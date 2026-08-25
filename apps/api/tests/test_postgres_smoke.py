@@ -24,10 +24,11 @@ PASSWORD = "supersecret1"
 
 
 @pytest.fixture
-def client(worker_id: str) -> TestClient:
+def client() -> TestClient:
+    # Per-process database name keeps parallel runs isolated without xdist.
     settings = Settings(
         env="test",
-        database_url=f"{DATABASE_URL}_{worker_id}",
+        database_url=f"{DATABASE_URL}_{os.getpid()}",
         jwt_secret="test-secret-0123456789abcdef0123456789",
     )
     return TestClient(create_app(settings))
