@@ -1,12 +1,16 @@
-from collections import defaultdict
+import time
+from collections import defaultdict, deque
 from collections.abc import Generator
 from typing import Annotated
 
 import jwt as pyjwt
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 
 from bangla_gpt_api.auth.security import (
     create_access_token,
@@ -21,6 +25,7 @@ from bangla_gpt_api.db.session import init_db, make_engine, make_session_factory
 from bangla_gpt_api.providers import ProviderNotConfigured, get_provider
 from bangla_gpt_api.retrieval.bm25 import BM25Index
 from bangla_gpt_api.schemas import (
+    AdminOverview,
     AskRequest,
     AskResponse,
     ChapterStat,
@@ -34,13 +39,50 @@ from bangla_gpt_api.schemas import (
     RegisterRequest,
     RegisterResponse,
     ReviewItem,
+    RoleUpdateRequest,
     StudentBrief,
     StudentProgress,
     StudentResponse,
     TokenResponse,
+    UserPublic,
 )
 from bangla_gpt_api.services.quiz import ClozeQuizGenerator, dump_quiz
 from bangla_gpt_api.services.tutor import TutorService
+
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app, rules: dict[str, int]) -> None:
+        super().__init__(app)
+        self.rules = rules
+        self._hits: dict[tuple[str, str], deque[float]] = defaultdict(deque)
+
+    async def dispatch(self, request: Request, call_next):
+        client_ip = request.client.host if request.client else "unknown"
+        for path_prefix, limit in self.rules.items():
+            if not request.url.path.startswith(path_prefix) or limit <= 0:
+                continue
+            key = (client_ip, path_prefix)
+            now = time.monotonic()
+            hits = self._hits[key]
+            while hits and now - hits[0] >= 60.0:
+                hits.popleft()
+            if len(hits) >= limit:
+                return JSONResponse({"detail": "Rate limit exceeded"}, status_code=429)
+            hits.append(now)
+            break
+        return await call_next(request)
+
+
+class BodySizeLimitMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app, max_bytes: int) -> None:
+        super().__init__(app)
+        self.max_bytes = max_bytes
+
+    async def dispatch(self, request: Request, call_next):
+        content_length = request.headers.get("content-length")
+        if content_length and content_length.isdigit() and int(content_length) > self.max_bytes:
+            return JSONResponse({"detail": "Request body too large"}, status_code=413)
+        return await call_next(request)
 
 
 def _unauthorized(detail: str = "Not authenticated") -> HTTPException:
@@ -69,6 +111,31 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     engine = make_engine(settings)
     init_db(engine)
     session_factory = make_session_factory(engine)
+
+    if settings.admin_email and settings.admin_password:
+        with session_factory() as bootstrap_db:
+            admin_email = settings.admin_email.strip().lower()
+            exists = bootstrap_db.execute(
+                select(User).where(User.email == admin_email)
+            ).scalar_one_or_none()
+            if exists is None:
+                bootstrap_db.add(
+                    User(
+                        email=admin_email,
+                        password_hash=hash_password(settings.admin_password),
+                        role="admin",
+                    )
+                )
+                bootstrap_db.commit()
+
+    app.add_middleware(
+        RateLimitMiddleware,
+        rules={
+            "/auth/login": settings.rate_limit_login_per_minute,
+            "/tutor/ask": settings.rate_limit_tutor_per_minute,
+        },
+    )
+    app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes)
 
     def get_db() -> Generator[Session, None, None]:
         db = session_factory()
@@ -109,6 +176,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return dependency
 
     TeacherUser = Annotated[User, Depends(require_roles("teacher"))]
+    AdminUser = Annotated[User, Depends(require_roles("admin"))]
 
     def authorize_student_access(db: Session, student_id: int, user: User) -> Student:
         student = db.get(Student, student_id)
@@ -415,6 +483,52 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             chapters=chapters,
             weak_chapters=[c.chapter for c in chapters if c.accuracy < 60.0],
             students_detail=briefs,
+        )
+
+    @app.get("/admin/users", response_model=list[UserPublic])
+    def admin_list_users(db: DbSession, admin: AdminUser) -> list[UserPublic]:
+        users = db.execute(select(User).order_by(User.id)).scalars().all()
+        return [
+            UserPublic(id=u.id, email=u.email, role=u.role, created_at=u.created_at) for u in users
+        ]
+
+    @app.patch("/admin/users/{user_id}/role", response_model=UserPublic)
+    def admin_update_role(
+        user_id: int, payload: RoleUpdateRequest, db: DbSession, admin: AdminUser
+    ) -> UserPublic:
+        target = db.get(User, user_id)
+        if target is None:
+            raise HTTPException(status_code=404, detail="User not found")
+        if target.role == "admin" and payload.role != "admin":
+            admins = db.execute(
+                select(func.count()).select_from(User).where(User.role == "admin")
+            ).scalar_one()
+            if admins <= 1:
+                raise HTTPException(status_code=409, detail="Cannot demote the last admin")
+        target.role = payload.role
+        db.commit()
+        db.refresh(target)
+        return UserPublic(
+            id=target.id, email=target.email, role=target.role, created_at=target.created_at
+        )
+
+    @app.get("/admin/analytics/overview", response_model=AdminOverview)
+    def admin_overview(db: DbSession, admin: AdminUser) -> AdminOverview:
+        users = db.execute(select(User)).scalars().all()
+        by_role: dict[str, int] = defaultdict(int)
+        for u in users:
+            by_role[u.role] += 1
+        attempts = (
+            db.execute(select(QuizAttempt).where(QuizAttempt.status == "graded")).scalars().all()
+        )
+        scores = [a.score_pct for a in attempts if a.score_pct is not None]
+        return AdminOverview(
+            users_total=len(users),
+            students=by_role.get("student", 0),
+            teachers=by_role.get("teacher", 0),
+            admins=by_role.get("admin", 0),
+            quiz_attempts_graded=len(attempts),
+            avg_score_pct=round(sum(scores) / len(scores), 2) if scores else None,
         )
 
     return app

@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -130,3 +131,23 @@ class QuizResult(BaseModel):
     correct: int
     total: int
     review: list[ReviewItem]
+
+
+class RoleUpdateRequest(BaseModel):
+    role: Literal["student", "teacher", "admin"]
+
+
+class UserPublic(BaseModel):
+    id: int
+    email: str
+    role: str
+    created_at: datetime
+
+
+class AdminOverview(BaseModel):
+    users_total: int
+    students: int
+    teachers: int
+    admins: int
+    quiz_attempts_graded: int
+    avg_score_pct: float | None

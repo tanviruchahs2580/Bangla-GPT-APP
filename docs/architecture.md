@@ -123,6 +123,23 @@ BanglaGptApp/
   student token on teacher endpoints → 403.
 - Cross-student isolation enforced on profile, progress, quiz start/submit.
 
+## Stack decisions (Phase 5 — RBAC completion & hardening & container, verified)
+
+- **Admin role**: never self-registered (`/auth/register` Literal rejects it).
+  Bootstrap admin is created at startup only when `ADMIN_EMAIL` +
+  `ADMIN_PASSWORD` are set and no admin exists. Admin endpoints: list users,
+  change roles (with last-admin demotion guard → 409), platform overview
+  counts.
+- **Rate limiting** (`RateLimitMiddleware`): in-memory sliding window per
+  client IP on `/auth/login` and `/tutor/ask`; limits via settings; returns
+  429. Known limits: per-process only (multi-worker deployments need Redis or
+  equivalent) — documented, pending until infra exists.
+- **Body-size guard**: requests with `Content-Length` above `MAX_BODY_BYTES`
+  (default 64 KiB) rejected 413 before routing.
+- **Container** (`Dockerfile`): python:3.12-slim, non-root user, healthcheck,
+  package install from source. Verified by CI job that builds the image,
+  boots it, and asserts `/health` + `/ready` over HTTP.
+
 ## Pending (explicitly NOT built yet)
 
 | Item | Blocker |

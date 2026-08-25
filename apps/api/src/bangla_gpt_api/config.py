@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     database_url: str = "sqlite://"
     jwt_secret: str = "dev-insecure-change-me"
     jwt_expire_minutes: int = 60
+    rate_limit_login_per_minute: int = 10
+    rate_limit_tutor_per_minute: int = 30
+    max_body_bytes: int = 65536
+    admin_email: str | None = None
+    admin_password: str | None = None
 
 
 @lru_cache

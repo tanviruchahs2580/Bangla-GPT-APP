@@ -47,3 +47,37 @@ jobs:
 
       - name: Smoke start (import app + open routes)
         run: python -c "from bangla_gpt_api import create_app; app = create_app(); print(sorted(r.path for r in app.routes))"
+
+  docker:
+    name: Docker build & container smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t bangla-gpt-api:ci .
+
+      - name: Run container
+        run: docker run -d --name api-smoke -p 8080:8000 -e APP_ENV=ci bangla-gpt-api:ci
+
+      - name: Wait for health endpoint
+        run: |
+          set -e
+          for i in $(seq 1 15); do
+            if curl -fsS http://127.0.0.1:8080/health | grep -q '"status":"ok"'; then
+              echo "Container healthy"; exit 0
+            fi
+            sleep 2
+          done
+          echo "Container failed to become healthy"
+          docker logs api-smoke
+          exit 1
+
+      - name: Readiness uses mock provider inside image
+        run: curl -fsS http://127.0.0.1:8080/ready | grep -q '"provider":"mock"'
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker stop api-smoke || true
+          docker rm api-smoke || true

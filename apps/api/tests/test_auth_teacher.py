@@ -122,7 +122,7 @@ def test_expired_token_rejected(client: TestClient) -> None:
 def test_forged_token_rejected(client: TestClient) -> None:
     forged = pyjwt.encode(
         {"sub": "1", "role": "teacher", "exp": datetime.now(UTC) + timedelta(hours=1)},
-        "wrong-secret",
+        "wrong-secret-0123456789abcdef0123456789",
         algorithm="HS256",
     )
     res = client.get("/teacher/students", headers={"Authorization": f"Bearer {forged}"})
