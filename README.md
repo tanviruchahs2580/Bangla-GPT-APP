@@ -2,13 +2,16 @@
 
 **NCTB-grounded Bangla-first AI personal tutor platform.**
 
-> **Status: PHASE 8 — WEB DASHBOARD & PRODUCTION HARDENING (verified).**
-> Full student-teacher-parent-admin role set, authenticated tutor endpoint,
-> quiz/progress, teacher analytics, admin management, parent child-linkage,
-> GDPR-style self-service account deletion (`DELETE /users/me`), Prometheus
-> `/metrics`, rate limiting, body-size guard, Alembic migrations (2 revisions),
-> a CI-verified container, and a React web dashboard wired to the live APIs.
-> Real LLM providers and the real NCTB corpus remain pending external inputs.
+> **Status: PHASE 9 — NCTB RAG SUBSYSTEM (verified on real official corpus).**
+> Everything in Phase 8, plus: respectful acquisition of official NCTB
+> curriculum PDFs (nctb.gov.bd) with sha256 provenance manifests, legacy
+> Bijoy→Unicode conversion, quality-controlled extraction, structure-aware
+> chapter-parented chunking, corpus wiring into the tutor via
+> `NCTB_CORPUS_DIR`, a query-coverage grounding gate (adversarial refusal
+> 4/4 on the real corpus), and retrieval benchmark harness.
+> Student-facing পাঠ্যপুস্তক e-books are not published as static downloads
+> by the source site — recorded as the remaining data gap. Real LLM key
+> still pending.
 
 ## API surface (current)
 
@@ -18,7 +21,7 @@
 | `GET /metrics` | — | Prometheus metrics (request counts/latency) |
 | `POST /auth/register` `/auth/login` | — | Accounts (all roles; admin via bootstrap), tokens |
 | `GET /users/me` · `DELETE /users/me` | any | Own profile; GDPR-style self-service deletion |
-| `POST /tutor/ask` | any | Curriculum-grounded Q&A; refuses without evidence |
+| `POST /tutor/ask` | any | Curriculum-grounded Q&A; coverage-gated refusal without evidence |
 | `GET /students/{id}` · `GET /students/{id}/progress` | owner/teacher/admin | Profile & chapter-level progress |
 | `POST /quizzes` · `POST /quizzes/{id}/submit` | owner/teacher | Generate / grade quizzes (answers never exposed) |
 | `GET /teacher/students` · `GET /teacher/classes/{level}/analytics` | teacher/admin | Roster & chapter accuracy/weak-topic flags |
@@ -28,6 +31,8 @@
 | `GET /parents/me/children/{id}/progress` | parent (linked) | Scoped child progress |
 
 Full reference: [docs/API.md](docs/API.md). Operations: [docs/runbook.md](docs/runbook.md).
+RAG design: [docs/RAG_ARCHITECTURE.md](docs/RAG_ARCHITECTURE.md).
+NCTB pipeline: [docs/NCTB_DATA_PIPELINE.md](docs/NCTB_DATA_PIPELINE.md).
 
 ## Quick start
 
@@ -35,6 +40,9 @@ Full reference: [docs/API.md](docs/API.md). Operations: [docs/runbook.md](docs/r
 cd apps/api
 python -m venv .venv
 .venv\Scripts\python -m pip install -e ".[dev]"
+# optional: build + serve the real NCTB curriculum corpus
+.venv\Scripts\python scripts\build_nctb_corpus.py --data-dir ..\..\data\nctb --subset ssc-science
+$env:NCTB_CORPUS_DIR = "..\..\data\nctb"
 .venv\Scripts\python -m uvicorn bangla_gpt_api.main:app --reload
 # http://127.0.0.1:8000/health  /live  /ready  /docs
 ```

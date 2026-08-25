@@ -203,12 +203,33 @@ BanglaGptApp/
 - `/metrics` exposes request/latency series after traffic.
 - `apps/web` type-checked production build passes on Node 24.
 
+## Stack decisions (Phase 9 — NCTB RAG subsystem, verified)
+
+- **Acquisition**: official nctb.gov.bd listing pages inventoried (16
+  secondary + 32 HSC artifacts); respectful idempotent downloader with
+  sha256 provenance manifest; copyrighted content gitignored, provenance
+  committed. The published artifacts are the national curriculum documents
+  (জাতীয় শিক্ষাক্রম), not student e-books — textbook PDFs are not exposed
+  by the site and remain a data gap.
+- **Encoding**: all verified PDFs use legacy Bijoy/SutonnyMJ ANSI encoding;
+  `nctb/bijoy.py` converts to Unicode (verified on real pages) with
+  per-page crash isolation and honest QC (`quality_report.json`).
+- **Indexing safety**: sources below 0.5 Bangla ratio never reach the tutor
+  index. Class level is derived only when unambiguous, else the declared
+  level range applies.
+- **Grounding gate**: query-term coverage ≥ 0.5 replaces absolute score
+  floors that measurably fail to transfer between corpus scales;
+  adversarial refusal 4/4 on the real corpus.
+- **Evaluation harness**: `scripts/evaluate_nctb_retrieval.py` measures
+  Recall@K over self-sentence and chapter-title families plus adversarial
+  refusal, writing `data/nctb/retrieval_eval.json`.
+
 ## Pending (explicitly NOT built yet)
 
 | Item | Blocker |
 |---|---|
 | Real LLM provider integration + hallucination eval | API key required from user |
-| NCTB ingestion/RAG pipeline | Textbook corpus required |
-| Vector store | Chosen together with corpus scale; no Docker locally |
+| Student পাঠ্যপুস্তক (textbook) corpus | not published as static downloads on nctb.gov.bd static pages; needs alternate authorized channel/OCR pipeline |
+| Dense/hybrid retrieval + reranker + golden dataset benchmark | embedding-model benchmark infrastructure |
 | Mobile (Flutter) | SDK not installed on dev machine |
-| Postgres/Redis, load testing, monitoring/alerts, prod deploy | Production infrastructure required |
+| Postgres/Redis, load testing at scale, monitoring/alerts, prod deploy | Production infrastructure required |
