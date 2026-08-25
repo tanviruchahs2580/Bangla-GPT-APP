@@ -2,7 +2,7 @@
 
 **NCTB-grounded Bangla-first AI personal tutor platform.**
 
-> **Status: v0.2.0 — PRODUCTION HARDENING (gap plan B1–B19 executed).**
+> **Status: v0.2.1 — LIVE-VERIFIED with real Gemini (deployable stage).**
 > Everything in Phase 9, plus: real **Gemini provider** (`generateContent`,
 > timeout/retry policy), prompt-injection guard (`<evidence>` data-delimiting
 > + system rules + poisoned-chunk tests), password reset (single-use hashed

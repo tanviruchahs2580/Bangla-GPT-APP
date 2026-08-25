@@ -117,3 +117,55 @@ def test_tutor_unavailable_when_provider_unconfigured() -> None:
         headers=headers,
     )
     assert res.status_code == 503
+
+
+def test_provider_failure_maps_to_502(tmp_path) -> None:
+    """Upstream LLM failure must be a controlled 502, never an unhandled 500."""
+    import bangla_gpt_api.main as main_module
+    from bangla_gpt_api.providers.base import LLMProvider as _Base
+    from bangla_gpt_api.providers.base import ProviderError as _ProviderError
+
+    class ExplodingProvider(_Base):
+        name = "exploding"
+
+        async def generate(self, prompt: str, *, system: str | None = None) -> str:
+            raise _ProviderError("upstream down")
+
+    settings = Settings(
+        env="test",
+        database_url=f"sqlite:///{tmp_path}/p502.db",
+        jwt_secret="test-secret-0123456789abcdef0123456789",
+    )
+    original = main_module.TutorService.__init__
+
+    def inject(self, *args, **kwargs):
+        kwargs["provider"] = ExplodingProvider()
+        original(self, *args, **kwargs)
+
+    main_module.TutorService.__init__ = inject  # type: ignore[method-assign]
+    try:
+        client = TestClient(main_module.create_app(settings))
+        reg = client.post(
+            "/auth/register",
+            json={
+                "email": "x@y.com",
+                "password": PASSWORD,
+                "name": "শিক্ষার্থী",
+                "role": "student",
+                "class_level": 6,
+                "guardian_consent": True,
+            },
+        )
+        assert reg.status_code == 201, reg.text
+        tok = client.post("/auth/login", json={"email": "x@y.com", "password": PASSWORD}).json()[
+            "access_token"
+        ]
+        res = client.post(
+            "/tutor/ask",
+            json={"question": "কোষ কী?", "class_level": 6, "subject": "science"},
+            headers={"Authorization": f"Bearer {tok}"},
+        )
+        assert res.status_code == 502, res.text
+        assert res.json() == {"detail": "LLM provider unavailable"}
+    finally:
+        main_module.TutorService.__init__ = original  # type: ignore[method-assign]

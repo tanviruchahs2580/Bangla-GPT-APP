@@ -93,11 +93,11 @@ jobs:
           cache: pip
           cache-dependency-path: apps/api/pyproject.toml
 
-      - name: Install package with dev + postgres dependencies
+      - name: Install package with dev dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install --upgrade setuptools wheel
-          python -m pip install -e ".[dev,postgres]"
+          python -m pip install -e ".[dev]"
 
       - name: Alembic migration cycle against Postgres
         run: |

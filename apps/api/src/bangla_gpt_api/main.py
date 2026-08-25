@@ -44,7 +44,11 @@ from bangla_gpt_api.metrics import (
     REQUESTS_TOTAL,
     UNHANDLED_EXCEPTIONS_TOTAL,
 )
-from bangla_gpt_api.providers import ProviderNotConfigured, get_provider
+from bangla_gpt_api.providers import (
+    ProviderError,
+    ProviderNotConfigured,
+    get_provider,
+)
 from bangla_gpt_api.ratelimit import (
     RateLimitBackendError,
     RateLimiter,
@@ -546,7 +550,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def ask(payload: AskRequest, user: CurrentUser) -> AskResponse:
         if tutor is None:
             raise HTTPException(status_code=503, detail="Tutor service unavailable")
-        return await tutor.ask(payload.question, payload.class_level, payload.subject)
+        try:
+            return await tutor.ask(payload.question, payload.class_level, payload.subject)
+        except ProviderError as exc:
+            # Upstream LLM failure (timeout/exhausted retries/blocked) must be a
+            # controlled 502, never an unhandled 500.
+            raise HTTPException(status_code=502, detail="LLM provider unavailable") from exc
 
     @app.get("/users/me", response_model=MeResponse)
     def read_me(db: DbSession, user: CurrentUser) -> MeResponse:

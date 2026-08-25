@@ -16,13 +16,16 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_name: str = "Bangla GPT API"
-    version: str = "0.2.0"
+    version: str = "0.2.1"
     env: str = "development"
 
     # --- LLM provider ---
     llm_provider: str = "mock"
     gemini_api_key: str | None = None
-    gemini_model: str = "gemini-2.5-flash"
+    # Verified live 2026-08-26 with new-format ("AQ.") API keys, which cannot
+    # access legacy models like gemini-2.5-flash ("no longer available to new
+    # users"). Override via GEMINI_MODEL if your account has broader access.
+    gemini_model: str = "gemini-3.1-flash-lite"
     llm_timeout_seconds: float = 30.0
     llm_max_retries: int = 2
 
