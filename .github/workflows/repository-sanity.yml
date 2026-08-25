@@ -35,11 +35,13 @@ jobs:
         shell: bash
         run: |
           set -e
-          if git ls-files --error-unmatch .env >/dev/null 2>&1 \
-             || git ls-files | grep -Eq '(^|/)\.env($|\.)'; then
-            echo "FAIL: .env file is tracked"; exit 1
+          bad="$(git ls-files | grep -vi 'example' | grep -E '(^|/)\.env($|\.)' || true)"
+          if [ -n "$bad" ]; then
+            echo "FAIL: .env file(s) tracked:"
+            echo "$bad"
+            exit 1
           fi
-          echo "OK: no .env files tracked"
+          echo "OK: no .env files tracked (.env.example templates allowed)"
 
       - name: Validate all GitHub Actions workflow YAML
         shell: bash
