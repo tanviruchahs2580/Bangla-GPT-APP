@@ -1,5 +1,5 @@
 from bangla_gpt_api.providers.base import LLMProvider
-from bangla_gpt_api.retrieval.bm25 import BM25Index
+from bangla_gpt_api.retrieval.bm25 import BM25Index, tokenize
 from bangla_gpt_api.schemas import AskResponse, SourceRef
 
 INSUFFICIENT_EVIDENCE_ANSWER = (
@@ -19,13 +19,28 @@ class TutorService:
         index: BM25Index,
         provider: LLMProvider,
         *,
-        min_score: float = 1.5,
+        min_score: float = 0.0,
+        min_coverage: float = 0.5,
         top_k: int = 3,
     ) -> None:
         self.index = index
         self.provider = provider
+        # Absolute BM25 floors do NOT transfer across corpus sizes (verified
+        # on the real NCTB corpus); the grounding gate therefore requires
+        # that a sufficient fraction of query terms appear in the evidence.
         self.min_score = min_score
+        self.min_coverage = min_coverage
         self.top_k = top_k
+
+    def _grounded(self, question: str, top_score: float | None, top_text: str) -> bool:
+        if top_score is None or top_score <= self.min_score or not top_text:
+            return False
+        query_terms = {t for t in tokenize(question) if len(t) >= 2}
+        if not query_terms:
+            return False
+        evidence_terms = set(tokenize(top_text))
+        coverage = sum(1 for t in query_terms if t in evidence_terms) / len(query_terms)
+        return coverage >= self.min_coverage
 
     async def ask(
         self,
@@ -39,7 +54,9 @@ class TutorService:
             subject=subject,
             top_k=self.top_k,
         )
-        if not hits or hits[0].score < self.min_score:
+        top_score = hits[0].score if hits else None
+        top_text = hits[0].chunk.text if hits else ""
+        if not self._grounded(question, top_score, top_text):
             return AskResponse(
                 answer=INSUFFICIENT_EVIDENCE_ANSWER,
                 grounded=False,
