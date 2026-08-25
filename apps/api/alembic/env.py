@@ -16,6 +16,7 @@ if config.config_file_name is not None:
 
 from bangla_gpt_api.config import get_settings
 from bangla_gpt_api.db.base import Base
+import bangla_gpt_api.db.models  # noqa: F401  ensure tables are registered
 
 target_metadata = Base.metadata
 

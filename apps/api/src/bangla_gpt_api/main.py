@@ -20,7 +20,15 @@ from bangla_gpt_api.auth.security import (
 )
 from bangla_gpt_api.config import Settings, get_settings
 from bangla_gpt_api.data.loader import load_sample_corpus
-from bangla_gpt_api.db.models import AnswerLog, QuizAttempt, Student, Teacher, User
+from bangla_gpt_api.db.models import (
+    AnswerLog,
+    Parent,
+    ParentStudentLink,
+    QuizAttempt,
+    Student,
+    Teacher,
+    User,
+)
 from bangla_gpt_api.db.session import init_db, make_engine, make_session_factory
 from bangla_gpt_api.logging_config import configure_logging
 from bangla_gpt_api.providers import ProviderNotConfigured, get_provider
@@ -32,6 +40,7 @@ from bangla_gpt_api.schemas import (
     ChapterStat,
     ClassAnalytics,
     LoginRequest,
+    ParentLinkRequest,
     QuizQuestionPublic,
     QuizResult,
     QuizStarted,
@@ -190,6 +199,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return dependency
 
     TeacherOrAdminUser = Annotated[User, Depends(require_roles("teacher", "admin"))]
+    ParentUser = Annotated[User, Depends(require_roles("parent"))]
     AdminUser = Annotated[User, Depends(require_roles("admin"))]
 
     def authorize_student_access(db: Session, student_id: int, user: User) -> Student:
@@ -238,11 +248,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         user = User(email=email, password_hash=hash_password(payload.password), role=payload.role)
         db.add(user)
         db.flush()
-        profile: Student | Teacher
+        profile: Student | Teacher | Parent
         if payload.role == "student":
             profile = Student(
                 name=payload.name.strip(), class_level=payload.class_level, user_id=user.id
             )
+        elif payload.role == "parent":
+            profile = Parent(name=payload.name.strip(), user_id=user.id)
         else:
             profile = Teacher(name=payload.name.strip(), user_id=user.id)
         db.add(profile)
@@ -547,8 +559,118 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             students=by_role.get("student", 0),
             teachers=by_role.get("teacher", 0),
             admins=by_role.get("admin", 0),
+            parents=by_role.get("parent", 0),
             quiz_attempts_graded=len(attempts),
             avg_score_pct=round(sum(scores) / len(scores), 2) if scores else None,
+        )
+
+    @app.post("/parents/link", status_code=201)
+    def parent_link(payload: ParentLinkRequest, db: DbSession, parent: ParentUser) -> dict:
+        parent_profile = db.execute(
+            select(Parent).where(Parent.user_id == parent.id)
+        ).scalar_one_or_none()
+        if parent_profile is None:
+            parent_profile = Parent(name=parent.email.split("@")[0], user_id=parent.id)
+            db.add(parent_profile)
+            db.flush()
+        student = db.get(Student, payload.student_id)
+        if student is None:
+            raise HTTPException(status_code=404, detail="Student not found")
+        existing = db.execute(
+            select(ParentStudentLink).where(
+                ParentStudentLink.parent_id == parent_profile.id,
+                ParentStudentLink.student_id == student.id,
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            raise HTTPException(status_code=409, detail="Already linked")
+        db.add(ParentStudentLink(parent_id=parent_profile.id, student_id=student.id))
+        db.commit()
+        return {"linked": True, "parent_id": parent_profile.id, "student_id": student.id}
+
+    @app.get("/parents/me/children", response_model=list[StudentBrief])
+    def parent_children(db: DbSession, parent: ParentUser) -> list[StudentBrief]:
+        parent_profile = db.execute(
+            select(Parent).where(Parent.user_id == parent.id)
+        ).scalar_one_or_none()
+        if parent_profile is None:
+            return []
+        links = (
+            db.execute(
+                select(ParentStudentLink).where(ParentStudentLink.parent_id == parent_profile.id)
+            )
+            .scalars()
+            .all()
+        )
+        if not links:
+            return []
+        students = (
+            db.execute(select(Student).where(Student.id.in_([link.student_id for link in links])))
+            .scalars()
+            .all()
+        )
+        return _student_briefs(db, list(students))
+
+    @app.get("/parents/me/children/{student_id}/progress", response_model=StudentProgress)
+    def parent_child_progress(
+        student_id: int, db: DbSession, parent: ParentUser
+    ) -> StudentProgress:
+        parent_profile = db.execute(
+            select(Parent).where(Parent.user_id == parent.id)
+        ).scalar_one_or_none()
+        if parent_profile is None:
+            raise HTTPException(status_code=404, detail="Not linked to this student")
+        link = db.execute(
+            select(ParentStudentLink).where(
+                ParentStudentLink.parent_id == parent_profile.id,
+                ParentStudentLink.student_id == student_id,
+            )
+        ).scalar_one_or_none()
+        if link is None:
+            raise HTTPException(status_code=404, detail="Not linked to this student")
+        student = db.get(Student, student_id)
+        if student is None:
+            raise HTTPException(status_code=404, detail="Student not found")
+        attempts = (
+            db.execute(select(QuizAttempt).where(QuizAttempt.student_id == student_id))
+            .scalars()
+            .all()
+        )
+        graded = [a for a in attempts if a.status == "graded"]
+        stats: dict[str, list[int]] = defaultdict(lambda: [0, 0])
+        if graded:
+            rows = (
+                db.execute(
+                    select(AnswerLog).where(AnswerLog.attempt_id.in_([a.id for a in graded]))
+                )
+                .scalars()
+                .all()
+            )
+            for row in rows:
+                stats[row.chapter][0] += 1
+                stats[row.chapter][1] += row.is_correct
+        by_chapter = sorted(
+            (
+                ChapterStat(
+                    chapter=chapter,
+                    asked=asked,
+                    correct=correct_count,
+                    accuracy=round(100.0 * correct_count / asked, 2),
+                )
+                for chapter, (asked, correct_count) in stats.items()
+            ),
+            key=lambda s: s.accuracy,
+        )
+        weak_chapters = [s.chapter for s in by_chapter if s.accuracy < 60.0]
+        avg_score = round(sum(a.score_pct for a in graded) / len(graded), 2) if graded else None
+        return StudentProgress(
+            student=StudentResponse(
+                id=student.id, name=student.name, class_level=student.class_level
+            ),
+            attempts_graded=len(graded),
+            avg_score_pct=avg_score,
+            by_chapter=by_chapter,
+            weak_chapters=weak_chapters,
         )
 
     return app

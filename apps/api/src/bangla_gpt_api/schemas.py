@@ -31,7 +31,7 @@ class RegisterRequest(BaseModel):
     email: str = Field(min_length=5, max_length=255, pattern=_EMAIL_PATTERN)
     password: str = Field(min_length=8, max_length=128)
     name: str = Field(min_length=2, max_length=120)
-    role: Literal["student", "teacher"]
+    role: Literal["student", "teacher", "parent"]
     class_level: int | None = Field(default=None, ge=1, le=12)
 
     @model_validator(mode="after")
@@ -134,7 +134,7 @@ class QuizResult(BaseModel):
 
 
 class RoleUpdateRequest(BaseModel):
-    role: Literal["student", "teacher", "admin"]
+    role: Literal["student", "teacher", "parent", "admin"]
 
 
 class UserPublic(BaseModel):
@@ -149,5 +149,10 @@ class AdminOverview(BaseModel):
     students: int
     teachers: int
     admins: int
+    parents: int
     quiz_attempts_graded: int
     avg_score_pct: float | None
+
+
+class ParentLinkRequest(BaseModel):
+    student_id: int = Field(ge=1)

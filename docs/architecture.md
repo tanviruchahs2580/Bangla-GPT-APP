@@ -155,6 +155,17 @@ BanglaGptApp/
   hallucination-guard). The sample file proves 100% accuracy on the current
   mock tutor; a real LLM key swaps in without changing the harness.
 
+## Stack decisions (Phase 7 — parent dashboard, verified)
+
+- **Parent linkage**: `parents` + `parent_student_links` (unique per pair)
+  tables; `/parents/link` (parent role), `/parents/me/children` and
+  `/parents/me/children/{id}/progress` scoped by explicit link. Tests assert
+  linkage, duplicate 409, unknown 404, and cross-parent isolation (403
+  vs 404 as appropriate).
+- **Role set** now `student | teacher | parent | admin`; registration
+  enforces `class_level` only for students; `RoleUpdateRequest` covers all
+  four. `AdminOverview` now reports `parents` count.
+
 ## Pending (explicitly NOT built yet)
 
 | Item | Blocker |
