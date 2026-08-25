@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     version: str = "0.1.0"
     env: str = "development"
     llm_provider: str = "mock"
+    database_url: str = "sqlite://"
 
 
 @lru_cache

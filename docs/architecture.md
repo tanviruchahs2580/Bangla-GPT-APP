@@ -75,6 +75,29 @@ BanglaGptApp/
 - Payload validation (question length, class range) returns 422.
 - Unconfigured providers: `/ready` and `/tutor/ask` return 503 loudly.
 
+## Stack decisions (Phase 3 — quizzes & progress, verified)
+
+- **Persistence** (`db/`): SQLAlchemy 2.0 (`students`, `quiz_attempts`,
+  `answer_log`). SQLite default (in-memory for tests; file URL via
+  `DATABASE_URL`). `create_all` startup is dev-grade — Alembic migrations
+  pending before any shared environment.
+- **Quiz engine** (`services/quiz.py`): deterministic cloze generator over
+  curriculum chunks (rare-term blanking, seeded distractor sampling). This is
+  an honest baseline — an LLM-backed generator with a validation gate replaces
+  it later; generated questions are never marked trusted without validation.
+- **Answer safety**: quiz payloads never contain answer keys; grading happens
+  server-side; double-submit and length-mismatch rejected.
+- **Progress** (`/students/{id}/progress`): per-chapter accuracy computed from
+  answer logs; chapters under 60% flagged as weak.
+- **DI style**: FastAPI `Annotated` dependencies; ruff B008 kept enabled.
+
+## Verified behaviors (Phase 3)
+
+- Deterministic generation (same seed ⇒ same quiz), valid 4-option MCQs.
+- No answer leakage in `/quizzes` response (asserted on raw JSON).
+- Grading integrity: review rows reconcile exactly with stored score.
+- Student validation, unknown student/attempt → 404/422 paths.
+
 ## Pending (explicitly NOT built yet)
 
 | Item | Blocker |

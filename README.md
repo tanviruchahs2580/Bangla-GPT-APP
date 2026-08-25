@@ -2,11 +2,21 @@
 
 **NCTB-grounded Bangla-first AI personal tutor platform.**
 
-> **Status: PHASE 2 — STUDENT DOMAIN CORE (verified).**
-> FastAPI service with health/readiness endpoints, curriculum ingestion,
-> Bangla-aware BM25 retrieval, and a `/tutor/ask` endpoint that grounds
-> answers in curriculum content and refuses out-of-domain questions.
-> Real LLM providers, real NCTB corpus, quizzes, dashboards, mobile: pending.
+> **Status: PHASE 3 — QUIZZES & PROGRESS (verified).**
+> FastAPI service: NCTB-style curriculum retrieval + grounded tutor Q&A +
+> deterministic quiz engine + student profiles with chapter-level progress.
+> Real LLM providers, real NCTB corpus, auth/RBAC, dashboards, mobile: pending.
+
+## API surface (current)
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /health` `/live` `/ready` | Service health; readiness reports provider |
+| `POST /tutor/ask` | Curriculum-grounded Q&A; refuses without evidence |
+| `POST /students` · `GET /students/{id}` | Student profile |
+| `POST /quizzes` | Generate MCQ quiz (answers never exposed) |
+| `POST /quizzes/{id}/submit` | Server-side grading + review |
+| `GET /students/{id}/progress` | Per-chapter accuracy + weak-chapter flags |
 
 ## Quick start
 
