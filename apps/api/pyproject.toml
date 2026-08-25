@@ -24,6 +24,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+bangla_gpt_api = ["data/sample_nctb/*.md"]
+
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]

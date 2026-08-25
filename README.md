@@ -2,11 +2,11 @@
 
 **NCTB-grounded Bangla-first AI personal tutor platform.**
 
-> **Status: PHASE 1 — API SKELETON (verified).**
-> A working FastAPI service (`apps/api`) with health/readiness endpoints and a
-> provider-abstraction layer for future LLM/RAG integration. Application
-> features (tutor chat, NCTB RAG, quizzes, dashboards, mobile) have NOT been
-> built yet.
+> **Status: PHASE 2 — STUDENT DOMAIN CORE (verified).**
+> FastAPI service with health/readiness endpoints, curriculum ingestion,
+> Bangla-aware BM25 retrieval, and a `/tutor/ask` endpoint that grounds
+> answers in curriculum content and refuses out-of-domain questions.
+> Real LLM providers, real NCTB corpus, quizzes, dashboards, mobile: pending.
 
 ## Quick start
 

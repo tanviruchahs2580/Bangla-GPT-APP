@@ -47,6 +47,34 @@ BanglaGptApp/
 └── docs/architecture.md
 ```
 
+## Stack decisions (Phase 2 — student domain core, verified)
+
+- **Curriculum model** (`curriculum/models.py`): `CurriculumMeta` carries the
+  full provenance set required by the master plan (`curriculum_year`,
+  `class_level`, `subject`, `book`, `chapter`, `section`, `page`, `language`,
+  `source`, `version`, `content_type`). Every retrieval chunk keeps its
+  metadata; versions never mix because filters key on them.
+- **Ingestion** (`ingestion/text_ingester.py`): deterministic marker-based
+  ingester for structured plain text (chapter/section/paragraph). PDF/OCR
+  adapters pending corpus arrival.
+- **Retrieval** (`retrieval/bm25.py`): dependency-free Okapi BM25 with
+  curriculum-aware filtering. A Bangla-block tokenizer (U+0980-U+09FF) is
+  required — `\w+` splits on Bangla vowel signs/virama and destroys words
+  (verified bug, fixed, regression-tested).
+- **Tutor service** (`services/tutor.py`): retrieve → grounding gate →
+  provider generate → cited answer. Below-threshold retrieval returns an
+  explicit insufficient-evidence refusal instead of inventing content
+  (hallucination guard, master §32).
+- **Sample corpus** (`data/sample_nctb/`): ORIGINAL synthetic Bangla text for
+  pipeline verification only — NOT real NCTB content.
+
+## Verified behaviors (Phase 2)
+
+- `/tutor/ask` grounded path returns cited sources (book/chapter/section).
+- Out-of-curriculum questions refuse with `grounded=false`.
+- Payload validation (question length, class range) returns 422.
+- Unconfigured providers: `/ready` and `/tutor/ask` return 503 loudly.
+
 ## Pending (explicitly NOT built yet)
 
 | Item | Blocker |
