@@ -58,6 +58,7 @@ export const del = (path: string) => api<void>(path, { method: 'DELETE' })
 
 export interface TokenResponse {
   access_token: string
+  must_change_password?: boolean
 }
 
 function decodeRole(token: string): string | null {
@@ -83,8 +84,29 @@ export async function register(input: {
   name: string
   role: 'student' | 'teacher' | 'parent'
   class_level?: number
+  guardian_consent?: boolean
 }): Promise<void> {
   await post('/auth/register', input)
+}
+
+export async function forgotPassword(email: string): Promise<void> {
+  await post('/auth/forgot', { email })
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  const res = await post<TokenResponse>('/auth/reset', { token, new_password: newPassword })
+  localStorage.setItem(TOKEN_KEY, res.access_token)
+}
+
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  const res = await post<TokenResponse>('/auth/change-password', {
+    current_password: currentPassword,
+    new_password: newPassword,
+  })
+  localStorage.setItem(TOKEN_KEY, res.access_token)
 }
 
 let meCache: MeResponse | null = null

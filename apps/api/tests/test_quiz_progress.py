@@ -27,7 +27,10 @@ def _register(
     class_level: int | None = 6,
 ) -> dict:
     payload: dict = {"email": email, "password": PASSWORD, "name": name, "role": role}
-    if class_level is not None:
+    if role == "student":
+        payload["guardian_consent"] = True
+        payload["class_level"] = class_level
+    elif class_level is not None:
         payload["class_level"] = class_level
     res = client.post("/auth/register", json=payload)
     assert res.status_code == 201, res.text

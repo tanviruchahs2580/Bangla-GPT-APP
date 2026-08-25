@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import false as sa_false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from bangla_gpt_api.db.base import Base
@@ -17,6 +18,21 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(512))
     role: Mapped[str] = mapped_column(String(16))
+    must_change_password: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default=sa_false()
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class PasswordReset(Base):
+    __tablename__ = "password_resets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    # Only the SHA-256 hash of the single-use token is persisted.
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 

@@ -25,6 +25,7 @@ def _register_and_login(client: TestClient, email: str = "student@example.com") 
             "password": PASSWORD,
             "name": "শিক্ষার্থী",
             "role": "student",
+            "guardian_consent": True,
             "class_level": 6,
         },
     )

@@ -1,0 +1,17 @@
+[
+  {"question": "কোষ কী?", "class_level": 6, "subject": "science", "expected_grounded": true, "expected_chapter_contains": "কোষ", "note": "in-corpus: cell definition"},
+  {"question": "কোষের প্রধান অংশ কয়টি ও কী কী?", "class_level": 6, "subject": "science", "expected_grounded": true, "expected_chapter_contains": "কোষ", "note": "in-corpus: cell parts"},
+  {"question": "নিউক্লিয়াসকে কী বলা হয়?", "class_level": 6, "subject": "science", "expected_grounded": true, "expected_chapter_contains": "কোষ", "note": "in-corpus: nucleus control centre"},
+  {"question": "ভগ্নাংশ কাকে বলে?", "class_level": 7, "subject": "mathematics", "expected_grounded": true, "expected_chapter_contains": "ভগ্নাংশ", "note": "in-corpus: fraction definition"},
+  {"question": "১/২ ও ২/৪ কেন সমান ভগ্নাংশ?", "class_level": 7, "subject": "mathematics", "expected_grounded": true, "expected_chapter_contains": "ভগ্নাংশ", "note": "in-corpus: equivalent fractions"},
+  {"question": "লব ও হর দিয়ে কী নির্ণয় করা হয়?", "class_level": 7, "subject": "mathematics", "expected_grounded": true, "expected_chapter_contains": "ভগ্নাংশ", "note": "in-corpus: numerator/denominator"},
+  {"question": "শতকরা মানে কী?", "class_level": 7, "subject": "mathematics", "expected_grounded": true, "expected_chapter_contains": "শতকরা", "note": "in-corpus: percentage meaning"},
+  {"question": "২৫% কত ভাগ বোঝায়?", "class_level": 7, "subject": "mathematics", "expected_grounded": true, "expected_chapter_contains": "শতকরা", "note": "in-corpus: 25 percent"},
+  {"question": "বল কী এবং এটি কী করে?", "class_level": 6, "subject": "science", "expected_grounded": true, "expected_chapter_contains": "বল", "note": "in-corpus: force and motion"},
+  {"question": "অণুবীক্ষণ যন্ত্রে কী দেখা যায়?", "class_level": 6, "subject": "science", "expected_grounded": true, "expected_chapter_contains": "কোষ", "note": "in-corpus: microscope/cell"},
+  {"question": "গত বিশ্বকাপ ফুটবল ফাইনালে কোন দল জিতেছিল?", "class_level": 6, "subject": "science", "expected_grounded": false, "note": "out-of-domain: sports"},
+  {"question": "আগামীকালের আবহাওয়ার পূর্বাভাস কী?", "class_level": 6, "subject": "science", "expected_grounded": false, "note": "out-of-domain: weather"},
+  {"question": "সেরা গেমিং ল্যাপটপ কোনটি?", "class_level": 7, "subject": "mathematics", "expected_grounded": false, "note": "out-of-domain: gaming"},
+  {"question": "ইংরেজি tense কিভাবে শিখবো?", "class_level": 6, "subject": "science", "expected_grounded": false, "note": "wrong subject: english grammar"},
+  {"question": "qxzzv bloop blarp", "class_level": 6, "subject": "science", "expected_grounded": false, "note": "gibberish"}
+]

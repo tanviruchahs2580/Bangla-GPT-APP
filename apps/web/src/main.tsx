@@ -4,6 +4,8 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import './styles.css'
 import { fetchMe, getToken, logout, type MeResponse } from './api'
 import AdminDashboard from './pages/AdminDashboard'
+import ForgotResetPage from './pages/ForgotResetPage'
+import LegalPage from './pages/LegalPage'
 import LoginPage from './pages/LoginPage'
 import ParentDashboard from './pages/ParentDashboard'
 import RegisterPage from './pages/RegisterPage'
@@ -77,6 +79,9 @@ function App() {
             path="/register"
             element={me ? <Navigate to={home} replace /> : <RegisterPage onRegister={setMe} />}
           />
+          <Route path="/forgot" element={<ForgotResetPage />} />
+          <Route path="/privacy" element={<LegalPage kind="privacy" />} />
+          <Route path="/terms" element={<LegalPage kind="terms" />} />
           <Route
             path="/student"
             element={

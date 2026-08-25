@@ -1,0 +1,163 @@
+name: bangla-gpt-app
+
+# Profiles:
+#   core        â€“ api + redis            (docker compose --profile core up -d)
+#   web         â€“ static dashboard       (add --profile web)
+#   tls         â€“ Caddy auto-HTTPS proxy (add --profile tls; requires DOMAIN/ACME_EMAIL)
+#   postgres    â€“ Postgres service       (add --profile postgres)
+#   monitoring  â€“ Prometheus + Grafana   (add --profile monitoring)
+#   backup      â€“ scheduled DB backups   (add --profile backup)
+
+x-api-common: &api-common
+  restart: unless-stopped
+  expose:
+    - "8000"
+
+services:
+  api:
+    <<: *api-common
+    build: .
+    image: ghcr.io/tanviruchahs2580/bangla-gpt-app/api:${API_TAG:-local}
+    profiles: [core]
+    environment:
+      ENV: ${ENV:-production}
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////data/app.db}
+      JWT_SECRET: ${JWT_SECRET:-}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      MAX_BODY_BYTES: ${MAX_BODY_BYTES:-65536}
+      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-60}
+      PASSWORD_RESET_TOKEN_MINUTES: ${PASSWORD_RESET_TOKEN_MINUTES:-30}
+      FORCE_ADMIN_PASSWORD_CHANGE: ${FORCE_ADMIN_PASSWORD_CHANGE:-true}
+      RATE_LIMIT_LOGIN_PER_MINUTE: ${RATE_LIMIT_LOGIN_PER_MINUTE:-10}
+      RATE_LIMIT_TUTOR_PER_MINUTE: ${RATE_LIMIT_TUTOR_PER_MINUTE:-30}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-30}
+      LLM_MAX_RETRIES: ${LLM_MAX_RETRIES:-2}
+      RATE_LIMIT_BACKEND: ${RATE_LIMIT_BACKEND:-redis}
+      RATE_LIMIT_FAIL_OPEN: ${RATE_LIMIT_FAIL_OPEN:-false}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      NCTB_CORPUS_DIR: ${NCTB_CORPUS_DIR:-}
+      SMTP_ENABLED: ${SMTP_ENABLED:-false}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+    volumes:
+      - api_data:/data
+    # Publish to the host ONLY when API_HOST_PORT is set (e.g. staging).
+    # In production keep it unset so traffic enters through Caddy/nginx.
+    ports:
+      - "${API_HOST_PORT:-}:8000"
+    depends_on:
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    profiles: [core]
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
+    # Not exposed to the host on purpose.
+
+  web:
+    build:
+      context: ./apps/web
+      args:
+        VITE_API_BASE: ${VITE_API_BASE:-/api}
+    image: ghcr.io/tanviruchahs2580/bangla-gpt-app/web:${WEB_TAG:-local}
+    profiles: [web]
+    restart: unless-stopped
+    expose:
+      - "80"
+    depends_on:
+      - api
+
+  caddy:
+    image: caddy:2-alpine
+    profiles: [tls]
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - web
+
+  postgres:
+    image: postgres:16-alpine
+    profiles: [postgres]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bgpt}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_DB: ${POSTGRES_DB:-bgpt}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    profiles: [monitoring]
+    restart: unless-stopped
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    ports:
+      - "127.0.0.1:9090:9090"
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    profiles: [monitoring]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
+
+  backup:
+    build: .
+    image: ghcr.io/tanviruchahs2580/bangla-gpt-app/api:${API_TAG:-local}
+    profiles: [backup]
+    restart: unless-stopped
+    entrypoint: ["python", "/srv/scripts/backup_loop.py"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////data/app.db}
+      BACKUP_DIR: /backups
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      OFFSITE_SYNC_CMD: ${OFFSITE_SYNC_CMD:-}
+    volumes:
+      - api_data:/data:ro
+      - backup_data:/backups
+      - ./scripts:/srv/scripts:ro
+
+volumes:
+  api_data:
+  pg_data:
+  caddy_data:
+  caddy_config:
+  backup_data:

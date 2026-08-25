@@ -44,6 +44,7 @@ def test_tutor_ask_also_carries_request_id(client: TestClient) -> None:
             "password": "supersecret1",
             "name": "শিক্ষার্থী",
             "role": "student",
+            "guardian_consent": True,
             "class_level": 6,
         },
     )

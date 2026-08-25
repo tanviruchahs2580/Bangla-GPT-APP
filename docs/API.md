@@ -20,12 +20,24 @@ Every response carries `X-Request-ID` (echoed if supplied, otherwise generated).
 
 | Method | Path | Auth | Body / notes |
 |---|---|---|---|
-| POST | `/auth/register` | — | `{email, password(min 8), name, role: student\|teacher\|parent, class_level?}` — `class_level` required for students; admin role cannot be self-registered. Returns 201 `{user_id, role, profile_id}` |
-| POST | `/auth/login` | — | `{email, password}` → `{access_token}` (HS256 JWT: `sub`, `role`, `exp`) |
+| POST | `/auth/register` | - | `{email, password(min 8), name, role: student\|teacher\|parent, class_level?, guardian_consent?}` - `class_level` AND `guardian_consent: true` required for students; admin role cannot be self-registered. Returns 201 `{user_id, role, profile_id}` |
+| POST | `/auth/login` | - | `{email, password}` → `{access_token, must_change_password}` (HS256 JWT: `sub`, `role`, `exp`) |
+| POST | `/auth/forgot` | - | `{email}` → always `202 {"status":"accepted"}` (anti-enumeration). Emails a single-use reset token (30 min); token stored only as SHA-256 hash. Dev fallback logs the token to console when SMTP is off and ENV≠production |
+| POST | `/auth/reset` | - | `{token, new_password(min 8)}` → fresh `{access_token}`; single-use + expiry enforced |
+| POST | `/auth/change-password` | Bearer | `{current_password, new_password}` → rotates password and clears the forced-change flag |
 | GET | `/users/me` | any | Profile of the caller: `{user_id, email, role, profile_id, name, class_level}` |
+| GET | `/users/me/export` | any | GDPR-style data export: account, profile, quiz attempts, parent links (`Content-Disposition: attachment`) |
 | DELETE | `/users/me` | any | Self-service account deletion (GDPR-style). Removes profile, quiz attempts + answer logs, parent links. Last remaining admin is refused (409). Returns 204 |
 
-Rate limits (per IP, per process): `/auth/login` 10/min, `/tutor/ask` 30/min (configurable).
+Rate limits (per client IP): `/auth/login`, `/auth/forgot`, `/auth/reset`
+10/min and `/tutor/ask` 30/min by default — configurable via
+`RATE_LIMIT_*_PER_MINUTE`. Backend is per-process memory or shared Redis
+(`RATE_LIMIT_BACKEND=redis`; answers 503 on protected routes when Redis is down
+and `RATE_LIMIT_FAIL_OPEN=false`).
+
+When `must_change_password=true` (production admin bootstrap), every endpoint
+except health/metrics, `/users/me*` and `/auth/change-password` returns 403
+until the password is rotated.
 
 ## Tutor
 

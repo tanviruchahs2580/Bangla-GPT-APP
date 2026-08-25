@@ -15,6 +15,7 @@ def make_client(tmp_path, **overrides) -> TestClient:
         jwt_secret=SECRET,
         admin_email="root@example.com",
         admin_password=PASSWORD,
+        force_admin_password_change=False,
         **overrides,
     )
     return TestClient(create_app(settings))
@@ -27,8 +28,10 @@ def client(tmp_path) -> TestClient:
 
 def _register(client: TestClient, email: str, role: str = "student", class_level: int | None = 6):
     payload: dict = {"email": email, "password": PASSWORD, "name": "নাম", "role": role}
-    if role == "student" and class_level is not None:
-        payload["class_level"] = class_level
+    if role == "student":
+        payload["guardian_consent"] = True
+        if class_level is not None:
+            payload["class_level"] = class_level
     res = client.post("/auth/register", json=payload)
     assert res.status_code == 201, res.text
     return res.json()

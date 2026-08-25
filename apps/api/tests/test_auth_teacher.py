@@ -29,6 +29,7 @@ def _register(client: TestClient, email: str, role: str = "student", class_level
         "role": role,
     }
     if class_level is not None and role == "student":
+        payload["guardian_consent"] = True
         payload["class_level"] = class_level
     res = client.post("/auth/register", json=payload)
     assert res.status_code == 201, res.text
@@ -58,6 +59,7 @@ def test_duplicate_email_rejected(client: TestClient) -> None:
             "password": PASSWORD,
             "name": "à¦…à¦¨à§à¦¯",
             "role": "student",
+            "guardian_consent": True,
             "class_level": 7,
         },
     )
@@ -74,6 +76,7 @@ def test_duplicate_email_rejected(client: TestClient) -> None:
             "password": "short",
             "name": "à¦•à§‡à¦‰",
             "role": "student",
+            "guardian_consent": True,
             "class_level": 6,
         },
     ],

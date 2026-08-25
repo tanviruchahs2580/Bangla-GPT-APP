@@ -43,7 +43,11 @@ export default function LoginPage({ onLogin }: { onLogin: (me: MeResponse | null
         </button>
       </form>
       <p className="muted">
-        অ্যাকাউন্ট নেই? <a href="/register">নিবন্ধন করুন</a>
+        <a href="/forgot">পাসওয়ার্ড ভুলে গেছেন?</a>
+      </p>
+      <p className="muted">
+        অ্যাকাউন্ট নেই? <a href="/register">নিবন্ধন করুন</a> · <a href="/privacy">গোপনীয়তা</a> ·{' '}
+        <a href="/terms">শর্তাবলি</a>
       </p>
     </div>
   )

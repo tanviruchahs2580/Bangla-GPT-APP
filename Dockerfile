@@ -10,14 +10,18 @@ COPY apps/api/pyproject.toml ./apps/api/
 COPY apps/api/src ./apps/api/src
 COPY apps/api/alembic ./apps/api/alembic
 COPY apps/api/alembic.ini ./apps/api/alembic.ini
-RUN pip install --no-cache-dir ./apps/api
+RUN pip install --no-cache-dir ./apps/api "gunicorn>=23.0" "uvicorn-worker>=0.2"
 
-RUN useradd --create-home --shell /usr/sbin/nologin appuser
+RUN useradd --create-home --shell /usr/sbin/nologin appuser \
+    && mkdir -p /data /backups && chown -R appuser:appuser /app /data /backups
 USER appuser
+
+# Number of Uvicorn worker processes; scale horizontally via this env var.
+ENV WEB_CONCURRENCY=2
 
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD ["python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status==200 else 1)"]
 
-CMD ["uvicorn", "bangla_gpt_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "exec gunicorn bangla_gpt_api.main:app -k uvicorn_worker.UvicornWorker -w ${WEB_CONCURRENCY} -b 0.0.0.0:8000 --timeout 60 --graceful-timeout 30 --max-requests 1000 --max-requests-jitter 100 --access-logfile -"]

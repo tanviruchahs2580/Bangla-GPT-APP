@@ -8,11 +8,16 @@ export default function RegisterPage({ onRegister }: { onRegister: (me: MeRespon
   const [password, setPassword] = useState('')
   const [role, setRole] = useState<'student' | 'teacher' | 'parent'>('student')
   const [classLevel, setClassLevel] = useState(6)
+  const [consent, setConsent] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
+    if (role === 'student' && !consent) {
+      setError('শিক্ষার্থী নিবন্ধনের জন্য অভিভাবকের সম্মতি আবশ্যক')
+      return
+    }
     setBusy(true)
     setError(null)
     try {
@@ -22,6 +27,7 @@ export default function RegisterPage({ onRegister }: { onRegister: (me: MeRespon
         name,
         role,
         class_level: role === 'student' ? classLevel : undefined,
+        guardian_consent: role === 'student',
       })
       await login(email, password)
       onRegister(await fetchMe())
@@ -66,6 +72,26 @@ export default function RegisterPage({ onRegister }: { onRegister: (me: MeRespon
               value={classLevel}
               onChange={(e) => setClassLevel(Number(e.target.value))}
             />
+            <label htmlFor="consent" className="muted" style={{ display: 'flex', gap: 8 }}>
+              <input
+                id="consent"
+                type="checkbox"
+                checked={consent}
+                onChange={(e) => setConsent(e.target.checked)}
+                required
+              />
+              <span>
+                আমি অভিভাবক হিসেবে বা অভিভাবকের সম্মতিক্রমে নিবন্ধন করছি এবং{' '}
+                <a href="/privacy" target="_blank" rel="noreferrer">
+                  গোপনীয়তা নীতি
+                </a>{' '}
+                ও{' '}
+                <a href="/terms" target="_blank" rel="noreferrer">
+                  শর্তাবলি
+                </a>{' '}
+                পড়ে সম্মত হচ্ছি।
+              </span>
+            </label>
           </>
         )}
         {error && <p className="error">{error}</p>}
@@ -74,7 +100,8 @@ export default function RegisterPage({ onRegister }: { onRegister: (me: MeRespon
         </button>
       </form>
       <p className="muted">
-        অ্যাকাউন্ট আছে? <a href="/login">লগইন করুন</a>
+        অ্যাকাউন্ট আছে? <a href="/login">লগইন করুন</a> · <a href="/privacy">গোপনীয়তা</a> ·{' '}
+        <a href="/terms">শর্তাবলি</a>
       </p>
     </div>
   )

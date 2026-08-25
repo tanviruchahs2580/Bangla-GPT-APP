@@ -1,0 +1,113 @@
+name: Release & Deploy
+
+# B11 — continuous delivery:
+#   tag push (vX.Y.Z) → build+push GHCR images → SSH deploy (optional).
+# Rollback = redeploy the previous tag on the host (see docs/runbook.md).
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  API_IMAGE: ghcr.io/${{ github.repository }}/api
+  WEB_IMAGE: ghcr.io/${{ github.repository }}/web
+
+jobs:
+  build-push:
+    name: Build & push images to GHCR
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute version label
+        id: meta
+        run: echo "version=${GITHUB_REF_NAME:-manual-$(date +%s)}" >> "$GITHUB_OUTPUT"
+
+      - name: Build & push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.API_IMAGE }}:${{ steps.meta.outputs.version }}
+            ${{ env.API_IMAGE }}:latest
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+
+      - name: Build & push Web image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./apps/web
+          build-args: |
+            VITE_API_BASE=/api
+          push: true
+          tags: |
+            ${{ env.WEB_IMAGE }}:${{ steps.meta.outputs.version }}
+            ${{ env.WEB_IMAGE }}:latest
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+
+  deploy:
+    name: Deploy to production host (SSH)
+    needs: build-push
+    runs-on: ubuntu-latest
+    # Skips cleanly when deployment secrets are not configured yet.
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    environment: production
+    steps:
+      - name: Deploy release over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/bangla-gpt
+            git fetch --tags --force origin
+            git checkout ${{ needs.build-push.outputs.tag }}
+            export API_TAG=${{ needs.build-push.outputs.tag }}
+            export WEB_TAG=${{ needs.build-push.outputs.tag }}
+
+            docker compose --profile core pull || true
+
+            if ! docker compose --profile core up -d --wait --wait-timeout 120; then
+              echo "DEPLOY FAILED — rolling back to previous running state"
+              docker compose --profile core down || true
+              PREV=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
+              if [ -n "$PREV" ]; then
+                git checkout "$PREV"
+                export API_TAG="$PREV"; export WEB_TAG="$PREV"
+                docker compose --profile core up -d --wait --wait-timeout 120
+              fi
+              exit 1
+            fi
+
+            for i in $(seq 1 30); do
+              if curl -fsS http://127.0.0.1:8000/health | grep -q '"status":"ok"'; then
+                echo "Release ${{ needs.build-push.outputs.tag }} healthy"
+                exit 0
+              fi
+              sleep 2
+            done
+            echo "Health check timeout after deploy"
+            exit 1

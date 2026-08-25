@@ -2,16 +2,19 @@
 
 **NCTB-grounded Bangla-first AI personal tutor platform.**
 
-> **Status: PHASE 9 — NCTB RAG SUBSYSTEM (verified on real official corpus).**
-> Everything in Phase 8, plus: respectful acquisition of official NCTB
-> curriculum PDFs (nctb.gov.bd) with sha256 provenance manifests, legacy
-> Bijoy→Unicode conversion, quality-controlled extraction, structure-aware
-> chapter-parented chunking, corpus wiring into the tutor via
-> `NCTB_CORPUS_DIR`, a query-coverage grounding gate (adversarial refusal
-> 4/4 on the real corpus), and retrieval benchmark harness.
-> Student-facing পাঠ্যপুস্তক e-books are not published as static downloads
-> by the source site — recorded as the remaining data gap. Real LLM key
-> still pending.
+> **Status: v0.2.0 — PRODUCTION HARDENING (gap plan B1–B19 executed).**
+> Everything in Phase 9, plus: real **Gemini provider** (`generateContent`,
+> timeout/retry policy), prompt-injection guard (`<evidence>` data-delimiting
+> + system rules + poisoned-chunk tests), password reset (single-use hashed
+> tokens) & change-password with forced admin rotation, GDPR data export,
+> parental-consent-gated student signup, bilingual privacy/terms pages, CORS
+> allowlist, production boot-guard, gunicorn multi-worker, shared Redis rate
+> limiting, docker-compose topology (Caddy auto-HTTPS / nginx dashboard /
+> Prometheus+Grafana / Postgres / backup sidecar), automated backup +
+> restore-rehearsal scripts, alert rules, release CD workflow (GHCR → SSH),
+> golden retrieval benchmark, OCR ingestion adapter (permission-gated) and a
+> concurrency probe. Student-facing পাঠ্যপুস্তক e-books still require
+> rights-holder permission; live Gemini behaviour needs a real API key.
 
 ## API surface (current)
 
@@ -81,8 +84,11 @@ BanglaGptApp/
 | Pipeline | Stage | Status |
 |---|---|---|
 | `ci.yml` api job | install → ruff lint → format → mypy → pytest (3.11+3.12) → pip-audit → alembic cycle → smoke | ✅ active |
+| `ci.yml` postgres job | alembic cycle + API journeys against Postgres 16 service container | ✅ active |
+| `ci.yml` golden-eval job | golden retrieval benchmark w/ grounded-accuracy gate | ✅ active |
 | `ci.yml` web job | Node 24 → npm ci → tsc + vite build | ✅ active |
 | `ci.yml` docker job | build image → run → `/health` + `/ready` probes | ✅ active |
+| `release.yml` | tag → GHCR images → optional SSH deploy w/ health-gated rollback | ✅ tag-driven |
 | `repository-sanity.yml` | structure / secret-file / YAML validation | ✅ active |
 
 Full roadmap: [docs/architecture.md](docs/architecture.md).

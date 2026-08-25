@@ -18,7 +18,7 @@ def test_health_reports_app_identity(client: TestClient) -> None:
     assert body["status"] == "ok"
     assert body["env"] == "test"
     assert body["app"] == "Bangla GPT API"
-    assert body["version"] == "0.1.0"
+    assert body["version"] == "0.2.0"
 
 
 def test_live_endpoint(client: TestClient) -> None:

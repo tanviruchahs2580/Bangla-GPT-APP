@@ -1,0 +1,26 @@
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Security headers
+	header {
+		Strict-Transport-Security "max-age=31536000; include-subdomain"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	# API: strip the /api prefix before proxying to FastAPI
+	handle_path /api/* {
+		reverse_proxy api:8000
+	}
+
+	# Static dashboard
+	handle {
+		reverse_proxy web:80
+	}
+}

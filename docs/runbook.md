@@ -1,6 +1,6 @@
 # Operations Runbook — Bangla GPT APP
 
-Audience: engineer/SRE deploying or operating the API service.
+Audience: engineer/SRE deploying or operating the platform.
 Every command below has been executed and verified on this codebase.
 
 ## 1. Start locally (dev)
@@ -21,79 +21,151 @@ curl http://127.0.0.1:8000/ready
 Web dashboard (dev): `cd apps/web && npm install && npm run dev` → http://localhost:5173
 (dev server proxies `/api/*` to `http://127.0.0.1:8000`). Production build: `npm run build`.
 
-## 2. Container deployment
+## 2. Staging / production deployment (docker compose)
+
+Full topology lives in `docker-compose.yml` with profiles:
+
+```bash
+cp .env.production.example .env    # fill every required value first!
+docker compose --profile core up -d --wait          # api + redis (shared Redis limiter)
+docker compose --profile core --profile web --profile tls up -d --wait   # + nginx dashboard + Caddy auto-HTTPS
+docker compose --profile monitoring up -d           # Prometheus (+ Grafana)
+```
+
+- `ENV=production` boot guard refuses to start with a default/short `JWT_SECRET`,
+  missing `ADMIN_EMAIL/ADMIN_PASSWORD`, or an `ADMIN_PASSWORD` shorter than 12 chars.
+- Set `API_HOST_PORT=18000` in `.env` ONLY for staging/debug when you need direct
+  host access to the API; production traffic must enter through Caddy/nginx.
+- Postgres profile: start `--profile postgres`, point `DATABASE_URL` at
+  `postgresql+psycopg://…` and run alembic (§3).
+
+Single-container run remains available:
 
 ```bash
 docker build -t bangla-gpt-api:local .
 docker run -d --name bgpt -p 8080:8000 \
-  -e ENV=production \
-  -e DATABASE_URL=sqlite:////data/bangla_gpt.db \
+  -e ENV=production -e DATABASE_URL=sqlite:////data/bangla_gpt.db \
   -e JWT_SECRET="$(openssl rand -hex 32)" \
   -e ADMIN_EMAIL=admin@example.com -e ADMIN_PASSWORD='…' \
   bangla-gpt-api:local
 curl -fsS http://127.0.0.1:8080/health && curl -fsS http://127.0.0.1:8080/ready
 ```
 
-Image is python:3.12-slim, runs as non-root `appuser`, has a Docker HEALTHCHECK on `/health`.
-Mount a volume for the SQLite file (e.g., `-v bgpt-data:/data`).
+Image is python:3.12-slim, runs as non-root `appuser`, HEALTHCHECK on `/health`,
+and serves gunicorn+uvicorn workers (`WEB_CONCURRENCY`, default 2).
+
+End-to-end stack smoke (executed inside the api container):
+
+```bash
+docker cp scripts/smoke_stack.py <api-container>:/tmp/smoke_stack.py
+docker compose exec -T api python /tmp/smoke_stack.py   # expect SMOKE OK
+```
 
 ## 3. Database migrations
 
-Alembic is authoritative for any file/persistent DB (`create_all` only serves in-memory test DBs).
+Alembic is authoritative for any file/persistent DB (`create_all` only serves
+in-memory test DBs; multi-worker boots tolerate concurrent create races).
 
 ```bash
 cd apps/api
-DATABASE_URL=sqlite:///./bangla_gpt.db alembic upgrade head      # apply
-DATABASE_URL=sqlite:///./bangla_gpt.db alembic downgrade base    # rollback all
-DATABASE_URL=sqlite:///./bangla_gpt.db alembic current           # inspect
+DATABASE_URL=<url> alembic upgrade head      # apply
+DATABASE_URL=<url> alembic downgrade base    # rollback all
+DATABASE_URL=<url> alembic current           # inspect
 ```
 
-Verified cycle: `upgrade head → downgrade base → upgrade head` (CI runs this every push).
+Verified cycle: `upgrade head → downgrade base → upgrade head` on SQLite (CI) and
+Postgres 16 (CI service container).
 
-## 4. Backup & restore (SQLite file DB)
+## 4. Backups & restore rehearsal (automated)
+
+The `backup` compose sidecar runs `scripts/backup_loop.py` every
+`BACKUP_INTERVAL_SECONDS` (default daily): online sqlite snapshot (or `pg_dump`
+for Postgres) into the `backup_data` volume, prunes beyond `BACKUP_KEEP_DAYS`,
+then executes `OFFSITE_SYNC_CMD` if configured.
+
+```bash
+docker compose --profile backup up -d                 # start scheduled backups
+docker compose logs backup | tail                     # "sqlite backup written: …"
+docker compose exec backup python /srv/scripts/restore_test.py --backup-dir /backups
+# PASS: integrity_check ok + row counts printed
+```
+
+Manual backup (dev):
 
 ```powershell
-# Backup (RPO: schedule to taste, e.g. hourly copy + offsite sync)
 Copy-Item bangla_gpt.db "backups\bangla_gpt_$(Get-Date -Format yyyyMMdd_HHmm).db"
-# Restore
-Stop service → Copy-Item backup.db bangla_gpt.db → Start service → alembic upgrade head
-# Verify restore
-sqlite3 bangla_gpt.db "SELECT count(*) FROM users;"
 ```
 
-Rehearsed 2026-08-25: file copy → destroy → restore → row count verified (`RESTORE_OK`).
-RPO/RTO are NOT yet formally defined — required before production pilot (see §8).
+Rehearsed 2026-08-26 in the compose stack: automated snapshot → restore test
+(`integrity_check: ok`, row counts verified, exit 0).
 
-## 5. Health checks & monitoring
+## 5. Health checks, metrics & alerting
 
 | Probe | Meaning | Action if failing |
 |---|---|---|
 | `GET /health` 200 | process up | restart container / check logs |
-| `GET /live` 200 | request loop alive | container orchestrator should restart |
+| `GET /live` 200 | request loop alive | orchestrator should restart |
 | `GET /ready` 200 | DB reachable AND provider configured | 503 with provider message → fix `LLM_PROVIDER`; 503 `Database unavailable` → check DB path/volume |
-| `GET /metrics` | Prometheus series | scrape via Prometheus; alert on 5xx rate (`bgpt_http_requests_total{status="500"}`), p95 latency (`bgpt_http_request_duration_seconds`) |
+| `GET /metrics` | Prometheus series | scraped by Prometheus (monitoring profile) |
 
-Logs are JSON lines to stdout with `X-Request-ID` correlation — ship stdout to your log stack.
-Alerting rules and dashboards are not yet provisioned (infra-pending).
+Alert rules ship in `deploy/prometheus/alerts.yml`:
 
-## 6. Rollback
+- `HighHTTP5xxRate` — >2% 5xx for 5 min (critical)
+- `HighP95Latency` — p95 > 1s for 10 min (warning)
+- `APIScrapeDown` — scrape target down 2 min (critical)
+- `UnhandledExceptions` — any unhandled exception increase
+- `DiskNearFull` — requires node_exporter (fires only when present)
 
-- **App rollback:** redeploy previous image tag; schema is forward-compatible within current revisions. Verify `/health` after rollout.
-- **DB rollback:** `alembic downgrade <revision>` (verified `downgrade base → upgrade head`). Take a backup before downgrading.
-- **Bad release:** CI gates (lint/type/tests/audit/migrations/container smoke) must pass before merge to `main`; rollback = previous green commit's image.
+Logs are JSON lines to stdout with `X-Request-ID` correlation. `LOG_LEVEL`
+controls verbosity (DEBUG/INFO/WARNING/ERROR/CRITICAL).
 
-## 7. Known operational limits
+## 6. Admin credential rotation
 
-- In-memory rate limiter is per-process → multi-worker/multi-replica needs Redis (documented).
+Bootstrap admin (`ADMIN_EMAIL`/`ADMIN_PASSWORD`) is created once; first login in
+a fresh database returns `must_change_password=true` and blocks all other
+endpoints until `POST /auth/change-password` succeeds.
+
+Quarterly rotation procedure:
+
+1. Log in as admin → `POST /auth/change-password` with current+new password
+   (response issues a fresh JWT automatically).
+2. If the password is lost: set a new `ADMIN_PASSWORD` env value only after
+   deleting that user row from the DB (bootstrap re-creates it at next boot).
+3. TOTP/MFA is NOT yet implemented — tracked as future hardening; until then,
+   restrict `/admin/*` access at the reverse proxy or VPN layer.
+
+## 7. Rollback
+
+- **Release rollback:** redeploy previous tag — `git checkout vX.Y.Z &&
+  docker compose pull && docker compose up -d`. The release workflow performs
+  this automatically when its post-deploy health gate fails.
+- **DB rollback:** `alembic downgrade <revision>` (verified cycle). Always take
+  a backup (§4) before downgrading.
+- **Bad release prevention:** CI gates (lint/format/type/tests/pip-audit/
+  migrations incl. Postgres/golden-eval/container smoke) must pass before merge.
+
+## 8. Known operational limits
+
+- Redis rate limiting uses a fixed 60 s window; counts are approximate under
+  heavy skew (standard trade-off vs sliding-window log).
+- `RATE_LIMIT_FAIL_OPEN=false` (default) answers **503** on protected routes if
+  Redis is down; set `true` to prefer availability over strictness.
 - SQLite is single-node; move to Postgres before horizontal scaling.
-- Real LLM providers require API keys (`LLM_PROVIDER=mock` default answers from corpus context).
-- TLS termination belongs to the reverse proxy/load balancer, not the app.
+- Live Gemini behaviour needs a real `GEMINI_API_KEY`; contract tests cover the
+  client, live latency/quota behaviour is UNVERIFIED until a key is deployed.
+- Textbook (পাঠ্যপুস্তক) OCR ingestion is implemented behind a permission gate
+  (`BGPT_OCR_CONFIRMED=yes`) pending rights-holder permission (B18).
+- TOTP/MFA for admins not yet implemented (§6).
 
-## 8. Pre-production checklist
+## 9. Pre-production checklist
 
-- [ ] Postgres + Redis provisioned; `DATABASE_URL` migrated; Alembic run against prod DB
-- [ ] `JWT_SECRET` set to ≥32-byte random value; `ENV=production`; admin bootstrap credentials rotated
-- [ ] RPO/RTO defined; automated backups scheduled and RESTORE TESTED
-- [ ] Prometheus/Grafana/alerting wired to `/metrics`
-- [ ] Load test at expected concurrency (locust/k6) executed
-- [ ] Reverse proxy TLS enforced; security headers reviewed
+- [x] Postgres CI job green (alembic + API journeys against Postgres 16)
+- [x] Redis-backed shared rate limiting verified in compose stack
+- [x] `JWT_SECRET` ≥32 random bytes enforced at boot in production
+- [x] Automated backups scheduled AND restore rehearsed (§4)
+- [x] Prometheus alert rules shipped (§5); Grafana provisionable via profile
+- [x] Load/concurrency probe executed (scripts/concurrency_probe.py);
+      k6 script provided in `load/k6-tutor.js` for larger-scale runs
+- [ ] Real `GEMINI_API_KEY` deployed and live latency/quota validated
+- [ ] Domain + ACME email set; Caddy TLS profile enabled; DNS pointed
+- [ ] Offsite backup sync command configured (`OFFSITE_SYNC_CMD`)

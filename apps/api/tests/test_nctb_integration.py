@@ -39,6 +39,7 @@ def _register_and_login(client: TestClient, email: str) -> dict:
             "password": PASSWORD,
             "name": "শিক্ষার্থী",
             "role": "student",
+            "guardian_consent": True,
             "class_level": 9,
         },
     )

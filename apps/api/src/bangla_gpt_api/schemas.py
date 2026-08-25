@@ -33,11 +33,15 @@ class RegisterRequest(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     role: Literal["student", "teacher", "parent"]
     class_level: int | None = Field(default=None, ge=1, le=12)
+    # Parental/guardian consent is mandatory for student accounts (minors).
+    guardian_consent: bool = False
 
     @model_validator(mode="after")
     def _require_class_level_for_students(self) -> "RegisterRequest":
         if self.role == "student" and self.class_level is None:
             raise ValueError("class_level is required when role is 'student'")
+        if self.role == "student" and not self.guardian_consent:
+            raise ValueError("guardian_consent is required when role is 'student'")
         return self
 
 
@@ -55,6 +59,30 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    must_change_password: bool = False
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=255)
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=16, max_length=256)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class DataExportResponse(BaseModel):
+    """Self-service GDPR-style export of everything we store about the user."""
+
+    user: dict
+    profile: dict | None
+    quiz_attempts: list[dict]
+    parent_links: list[dict]
 
 
 class MeResponse(BaseModel):

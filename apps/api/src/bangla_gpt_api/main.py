@@ -1,18 +1,22 @@
-import time
-from collections import defaultdict, deque
+import hashlib
+import logging
+import secrets
+from collections import defaultdict
 from collections.abc import Generator
+from datetime import UTC, datetime, timedelta
 from time import perf_counter
 from typing import Annotated
 
 import jwt as pyjwt
-from fastapi import Depends, FastAPI, HTTPException, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from sqlalchemy import delete, func, select
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
 
 from bangla_gpt_api.auth.security import (
     create_access_token,
@@ -20,19 +24,20 @@ from bangla_gpt_api.auth.security import (
     hash_password,
     verify_password,
 )
-from bangla_gpt_api.config import Settings, get_settings
+from bangla_gpt_api.config import DEFAULT_JWT_SECRET, Settings, get_settings
 from bangla_gpt_api.data.loader import load_sample_corpus
 from bangla_gpt_api.db.models import (
     AnswerLog,
     Parent,
     ParentStudentLink,
+    PasswordReset,
     QuizAttempt,
     Student,
     Teacher,
     User,
 )
 from bangla_gpt_api.db.session import init_db, make_engine, make_session_factory
-from bangla_gpt_api.logging_config import configure_logging
+from bangla_gpt_api.logging_config import configure_logging, json_log
 from bangla_gpt_api.metrics import (
     REGISTRY,
     REQUEST_LATENCY_SECONDS,
@@ -40,13 +45,21 @@ from bangla_gpt_api.metrics import (
     UNHANDLED_EXCEPTIONS_TOTAL,
 )
 from bangla_gpt_api.providers import ProviderNotConfigured, get_provider
+from bangla_gpt_api.ratelimit import (
+    RateLimitBackendError,
+    RateLimiter,
+    build_limiter,
+)
 from bangla_gpt_api.retrieval.bm25 import BM25Index
 from bangla_gpt_api.schemas import (
     AdminOverview,
     AskRequest,
     AskResponse,
+    ChangePasswordRequest,
     ChapterStat,
     ClassAnalytics,
+    DataExportResponse,
+    ForgotPasswordRequest,
     LoginRequest,
     MeResponse,
     ParentLinkRequest,
@@ -57,6 +70,7 @@ from bangla_gpt_api.schemas import (
     QuizSubmitRequest,
     RegisterRequest,
     RegisterResponse,
+    ResetPasswordRequest,
     ReviewItem,
     RoleUpdateRequest,
     StudentBrief,
@@ -65,8 +79,56 @@ from bangla_gpt_api.schemas import (
     TokenResponse,
     UserPublic,
 )
+from bangla_gpt_api.services.mailer import send_mail, smtp_configured
 from bangla_gpt_api.services.quiz import ClozeQuizGenerator, dump_quiz
 from bangla_gpt_api.services.tutor import TutorService
+
+logger = logging.getLogger(__name__)
+
+# Endpoints reachable while a mandatory password change is pending.
+_FORCE_CHANGE_EXEMPT_PATHS = frozenset(
+    {
+        "/health",
+        "/live",
+        "/ready",
+        "/metrics",
+        "/auth/change-password",
+        "/auth/login",
+        "/users/me",
+        "/users/me/export",
+    }
+)
+
+
+def _safe_init_db(engine) -> None:
+    """create_all tolerant of concurrent multi-worker boot (gunicorn -w N)."""
+    try:
+        init_db(engine)
+    except OperationalError as exc:
+        if "already exists" not in str(exc):
+            raise
+
+
+def enforce_production_safety(settings: Settings) -> None:
+    """Refuse to boot in production with insecure configuration (B6)."""
+    if not settings.is_production:
+        return
+    problems: list[str] = []
+    if settings.jwt_secret == DEFAULT_JWT_SECRET or len(settings.jwt_secret) < 32:
+        problems.append(
+            "JWT_SECRET must be overridden in production with at least 32 random characters"
+        )
+    if not settings.admin_email or not settings.admin_password:
+        problems.append("ADMIN_EMAIL and ADMIN_PASSWORD must be configured in production")
+    elif len(settings.admin_password) < 12:
+        problems.append("ADMIN_PASSWORD must be at least 12 characters in production")
+    if settings.rate_limit_backend == "redis" and not settings.redis_url:
+        problems.append("RATE_LIMIT_BACKEND=redis requires REDIS_URL")
+    if problems:
+        raise RuntimeError(
+            "Refusing to start: insecure production configuration detected:\n- "
+            + "\n- ".join(problems)
+        )
 
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
@@ -81,24 +143,23 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, rules: dict[str, int]) -> None:
+    def __init__(self, app, rules: dict[str, int], limiter: "RateLimiter") -> None:
         super().__init__(app)
         self.rules = rules
-        self._hits: dict[tuple[str, str], deque[float]] = defaultdict(deque)
+        self.limiter = limiter
 
     async def dispatch(self, request: Request, call_next):
         client_ip = request.client.host if request.client else "unknown"
         for path_prefix, limit in self.rules.items():
             if not request.url.path.startswith(path_prefix) or limit <= 0:
                 continue
-            key = (client_ip, path_prefix)
-            now = time.monotonic()
-            hits = self._hits[key]
-            while hits and now - hits[0] >= 60.0:
-                hits.popleft()
-            if len(hits) >= limit:
+            key = f"{path_prefix}|{client_ip}"
+            try:
+                allowed = self.limiter.check(key, limit)
+            except RateLimitBackendError:
+                return JSONResponse({"detail": "Rate limiter unavailable"}, status_code=503)
+            if not allowed:
                 return JSONResponse({"detail": "Rate limit exceeded"}, status_code=429)
-            hits.append(now)
             break
         return await call_next(request)
 
@@ -151,9 +212,26 @@ def _unauthorized(detail: str = "Not authenticated") -> HTTPException:
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
-    configure_logging()
     settings = settings or get_settings()
+    configure_logging(settings.log_level)
+    enforce_production_safety(settings)
+    if settings.rate_limit_backend not in ("memory", "redis"):
+        raise RuntimeError(
+            f"RATE_LIMIT_BACKEND={settings.rate_limit_backend!r} is not supported; "
+            "use 'memory' or 'redis'"
+        )
+    if settings.rate_limit_backend == "redis" and not settings.redis_url:
+        raise RuntimeError("RATE_LIMIT_BACKEND=redis requires REDIS_URL to be set")
     app = FastAPI(title=settings.app_name, version=settings.version)
+
+    if settings.cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
 
     try:
         provider = get_provider(settings)
@@ -180,10 +258,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         tutor = TutorService(index=index, provider=provider)
 
     engine = make_engine(settings)
-    init_db(engine)
+    _safe_init_db(engine)
     session_factory = make_session_factory(engine)
 
     if settings.admin_email and settings.admin_password:
+        force_change = settings.force_admin_password_change
         with session_factory() as bootstrap_db:
             admin_email = settings.admin_email.strip().lower()
             exists = bootstrap_db.execute(
@@ -195,16 +274,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         email=admin_email,
                         password_hash=hash_password(settings.admin_password),
                         role="admin",
+                        must_change_password=force_change,
                     )
                 )
-                bootstrap_db.commit()
+                try:
+                    bootstrap_db.commit()
+                except IntegrityError:
+                    # Another worker bootstrapped the same admin concurrently.
+                    bootstrap_db.rollback()
 
     app.add_middleware(
         RateLimitMiddleware,
         rules={
             "/auth/login": settings.rate_limit_login_per_minute,
             "/tutor/ask": settings.rate_limit_tutor_per_minute,
+            "/auth/forgot": settings.rate_limit_login_per_minute,
+            "/auth/reset": settings.rate_limit_login_per_minute,
         },
+        limiter=build_limiter(settings),
     )
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes)
     app.add_middleware(RequestIdMiddleware)
@@ -223,6 +310,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     BearerCredentials = Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)]
 
     def get_current_user(
+        request: Request,
         credentials: BearerCredentials,
         db: DbSession,
     ) -> User:
@@ -236,6 +324,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         user = db.get(User, user_id)
         if user is None:
             raise _unauthorized("Invalid or expired token")
+        if user.must_change_password and request.url.path not in _FORCE_CHANGE_EXEMPT_PATHS:
+            raise HTTPException(
+                status_code=403,
+                detail="Password change required. Use POST /auth/change-password first.",
+            )
         return user
 
     CurrentUser = Annotated[User, Depends(get_current_user)]
@@ -353,7 +446,101 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if user is None or not verify_password(payload.password, user.password_hash):
             raise HTTPException(status_code=401, detail="Incorrect email or password")
         token = create_access_token(user, settings=settings)
-        return TokenResponse(access_token=token)
+        return TokenResponse(access_token=token, must_change_password=user.must_change_password)
+
+    def _hash_reset_token(token: str) -> str:
+        return hashlib.sha256(token.encode()).hexdigest()
+
+    @app.post("/auth/forgot", status_code=202)
+    def forgot_password(payload: ForgotPasswordRequest, db: DbSession) -> dict:
+        """Start a password reset.
+
+        Always returns 202 with a generic body so attackers cannot enumerate
+        registered email addresses. Tokens are single-use, expire after
+        ``password_reset_token_minutes`` and only their SHA-256 hash is stored.
+        """
+        email = payload.email.strip().lower()
+        user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
+        if user is None:
+            return {"status": "accepted"}
+
+        now = datetime.now(UTC).replace(tzinfo=None)
+        pending = (
+            db.execute(
+                select(PasswordReset).where(
+                    PasswordReset.user_id == user.id, PasswordReset.used_at.is_(None)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for row in pending:
+            row.used_at = now
+
+        token = secrets.token_urlsafe(32)
+        db.add(
+            PasswordReset(
+                user_id=user.id,
+                token_hash=_hash_reset_token(token),
+                expires_at=now + timedelta(minutes=settings.password_reset_token_minutes),
+            )
+        )
+        db.commit()
+
+        delivered = send_mail(
+            settings,
+            to=user.email,
+            subject="পাসওয়ার্ড রিসেট / Password reset",
+            body=(f"পাসওয়ার্ড রিসেট করতে নিচের টোকেনটি ব্যবহার করুন (৩০ মিনিটের জন্য বৈধ):\n\n{token}\n"),
+        )
+        if not delivered:
+            if settings.is_production:
+                json_log(
+                    logger,
+                    logging.WARNING,
+                    "password_reset_email_undeliverable",
+                    smtp_configured=smtp_configured(settings),
+                )
+            else:
+                # Non-production convenience: the only place the raw token is
+                # ever logged; never emitted when ENV=production.
+                json_log(logger, logging.INFO, "password_reset_token_console", token=token)
+        return {"status": "accepted"}
+
+    @app.post("/auth/reset", response_model=TokenResponse)
+    def reset_password(payload: ResetPasswordRequest, db: DbSession) -> TokenResponse:
+        now = datetime.now(UTC).replace(tzinfo=None)
+        row = db.execute(
+            select(PasswordReset).where(
+                PasswordReset.token_hash == _hash_reset_token(payload.token),
+                PasswordReset.used_at.is_(None),
+            )
+        ).scalar_one_or_none()
+        if row is None or row.expires_at < now:
+            raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+        row.used_at = now
+        user = db.get(User, row.user_id)
+        if user is None:
+            raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+        user.password_hash = hash_password(payload.new_password)
+        user.must_change_password = False
+        db.commit()
+        return TokenResponse(access_token=create_access_token(user, settings=settings))
+
+    @app.post("/auth/change-password", response_model=TokenResponse)
+    def change_password(
+        payload: ChangePasswordRequest, db: DbSession, user: CurrentUser
+    ) -> TokenResponse:
+        if not verify_password(payload.current_password, user.password_hash):
+            raise HTTPException(status_code=400, detail="Current password is incorrect")
+        if payload.current_password == payload.new_password:
+            raise HTTPException(
+                status_code=422, detail="New password must differ from the current one"
+            )
+        user.password_hash = hash_password(payload.new_password)
+        user.must_change_password = False
+        db.commit()
+        return TokenResponse(access_token=create_access_token(user, settings=settings))
 
     @app.post("/tutor/ask", response_model=AskResponse)
     async def ask(payload: AskRequest, user: CurrentUser) -> AskResponse:
@@ -404,6 +591,69 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         db.delete(user)
         db.commit()
         return Response(status_code=204)
+
+    @app.get("/users/me/export", response_model=DataExportResponse)
+    def export_me(response: Response, db: DbSession, user: CurrentUser) -> DataExportResponse:
+        """Self-service data portability: everything stored about this account."""
+        response.headers["Content-Disposition"] = 'attachment; filename="my-data-export.json"'
+        student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one_or_none()
+        teacher = db.execute(select(Teacher).where(Teacher.user_id == user.id)).scalar_one_or_none()
+        parent = db.execute(select(Parent).where(Parent.user_id == user.id)).scalar_one_or_none()
+
+        profile: dict
+        attempt_rows: list[QuizAttempt] = []
+        links: list[dict] = []
+        if student is not None:
+            profile = {
+                "type": "student",
+                "id": student.id,
+                "name": student.name,
+                "class_level": student.class_level,
+            }
+            attempt_rows = list(
+                db.execute(
+                    select(QuizAttempt).where(QuizAttempt.student_id == student.id)
+                ).scalars()
+            )
+            for link in db.execute(
+                select(ParentStudentLink).where(ParentStudentLink.student_id == student.id)
+            ).scalars():
+                links.append({"direction": "linked_by", "parent_id": link.parent_id})
+        elif teacher is not None:
+            profile = {"type": "teacher", "id": teacher.id, "name": teacher.name}
+        elif parent is not None:
+            profile = {"type": "parent", "id": parent.id, "name": parent.name}
+            for link in db.execute(
+                select(ParentStudentLink).where(ParentStudentLink.parent_id == parent.id)
+            ).scalars():
+                links.append({"direction": "links", "student_id": link.student_id})
+        else:
+            profile = {"type": None}
+
+        attempts = [
+            {
+                "id": a.id,
+                "subject": a.subject,
+                "class_level": a.class_level,
+                "status": a.status,
+                "total": a.total,
+                "correct": a.correct,
+                "score_pct": a.score_pct,
+                "created_at": a.created_at.isoformat() if a.created_at else None,
+            }
+            for a in attempt_rows
+        ]
+        return DataExportResponse(
+            user={
+                "id": user.id,
+                "email": user.email,
+                "role": user.role,
+                "created_at": user.created_at.isoformat() if user.created_at else None,
+            },
+            profile=profile,
+            quiz_attempts=attempts,
+            parent_links=links,
+        )
 
     @app.get("/students/{student_id}", response_model=StudentResponse)
     def get_student(student_id: int, db: DbSession, user: CurrentUser) -> StudentResponse:

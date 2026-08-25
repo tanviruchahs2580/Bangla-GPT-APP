@@ -8,6 +8,7 @@
 .env
 .env.*
 !.env.example
+!.env.production.example
 *.pem
 *.key
 *.p12
@@ -68,6 +69,9 @@ venv/
 models/
 *.onnx
 *.gguf
+
+# --- Generated evaluation artifacts (regenerable via scripts/evaluate_golden.py) ---
+apps/api/eval/golden_report.json
 
 # --- NCTB corpus content (copyrighted textbooks; provenance stays in git) ---
 data/nctb/raw/
