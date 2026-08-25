@@ -12,7 +12,7 @@ def make_engine(settings: Settings) -> Engine:
     kwargs: dict = {}
     if url.startswith("sqlite"):
         kwargs["connect_args"] = {"check_same_thread": False}
-        if ":memory:" in url:
+        if ":memory:" in url or url.rstrip("/") == "sqlite:":
             kwargs["poolclass"] = StaticPool
     return create_engine(url, **kwargs)
 

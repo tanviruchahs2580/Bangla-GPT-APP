@@ -37,6 +37,32 @@ def test_health_live_ready_and_request_id(client: TestClient) -> None:
 
 
 def test_tutor_ask_also_carries_request_id(client: TestClient) -> None:
-    res = client.post("/tutor/ask", json={"question": "কোষ কী?", "class_level": 6})
+    reg = client.post(
+        "/auth/register",
+        json={
+            "email": "obs@example.com",
+            "password": "supersecret1",
+            "name": "শিক্ষার্থী",
+            "role": "student",
+            "class_level": 6,
+        },
+    )
+    assert reg.status_code == 201, reg.text
+    login = client.post(
+        "/auth/login", json={"email": "obs@example.com", "password": "supersecret1"}
+    )
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    res = client.post("/tutor/ask", json={"question": "কোষ কী?", "class_level": 6}, headers=headers)
     assert res.status_code == 200
     assert "X-Request-ID" in res.headers
+
+
+def test_metrics_exposes_prometheus_series(client: TestClient) -> None:
+    assert client.get("/health").status_code == 200
+    metrics = client.get("/metrics")
+    assert metrics.status_code == 200
+    assert metrics.headers["content-type"].startswith("text/plain")
+    body = metrics.text
+    assert "bgpt_http_requests_total" in body
+    assert "bgpt_http_request_duration_seconds" in body
+    assert "/health" in body

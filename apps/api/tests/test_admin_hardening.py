@@ -138,5 +138,11 @@ def test_body_size_limit_413(tmp_path) -> None:
 
 
 def test_normal_payload_passes_size_guard(client: TestClient) -> None:
-    res = client.post("/tutor/ask", json={"question": "কোষ কী?", "class_level": 6})
+    _register(client, "size@example.com")
+    headers = _login_headers(client, "size@example.com")
+    res = client.post(
+        "/tutor/ask",
+        json={"question": "কোষ কী?", "class_level": 6},
+        headers=headers,
+    )
     assert res.status_code == 200

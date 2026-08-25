@@ -57,6 +57,15 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class MeResponse(BaseModel):
+    user_id: int
+    email: str
+    role: str
+    profile_id: int | None
+    name: str | None
+    class_level: int | None
+
+
 class ChapterStat(BaseModel):
     chapter: str
     asked: int

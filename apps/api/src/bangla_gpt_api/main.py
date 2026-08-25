@@ -1,13 +1,15 @@
 import time
 from collections import defaultdict, deque
 from collections.abc import Generator
+from time import perf_counter
 from typing import Annotated
 
 import jwt as pyjwt
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import func, select
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -31,6 +33,12 @@ from bangla_gpt_api.db.models import (
 )
 from bangla_gpt_api.db.session import init_db, make_engine, make_session_factory
 from bangla_gpt_api.logging_config import configure_logging
+from bangla_gpt_api.metrics import (
+    REGISTRY,
+    REQUEST_LATENCY_SECONDS,
+    REQUESTS_TOTAL,
+    UNHANDLED_EXCEPTIONS_TOTAL,
+)
 from bangla_gpt_api.providers import ProviderNotConfigured, get_provider
 from bangla_gpt_api.retrieval.bm25 import BM25Index
 from bangla_gpt_api.schemas import (
@@ -40,6 +48,7 @@ from bangla_gpt_api.schemas import (
     ChapterStat,
     ClassAnalytics,
     LoginRequest,
+    MeResponse,
     ParentLinkRequest,
     QuizQuestionPublic,
     QuizResult,
@@ -106,6 +115,33 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+class PrometheusMetricsMiddleware(BaseHTTPMiddleware):
+    """Count every request and observe latency, labeled by route template."""
+
+    async def dispatch(self, request: Request, call_next):
+        start = perf_counter()
+        status_code = 500
+        try:
+            response = await call_next(request)
+            status_code = response.status_code
+            return response
+        except Exception:
+            UNHANDLED_EXCEPTIONS_TOTAL.labels(
+                method=request.method, path=self._route_path(request)
+            ).inc()
+            raise
+        finally:
+            elapsed = perf_counter() - start
+            path = self._route_path(request)
+            REQUESTS_TOTAL.labels(method=request.method, path=path, status=str(status_code)).inc()
+            REQUEST_LATENCY_SECONDS.labels(path=path).observe(elapsed)
+
+    @staticmethod
+    def _route_path(request: Request) -> str:
+        route = request.scope.get("route")
+        return getattr(route, "path", request.url.path)
+
+
 def _unauthorized(detail: str = "Not authenticated") -> HTTPException:
     return HTTPException(
         status_code=401,
@@ -159,6 +195,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes)
     app.add_middleware(RequestIdMiddleware)
+    app.add_middleware(PrometheusMetricsMiddleware)
 
     def get_db() -> Generator[Session, None, None]:
         db = session_factory()
@@ -212,6 +249,37 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return student
         raise HTTPException(status_code=403, detail="Not allowed to access this student")
 
+    def _build_me_response(db: Session, user: User) -> MeResponse:
+        profile_id: int | None = None
+        name: str | None = None
+        class_level: int | None = None
+        if user.role == "student":
+            student = db.execute(
+                select(Student).where(Student.user_id == user.id)
+            ).scalar_one_or_none()
+            if student is not None:
+                profile_id, name, class_level = student.id, student.name, student.class_level
+        elif user.role == "teacher":
+            teacher = db.execute(
+                select(Teacher).where(Teacher.user_id == user.id)
+            ).scalar_one_or_none()
+            if teacher is not None:
+                profile_id, name = teacher.id, teacher.name
+        elif user.role == "parent":
+            parent = db.execute(
+                select(Parent).where(Parent.user_id == user.id)
+            ).scalar_one_or_none()
+            if parent is not None:
+                profile_id, name = parent.id, parent.name
+        return MeResponse(
+            user_id=user.id,
+            email=user.email,
+            role=user.role,
+            profile_id=profile_id,
+            name=name,
+            class_level=class_level,
+        )
+
     @app.get("/health")
     async def health() -> dict:
         return {
@@ -238,6 +306,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except Exception as exc:
             raise HTTPException(status_code=503, detail="Database unavailable") from exc
         return {"status": "ready", "provider": provider.name}
+
+    @app.get("/metrics", include_in_schema=False)
+    async def metrics() -> Response:
+        return Response(content=generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
     @app.post("/auth/register", response_model=RegisterResponse, status_code=201)
     def register(payload: RegisterRequest, db: DbSession) -> RegisterResponse:
@@ -271,10 +343,54 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return TokenResponse(access_token=token)
 
     @app.post("/tutor/ask", response_model=AskResponse)
-    async def ask(payload: AskRequest) -> AskResponse:
+    async def ask(payload: AskRequest, user: CurrentUser) -> AskResponse:
         if tutor is None:
             raise HTTPException(status_code=503, detail="Tutor service unavailable")
         return await tutor.ask(payload.question, payload.class_level, payload.subject)
+
+    @app.get("/users/me", response_model=MeResponse)
+    def read_me(db: DbSession, user: CurrentUser) -> MeResponse:
+        return _build_me_response(db, user)
+
+    @app.delete("/users/me", status_code=204)
+    def delete_me(db: DbSession, user: CurrentUser) -> Response:
+        """GDPR-style self-service account deletion.
+
+        Removes the account and all owned profile data: student/teacher/parent
+        profile, quiz attempts + answer logs, and parent-student links.
+        The last remaining admin cannot delete their own account (409).
+        """
+        if user.role == "admin":
+            admins = db.execute(
+                select(func.count()).select_from(User).where(User.role == "admin")
+            ).scalar_one()
+            if admins <= 1:
+                raise HTTPException(status_code=409, detail="Cannot delete the last admin")
+
+        student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one_or_none()
+        parent = db.execute(select(Parent).where(Parent.user_id == user.id)).scalar_one_or_none()
+        teacher = db.execute(select(Teacher).where(Teacher.user_id == user.id)).scalar_one_or_none()
+
+        if parent is not None:
+            db.execute(delete(ParentStudentLink).where(ParentStudentLink.parent_id == parent.id))
+            db.delete(parent)
+        if teacher is not None:
+            db.delete(teacher)
+        if student is not None:
+            attempt_ids = (
+                db.execute(select(QuizAttempt.id).where(QuizAttempt.student_id == student.id))
+                .scalars()
+                .all()
+            )
+            if attempt_ids:
+                db.execute(delete(AnswerLog).where(AnswerLog.attempt_id.in_(attempt_ids)))
+            db.execute(delete(QuizAttempt).where(QuizAttempt.student_id == student.id))
+            db.execute(delete(ParentStudentLink).where(ParentStudentLink.student_id == student.id))
+            db.delete(student)
+
+        db.delete(user)
+        db.commit()
+        return Response(status_code=204)
 
     @app.get("/students/{student_id}", response_model=StudentResponse)
     def get_student(student_id: int, db: DbSession, user: CurrentUser) -> StudentResponse:
