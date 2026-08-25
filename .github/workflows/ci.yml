@@ -42,8 +42,14 @@ jobs:
       - name: Ruff format check
         run: ruff format --check .
 
+      - name: Type check (mypy)
+        run: mypy src
+
       - name: Tests
         run: pytest -q
+
+      - name: Dependency audit (pip-audit)
+        run: python -m pip_audit
 
       - name: Alembic migration check
         run: |
@@ -53,6 +59,28 @@ jobs:
 
       - name: Smoke start (import app + open routes)
         run: python -c "from bangla_gpt_api.main import create_app; app = create_app(); print(sorted(r.path for r in app.routes))"
+
+  web:
+    name: Web build (apps/web)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies (npm ci)
+        run: npm ci
+
+      - name: Build (tsc + vite)
+        run: npm run build
 
   docker:
     name: Docker build & container smoke
