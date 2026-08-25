@@ -2,19 +2,23 @@
 
 **NCTB-grounded Bangla-first AI personal tutor platform.**
 
-> **Status: PHASE 7 — PARENT DASHBOARD (verified).**
-> Full student-teacher-parent-admin role set, quiz/progress, teacher analytics,
-> admin management, parent child-linkage with scoped progress, rate limiting,
-> body-size guard, Alembic migrations (2 revisions), and a CI-verified container.
-> Real LLM providers, real NCTB corpus, web/mobile UIs: pending.
+> **Status: PHASE 8 — WEB DASHBOARD & PRODUCTION HARDENING (verified).**
+> Full student-teacher-parent-admin role set, authenticated tutor endpoint,
+> quiz/progress, teacher analytics, admin management, parent child-linkage,
+> GDPR-style self-service account deletion (`DELETE /users/me`), Prometheus
+> `/metrics`, rate limiting, body-size guard, Alembic migrations (2 revisions),
+> a CI-verified container, and a React web dashboard wired to the live APIs.
+> Real LLM providers and the real NCTB corpus remain pending external inputs.
 
 ## API surface (current)
 
 | Endpoint | Auth | Purpose |
 |---|---|---|
 | `GET /health` `/live` `/ready` | — (`ready` checks DB) | Service health |
+| `GET /metrics` | — | Prometheus metrics (request counts/latency) |
 | `POST /auth/register` `/auth/login` | — | Accounts (all roles; admin via bootstrap), tokens |
-| `POST /tutor/ask` | — (migration pending) | Curriculum-grounded Q&A; refuses without evidence |
+| `GET /users/me` · `DELETE /users/me` | any | Own profile; GDPR-style self-service deletion |
+| `POST /tutor/ask` | any | Curriculum-grounded Q&A; refuses without evidence |
 | `GET /students/{id}` · `GET /students/{id}/progress` | owner/teacher/admin | Profile & chapter-level progress |
 | `POST /quizzes` · `POST /quizzes/{id}/submit` | owner/teacher | Generate / grade quizzes (answers never exposed) |
 | `GET /teacher/students` · `GET /teacher/classes/{level}/analytics` | teacher/admin | Roster & chapter accuracy/weak-topic flags |
@@ -22,6 +26,8 @@
 | `GET /admin/analytics/overview` | admin | Platform totals (now includes `parents`) |
 | `POST /parents/link` · `GET /parents/me/children` | parent | Link child; list linked children |
 | `GET /parents/me/children/{id}/progress` | parent (linked) | Scoped child progress |
+
+Full reference: [docs/API.md](docs/API.md). Operations: [docs/runbook.md](docs/runbook.md).
 
 ## Quick start
 
@@ -33,6 +39,15 @@ python -m venv .venv
 # http://127.0.0.1:8000/health  /live  /ready  /docs
 ```
 
+Web dashboard:
+
+```powershell
+cd apps/web
+npm install
+npm run dev      # http://localhost:5173 (proxies /api to :8000)
+npm run build    # type-checked production build → dist/
+```
+
 Environment variables are documented in `.env.example`. Default
 `LLM_PROVIDER=mock` requires no API key; unknown providers fail loudly.
 
@@ -40,10 +55,15 @@ Environment variables are documented in `.env.example`. Default
 
 ```text
 BanglaGptApp/
-├── apps/api/                                 # FastAPI service (Phase 1)
+├── apps/api/                                 # FastAPI service
+├── apps/web/                                 # React dashboard (Vite + TS)
 ├── docs/architecture.md                      # verified decisions + pending items
+├── docs/API.md                               # hand-written endpoint reference
+├── docs/runbook.md                           # operations runbook
 ├── .github/workflows/repository-sanity.yml   # CI: repo-level sanity checks
-├── .github/workflows/ci.yml                  # CI: lint + tests (Py 3.11 & 3.12)
+├── .github/workflows/ci.yml                  # CI: lint/type/tests/audit/web/docker
+├── LICENSE                                   # MIT
+├── Dockerfile
 ├── .gitignore
 └── README.md
 ```
@@ -52,10 +72,14 @@ BanglaGptApp/
 
 | Pipeline | Stage | Status |
 |---|---|---|
-| `ci.yml` | install → ruff lint → ruff format → pytest (3.11+3.12) | ✅ active |
+| `ci.yml` api job | install → ruff lint → format → mypy → pytest (3.11+3.12) → pip-audit → alembic cycle → smoke | ✅ active |
+| `ci.yml` web job | Node 24 → npm ci → tsc + vite build | ✅ active |
+| `ci.yml` docker job | build image → run → `/health` + `/ready` probes | ✅ active |
 | `repository-sanity.yml` | structure / secret-file / YAML validation | ✅ active |
-| type check (mypy) | pending — add with first real domain logic |
-| security scan (pip-audit) | pending — gate after dependency set stabilizes |
-| build/deploy stages | NOT APPLICABLE yet (no Docker/target) |
 
 Full roadmap: [docs/architecture.md](docs/architecture.md).
+
+## License
+
+[MIT](LICENSE)
+

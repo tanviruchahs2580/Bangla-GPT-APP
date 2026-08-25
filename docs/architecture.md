@@ -1,7 +1,7 @@
 # Architecture — Bangla GPT APP
 
-> Status: Phase 1 (API skeleton). This document records **actual, verified**
-> decisions only. Pending items are explicitly marked.
+> Status: Phase 8 (web dashboard & production hardening). This document
+> records **actual, verified** decisions only. Pending items are explicitly marked.
 
 ## Goal
 
@@ -166,13 +166,49 @@ BanglaGptApp/
   enforces `class_level` only for students; `RoleUpdateRequest` covers all
   four. `AdminOverview` now reports `parents` count.
 
+## Stack decisions (Phase 8 — web dashboard & production hardening, verified)
+
+- **Authenticated tutor**: `/tutor/ask` now requires a valid JWT (`CurrentUser`);
+  unauthenticated requests get 401 with `WWW-Authenticate: Bearer`. This closes
+  the planned migration item from the Phase 7 risk table.
+- **Self-service profile API**: `GET /users/me` returns the caller's user +
+  role-profile mapping (needed by any frontend to discover `profile_id`);
+  `DELETE /users/me` implements GDPR-style deletion — removes profile rows,
+  quiz attempts + answer logs, and parent-student links in one transaction;
+  the last remaining admin is protected with 409.
+- **Metrics**: Prometheus instrumentation via a dedicated registry
+  (`metrics.py`): `bgpt_http_requests_total{method,path,status}`,
+  `bgpt_http_request_duration_seconds` histogram, and an unhandled-exception
+  counter. Exposed at `GET /metrics`; route templates are used as labels
+  (no raw-path cardinality). `prometheus-client` added as runtime dependency.
+- **Web dashboard** (`apps/web`, Vite + React + TypeScript): login/register,
+  student tutor-quiz-progress, teacher roster/analytics, parent linkage +
+  scoped progress, admin users/role management/overview. JWT stored in
+  localStorage; role resolved server-side via `/users/me`. Dev proxy maps
+  `/api/*` → API; production base URL overridable via `VITE_API_BASE`.
+  CI builds it with Node 24 (`tsc && vite build`).
+- **CI hardening**: mypy and pip-audit are now required steps of the api job
+  (previously local-only), plus the new web build job.
+- **In-memory SQLite fix**: bare `sqlite://` URLs now also use StaticPool
+  (same connection shared) — previously only URLs containing `:memory:` did,
+  which broke registration on default test settings.
+
+## Verified behaviors (Phase 8)
+
+- Unauthenticated `/tutor/ask` → 401; authenticated grounded/refused paths unchanged.
+- `GET /users/me` returns correct profile for all four roles.
+- Student self-deletion removes account + attempts + logs + parent links
+  (parent's children list becomes empty); login afterwards → 401.
+- Last admin cannot delete self (409); second admin can.
+- `/metrics` exposes request/latency series after traffic.
+- `apps/web` type-checked production build passes on Node 24.
+
 ## Pending (explicitly NOT built yet)
 
 | Item | Blocker |
 |---|---|
-| Real LLM provider integration | API key required from user |
+| Real LLM provider integration + hallucination eval | API key required from user |
 | NCTB ingestion/RAG pipeline | Textbook corpus required |
 | Vector store | Chosen together with corpus scale; no Docker locally |
-| Web dashboard | Phase after API endpoints stabilize |
 | Mobile (Flutter) | SDK not installed on dev machine |
-| Voice, offline sync, load testing, deployment | Depend on above |
+| Postgres/Redis, load testing, monitoring/alerts, prod deploy | Production infrastructure required |
