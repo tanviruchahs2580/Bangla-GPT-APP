@@ -25,10 +25,20 @@ PASSWORD = "supersecret1"
 
 @pytest.fixture
 def client() -> TestClient:
-    # Per-process database name keeps parallel runs isolated without xdist.
+    # Create a per-process scratch database so runs never collide.
+    import psycopg
+
+    base, dbname = DATABASE_URL.rsplit("/", 1)
+    scratch = f"{dbname}_{os.getpid()}"
+    # Raw psycopg does not understand the "+psycopg" driver suffix.
+    admin_url = f"{base}/postgres".replace("postgresql+psycopg://", "postgresql://")
+    with psycopg.connect(admin_url, autocommit=True) as conn:
+        conn.execute(f'DROP DATABASE IF EXISTS "{scratch}"')
+        conn.execute(f'CREATE DATABASE "{scratch}"')
+
     settings = Settings(
         env="test",
-        database_url=f"{DATABASE_URL}_{os.getpid()}",
+        database_url=f"{base}/{scratch}",
         jwt_secret="test-secret-0123456789abcdef0123456789",
     )
     return TestClient(create_app(settings))
