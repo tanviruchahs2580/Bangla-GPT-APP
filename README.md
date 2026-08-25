@@ -2,21 +2,22 @@
 
 **NCTB-grounded Bangla-first AI personal tutor platform.**
 
-> **Status: PHASE 3 — QUIZZES & PROGRESS (verified).**
-> FastAPI service: NCTB-style curriculum retrieval + grounded tutor Q&A +
-> deterministic quiz engine + student profiles with chapter-level progress.
-> Real LLM providers, real NCTB corpus, auth/RBAC, dashboards, mobile: pending.
+> **Status: PHASE 4 — AUTH & TEACHER ANALYTICS (verified).**
+> JWT auth (PBKDF2 password hashing), role + ownership enforcement, quiz
+> engine, student progress, and teacher class analytics.
+> Real LLM providers, real NCTB corpus, admin roles, dashboards, mobile: pending.
 
 ## API surface (current)
 
-| Endpoint | Purpose |
-|---|---|
-| `GET /health` `/live` `/ready` | Service health; readiness reports provider |
-| `POST /tutor/ask` | Curriculum-grounded Q&A; refuses without evidence |
-| `POST /students` · `GET /students/{id}` | Student profile |
-| `POST /quizzes` | Generate MCQ quiz (answers never exposed) |
-| `POST /quizzes/{id}/submit` | Server-side grading + review |
-| `GET /students/{id}/progress` | Per-chapter accuracy + weak-chapter flags |
+| Endpoint | Auth | Purpose |
+|---|---|---|
+| `GET /health` `/live` `/ready` | — | Service health; readiness reports provider |
+| `POST /auth/register` `/auth/login` | — | Account creation (student/teacher), token issue |
+| `POST /tutor/ask` | — (migration pending) | Curriculum-grounded Q&A; refuses without evidence |
+| `GET /students/{id}` · `GET /students/{id}/progress` | owner/teacher | Profile & chapter-level progress |
+| `POST /quizzes` · `POST /quizzes/{id}/submit` | owner/teacher | Generate MCQ quiz (answers never exposed) / grade |
+| `GET /teacher/students` | teacher | Roster with attempt/average stats |
+| `GET /teacher/classes/{level}/analytics` | teacher | Chapter accuracy + weak-topic flags |
 
 ## Quick start
 

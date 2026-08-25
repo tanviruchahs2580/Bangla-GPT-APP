@@ -2,13 +2,21 @@ from collections import defaultdict
 from collections.abc import Generator
 from typing import Annotated
 
+import jwt as pyjwt
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from bangla_gpt_api.auth.security import (
+    create_access_token,
+    decode_token,
+    hash_password,
+    verify_password,
+)
 from bangla_gpt_api.config import Settings, get_settings
 from bangla_gpt_api.data.loader import load_sample_corpus
-from bangla_gpt_api.db.models import AnswerLog, QuizAttempt, Student
+from bangla_gpt_api.db.models import AnswerLog, QuizAttempt, Student, Teacher, User
 from bangla_gpt_api.db.session import init_db, make_engine, make_session_factory
 from bangla_gpt_api.providers import ProviderNotConfigured, get_provider
 from bangla_gpt_api.retrieval.bm25 import BM25Index
@@ -16,18 +24,31 @@ from bangla_gpt_api.schemas import (
     AskRequest,
     AskResponse,
     ChapterStat,
-    CreateStudentRequest,
+    ClassAnalytics,
+    LoginRequest,
     QuizQuestionPublic,
     QuizResult,
     QuizStarted,
     QuizStartRequest,
     QuizSubmitRequest,
+    RegisterRequest,
+    RegisterResponse,
     ReviewItem,
+    StudentBrief,
     StudentProgress,
     StudentResponse,
+    TokenResponse,
 )
 from bangla_gpt_api.services.quiz import ClozeQuizGenerator, dump_quiz
 from bangla_gpt_api.services.tutor import TutorService
+
+
+def _unauthorized(detail: str = "Not authenticated") -> HTTPException:
+    return HTTPException(
+        status_code=401,
+        detail=detail,
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -58,6 +79,47 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     DbSession = Annotated[Session, Depends(get_db)]
 
+    bearer_scheme = HTTPBearer(auto_error=False)
+    BearerCredentials = Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)]
+
+    def get_current_user(
+        credentials: BearerCredentials,
+        db: DbSession,
+    ) -> User:
+        if credentials is None or credentials.scheme.lower() != "bearer":
+            raise _unauthorized()
+        try:
+            payload = decode_token(credentials.credentials, settings=settings)
+            user_id = int(payload["sub"])
+        except (pyjwt.PyJWTError, KeyError, TypeError, ValueError) as exc:
+            raise _unauthorized("Invalid or expired token") from exc
+        user = db.get(User, user_id)
+        if user is None:
+            raise _unauthorized("Invalid or expired token")
+        return user
+
+    CurrentUser = Annotated[User, Depends(get_current_user)]
+
+    def require_roles(*roles: str):
+        def dependency(user: CurrentUser) -> User:
+            if user.role not in roles:
+                raise HTTPException(status_code=403, detail="Insufficient role")
+            return user
+
+        return dependency
+
+    TeacherUser = Annotated[User, Depends(require_roles("teacher"))]
+
+    def authorize_student_access(db: Session, student_id: int, user: User) -> Student:
+        student = db.get(Student, student_id)
+        if student is None:
+            raise HTTPException(status_code=404, detail="Student not found")
+        if user.role == "teacher":
+            return student
+        if user.role == "student" and student.user_id == user.id:
+            return student
+        raise HTTPException(status_code=403, detail="Not allowed to access this student")
+
     @app.get("/health")
     async def health() -> dict:
         return {
@@ -81,41 +143,57 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=503, detail=detail)
         return {"status": "ready", "provider": provider.name}
 
+    @app.post("/auth/register", response_model=RegisterResponse, status_code=201)
+    def register(payload: RegisterRequest, db: DbSession) -> RegisterResponse:
+        email = payload.email.strip().lower()
+        existing = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
+        if existing is not None:
+            raise HTTPException(status_code=409, detail="Email already registered")
+        user = User(email=email, password_hash=hash_password(payload.password), role=payload.role)
+        db.add(user)
+        db.flush()
+        profile: Student | Teacher
+        if payload.role == "student":
+            profile = Student(
+                name=payload.name.strip(), class_level=payload.class_level, user_id=user.id
+            )
+        else:
+            profile = Teacher(name=payload.name.strip(), user_id=user.id)
+        db.add(profile)
+        db.commit()
+        return RegisterResponse(user_id=user.id, role=user.role, profile_id=profile.id)
+
+    @app.post("/auth/login", response_model=TokenResponse)
+    def login(payload: LoginRequest, db: DbSession) -> TokenResponse:
+        email = payload.email.strip().lower()
+        user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
+        if user is None or not verify_password(payload.password, user.password_hash):
+            raise HTTPException(status_code=401, detail="Incorrect email or password")
+        token = create_access_token(user, settings=settings)
+        return TokenResponse(access_token=token)
+
     @app.post("/tutor/ask", response_model=AskResponse)
     async def ask(payload: AskRequest) -> AskResponse:
         if tutor is None:
             raise HTTPException(status_code=503, detail="Tutor service unavailable")
         return await tutor.ask(payload.question, payload.class_level, payload.subject)
 
-    @app.post("/students", response_model=StudentResponse, status_code=201)
-    def create_student(payload: CreateStudentRequest, db: DbSession) -> StudentResponse:
-        student = Student(name=payload.name.strip(), class_level=payload.class_level)
-        db.add(student)
-        db.commit()
-        return StudentResponse(id=student.id, name=student.name, class_level=student.class_level)
-
     @app.get("/students/{student_id}", response_model=StudentResponse)
-    def get_student(student_id: int, db: DbSession) -> StudentResponse:
-        student = db.get(Student, student_id)
-        if student is None:
-            raise HTTPException(status_code=404, detail="Student not found")
+    def get_student(student_id: int, db: DbSession, user: CurrentUser) -> StudentResponse:
+        student = authorize_student_access(db, student_id, user)
         return StudentResponse(id=student.id, name=student.name, class_level=student.class_level)
 
     @app.post("/quizzes", response_model=QuizStarted)
-    def start_quiz(payload: QuizStartRequest, db: DbSession) -> QuizStarted:
+    def start_quiz(payload: QuizStartRequest, db: DbSession, user: CurrentUser) -> QuizStarted:
         if index is None:
             raise HTTPException(status_code=503, detail="Curriculum index unavailable")
-        student = db.get(Student, payload.student_id)
-        if student is None:
-            raise HTTPException(status_code=404, detail="Student not found")
+        student = authorize_student_access(db, payload.student_id, user)
         class_level = (
             payload.class_level if payload.class_level is not None else student.class_level
         )
 
         attempt = QuizAttempt(
-            student_id=student.id,
-            subject=payload.subject,
-            class_level=class_level,
+            student_id=student.id, subject=payload.subject, class_level=class_level
         )
         db.add(attempt)
         db.flush()
@@ -145,10 +223,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     @app.post("/quizzes/{attempt_id}/submit", response_model=QuizResult)
-    def submit_quiz(attempt_id: int, payload: QuizSubmitRequest, db: DbSession) -> QuizResult:
+    def submit_quiz(
+        attempt_id: int, payload: QuizSubmitRequest, db: DbSession, user: CurrentUser
+    ) -> QuizResult:
         attempt = db.get(QuizAttempt, attempt_id)
         if attempt is None:
             raise HTTPException(status_code=404, detail="Attempt not found")
+        authorize_student_access(db, attempt.student_id, user)
         if attempt.status == "graded":
             raise HTTPException(status_code=400, detail="Attempt already graded")
         questions = list(attempt.quiz_json)
@@ -201,10 +282,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     @app.get("/students/{student_id}/progress", response_model=StudentProgress)
-    def get_progress(student_id: int, db: DbSession) -> StudentProgress:
-        student = db.get(Student, student_id)
-        if student is None:
-            raise HTTPException(status_code=404, detail="Student not found")
+    def get_progress(student_id: int, db: DbSession, user: CurrentUser) -> StudentProgress:
+        student = authorize_student_access(db, student_id, user)
 
         attempts = (
             db.execute(select(QuizAttempt).where(QuizAttempt.student_id == student_id))
@@ -249,6 +328,93 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             avg_score_pct=avg_score,
             by_chapter=by_chapter,
             weak_chapters=weak_chapters,
+        )
+
+    def _load_class_students(db: Session, class_level: int | None) -> list[Student]:
+        statement = select(Student).order_by(Student.id)
+        if class_level is not None:
+            statement = statement.where(Student.class_level == class_level)
+        return list(db.execute(statement).scalars().all())
+
+    def _student_briefs(db: Session, students: list[Student]) -> list[StudentBrief]:
+        briefs: list[StudentBrief] = []
+        for student in students:
+            attempts = (
+                db.execute(
+                    select(QuizAttempt).where(
+                        QuizAttempt.student_id == student.id, QuizAttempt.status == "graded"
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            scores = [a.score_pct for a in attempts if a.score_pct is not None]
+            avg = round(sum(scores) / len(scores), 2) if scores else None
+            briefs.append(
+                StudentBrief(
+                    student_id=student.id,
+                    name=student.name,
+                    class_level=student.class_level,
+                    attempts_graded=len(attempts),
+                    avg_score_pct=avg,
+                )
+            )
+        return briefs
+
+    @app.get("/teacher/students", response_model=list[StudentBrief])
+    def teacher_roster(
+        db: DbSession, teacher: TeacherUser, class_level: int | None = None
+    ) -> list[StudentBrief]:
+        students = _load_class_students(db, class_level)
+        return _student_briefs(db, students)
+
+    @app.get("/teacher/classes/{class_level}/analytics", response_model=ClassAnalytics)
+    def teacher_analytics(class_level: int, db: DbSession, teacher: TeacherUser) -> ClassAnalytics:
+        students = _load_class_students(db, class_level)
+        briefs = _student_briefs(db, students)
+
+        stats: dict[str, list[int]] = defaultdict(lambda: [0, 0])
+        if students:
+            attempt_ids = [
+                a.id
+                for a in db.execute(
+                    select(QuizAttempt).where(
+                        QuizAttempt.student_id.in_([s.id for s in students]),
+                        QuizAttempt.status == "graded",
+                    )
+                )
+                .scalars()
+                .all()
+            ]
+            if attempt_ids:
+                rows = (
+                    db.execute(select(AnswerLog).where(AnswerLog.attempt_id.in_(attempt_ids)))
+                    .scalars()
+                    .all()
+                )
+                for row in rows:
+                    stats[row.chapter][0] += 1
+                    stats[row.chapter][1] += row.is_correct
+
+        chapters = sorted(
+            (
+                ChapterStat(
+                    chapter=chapter,
+                    asked=asked,
+                    correct=correct_count,
+                    accuracy=round(100.0 * correct_count / asked, 2),
+                )
+                for chapter, (asked, correct_count) in stats.items()
+            ),
+            key=lambda s: s.accuracy,
+        )
+
+        return ClassAnalytics(
+            class_level=class_level,
+            students=len(students),
+            chapters=chapters,
+            weak_chapters=[c.chapter for c in chapters if c.accuracy < 60.0],
+            students_detail=briefs,
         )
 
     return app

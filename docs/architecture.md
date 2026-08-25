@@ -98,6 +98,31 @@ BanglaGptApp/
 - Grading integrity: review rows reconcile exactly with stored score.
 - Student validation, unknown student/attempt → 404/422 paths.
 
+## Stack decisions (Phase 4 — auth & teacher analytics, verified)
+
+- **Credentials**: PBKDF2-HMAC-SHA256 (200k iterations, per-user salt,
+  constant-time compare) via stdlib — no hashing dependency.
+- **Tokens**: HS256 JWT (`pyjwt`), `sub`=user id, `role`, `exp`
+  (`JWT_EXPIRE_MINUTES`). Secret from env (`JWT_SECRET`); the committed dev
+  default is documented as insecure-on-purpose in `.env.example`.
+- **Authorization**: role gates (`student`, `teacher`; admin roles pending) +
+  object-level ownership checks — students can only read/submit their own
+  data; teachers have class-wide read access and may generate quizzes for
+  students. Cross-student access returns 403 (regression-tested).
+- **Teacher API**: roster with per-student attempt/average stats; class-level
+  chapter analytics with weak-chapter (<60% accuracy) identification.
+- Legacy unauthenticated `POST /students` was removed; profiles are now
+  created through `/auth/register` only.
+
+## Verified behaviors (Phase 4)
+
+- Register/login round-trips; duplicate email → 409; bad email/short
+  password/missing class_level → 422; wrong credentials → generic 401
+  (no user enumeration).
+- Missing/garbage/forged-secret/expired tokens all rejected with 401;
+  student token on teacher endpoints → 403.
+- Cross-student isolation enforced on profile, progress, quiz start/submit.
+
 ## Pending (explicitly NOT built yet)
 
 | Item | Blocker |

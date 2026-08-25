@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     env: str = "development"
     llm_provider: str = "mock"
     database_url: str = "sqlite://"
+    jwt_secret: str = "dev-insecure-change-me"
+    jwt_expire_minutes: int = 60
 
 
 @lru_cache

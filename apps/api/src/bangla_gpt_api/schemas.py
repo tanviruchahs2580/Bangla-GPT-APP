@@ -1,4 +1,6 @@
-from pydantic import BaseModel, Field
+from typing import Literal
+
+from pydantic import BaseModel, Field, model_validator
 
 
 class AskRequest(BaseModel):
@@ -21,15 +23,37 @@ class AskResponse(BaseModel):
     sources: list[SourceRef]
 
 
-class CreateStudentRequest(BaseModel):
+_EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+
+
+class RegisterRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=255, pattern=_EMAIL_PATTERN)
+    password: str = Field(min_length=8, max_length=128)
     name: str = Field(min_length=2, max_length=120)
-    class_level: int = Field(ge=1, le=12)
+    role: Literal["student", "teacher"]
+    class_level: int | None = Field(default=None, ge=1, le=12)
+
+    @model_validator(mode="after")
+    def _require_class_level_for_students(self) -> "RegisterRequest":
+        if self.role == "student" and self.class_level is None:
+            raise ValueError("class_level is required when role is 'student'")
+        return self
 
 
-class StudentResponse(BaseModel):
-    id: int
-    name: str
-    class_level: int
+class RegisterResponse(BaseModel):
+    user_id: int
+    role: str
+    profile_id: int
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=255)
+    password: str = Field(min_length=1, max_length=128)
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
 
 
 class ChapterStat(BaseModel):
@@ -39,12 +63,34 @@ class ChapterStat(BaseModel):
     accuracy: float
 
 
+class StudentBrief(BaseModel):
+    student_id: int
+    name: str
+    class_level: int
+    attempts_graded: int
+    avg_score_pct: float | None
+
+
+class StudentResponse(BaseModel):
+    id: int
+    name: str
+    class_level: int
+
+
 class StudentProgress(BaseModel):
     student: StudentResponse
     attempts_graded: int
     avg_score_pct: float | None
     by_chapter: list[ChapterStat]
     weak_chapters: list[str]
+
+
+class ClassAnalytics(BaseModel):
+    class_level: int
+    students: int
+    chapters: list[ChapterStat]
+    weak_chapters: list[str]
+    students_detail: list[StudentBrief]
 
 
 class QuizStartRequest(BaseModel):
