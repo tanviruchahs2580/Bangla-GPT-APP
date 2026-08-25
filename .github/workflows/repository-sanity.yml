@@ -1,0 +1,64 @@
+name: Repository Sanity
+
+# Foundation-phase CI: validates repository structure and workflow files only.
+# It deliberately performs NO application lint/test/build because no
+# application code or stack exists yet. Stages will be added as they
+# become real and verifiable.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sanity:
+    name: Repository structure & config validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Required foundation files exist
+        shell: bash
+        run: |
+          set -e
+          test -f .gitignore || { echo "FAIL: .gitignore missing"; exit 1; }
+          test -f README.md || { echo "FAIL: README.md missing"; exit 1; }
+          echo "OK: foundation files present"
+
+      - name: No environment/secret files tracked
+        shell: bash
+        run: |
+          set -e
+          if git ls-files --error-unmatch .env >/dev/null 2>&1 \
+             || git ls-files | grep -Eq '(^|/)\.env($|\.)'; then
+            echo "FAIL: .env file is tracked"; exit 1
+          fi
+          echo "OK: no .env files tracked"
+
+      - name: Validate all GitHub Actions workflow YAML
+        shell: bash
+        run: |
+          set -e
+          python3 - <<'PY'
+          import glob, sys
+          try:
+              import yaml
+          except ImportError:
+              print("PyYAML unavailable on runner; skipping parse"); sys.exit(0)
+          files = glob.glob(".github/workflows/*.y*ml")
+          assert files, "No workflow files found"
+          for f in files:
+              with open(f, encoding="utf-8") as fh:
+                  yaml.safe_load(fh)
+              print(f"OK: {f} parses as valid YAML")
+          PY
+
+      - name: Summary
+        shell: bash
+        run: echo "Repository sanity checks completed successfully."
