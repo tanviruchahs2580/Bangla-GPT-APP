@@ -1,0 +1,12 @@
+[
+  {"question": "কোষ কী?", "class_level": 6, "subject": "science", "expected_grounded": true, "note": "in-corpus: cell definition"},
+  {"question": "কোষের প্রধান অংশ কী কী?", "class_level": 6, "subject": "science", "expected_grounded": true, "note": "in-corpus: cell parts"},
+  {"question": "বল কাকে বলে?", "class_level": 6, "subject": "science", "expected_grounded": true, "note": "in-corpus: force"},
+  {"question": "ভগ্নাংশ কী?", "class_level": 7, "subject": "mathematics", "expected_grounded": true, "note": "in-corpus: fraction"},
+  {"question": "শতকরা কী? ২৫% মানে কত?", "class_level": 7, "subject": "mathematics", "expected_grounded": true, "note": "in-corpus: percentage"},
+  {"question": "বিশ্বকাপ ফুটবল কে জিতেছিল?", "class_level": 6, "subject": "science", "expected_grounded": false, "note": "out-of-domain: sports"},
+  {"question": "গতকাল আবহাওয়া কেমন ছিল?", "class_level": 6, "subject": "science", "expected_grounded": false, "note": "out-of-domain: weather"},
+  {"question": "মোবাইল গেমে কীভাবে লেভেল বাড়াব?", "class_level": 7, "subject": "mathematics", "expected_grounded": false, "note": "out-of-domain: gaming"},
+  {"question": "ইংরেজি গ্রামারে tense কয় প্রকার?", "class_level": 6, "subject": "science", "expected_grounded": false, "note": "out-of-domain: wrong subject"},
+  {"question": "qxzzv bloop blarp", "class_level": 6, "subject": "science", "expected_grounded": false, "note": "gibberish"}
+]

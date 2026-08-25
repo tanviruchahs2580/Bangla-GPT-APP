@@ -140,6 +140,21 @@ BanglaGptApp/
   package install from source. Verified by CI job that builds the image,
   boots it, and asserts `/health` + `/ready` over HTTP.
 
+## Stack decisions (Phase 6 — observability, migrations, evaluation harness, verified)
+
+- **Logging**: `logging_config` (JSON lines via stdlib) + `RequestIdMiddleware`
+  that echoes/creates `X-Request-ID` on every response. The `ready` probe now
+  checks database reachability in addition to the LLM provider.
+- **Migrations**: Alembic (initial revision `7a826704cc96`) checked in;
+  `upgrade head → downgrade base → upgrade head` verified locally and in CI.
+  Runtime still calls `create_all` for the in-memory test databases —
+  Alembic is authoritative for any file/persistent database.
+- **Evaluation harness**: `evaluation/runner.py` (`EvalQuestion` /
+  `evaluate_questions`) scores grounding correctness over a curated JSON set
+  (`eval/sample_questions.json`, 10 items: 5 in-domain true, 5 out true →
+  hallucination-guard). The sample file proves 100% accuracy on the current
+  mock tutor; a real LLM key swaps in without changing the harness.
+
 ## Pending (explicitly NOT built yet)
 
 | Item | Blocker |

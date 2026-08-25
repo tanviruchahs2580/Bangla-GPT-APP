@@ -45,6 +45,12 @@ jobs:
       - name: Tests
         run: pytest -q
 
+      - name: Alembic migration check
+        run: |
+          alembic upgrade head
+          alembic downgrade base
+          alembic upgrade head
+
       - name: Smoke start (import app + open routes)
         run: python -c "from bangla_gpt_api import create_app; app = create_app(); print(sorted(r.path for r in app.routes))"
 

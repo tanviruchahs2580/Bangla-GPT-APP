@@ -22,6 +22,7 @@ from bangla_gpt_api.config import Settings, get_settings
 from bangla_gpt_api.data.loader import load_sample_corpus
 from bangla_gpt_api.db.models import AnswerLog, QuizAttempt, Student, Teacher, User
 from bangla_gpt_api.db.session import init_db, make_engine, make_session_factory
+from bangla_gpt_api.logging_config import configure_logging
 from bangla_gpt_api.providers import ProviderNotConfigured, get_provider
 from bangla_gpt_api.retrieval.bm25 import BM25Index
 from bangla_gpt_api.schemas import (
@@ -48,6 +49,17 @@ from bangla_gpt_api.schemas import (
 )
 from bangla_gpt_api.services.quiz import ClozeQuizGenerator, dump_quiz
 from bangla_gpt_api.services.tutor import TutorService
+
+
+class RequestIdMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        import uuid
+
+        request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex[:16]
+        request.state.request_id = request_id
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -94,6 +106,7 @@ def _unauthorized(detail: str = "Not authenticated") -> HTTPException:
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
+    configure_logging()
     settings = settings or get_settings()
     app = FastAPI(title=settings.app_name, version=settings.version)
 
@@ -136,6 +149,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         },
     )
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes)
+    app.add_middleware(RequestIdMiddleware)
 
     def get_db() -> Generator[Session, None, None]:
         db = session_factory()
@@ -175,14 +189,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         return dependency
 
-    TeacherUser = Annotated[User, Depends(require_roles("teacher"))]
+    TeacherOrAdminUser = Annotated[User, Depends(require_roles("teacher", "admin"))]
     AdminUser = Annotated[User, Depends(require_roles("admin"))]
 
     def authorize_student_access(db: Session, student_id: int, user: User) -> Student:
         student = db.get(Student, student_id)
         if student is None:
             raise HTTPException(status_code=404, detail="Student not found")
-        if user.role == "teacher":
+        if user.role in ("teacher", "admin"):
             return student
         if user.role == "student" and student.user_id == user.id:
             return student
@@ -202,13 +216,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"status": "alive"}
 
     @app.get("/ready")
-    async def ready() -> dict:
+    async def ready(db: DbSession) -> dict:
         if provider is None:
             detail = (
                 f"LLM_PROVIDER={settings.llm_provider!r} is not implemented yet. "
                 "Set LLM_PROVIDER=mock or configure a supported provider."
             )
             raise HTTPException(status_code=503, detail=detail)
+        try:
+            db.execute(select(1))
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail="Database unavailable") from exc
         return {"status": "ready", "provider": provider.name}
 
     @app.post("/auth/register", response_model=RegisterResponse, status_code=201)
@@ -431,13 +449,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/teacher/students", response_model=list[StudentBrief])
     def teacher_roster(
-        db: DbSession, teacher: TeacherUser, class_level: int | None = None
+        db: DbSession, teacher: TeacherOrAdminUser, class_level: int | None = None
     ) -> list[StudentBrief]:
         students = _load_class_students(db, class_level)
         return _student_briefs(db, students)
 
     @app.get("/teacher/classes/{class_level}/analytics", response_model=ClassAnalytics)
-    def teacher_analytics(class_level: int, db: DbSession, teacher: TeacherUser) -> ClassAnalytics:
+    def teacher_analytics(
+        class_level: int, db: DbSession, teacher: TeacherOrAdminUser
+    ) -> ClassAnalytics:
         students = _load_class_students(db, class_level)
         briefs = _student_briefs(db, students)
 

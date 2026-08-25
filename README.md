@@ -2,28 +2,27 @@
 
 **NCTB-grounded Bangla-first AI personal tutor platform.**
 
-> **Status: PHASE 5 — RBAC + HARDENING + CONTAINER (verified).**
-> JWT auth with student/teacher/admin roles, ownership enforcement, quiz
-> engine, progress analytics, teacher & admin APIs, rate limiting, body-size
-> guard, and a CI-verified Docker image.
+> **Status: PHASE 6 — OBSERVABILITY + MIGRATIONS + EVAL HARNESS (verified).**
+> Request IDs on every response, structured logging, DB-aware readiness,
+> Alembic initial migration (upgrade/downgrade cycle verified), and a
+> grounding-evaluation harness over a curated sample question set.
 > Real LLM providers, real NCTB corpus, dashboards, mobile: pending.
 
 ## API surface (current)
 
 | Endpoint | Auth | Purpose |
 |---|---|---|
-| `GET /health` `/live` `/ready` | — | Service health; readiness reports provider |
+| `GET /health` `/live` `/ready` | — (`ready` now checks DB) | Service health; readiness includes DB |
 | `POST /auth/register` `/auth/login` | — | Accounts (student/teacher; admin via bootstrap), tokens |
 | `POST /tutor/ask` | — (migration pending) | Curriculum-grounded Q&A; refuses without evidence |
-| `GET /students/{id}` · `GET /students/{id}/progress` | owner/teacher | Profile & chapter-level progress |
+| `GET /students/{id}` · `GET /students/{id}/progress` | owner/teacher/admin | Profile & chapter-level progress |
 | `POST /quizzes` · `POST /quizzes/{id}/submit` | owner/teacher | Generate MCQ quiz (answers never exposed) / grade |
-| `GET /teacher/students` | teacher | Roster with attempt/average stats |
-| `GET /teacher/classes/{level}/analytics` | teacher | Chapter accuracy + weak-topic flags |
+| `GET /teacher/students` | teacher/admin | Roster with attempt/average stats |
+| `GET /teacher/classes/{level}/analytics` | teacher/admin | Chapter accuracy + weak-topic flags |
 | `GET /admin/users` · `PATCH /admin/users/{id}/role` | admin | User management (last-admin guard) |
 | `GET /admin/analytics/overview` | admin | Platform totals |
 
-Hardening: per-IP sliding-window rate limits on login/tutor (429), request
-body-size cap (413), PBKDF2 password hashing, HS256 JWTs.
+Every response now carries `X-Request-ID`. Hardening: per-IP sliding-window rate limits, body-size cap.
 
 ## Quick start
 

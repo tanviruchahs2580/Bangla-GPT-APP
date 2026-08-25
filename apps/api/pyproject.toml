@@ -9,6 +9,7 @@ dependencies = [
     "pydantic-settings>=2.4",
     "sqlalchemy>=2.0",
     "pyjwt>=2.9",
+    "alembic>=1.13",
 ]
 
 [project.optional-dependencies]
@@ -33,6 +34,7 @@ bangla_gpt_api = ["data/sample_nctb/*.md"]
 line-length = 100
 src = ["src", "tests"]
 target-version = "py311"
+exclude = ["alembic"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

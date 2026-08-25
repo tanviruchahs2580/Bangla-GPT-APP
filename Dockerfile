@@ -8,6 +8,8 @@ WORKDIR /app
 
 COPY apps/api/pyproject.toml ./apps/api/
 COPY apps/api/src ./apps/api/src
+COPY apps/api/alembic ./apps/api/alembic
+COPY apps/api/alembic.ini ./apps/api/alembic.ini
 RUN pip install --no-cache-dir ./apps/api
 
 RUN useradd --create-home --shell /usr/sbin/nologin appuser
