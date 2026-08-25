@@ -24,7 +24,11 @@ SECRET = "test-secret-0123456789abcdef0123456789"
 REPO_ROOT = Path(__file__).resolve().parents[2]
 REAL_CORPUS = REPO_ROOT.parent / "data" / "nctb"
 
-REAL_CORPUS_AVAILABLE = (REAL_CORPUS / "quality_report.json").exists()
+REAL_CORPUS_AVAILABLE = (
+    (REAL_CORPUS / "quality_report.json").exists()
+    and (REAL_CORPUS / "normalized").is_dir()
+    and any((REAL_CORPUS / "normalized").glob("*.chunks.jsonl"))
+)
 
 
 def _register_and_login(client: TestClient, email: str) -> dict:
