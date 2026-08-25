@@ -1,0 +1,17 @@
+{
+  "corpus_chunks": 2508,
+  "index_build_seconds": 0.361,
+  "family_A_self_sentence": {
+    "n": 100,
+    "recall_at_1": 0.38,
+    "recall_at_5": 1.0
+  },
+  "family_B_chapter_title": {
+    "n": 80,
+    "recall_at_1": 0.225,
+    "recall_at_5": 0.525
+  },
+  "family_C_adversarial_refusal_rate": 1.0,
+  "search_latency_p50_ms": 2.44,
+  "search_latency_p95_ms": 3.26
+}

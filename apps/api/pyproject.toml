@@ -11,6 +11,8 @@ dependencies = [
     "pyjwt>=2.9",
     "alembic>=1.13",
     "prometheus-client>=0.21",
+    "pypdf>=5.0",
+    "bijoy2unicode>=0.1.1",
 ]
 
 [project.optional-dependencies]

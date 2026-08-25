@@ -68,3 +68,8 @@ venv/
 models/
 *.onnx
 *.gguf
+
+# --- NCTB corpus content (copyrighted textbooks; provenance stays in git) ---
+data/nctb/raw/
+data/nctb/extracted/
+data/nctb/normalized/

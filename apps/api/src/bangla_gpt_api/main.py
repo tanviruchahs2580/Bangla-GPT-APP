@@ -163,7 +163,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     index: BM25Index | None = None
     tutor: TutorService | None = None
     if provider is not None:
-        index = BM25Index(load_sample_corpus())
+        if settings.nctb_corpus_dir:
+            from pathlib import Path as _Path
+
+            from bangla_gpt_api.data.nctb_loader import load_nctb_corpus
+
+            corpus_root = _Path(settings.nctb_corpus_dir)
+            nctb_chunks = load_nctb_corpus(
+                corpus_root / "normalized",
+                quality_report_path=corpus_root / "quality_report.json",
+            )
+            if nctb_chunks:
+                index = BM25Index(nctb_chunks)
+        if index is None:
+            index = BM25Index(load_sample_corpus())
         tutor = TutorService(index=index, provider=provider)
 
     engine = make_engine(settings)

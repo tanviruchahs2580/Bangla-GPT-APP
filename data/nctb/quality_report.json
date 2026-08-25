@@ -1,0 +1,164 @@
+{
+  "nctb-secondary-3ce5065b7a32": {
+    "subject_bn": "বাংলা",
+    "level": "secondary",
+    "content_hash": "ca0bb834d1b2afa71bf1a76ef5e8c6c499f318531ed9f16f54ca8c0b754c2da1",
+    "status": "acquired",
+    "total_pages": 93,
+    "empty_pages": 2,
+    "garbage_pages": 0,
+    "usable_pages": 91,
+    "usable_ratio": 0.9785,
+    "bangla_char_ratio_on_usable": 1.0,
+    "total_chars_on_usable": 174360,
+    "page_encodings": {
+      "unusable": 2,
+      "bijoy-converted": 91
+    },
+    "chunks": 130
+  },
+  "nctb-secondary-afda21d8556d": {
+    "subject_bn": "ইংরেজি",
+    "level": "secondary",
+    "content_hash": "537d2fbf64e9e57aea77ecede3415acb2e8f16542124a1e435f448f3e0c0ec98",
+    "status": "acquired",
+    "total_pages": 93,
+    "empty_pages": 2,
+    "garbage_pages": 0,
+    "usable_pages": 91,
+    "usable_ratio": 0.9785,
+    "bangla_char_ratio_on_usable": 0.0376,
+    "total_chars_on_usable": 155379,
+    "page_encodings": {
+      "unusable": 89,
+      "bijoy-converted": 4
+    },
+    "chunks": 122
+  },
+  "nctb-secondary-be50d8aff8d5": {
+    "subject_bn": "গণিত ও উচ্চতর গণিত",
+    "level": "secondary",
+    "content_hash": "d35787da9b1d615dca1b166d8f2b0ebd4b3a5290d39f6cdea0ac5eaedbc266ad",
+    "status": "acquired",
+    "total_pages": 146,
+    "empty_pages": 3,
+    "garbage_pages": 0,
+    "usable_pages": 143,
+    "usable_ratio": 0.9795,
+    "bangla_char_ratio_on_usable": 0.9984,
+    "total_chars_on_usable": 237075,
+    "page_encodings": {
+      "unusable": 3,
+      "bijoy-converted": 143
+    },
+    "chunks": 88
+  },
+  "nctb-secondary-e39c58d35764": {
+    "subject_bn": "বিজ্ঞান শাখার বিষয়সমূহ",
+    "level": "secondary",
+    "content_hash": "7e5160d72a38c150272498c5f750d2b241444ae79874c67b4d921863c910d944",
+    "status": "acquired",
+    "total_pages": 241,
+    "empty_pages": 2,
+    "garbage_pages": 0,
+    "usable_pages": 239,
+    "usable_ratio": 0.9917,
+    "bangla_char_ratio_on_usable": 1.0,
+    "total_chars_on_usable": 408681,
+    "page_encodings": {
+      "unusable": 2,
+      "bijoy-converted": 239
+    },
+    "chunks": 81
+  },
+  "nctb-secondary-ca0d6bd886b7": {
+    "subject_bn": "আইসিটি ও ক্যারিয়ার এডুকেশন",
+    "level": "secondary",
+    "content_hash": "17c22d7e89d803db81a03fb392b7081ddd22e9ae9864e0bb3f629d0aa48eaeb4",
+    "status": "acquired",
+    "total_pages": 111,
+    "empty_pages": 2,
+    "garbage_pages": 0,
+    "usable_pages": 109,
+    "usable_ratio": 0.982,
+    "bangla_char_ratio_on_usable": 1.0,
+    "total_chars_on_usable": 214154,
+    "page_encodings": {
+      "unusable": 2,
+      "bijoy-converted": 109
+    },
+    "chunks": 85
+  },
+  "nctb-hsc-28d03c592c2c": {
+    "subject_bn": "পদার্থবিদ্যা",
+    "level": "hsc",
+    "content_hash": "4bab4adf0487a84ee0c81b089ef26b7c977c025a927e1675727c73f71d94fa0d",
+    "status": "acquired",
+    "total_pages": 52,
+    "empty_pages": 0,
+    "garbage_pages": 0,
+    "usable_pages": 52,
+    "usable_ratio": 1.0,
+    "bangla_char_ratio_on_usable": 0.8446,
+    "total_chars_on_usable": 108827,
+    "page_encodings": {
+      "bijoy-converted": 40,
+      "unusable": 12
+    },
+    "chunks": 78
+  },
+  "nctb-hsc-a513203336f6": {
+    "subject_bn": "রসায়ন",
+    "level": "hsc",
+    "content_hash": "cd17f741e26c6d899281e8373fdcb2ba5059390852d4a2c7acc5bc9c291ba0a2",
+    "status": "acquired",
+    "total_pages": 45,
+    "empty_pages": 0,
+    "garbage_pages": 0,
+    "usable_pages": 45,
+    "usable_ratio": 1.0,
+    "bangla_char_ratio_on_usable": 0.9007,
+    "total_chars_on_usable": 113365,
+    "page_encodings": {
+      "bijoy-converted": 38,
+      "unusable": 7
+    },
+    "chunks": 67
+  },
+  "nctb-hsc-ca39e5957513": {
+    "subject_bn": "জীববিজ্ঞান",
+    "level": "hsc",
+    "content_hash": "6d856b59b212f200eac442cce5457e8f112560f5aaa08ee9c798b043e6b16806",
+    "status": "acquired",
+    "total_pages": 46,
+    "empty_pages": 0,
+    "garbage_pages": 0,
+    "usable_pages": 46,
+    "usable_ratio": 1.0,
+    "bangla_char_ratio_on_usable": 0.8268,
+    "total_chars_on_usable": 106944,
+    "page_encodings": {
+      "bijoy-converted": 37,
+      "unusable": 9
+    },
+    "chunks": 69
+  },
+  "nctb-hsc-9c44bb8ff649": {
+    "subject_bn": "উচ্চতর গণিত",
+    "level": "hsc",
+    "content_hash": "ea30a7a6eacd271157904dc46c876b1bdaa6480ec8f863de2b46b5359edaee49",
+    "status": "acquired",
+    "total_pages": 52,
+    "empty_pages": 0,
+    "garbage_pages": 0,
+    "usable_pages": 52,
+    "usable_ratio": 1.0,
+    "bangla_char_ratio_on_usable": 0.734,
+    "total_chars_on_usable": 108390,
+    "page_encodings": {
+      "bijoy-converted": 33,
+      "unusable": 19
+    },
+    "chunks": 80
+  }
+}

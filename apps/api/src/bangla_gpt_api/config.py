@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     max_body_bytes: int = 65536
     admin_email: str | None = None
     admin_password: str | None = None
+    nctb_corpus_dir: str | None = None
 
 
 @lru_cache
