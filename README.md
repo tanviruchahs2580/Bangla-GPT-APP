@@ -1,43 +1,46 @@
 # Bangla GPT APP
 
-**NCTB-grounded Bangla-first AI personal tutor platform** (planned).
+**NCTB-grounded Bangla-first AI personal tutor platform.**
 
-> **Status: FOUNDATION ONLY — application development has NOT started yet.**
-> This repository currently contains only repository infrastructure:
-> Git configuration, `.gitignore`, and a CI sanity workflow.
-> No application source code exists by design at this phase.
+> **Status: PHASE 1 — API SKELETON (verified).**
+> A working FastAPI service (`apps/api`) with health/readiness endpoints and a
+> provider-abstraction layer for future LLM/RAG integration. Application
+> features (tutor chat, NCTB RAG, quizzes, dashboards, mobile) have NOT been
+> built yet.
+
+## Quick start
+
+```powershell
+cd apps/api
+python -m venv .venv
+.venv\Scripts\python -m pip install -e ".[dev]"
+.venv\Scripts\python -m uvicorn bangla_gpt_api:app --reload
+# http://127.0.0.1:8000/health  /live  /ready  /docs
+```
+
+Environment variables are documented in `.env.example`. Default
+`LLM_PROVIDER=mock` requires no API key; unknown providers fail loudly.
 
 ## Repository layout
 
 ```text
 BanglaGptApp/
-├── .github/workflows/repository-sanity.yml   # CI: repo-level sanity checks only
-├── .gitignore                                 # tech-agnostic safety baseline
+├── apps/api/                                 # FastAPI service (Phase 1)
+├── docs/architecture.md                      # verified decisions + pending items
+├── .github/workflows/repository-sanity.yml   # CI: repo-level sanity checks
+├── .github/workflows/ci.yml                  # CI: lint + tests (Py 3.11 & 3.12)
+├── .gitignore
 └── README.md
 ```
 
-## CI/CD roadmap
+## CI/CD status
 
-The current pipeline intentionally performs **repository-level checks only** —
-it does NOT pretend to build or test an application that does not exist yet.
+| Pipeline | Stage | Status |
+|---|---|---|
+| `ci.yml` | install → ruff lint → ruff format → pytest (3.11+3.12) | ✅ active |
+| `repository-sanity.yml` | structure / secret-file / YAML validation | ✅ active |
+| type check (mypy) | pending — add with first real domain logic |
+| security scan (pip-audit) | pending — gate after dependency set stabilizes |
+| build/deploy stages | NOT APPLICABLE yet (no Docker/target) |
 
-After the technology stack is selected, the pipeline will expand to:
-
-```text
-Checkout
-  → Runtime setup
-  → Dependency installation
-  → Lint
-  → Formatting check
-  → Type check
-  → Unit tests
-  → Integration tests
-  → Security scans
-  → Build
-  → Artifact validation
-  → Release
-  → Deployment   (intentionally pending: no app, no target, no credentials)
-```
-
-Each future stage will be added **only when its commands actually exist and are
-verified locally** first.
+Full roadmap: [docs/architecture.md](docs/architecture.md).
