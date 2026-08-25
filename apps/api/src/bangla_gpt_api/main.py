@@ -416,7 +416,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             key=lambda s: s.accuracy,
         )
         weak_chapters = [s.chapter for s in by_chapter if s.accuracy < 60.0]
-        avg_score = round(sum(a.score_pct for a in graded) / len(graded), 2) if graded else None
+        avg_score = (
+            round(sum(a.score_pct for a in graded if a.score_pct is not None) / len(graded), 2)
+            if graded
+            else None
+        )
 
         return StudentProgress(
             student=StudentResponse(
@@ -662,7 +666,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             key=lambda s: s.accuracy,
         )
         weak_chapters = [s.chapter for s in by_chapter if s.accuracy < 60.0]
-        avg_score = round(sum(a.score_pct for a in graded) / len(graded), 2) if graded else None
+        avg_score = (
+            round(sum(a.score_pct for a in graded if a.score_pct is not None) / len(graded), 2)
+            if graded
+            else None
+        )
         return StudentProgress(
             student=StudentResponse(
                 id=student.id, name=student.name, class_level=student.class_level

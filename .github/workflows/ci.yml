@@ -64,7 +64,7 @@ jobs:
         run: docker build -t bangla-gpt-api:ci .
 
       - name: Run container
-        run: docker run -d --name api-smoke -p 8080:8000 -e APP_ENV=ci bangla-gpt-api:ci
+        run: docker run -d --name api-smoke -p 8080:8000 -e ENV=ci bangla-gpt-api:ci
 
       - name: Wait for health endpoint
         run: |

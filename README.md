@@ -29,7 +29,7 @@
 cd apps/api
 python -m venv .venv
 .venv\Scripts\python -m pip install -e ".[dev]"
-.venv\Scripts\python -m uvicorn bangla_gpt_api:app --reload
+.venv\Scripts\python -m uvicorn bangla_gpt_api.main:app --reload
 # http://127.0.0.1:8000/health  /live  /ready  /docs
 ```
 
