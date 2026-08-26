@@ -5,7 +5,7 @@ from collections import defaultdict
 from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 from time import perf_counter
-from typing import Annotated
+from typing import Annotated, Any, cast
 
 import jwt as pyjwt
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from sqlalchemy import delete, func, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -737,11 +738,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         # Atomic claim: exactly one concurrent submission may transition
         # open -> graded. Losers get a clean 400 instead of corrupting state.
-        claimed = db.execute(
+        claim_stmt = (
             update(QuizAttempt)
             .where(QuizAttempt.id == attempt.id, QuizAttempt.status == "open")
             .values(status="graded")
         )
+        claimed = cast(CursorResult[Any], db.execute(claim_stmt))
         if claimed.rowcount != 1:
             db.rollback()
             raise HTTPException(status_code=400, detail="Attempt already graded")
