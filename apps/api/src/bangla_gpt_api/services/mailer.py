@@ -23,15 +23,17 @@ def send_mail(settings: Settings, *, to: str, subject: str, body: str) -> bool:
     """Send an email over STARTTLS. Returns True when accepted by the relay."""
     if not smtp_configured(settings):
         return False
-    assert settings.smtp_host is not None
-    assert settings.smtp_from is not None
+    host = settings.smtp_host or ""
+    sender = settings.smtp_from or ""
+    if not host or not sender:
+        return False
     message = EmailMessage()
-    message["From"] = settings.smtp_from
+    message["From"] = sender
     message["To"] = to
     message["Subject"] = subject
     message.set_content(body)
     try:
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as server:
+        with smtplib.SMTP(host, settings.smtp_port, timeout=15) as server:
             server.starttls(context=ssl.create_default_context())
             if settings.smtp_user and settings.smtp_password:
                 server.login(settings.smtp_user, settings.smtp_password)

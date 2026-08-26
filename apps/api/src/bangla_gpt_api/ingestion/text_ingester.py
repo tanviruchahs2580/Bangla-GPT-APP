@@ -35,7 +35,8 @@ class TextIngester:
                 return
             for piece in self._split_paragraph(paragraph):
                 digest = hashlib.sha1(
-                    f"{meta.source}|{chapter}|{section}|{seq}".encode()
+                    f"{meta.source}|{chapter}|{section}|{seq}".encode(),
+                    usedforsecurity=False,
                 ).hexdigest()[:12]
                 chunk_meta = meta.model_copy(
                     update={"chapter": chapter, "section": section or None}

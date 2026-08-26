@@ -56,7 +56,7 @@ class RawChunk:
 
 def _stable_id(*parts: object) -> str:
     joined = "|".join(str(p) for p in parts)
-    return hashlib.sha1(joined.encode("utf-8")).hexdigest()[:16]
+    return hashlib.sha1(joined.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
 
 
 def _is_chapter_heading(line: str) -> str | None:

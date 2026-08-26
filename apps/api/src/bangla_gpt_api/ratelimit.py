@@ -69,8 +69,10 @@ class RedisRateLimiter:
 def build_limiter(settings) -> RateLimiter:  # noqa: ANN001 (Settings import cycle)
     from bangla_gpt_api.config import Settings
 
-    assert isinstance(settings, Settings)
+    if not isinstance(settings, Settings):
+        raise TypeError("build_limiter expects a Settings instance")
     if settings.rate_limit_backend == "redis":
-        assert settings.redis_url
+        if not settings.redis_url:
+            raise ValueError("RATE_LIMIT_BACKEND=redis requires REDIS_URL")
         return RedisRateLimiter(settings.redis_url, fail_open=settings.rate_limit_fail_open)
     return MemoryRateLimiter()

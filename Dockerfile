@@ -6,6 +6,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# Security patching of base-layer packages with available vendor fixes
+# (rescanned with trivy; remaining unfixed advisories documented in the
+# validation report — no vendor fix published yet, exposure mitigated).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssl libssl3t64 \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY apps/api/pyproject.toml ./apps/api/
 COPY apps/api/src ./apps/api/src
 COPY apps/api/alembic ./apps/api/alembic

@@ -120,7 +120,9 @@ class ClozeQuizGenerator:
             rng.shuffle(options)
             questions.append(
                 GeneratedQuestion(
-                    id=hashlib.sha1(f"{chunk.id}|{term}".encode()).hexdigest()[:10],
+                    id=hashlib.sha1(
+                        f"{chunk.id}|{term}".encode(), usedforsecurity=False
+                    ).hexdigest()[:10],
                     question_text=f"রিক্তস্থানে সঠিক শব্দটি বসাও: {sentence.replace(term, '____', 1)}",
                     options=options,
                     answer_index=options.index(term),

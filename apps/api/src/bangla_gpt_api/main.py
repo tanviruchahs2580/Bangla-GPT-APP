@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -180,6 +180,17 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Baseline hardening headers on every API response."""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        return response
+
+
 class PrometheusMetricsMiddleware(BaseHTTPMiddleware):
     """Count every request and observe latency, labeled by route template."""
 
@@ -299,6 +310,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes)
     app.add_middleware(RequestIdMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(PrometheusMetricsMiddleware)
 
     def get_db() -> Generator[Session, None, None]:
@@ -429,7 +441,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=409, detail="Email already registered")
         user = User(email=email, password_hash=hash_password(payload.password), role=payload.role)
         db.add(user)
-        db.flush()
+        try:
+            # Unique violation on users.email surfaces here when a concurrent
+            # registration won the race between our check and this insert.
+            db.flush()
+        except IntegrityError as exc:
+            db.rollback()
+            raise HTTPException(status_code=409, detail="Email already registered") from exc
         profile: Student | Teacher | Parent
         if payload.role == "student":
             profile = Student(
@@ -716,8 +734,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if attempt is None:
             raise HTTPException(status_code=404, detail="Attempt not found")
         authorize_student_access(db, attempt.student_id, user)
-        if attempt.status == "graded":
+
+        # Atomic claim: exactly one concurrent submission may transition
+        # open -> graded. Losers get a clean 400 instead of corrupting state.
+        claimed = db.execute(
+            update(QuizAttempt)
+            .where(QuizAttempt.id == attempt.id, QuizAttempt.status == "open")
+            .values(status="graded")
+        )
+        if claimed.rowcount != 1:
+            db.rollback()
             raise HTTPException(status_code=400, detail="Attempt already graded")
+
         questions = list(attempt.quiz_json)
         if len(payload.answers) != len(questions):
             raise HTTPException(
@@ -977,7 +1005,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if existing is not None:
             raise HTTPException(status_code=409, detail="Already linked")
         db.add(ParentStudentLink(parent_id=parent_profile.id, student_id=student.id))
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError as exc:
+            # Lost a race against a concurrent duplicate link.
+            db.rollback()
+            raise HTTPException(status_code=409, detail="Already linked") from exc
         return {"linked": True, "parent_id": parent_profile.id, "student_id": student.id}
 
     @app.get("/parents/me/children", response_model=list[StudentBrief])

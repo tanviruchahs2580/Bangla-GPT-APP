@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -42,12 +43,15 @@ def _sha256_of(path: Path) -> str:
 
 def fetch_url(url: str, *, timeout: float = 60.0) -> tuple[bytes, str]:
     """GET a URL and return (body, content_type). Raises AcquisitionError."""
+    if urllib.parse.urlparse(url).scheme not in ("http", "https"):
+        raise AcquisitionError(f"Refusing non-HTTP(S) URL: {url}")
     last_error: Exception | None = None
     backoff = INITIAL_BACKOFF
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-            with urllib.request.urlopen(request, timeout=timeout) as response:
+            # Scheme allowlisted above; official-source downloads only.
+            with urllib.request.urlopen(request, timeout=timeout) as response:  # nosec B310
                 body = response.read()
                 content_type = response.headers.get("Content-Type", "")
             return body, content_type

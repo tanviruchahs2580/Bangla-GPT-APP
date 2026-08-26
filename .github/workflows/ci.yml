@@ -163,6 +163,12 @@ jobs:
       - name: Build image
         run: docker build -t bangla-gpt-api:ci .
 
+      - name: Trivy vulnerability gate (fail on FIXABLE high/critical)
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest image --scanners vuln --severity HIGH,CRITICAL \
+            --ignore-unfixed --exit-code 1 bangla-gpt-api:ci
+
       - name: Run container
         run: docker run -d --name api-smoke -p 8080:8000 -e ENV=ci bangla-gpt-api:ci
 
