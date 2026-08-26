@@ -14,19 +14,22 @@ permissions:
   contents: read
   packages: write
 
-env:
-  REGISTRY: ghcr.io
-  API_IMAGE: ghcr.io/${{ github.repository }}/api
-  WEB_IMAGE: ghcr.io/${{ github.repository }}/web
-
 jobs:
   build-push:
     name: Build & push images to GHCR
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.meta.outputs.version }}
+      api_image: ${{ steps.images.outputs.api }}
+      web_image: ${{ steps.images.outputs.web }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Compute image names (GHCR requires lowercase)
+        id: images
+        run: |
+          echo "api=ghcr.io/${GITHUB_REPOSITORY,,}/api" >> "$GITHUB_OUTPUT"
+          echo "web=ghcr.io/${GITHUB_REPOSITORY,,}/web" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -48,8 +51,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ env.API_IMAGE }}:${{ steps.meta.outputs.version }}
-            ${{ env.API_IMAGE }}:latest
+            ${{ steps.images.outputs.api }}:${{ steps.meta.outputs.version }}
+            ${{ steps.images.outputs.api }}:latest
           cache-from: type=gha,scope=api
           cache-to: type=gha,scope=api,mode=max
 
@@ -61,8 +64,8 @@ jobs:
             VITE_API_BASE=/api
           push: true
           tags: |
-            ${{ env.WEB_IMAGE }}:${{ steps.meta.outputs.version }}
-            ${{ env.WEB_IMAGE }}:latest
+            ${{ steps.images.outputs.web }}:${{ steps.meta.outputs.version }}
+            ${{ steps.images.outputs.web }}:latest
           cache-from: type=gha,scope=web
           cache-to: type=gha,scope=web,mode=max
 
