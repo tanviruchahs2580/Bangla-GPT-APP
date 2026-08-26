@@ -14,6 +14,9 @@ permissions:
   contents: read
   packages: write
 
+env:
+  REGISTRY: ghcr.io
+
 jobs:
   build-push:
     name: Build & push images to GHCR
