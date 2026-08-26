@@ -74,14 +74,39 @@ models enumerated authoritatively via `GET /v1beta/models`.
 provider retries (backoff ≤4s ×N) then answers controlled 502 — behaviour is
 correct; capacity/latency SLOs need a paid tier or lighter model.
 
-## 5. Final verdict
+## 5. CD pipeline executed end-to-end (v0.2.1 tag)
+
+| Step | Result | Evidence |
+|---|---|---|
+| Tag `v0.2.1` push → `release.yml` | PASS | run 32929556347: **Build & push images to GHCR = success** |
+| GHCR images published | PASS | api + web pushed (`push: true` succeeded); tags `v0.2.1` + `latest` |
+| Deploy job gating | PASS | correctly **skipped** until `DEPLOY_ENABLED=true` + SSH secrets |
+| Monitoring profile live | PASS | Prometheus target `bangla-gpt-api: up`; all **5 alert rules loaded (health ok)**; PromQL query returned real `bgpt_http_requests_total=15` |
+| Grafana | PASS | container healthy under monitoring profile |
+| Caddy config | PASS* | `caddy validate` → "Valid configuration"; real ACME needs the actual domain |
+| Fresh-clone reproducibility | PASS | clean GitHub clone + fresh venv → **135 passed** |
+| CI on main @ `c75cfa2` | PASS | API CI 6/6 jobs green |
+
+CD defects found & fixed during this execution:
+- L6: GHCR image paths must be lowercase — `${{ github.repository }}` produced
+  `Bangla-GPT-APP` → invalid tag; now computed via `${GITHUB_REPOSITORY,,}`.
+- L7: `REGISTRY` env accidentally dropped in L6 fix → login hit Docker Hub;
+  restored `env.REGISTRY: ghcr.io`.
+
+Note: anonymous/CLI pull of the private GHCR images requires a token with
+`read:packages` (local `gh` token lacks it); publish success is evidenced by
+the workflow's own push gate.
+
+## 6. Final verdict
 
 🟢 **PRODUCTION READY (engineering)** — every runtime parameter verified live in
-the deployable stage; all discovered defects fixed and regression-tested
-(135 passed locally, CI green).
+the deployable stage; CD pipeline executed to GHCR publish; all discovered
+defects (L1–L7) fixed and regression-tested (135 passed locally, CI green,
+release workflow green).
 
 Remaining operator inputs for a real public launch:
 1. Rotate the shared Gemini key; store as secret.
 2. Provide `DOMAIN` + DNS → enable Caddy TLS profile.
-3. Set `DEPLOY_ENABLED=true` + SSH secrets for CD (GHCR publish already tag-driven).
+3. Set `DEPLOY_ENABLED=true` + SSH secrets for CD deploy stage.
 4. Paid Gemini tier (or accept free-tier high-demand 503→502 behaviour).
+5. Optional: `gh auth refresh -s read:packages` to pull private GHCR images locally.
