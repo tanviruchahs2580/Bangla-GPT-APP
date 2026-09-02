@@ -217,7 +217,7 @@ def test_force_change_flag_follows_setting(tmp_path) -> None:
     assert login.json()["must_change_password"] is False
 
 
-def test_production_boot_guard_refuses_insecure_settings() -> None:
+def test_production_boot_guard_refuses_insecure_settings(tmp_path) -> None:
     with pytest.raises(RuntimeError, match="JWT_SECRET"):
         create_app(
             Settings(
@@ -241,6 +241,7 @@ def test_production_boot_guard_refuses_insecure_settings() -> None:
     app = create_app(
         Settings(
             env="production",
+            database_url=f"sqlite:///{tmp_path}/prod-guard.db",  # persistent (V8)
             jwt_secret="x" * 40,
             admin_email="a@b.com",
             admin_password="longenoughpass1",

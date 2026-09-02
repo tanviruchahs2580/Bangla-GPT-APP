@@ -46,7 +46,7 @@ def test_bootstrap_admin_exists_and_can_list_users(client: TestClient) -> None:
     headers = _login_headers(client, "root@example.com")
     users = client.get("/admin/users", headers=headers)
     assert users.status_code == 200
-    roles = [u["role"] for u in users.json()]
+    roles = [u["role"] for u in users.json()["items"]]
     assert roles.count("admin") >= 1
 
 
@@ -74,7 +74,7 @@ def test_admin_can_promote_and_role_takes_effect(client: TestClient) -> None:
 
 def test_cannot_demote_last_admin(client: TestClient) -> None:
     root = _login_headers(client, "root@example.com")
-    users = client.get("/admin/users", headers=root).json()
+    users = client.get("/admin/users", headers=root).json()["items"]
     admin_user = next(u for u in users if u["role"] == "admin")
     res = client.patch(
         f"/admin/users/{admin_user['id']}/role", json={"role": "student"}, headers=root
@@ -121,7 +121,7 @@ def test_rate_limit_login_429(tmp_path) -> None:
         assert res.status_code == 401
     third = client.post("/auth/login", json={"email": "nobody@example.com", "password": PASSWORD})
     assert third.status_code == 429
-    assert third.json()["detail"] == "Rate limit exceeded"
+    assert third.json()["detail"]["code"] == "rate_limited"
 
 
 def test_rate_limit_scoped_to_configured_paths(tmp_path) -> None:

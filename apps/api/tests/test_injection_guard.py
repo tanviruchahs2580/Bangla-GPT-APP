@@ -66,7 +66,8 @@ def test_build_evidence_prompt_wraps_each_chunk() -> None:
     prompt = build_evidence_prompt([Hit(c) for c in chunks], "কোষ কী?")
     assert prompt.count("<evidence>") == 2
     assert prompt.count("</evidence>") == 2
-    assert prompt.endswith("প্রশ্ন: কোষ কী?")
+    # The user question is itself wrapped as untrusted data (A5 hardening).
+    assert prompt.endswith("প্রশ্ন: <user_question>কোষ কী?</user_question>")
 
 
 def test_poisoned_chunk_cannot_break_out_of_evidence_block() -> None:

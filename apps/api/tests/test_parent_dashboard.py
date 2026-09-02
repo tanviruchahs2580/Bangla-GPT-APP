@@ -13,6 +13,7 @@ def client(tmp_path) -> TestClient:
     settings = Settings(
         env="test",
         database_url=f"sqlite:///{tmp_path}/parent.db",
+        allow_direct_parent_link=True,  # legacy mode under test
         jwt_secret=SECRET,
     )
     return TestClient(create_app(settings))

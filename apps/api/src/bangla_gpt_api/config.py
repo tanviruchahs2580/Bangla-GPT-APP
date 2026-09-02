@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_name: str = "Bangla GPT API"
-    version: str = "0.2.1"
+    version: str = "0.4.0"
     env: str = "development"
 
     # --- LLM provider ---
@@ -49,9 +49,22 @@ class Settings(BaseSettings):
     # --- rate limiting ---
     rate_limit_login_per_minute: int = 10
     rate_limit_tutor_per_minute: int = 30
+    # Generic IP ceiling for remaining /tutor/* routes (conversation listing).
+    rate_limit_tutor_ip_per_minute: int = 60
     rate_limit_backend: str = "memory"  # memory | redis
     rate_limit_fail_open: bool = False
     redis_url: str | None = None
+
+    # --- chat ---
+    chat_history_messages: int = 8
+    chat_retention_days: int = 180
+
+    # --- parent invites ---
+    invite_ttl_minutes: int = 1440
+    # Legacy bare-ID parent linking is DISABLED by default: any parent could
+    # link any student_id and read progress. The invite-code flow replaces it;
+    # enable only for controlled migrations/tests.
+    allow_direct_parent_link: bool = False
 
     # --- email delivery (password reset) ---
     smtp_enabled: bool = False

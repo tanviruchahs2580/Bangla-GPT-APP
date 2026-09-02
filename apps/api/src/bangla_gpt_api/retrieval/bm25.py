@@ -4,8 +4,12 @@ from collections import Counter
 from dataclasses import dataclass
 
 from bangla_gpt_api.curriculum.models import Chunk
+from bangla_gpt_api.retrieval.hybrid import expand_query, light_stem, trigram_similarity
 
 _BANGLA_WORD_RE = re.compile(r"[A-Za-z0-9\u0980-\u09FF]+")
+
+# Weight of the character-trigram fallback blended into the BM25 score.
+_TRIGRAM_WEIGHT = 2.0
 
 
 def tokenize(text: str) -> list[str]:
@@ -46,6 +50,9 @@ class BM25Index:
         self.doc_freq: Counter[str] = Counter()
         for tf in self.term_freqs:
             self.doc_freq.update(tf.keys())
+        # Hybrid retrieval (A2): precomputed char-trigram sets per chunk for
+        # the soft-match fallback signal.
+        self._trigrams: list[frozenset[str]] | None = None
 
     def search(
         self,
@@ -56,7 +63,10 @@ class BM25Index:
         top_k: int = 4,
         min_score: float = 0.0,
     ) -> list[Hit]:
-        query_terms = tokenize(query)
+        raw_terms = tokenize(query)
+        # Query-side expansion: stems + curated synonyms improve recall for
+        # paraphrased questions without touching document text.
+        query_terms = expand_query([light_stem(t) for t in raw_terms])
         hits: list[Hit] = []
         for i, chunk in enumerate(self.chunks):
             if class_level is not None and chunk.meta.class_level != class_level:
@@ -64,7 +74,13 @@ class BM25Index:
             if subject is not None and chunk.meta.subject != subject:
                 continue
             score = self._score(query_terms, i)
-            if score > min_score:
+            if score <= min_score:
+                soft = _TRIGRAM_WEIGHT * trigram_similarity(query, chunk.text)
+                if soft > score:
+                    score = soft
+            else:
+                score += 0.3 * _TRIGRAM_WEIGHT * trigram_similarity(query, chunk.text)
+            if score > 0:
                 hits.append(Hit(chunk=chunk, score=round(score, 4)))
         hits.sort(key=lambda hit: hit.score, reverse=True)
         return hits[:top_k]

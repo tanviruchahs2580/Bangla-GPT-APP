@@ -15,6 +15,8 @@ response handling is covered by tests against an ``httpx.MockTransport``.
 """
 
 import asyncio
+import json
+from collections.abc import AsyncIterator
 
 import httpx
 
@@ -56,6 +58,38 @@ def _extract_text(payload: dict) -> str:
     return answer
 
 
+def _parse_sse_delta(line: str) -> str | None:
+    """Extract the text delta from one SSE data line of streamGenerateContent."""
+    if not line.startswith("data:"):
+        return None
+    raw = line[len("data:") :].strip()
+    if not raw or raw == "[DONE]":
+        return None
+    try:
+        payload = json.loads(raw)
+    except ValueError:
+        return None
+    candidates = payload.get("candidates")
+    if not isinstance(candidates, list) or not candidates:
+        return None
+    content = candidates[0].get("content") if isinstance(candidates[0], dict) else None
+    parts = content.get("parts") if isinstance(content, dict) else None
+    texts = [
+        part["text"]
+        for part in (parts or [])
+        if isinstance(part, dict) and isinstance(part.get("text"), str)
+    ]
+    delta = "".join(texts)
+    return delta or None
+
+
+def _error_message_text(body: bytes) -> str:
+    try:
+        return _error_message(json.loads(body))
+    except ValueError:
+        return body[:200].decode(errors="replace")
+
+
 class GeminiProvider:
     name = "gemini"
 
@@ -73,6 +107,54 @@ class GeminiProvider:
         self._timeout_seconds = timeout_seconds
         self._max_retries = max(0, max_retries)
         self._transport = transport
+
+    async def stream(self, prompt: str, *, system: str | None = None) -> AsyncIterator[str]:
+        """Stream tokens via ``streamGenerateContent`` SSE transport.
+
+        Falls back to a single chunk of the non-streaming answer when the
+        streaming endpoint is unavailable after retries (graceful degrade).
+        """
+        url = f"{_API_BASE}/models/{self.model}:streamGenerateContent?alt=sse"
+        headers = {"x-goog-api-key": self._api_key}
+        payload: dict = {"contents": [{"role": "user", "parts": [{"text": prompt}]}]}
+        if system:
+            payload["systemInstruction"] = {"parts": [{"text": system}]}
+
+        attempt = 0
+        while True:
+            status = 0
+            body = b""
+            try:
+                client = httpx.AsyncClient(timeout=self._timeout_seconds, transport=self._transport)
+                async with client as session:
+                    async with session.stream(
+                        "POST", url, json=payload, headers=headers
+                    ) as response:
+                        if response.status_code == 200:
+                            emitted = 0
+                            async for line in response.aiter_lines():
+                                delta = _parse_sse_delta(line)
+                                if delta:
+                                    emitted += 1
+                                    yield delta
+                            if emitted:
+                                return
+                            raise ProviderError("Gemini stream produced no text")
+                        status = response.status_code
+                        body = await response.aread()
+            except httpx.TimeoutException as exc:
+                raise ProviderError(
+                    f"Gemini stream timed out after {self._timeout_seconds}s"
+                ) from exc
+            except httpx.HTTPError as exc:
+                raise ProviderError(f"Gemini stream failed: {exc}") from exc
+
+            retryable = status in _RETRYABLE_STATUS
+            if retryable and attempt < self._max_retries:
+                await asyncio.sleep(min(0.5 * (2**attempt), _MAX_BACKOFF_SECONDS))
+                attempt += 1
+                continue
+            raise ProviderError(f"Gemini API error {status}: {_error_message_text(body)}")
 
     async def generate(self, prompt: str, *, system: str | None = None) -> str:
         url = f"{_API_BASE}/models/{self.model}:generateContent"

@@ -15,6 +15,7 @@ def client(tmp_path) -> TestClient:
         env="test",
         database_url=f"sqlite:///{tmp_path}/export.db",
         jwt_secret="test-secret-0123456789abcdef0123456789",
+        allow_direct_parent_link=True,  # legacy mode under test
     )
     return TestClient(create_app(settings))
 

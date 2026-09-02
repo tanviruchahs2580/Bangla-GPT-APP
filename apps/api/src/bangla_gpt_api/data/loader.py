@@ -12,11 +12,65 @@ SAMPLE_MANIFEST: dict[str, dict] = {
         "subject": "science",
         "book": "বিজ্ঞান",
     },
+    "class6_math.md": {
+        "curriculum_year": 2023,
+        "class_level": 6,
+        "subject": "mathematics",
+        "book": "গণিত",
+    },
+    "class6_bangla.md": {
+        "curriculum_year": 2023,
+        "class_level": 6,
+        "subject": "bangla",
+        "book": "বাংলা ব্যাকরণ",
+    },
     "class7_math.md": {
         "curriculum_year": 2023,
         "class_level": 7,
         "subject": "mathematics",
         "book": "গণিত",
+    },
+    "class7_science.md": {
+        "curriculum_year": 2023,
+        "class_level": 7,
+        "subject": "science",
+        "book": "বিজ্ঞান",
+    },
+    "class8_science.md": {
+        "curriculum_year": 2023,
+        "class_level": 8,
+        "subject": "science",
+        "book": "বিজ্ঞান",
+    },
+    "class8_math.md": {
+        "curriculum_year": 2023,
+        "class_level": 8,
+        "subject": "mathematics",
+        "book": "নতুন গণিত",
+    },
+    "class9_science.md": {
+        "curriculum_year": 2023,
+        "class_level": 9,
+        "subject": "science",
+        "book": "বিজ্ঞান",
+    },
+    "class9_math.md": {
+        "curriculum_year": 2023,
+        "class_level": 9,
+        "subject": "mathematics",
+        "book": "সাধারণ গণিত",
+    },
+    "class10_science.md": {
+        "curriculum_year": 2023,
+        "class_level": 10,
+        "subject": "science",
+        "book": "বিজ্ঞান",
+    },
+    "class10_math.md": {
+        "curriculum_year": 2023,
+        "class_level": 10,
+        "subject": "mathematics",
+        "book": "সাধারণ গণিত",
     },
 }
 

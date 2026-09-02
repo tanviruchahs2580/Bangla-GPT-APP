@@ -1,16 +1,17 @@
 import hashlib
+import json
 import logging
 import secrets
 from collections import defaultdict
-from collections.abc import Generator
+from collections.abc import AsyncIterator, Generator
 from datetime import UTC, datetime, timedelta
 from time import perf_counter
 from typing import Annotated, Any, cast
 
 import jwt as pyjwt
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from sqlalchemy import delete, func, select, update
@@ -29,7 +30,12 @@ from bangla_gpt_api.config import DEFAULT_JWT_SECRET, Settings, get_settings
 from bangla_gpt_api.data.loader import load_sample_corpus
 from bangla_gpt_api.db.models import (
     AnswerLog,
+    ChatMessage,
+    Conversation,
+    EmailVerification,
+    Feedback,
     Parent,
+    ParentInvite,
     ParentStudentLink,
     PasswordReset,
     QuizAttempt,
@@ -58,15 +64,23 @@ from bangla_gpt_api.ratelimit import (
 from bangla_gpt_api.retrieval.bm25 import BM25Index
 from bangla_gpt_api.schemas import (
     AdminOverview,
+    AdminUsersPage,
+    AnalyticsEvent,
     AskRequest,
     AskResponse,
     ChangePasswordRequest,
     ChapterStat,
+    ChatMessageOut,
+    ChatSendRequest,
     ClassAnalytics,
+    ConversationCreate,
+    ConversationOut,
     DataExportResponse,
+    FeedbackRequest,
     ForgotPasswordRequest,
     LoginRequest,
     MeResponse,
+    ParentInviteLinkRequest,
     ParentLinkRequest,
     QuizQuestionPublic,
     QuizResult,
@@ -78,17 +92,40 @@ from bangla_gpt_api.schemas import (
     ResetPasswordRequest,
     ReviewItem,
     RoleUpdateRequest,
+    SourceRef,
     StudentBrief,
     StudentProgress,
     StudentResponse,
     TokenResponse,
     UserPublic,
+    VerifyEmailRequest,
+)
+from bangla_gpt_api.services.learn import (
+    ChapterContentOut,
+    ChapterSummaryOut,
+    SubjectOut,
+    chapter_content,
+    list_subjects,
+    subject_chapters,
 )
 from bangla_gpt_api.services.mailer import send_mail, smtp_configured
 from bangla_gpt_api.services.quiz import ClozeQuizGenerator, dump_quiz
 from bangla_gpt_api.services.tutor import TutorService
 
 logger = logging.getLogger(__name__)
+
+# Canonical subject keys used by the corpus; aliases accepted from clients
+# are normalized so 'math' and 'mathematics' both resolve (frontend bug fix).
+_SUBJECT_ALIASES = {"math": "mathematics", "গণিত": "mathematics"}
+
+
+def canonical_subject(subject: str | None) -> str | None:
+    if subject is None:
+        return None
+    return _SUBJECT_ALIASES.get(subject.strip().lower(), subject.strip().lower())
+
+
+CONSENT_VERSION = "2026-08-v1"
 
 # Endpoints reachable while a mandatory password change is pending.
 _FORCE_CHANGE_EXEMPT_PATHS = frozenset(
@@ -129,6 +166,13 @@ def enforce_production_safety(settings: Settings) -> None:
         problems.append("ADMIN_PASSWORD must be at least 12 characters in production")
     if settings.rate_limit_backend == "redis" and not settings.redis_url:
         problems.append("RATE_LIMIT_BACKEND=redis requires REDIS_URL")
+    # V8: an in-memory database in production silently gives each worker its
+    # own isolated store -> sessions/records vanish across workers.
+    if settings.database_url.strip() == "sqlite://":
+        problems.append(
+            "DATABASE_URL must be a persistent store in production "
+            "(e.g. sqlite:////data/app.db or PostgreSQL)"
+        )
     if problems:
         raise RuntimeError(
             "Refusing to start: insecure production configuration detected:\n- "
@@ -148,23 +192,53 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, rules: dict[str, int], limiter: "RateLimiter") -> None:
+    """Sliding-window rate limiting with IP and per-user scopes.
+
+    Authenticated routes use a per-user key when a valid Bearer token is
+    present (C15: one school NAT must not lock out a whole classroom), while
+    an IP ceiling still guards against token-farm abuse.
+    """
+
+    def __init__(
+        self, app, rules: dict[str, tuple[int, str]], limiter: "RateLimiter", settings: Settings
+    ) -> None:
         super().__init__(app)
         self.rules = rules
         self.limiter = limiter
+        self._settings = settings
+
+    @staticmethod
+    def _user_key(request: Request) -> str | None:
+        auth = request.headers.get("authorization", "")
+        if not auth.lower().startswith("bearer "):
+            return None
+        try:
+            payload = decode_token(auth[7:], settings=request.app.state.settings)
+            return f"u:{payload['sub']}"
+        except Exception:
+            return None
 
     async def dispatch(self, request: Request, call_next):
         client_ip = request.client.host if request.client else "unknown"
-        for path_prefix, limit in self.rules.items():
+        for path_prefix, (limit, scope) in self.rules.items():
             if not request.url.path.startswith(path_prefix) or limit <= 0:
                 continue
-            key = f"{path_prefix}|{client_ip}"
+            if scope == "user":
+                # Per-user budget so a shared school NAT cannot lock out a
+                # classroom; unauthenticated callers fall back to their IP.
+                user_key = self._user_key(request)
+                key_source = user_key or f"ip:{client_ip}"
+            else:
+                key_source = f"ip:{client_ip}"
             try:
-                allowed = self.limiter.check(key, limit)
+                allowed = self.limiter.check(f"{path_prefix}|{key_source}", limit)
             except RateLimitBackendError:
                 return JSONResponse({"detail": "Rate limiter unavailable"}, status_code=503)
             if not allowed:
-                return JSONResponse({"detail": "Rate limit exceeded"}, status_code=429)
+                return JSONResponse(
+                    {"detail": {"code": "rate_limited", "message": "Rate limit exceeded"}},
+                    status_code=429,
+                )
             break
         return await call_next(request)
 
@@ -239,6 +313,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     if settings.rate_limit_backend == "redis" and not settings.redis_url:
         raise RuntimeError("RATE_LIMIT_BACKEND=redis requires REDIS_URL to be set")
     app = FastAPI(title=settings.app_name, version=settings.version)
+    app.state.settings = settings
 
     if settings.cors_origins:
         app.add_middleware(
@@ -302,12 +377,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(
         RateLimitMiddleware,
         rules={
-            "/auth/login": settings.rate_limit_login_per_minute,
-            "/tutor/ask": settings.rate_limit_tutor_per_minute,
-            "/auth/forgot": settings.rate_limit_login_per_minute,
-            "/auth/reset": settings.rate_limit_login_per_minute,
+            "/auth/login": (settings.rate_limit_login_per_minute, "ip"),
+            "/tutor/ask": (settings.rate_limit_tutor_per_minute, "user"),
+            "/tutor/chat": (settings.rate_limit_tutor_per_minute, "user"),
+            "/tutor": (settings.rate_limit_tutor_ip_per_minute, "ip"),
+            "/auth/forgot": (settings.rate_limit_login_per_minute, "ip"),
+            "/auth/reset": (settings.rate_limit_login_per_minute, "ip"),
+            "/events": (60, "ip"),
         },
         limiter=build_limiter(settings),
+        settings=settings,
     )
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes)
     app.add_middleware(RequestIdMiddleware)
@@ -361,6 +440,37 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     TeacherOrAdminUser = Annotated[User, Depends(require_roles("teacher", "admin"))]
     ParentUser = Annotated[User, Depends(require_roles("parent"))]
     AdminUser = Annotated[User, Depends(require_roles("admin"))]
+
+    # ── Learn catalog (read-only, grounded in the loaded corpus) ──────────
+    @app.get("/learn/subjects", response_model=list[SubjectOut])
+    def learn_subjects(
+        user: CurrentUser,
+        class_level: int | None = Query(default=None),
+    ) -> list[SubjectOut]:
+        return list_subjects(class_level)
+
+    @app.get("/learn/subjects/{subject}/chapters", response_model=list[ChapterSummaryOut])
+    def learn_subject_chapters(
+        subject: str,
+        user: CurrentUser,
+        class_level: int | None = Query(default=None),
+    ) -> list[ChapterSummaryOut]:
+        chapters = subject_chapters(subject, class_level)
+        if not chapters:
+            raise HTTPException(status_code=404, detail="Subject not found")
+        return chapters
+
+    @app.get("/learn/subjects/{subject}/chapters/{chapter}", response_model=ChapterContentOut)
+    def learn_chapter_content(
+        subject: str,
+        chapter: str,
+        user: CurrentUser,
+        class_level: int | None = Query(default=None),
+    ) -> ChapterContentOut:
+        content = chapter_content(subject, class_level, chapter)
+        if content is None:
+            raise HTTPException(status_code=404, detail="Chapter not found")
+        return content
 
     def authorize_student_access(db: Session, student_id: int, user: User) -> Student:
         student = db.get(Student, student_id)
@@ -435,12 +545,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return Response(content=generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
     @app.post("/auth/register", response_model=RegisterResponse, status_code=201)
-    def register(payload: RegisterRequest, db: DbSession) -> RegisterResponse:
+    def register(request: Request, payload: RegisterRequest, db: DbSession) -> RegisterResponse:
         email = payload.email.strip().lower()
         existing = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
         if existing is not None:
-            raise HTTPException(status_code=409, detail="Email already registered")
-        user = User(email=email, password_hash=hash_password(payload.password), role=payload.role)
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "email_taken", "message": "Email already registered"},
+            )
+        # Email verification is enforced only when SMTP delivery exists;
+        # otherwise accounts are trusted as verified (dev/small deployments).
+        verified = not smtp_configured(settings)
+        user = User(
+            email=email,
+            password_hash=hash_password(payload.password),
+            role=payload.role,
+            email_verified=verified,
+        )
         db.add(user)
         try:
             # Unique violation on users.email surfaces here when a concurrent
@@ -448,11 +569,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             db.flush()
         except IntegrityError as exc:
             db.rollback()
-            raise HTTPException(status_code=409, detail="Email already registered") from exc
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "email_taken", "message": "Email already registered"},
+            ) from exc
         profile: Student | Teacher | Parent
         if payload.role == "student":
+            consent_ip = request.client.host if request.client else None
             profile = Student(
-                name=payload.name.strip(), class_level=payload.class_level, user_id=user.id
+                name=payload.name.strip(),
+                class_level=payload.class_level,
+                user_id=user.id,
+                consent_ip=consent_ip,
+                consent_at=datetime.now(UTC),
+                consent_version=CONSENT_VERSION,
             )
         elif payload.role == "parent":
             profile = Parent(name=payload.name.strip(), user_id=user.id)
@@ -460,14 +590,88 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             profile = Teacher(name=payload.name.strip(), user_id=user.id)
         db.add(profile)
         db.commit()
+        if not verified:
+            _send_verification_email(db, settings, user)
         return RegisterResponse(user_id=user.id, role=user.role, profile_id=profile.id)
+
+    def _send_verification_email(db: Session, settings: Settings, user: User) -> None:
+        token = secrets.token_urlsafe(32)
+        db.add(
+            EmailVerification(
+                user_id=user.id,
+                token_hash=hashlib.sha256(token.encode()).hexdigest(),
+                expires_at=datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=24),
+            )
+        )
+        db.commit()
+        send_mail(
+            settings,
+            to=user.email,
+            subject="ইমেইল যাচাই / Verify your email",
+            body=(
+                "Bangla GPT Tutor-এ স্বাগতম! "
+                "ইমেইল যাচাই করতে নিচের কোডটি "
+                "অ্যাপের ঘরে দিন (২৪ ঘণ্টা বৈধ):\n\n"
+                f"{token}\n"
+            ),
+        )
+
+    @app.post("/auth/verify-email", response_model=TokenResponse)
+    def verify_email(payload: VerifyEmailRequest, db: DbSession) -> TokenResponse:
+        """Complete email verification with the token from the mail.
+
+        On success the account is marked verified and a session is issued.
+        """
+        now = datetime.now(UTC).replace(tzinfo=None)
+        row = db.execute(
+            select(EmailVerification).where(
+                EmailVerification.token_hash == hashlib.sha256(payload.token.encode()).hexdigest(),
+                EmailVerification.used_at.is_(None),
+            )
+        ).scalar_one_or_none()
+        if row is None or row.expires_at < now:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_token", "message": "Invalid or expired verification code"},
+            )
+        row.used_at = now
+        user = db.get(User, row.user_id)
+        if user is None:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_token", "message": "Invalid or expired verification code"},
+            )
+        user.email_verified = True
+        db.commit()
+        return TokenResponse(access_token=create_access_token(user, settings=settings))
+
+    @app.post("/auth/resend-verification", status_code=202)
+    def resend_verification(db: DbSession, user: CurrentUser) -> dict:
+        if smtp_configured(settings) and not user.email_verified:
+            _send_verification_email(db, settings, user)
+        return {"status": "accepted"}
 
     @app.post("/auth/login", response_model=TokenResponse)
     def login(payload: LoginRequest, db: DbSession) -> TokenResponse:
         email = payload.email.strip().lower()
         user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
-        if user is None or not verify_password(payload.password, user.password_hash):
-            raise HTTPException(status_code=401, detail="Incorrect email or password")
+        if (
+            user is None
+            or not verify_password(payload.password, user.password_hash)
+            or not user.email_verified
+        ):
+            # Unverified accounts get the same generic 401 as bad credentials,
+            # but with a machine-readable code so the UI can offer "resend".
+            unverified = user is not None and not user.email_verified
+            if unverified:
+                raise HTTPException(
+                    status_code=403,
+                    detail={"code": "email_unverified", "message": "Email verification required"},
+                )
+            raise HTTPException(
+                status_code=401,
+                detail={"code": "bad_credentials", "message": "Incorrect email or password"},
+            )
         token = create_access_token(user, settings=settings)
         return TokenResponse(access_token=token, must_change_password=user.must_change_password)
 
@@ -568,13 +772,289 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/tutor/ask", response_model=AskResponse)
     async def ask(payload: AskRequest, user: CurrentUser) -> AskResponse:
         if tutor is None:
-            raise HTTPException(status_code=503, detail="Tutor service unavailable")
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "tutor_unavailable", "message": "Tutor service unavailable"},
+            )
         try:
-            return await tutor.ask(payload.question, payload.class_level, payload.subject)
+            return await tutor.ask(
+                payload.question,
+                payload.class_level,
+                canonical_subject(payload.subject),
+            )
         except ProviderError as exc:
             # Upstream LLM failure (timeout/exhausted retries/blocked) must be a
             # controlled 502, never an unhandled 500.
-            raise HTTPException(status_code=502, detail="LLM provider unavailable") from exc
+            raise HTTPException(
+                status_code=502,
+                detail={"code": "llm_unavailable", "message": "LLM provider unavailable"},
+            ) from exc
+
+    # ------------------------------------------------------------------
+    # Multi-turn tutoring chat (A3)
+    # ------------------------------------------------------------------
+
+    def _student_profile(db: Session, user: User) -> Student:
+        student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one_or_none()
+        if student is None:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "no_student_profile", "message": "Student profile not found"},
+            )
+        return student
+
+    def _own_conversation(db: Session, conversation_id: int, user: User) -> Conversation:
+        conv = db.get(Conversation, conversation_id)
+        if conv is None:
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "conversation_not_found", "message": "Conversation not found"},
+            )
+        owner = db.execute(
+            select(Student).where(Student.id == conv.student_id)
+        ).scalar_one_or_none()
+        if owner is None or owner.user_id != user.id:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "not_allowed",
+                    "message": "Not allowed to access this conversation",
+                },
+            )
+        return conv
+
+    @app.post("/tutor/conversations", response_model=ConversationOut, status_code=201)
+    def create_conversation(payload: ConversationCreate, db: DbSession, user: CurrentUser):
+        student = _student_profile(db, user)
+        conv = Conversation(student_id=student.id, title=payload.title)
+        db.add(conv)
+        db.commit()
+        return ConversationOut(
+            id=conv.id, title=conv.title, created_at=conv.created_at, message_count=0
+        )
+
+    @app.get("/tutor/conversations", response_model=list[ConversationOut])
+    def list_conversations(db: DbSession, user: CurrentUser) -> list[ConversationOut]:
+        student = _student_profile(db, user)
+        rows = (
+            db.execute(
+                select(Conversation)
+                .where(Conversation.student_id == student.id)
+                .order_by(Conversation.created_at.desc())
+                .limit(100)
+            )
+            .scalars()
+            .all()
+        )
+        out: list[ConversationOut] = []
+        for conv in rows:
+            count = db.execute(
+                select(func.count())
+                .select_from(ChatMessage)
+                .where(ChatMessage.conversation_id == conv.id)
+            ).scalar_one()
+            out.append(
+                ConversationOut(
+                    id=conv.id, title=conv.title, created_at=conv.created_at, message_count=count
+                )
+            )
+        return out
+
+    @app.get("/tutor/conversations/{conversation_id}/messages", response_model=list[ChatMessageOut])
+    def conversation_messages(
+        conversation_id: int, db: DbSession, user: CurrentUser
+    ) -> list[ChatMessageOut]:
+        _own_conversation(db, conversation_id, user)
+        rows = (
+            db.execute(
+                select(ChatMessage)
+                .where(ChatMessage.conversation_id == conversation_id)
+                .order_by(ChatMessage.id)
+            )
+            .scalars()
+            .all()
+        )
+        return [
+            ChatMessageOut(
+                id=m.id,
+                role=m.role,
+                content=m.content,
+                grounded=m.grounded,
+                refused_reason=m.refused_reason,
+                sources=[SourceRef(**s) for s in (m.sources_json or [])],
+                rating=m.rating,
+                created_at=m.created_at,
+            )
+            for m in rows
+        ]
+
+    def _chat_history(db: Session, conversation_id: int) -> list[dict[str, str]]:
+        rows = (
+            db.execute(
+                select(ChatMessage)
+                .where(ChatMessage.conversation_id == conversation_id)
+                .order_by(ChatMessage.id.desc())
+                .limit(settings.chat_history_messages)
+            )
+            .scalars()
+            .all()
+        )
+        history = [{"role": m.role, "content": m.content} for m in reversed(rows)]
+        return history
+
+    @app.post("/tutor/conversations/{conversation_id}/messages", response_model=ChatMessageOut)
+    async def send_chat_message(
+        conversation_id: int, payload: ChatSendRequest, db: DbSession, user: CurrentUser
+    ) -> ChatMessageOut:
+        """Non-streaming chat turn: persists both sides and returns the reply."""
+        if tutor is None:
+            raise HTTPException(status_code=503, detail="Tutor service unavailable")
+        conv = _own_conversation(db, conversation_id, user)
+        student = _student_profile(db, user)
+        class_level = payload.class_level or student.class_level or 6
+        history = _chat_history(db, conv.id)
+
+        user_msg = ChatMessage(conversation_id=conv.id, role="user", content=payload.message)
+        db.add(user_msg)
+        db.commit()
+
+        try:
+            result = await tutor.ask(
+                payload.message, class_level, canonical_subject(payload.subject), history
+            )
+        except ProviderError as exc:
+            db.rollback()
+            raise HTTPException(
+                status_code=502,
+                detail={"code": "llm_unavailable", "message": "LLM provider unavailable"},
+            ) from exc
+
+        assistant_msg = ChatMessage(
+            conversation_id=conv.id,
+            role="assistant",
+            content=result.answer,
+            grounded=result.grounded,
+            refused_reason=result.refused_reason,
+            sources_json=[s.model_dump() for s in result.sources],
+        )
+        db.add(assistant_msg)
+        if conv.title is None:
+            conv.title = payload.message[:80]
+        db.commit()
+        return ChatMessageOut(
+            id=assistant_msg.id,
+            role=assistant_msg.role,
+            content=assistant_msg.content,
+            grounded=assistant_msg.grounded,
+            refused_reason=assistant_msg.refused_reason,
+            sources=result.sources,
+            rating=None,
+            created_at=assistant_msg.created_at,
+        )
+
+    @app.post("/tutor/conversations/{conversation_id}/messages/stream")
+    async def stream_chat_message(
+        conversation_id: int, payload: ChatSendRequest, db: DbSession, user: CurrentUser
+    ) -> StreamingResponse:
+        """SSE streaming chat turn: token events, then one final JSON event."""
+        if tutor is None:
+            raise HTTPException(status_code=503, detail="Tutor service unavailable")
+        conv = _own_conversation(db, conversation_id, user)
+        student = _student_profile(db, user)
+        class_level = payload.class_level or student.class_level or 6
+        history = _chat_history(db, conv.id)
+
+        user_msg = ChatMessage(conversation_id=conv.id, role="user", content=payload.message)
+        db.add(user_msg)
+        db.commit()
+
+        async def event_stream() -> AsyncIterator[str]:
+            try:
+                final_response: AskResponse | None = None
+                async for event in tutor.ask_stream(  # type: ignore[union-attr]
+                    payload.message,
+                    class_level,
+                    canonical_subject(payload.subject),
+                    history,
+                ):
+                    if event.type == "token":
+                        token_payload = json.dumps({"text": event.text}, ensure_ascii=False)
+                        yield f"event: token\ndata: {token_payload}\n\n"
+                    elif event.response is not None:
+                        final_response = event.response
+                if final_response is None:  # never leak a naked 500 under -O
+                    yield (
+                        "event: error\ndata: "
+                        + json.dumps({"code": "llm_unavailable"}, ensure_ascii=False)
+                        + "\n\n"
+                    )
+                    return
+                assistant_msg = ChatMessage(
+                    conversation_id=conv.id,
+                    role="assistant",
+                    content=final_response.answer,
+                    grounded=final_response.grounded,
+                    refused_reason=final_response.refused_reason,
+                    sources_json=[s.model_dump() for s in final_response.sources],
+                )
+                db.add(assistant_msg)
+                if conv.title is None:
+                    conv.title = payload.message[:80]
+                db.commit()
+                done_payload = {
+                    "user_message_id": user_msg.id,
+                    "message_id": assistant_msg.id,
+                    **final_response.model_dump(),
+                }
+                yield (
+                    "event: done\ndata: " + json.dumps(done_payload, ensure_ascii=False) + "\n\n"
+                )
+            except ProviderError:
+                yield (
+                    "event: error\ndata: "
+                    + json.dumps({"code": "llm_unavailable"}, ensure_ascii=False)
+                    + "\n\n"
+                )
+
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+    # ------------------------------------------------------------------
+    # Feedback & privacy-safe product analytics (B12)
+    # ------------------------------------------------------------------
+
+    @app.post("/feedback", status_code=201)
+    def submit_feedback(payload: FeedbackRequest, db: DbSession, user: CurrentUser) -> dict:
+        if payload.message_id is None and payload.attempt_id is None:
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "missing_target", "message": "message_id or attempt_id required"},
+            )
+        row = Feedback(
+            user_id=user.id,
+            message_id=payload.message_id,
+            attempt_id=payload.attempt_id,
+            rating=payload.rating,
+            comment=payload.comment,
+        )
+        if payload.message_id is not None:
+            msg = db.get(ChatMessage, payload.message_id)
+            if msg is not None and payload.rating in (-1, 1):
+                msg.rating = payload.rating
+        db.add(row)
+        db.commit()
+        return {"status": "recorded"}
+
+    @app.post("/events", status_code=202)
+    def record_event(payload: AnalyticsEvent, request: Request, user: CurrentUser) -> dict:
+        json_log(
+            logger,
+            logging.INFO,
+            "product_event",
+            name=payload.name,
+            props=payload.props,
+            role=user.role,
+        )
+        return {"status": "accepted"}
 
     @app.get("/users/me", response_model=MeResponse)
     def read_me(db: DbSession, user: CurrentUser) -> MeResponse:
@@ -612,8 +1092,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
             if attempt_ids:
                 db.execute(delete(AnswerLog).where(AnswerLog.attempt_id.in_(attempt_ids)))
+            conv_ids = (
+                db.execute(select(Conversation.id).where(Conversation.student_id == student.id))
+                .scalars()
+                .all()
+            )
+            if conv_ids:
+                db.execute(delete(ChatMessage).where(ChatMessage.conversation_id.in_(conv_ids)))
+            db.execute(delete(Conversation).where(Conversation.student_id == student.id))
+            db.execute(delete(Feedback).where(Feedback.user_id == user.id))
             db.execute(delete(QuizAttempt).where(QuizAttempt.student_id == student.id))
             db.execute(delete(ParentStudentLink).where(ParentStudentLink.student_id == student.id))
+            db.execute(delete(ParentInvite).where(ParentInvite.student_id == student.id))
             db.delete(student)
 
         db.delete(user)
@@ -637,6 +1127,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "id": student.id,
                 "name": student.name,
                 "class_level": student.class_level,
+                "consent_version": student.consent_version,
+                "consent_at": student.consent_at.isoformat() if student.consent_at else None,
             }
             attempt_rows = list(
                 db.execute(
@@ -691,7 +1183,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/quizzes", response_model=QuizStarted)
     def start_quiz(payload: QuizStartRequest, db: DbSession, user: CurrentUser) -> QuizStarted:
         if index is None:
-            raise HTTPException(status_code=503, detail="Curriculum index unavailable")
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "index_unavailable", "message": "Curriculum index unavailable"},
+            )
         student = authorize_student_access(db, payload.student_id, user)
         class_level = (
             payload.class_level if payload.class_level is not None else student.class_level
@@ -706,21 +1201,33 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         generator = ClozeQuizGenerator(index.chunks)
         questions = generator.generate(
             class_level=class_level,
-            subject=payload.subject,
+            subject=canonical_subject(payload.subject),
             num=payload.num_questions,
             seed=attempt.id,
         )
         if not questions:
             db.rollback()
             raise HTTPException(
-                status_code=422, detail="No quiz could be generated for this filter"
+                status_code=422,
+                detail={
+                    "code": "no_quiz_for_filter",
+                    "message": "No quiz could be generated for this class/subject yet",
+                },
             )
 
         attempt.quiz_json = dump_quiz(questions)
         db.commit()
 
+        note: str | None = None
+        if len(questions) < payload.num_questions:
+            # A4: never silently short-change the caller — surface a code the
+            # UI can translate into an honest, localized notice.
+            note = f"partial_quiz:{len(questions)}"
+
         return QuizStarted(
             attempt_id=attempt.id,
+            requested=payload.num_questions,
+            note=note,
             questions=[
                 QuizQuestionPublic(id=q.id, question_text=q.question_text, options=list(q.options))
                 for q in questions
@@ -751,7 +1258,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         questions = list(attempt.quiz_json)
         if len(payload.answers) != len(questions):
             raise HTTPException(
-                status_code=400, detail="Answer count does not match question count"
+                status_code=400,
+                detail={
+                    "code": "answer_count_mismatch",
+                    "message": "Answer count does not match question count",
+                    "expected": len(questions),
+                    "received": len(payload.answers),
+                },
             )
 
         correct = 0
@@ -939,12 +1452,34 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             students_detail=briefs,
         )
 
-    @app.get("/admin/users", response_model=list[UserPublic])
-    def admin_list_users(db: DbSession, admin: AdminUser) -> list[UserPublic]:
-        users = db.execute(select(User).order_by(User.id)).scalars().all()
-        return [
-            UserPublic(id=u.id, email=u.email, role=u.role, created_at=u.created_at) for u in users
-        ]
+    @app.get("/admin/users", response_model=AdminUsersPage)
+    def admin_list_users(
+        db: DbSession,
+        admin: AdminUser,
+        q: str | None = Query(default=None, max_length=120),
+        role: str | None = None,
+        limit: int = Query(default=50, ge=1, le=200),
+        offset: int = Query(default=0, ge=0),
+    ) -> AdminUsersPage:
+        """Paginated, searchable user list (C18)."""
+        statement = select(User)
+        count_stmt = select(func.count()).select_from(User)
+        if q:
+            like = f"%{q.strip().lower()}%"
+            statement = statement.where(func.lower(User.email).like(like))
+            count_stmt = count_stmt.where(func.lower(User.email).like(like))
+        if role:
+            statement = statement.where(User.role == role)
+            count_stmt = count_stmt.where(User.role == role)
+        total = db.execute(count_stmt).scalar_one()
+        rows = db.execute(statement.order_by(User.id).offset(offset).limit(limit)).scalars().all()
+        return AdminUsersPage(
+            total=total,
+            items=[
+                UserPublic(id=u.id, email=u.email, role=u.role, created_at=u.created_at)
+                for u in rows
+            ],
+        )
 
     @app.patch("/admin/users/{user_id}/role", response_model=UserPublic)
     def admin_update_role(
@@ -986,8 +1521,77 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             avg_score_pct=round(sum(scores) / len(scores), 2) if scores else None,
         )
 
+    @app.post("/admin/maintenance/purge", response_model=dict)
+    def admin_purge_expired(db: DbSession, admin: AdminUser) -> dict:
+        """Retention sweep (D20): expired tokens, stale invites, old chats.
+
+        Child-data minimization: conversations older than
+        ``chat_retention_days`` are deleted with their messages.
+        """
+        now = datetime.now(UTC).replace(tzinfo=None)
+        chat_cutoff = now - timedelta(days=settings.chat_retention_days)
+
+        old_convs = (
+            db.execute(select(Conversation.id).where(Conversation.created_at < chat_cutoff))
+            .scalars()
+            .all()
+        )
+        deleted_messages = 0
+        if old_convs:
+            deleted_messages = cast(
+                CursorResult[Any],
+                db.execute(delete(ChatMessage).where(ChatMessage.conversation_id.in_(old_convs))),
+            ).rowcount
+            db.execute(delete(Conversation).where(Conversation.id.in_(old_convs)))
+
+        deleted_resets = cast(
+            CursorResult[Any],
+            db.execute(
+                delete(PasswordReset).where(PasswordReset.expires_at < now - timedelta(days=30))
+            ),
+        ).rowcount
+        deleted_verifications = cast(
+            CursorResult[Any],
+            db.execute(
+                delete(EmailVerification).where(
+                    EmailVerification.expires_at < now - timedelta(days=30)
+                )
+            ),
+        ).rowcount
+        deleted_invites = cast(
+            CursorResult[Any],
+            db.execute(
+                delete(ParentInvite).where(
+                    ParentInvite.expires_at < now - timedelta(days=30),
+                    ParentInvite.used_at.isnot(None),
+                )
+            ),
+        ).rowcount
+        db.commit()
+        return {
+            "conversations_deleted": len(old_convs),
+            "chat_messages_deleted": deleted_messages,
+            "password_resets_deleted": deleted_resets,
+            "email_verifications_deleted": deleted_verifications,
+            "used_invites_deleted": deleted_invites,
+        }
+
     @app.post("/parents/link", status_code=201)
     def parent_link(payload: ParentLinkRequest, db: DbSession, parent: ParentUser) -> dict:
+        """Legacy direct-ID linking — disabled by default (V2 hardening).
+
+        An unconsented parent could previously link ANY student_id and read
+        their progress. The invite-code flow (`/parents/link/invite`) is the
+        consented path; enable ALLOW_DIRECT_PARENT_LINK only for migrations.
+        """
+        if not settings.allow_direct_parent_link:
+            raise HTTPException(
+                status_code=410,
+                detail={
+                    "code": "direct_link_disabled",
+                    "message": "Use the student's invite code via /parents/link/invite",
+                },
+            )
         parent_profile = db.execute(
             select(Parent).where(Parent.user_id == parent.id)
         ).scalar_one_or_none()
@@ -1014,6 +1618,85 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             db.rollback()
             raise HTTPException(status_code=409, detail="Already linked") from exc
         return {"linked": True, "parent_id": parent_profile.id, "student_id": student.id}
+
+    # ------------------------------------------------------------------
+    # Parent invite-code flow (C17): students generate a single-use code,
+    # parents redeem it. No more bare student_id guessing.
+    # ------------------------------------------------------------------
+
+    def _hash_invite(code: str) -> str:
+        return hashlib.sha256(code.strip().upper().encode()).hexdigest()
+
+    @app.post("/students/me/invite-code", status_code=201)
+    def create_parent_invite(db: DbSession, user: CurrentUser) -> dict:
+        if user.role != "student":
+            raise HTTPException(status_code=403, detail="Students only")
+        student = _student_profile(db, user)
+        active = (
+            db.execute(
+                select(ParentInvite).where(
+                    ParentInvite.student_id == student.id,
+                    ParentInvite.used_at.is_(None),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        now = datetime.now(UTC).replace(tzinfo=None)
+        active = [i for i in active if i.expires_at > now]
+        for stale in active[2:]:  # keep at most 3 live codes per student
+            db.delete(stale)
+        code = "BGPT-" + secrets.token_hex(4).upper()
+        db.add(
+            ParentInvite(
+                code_hash=_hash_invite(code),
+                student_id=student.id,
+                expires_at=now + timedelta(minutes=settings.invite_ttl_minutes),
+            )
+        )
+        db.commit()
+        return {"code": code, "expires_in_minutes": settings.invite_ttl_minutes}
+
+    @app.post("/parents/link/invite", status_code=201)
+    def link_via_invite(
+        payload: ParentInviteLinkRequest, db: DbSession, parent: ParentUser
+    ) -> dict:
+        now = datetime.now(UTC).replace(tzinfo=None)
+        invite = db.execute(
+            select(ParentInvite).where(ParentInvite.code_hash == _hash_invite(payload.code))
+        ).scalar_one_or_none()
+        if invite is None or invite.used_at is not None or invite.expires_at < now:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "invalid_invite", "message": "Invalid or expired invite code"},
+            )
+        parent_profile = db.execute(
+            select(Parent).where(Parent.user_id == parent.id)
+        ).scalar_one_or_none()
+        if parent_profile is None:
+            parent_profile = Parent(name=parent.email.split("@")[0], user_id=parent.id)
+            db.add(parent_profile)
+            db.flush()
+        existing = db.execute(
+            select(ParentStudentLink).where(
+                ParentStudentLink.parent_id == parent_profile.id,
+                ParentStudentLink.student_id == invite.student_id,
+            )
+        ).scalar_one_or_none()
+        if existing is None:
+            db.add(ParentStudentLink(parent_id=parent_profile.id, student_id=invite.student_id))
+        invite.used_at = now
+        invite.used_by_parent_id = parent_profile.id
+        try:
+            db.commit()
+        except IntegrityError as exc:
+            db.rollback()
+            raise HTTPException(status_code=409, detail="Already linked") from exc
+        return {
+            "linked": True,
+            "parent_id": parent_profile.id,
+            "student_id": invite.student_id,
+        }
 
     @app.get("/parents/me/children", response_model=list[StudentBrief])
     def parent_children(db: DbSession, parent: ParentUser) -> list[StudentBrief]:

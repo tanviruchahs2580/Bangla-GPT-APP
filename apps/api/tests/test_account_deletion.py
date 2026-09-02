@@ -13,6 +13,7 @@ def make_client(tmp_path, **overrides) -> TestClient:
         env="test",
         database_url=f"sqlite:///{tmp_path}/deletion.db",
         jwt_secret=SECRET,
+        allow_direct_parent_link=True,  # legacy mode under test
         admin_email="root@example.com",
         admin_password=PASSWORD,
         force_admin_password_change=False,
@@ -148,6 +149,8 @@ def test_second_admin_can_self_delete(client: TestClient) -> None:
     assert promote.status_code == 200
     second_headers = _login_headers(client, "second@example.com")
     assert client.delete("/users/me", headers=second_headers).status_code == 204
-    remaining = [u for u in client.get("/admin/users", headers=root).json() if u["role"] == "admin"]
+    remaining = [
+        u for u in client.get("/admin/users", headers=root).json()["items"] if u["role"] == "admin"
+    ]
     assert len(remaining) >= 1
     assert all(u["id"] != other["user_id"] for u in remaining)

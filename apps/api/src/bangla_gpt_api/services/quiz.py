@@ -107,38 +107,81 @@ class ClozeQuizGenerator:
         rng.shuffle(order)
 
         questions: list[GeneratedQuestion] = []
+        used_terms: set[tuple[int, str]] = set()
         for i in order:
-            chunk = self.chunks[i]
-            picked = self._best_cloze(i)
+            if len(questions) >= num:
+                break
+            picked = self._best_cloze(i, exclude=used_terms)
             if picked is None:
                 continue
             sentence, term = picked
             distractors = self._sample_distractors(rng, i, term, doc_indices)
             if distractors is None:
                 continue
-            options = [term, *distractors]
-            rng.shuffle(options)
-            questions.append(
-                GeneratedQuestion(
-                    id=hashlib.sha1(
-                        f"{chunk.id}|{term}".encode(), usedforsecurity=False
-                    ).hexdigest()[:10],
-                    question_text=f"রিক্তস্থানে সঠিক শব্দটি বসাও: {sentence.replace(term, '____', 1)}",
-                    options=options,
-                    answer_index=options.index(term),
-                    chapter=chunk.meta.chapter,
-                    book=chunk.meta.book,
-                )
-            )
-            if len(questions) >= num:
-                break
+            used_terms.add((i, term))
+            questions.append(self._build_question(i, sentence, term, distractors))
+
+        # Second pass (A4): when one question per chunk cannot satisfy the
+        # request, harvest additional distinct clozes from the same chunks so
+        # short quizzes only happen when content genuinely runs out.
+        if len(questions) < num:
+            for i in order:
+                if len(questions) >= num:
+                    break
+                for sentence, term in self._extra_clozes(i, used_terms):
+                    if len(questions) >= num:
+                        break
+                    distractors = self._sample_distractors(rng, i, term, doc_indices)
+                    if distractors is None or term in [
+                        q.options[q.answer_index] for q in questions
+                    ]:
+                        continue
+                    used_terms.add((i, term))
+                    questions.append(self._build_question(i, sentence, term, distractors))
         return questions
 
-    def _best_cloze(self, doc_index: int) -> tuple[str, str] | None:
+    def _build_question(
+        self, doc_index: int, sentence: str, term: str, distractors: list[str]
+    ) -> GeneratedQuestion:
+        chunk = self.chunks[doc_index]
+        options = [term, *distractors]
+        random.Random(f"{chunk.id}|{term}").shuffle(options)
+        return GeneratedQuestion(
+            id=hashlib.sha256(f"{chunk.id}|{term}".encode(), usedforsecurity=False).hexdigest()[
+                :10
+            ],
+            question_text=f"রিক্তস্থানে সঠিক শব্দটি বসাও: {sentence.replace(term, '____', 1)}",
+            options=options,
+            answer_index=options.index(term),
+            chapter=chunk.meta.chapter,
+            book=chunk.meta.book,
+        )
+
+    def _extra_clozes(self, doc_index: int, used: set[tuple[int, str]]):
+        """Yield additional (sentence, term) pairs not yet used for a chunk."""
+        for sentence in _SENT_SPLIT.split(self.chunks[doc_index].text):
+            candidates = [
+                t
+                for t in dict.fromkeys(tokenize(sentence))
+                if t in self.chunk_terms[doc_index] and (doc_index, t) not in used
+            ]
+            if not candidates:
+                continue
+            term = min(candidates, key=lambda t: (self.df[t], -len(t)))
+            replaced = sentence.replace(term, "____", 1)
+            if replaced != sentence:
+                yield replaced, term
+
+    def _best_cloze(
+        self, doc_index: int, exclude: set[tuple[int, str]] | None = None
+    ) -> tuple[str, str] | None:
         best: tuple[float, str, str] | None = None
         for sentence in _SENT_SPLIT.split(self.chunks[doc_index].text):
             candidates = [
-                t for t in dict.fromkeys(tokenize(sentence)) if t in self.chunk_terms[doc_index]
+                t
+                for t in dict.fromkeys(tokenize(sentence))
+                if t in self.chunk_terms[doc_index]
+                and (exclude is None or (doc_index, t) not in exclude)
             ]
             if not candidates:
                 continue

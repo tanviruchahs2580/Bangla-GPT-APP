@@ -166,6 +166,8 @@ def test_provider_failure_maps_to_502(tmp_path) -> None:
             headers={"Authorization": f"Bearer {tok}"},
         )
         assert res.status_code == 502, res.text
-        assert res.json() == {"detail": "LLM provider unavailable"}
+        assert res.json() == {
+            "detail": {"code": "llm_unavailable", "message": "LLM provider unavailable"}
+        }
     finally:
         main_module.TutorService.__init__ = original  # type: ignore[method-assign]

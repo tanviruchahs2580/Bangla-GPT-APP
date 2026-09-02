@@ -34,7 +34,7 @@ def test_sample_corpus_loads_with_curriculum_versions() -> None:
     corpus = load_sample_corpus()
     assert len(corpus) >= 6
     subjects = {chunk.meta.subject for chunk in corpus}
-    assert subjects == {"science", "mathematics"}
+    assert subjects == {"science", "mathematics", "bangla"}
     assert all(chunk.meta.version == "sample-v1" for chunk in corpus)
 
 

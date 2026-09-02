@@ -18,7 +18,7 @@ def test_health_reports_app_identity(client: TestClient) -> None:
     assert body["status"] == "ok"
     assert body["env"] == "test"
     assert body["app"] == "Bangla GPT API"
-    assert body["version"] == "0.2.1"
+    assert body["version"] == "0.4.0"
 
 
 def test_live_endpoint(client: TestClient) -> None:
@@ -63,5 +63,22 @@ def test_mock_provider_with_system_prompt() -> None:
 
     provider = MockLLMProvider()
     out = asyncio.run(provider.generate("hello", system="tutor"))
-    assert out.startswith("[tutor]")
-    assert out.endswith("[mock] hello")
+    # AUD-01: the internal system prompt must never leak into the answer.
+    assert "tutor" not in out
+    assert out == "[mock] hello"
+
+
+def test_mock_provider_quotes_evidence_without_markup() -> None:
+    import asyncio
+
+    from bangla_gpt_api.providers.mock import MockLLMProvider
+
+    provider = MockLLMProvider()
+    prompt = (
+        "নির্দেশনা <evidence> কোষ হলো ক্ষুদ্রতম একক। </evidence> "
+        "<evidence> কোষের তিনটি অংশ। </evidence> প্রশ্ন: <user_question>কোষ কী?</user_question>"
+    )
+    out = asyncio.run(provider.generate(prompt, system="SYSTEM-PROMPT-TEXT"))
+    assert "SYSTEM-PROMPT-TEXT" not in out
+    assert "<evidence>" not in out and "<user_question>" not in out
+    assert "কোষ হলো ক্ষুদ্রতম একক।" in out
