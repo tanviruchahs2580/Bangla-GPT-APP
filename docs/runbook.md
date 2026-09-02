@@ -169,3 +169,32 @@ Quarterly rotation procedure:
 - [ ] Real `GEMINI_API_KEY` deployed and live latency/quota validated
 - [ ] Domain + ACME email set; Caddy TLS profile enabled; DNS pointed
 - [ ] Offsite backup sync command configured (`OFFSITE_SYNC_CMD`)
+
+## 10. v0.3 additions (chat, invites, retention)
+
+### Secrets rotation (expanded)
+- `JWT_SECRET`: rotate via `python -c "import secrets;print(secrets.token_urlsafe(48))"`.
+  Rotation invalidates all sessions (users simply log in again); do it in a
+  maintenance window. Update the compose `.env` and restart `api`.
+- Gemini key: replace in `.env` (`GEMINI_API_KEY`), restart api; verify with
+  one live `/tutor/ask`. Old key must be revoked in AI Studio.
+- SMTP credentials: rotate in `.env`; test via `/auth/forgot`.
+
+### Capacity plan & load testing
+- Baseline: 2 uvicorn workers handle ~120 concurrent quiz journeys at
+  p95<300 ms (DB-bound). The LLM path is upstream-bound: budget ~2-8 s p95
+  per ask at free-tier quota; scale by upgrading tier / adding keys, not
+  workers.
+- Run `k6 run -e BASE=... -e VUS=50 -e DURATION=5m load/tutor_load.js`
+  before each release; thresholds inside fail on SLO breach.
+
+### Data retention (D20)
+- Conversations older than `CHAT_RETENTION_DAYS` (default 180) are purged by
+  `POST /admin/maintenance/purge` (admin-only). Schedule it daily:
+  `0 3 * * * curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" http://api:8000/admin/maintenance/purge`
+  or trigger from the admin dashboard button weekly until automated.
+
+### Email verification
+- With `SMTP_ENABLED=true`, registration requires email verification before
+  first login (`email_unverified` code drives UI copy + resend link).
+- Without SMTP, accounts auto-verify (dev/small deployments only).
