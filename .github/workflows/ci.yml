@@ -133,7 +133,7 @@ jobs:
         run: python scripts/evaluate_golden.py
 
   web:
-    name: Web build (apps/web)
+    name: Web build & test (apps/web)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -150,6 +150,9 @@ jobs:
 
       - name: Install dependencies (npm ci)
         run: npm ci
+
+      - name: Unit tests (vitest)
+        run: npx vitest run --no-file-parallelism
 
       - name: Build (tsc + vite)
         run: npm run build

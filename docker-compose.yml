@@ -1,12 +1,12 @@
-name: bangla-gpt-app
+﻿name: bangla-gpt-app
 
 # Profiles:
-#   core        â€“ api + redis            (docker compose --profile core up -d)
-#   web         â€“ static dashboard       (add --profile web)
-#   tls         â€“ Caddy auto-HTTPS proxy (add --profile tls; requires DOMAIN/ACME_EMAIL)
-#   postgres    â€“ Postgres service       (add --profile postgres)
-#   monitoring  â€“ Prometheus + Grafana   (add --profile monitoring)
-#   backup      â€“ scheduled DB backups   (add --profile backup)
+#   core        Ã¢â‚¬â€œ api + redis            (docker compose --profile core up -d)
+#   web         Ã¢â‚¬â€œ static dashboard       (add --profile web)
+#   tls         Ã¢â‚¬â€œ Caddy auto-HTTPS proxy (add --profile tls; requires DOMAIN/ACME_EMAIL)
+#   postgres    Ã¢â‚¬â€œ Postgres service       (add --profile postgres)
+#   monitoring  Ã¢â‚¬â€œ Prometheus + Grafana   (add --profile monitoring)
+#   backup      Ã¢â‚¬â€œ scheduled DB backups   (add --profile backup)
 
 x-api-common: &api-common
   restart: unless-stopped
@@ -23,7 +23,7 @@ services:
       ENV: ${ENV:-production}
       LLM_PROVIDER: ${LLM_PROVIDER:-mock}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
       DATABASE_URL: ${DATABASE_URL:-sqlite:////data/app.db}
       JWT_SECRET: ${JWT_SECRET:-}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
@@ -33,6 +33,10 @@ services:
       FORCE_ADMIN_PASSWORD_CHANGE: ${FORCE_ADMIN_PASSWORD_CHANGE:-true}
       RATE_LIMIT_LOGIN_PER_MINUTE: ${RATE_LIMIT_LOGIN_PER_MINUTE:-10}
       RATE_LIMIT_TUTOR_PER_MINUTE: ${RATE_LIMIT_TUTOR_PER_MINUTE:-30}
+      RATE_LIMIT_TUTOR_IP_PER_MINUTE: ${RATE_LIMIT_TUTOR_IP_PER_MINUTE:-60}
+      CHAT_HISTORY_MESSAGES: ${CHAT_HISTORY_MESSAGES:-8}
+      CHAT_RETENTION_DAYS: ${CHAT_RETENTION_DAYS:-180}
+      INVITE_TTL_MINUTES: ${INVITE_TTL_MINUTES:-1440}
       LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-30}
       LLM_MAX_RETRIES: ${LLM_MAX_RETRIES:-2}
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
@@ -162,3 +166,5 @@ volumes:
   caddy_data:
   caddy_config:
   backup_data:
+
+
