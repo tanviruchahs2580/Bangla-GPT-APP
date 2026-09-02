@@ -77,3 +77,6 @@ apps/api/eval/golden_report.json
 data/nctb/raw/
 data/nctb/extracted/
 data/nctb/normalized/
+
+# --- Local live-testing evidence (screenshots, not for repo) ---
+live_evidence/

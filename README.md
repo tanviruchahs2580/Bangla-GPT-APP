@@ -2,38 +2,46 @@
 
 **NCTB-grounded Bangla-first AI personal tutor platform.**
 
-> **Status: v0.2.1 — LIVE-VERIFIED with real Gemini (deployable stage).**
-> Everything in Phase 9, plus: real **Gemini provider** (`generateContent`,
-> timeout/retry policy), prompt-injection guard (`<evidence>` data-delimiting
-> + system rules + poisoned-chunk tests), password reset (single-use hashed
-> tokens) & change-password with forced admin rotation, GDPR data export,
-> parental-consent-gated student signup, bilingual privacy/terms pages, CORS
-> allowlist, production boot-guard, gunicorn multi-worker, shared Redis rate
-> limiting, docker-compose topology (Caddy auto-HTTPS / nginx dashboard /
-> Prometheus+Grafana / Postgres / backup sidecar), automated backup +
-> restore-rehearsal scripts, alert rules, release CD workflow (GHCR → SSH),
-> golden retrieval benchmark, OCR ingestion adapter (permission-gated) and a
-> concurrency probe. Student-facing পাঠ্যপুস্তক e-books still require
-> rights-holder permission; live Gemini behaviour needs a real API key.
+> **Status: v0.4.0 — product-complete MVP (chat-first).** New in v0.3:
+> multi-turn **tutor chat with SSE streaming + persisted history**, hybrid
+> retrieval (Bangla light-stemming + query expansion + trigram fallback),
+> child-safety moderation layer with supportive refusals, corpus covering
+> classes 6–10 (science/mathematics/bangla), quiz honesty fields
+> (`requested`/`partial_quiz` note), parent **invite-code** linking,
+> email verification gate, per-user rate limiting, admin pagination/search +
+> retention purge endpoint, answer 👍👎 feedback & privacy-safe events,
+> redesigned responsive UI (design system, dark mode, self-hosted Bangla
+> fonts), i18n scaffold (bn/en), PWA (installable + offline shell) and a
+> frontend test suite (vitest).
+> Student-facing পাঠ্যপুস্তক e-books still require rights-holder permission;
+> live Gemini behaviour needs a real API key.
 
 ## API surface (current)
 
 | Endpoint | Auth | Purpose |
 |---|---|---|
 | `GET /health` `/live` `/ready` | — (`ready` checks DB) | Service health |
-| `GET /metrics` | — | Prometheus metrics (request counts/latency) |
-| `POST /auth/register` `/auth/login` | — | Accounts (all roles; admin via bootstrap), tokens |
-| `GET /users/me` · `DELETE /users/me` | any | Own profile; GDPR-style self-service deletion |
-| `POST /tutor/ask` | any | Curriculum-grounded Q&A; coverage-gated refusal without evidence |
-| `GET /students/{id}` · `GET /students/{id}/progress` | owner/teacher/admin | Profile & chapter-level progress |
-| `POST /quizzes` · `POST /quizzes/{id}/submit` | owner/teacher | Generate / grade quizzes (answers never exposed) |
-| `GET /teacher/students` · `GET /teacher/classes/{level}/analytics` | teacher/admin | Roster & chapter accuracy/weak-topic flags |
-| `GET /admin/users` · `PATCH /admin/users/{id}/role` | admin | User management (last-admin guard) |
-| `GET /admin/analytics/overview` | admin | Platform totals (now includes `parents`) |
-| `POST /parents/link` · `GET /parents/me/children` | parent | Link child; list linked children |
-| `GET /parents/me/children/{id}/progress` | parent (linked) | Scoped child progress |
+| `GET /metrics` | — | Prometheus metrics |
+| `POST /auth/register` `/auth/login` | — | Accounts; tokens (`email_unverified` code when SMTP on) |
+| `POST /auth/forgot` `/auth/reset` | — | Password reset (single-use hashed tokens) |
+| `POST /auth/verify-email` `/auth/resend-verification` | mixed | Email verification flow |
+| `GET /users/me` · `DELETE /users/me` · `GET /users/me/export` | any | Profile; GDPR delete/export |
+| `POST /tutor/ask` | any | Grounded Q&A; safety screen; coverage-gated refusal |
+| `POST /tutor/conversations` · `GET /tutor/conversations` | student | Multi-turn chat sessions |
+| `GET /tutor/conversations/{id}/messages` | owner | Chat history |
+| `POST .../messages` · `POST .../messages/stream` | owner | Chat turn (JSON or SSE tokens+done) |
+| `POST /feedback` · `POST /events` | any | Answer ratings; privacy-safe analytics events |
+| `GET /students/{id}` · `GET /students/{id}/progress` | owner/teacher/admin | Profile & progress |
+| `POST /quizzes` · `POST /quizzes/{id}/submit` | owner/teacher | Quizzes (`requested`, `partial_quiz` note) |
+| `POST /students/me/invite-code` | student | Single-use parent invite code |
+| `GET /teacher/students` · `GET /teacher/classes/{level}/analytics` | teacher/admin | Roster & analytics |
+| `GET /admin/users?q&role&limit&offset` · `PATCH /admin/users/{id}/role` | admin | Paginated user management |
+| `GET /admin/analytics/overview` | admin | Platform totals |
+| `POST /admin/maintenance/purge` | admin | Retention sweep (chats/tokens/invites) |
+| `POST /parents/link` · `POST /parents/link/invite` · `GET /parents/me/children...` | parent | Linking (legacy ID + invite-code flows) |
 
 Full reference: [docs/API.md](docs/API.md). Operations: [docs/runbook.md](docs/runbook.md).
+Launch gates for the owner: [docs/LAUNCH_READINESS_CHECKLIST.md](docs/LAUNCH_READINESS_CHECKLIST.md).
 RAG design: [docs/RAG_ARCHITECTURE.md](docs/RAG_ARCHITECTURE.md).
 NCTB pipeline: [docs/NCTB_DATA_PIPELINE.md](docs/NCTB_DATA_PIPELINE.md).
 
