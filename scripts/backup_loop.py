@@ -29,7 +29,14 @@ def _sqlite_file_from_url(url: str) -> Path:
     if not url.startswith(prefix):
         raise ValueError(f"not a sqlite URL: {url!r}")
     path = url[len(prefix) :]
-    return Path(path if path.startswith("/") else "/" + path.lstrip("/"))
+    if path.startswith("/"):
+        # POSIX absolute path (container default: /data/app.db).
+        return Path(path)
+    if len(path) >= 2 and path[1] == ":":
+        # Windows drive-absolute path (host-side rehearsals).
+        return Path(path)
+    # Relative path: resolve against the process working directory.
+    return Path(path).resolve()
 
 
 def backup_sqlite(database_url: str, dest_dir: Path) -> Path:
@@ -71,7 +78,8 @@ def backup_postgres(database_url: str, dest_dir: Path) -> Path:
             "pg_dump binary not found in this image; use a dedicated postgres "
             "backup image or mount one that provides postgresql-client"
         )
-    subprocess.run([pg_dump, database_url], stdout=open(target, "wb"), check=True)
+    with open(target, "wb") as dump_fh:
+        subprocess.run([pg_dump, database_url], stdout=dump_fh, check=True)
     logger.info("postgres dump written: %s", target)
     return target
 
@@ -93,16 +101,16 @@ def run_once() -> None:
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     if database_url.startswith("sqlite"):
-        artifact = backup_sqlite(database_url, dest_dir)
+        backup_sqlite(database_url, dest_dir)
     elif database_url.startswith(("postgresql", "postgres")):
-        artifact = backup_postgres(database_url, dest_dir)
+        backup_postgres(database_url, dest_dir)
     else:
         raise ValueError(f"unsupported DATABASE_URL for backup: {database_url!r}")
 
     prune_old(dest_dir, keep_days)
 
     if offsite:
-        result = subprocess.run(["sh", "-c", offsite])
+        result = subprocess.run(["sh", "-c", offsite], check=False)
         status = "completed" if result.returncode == 0 else f"failed rc={result.returncode}"
         logger.info("offsite sync %s", status)
 
@@ -112,8 +120,8 @@ def main() -> int:
     while True:
         try:
             run_once()
-        except Exception as exc:  # keep the loop alive; alerting sees stale backups
-            logger.exception("backup failed: %s", exc)
+        except Exception:  # keep the loop alive; alerting sees stale backups
+            logger.exception("backup failed")
         time.sleep(interval)
 
 

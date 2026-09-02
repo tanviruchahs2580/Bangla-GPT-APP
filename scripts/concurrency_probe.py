@@ -10,7 +10,6 @@ Usage:
 
 import argparse
 import json
-import statistics
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -69,20 +68,22 @@ def main() -> int:
         return ok, time.perf_counter() - start
 
     print(f"target={base} reqs_per_level={args.reqs}")
-    print(f"{'concurrency':>12} {'ok%':>7} {'p50_ms':>8} {'p95_ms':>8} {'rps':>7}")
+    print(f"{'concurrency':>12} {'err%':>7} {'p50_ms':>8} {'p95_ms':>8} {'rps':>7}")
     summary: list[dict] = []
     for level in levels:
         results: list[tuple[bool, float]] = []
-        with httpx.Client(base_url=base, timeout=30.0) as client:
-            with ThreadPoolExecutor(max_workers=level) as pool:
-                started = time.perf_counter()
-                futures = [
-                    pool.submit(one_request, client, i % 10 < 7)
-                    for i in range(args.reqs)
-                ]
-                for future in futures:
-                    results.append(future.result())
-                wall = time.perf_counter() - started
+        with (
+            httpx.Client(base_url=base, timeout=30.0) as client,
+            ThreadPoolExecutor(max_workers=level) as pool,
+        ):
+            started = time.perf_counter()
+            futures = [
+                pool.submit(one_request, client, i % 10 < 7)
+                for i in range(args.reqs)
+            ]
+            for future in futures:
+                results.append(future.result())
+            wall = time.perf_counter() - started
         latencies = sorted(lat for _, lat in results)
         errors = sum(1 for ok, _ in results if not ok)
         row = {
