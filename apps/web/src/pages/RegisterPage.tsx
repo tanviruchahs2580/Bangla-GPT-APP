@@ -1,21 +1,25 @@
 import { useState } from 'react'
-import type { MeResponse } from '../api'
 import { fetchMe, login, register } from '../api'
+import { useAuth } from '../AuthContext'
+import { friendlyError, type ErrorCopy } from '../errors'
+import { t } from '../i18n'
+import { Button, Card } from '../components/ui'
 
-export default function RegisterPage({ onRegister }: { onRegister: (me: MeResponse | null) => void }) {
+export default function RegisterPage() {
+  const { setMe } = useAuth()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState<'student' | 'teacher' | 'parent'>('student')
   const [classLevel, setClassLevel] = useState(6)
   const [consent, setConsent] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<ErrorCopy | null>(null)
   const [busy, setBusy] = useState(false)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     if (role === 'student' && !consent) {
-      setError('শিক্ষার্থী নিবন্ধনের জন্য অভিভাবকের সম্মতি আবশ্যক')
+      setError({ text: t('consentText') })
       return
     }
     setBusy(true)
@@ -29,80 +33,91 @@ export default function RegisterPage({ onRegister }: { onRegister: (me: MeRespon
         class_level: role === 'student' ? classLevel : undefined,
         guardian_consent: role === 'student',
       })
-      await login(email, password)
-      onRegister(await fetchMe())
+      // SMTP-verified deployments land on the verify screen; others go straight in.
+      try {
+        await login(email, password)
+        setMe(await fetchMe())
+      } catch (verifyErr) {
+        const code = (verifyErr as { code?: string }).code
+        if (code === 'email_unverified') {
+          setError({ text: t('verifySent'), action: undefined })
+        } else {
+          throw verifyErr
+        }
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'নিবন্ধন ব্যর্থ হয়েছে')
+      setError(friendlyError((err as { code?: string }).code))
     } finally {
       setBusy(false)
     }
   }
 
   return (
-    <div className="card" style={{ maxWidth: 460, margin: '40px auto' }}>
-      <h2>নিবন্ধন</h2>
-      <form onSubmit={submit}>
-        <label htmlFor="role">ভূমিকা</label>
-        <select id="role" value={role} onChange={(e) => setRole(e.target.value as typeof role)}>
-          <option value="student">শিক্ষার্থী</option>
-          <option value="teacher">শিক্ষক</option>
-          <option value="parent">অভিভাবক</option>
-        </select>
-        <label htmlFor="name">নাম</label>
-        <input id="name" value={name} required minLength={2} onChange={(e) => setName(e.target.value)} />
-        <label htmlFor="remail">ইমেইল</label>
-        <input id="remail" type="email" value={email} required onChange={(e) => setEmail(e.target.value)} />
-        <label htmlFor="rpassword">পাসওয়ার্ড (কমপক্ষে ৮ অক্ষর)</label>
-        <input
-          id="rpassword"
-          type="password"
-          value={password}
-          required
-          minLength={8}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        {role === 'student' && (
-          <>
-            <label htmlFor="class">শ্রেণি (১-১২)</label>
-            <input
-              id="class"
-              type="number"
-              min={1}
-              max={12}
-              value={classLevel}
-              onChange={(e) => setClassLevel(Number(e.target.value))}
-            />
-            <label htmlFor="consent" className="muted" style={{ display: 'flex', gap: 8 }}>
-              <input
-                id="consent"
-                type="checkbox"
-                checked={consent}
-                onChange={(e) => setConsent(e.target.checked)}
-                required
-              />
-              <span>
-                আমি অভিভাবক হিসেবে বা অভিভাবকের সম্মতিক্রমে নিবন্ধন করছি এবং{' '}
-                <a href="/privacy" target="_blank" rel="noreferrer">
-                  গোপনীয়তা নীতি
-                </a>{' '}
-                ও{' '}
-                <a href="/terms" target="_blank" rel="noreferrer">
-                  শর্তাবলি
-                </a>{' '}
-                পড়ে সম্মত হচ্ছি।
-              </span>
-            </label>
-          </>
-        )}
-        {error && <p className="error">{error}</p>}
-        <button className="primary" type="submit" disabled={busy}>
-          {busy ? 'অপেক্ষা করুন…' : 'নিবন্ধন'}
-        </button>
-      </form>
-      <p className="muted">
-        অ্যাকাউন্ট আছে? <a href="/login">লগইন করুন</a> · <a href="/privacy">গোপনীয়তা</a> ·{' '}
-        <a href="/terms">শর্তাবলি</a>
-      </p>
+    <div className="splash">
+      <div className="splash-logo" aria-hidden>
+        🎓
+      </div>
+      <h1>{t('appName')}</h1>
+      <Card className="auth-card">
+        <h2>{t('register')}</h2>
+        <form onSubmit={submit}>
+          <div className="field">
+            <label htmlFor="role">{t('role')}</label>
+            <select className="select" id="role" value={role} onChange={(e) => setRole(e.target.value as typeof role)}>
+              <option value="student">শিক্ষার্থী</option>
+              <option value="teacher">শিক্ষক</option>
+              <option value="parent">অভিভাবক</option>
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="name">{t('name')}</label>
+            <input className="input" id="name" autoComplete="name" value={name} required minLength={2} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div className="field">
+            <label htmlFor="remail">{t('email')}</label>
+            <input className="input" id="remail" type="email" autoComplete="email" value={email} required onChange={(e) => setEmail(e.target.value)} />
+          </div>
+          <div className="field">
+            <label htmlFor="rpassword">{t('password')}</label>
+            <input className="input" id="rpassword" name="new-password" autoComplete="new-password" type="password" value={password} required minLength={8} onChange={(e) => setPassword(e.target.value)} />
+          </div>
+          {role === 'student' && (
+            <>
+              <div className="field">
+                <label htmlFor="class">{t('className')}</label>
+                <input className="input" id="class" type="number" min={1} max={12} value={classLevel} onChange={(e) => setClassLevel(Number(e.target.value))} />
+              </div>
+              <div className="field">
+                <label htmlFor="consent" style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  <input id="consent" type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} required style={{ width: 'auto', marginTop: 3 }} />
+                  <span>
+                    {t('consentText').replace('গোপনীয়তা নীতি ও শর্তাবলি', '')}{' '}
+                    <a href="/privacy" target="_blank" rel="noreferrer">{t('privacy')}</a> ·{' '}
+                    <a href="/terms" target="_blank" rel="noreferrer">{t('terms')}</a>
+                  </span>
+                </label>
+              </div>
+            </>
+          )}
+          {error && (
+            <p className="error" role="alert">
+              {error.text}
+              {error.action === 'resend-verification' && (
+                <>
+                  {' '}
+                  <a href="/forgot">{t('verifyTitle')}</a>
+                </>
+              )}
+            </p>
+          )}
+          <Button variant="primary" block type="submit" disabled={busy}>
+            {t('register')}
+          </Button>
+        </form>
+        <div className="link-row" style={{ justifyContent: 'center' }}>
+          <a href="/login">{t('haveAccount')} {t('login')}</a>
+        </div>
+      </Card>
     </div>
   )
 }

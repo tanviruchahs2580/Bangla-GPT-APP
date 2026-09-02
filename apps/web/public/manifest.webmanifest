@@ -1,0 +1,25 @@
+{
+  "name": "বাংলা GPT টিউটর",
+  "short_name": "বাংলা GPT",
+  "description": "NCTB পাঠ্যবই-ভিত্তিক বাংলা AI টিউটর",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f7fb",
+  "theme_color": "#0f6b4f",
+  "lang": "bn",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

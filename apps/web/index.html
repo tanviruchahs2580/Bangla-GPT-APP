@@ -1,9 +1,32 @@
 <!doctype html>
-<html lang="bn">
+<html lang="bn" data-theme="light">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>বাংলা GPT টিউটর</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>বাংলা GPT টিউটর — NCTB পাঠ্যবই-ভিত্তিক AI শিক্ষক</title>
+    <meta
+      name="description"
+      content="শ্রেণি ১–১২ এর শিক্ষার্থীদের জন্য এনসিটিবি পাঠ্যবই-ভিত্তিক নিরাপদ বাংলা AI টিউটর — প্রশ্ন করুন, কুইজ দিন, অগ্রগতি দেখুন।"
+    />
+    <meta name="theme-color" content="#4353b8" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta property="og:title" content="বাংলা GPT টিউটর" />
+    <meta property="og:description" content="NCTB পাঠ্যবই-ভিত্তিক বাংলা AI টিউটর প্ল্যাটফর্ম" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="bn_BD" />
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('bgpt_theme')
+          var dark = saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
+          var lang = localStorage.getItem('bgpt_lang')
+          if (lang === 'en' || lang === 'bn') document.documentElement.setAttribute('lang', lang)
+        } catch (e) {}
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

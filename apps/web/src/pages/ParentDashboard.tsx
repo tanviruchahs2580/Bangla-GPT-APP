@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
 import { get, post } from '../api'
+import { friendlyError } from '../errors'
+import { t } from '../i18n'
 import type { StudentBrief, StudentProgress } from '../types'
 
 export default function ParentDashboard() {
   const [children, setChildren] = useState<StudentBrief[]>([])
-  const [linkId, setLinkId] = useState('')
+  const [code, setCode] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
   const [selected, setSelected] = useState<number | null>(null)
   const [progress, setProgress] = useState<StudentProgress | null>(null)
 
@@ -32,117 +35,131 @@ export default function ParentDashboard() {
 
   async function link(e: React.FormEvent) {
     e.preventDefault()
+    if (busy) return
+    setBusy(true)
     setError(null)
     setMessage(null)
     try {
-      await post('/parents/link', { student_id: Number(linkId) })
-      setMessage(`শিক্ষার্থী #${linkId} সংযুক্ত হয়েছে`)
-      setLinkId('')
+      // C17: single-use invite code issued by the child — no bare IDs.
+      await post('/parents/link/invite', { code: code.trim().toUpperCase() })
+      setMessage(t('myChildren') + ' ✓')
+      setCode('')
       loadChildren()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'সংযোগ ব্যর্থ হয়েছে')
+      setError(friendlyError((err as { code?: string }).code ?? 'invalid_invite').text)
+    } finally {
+      setBusy(false)
     }
   }
 
   return (
     <>
+      <h1 className="page-title">{t('parentDashboard')}</h1>
+
       <div className="card">
-        <h2>অভিভাবক ড্যাশবোর্ড</h2>
+        <h2>{t('linkChild')}</h2>
+        <p className="muted">
+          সন্তানের অ্যাকাউন্টে লগইন করে “{t('account')}” → “{t('parentInviteTitle')}” কোড তৈরি করুন।
+        </p>
         <form onSubmit={link} className="grid-2">
           <div>
-            <label htmlFor="sid">শিক্ষার্থীর আইডি</label>
+            <label htmlFor="icode">{t('inviteCodeLabel')}</label>
             <input
-              id="sid"
-              type="number"
-              min={1}
-              value={linkId}
+              id="icode"
+              value={code}
+              placeholder="BGPT-XXXXXXXX"
               required
-              onChange={(e) => setLinkId(e.target.value)}
+              minLength={8}
+              onChange={(e) => setCode(e.target.value)}
             />
           </div>
           <div style={{ alignSelf: 'end' }}>
-            <button className="primary" type="submit">
-              সন্তান সংযুক্ত করুন
+            <button className="primary" type="submit" disabled={busy}>
+              {busy ? <span className="spinner" aria-hidden /> : t('redeem')}
             </button>
           </div>
         </form>
-        {message && <p className="ok">{message}</p>}
-        {error && <p className="error">{error}</p>}
+        {message && <p className="ok" role="status">{message}</p>}
+        {error && <p className="error" role="alert">{error}</p>}
       </div>
 
       <div className="card">
-        <h2>আমার সন্তানেরা</h2>
+        <h2>{t('myChildren')}</h2>
         {children.length === 0 ? (
-          <p className="muted">কোনো শিক্ষার্থী সংযুক্ত নেই।</p>
+          <p className="muted">—</p>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>আইডি</th>
-                <th>নাম</th>
-                <th>শ্রেণি</th>
-                <th>গড়</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {children.map((c) => (
-                <tr key={c.student_id}>
-                  <td>{c.student_id}</td>
-                  <td>{c.name}</td>
-                  <td>{c.class_level}</td>
-                  <td>{c.avg_score_pct === null ? '—' : `${c.avg_score_pct}%`}</td>
-                  <td>
-                    <button className="small" onClick={() => setSelected(c.student_id)}>
-                      অগ্রগতি
-                    </button>
-                  </td>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">#</th>
+                  <th scope="col">{t('name')}</th>
+                  <th scope="col">{t('className')}</th>
+                  <th scope="col">{t('avgScore')}</th>
+                  <th scope="col"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {children.map((c) => (
+                  <tr key={c.student_id}>
+                    <td>{c.student_id}</td>
+                    <td>{c.name}</td>
+                    <td>{c.class_level}</td>
+                    <td>{c.avg_score_pct === null ? '—' : `${c.avg_score_pct}%`}</td>
+                    <td>
+                      <button className="small secondary" onClick={() => setSelected(c.student_id)}>
+                        {t('progressTitle')}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
       {selected !== null && progress && (
         <div className="card">
           <h2>
-            অগ্রগতি — {progress.student.name} (শ্রেণি {progress.student.class_level})
+            {t('progressTitle')} — {progress.student.name}
           </h2>
           <div className="stat-row">
             <div className="stat">
               <div className="num">{progress.attempts_graded}</div>
-              <div className="lbl">কুইজ</div>
+              <div className="lbl">{t('gradedQuizzes')}</div>
             </div>
             <div className="stat">
               <div className="num">{progress.avg_score_pct ?? '—'}%</div>
-              <div className="lbl">গড় স্কোর</div>
+              <div className="lbl">{t('avgScore')}</div>
             </div>
           </div>
           {progress.by_chapter.length > 0 && (
-            <table>
-              <thead>
-                <tr>
-                  <th>অধ্যায়</th>
-                  <th>প্রশ্ন</th>
-                  <th>সঠিক</th>
-                  <th>নির্ভুলতা</th>
-                </tr>
-              </thead>
-              <tbody>
-                {progress.by_chapter.map((c) => (
-                  <tr key={c.chapter}>
-                    <td>{c.chapter}</td>
-                    <td>{c.asked}</td>
-                    <td>{c.correct}</td>
-                    <td>
-                      {c.accuracy}%
-                      {c.accuracy < 60 && <span className="badge weak">দুর্বল</span>}
-                    </td>
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">{t('chapter')}</th>
+                    <th scope="col">{t('asked')}</th>
+                    <th scope="col">{t('correct')}</th>
+                    <th scope="col">{t('accuracy')}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {progress.by_chapter.map((c) => (
+                    <tr key={c.chapter}>
+                      <td>{c.chapter}</td>
+                      <td>{c.asked}</td>
+                      <td>{c.correct}</td>
+                      <td>
+                        {c.accuracy}%
+                        {c.accuracy < 60 && <span className="badge weak"> {t('weak')}</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}

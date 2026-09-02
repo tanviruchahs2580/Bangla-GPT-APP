@@ -1,128 +1,205 @@
-import React, { useEffect, useState } from 'react'
+import React, { lazy, Suspense } from 'react'
 import ReactDOM from 'react-dom/client'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { BrowserRouter, Navigate, Route, Routes, Link } from 'react-router-dom'
 import './styles.css'
-import { fetchMe, getToken, logout, type MeResponse } from './api'
-import AdminDashboard from './pages/AdminDashboard'
-import ForgotResetPage from './pages/ForgotResetPage'
-import LegalPage from './pages/LegalPage'
-import LoginPage from './pages/LoginPage'
-import ParentDashboard from './pages/ParentDashboard'
-import RegisterPage from './pages/RegisterPage'
-import StudentDashboard from './pages/StudentDashboard'
-import TeacherDashboard from './pages/TeacherDashboard'
+import '@fontsource/noto-sans-bengali/400.css'
+import '@fontsource/noto-sans-bengali/700.css'
+import '@fontsource/hind-siliguri/400.css'
+import '@fontsource/hind-siliguri/600.css'
+import 'katex/dist/katex.min.css'
+import { getToken } from './api'
+import { AuthProvider, ROLE_HOME, useAuth } from './AuthContext'
+import { AppShell } from './AppShell'
+import { t } from './i18n'
 
-const ROLE_HOME: Record<string, string> = {
-  student: '/student',
-  teacher: '/teacher',
-  parent: '/parent',
-  admin: '/admin',
+const LoginPage = lazy(() => import('./pages/LoginPage'))
+const RegisterPage = lazy(() => import('./pages/RegisterPage'))
+const ForgotResetPage = lazy(() => import('./pages/ForgotResetPage'))
+const LegalPage = lazy(() => import('./pages/LegalPage'))
+const HomePage = lazy(() => import('./pages/student/HomePage'))
+const AITutorPage = lazy(() => import('./pages/student/AITutorPage'))
+const QuizPage = lazy(() => import('./pages/student/QuizPage'))
+const MePage = lazy(() => import('./pages/student/MePage'))
+const LearnPage = lazy(() =>
+  import('./pages/student/LearnPage').then((m) => ({ default: m.LearnPage })),
+)
+const LearnChapterPage = lazy(() =>
+  import('./pages/student/LearnPage').then((m) => ({ default: m.LearnChapterPage })),
+)
+const TeacherDashboard = lazy(() => import('./pages/TeacherDashboard'))
+const ParentDashboard = lazy(() => import('./pages/ParentDashboard'))
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+})
+
+function RequireAuth({
+  role,
+  children,
+}: {
+  role?: string
+  children: React.ReactNode
+}) {
+  const { me, loading } = useAuth()
+  if (!getToken()) return <Navigate to="/login" replace />
+  if (loading || me === null)
+    return (
+      <main className="container" aria-live="polite">
+        <p className="muted">{t('loading')}</p>
+        <div className="skeleton" style={{ width: '60%' }} />
+        <div className="skeleton" style={{ width: '40%' }} />
+      </main>
+    )
+  if (role && me.role !== role) return <Navigate to={ROLE_HOME[me.role] ?? '/login'} replace />
+  return <AppShell>{children}</AppShell>
 }
 
-function Header({ me }: { me: MeResponse | null }) {
+function Loading() {
   return (
-    <header className="topbar">
-      <span className="brand">বাংলা GPT টিউটর</span>
-      <nav>
-        {me ? (
-          <>
-            <span className="who">
-              {me.name ?? me.email} · {me.role}
-            </span>
-            <button
-              onClick={() => {
-                logout()
-                window.location.href = '/login'
-              }}
-            >
-              লগআউট
-            </button>
-          </>
-        ) : (
-          <a href="/login">লগইন</a>
-        )}
-      </nav>
-    </header>
+    <main className="container" aria-live="polite">
+      <p className="muted">{t('loading')}</p>
+      <div className="skeleton" style={{ width: '70%' }} />
+      <div className="skeleton" style={{ width: '55%' }} />
+      <div className="skeleton" style={{ width: '80%' }} />
+    </main>
   )
 }
 
-function RequireAuth({ me, role, children }: { me: MeResponse | null; role?: string; children: React.ReactNode }) {
-  if (!getToken()) return <Navigate to="/login" replace />
-  if (me === null) return <div className="container">লোড হচ্ছে…</div>
-  if (role && me.role !== role) return <Navigate to={ROLE_HOME[me.role] ?? '/login'} replace />
-  return <>{children}</>
+function RoutesSwitch() {
+  const { me, loading } = useAuth()
+  const home = me ? ROLE_HOME[me.role] ?? '/login' : '/login'
+  if (loading) return <Loading />
+
+  return (
+    <Routes>
+      <Route path="/" element={<Navigate to={home} replace />} />
+      <Route path="/login" element={me ? <Navigate to={home} replace /> : <LoginPage />} />
+      <Route path="/register" element={me ? <Navigate to={home} replace /> : <RegisterPage />} />
+      <Route path="/forgot" element={<ForgotResetPage />} />
+      <Route path="/privacy" element={<LegalPage kind="privacy" />} />
+      <Route path="/terms" element={<LegalPage kind="terms" />} />
+
+      <Route
+        path="/student"
+        element={
+          <RequireAuth role="student">
+            <HomePage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/student/learn"
+        element={
+          <RequireAuth role="student">
+            <LearnPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/student/learn/:subject/:chapter"
+        element={
+          <RequireAuth role="student">
+            <LearnChapterPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/student/tutor"
+        element={
+          <RequireAuth role="student">
+            <AITutorPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/student/quiz"
+        element={
+          <RequireAuth role="student">
+            <QuizPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/student/me"
+        element={
+          <RequireAuth role="student">
+            <MePage />
+          </RequireAuth>
+        }
+      />
+
+      <Route path="/teacher" element={<RequireAuth role="teacher"><TeacherDashboard /></RequireAuth>} />
+      <Route path="/parent" element={<RequireAuth role="parent"><ParentDashboard /></RequireAuth>} />
+      <Route path="/admin" element={<RequireAuth role="admin"><AdminDashboard /></RequireAuth>} />
+
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
 }
 
 function App() {
-  const [me, setMe] = useState<MeResponse | null>(null)
-  const [loaded, setLoaded] = useState(false)
-
-  useEffect(() => {
-    fetchMe().then((result) => {
-      setMe(result)
-      setLoaded(true)
-    })
-  }, [])
-
-  if (!loaded) return <div className="container">লোড হচ্ছে…</div>
-
-  const home = me ? ROLE_HOME[me.role] ?? '/login' : '/login'
-
   return (
     <BrowserRouter>
-      <Header me={me} />
-      <main className="container">
-        <Routes>
-          <Route path="/" element={<Navigate to={home} replace />} />
-          <Route path="/login" element={me ? <Navigate to={home} replace /> : <LoginPage onLogin={setMe} />} />
-          <Route
-            path="/register"
-            element={me ? <Navigate to={home} replace /> : <RegisterPage onRegister={setMe} />}
-          />
-          <Route path="/forgot" element={<ForgotResetPage />} />
-          <Route path="/privacy" element={<LegalPage kind="privacy" />} />
-          <Route path="/terms" element={<LegalPage kind="terms" />} />
-          <Route
-            path="/student"
-            element={
-              <RequireAuth me={me} role="student">
-                <StudentDashboard me={me!} />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/teacher"
-            element={
-              <RequireAuth me={me} role="teacher">
-                <TeacherDashboard />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/parent"
-            element={
-              <RequireAuth me={me} role="parent">
-                <ParentDashboard />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/admin"
-            element={
-              <RequireAuth me={me} role="admin">
-                <AdminDashboard />
-              </RequireAuth>
-            }
-          />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </main>
+      <Suspense fallback={<Loading />}>
+        <RoutesSwitch />
+        <Footer />
+      </Suspense>
     </BrowserRouter>
   )
 }
 
+function Footer() {
+  return (
+    <footer className="footer">
+      <div>
+        <Link to="/privacy">{t('privacy')}</Link> · <Link to="/terms">{t('terms')}</Link>
+      </div>
+      <div>
+        © {new Date().getFullYear()} {t('appName')}
+      </div>
+    </footer>
+  )
+}
+
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null }
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="container" role="alert">
+          <div className="card">
+            <h2>{t('errorGeneric')}</h2>
+            <p className="muted">{this.state.error.message}</p>
+            <button className="btn btn-primary" onClick={() => window.location.reload()}>
+              Reload
+            </button>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   </React.StrictMode>,
 )

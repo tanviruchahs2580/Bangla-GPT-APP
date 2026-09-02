@@ -10,6 +10,31 @@ export interface AskResponse {
   answer: string
   grounded: boolean
   sources: SourceRef[]
+  refused_reason?: string | null
+  citation_verified?: boolean | null
+}
+
+export interface ConversationOut {
+  id: number
+  title: string | null
+  created_at: string
+  message_count: number
+}
+
+export interface ChatMessage {
+  id: number
+  role: 'user' | 'assistant'
+  content: string
+  grounded?: boolean | null
+  refused_reason?: string | null
+  sources: SourceRef[]
+  rating?: number | null
+  created_at?: string
+}
+
+export interface ChatDoneEvent extends AskResponse {
+  user_message_id: number
+  message_id: number
 }
 
 export interface QuizQuestionPublic {
@@ -21,6 +46,8 @@ export interface QuizQuestionPublic {
 export interface QuizStarted {
   attempt_id: number
   questions: QuizQuestionPublic[]
+  requested: number
+  note?: string | null
 }
 
 export interface ReviewItem {
@@ -92,4 +119,35 @@ export interface AdminOverview {
   parents: number
   quiz_attempts_graded: number
   avg_score_pct: number | null
+}
+
+export interface AdminUsersPage {
+  total: number
+  items: UserPublic[]
+}
+
+/* -------- Learn catalog (grounded corpus) -------- */
+export interface SubjectOut {
+  subject: string
+  book: string
+  class_levels: number[]
+}
+
+export interface ChapterSummaryOut {
+  chapter: string
+  excerpt: string
+  section_count: number
+}
+
+export interface SectionOut {
+  section: string
+  text: string
+}
+
+export interface ChapterContentOut {
+  subject: string
+  class_level: number
+  book: string
+  chapter: string
+  sections: SectionOut[]
 }

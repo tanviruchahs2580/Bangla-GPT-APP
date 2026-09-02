@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { get } from '../api'
+import { get, post } from '../api'
+import { t } from '../i18n'
 import type { ClassAnalytics, StudentBrief } from '../types'
 
 export default function TeacherDashboard() {
@@ -7,6 +8,13 @@ export default function TeacherDashboard() {
   const [roster, setRoster] = useState<StudentBrief[]>([])
   const [analytics, setAnalytics] = useState<ClassAnalytics | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // C16: assign a quiz to a specific student straight from the roster.
+  const [assignTo, setAssignTo] = useState<number | null>(null)
+  const [assignSubject, setAssignSubject] = useState('science')
+  const [assignCount, setAssignCount] = useState(5)
+  const [assignBusy, setAssignBusy] = useState(false)
+  const [assignMsg, setAssignMsg] = useState<string | null>(null)
 
   const load = useCallback(() => {
     setError(null)
@@ -25,11 +33,31 @@ export default function TeacherDashboard() {
     load()
   }, [load])
 
+  async function assignQuiz(e: React.FormEvent) {
+    e.preventDefault()
+    if (assignTo === null || assignBusy) return
+    setAssignBusy(true)
+    setAssignMsg(null)
+    try {
+      const started = await post<{ attempt_id: number }>('/quizzes', {
+        student_id: assignTo,
+        class_level: classLevel,
+        subject: assignSubject,
+        num_questions: assignCount,
+      })
+      setAssignMsg(t('assigned', { id: started.attempt_id }))
+    } catch (err) {
+      setAssignMsg(err instanceof Error ? err.message : t('errorGeneric'))
+    } finally {
+      setAssignBusy(false)
+    }
+  }
+
   return (
     <>
+      <h1 className="page-title">{t('teacherDashboard')}</h1>
       <div className="card">
-        <h2>শিক্ষক ড্যাশবোর্ড</h2>
-        <label htmlFor="cls">শ্রেণি</label>
+        <label htmlFor="cls">{t('className').replace(/\s*\(.*\)/, '')}</label>
         <input
           id="cls"
           type="number"
@@ -41,82 +69,134 @@ export default function TeacherDashboard() {
         <button className="primary" onClick={load}>
           রিফ্রেশ
         </button>
-        {error && <p className="error">{error}</p>}
+        {error && <p className="error" role="alert">{error}</p>}
       </div>
 
       {analytics && (
         <div className="stat-row">
           <div className="stat">
             <div className="num">{analytics.students}</div>
-            <div className="lbl">শিক্ষার্থী</div>
+            <div className="lbl">{t('students')}</div>
           </div>
           <div className="stat">
             <div className="num">{analytics.chapters.length}</div>
-            <div className="lbl">অধ্যায় রেকর্ড</div>
+            <div className="lbl">{t('chapter')}</div>
           </div>
           <div className="stat">
             <div className="num">{analytics.weak_chapters.length}</div>
-            <div className="lbl">দুর্বল অধ্যায়</div>
+            <div className="lbl">{t('weakChapters')}</div>
           </div>
         </div>
       )}
 
       <div className="card">
-        <h2>শ্রেণির শিক্ষার্থীবৃন্দ</h2>
+        <h2>{t('classStudents')}</h2>
         {roster.length === 0 ? (
-          <p className="muted">এই শ্রেণিতে কোনো শিক্ষার্থী নেই।</p>
+          <p className="muted">{t('noStudents')}</p>
         ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>আইডি</th>
-                <th>নাম</th>
-                <th>শ্রেণি</th>
-                <th>কুইজ</th>
-                <th>গড়</th>
-              </tr>
-            </thead>
-            <tbody>
-              {roster.map((s) => (
-                <tr key={s.student_id}>
-                  <td>{s.student_id}</td>
-                  <td>{s.name}</td>
-                  <td>{s.class_level}</td>
-                  <td>{s.attempts_graded}</td>
-                  <td>{s.avg_score_pct === null ? '—' : `${s.avg_score_pct}%`}</td>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">#</th>
+                  <th scope="col">{t('name')}</th>
+                  <th scope="col">{t('className').replace(/\s*\(.*\)/, '')}</th>
+                  <th scope="col">{t('quizTitle')}</th>
+                  <th scope="col">{t('avgScore')}</th>
+                  <th scope="col"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {roster.map((s) => (
+                  <tr key={s.student_id}>
+                    <td>{s.student_id}</td>
+                    <td>{s.name}</td>
+                    <td>{s.class_level}</td>
+                    <td>{s.attempts_graded}</td>
+                    <td>{s.avg_score_pct === null ? '—' : `${s.avg_score_pct}%`}</td>
+                    <td>
+                      <button
+                        className={`small secondary${assignTo === s.student_id ? ' on-up' : ''}`}
+                        onClick={() => setAssignTo(s.student_id)}
+                      >
+                        {t('assignQuiz')}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
+      {assignTo !== null && (
+        <div className="card">
+          <h3>
+            {t('assignQuiz')} — #{assignTo}
+          </h3>
+          <form onSubmit={assignQuiz} className="grid-2">
+            <div>
+              <label htmlFor="asubj">{t('subject')}</label>
+              <select id="asubj" value={assignSubject} onChange={(e) => setAssignSubject(e.target.value)}>
+                <option value="science">বিজ্ঞান</option>
+                <option value="math">গণিত</option>
+                <option value="bangla">বাংলা</option>
+              </select>
+              <label htmlFor="acount">{t('questionCount')}</label>
+              <input
+                id="acount"
+                type="number"
+                min={1}
+                max={10}
+                value={assignCount}
+                onChange={(e) => setAssignCount(Number(e.target.value))}
+              />
+            </div>
+            <div style={{ alignSelf: 'end' }}>
+              <button className="primary" type="submit" disabled={assignBusy}>
+                {assignBusy ? <span className="spinner" aria-hidden /> : t('assignQuiz')}
+              </button>
+              {assignMsg && (
+                <p className={assignMsg.includes('#') ? 'ok' : 'error'} role="status">
+                  {assignMsg}
+                </p>
+              )}
+            </div>
+          </form>
+        </div>
+      )}
+
       {analytics && analytics.chapters.length > 0 && (
         <div className="card">
-          <h2>অধ্যায়ভিত্তিক নির্ভুলতা (শ্রেণি {analytics.class_level})</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>অধ্যায়</th>
-                <th>প্রশ্ন</th>
-                <th>সঠিক</th>
-                <th>নির্ভুলতা</th>
-              </tr>
-            </thead>
-            <tbody>
-              {analytics.chapters.map((c) => (
-                <tr key={c.chapter}>
-                  <td>{c.chapter}</td>
-                  <td>{c.asked}</td>
-                  <td>{c.correct}</td>
-                  <td>
-                    {c.accuracy}%
-                    {c.accuracy < 60 && <span className="badge weak">দুর্বল</span>}
-                  </td>
+          <h2>
+            {t('accuracy')} ({t('className').replace(/\s*\(.*\)/, '')} {analytics.class_level})
+          </h2>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">{t('chapter')}</th>
+                  <th scope="col">{t('asked')}</th>
+                  <th scope="col">{t('correct')}</th>
+                  <th scope="col">{t('accuracy')}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {analytics.chapters.map((c) => (
+                  <tr key={c.chapter}>
+                    <td>{c.chapter}</td>
+                    <td>{c.asked}</td>
+                    <td>{c.correct}</td>
+                    <td>
+                      {c.accuracy}%
+                      {c.accuracy < 60 && <span className="badge weak"> {t('weak')}</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </>
