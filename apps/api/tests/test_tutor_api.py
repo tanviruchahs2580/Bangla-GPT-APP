@@ -119,6 +119,27 @@ def test_tutor_unavailable_when_provider_unconfigured() -> None:
     assert res.status_code == 503
 
 
+def test_mock_never_leaks_system_prompt(client: TestClient) -> None:
+    """S0.2: mock must never echo system tokens (AUD-01)."""
+    headers = _register_and_login(client, email="leakcheck@example.com")
+    res = client.post(
+        "/tutor/ask",
+        json={"question": "কোষ কী?", "class_level": 6, "subject": "science"},
+        headers=headers,
+    )
+    assert res.status_code == 200
+    answer = res.json()["answer"]
+    # System prompt fragments must never appear in student-visible answer
+    assert "তুমি একজন বাংলা মাধ্যমের শিক্ষক" not in answer
+    assert "<evidence>" not in answer
+    assert "<user_question>" not in answer
+    # Mock tag must still be present (dev-only marker)
+    assert "[mock]" in answer
+    # No large system fragment should be echoed
+    assert "অক্ষরে অক্ষরে" not in answer
+    assert "SYSTEM_PROMPT" not in answer
+
+
 def test_provider_failure_maps_to_502(tmp_path) -> None:
     """Upstream LLM failure must be a controlled 502, never an unhandled 500."""
     import bangla_gpt_api.main as main_module
