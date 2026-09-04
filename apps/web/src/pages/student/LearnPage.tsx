@@ -8,6 +8,7 @@ import { useAuth } from '../../AuthContext'
 import { Card } from '../../components/ui'
 import { t } from '../../i18n'
 import { cn } from '../../lib/cn'
+import { SafeMarkdown } from '../../lib/safeMarkdown'
 
 const EMOJI: Record<string, string> = {
   science: '🔬',
@@ -165,7 +166,7 @@ export function LearnChapterPage() {
             {content.sections.map((s, i) => (
               <div key={i}>
                 {s.section && <h3>{s.section}</h3>}
-                <p>{s.text}</p>
+                <SafeMarkdown content={s.text} />
               </div>
             ))}
           </div>

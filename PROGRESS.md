@@ -7,6 +7,7 @@
 ## Stages & Steps (64)
 - [x] **0.1 Real LLM provider (Gemini) live** | status: done (code+mocked tests green; live /ready gemini pending key) | evidence: gemini Generate/Stream now log latency_ms+prompt/answer chars+retries via json_log; pooled AsyncClient; pytest 172 passed; ruff/mypy clean | commit: 5e6ff4f
 - [x] **0.2 Mock leak fix (AUD-01)** | status: done | evidence: mock.py already returns [mock] quoted evidence (no system); new test test_mock_never_leaks_system_prompt asserts no <evidence>/<user_question>/AUD-01 tokens; pytest 172 passed | commit: eb2955d
+- [x] **0.3 Markdown + KaTeX rendering** | status: done | evidence: SafeMarkdown (react-markdown+remark-math+rehype-katex, XSS regex strip, katex CSS) wired into AITutorPage bubble + LearnChapterPage sections; vitest 10 passed (4 files) includes KaTeX+XSS tests; tsc clean; vite build green (katex chunk 392kB) | commit: —
 - [ ] **0.3 Markdown + KaTeX rendering** | status: todo | evidence: — | commit: —
 - [ ] **0.4 Postgres migration** | status: todo | evidence: — | commit: —
 - [ ] **0.5 Config hardening** | status: todo | evidence: — | commit: —

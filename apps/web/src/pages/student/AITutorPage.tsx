@@ -7,6 +7,7 @@ import { useAuth } from '../../AuthContext'
 import { Badge, Button, Card } from '../../components/ui'
 import { friendlyError } from '../../errors'
 import { t } from '../../i18n'
+import { SafeMarkdown } from '../../lib/safeMarkdown'
 
 const SUBJECTS = [
   { value: 'science', label: 'বিজ্ঞান' },
@@ -24,11 +25,15 @@ export default function AITutorPage() {
   const [error, setError] = useState<string | null>(null)
   const [thanks, setThanks] = useState<number | null>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
+  const abortRef = useRef<AbortController | null>(null)
 
   const { data: conversations, refetch: refetchConvs } = useQuery({
     queryKey: ['conversations'],
     queryFn: () => get<ConversationOut[]>('/tutor/conversations'),
   })
+
+  // Cancel an in-flight SSE stream when the student leaves the page.
+  useEffect(() => () => abortRef.current?.abort(), [])
 
   useEffect(() => {
     viewportRef.current?.scrollTo({ top: viewportRef.current.scrollHeight, behavior: 'smooth' })
@@ -76,6 +81,8 @@ export default function AITutorPage() {
     setMessages((m) => [...m, { id: 0, role: 'user', content: text, grounded: null, sources: [] }])
     setStreaming(true)
     const acc = { text: '' }
+    const controller = new AbortController()
+    abortRef.current = controller
     try {
       const undone = await postStream<ChatDoneEvent>(
         `/tutor/conversations/${id}/messages/stream`,
@@ -91,6 +98,7 @@ export default function AITutorPage() {
             return copy
           })
         },
+        { signal: controller.signal },
       )
       setMessages((m) => {
         const copy = [...m]
@@ -103,9 +111,11 @@ export default function AITutorPage() {
         return copy
       })
     } catch (e) {
+      if ((e as { name?: string })?.name === 'AbortError') return
       setError(friendlyError((e as { rawDetail?: unknown }).rawDetail)?.text ?? t('errorGeneric'))
     } finally {
       setStreaming(false)
+      if (abortRef.current === controller) abortRef.current = null
     }
   }, [input, streaming, conversationId, subject, refetchConvs])
 
@@ -165,7 +175,9 @@ export default function AITutorPage() {
           )}
           {messages.map((m, i) => (
             <div key={m.id || i}>
-              <div className={`bubble ${m.role}`}>{m.content}</div>
+              <div className={`bubble ${m.role}`}>
+                {m.role === 'assistant' ? <SafeMarkdown content={m.content} /> : m.content}
+              </div>
               {m.role === 'assistant' && m.sources && m.sources.length > 0 && (
                 <div className="sources">
                   {m.refused_reason ? (
