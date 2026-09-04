@@ -166,6 +166,12 @@ def enforce_production_safety(settings: Settings) -> None:
         problems.append("ADMIN_PASSWORD must be at least 12 characters in production")
     if settings.rate_limit_backend == "redis" and not settings.redis_url:
         problems.append("RATE_LIMIT_BACKEND=redis requires REDIS_URL")
+    if settings.llm_provider.strip().lower() == "gemini" and not settings.gemini_api_key:
+        problems.append("LLM_PROVIDER=gemini requires GEMINI_API_KEY in production")
+    if not settings.allowed_origins.strip():
+        problems.append("ALLOWED_ORIGINS must be set in production (comma-separated allowlist)")
+    elif "*" in settings.allowed_origins:
+        problems.append("ALLOWED_ORIGINS must not contain wildcard '*' in production")
     # V8: an in-memory database in production silently gives each worker its
     # own isolated store -> sessions/records vanish across workers.
     if settings.database_url.strip() == "sqlite://":
@@ -189,6 +195,21 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         response.headers["X-Request-ID"] = request_id
         return response
+
+
+def _client_ip(request: Request, *, trust_proxy: bool) -> str:
+    """Client identity for IP-scoped rate limits.
+
+    Behind a trusted reverse proxy the real client IP arrives in
+    X-Forwarded-For; enable only when the proxy overwrites (not appends)
+    that header, otherwise clients can spoof it.
+    """
+    if trust_proxy:
+        forwarded = request.headers.get("x-forwarded-for", "")
+        first = forwarded.split(",")[0].strip() if forwarded else ""
+        if first:
+            return first
+    return request.client.host if request.client else "unknown"
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -219,7 +240,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return None
 
     async def dispatch(self, request: Request, call_next):
-        client_ip = request.client.host if request.client else "unknown"
+        client_ip = _client_ip(request, trust_proxy=self._settings.trust_proxy_headers)
         for path_prefix, (limit, scope) in self.rules.items():
             if not request.url.path.startswith(path_prefix) or limit <= 0:
                 continue
@@ -347,6 +368,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if index is None:
             index = BM25Index(load_sample_corpus())
         tutor = TutorService(index=index, provider=provider)
+        if hasattr(provider, "aclose"):
+            app.router.on_shutdown.append(provider.aclose)
 
     engine = make_engine(settings)
     _safe_init_db(engine)
@@ -916,7 +939,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         user_msg = ChatMessage(conversation_id=conv.id, role="user", content=payload.message)
         db.add(user_msg)
-        db.commit()
+        # Flush (not commit): the user turn must not survive a failed LLM call,
+        # otherwise the provider error leaves an orphan message behind.
+        db.flush()
 
         try:
             result = await tutor.ask(
@@ -966,7 +991,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         user_msg = ChatMessage(conversation_id=conv.id, role="user", content=payload.message)
         db.add(user_msg)
-        db.commit()
+        # Flush (not commit): committed only together with the assistant reply,
+        # so a provider failure mid-stream cannot leave an orphan user turn.
+        db.flush()
 
         async def event_stream() -> AsyncIterator[str]:
             try:
@@ -983,6 +1010,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     elif event.response is not None:
                         final_response = event.response
                 if final_response is None:  # never leak a naked 500 under -O
+                    db.rollback()
                     yield (
                         "event: error\ndata: "
                         + json.dumps({"code": "llm_unavailable"}, ensure_ascii=False)
@@ -1010,6 +1038,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     "event: done\ndata: " + json.dumps(done_payload, ensure_ascii=False) + "\n\n"
                 )
             except ProviderError:
+                db.rollback()
                 yield (
                     "event: error\ndata: "
                     + json.dumps({"code": "llm_unavailable"}, ensure_ascii=False)
@@ -1046,12 +1075,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/events", status_code=202)
     def record_event(payload: AnalyticsEvent, request: Request, user: CurrentUser) -> dict:
+        # Privacy: log only which prop keys were sent, never their values —
+        # props are arbitrary client input and may contain personal data.
         json_log(
             logger,
             logging.INFO,
             "product_event",
             name=payload.name,
-            props=payload.props,
+            props_keys=sorted(payload.props.keys()),
             role=user.role,
         )
         return {"status": "accepted"}

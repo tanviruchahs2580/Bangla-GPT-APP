@@ -149,3 +149,50 @@ def test_normal_payload_passes_size_guard(client: TestClient) -> None:
         headers=headers,
     )
     assert res.status_code == 200
+
+
+def test_production_safety_rejects_weak_config(tmp_path) -> None:
+    """S0.5: prod boot must fail on weak/missing secrets."""
+    import pytest
+
+    from bangla_gpt_api.main import enforce_production_safety
+
+    # Weak JWT
+    s = Settings(
+        env="production",
+        database_url="sqlite:////tmp/app.db",
+        jwt_secret="short",
+        admin_email="a@b.com",
+        admin_password="longenough123",
+        allowed_origins="https://example.com",
+        gemini_api_key="dummy",
+    )
+    with pytest.raises(RuntimeError, match="JWT_SECRET"):
+        enforce_production_safety(s)
+
+    # Missing gemini key
+    s2 = Settings(
+        env="production",
+        database_url="sqlite:////tmp/app.db",
+        jwt_secret="a" * 32,
+        admin_email="a@b.com",
+        admin_password="longenough123",
+        allowed_origins="https://example.com",
+        llm_provider="gemini",
+        gemini_api_key=None,
+    )
+    with pytest.raises(RuntimeError, match="GEMINI_API_KEY"):
+        enforce_production_safety(s2)
+
+    # Missing CORS
+    s3 = Settings(
+        env="production",
+        database_url="sqlite:////tmp/app.db",
+        jwt_secret="a" * 32,
+        admin_email="a@b.com",
+        admin_password="longenough123",
+        allowed_origins="",
+        gemini_api_key="dummy",
+    )
+    with pytest.raises(RuntimeError, match="ALLOWED_ORIGINS"):
+        enforce_production_safety(s3)
