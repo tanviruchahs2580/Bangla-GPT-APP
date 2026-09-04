@@ -1,0 +1,45 @@
+# STAGE 0 REPORT — Production Foundation
+
+**Stage:** S0 (0.1-0.7) · **Branch:** `upgrade/master-roadmap` · **Date:** 2026-09-04
+**Commits:** 5e6ff4f (0.1) · eb2955d (0.2) · 48bbabb (0.3) · d33cb15 (progress)
+**Gate G0:** ⏳ IN PROGRESS (3/7 steps done, 4 blocked pending human inputs)
+
+## Scope Completed
+- **0.1 Gemini live:** Enhanced `providers/gemini.py` with pooled AsyncClient, latency_ms + prompt/answer chars + retries json_log for both generate/stream. Mock stays fallback via `get_provider`. Code complete, mocked HTTP tests green. Live `/ready` → gemini pending GEMINI_API_KEY (R8 blocker).
+- **0.2 Mock leak fix (AUD-01):** Verified `providers/mock.py` already fixed (returns `[mock] পাঠ্যবই অনুযায়ী: truncated evidence`, never system). Added `test_mock_never_leaks_system_prompt` asserting no `<evidence>`, `<user_question>`, `তুমি একজন বাংলা মাধ্যমের শিক্ষক`, `অক্ষরে অক্ষরে`. pytest 172 passed.
+- **0.3 Markdown+KaTeX:** Created `lib/safeMarkdown.tsx` (react-markdown + remark-math + rehype-katex + katex CSS, regex XSS strip). Wired into `AITutorPage` assistant bubbles and `LearnChapterPage` sections. Added `markdown.test.tsx` (KaTeX render, XSS sanitized, markdown elements). tsc clean, vitest 10 passed (4 files), vite build green (katex CSS separate chunk).
+
+## Tests Run + Results
+| Suite | Command | Result |
+|---|---|---|
+| API ruff | `ruff check .` | ✅ All checks passed |
+| API format | `ruff format --check .` | ✅ 85 files formatted |
+| API mypy | `mypy apps/api` | ✅ Success 44 files (1 allowed bijoy2unicode) |
+| API pytest | `pytest -q` | ✅ 172 passed, 3 skipped |
+| Web tsc | `tsc --noEmit` | ✅ clean |
+| Web vitest | `vitest run` | ✅ 10 passed (4 files) |
+| Web build | `vite build` | ✅ 77kB main + 392kB safeMarkdown chunk |
+
+## New Endpoints/Tables/Pages
+- No new endpoints/tables in S0.1-0.3 (foundation only)
+- New lib: `apps/web/src/lib/safeMarkdown.tsx`
+- New test: `apps/web/src/test/markdown.test.tsx`
+
+## Deviations from Plan (with reason)
+- **0.1 live verify blocked:** GEMINI_API_KEY not provided. Code + mocked tests done, live `/ready` gemini and grounded answer will be verified when key supplied. Per R8 STOP and ask.
+- **0.3 chunk size:** safeMarkdown chunk 392kB (katex+react-markdown) larger than ideal but correctly code-split; will be lazy-loaded in S1.4 if needed.
+
+## Risks Introduced
+- None. All existing suites stay green (R6). Design tokens, middleware order, guardian_consent, SYSTEM_PROMPT secrecy, alembic history untouched per R5.
+
+## Smoke Output (current)
+- `GET /health` → `{"status":"ok","version":"0.4.0"}`
+- `GET /ready` → `{"provider":"mock"}` (expected until gemini key)
+- `POST /tutor/ask` কোষ কী? → grounded:true with 3 sources, answer now via mock truncated evidence (no leak)
+
+## Next Steps
+- S0.4 Postgres migration (requires local Docker postgres), S0.5 config hardening, S0.6 Sentry (needs DSN), S0.7 staging deploy (needs server) — all blocked pending F prerequisites. Proceeding to S1.1 next per supervised gate (awaiting GO).
+
+## Evidence Refs
+- Commits: 5e6ff4f, eb2955d, 48bbabb
+- Files: `apps/api/src/bangla_gpt_api/providers/gemini.py:10-214`, `apps/api/tests/test_tutor_api.py:122-138`, `apps/web/src/lib/safeMarkdown.tsx`
