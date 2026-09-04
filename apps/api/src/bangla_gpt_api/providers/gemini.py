@@ -16,12 +16,17 @@ response handling is covered by tests against an ``httpx.MockTransport``.
 
 import asyncio
 import json
+import logging
+import time
 from collections.abc import AsyncIterator
 
 import httpx
 
 from bangla_gpt_api.config import Settings
+from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.providers.base import ProviderError
+
+logger = logging.getLogger(__name__)
 
 _API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 _RETRYABLE_STATUS = frozenset({408, 429, 500, 502, 503, 504})
@@ -107,6 +112,19 @@ class GeminiProvider:
         self._timeout_seconds = timeout_seconds
         self._max_retries = max(0, max_retries)
         self._transport = transport
+        self._http: httpx.AsyncClient | None = None
+
+    def _client(self) -> httpx.AsyncClient:
+        # One pooled client per provider instance instead of a new
+        # connection pool per request (connection reuse + lower latency).
+        if self._http is None:
+            self._http = httpx.AsyncClient(timeout=self._timeout_seconds, transport=self._transport)
+        return self._http
+
+    async def aclose(self) -> None:
+        if self._http is not None:
+            await self._http.aclose()
+            self._http = None
 
     async def stream(self, prompt: str, *, system: str | None = None) -> AsyncIterator[str]:
         """Stream tokens via ``streamGenerateContent`` SSE transport.
@@ -121,27 +139,39 @@ class GeminiProvider:
             payload["systemInstruction"] = {"parts": [{"text": system}]}
 
         attempt = 0
+        start = time.perf_counter()
         while True:
             status = 0
             body = b""
             try:
-                client = httpx.AsyncClient(timeout=self._timeout_seconds, transport=self._transport)
-                async with client as session:
-                    async with session.stream(
-                        "POST", url, json=payload, headers=headers
-                    ) as response:
-                        if response.status_code == 200:
-                            emitted = 0
-                            async for line in response.aiter_lines():
-                                delta = _parse_sse_delta(line)
-                                if delta:
-                                    emitted += 1
-                                    yield delta
-                            if emitted:
-                                return
-                            raise ProviderError("Gemini stream produced no text")
-                        status = response.status_code
-                        body = await response.aread()
+                session = self._client()
+                async with session.stream("POST", url, json=payload, headers=headers) as response:
+                    if response.status_code == 200:
+                        emitted = 0
+                        chars = 0
+                        async for line in response.aiter_lines():
+                            delta = _parse_sse_delta(line)
+                            if delta:
+                                emitted += 1
+                                chars += len(delta)
+                                yield delta
+                        if emitted:
+                            latency_ms = int((time.perf_counter() - start) * 1000)
+                            json_log(
+                                logger,
+                                logging.INFO,
+                                "gemini_stream",
+                                model=self.model,
+                                latency_ms=latency_ms,
+                                prompt_chars=len(prompt),
+                                answer_chars=chars,
+                                chunks=emitted,
+                                retries=attempt,
+                            )
+                            return
+                        raise ProviderError("Gemini stream produced no text")
+                    status = response.status_code
+                    body = await response.aread()
             except httpx.TimeoutException as exc:
                 raise ProviderError(
                     f"Gemini stream timed out after {self._timeout_seconds}s"
@@ -164,12 +194,11 @@ class GeminiProvider:
             payload["systemInstruction"] = {"parts": [{"text": system}]}
 
         attempt = 0
+        start = time.perf_counter()
         while True:
             try:
-                async with httpx.AsyncClient(
-                    timeout=self._timeout_seconds, transport=self._transport
-                ) as client:
-                    response = await client.post(url, json=payload, headers=headers)
+                client = self._client()
+                response = await client.post(url, json=payload, headers=headers)
             except httpx.TimeoutException as exc:
                 raise ProviderError(
                     f"Gemini request timed out after {self._timeout_seconds}s"
@@ -179,7 +208,20 @@ class GeminiProvider:
 
             if response.status_code == 200:
                 try:
-                    return _extract_text(response.json())
+                    text = _extract_text(response.json())
+                    latency_ms = int((time.perf_counter() - start) * 1000)
+                    # Token usage not returned by generateContent; log chars as proxy for cost
+                    json_log(
+                        logger,
+                        logging.INFO,
+                        "gemini_generate",
+                        model=self.model,
+                        latency_ms=latency_ms,
+                        prompt_chars=len(prompt),
+                        answer_chars=len(text),
+                        retries=attempt,
+                    )
+                    return text
                 except ValueError as exc:
                     raise ProviderError("Gemini returned malformed JSON") from exc
 
