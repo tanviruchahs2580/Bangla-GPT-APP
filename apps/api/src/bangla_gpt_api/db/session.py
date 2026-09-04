@@ -14,6 +14,12 @@ def make_engine(settings: Settings) -> Engine:
         kwargs["connect_args"] = {"check_same_thread": False}
         if ":memory:" in url or url.rstrip("/") == "sqlite:":
             kwargs["poolclass"] = StaticPool
+    elif url.startswith("postgresql"):
+        # Production Postgres: pre-ping + modest pool for 2-4 workers
+        kwargs["pool_pre_ping"] = True
+        kwargs["pool_size"] = 10
+        kwargs["max_overflow"] = 20
+        kwargs["pool_recycle"] = 3600
     return create_engine(url, **kwargs)
 
 
