@@ -1,25 +1,25 @@
-# FINAL REPORT — Bangla GPT Master Roadmap (Progress: S0.1-0.3)
+# FINAL REPORT — Bangla GPT Master Roadmap (Progress: S0.1-0.5)
 
-**Executive Summary:** 3/64 steps complete (S0.1-0.3), 4/7 S0 steps blocked pending human inputs. Branch `upgrade/master-roadmap` (5e6ff4f, eb2955d, 48bbabb). Gate G0 in progress. No push to remote per R4. Next gate requires GO.
+**Executive Summary:** 5/64 steps complete (S0.1-0.5), 2/7 S0 steps blocked pending human inputs. Branch `upgrade/master-roadmap` (5e6ff4f, eb2955d, 48bbabb, a4ae70a, 060e5e4). Gate G0 in progress. No push to remote per R4. Next gate requires GO.
 
 ## Step Status Table
 
 | Step | Title | Status | Evidence | Commit |
 |---|---|---|---|---|
-| 0.1 | Real LLM provider (Gemini) live | ✅ done (code, live pending key) | gemini pooled client + latency logging, mocked tests green, pytest 172 | 5e6ff4f |
-| 0.2 | Mock leak fix (AUD-01) | ✅ done | mock returns truncated evidence, no system, new leak test, pytest 172 | eb2955d |
+| 0.1 | Real LLM provider (Gemini) live | ✅ done (code, live pending key) | gemini pooled client + latency logging, mocked tests green, pytest 173 | 5e6ff4f |
+| 0.2 | Mock leak fix (AUD-01) | ✅ done | mock returns truncated evidence, no system, new leak test, pytest 173 | eb2955d |
 | 0.3 | Markdown + KaTeX rendering | ✅ done | SafeMarkdown wired tutor+learn, vitest 10 (KaTeX+XSS), tsc/build green | 48bbabb |
-| 0.4 | Postgres migration | ⏳ todo | blocked — needs Docker postgres | — |
-| 0.5 | Config hardening | ⏳ todo | — | — |
+| 0.4 | Postgres migration | ✅ done | pg pool config, pg_backup.sh, alembic drill on pg16, smoke 1 passed | a4ae70a |
+| 0.5 | Config hardening | ✅ done | gemini/CORS checks + negative prod test, ruff/mypy clean | 060e5e4 |
 | 0.6 | Observability baseline | 🖐 todo | needs Sentry DSN | — |
 | 0.7 | Real deploy + smoke | 🖐 todo | needs staging server | — |
 | 1.1-7.3 | Remaining 57 steps | ⏳ todo | — | — |
 
 ## Test Results
-- **API:** ruff clean, 85 formatted, mypy 44 success, pytest 172 passed 3 skipped
+- **API:** ruff clean, 85 formatted, mypy 44 success, pytest 173 passed 3 skipped
 - **Web:** tsc clean, vitest 10 passed (4 files), vite build 77kB main + katex
-- **DB:** alembic head d4e5f6a7b8c9 (no migration in this stage)
-- **Docker:** not built this stage (no infra change)
+- **DB:** alembic head d4e5f6a7b8c9, postgres verified (downgrade -1 ↔ upgrade, smoke 1 passed), full suite 173
+- **Docker:** not built this stage (no infra change; pg test used postgres:16-alpine)
 
 ## Eval Metrics (Baseline vs Current)
 - Baseline (v0.4.0): grounded-rate via mock truncated evidence, hit@5 via BM25 hybrid
