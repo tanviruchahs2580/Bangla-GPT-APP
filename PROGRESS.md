@@ -5,7 +5,7 @@
 **Human inputs:** GEMINI_API_KEY pending (S0.1 live verify blocked) · Staging server pending · Sentry DSN pending · Postgres/Redis/SMTP/NCTB/Android/School pending
 
 ## Stages & Steps (64)
-- [x] **0.1 Real LLM provider (Gemini) live** | status: done (code+mocked tests green; live /ready gemini pending key) | evidence: gemini Generate/Stream now log latency_ms+prompt/answer chars+retries via json_log; pooled AsyncClient; pytest 172 passed; ruff/mypy clean | commit: 5e6ff4f
+- [x] **0.1 Real LLM provider (Gemini) live** | status: done ✅ LIVE VERIFIED | evidence: pooled AsyncClient + latency logging; live /ready → gemini, POST /tutor/ask কোষ কী? → grounded:true, 3 sources, answer 49 chars no leak, latency 4129ms logged via json_log; key stored in apps/api/.env (gitignored, never hardcoded) per R7; pytest 173 passed | commit: 5e6ff4f
 - [x] **0.2 Mock leak fix (AUD-01)** | status: done | evidence: mock.py already returns [mock] quoted evidence (no system); new test test_mock_never_leaks_system_prompt asserts no <evidence>/<user_question>/AUD-01 tokens; pytest 172 passed | commit: eb2955d
 - [x] **0.3 Markdown + KaTeX rendering** | status: done | evidence: SafeMarkdown (react-markdown+remark-math+rehype-katex, XSS regex strip, katex CSS) wired into AITutorPage bubble + LearnChapterPage sections; vitest 10 passed (4 files) includes KaTeX+XSS tests; tsc clean; vite build green (katex chunk 392kB) | commit: 48bbabb
 - [x] **0.4 Postgres migration** | status: done | evidence: engine now pool_pre_ping+pool_size=10 for postgres; alembic upgrade head d4e5f6a7b8c9 on pg16 (5433), downgrade -1 ↔ upgrade reversible, pytest test_postgres_smoke PASSED, full suite 172 passed; scripts/pg_backup.sh created + drill executed (docker pg) | commit: a4ae70a
