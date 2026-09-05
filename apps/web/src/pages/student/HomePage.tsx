@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
-import { BookOpen, GraduationCap, Zap, ArrowRight, Sparkles } from 'lucide-react'
+import { BookOpen, GraduationCap, Zap, ArrowRight, Sparkles, Play } from 'lucide-react'
 import { get, type MeResponse } from '../../api'
-import type { StudentProgress } from '../../types'
+import type { DashboardSummary, StudentProgress } from '../../types'
 import { useAuth } from '../../AuthContext'
 import { Button, Card, ProgressRing, Stat } from '../../components/ui'
 import { t } from '../../i18n'
@@ -15,10 +15,19 @@ function useProgress(me: MeResponse | null) {
   })
 }
 
+function useDashboard(me: MeResponse | null) {
+  return useQuery({
+    queryKey: ['dashboard'],
+    queryFn: () => get<DashboardSummary>('/dashboard/summary'),
+    enabled: !!me && me.role === 'student',
+  })
+}
+
 export default function HomePage() {
   const { me } = useAuth()
   const navigate = useNavigate()
   const { data: progress, isLoading } = useProgress(me)
+  const { data: dashboard } = useDashboard(me)
 
   const avg = progress?.avg_score_pct ?? 0
   const graded = progress?.attempts_graded ?? 0
@@ -135,12 +144,59 @@ export default function HomePage() {
         )}
       </Card>
 
-      <Card>
-        <div className="card-title">{t('lessonsNote')}</div>
-        <Button variant="primary" onClick={() => navigate('/student/learn')}>
-          <BookOpen size={18} aria-hidden /> {t('browseCurriculum')}
-        </Button>
-      </Card>
+      {(() => {
+        const cont = dashboard?.continue_learning
+        // Fallback to localStorage lastChapter (set by LearnChapterPage)
+        let lastLocal: { subject: string; chapter: string; class_level: number } | null = null
+        try {
+          const raw = localStorage.getItem('lastChapter')
+          if (raw) lastLocal = JSON.parse(raw)
+        } catch {}
+        const showCont = cont?.chapter ? cont : lastLocal ? { subject: lastLocal.subject, chapter: lastLocal.chapter, class_level: lastLocal.class_level, excerpt: null } : null
+        const rec = dashboard?.recommendation
+        return (
+          <>
+            {showCont && (
+              <Card>
+                <div className="card-title">চালিয়ে যান: {showCont.chapter}</div>
+                <p className="muted">
+                  {showCont.subject} · শ্রেণি {showCont.class_level}
+                  {showCont.excerpt ? ` — ${showCont.excerpt.slice(0, 80)}…` : ''}
+                </p>
+                <Button
+                  variant="teal"
+                  onClick={() => {
+                    const subj = encodeURIComponent(showCont.subject ?? 'science')
+                    const chap = encodeURIComponent(showCont.chapter ?? '')
+                    const cls = showCont.class_level ?? me?.class_level ?? 6
+                    navigate(`/student/learn/${subj}/${chap}?class=${cls}`)
+                  }}
+                >
+                  <Play size={18} aria-hidden /> চালিয়ে যান
+                </Button>
+              </Card>
+            )}
+            {rec && rec.chapter && (
+              <Card>
+                <div className="card-title">প্রস্তাবিত: {rec.chapter}</div>
+                <p className="muted">{rec.reason ?? 'দুর্বল অধ্যায়'} — {rec.subject}</p>
+                <Button
+                  variant="soft"
+                  onClick={() => navigate(`/student/quiz`)}
+                >
+                  <GraduationCap size={18} aria-hidden /> মিনি কুইজ (3 প্রশ্ন)
+                </Button>
+              </Card>
+            )}
+            <Card>
+              <div className="card-title">{t('lessonsNote')}</div>
+              <Button variant="primary" onClick={() => navigate('/student/learn')}>
+                <BookOpen size={18} aria-hidden /> {t('browseCurriculum')}
+              </Button>
+            </Card>
+          </>
+        )
+      })()}
     </main>
   )
 }

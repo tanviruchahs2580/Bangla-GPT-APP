@@ -73,8 +73,10 @@ from bangla_gpt_api.schemas import (
     ChatMessageOut,
     ChatSendRequest,
     ClassAnalytics,
+    ContinueLearning,
     ConversationCreate,
     ConversationOut,
+    DashboardSummary,
     DataExportResponse,
     FeedbackRequest,
     ForgotPasswordRequest,
@@ -82,11 +84,13 @@ from bangla_gpt_api.schemas import (
     MeResponse,
     ParentInviteLinkRequest,
     ParentLinkRequest,
+    QuickAction,
     QuizQuestionPublic,
     QuizResult,
     QuizStarted,
     QuizStartRequest,
     QuizSubmitRequest,
+    Recommendation,
     RegisterRequest,
     RegisterResponse,
     ResetPasswordRequest,
@@ -1408,6 +1412,120 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             avg_score_pct=avg_score,
             by_chapter=by_chapter,
             weak_chapters=weak_chapters,
+        )
+
+    @app.get("/dashboard/summary", response_model=DashboardSummary)
+    def dashboard_summary(db: DbSession, user: CurrentUser) -> DashboardSummary:
+        """S1.1: Light summary for Home — user, today, continue, quick actions, recommendation."""
+        me = _build_me_response(db, user)
+        today = datetime.now(UTC).date().isoformat()
+        quick_actions = [
+            QuickAction(label="পাঠ্যবই পড়ুন", to="/student/learn", icon="book"),
+            QuickAction(label="AI-কে প্রশ্ন করুন", to="/student/tutor", icon="zap"),
+            QuickAction(label="কুইজ দিন", to="/student/quiz", icon="graduation"),
+        ]
+        if user.role != "student":
+            return DashboardSummary(
+                user=me,
+                today=today,
+                continue_learning=None,
+                quick_actions=quick_actions,
+                recommendation=None,
+                progress=None,
+            )
+        # Student progress (reuse logic minimally)
+        student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one_or_none()
+        if student is None:
+            return DashboardSummary(
+                user=me,
+                today=today,
+                quick_actions=quick_actions,
+                recommendation=None,
+                progress=None,
+            )
+        # Compute progress
+        attempts = (
+            db.execute(select(QuizAttempt).where(QuizAttempt.student_id == student.id))
+            .scalars()
+            .all()
+        )
+        graded = [a for a in attempts if a.status == "graded"]
+        stats: dict[str, list[int]] = defaultdict(lambda: [0, 0])
+        if graded:
+            rows = (
+                db.execute(
+                    select(AnswerLog).where(AnswerLog.attempt_id.in_([a.id for a in graded]))
+                )
+                .scalars()
+                .all()
+            )
+            for r in rows:
+                stats[r.chapter][0] += 1
+                stats[r.chapter][1] += r.is_correct
+        by_chapter = sorted(
+            (
+                ChapterStat(
+                    chapter=k, asked=v[0], correct=v[1], accuracy=round(100.0 * v[1] / v[0], 2)
+                )
+                for k, v in stats.items()
+            ),
+            key=lambda s: s.accuracy,
+        )
+        weak = [s.chapter for s in by_chapter if s.accuracy < 60.0]
+        avg_score = (
+            round(sum(a.score_pct for a in graded if a.score_pct is not None) / len(graded), 2)
+            if graded
+            else None
+        )
+        progress = StudentProgress(
+            student=StudentResponse(
+                id=student.id, name=student.name, class_level=student.class_level
+            ),
+            attempts_graded=len(graded),
+            avg_score_pct=avg_score,
+            by_chapter=by_chapter,
+            weak_chapters=weak,
+        )
+        # Continue: last graded attempt's first question chapter
+        continue_learning = None
+        if graded:
+            last = sorted(graded, key=lambda a: a.created_at or datetime.min, reverse=True)[0]
+            if last.quiz_json:
+                first = (
+                    last.quiz_json[0]
+                    if isinstance(last.quiz_json, list) and last.quiz_json
+                    else None
+                )
+                if first and isinstance(first, dict) and first.get("chapter"):
+                    continue_learning = ContinueLearning(
+                        subject=last.subject,
+                        chapter=first["chapter"],
+                        class_level=last.class_level,
+                        excerpt=first.get("question_text", "")[:120],
+                    )
+        # Recommendation: weak first, else general
+        recommendation = None
+        if weak:
+            # Find subject for weak chapter via last attempt or default science
+            subj = None
+            for a in graded:
+                if a.quiz_json and any(
+                    q.get("chapter") == weak[0] for q in a.quiz_json if isinstance(q, dict)
+                ):
+                    subj = a.subject
+                    break
+            recommendation = Recommendation(
+                type="weak_quiz", subject=subj or "science", chapter=weak[0], reason="দুর্বল অধ্যায়"
+            )
+        elif graded:
+            recommendation = Recommendation(type="general", reason="নতুন কুইজ চেষ্টা করুন")
+        return DashboardSummary(
+            user=me,
+            today=today,
+            continue_learning=continue_learning,
+            quick_actions=quick_actions,
+            recommendation=recommendation,
+            progress=progress,
         )
 
     def _load_class_students(db: Session, class_level: int | None) -> list[Student]:

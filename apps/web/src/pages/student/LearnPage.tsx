@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { BookOpen, FileText } from 'lucide-react'
@@ -134,6 +134,14 @@ export function LearnChapterPage() {
     queryFn: () => getChapterContent(subject!, chapter!, classLevel),
     enabled: !!subject && !!chapter,
   })
+
+  useEffect(() => {
+    if (subject && chapter && classLevel) {
+      try {
+        localStorage.setItem('lastChapter', JSON.stringify({ subject, chapter, class_level: classLevel }))
+      } catch {}
+    }
+  }, [subject, chapter, classLevel])
 
   const content = query.data
 

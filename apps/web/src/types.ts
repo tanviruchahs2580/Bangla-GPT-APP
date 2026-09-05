@@ -126,6 +126,42 @@ export interface AdminUsersPage {
   items: UserPublic[]
 }
 
+export interface ContinueLearning {
+  subject: string | null
+  chapter: string | null
+  class_level: number | null
+  excerpt: string | null
+}
+
+export interface QuickAction {
+  label: string
+  to: string
+  icon?: string | null
+}
+
+export interface Recommendation {
+  type: string
+  subject: string | null
+  chapter: string | null
+  reason: string | null
+}
+
+export interface DashboardSummary {
+  user: {
+    user_id: number
+    email: string
+    role: string
+    profile_id: number | null
+    name: string | null
+    class_level: number | null
+  }
+  today: string
+  continue_learning: ContinueLearning | null
+  quick_actions: QuickAction[]
+  recommendation: Recommendation | null
+  progress: StudentProgress | null
+}
+
 /* -------- Learn catalog (grounded corpus) -------- */
 export interface SubjectOut {
   subject: string

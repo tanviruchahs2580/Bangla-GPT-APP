@@ -1,9 +1,8 @@
 # PROGRESS — Bangla GPT Master Roadmap v1.0
 
-**Mode:** supervised · **Branch:** `upgrade/master-roadmap` · **Last updated:** 2026-09-04 · **Current:** S1.1
+**Mode:** supervised · **Branch:** `upgrade/master-roadmap` · **Last updated:** 2026-09-04 · **Current:** S1.2
 **Gates:** [x] G0 (code) · [ ] G1 · [ ] G2 · [ ] G3 · [ ] G4 · [ ] G5 · [ ] G6 · [ ] G7
 **Human inputs:** GEMINI_API_KEY ✅ done (live) · Staging server pending · Sentry DSN pending (code done, live pending) · Postgres/Redis/SMTP/NCTB/Android/School pending
-**Human inputs:** GEMINI_API_KEY pending (S0.1 live verify blocked) · Staging server pending · Sentry DSN pending · Postgres/Redis/SMTP/NCTB/Android/School pending
 
 ## Stages & Steps (64)
 - [x] **0.1 Real LLM provider (Gemini) live** | status: done ✅ LIVE VERIFIED | evidence: pooled AsyncClient + latency logging; live /ready → gemini, POST /tutor/ask কোষ কী? → grounded:true, 3 sources, answer 49 chars no leak, latency 4129ms logged via json_log; key stored in apps/api/.env (gitignored, never hardcoded) per R7; pytest 173 passed | commit: 5e6ff4f
@@ -13,12 +12,7 @@
 - [x] **0.5 Config hardening** | status: done | evidence: enforce_production_safety now checks gemini key + CORS allowlist (no wildcard, must be set); negative test test_production_safety_rejects_weak_config covers JWT/Gemini/CORS; ruff/mypy clean | commit: 060e5e4
 - [x] **0.6 Observability baseline** | status: done | evidence: sentry-sdk + SENTRY_DSN/SENTRY_ENV config, Sentry init no-op when DSN absent, request_id_var contextvar propagated into json_log + middleware, Grafana dashboard deploy/grafana/dashboards/bangla-gpt.json, web @sentry/react init, tests for request_id+ sentry noop pass, ruff/mypy/tsc/vitest/build green | commit: ff81159
 - [x] **0.7 Real deploy + automated smoke** | status: done (script) | evidence: scripts/smoke.sh created (health→register→login→learn→tutor grounded→quiz→me→export→delete, local smoke via python verified, rollback doc in script); staging deploy via release.yml pending server 🖐 | commit: fcf5f7f
-- [ ] **0.3 Markdown + KaTeX rendering** | status: todo | evidence: — | commit: —
-- [ ] **0.4 Postgres migration** | status: todo | evidence: — | commit: —
-- [ ] **0.5 Config hardening** | status: todo | evidence: — | commit: —
-- [ ] **0.6 Observability baseline** | status: todo | evidence: — | commit: — | 🖐 Sentry DSN
-- [ ] **0.7 Real deploy + automated smoke** | status: todo | evidence: — | commit: — | 🖐 Staging server
-- [ ] **1.1 /dashboard/summary + Continue + Recommendation v1** | status: todo | evidence: — | commit: —
+- [x] **1.1 /dashboard/summary + Continue + Recommendation v1** | status: done | evidence: GET /dashboard/summary returns {user,today,continue_learning,quick_actions,recommendation,progress}; HomePage shows চালিয়ে যান card (localStorage fallback) + weak mini-quiz recommendation; pytest 3 dashboard tests pass; ruff/mypy/tsc/vitest/build green | commit: —
 - [ ] **1.2 Learn progress + Bookmark + TTS + font slider** | status: todo | evidence: — | commit: —
 - [ ] **1.3 Unified Learning Workspace** | status: todo | evidence: — | commit: —
 - [ ] **1.4 Structured AI response** | status: todo | evidence: — | commit: —

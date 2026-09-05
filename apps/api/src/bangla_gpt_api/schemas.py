@@ -256,3 +256,32 @@ class ParentInviteLinkRequest(BaseModel):
 class AdminUsersPage(BaseModel):
     total: int
     items: list[UserPublic]
+
+
+class ContinueLearning(BaseModel):
+    subject: str | None = None
+    chapter: str | None = None
+    class_level: int | None = None
+    excerpt: str | None = None
+
+
+class QuickAction(BaseModel):
+    label: str
+    to: str
+    icon: str | None = None
+
+
+class Recommendation(BaseModel):
+    type: str  # weak_quiz | continue | general
+    subject: str | None = None
+    chapter: str | None = None
+    reason: str | None = None
+
+
+class DashboardSummary(BaseModel):
+    user: MeResponse
+    today: str  # ISO date
+    continue_learning: ContinueLearning | None = None
+    quick_actions: list[QuickAction] = []
+    recommendation: Recommendation | None = None
+    progress: StudentProgress | None = None
