@@ -37,8 +37,9 @@
 
 ## Smoke Output (current)
 - `GET /health` → `{"status":"ok","version":"0.4.0"}`
-- `GET /ready` → `{"provider":"mock"}` (expected until gemini key)
-- `POST /tutor/ask` কোষ কী? → grounded:true with 3 sources, answer now via mock truncated evidence (no leak)
+- `GET /ready` → `{"provider":"gemini"}` ✅ LIVE (was mock, now gemini after key added to apps/api/.env gitignored)
+- `POST /tutor/ask` কোষ কী? (gemini live) → grounded:true, 3 sources, answer `জীবদেহের ক্ষুদ্রতম...` 49 chars, latency 4129ms logged, no leak — verified via TestClient with gemini-3.1-flash-lite
+- `POST /tutor/ask` (mock fallback) → still works when GEMINI_API_KEY absent
 
 ## Next Steps
 - **S0.6 Observability:** needs Sentry DSN (🖐) — will add sentry-sdk init + RequestId in logs + Grafana dashboard. Code ready to wire when DSN provided.

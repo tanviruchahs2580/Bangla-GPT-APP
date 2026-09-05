@@ -6,7 +6,7 @@
 
 | Step | Title | Status | Evidence | Commit |
 |---|---|---|---|---|
-| 0.1 | Real LLM provider (Gemini) live | ✅ done (code, live pending key) | gemini pooled client + latency logging, mocked tests green, pytest 173 | 5e6ff4f |
+| 0.1 | Real LLM provider (Gemini) live | ✅ done LIVE VERIFIED | gemini pooled client + latency logging, live /ready gemini + grounded answer 49 chars no leak (key in .env gitignored per SOP), pytest 173 | 5e6ff4f |
 | 0.2 | Mock leak fix (AUD-01) | ✅ done | mock returns truncated evidence, no system, new leak test, pytest 173 | eb2955d |
 | 0.3 | Markdown + KaTeX rendering | ✅ done | SafeMarkdown wired tutor+learn, vitest 10 (KaTeX+XSS), tsc/build green | 48bbabb |
 | 0.4 | Postgres migration | ✅ done | pg pool config, pg_backup.sh, alembic drill on pg16, smoke 1 passed | a4ae70a |
