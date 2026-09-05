@@ -1,7 +1,8 @@
 # PROGRESS — Bangla GPT Master Roadmap v1.0
 
-**Mode:** supervised · **Branch:** `upgrade/master-roadmap` · **Last updated:** 2026-09-04 · **Current:** S0.3
-**Gates:** [ ] G0 · [ ] G1 · [ ] G2 · [ ] G3 · [ ] G4 · [ ] G5 · [ ] G6 · [ ] G7
+**Mode:** supervised · **Branch:** `upgrade/master-roadmap` · **Last updated:** 2026-09-04 · **Current:** S1.1
+**Gates:** [x] G0 (code) · [ ] G1 · [ ] G2 · [ ] G3 · [ ] G4 · [ ] G5 · [ ] G6 · [ ] G7
+**Human inputs:** GEMINI_API_KEY ✅ done (live) · Staging server pending · Sentry DSN pending (code done, live pending) · Postgres/Redis/SMTP/NCTB/Android/School pending
 **Human inputs:** GEMINI_API_KEY pending (S0.1 live verify blocked) · Staging server pending · Sentry DSN pending · Postgres/Redis/SMTP/NCTB/Android/School pending
 
 ## Stages & Steps (64)

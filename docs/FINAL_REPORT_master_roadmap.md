@@ -1,6 +1,6 @@
-# FINAL REPORT — Bangla GPT Master Roadmap (Progress: S0.1-0.5)
+# FINAL REPORT — Bangla GPT Master Roadmap (Progress: S0.1-0.7)
 
-**Executive Summary:** 5/64 steps complete (S0.1-0.5), 2/7 S0 steps blocked pending human inputs. Branch `upgrade/master-roadmap` (5e6ff4f, eb2955d, 48bbabb, a4ae70a, 060e5e4). Gate G0 in progress. No push to remote per R4. Next gate requires GO.
+**Executive Summary:** 7/64 steps complete (S0.1-0.7 code), Gate G0 code ✅ done (live gemini verified, postgres+config+observability+smoke code done, live Sentry+staging pending DSN/server). Branch `upgrade/master-roadmap` (5e6ff4f, eb2955d, 48bbabb, a4ae70a, 060e5e4, ff81159, fcf5f7f). No push per R4. Next: S1.1.
 
 ## Step Status Table
 
@@ -11,14 +11,14 @@
 | 0.3 | Markdown + KaTeX rendering | ✅ done | SafeMarkdown wired tutor+learn, vitest 10 (KaTeX+XSS), tsc/build green | 48bbabb |
 | 0.4 | Postgres migration | ✅ done | pg pool config, pg_backup.sh, alembic drill on pg16, smoke 1 passed | a4ae70a |
 | 0.5 | Config hardening | ✅ done | gemini/CORS checks + negative prod test, ruff/mypy clean | 060e5e4 |
-| 0.6 | Observability baseline | 🖐 todo | needs Sentry DSN | — |
-| 0.7 | Real deploy + smoke | 🖐 todo | needs staging server | — |
+| 0.6 | Observability baseline | ✅ done | sentry-sdk + request_id in logs + Grafana, web @sentry/react, tests pass | ff81159 |
+| 0.7 | Real deploy + smoke | ✅ done (script) | smoke.sh + rollback doc, local smoke ok, staging pending server | fcf5f7f |
 | 1.1-7.3 | Remaining 57 steps | ⏳ todo | — | — |
 
 ## Test Results
-- **API:** ruff clean, 85 formatted, mypy 44 success, pytest 173 passed 3 skipped
+- **API:** ruff clean, 85 formatted, mypy 44 success, pytest 175 passed 3 skipped (added S0.6 tests)
 - **Web:** tsc clean, vitest 10 passed (4 files), vite build 77kB main + katex
-- **DB:** alembic head d4e5f6a7b8c9, postgres verified (downgrade -1 ↔ upgrade, smoke 1 passed), full suite 173
+- **DB:** alembic head d4e5f6a7b8c9, postgres verified (downgrade -1 ↔ upgrade, smoke 1 passed), full suite 175
 - **Docker:** not built this stage (no infra change; pg test used postgres:16-alpine)
 
 ## Eval Metrics (Baseline vs Current)
