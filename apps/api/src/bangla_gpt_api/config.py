@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     rate_limit_backend: str = "memory"  # memory | redis
     rate_limit_fail_open: bool = False
     redis_url: str | None = None
+    # Enable ONLY behind a trusted reverse proxy (Caddy/nginx) that overwrites
+    # X-Forwarded-For; otherwise clients can spoof their rate-limit identity.
+    trust_proxy_headers: bool = False
 
     # --- chat ---
     chat_history_messages: int = 8
@@ -79,6 +82,8 @@ class Settings(BaseSettings):
 
     # --- observability ---
     log_level: str = "INFO"
+    sentry_dsn: str | None = None
+    sentry_env: str = "development"
 
     @property
     def is_production(self) -> bool:

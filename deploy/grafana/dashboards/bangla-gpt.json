@@ -1,0 +1,21 @@
+{
+  "title": "Bangla GPT — API Overview (S0.6)",
+  "panels": [
+    {
+      "title": "p95 Latency (by route)",
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, path))" }]
+    },
+    {
+      "title": "Error Rate (5xx)",
+      "targets": [{ "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m]))" }]
+    },
+    {
+      "title": "AI Latency (gemini_generate)",
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(gemini_generate_latency_ms_bucket[5m])) by (le))" }]
+    },
+    {
+      "title": "Rate Limit Hits",
+      "targets": [{ "expr": "sum(rate(http_requests_total{status=\"429\"}[5m])) by (path)" }]
+    }
+  ]
+}

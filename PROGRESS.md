@@ -10,6 +10,7 @@
 - [x] **0.3 Markdown + KaTeX rendering** | status: done | evidence: SafeMarkdown (react-markdown+remark-math+rehype-katex, XSS regex strip, katex CSS) wired into AITutorPage bubble + LearnChapterPage sections; vitest 10 passed (4 files) includes KaTeX+XSS tests; tsc clean; vite build green (katex chunk 392kB) | commit: 48bbabb
 - [x] **0.4 Postgres migration** | status: done | evidence: engine now pool_pre_ping+pool_size=10 for postgres; alembic upgrade head d4e5f6a7b8c9 on pg16 (5433), downgrade -1 ↔ upgrade reversible, pytest test_postgres_smoke PASSED, full suite 172 passed; scripts/pg_backup.sh created + drill executed (docker pg) | commit: a4ae70a
 - [x] **0.5 Config hardening** | status: done | evidence: enforce_production_safety now checks gemini key + CORS allowlist (no wildcard, must be set); negative test test_production_safety_rejects_weak_config covers JWT/Gemini/CORS; ruff/mypy clean | commit: 060e5e4
+- [x] **0.6 Observability baseline** | status: done | evidence: sentry-sdk + SENTRY_DSN/SENTRY_ENV config, Sentry init no-op when DSN absent, request_id_var contextvar propagated into json_log + middleware, Grafana dashboard deploy/grafana/dashboards/bangla-gpt.json, web @sentry/react init, tests for request_id+ sentry noop pass, ruff/mypy/tsc/vitest/build green | commit: —
 - [ ] **0.3 Markdown + KaTeX rendering** | status: todo | evidence: — | commit: —
 - [ ] **0.4 Postgres migration** | status: todo | evidence: — | commit: —
 - [ ] **0.5 Config hardening** | status: todo | evidence: — | commit: —

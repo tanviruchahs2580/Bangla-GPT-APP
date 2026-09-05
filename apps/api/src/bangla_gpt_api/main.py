@@ -44,7 +44,7 @@ from bangla_gpt_api.db.models import (
     User,
 )
 from bangla_gpt_api.db.session import init_db, make_engine, make_session_factory
-from bangla_gpt_api.logging_config import configure_logging, json_log
+from bangla_gpt_api.logging_config import configure_logging, json_log, request_id_var
 from bangla_gpt_api.metrics import (
     REGISTRY,
     REQUEST_LATENCY_SECONDS,
@@ -192,7 +192,11 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
 
         request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex[:16]
         request.state.request_id = request_id
-        response = await call_next(request)
+        token = request_id_var.set(request_id)
+        try:
+            response = await call_next(request)
+        finally:
+            request_id_var.reset(token)
         response.headers["X-Request-ID"] = request_id
         return response
 
@@ -325,6 +329,18 @@ def _unauthorized(detail: str = "Not authenticated") -> HTTPException:
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level)
+    # S0.6: Sentry — no-op when DSN absent, safe for tests/dev
+    if settings.sentry_dsn:
+        try:
+            import sentry_sdk
+
+            sentry_sdk.init(
+                dsn=settings.sentry_dsn,
+                environment=settings.sentry_env,
+                traces_sample_rate=0.1,
+            )
+        except Exception:
+            pass
     enforce_production_safety(settings)
     if settings.rate_limit_backend not in ("memory", "redis"):
         raise RuntimeError(

@@ -67,3 +67,38 @@ def test_metrics_exposes_prometheus_series(client: TestClient) -> None:
     assert "bgpt_http_requests_total" in body
     assert "bgpt_http_request_duration_seconds" in body
     assert "/health" in body
+
+
+def test_request_id_propagated_into_json_logs(caplog) -> None:
+    """S0.6: RequestId must appear in json_log when set."""
+    import logging
+
+    from bangla_gpt_api.logging_config import json_log, request_id_var
+
+    logger = logging.getLogger("test_s06")
+    token = request_id_var.set("test-req-12345678")
+    try:
+        with caplog.at_level(logging.INFO):
+            json_log(logger, logging.INFO, "test_event", foo="bar")
+        # Find the log record
+        assert any("test_event" in rec.message for rec in caplog.records)
+        rec = next(r for r in caplog.records if "test_event" in r.message)
+        assert '"request_id": "test-req-12345678"' in rec.message
+        assert '"foo": "bar"' in rec.message
+    finally:
+        request_id_var.reset(token)
+
+
+def test_sentry_noop_when_dsn_absent(tmp_path) -> None:
+    """S0.6: Sentry init must not fail when DSN absent."""
+    from bangla_gpt_api.config import Settings
+    from bangla_gpt_api.main import create_app
+
+    settings = Settings(
+        env="test",
+        database_url=f"sqlite:///{tmp_path}/sentry.db",
+        jwt_secret="test-secret-0123456789abcdef0123456789",
+        sentry_dsn=None,
+    )
+    app = create_app(settings)
+    assert app is not None

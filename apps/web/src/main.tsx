@@ -2,12 +2,21 @@ import React, { lazy, Suspense } from 'react'
 import ReactDOM from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Navigate, Route, Routes, Link } from 'react-router-dom'
+import * as Sentry from '@sentry/react'
+
+// S0.6: Sentry — no-op when DSN absent
+if (import.meta.env.VITE_SENTRY_DSN) {
+  Sentry.init({
+    dsn: import.meta.env.VITE_SENTRY_DSN as string,
+    environment: import.meta.env.MODE,
+    tracesSampleRate: 0.1,
+  })
+}
 import './styles.css'
 import '@fontsource/noto-sans-bengali/400.css'
 import '@fontsource/noto-sans-bengali/700.css'
 import '@fontsource/hind-siliguri/400.css'
 import '@fontsource/hind-siliguri/600.css'
-import 'katex/dist/katex.min.css'
 import { getToken } from './api'
 import { AuthProvider, ROLE_HOME, useAuth } from './AuthContext'
 import { AppShell } from './AppShell'
@@ -203,3 +212,13 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </ErrorBoundary>
   </React.StrictMode>,
 )
+
+// PWA: register the service worker in production builds only — in dev the
+// cache-first strategy would serve stale Vite modules and break HMR.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      /* offline support is best-effort; never block the app on SW errors */
+    })
+  })
+}
