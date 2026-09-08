@@ -122,12 +122,28 @@ export default function AITutorPage() {
       )
       setMessages((m) => {
         const copy = [...m]
-        const li = copy.findIndex((x) => x.id === undone.message_id)
-        if (li >= 0) {
-          copy[li] = { ...copy[li], content: acc.text, grounded: undone.grounded, refused_reason: undone.refused_reason, sources: undone.sources ?? [] }
-        } else {
-          copy.push({ id: undone.message_id, role: 'assistant', content: acc.text, grounded: undone.grounded, refused_reason: undone.refused_reason, sources: undone.sources ?? [] })
+        let li = copy.findIndex((x) => x.id === undone.message_id)
+        if (li < 0) {
+          // The live-stream placeholder bubble carries id 0, so the real
+          // message_id never matches it — merge into that trailing bubble
+          // instead of pushing a second identical answer.
+          for (let i = copy.length - 1; i >= 0; i--) {
+            if (copy[i].role === 'assistant' && copy[i].id === 0) {
+              li = i
+              break
+            }
+          }
         }
+        const final = {
+          id: undone.message_id,
+          role: 'assistant' as const,
+          content: acc.text,
+          grounded: undone.grounded,
+          refused_reason: undone.refused_reason,
+          sources: undone.sources ?? [],
+        }
+        if (li >= 0) copy[li] = { ...copy[li], ...final }
+        else copy.push(final)
         return copy
       })
     } catch (e) {
