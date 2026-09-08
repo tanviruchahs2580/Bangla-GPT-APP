@@ -2,8 +2,17 @@
 
 **NCTB-grounded Bangla-first AI personal tutor platform.**
 
-> **Status: v0.4.0 — product-complete MVP (chat-first).** New in v0.3:
-> multi-turn **tutor chat with SSE streaming + persisted history**, hybrid
+> **Status: v0.5.0 — full multi-role platform (student + teacher + parent + admin).**
+> New in v0.5: reader with bookmarks/TTS/font-size + offline chapter copies,
+> quiz→tutor “explain this” deep-links, revision mini-quizzes + streak
+> heatmap, teacher dashboards (classrooms, CSV roster import, take-home and
+> per-student quiz assignments, AI question papers with review→finalize→PDF,
+> short tests, lesson plans, support plans, weak-chapter matrix), parent
+> per-chapter accuracy view, admin audit log, k-anonymised govt aggregate
+> export, safety refusal panel, feedback triage, time-boxed revocable
+> impersonation, public system-status page, unified chat/chapter search,
+> dark mode + bn/en language toggles and authenticated JSON data export.
+> v0.3/v0.4 baseline: multi-turn **tutor chat with SSE streaming + persisted history**, hybrid
 > retrieval (Bangla light-stemming + query expansion + trigram fallback),
 > child-safety moderation layer with supportive refusals, corpus covering
 > classes 6–10 (science/mathematics/bangla), quiz honesty fields
