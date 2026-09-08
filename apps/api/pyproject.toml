@@ -44,7 +44,9 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-bangla_gpt_api = ["data/sample_nctb/*.md"]
+# The wheel must ship every data file the runtime loads by path: sample corpus,
+# the S5 knowledge graph, and the Bengali TTF embedded in generated PDFs.
+bangla_gpt_api = ["data/sample_nctb/*.md", "data/kg/*.json", "data/fonts/*.ttf"]
 
 [tool.ruff]
 line-length = 100
