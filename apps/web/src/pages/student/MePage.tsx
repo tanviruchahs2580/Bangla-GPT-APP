@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Download, Flame, KeyRound, LogOut, Moon, Sun, Trash2 } from 'lucide-react'
-import { apiBase, del, generateInviteCode, get } from '../../api'
+import { del, generateInviteCode, get } from '../../api'
 import type { ActivitySummary } from '../../types'
 import { useAuth } from '../../AuthContext'
 import { Badge, Button, Card } from '../../components/ui'
@@ -19,6 +19,8 @@ export default function MePage() {
   const [busy, setBusy] = useState(false)
   const [invite, setInvite] = useState<{ code: string; expires_in_minutes: number } | null>(null)
   const [inviteBusy, setInviteBusy] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
   const [inviteError, setInviteError] = useState<string | null>(null)
   const dark = currentTheme() === 'dark'
   // S1.13: low-data mode (skip images + short tutor answers)
@@ -40,6 +42,26 @@ export default function MePage() {
       setInviteError(friendlyError((e as { rawDetail?: unknown }).rawDetail)?.text ?? t('errorGeneric'))
     } finally {
       setInviteBusy(false)
+    }
+  }
+
+  // Auth is header-based, so a plain <a href> download would 401; fetch the
+  // JSON with the session token and hand the browser a blob URL instead.
+  const exportData = async () => {
+    setExporting(true)
+    setExportError(null)
+    try {
+      const data = await get<Record<string, unknown>>('/users/me/export')
+      const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'bangla-gpt-data-export.json'
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      setExportError(friendlyError((e as { rawDetail?: unknown }).rawDetail)?.text ?? t('errorGeneric'))
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -187,9 +209,10 @@ export default function MePage() {
       <Card>
         <div className="card-title">{t('account')}</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-          <a className="btn btn-ghost" href={`${apiBase}/users/me/export`} style={{ justifyContent: 'flex-start' }}>
-            <Download size={18} aria-hidden /> {t('exportData')}
-          </a>
+          <Button variant="ghost" onClick={exportData} disabled={exporting} style={{ justifyContent: 'flex-start' }}>
+            {exporting ? <span className="spinner" aria-hidden /> : <Download size={18} aria-hidden />} {t('exportData')}
+          </Button>
+          {exportError && <p className="error" style={{ margin: 0 }}>{exportError}</p>}
           {!confirming ? (
             <Button variant="danger" onClick={() => setConfirming(true)}>
               <Trash2 size={18} aria-hidden /> {t('deleteAccount')}
