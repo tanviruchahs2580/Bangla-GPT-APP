@@ -137,9 +137,7 @@ def _row_counts(factory) -> dict[str, int]:
             "conversations": int(db.execute(select(func.count(Conversation.id))).scalar_one()),
             "messages": int(db.execute(select(func.count(ChatMessage.id))).scalar_one()),
             "resets": int(db.execute(select(func.count(PasswordReset.id))).scalar_one()),
-            "verifications": int(
-                db.execute(select(func.count(EmailVerification.id))).scalar_one()
-            ),
+            "verifications": int(db.execute(select(func.count(EmailVerification.id))).scalar_one()),
             "invites": int(db.execute(select(func.count(ParentInvite.id))).scalar_one()),
             "purge_audit": int(
                 db.execute(
@@ -163,9 +161,7 @@ def test_retention_dry_run_reports_counts_without_deleting(pair) -> None:
     before = _row_counts(factory)
     assert before["conversations"] == 2  # 1 old + 1 fresh
 
-    res = client.post(
-        "/admin/maintenance/purge?dry_run=true", headers=_admin_headers(client)
-    )
+    res = client.post("/admin/maintenance/purge?dry_run=true", headers=_admin_headers(client))
     assert res.status_code == 200
     body = res.json()
     assert body["dry_run"] is True

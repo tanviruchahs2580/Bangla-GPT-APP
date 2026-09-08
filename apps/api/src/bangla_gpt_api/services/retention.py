@@ -46,9 +46,7 @@ def retention_report(db: Session, *, now: datetime, chat_retention_days: int) ->
         select(func.count(PasswordReset.id)).where(PasswordReset.expires_at < token_cutoff)
     ).scalar_one()
     verifications = db.execute(
-        select(func.count(EmailVerification.id)).where(
-            EmailVerification.expires_at < token_cutoff
-        )
+        select(func.count(EmailVerification.id)).where(EmailVerification.expires_at < token_cutoff)
     ).scalar_one()
     invites = db.execute(
         select(func.count(ParentInvite.id)).where(
@@ -75,9 +73,7 @@ def run_retention_sweep(
     """
     if now is None:
         now = datetime.now(UTC).replace(tzinfo=None)
-    report = retention_report(
-        db, now=now, chat_retention_days=settings.chat_retention_days
-    )
+    report = retention_report(db, now=now, chat_retention_days=settings.chat_retention_days)
     if dry_run:
         return {"dry_run": True, **report}
 

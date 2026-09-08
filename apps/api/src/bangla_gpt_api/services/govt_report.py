@@ -73,8 +73,13 @@ def _csv_cell(value: object) -> str:
     return text
 
 
-def aggregate(db: Session, *, district: str = "", since_days: int | None = None,
-              min_cell: int = DEFAULT_MIN_CELL) -> AggregateExport:
+def aggregate(
+    db: Session,
+    *,
+    district: str = "",
+    since_days: int | None = None,
+    min_cell: int = DEFAULT_MIN_CELL,
+) -> AggregateExport:
     """Build anonymized per-(class_level, subject) cells."""
     cutoff = None
     if since_days:
@@ -222,25 +227,31 @@ def to_pdf(export: AggregateExport) -> bytes:
     pdf.set_text_color(0, 0, 0)
     pdf.set_font("nbg", size=10)
     pdf.cell(
-        w=0, h=8,
+        w=0,
+        h=8,
         text="class | subject | students | quiz_attempts | avg_score_pct | active_tutor_students",
-        new_x="LMARGIN", new_y="NEXT",
+        new_x="LMARGIN",
+        new_y="NEXT",
     )
     pdf.set_font("nbg", size=10)
     for row in export.rows:
         pdf.cell(
-            w=0, h=6,
+            w=0,
+            h=6,
             text=(
                 f"{row['class_level']} | {row['subject']} | {row['students']} | "
                 f"{row['quiz_attempts']} | {row['avg_score_pct']} | {row['active_tutor_students']}"
             ),
-            new_x="LMARGIN", new_y="NEXT",
+            new_x="LMARGIN",
+            new_y="NEXT",
         )
     if not export.rows:
         pdf.cell(
-            w=0, h=6,
+            w=0,
+            h=6,
             text="(no cells above the anonymity threshold)",
-            new_x="LMARGIN", new_y="NEXT",
+            new_x="LMARGIN",
+            new_y="NEXT",
         )
     return bytes(pdf.output())
 

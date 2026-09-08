@@ -257,4 +257,3 @@ def test_impersonation_revocation_is_per_session(pair) -> None:
     assert client.get("/users/me", headers=hdr_b).status_code == 200
     # The real student's own token is untouched by any of this.
     assert client.get("/users/me", headers=_login(client, "a@example.com")).status_code == 200
-

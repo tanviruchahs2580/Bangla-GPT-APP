@@ -118,7 +118,7 @@ def test_csv_escapes_formula_injection(session: Session) -> None:
     import io
 
     _attempt(session, _student(session, 1))
-    export = aggregate(session, district="=HYPERLINK(\"http://evil\")", min_cell=1)
+    export = aggregate(session, district='=HYPERLINK("http://evil")', min_cell=1)
     rows = list(csv_mod.reader(io.StringIO(to_csv(export))))
     assert rows[0][0] == "district"
     assert rows[1][0].startswith("'=")  # leading apostrophe neutralizes the formula

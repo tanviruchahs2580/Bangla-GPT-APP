@@ -837,9 +837,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             StatusComponent(
                 name="assistant",
                 ok=assistant_ok,
-                detail="provider configured"
-                if assistant_ok
-                else "no LLM provider configured",
+                detail="provider configured" if assistant_ok else "no LLM provider configured",
             )
         )
         healthy = all(c.ok for c in components)
@@ -1598,9 +1596,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         open_count = db.execute(
             select(func.count()).select_from(Feedback).where(Feedback.triaged.is_(False))
         ).scalar_one()
-        rows = db.execute(
-            stmt.order_by(Feedback.id.asc()).limit(limit).offset(offset)
-        ).all()
+        rows = db.execute(stmt.order_by(Feedback.id.asc()).limit(limit).offset(offset)).all()
         return FeedbackQueuePage(
             rows=[
                 FeedbackAdminRow(
