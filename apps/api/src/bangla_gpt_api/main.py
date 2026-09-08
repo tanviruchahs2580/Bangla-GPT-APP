@@ -45,6 +45,7 @@ from bangla_gpt_api.db.models import (
     ClassRoom,
     ClassStudent,
     ClassTeacher,
+    ConceptMastery,
     Conversation,
     DailyActivity,
     EmailVerification,
@@ -53,6 +54,7 @@ from bangla_gpt_api.db.models import (
     ParentInvite,
     ParentStudentLink,
     PasswordReset,
+    QuestionBankEntry,
     QuestionPaper,
     QuizAttempt,
     RevisionItem,
@@ -60,6 +62,7 @@ from bangla_gpt_api.db.models import (
     SchoolInvite,
     ShortTest,
     Student,
+    StudentAbility,
     StudentInvite,
     SupportPlan,
     Teacher,
@@ -1674,9 +1677,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def delete_me(db: DbSession, user: CurrentUser) -> Response:
         """GDPR-style self-service account deletion.
 
-        Removes the account and all owned profile data: student/teacher/parent
-        profile, quiz attempts + answer logs, and parent-student links.
-        The last remaining admin cannot delete their own account (409).
+        Removes the account and every row owned by it: student/teacher/parent
+        profile and ALL FK-children (Postgres enforces referential integrity --
+        SQLite silently does not, so every child table must be cleaned here or
+        the delete aborts mid-transaction on the production engine). The last
+        remaining admin cannot delete their own account (409).
         """
         if user.role == "admin":
             admins = db.execute(
@@ -1691,8 +1696,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         if parent is not None:
             db.execute(delete(ParentStudentLink).where(ParentStudentLink.parent_id == parent.id))
+            # Redeemed invites keep their history; only the pointer to the
+            # erased parent is dropped (nullable FK).
+            db.execute(
+                update(ParentInvite)
+                .where(ParentInvite.used_by_parent_id == parent.id)
+                .values(used_by_parent_id=None)
+            )
             db.delete(parent)
         if teacher is not None:
+            db.execute(delete(ClassTeacher).where(ClassTeacher.teacher_id == teacher.id))
             db.delete(teacher)
         if student is not None:
             attempt_ids = (
@@ -1710,11 +1723,47 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if conv_ids:
                 db.execute(delete(ChatMessage).where(ChatMessage.conversation_id.in_(conv_ids)))
             db.execute(delete(Conversation).where(Conversation.student_id == student.id))
-            db.execute(delete(Feedback).where(Feedback.user_id == user.id))
             db.execute(delete(QuizAttempt).where(QuizAttempt.student_id == student.id))
             db.execute(delete(ParentStudentLink).where(ParentStudentLink.student_id == student.id))
             db.execute(delete(ParentInvite).where(ParentInvite.student_id == student.id))
+            # S1.2/S1.9/S1.10 + S2/S4 children added after the original flow:
+            # skipping any of these breaks deletion under Postgres (BUG-4).
+            db.execute(delete(ChapterProgress).where(ChapterProgress.student_id == student.id))
+            db.execute(delete(DailyActivity).where(DailyActivity.student_id == student.id))
+            db.execute(delete(RevisionItem).where(RevisionItem.student_id == student.id))
+            db.execute(delete(ClassStudent).where(ClassStudent.student_id == student.id))
+            db.execute(delete(StudentInvite).where(StudentInvite.student_id == student.id))
+            db.execute(delete(SupportPlan).where(SupportPlan.student_id == student.id))
+            db.execute(delete(ConceptMastery).where(ConceptMastery.student_id == student.id))
+            db.execute(delete(StudentAbility).where(StudentAbility.student_id == student.id))
             db.delete(student)
+
+        # User-scoped rows (any role), removed before the users row itself.
+        db.execute(delete(PasswordReset).where(PasswordReset.user_id == user.id))
+        db.execute(delete(EmailVerification).where(EmailVerification.user_id == user.id))
+        db.execute(delete(Feedback).where(Feedback.user_id == user.id))
+        db.execute(delete(QuestionPaper).where(QuestionPaper.teacher_id == user.id))
+        db.execute(delete(ShortTest).where(ShortTest.teacher_id == user.id))
+        db.execute(delete(Assignment).where(Assignment.teacher_id == user.id))
+        db.execute(delete(QuestionBankEntry).where(QuestionBankEntry.teacher_id == user.id))
+        db.execute(delete(SupportPlan).where(SupportPlan.teacher_id == user.id))
+        # Invites this account created go with it (redeemed staff links are
+        # kept as evidence in the User row itself); redemption pointers to this
+        # account are nulled.
+        db.execute(delete(SchoolInvite).where(SchoolInvite.created_by == user.id))
+        db.execute(update(SchoolInvite).where(SchoolInvite.used_by == user.id).values(used_by=None))
+        # Shared artifacts survive their author, losing only the author pointer:
+        db.execute(
+            update(ChapterContent)
+            .where(ChapterContent.created_by == user.id)
+            .values(created_by=None)
+        )
+        # Audit rows are append-only and never deleted: the event survives the
+        # account, only the attribution to an erased account is anonymised
+        # (actor_user_id is nullable by design for exactly this erasure case).
+        db.execute(
+            update(AuditLog).where(AuditLog.actor_user_id == user.id).values(actor_user_id=None)
+        )
 
         db.delete(user)
         db.commit()

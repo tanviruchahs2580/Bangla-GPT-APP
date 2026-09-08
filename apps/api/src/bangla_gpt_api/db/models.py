@@ -636,7 +636,11 @@ class AuditLog(Base):
     role_change, data_export, purge, qp_finalize, impersonation.
 
     Privacy (R11): only ids and outcome metadata live in ``detail`` --
-    never message content, never PII. Rows are never updated or deleted.
+    never message content, never PII. Rows are never updated or deleted,
+    with ONE documented exception: account erasure (DELETE /users/me)
+    anonymises ``actor_user_id`` to NULL so the event survives the account
+    while the erased person is no longer attributable (the column is
+    nullable by design for this case).
     """
 
     __tablename__ = "audit_log"
