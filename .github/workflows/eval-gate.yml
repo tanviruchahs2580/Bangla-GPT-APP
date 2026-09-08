@@ -1,0 +1,47 @@
+name: Eval gate (S4.7 golden-set regression)
+
+# Spec 4.7: "CI gate fails build on >2% regression". Runs the golden v2
+# suite (eval/golden_v2.json, 634 items) against the hermetic mock provider
+# and compares every metric against eval/baseline_v2.json; any metric that
+# drops by more than 2 percentage points fails this job.
+#
+# NOTE (repo directive): this file is intentionally LOCAL ONLY -- never push
+# it; it becomes active when the no-commit directive is lifted.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  eval-gate:
+    name: Golden-set regression gate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/api/pyproject.toml
+
+      - name: Install package with dev dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade setuptools wheel
+          python -m pip install -e ".[dev]"
+
+      # --write-baseline is deliberately NOT used here: the baseline is a
+      # reviewed, committed artifact (R12: never re-baseline to go green).
+      - name: Run eval v2 suite vs recorded baseline (exit 1 on >2pp drop)
+        run: python -m bangla_gpt_api.evaluation.cli

@@ -21,6 +21,8 @@ import { getToken } from './api'
 import { AuthProvider, ROLE_HOME, useAuth } from './AuthContext'
 import { AppShell } from './AppShell'
 import { t } from './i18n'
+import { initInstallPrompt } from './lib/installPrompt'
+import { initLowData } from './lib/lowData'
 
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 const RegisterPage = lazy(() => import('./pages/RegisterPage'))
@@ -39,6 +41,8 @@ const LearnChapterPage = lazy(() =>
 const TeacherDashboard = lazy(() => import('./pages/TeacherDashboard'))
 const ParentDashboard = lazy(() => import('./pages/ParentDashboard'))
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
+const SchoolDashboard = lazy(() => import('./pages/SchoolDashboard'))
+const StatusPage = lazy(() => import('./pages/StatusPage'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -95,6 +99,7 @@ function RoutesSwitch() {
       <Route path="/forgot" element={<ForgotResetPage />} />
       <Route path="/privacy" element={<LegalPage kind="privacy" />} />
       <Route path="/terms" element={<LegalPage kind="terms" />} />
+      <Route path="/status" element={<StatusPage />} />
 
       <Route
         path="/student"
@@ -148,6 +153,7 @@ function RoutesSwitch() {
       <Route path="/teacher" element={<RequireAuth role="teacher"><TeacherDashboard /></RequireAuth>} />
       <Route path="/parent" element={<RequireAuth role="parent"><ParentDashboard /></RequireAuth>} />
       <Route path="/admin" element={<RequireAuth role="admin"><AdminDashboard /></RequireAuth>} />
+      <Route path="/school" element={<RequireAuth role="school_admin"><SchoolDashboard /></RequireAuth>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
@@ -169,7 +175,7 @@ function Footer() {
   return (
     <footer className="footer">
       <div>
-        <Link to="/privacy">{t('privacy')}</Link> · <Link to="/terms">{t('terms')}</Link>
+        <Link to="/privacy">{t('privacy')}</Link> · <Link to="/terms">{t('terms')}</Link> · <Link to="/status">{t('statusPage')}</Link>
       </div>
       <div>
         © {new Date().getFullYear()} {t('appName')}
@@ -201,6 +207,9 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { err
   }
 }
 
+// S1.13: apply the persisted low-data mode before first paint.
+initLowData()
+initInstallPrompt()
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>

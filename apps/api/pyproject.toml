@@ -16,9 +16,14 @@ dependencies = [
     "pypdf>=5.0",
     "bijoy2unicode>=0.1.1",
     "redis>=5.0",
+    "arq>=0.26",
     "httpx>=0.27",
     "psycopg[binary]>=3.2",
     "sentry-sdk>=2.0",
+    "fpdf2>=2.8.3",
+    "uharfbuzz>=0.40",
+    # S5.6: Fernet encryption for guardian phone at rest (security.py).
+    "cryptography>=42",
 ]
 
 [project.optional-dependencies]

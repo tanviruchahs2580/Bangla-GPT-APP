@@ -23,16 +23,25 @@ TOK=$(curl -fsS -X POST "$BASE/auth/login" -H "Content-Type: application/json" -
 echo "  login ok"
 
 AUTH="Authorization: Bearer $TOK"
+# Windows curl corrupts non-ASCII bytes passed in argv; send JSON bodies from files.
+TMPD=$(mktemp -d)
+trap 'rm -rf "$TMPD"' EXIT
+cat > "$TMPD/ask1.json" <<'BGPT_EOF'
+{"question":"কোষ কী?","class_level":6,"subject":"science"}
+BGPT_EOF
+cat > "$TMPD/ask2_head.json" <<'BGPT_EOF'
+{"question":"এই কুইজ প্ৰশ্নের ব্যাখ্যা দাও","class_level":6,"subject":"science","explain":
+BGPT_EOF
 
 echo "→ learn subjects"
 curl -fsS -H "$AUTH" "$BASE/learn/subjects?class_level=6" | grep -q "science" && echo "  learn ok"
 
 echo "→ tutor grounded"
-ASK=$(curl -fsS -X POST "$BASE/tutor/ask" -H "Content-Type: application/json" -H "$AUTH" -d '{"question":"কোষ কী?","class_level":6,"subject":"science"}')
+ASK=$(curl -fsS -X POST "$BASE/tutor/ask" -H "Content-Type: application/json" -H "$AUTH" --data-binary @"$TMPD/ask1.json")
 echo "$ASK" | grep -q '"grounded":true' && echo "  tutor grounded ok" || (echo "  tutor failed: $ASK"; exit 1)
 
 echo "→ quiz start"
-QZ=$(curl -fsS -X POST "$BASE/quizzes" -H "Content-Type: application/json" -H "$AUTH" -d '{"student_id":1,"class_level":6,"subject":"science","num_questions":2}')
+QZ=$(curl -fsS -X POST "$BASE/quizzes" -H "Content-Type: application/json" -H "$AUTH" -d '{"student_id":1,"class_level":6,"subject":"science","num_questions":2}' || true)  # probing call; the correct-SID call below is the gate
 # Student id 1 may not be correct; fetch me to get profile_id
 ME=$(curl -fsS -H "$AUTH" "$BASE/users/me")
 SID=$(echo "$ME" | python3 -c "import sys,json; print(json.load(sys.stdin)['profile_id'])")
@@ -45,6 +54,19 @@ echo "→ quiz submit"
 ANSWERS=$(python3 -c "print(','.join(['0']*int('$QCOUNT')))")
 SUBMIT=$(curl -fsS -X POST "$BASE/quizzes/$ATTEMPT/submit" -H "Content-Type: application/json" -H "$AUTH" -d "{\"answers\":[$ANSWERS]}")
 echo "$SUBMIT" | grep -q '"score_pct"' && echo "  submit ok"
+
+echo "→ quiz explain loop"
+EXPLAIN=$(echo "$SUBMIT" | python3 -c "
+import json, sys
+rev = json.load(sys.stdin)['review']
+item = next((x for x in rev if not x['is_correct']), rev[0])
+print(json.dumps({'question': item['question_text'], 'options': item['options'],
+                  'correct_index': item['correct_index'], 'user_answer': item['chosen'],
+                  'chapter': item['chapter']}, ensure_ascii=False))
+")
+{ cat "$TMPD/ask2_head.json"; printf '%s' "$EXPLAIN"; printf '}'; } > "$TMPD/ask2.json"
+EXASK=$(curl -fsS -X POST "$BASE/tutor/ask" -H "Content-Type: application/json" -H "$AUTH" --data-binary @"$TMPD/ask2.json")
+echo "$EXASK" | grep -q '"answer"' && echo "  explain ok grounded=$(echo "$EXASK" | python3 -c 'import sys,json; print(json.load(sys.stdin)["grounded"])')"
 
 echo "→ me"
 curl -fsS -H "$AUTH" "$BASE/users/me" | grep -q '"email"' && echo "  me ok"

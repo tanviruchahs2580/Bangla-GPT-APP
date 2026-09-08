@@ -25,6 +25,24 @@ import httpx
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.providers.base import ProviderError
+from bangla_gpt_api.services.context import get_current_context
+
+
+def _context_log_fields() -> dict[str, object]:
+    """S4.1/S4.2: attach the education context (counts/ids only, never
+    content) and the routing decision to provider logs so every AI call is
+    attributable (route + latency + cost) for eval."""
+    from bangla_gpt_api.services.router import get_current_route
+
+    fields: dict[str, object] = {}
+    route = get_current_route()
+    if route:
+        fields["ai_route"] = route
+    ctx = get_current_context()
+    if ctx is not None:
+        fields.update(ctx.log_fields())
+    return fields
+
 
 logger = logging.getLogger(__name__)
 
@@ -33,15 +51,19 @@ _RETRYABLE_STATUS = frozenset({408, 429, 500, 502, 503, 504})
 _MAX_BACKOFF_SECONDS = 4.0
 
 
+def _error_detail(payload: object, fallback: str) -> str:
+    error = payload.get("error") if isinstance(payload, dict) else None
+    if isinstance(error, dict):
+        return str(error.get("message") or error.get("status") or fallback)
+    return str(payload)[:200]
+
+
 def _error_message(response: httpx.Response) -> str:
     try:
         payload = response.json()
     except ValueError:
         return response.text[:200]
-    error = payload.get("error") if isinstance(payload, dict) else None
-    if isinstance(error, dict):
-        return str(error.get("message") or error.get("status") or response.status_code)
-    return str(payload)[:200]
+    return _error_detail(payload, str(response.status_code))
 
 
 def _extract_text(payload: dict) -> str:
@@ -90,7 +112,7 @@ def _parse_sse_delta(line: str) -> str | None:
 
 def _error_message_text(body: bytes) -> str:
     try:
-        return _error_message(json.loads(body))
+        return _error_detail(json.loads(body), "error")
     except ValueError:
         return body[:200].decode(errors="replace")
 
@@ -167,6 +189,7 @@ class GeminiProvider:
                                 answer_chars=chars,
                                 chunks=emitted,
                                 retries=attempt,
+                                **_context_log_fields(),
                             )
                             return
                         raise ProviderError("Gemini stream produced no text")
@@ -220,6 +243,7 @@ class GeminiProvider:
                         prompt_chars=len(prompt),
                         answer_chars=len(text),
                         retries=attempt,
+                        **_context_log_fields(),
                     )
                     return text
                 except ValueError as exc:
@@ -235,14 +259,15 @@ class GeminiProvider:
             )
 
 
-def build_gemini_provider(settings: Settings) -> GeminiProvider:
+def build_gemini_provider(settings: Settings, model: str | None = None) -> GeminiProvider:
+    """Build a Gemini client; ``model`` overrides GEMINI_MODEL (S4.2 fast lane)."""
     from bangla_gpt_api.providers.base import ProviderNotConfigured
 
     if not settings.gemini_api_key:
         raise ProviderNotConfigured("LLM_PROVIDER=gemini requires GEMINI_API_KEY to be set")
     return GeminiProvider(
         api_key=settings.gemini_api_key,
-        model=settings.gemini_model,
+        model=model or settings.gemini_model,
         timeout_seconds=settings.llm_timeout_seconds,
         max_retries=settings.llm_max_retries,
     )

@@ -1,9 +1,32 @@
 import { useCallback, useEffect, useState } from 'react'
-import { get, patch, post } from '../api'
+import {
+  del,
+  get,
+  getFeedbackQueue,
+  patch,
+  post,
+  startImpersonation,
+  triageFeedback,
+} from '../api'
+import { friendlyError } from '../errors'
 import { t } from '../i18n'
-import type { AdminOverview, AdminUsersPage, UserPublic } from '../types'
+import type {
+  AdminOverview,
+  AdminSchoolStats,
+  AdminUsersPage,
+  ContentVersionRow,
+  FeedbackQueuePage,
+  RefusalAudit,
+  SchoolInviteAdmin,
+  UserPublic,
+} from '../types'
 
 const ROLES = ['student', 'teacher', 'parent', 'admin'] as const
+const INVITE_ROLES = ['teacher', 'school_admin'] as const
+
+function errOf(err: unknown): string {
+  return friendlyError((err as { rawDetail?: unknown }).rawDetail)?.text ?? t('errorGeneric')
+}
 
 export default function AdminDashboard() {
   const [page, setPage] = useState<AdminUsersPage>({ total: 0, items: [] })
@@ -15,23 +38,99 @@ export default function AdminDashboard() {
   const [error, setError] = useState<string | null>(null)
   const LIMIT = 20
 
+  // S3.5: admin center -- schools + stats, invite management, content versions.
+  const [schools, setSchools] = useState<AdminSchoolStats[]>([])
+  const [versions, setVersions] = useState<ContentVersionRow[]>([])
+  const [invites, setInvites] = useState<SchoolInviteAdmin[]>([])
+  const [selSchool, setSelSchool] = useState<number | null>(null)
+  const [schoolName, setSchoolName] = useState('')
+  const [inviteRoles, setInviteRoles] = useState<Record<number, string>>({})
+  const [inviteCode, setInviteCode] = useState<string | null>(null)
+  const [admMsg, setAdmMsg] = useState<string | null>(null)
+  // S4.8: refusal audit -- aggregate safety-refusal counts only (R11).
+  const [refusals, setRefusals] = useState<RefusalAudit | null>(null)
+
+  // S5.10: feedback triage queue + audited impersonation launch.
+  const [triageStatus, setTriageStatus] = useState<'open' | 'all'>('open')
+  const [queue, setQueue] = useState<FeedbackQueuePage | null>(null)
+  const [notes, setNotes] = useState<Record<number, string>>({})
+  const [triageMsg, setTriageMsg] = useState<string | null>(null)
+
+  const loadTriage = useCallback(() => {
+    getFeedbackQueue(triageStatus)
+      .then(setQueue)
+      .catch(() => setQueue(null))
+  }, [triageStatus])
+
+  useEffect(() => {
+    loadTriage()
+  }, [loadTriage])
+
+  async function doTriage(id: number, triaged: boolean) {
+    setTriageMsg(null)
+    try {
+      const note = (notes[id] ?? '').trim()
+      await triageFeedback(id, note ? { triaged, note } : { triaged })
+      loadTriage()
+    } catch (err) {
+      setTriageMsg(errOf(err))
+    }
+  }
+
+  async function doImpersonate(user: UserPublic) {
+    const reason = window.prompt(t('impReasonPrompt'))
+    if (reason === null || reason.trim().length < 3) return
+    try {
+      await startImpersonation(user.id, reason.trim())
+      // Full reload: every component (and the auth context) re-reads the
+      // swapped token, and the shell shows the "support session" banner.
+      window.location.assign('/')
+    } catch (err) {
+      setError(errOf(err))
+    }
+  }
+
   const load = useCallback(() => {
     setError(null)
     const params: Record<string, string | number> = { limit: LIMIT, offset }
     if (query.trim()) params.q = query.trim()
     if (roleFilter) params.role = roleFilter
     const qs = new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]))
-    Promise.all([get<AdminUsersPage>(`/admin/users?${qs}`), get<AdminOverview>('/admin/analytics/overview')])
-      .then(([u, o]) => {
+    Promise.all([
+      get<AdminUsersPage>(`/admin/users?${qs}`),
+      get<AdminOverview>('/admin/analytics/overview'),
+      // S3.5: center cards ride the same refresh; auxiliary on failure.
+      get<AdminSchoolStats[]>('/admin/schools/stats').catch(() => []),
+      get<ContentVersionRow[]>('/admin/content/versions').catch(() => []),
+      get<RefusalAudit>('/admin/safety/refusals').catch(() => null),
+    ])
+      .then(([u, o, sh, v, ra]) => {
         setPage(u)
         setOverview(o)
+        setSchools(sh ?? [])
+        setVersions(v ?? [])
+        setRefusals(ra)
       })
-      .catch((err: Error) => setError(err.message))
+      .catch((err: unknown) => setError(errOf(err)))
   }, [offset, query, roleFilter])
 
   useEffect(() => {
     load()
   }, [load])
+
+  const loadInvites = useCallback(() => {
+    if (selSchool === null) {
+      setInvites([])
+      return
+    }
+    get<SchoolInviteAdmin[]>(`/admin/schools/${selSchool}/invites`)
+      .then((rows) => setInvites(rows))
+      .catch(() => setInvites([]))
+  }, [selSchool])
+
+  useEffect(() => {
+    loadInvites()
+  }, [loadInvites])
 
   async function changeRole(user: UserPublic, role: string) {
     if (role === user.role) return
@@ -40,7 +139,7 @@ export default function AdminDashboard() {
       await patch(`/admin/users/${user.id}/role`, { role })
       load()
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errorGeneric'))
+      setError(errOf(err))
     }
   }
 
@@ -50,7 +149,46 @@ export default function AdminDashboard() {
       const res = await post<Record<string, number>>('/admin/maintenance/purge')
       setPurgeMsg(`${t('purged')}: ${JSON.stringify(res)}`)
     } catch (err) {
-      setPurgeMsg(err instanceof Error ? err.message : t('errorGeneric'))
+      setPurgeMsg(errOf(err))
+    }
+  }
+
+  async function addSchool(e: React.FormEvent) {
+    e.preventDefault()
+    if (schoolName.trim().length < 2) return
+    setError(null)
+    try {
+      await post('/admin/schools', { name: schoolName.trim() })
+      setSchoolName('')
+      load()
+    } catch (err) {
+      setError(errOf(err))
+    }
+  }
+
+  async function createInvite(schoolId: number) {
+    setAdmMsg(null)
+    setInviteCode(null)
+    try {
+      const res = await post<{ code: string }>(`/schools/${schoolId}/invites`, {
+        role: inviteRoles[schoolId] ?? 'teacher',
+      })
+      setInviteCode(res.code)
+      if (schoolId === selSchool) loadInvites()
+    } catch (err) {
+      setAdmMsg(errOf(err))
+    }
+  }
+
+  async function revokeInvite(inviteId: number) {
+    if (selSchool === null) return
+    setAdmMsg(null)
+    try {
+      await del(`/admin/schools/${selSchool}/invites/${inviteId}`)
+      setAdmMsg(t('admRevoked'))
+      loadInvites()
+    } catch (err) {
+      setAdmMsg(errOf(err))
     }
   }
 
@@ -89,6 +227,280 @@ export default function AdminDashboard() {
               <div className="num">{overview.quiz_attempts_graded}</div>
               <div className="lbl">কুইজ</div>
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* S4.8: refusal audit -- why/where safety refusals happened (counts only). */}
+      <div className="card">
+        <h2>{t('admSafety')}</h2>
+        {refusals === null ? (
+          <p className="muted" role="status">{t('loading')}</p>
+        ) : (
+          <>
+            <div className="stat-row">
+              <div className="stat">
+                <div className="num">{refusals.total_refusals}</div>
+                <div className="lbl">{t('admRefusals')}</div>
+              </div>
+            </div>
+            {refusals.total_refusals === 0 ? (
+              <p className="muted">{t('admNoRefusals')}</p>
+            ) : (
+              <>
+                <div className="table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th scope="col">{t('admRefusalReason')}</th>
+                        <th scope="col">{t('admRefusals')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(refusals.by_reason).map(([reason, n]) => (
+                        <tr key={reason}>
+                          <td>{reason}</td>
+                          <td>{n}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="muted">
+                  {Object.entries(refusals.by_class).map(([cls, n]) => (
+                    <span key={cls} style={{ marginRight: 10 }}>
+                      {`${t('admRefusalClass')} ${cls}: ${n}`}
+                    </span>
+                  ))}
+                </p>
+                {refusals.last_refusal_at && (
+                  <p className="muted">
+                    {t('admLastRefusal')}: {new Date(refusals.last_refusal_at).toLocaleString()}
+                  </p>
+                )}
+              </>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* S5.10: feedback triage queue (reporter identity withheld, R11). */}
+      <div className="card">
+        <h2>{t('admTriage')}</h2>
+        <div className="row-flex" style={{ gap: 8, marginBottom: 8 }}>
+          <button
+            className={triageStatus === 'open' ? 'primary small' : 'secondary small'}
+            onClick={() => setTriageStatus('open')}
+          >
+            {t('admTriageOpen')}
+          </button>
+          <button
+            className={triageStatus === 'all' ? 'primary small' : 'secondary small'}
+            onClick={() => setTriageStatus('all')}
+          >
+            {t('admTriageAll')}
+          </button>
+          {queue && (
+            <span className="muted">{t('admOpenCount', { n: queue.open_count, t: queue.total })}</span>
+          )}
+        </div>
+        {triageMsg && <p className="error" role="alert">{triageMsg}</p>}
+        {queue === null ? (
+          <p className="muted" role="status">{t('loading')}</p>
+        ) : queue.rows.length === 0 ? (
+          <p className="muted">{t('admNoFeedback')}</p>
+        ) : (
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">#</th>
+                  <th scope="col">{t('role')}</th>
+                  <th scope="col">±</th>
+                  <th scope="col">{t('admNoteLabel').replace(/\s*\(.*\)$/, '')}</th>
+                  <th scope="col">{t('admStatus')}</th>
+                  <th scope="col"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {queue.rows.map((row) => (
+                  <tr key={row.id}>
+                    <td>{row.id}</td>
+                    <td>{row.role}</td>
+                    <td>{row.rating > 0 ? '+' : row.rating < 0 ? '−' : '·'}</td>
+                    <td style={{ whiteSpace: 'normal', maxWidth: 320 }}>
+                      {row.comment ?? '—'}
+                      {row.note && (
+                        <div className="muted">
+                          {t('admNoteLabel')}: {row.note}
+                        </div>
+                      )}
+                    </td>
+                    <td>{row.triaged ? t('admTriaged') : t('admTriageOpen')}</td>
+                    <td>
+                      <input
+                        value={notes[row.id] ?? ''}
+                        maxLength={500}
+                        placeholder={t('admNoteLabel')}
+                        aria-label={`${t('admNoteLabel')} #${row.id}`}
+                        onChange={(e) => setNotes({ ...notes, [row.id]: e.target.value })}
+                      />{' '}
+                      {row.triaged ? (
+                        <button className="small secondary" onClick={() => doTriage(row.id, false)}>
+                          {t('admReopen')}
+                        </button>
+                      ) : (
+                        <button className="small primary" onClick={() => doTriage(row.id, true)}>
+                          {t('admMarkTriage')}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="card">
+        <h2>{t('admSchools')}</h2>
+        <form onSubmit={addSchool}>
+          <label htmlFor="nschool">{t('admNewSchool')}</label>
+          <input
+            id="nschool"
+            value={schoolName}
+            onChange={(e) => setSchoolName(e.target.value)}
+            minLength={2}
+            maxLength={200}
+            required
+          />
+          <button className="primary small" type="submit">{t('admCreateSchool')}</button>
+        </form>
+        {inviteCode && (
+          <p role="status">
+            {t('admInviteOnce')} <code>{inviteCode}</code>
+          </p>
+        )}
+        {admMsg && <p className="muted" role="status">{admMsg}</p>}
+        {schools.length === 0 ? (
+          <p className="muted">{t('admNoSchools')}</p>
+        ) : (
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">{t('admNewSchool')}</th>
+                  <th scope="col">{t('admCode')}</th>
+                  <th scope="col">{t('sdTeachers')}</th>
+                  <th scope="col">{t('admClassrooms')}</th>
+                  <th scope="col">{t('students')}</th>
+                  <th scope="col">{t('admSessions7d')}</th>
+                  <th scope="col">{t('admInvite')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {schools.map((s) => (
+                  <tr key={s.id}>
+                    <td style={{ whiteSpace: 'normal' }}>
+                      <button
+                        className="small secondary"
+                        onClick={() => setSelSchool(s.id === selSchool ? null : s.id)}
+                        aria-label={`${s.name} ${t('admInvites')}`}
+                      >
+                        {s.name}
+                      </button>
+                    </td>
+                    <td>{s.code}</td>
+                    <td>{s.teachers}</td>
+                    <td>{s.classrooms}</td>
+                    <td>{s.students}</td>
+                    <td>{s.sessions_7d}</td>
+                    <td>
+                      <select
+                        value={inviteRoles[s.id] ?? 'teacher'}
+                        onChange={(e) => setInviteRoles({ ...inviteRoles, [s.id]: e.target.value })}
+                        aria-label={`${s.name} ${t('role')}`}
+                      >
+                        {INVITE_ROLES.map((r) => (
+                          <option key={r} value={r}>{r}</option>
+                        ))}
+                      </select>{' '}
+                      <button className="small primary" onClick={() => createInvite(s.id)}>
+                        {t('admInvite')}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {selSchool !== null && (
+          <div className="table-scroll">
+            <table>
+              <caption>{t('admInvites')}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">{t('role')}</th>
+                  <th scope="col">{t('admStatus')}</th>
+                  <th scope="col">{t('admCreated')}</th>
+                  <th scope="col"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {invites.map((i) => (
+                  <tr key={i.id}>
+                    <td>{i.role}</td>
+                    <td>{i.used ? t('admUsed') : t('admActive')}</td>
+                    <td>{i.created_at.slice(0, 10)}</td>
+                    <td>
+                      {!i.used && (
+                        <button className="small secondary" onClick={() => revokeInvite(i.id)}>
+                          {t('admRevoke')}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="card">
+        <h2>{t('admVersions')}</h2>
+        {versions.length === 0 ? (
+          <p className="muted">{t('admNoVersions')}</p>
+        ) : (
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">{t('admSubject')}</th>
+                  <th scope="col">{t('admChapter')}</th>
+                  <th scope="col">{t('admVersion')}</th>
+                  <th scope="col">{t('admSource')}</th>
+                  <th scope="col">{t('email')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {versions.map((v) => (
+                  <tr key={`${v.subject}-${v.class_level}-${v.chapter}`}>
+                    <td>
+                      {v.subject} · {v.class_level}
+                    </td>
+                    <td style={{ whiteSpace: 'normal' }}>{v.chapter}</td>
+                    <td>
+                      v{v.current_version} ({v.versions_total})
+                    </td>
+                    <td>{v.source}</td>
+                    <td style={{ whiteSpace: 'normal' }}>{v.updated_by_email ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
@@ -135,7 +547,13 @@ export default function AdminDashboard() {
                       {ROLES.map((r) => (
                         <option key={r} value={r}>{r}</option>
                       ))}
-                    </select>
+                    </select>{' '}
+                    {/* S5.10: server refuses admin targets; button mirrors that. */}
+                    {u.role !== 'admin' && u.role !== 'school_admin' && (
+                      <button className="small secondary" onClick={() => doImpersonate(u)}>
+                        {t('impersonate')}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

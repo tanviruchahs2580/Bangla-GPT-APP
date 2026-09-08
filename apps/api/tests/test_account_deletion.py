@@ -61,6 +61,9 @@ def test_users_me_returns_profile(client: TestClient) -> None:
         "profile_id": profile["profile_id"],
         "name": "নাম",
         "class_level": 7,
+        # S5.6: /users/me exposes the (decrypted) guardian phone; this
+        # student never supplied one.
+        "phone": None,
     }
 
 

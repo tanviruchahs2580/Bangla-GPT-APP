@@ -93,6 +93,7 @@ class ClozeQuizGenerator:
         *,
         class_level: int,
         subject: str | None = None,
+        chapter: str | None = None,
         num: int = 5,
         seed: int = 0,
     ) -> list[GeneratedQuestion]:
@@ -102,6 +103,7 @@ class ClozeQuizGenerator:
             for i, chunk in enumerate(self.chunks)
             if chunk.meta.class_level == class_level
             and (subject is None or chunk.meta.subject == subject)
+            and (chapter is None or chunk.meta.chapter == chapter)
         ]
         order = list(doc_indices)
         rng.shuffle(order)

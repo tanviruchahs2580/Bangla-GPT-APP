@@ -2,6 +2,7 @@ import hashlib
 import re
 
 from bangla_gpt_api.curriculum.models import Chunk, CurriculumMeta
+from bangla_gpt_api.services.safety import strip_injections
 
 CHAPTER_PREFIX = "অধ্যায়:"
 SENTENCE_SPLIT_RE = re.compile(r"(?<=[।.!?])\s+")
@@ -19,6 +20,8 @@ class TextIngester:
 
     def __init__(self, chunk_char_limit: int = 700) -> None:
         self.chunk_char_limit = chunk_char_limit
+        # S4.8: sentences removed by the ingest-time injection filter (count only).
+        self.dropped_injections = 0
 
     def ingest(self, text: str, meta: CurriculumMeta) -> list[Chunk]:
         chunks: list[Chunk] = []
@@ -29,8 +32,11 @@ class TextIngester:
 
         def flush() -> None:
             nonlocal seq
-            paragraph = "\n".join(buffer).strip()
+            raw = "\n".join(buffer).strip()
             buffer.clear()
+            # S4.8: untrusted corpus text first loses injection/leak sentences.
+            paragraph, dropped = strip_injections(raw)
+            self.dropped_injections += dropped
             if not paragraph:
                 return
             for piece in self._split_paragraph(paragraph):

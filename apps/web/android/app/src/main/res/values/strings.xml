@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Bangla GPT Tutor</string>
+    <string name="title_activity_main">Bangla GPT Tutor</string>
+    <string name="package_name">app.banglagpt.tutor</string>
+    <string name="custom_url_scheme">app.banglagpt.tutor</string>
+</resources>

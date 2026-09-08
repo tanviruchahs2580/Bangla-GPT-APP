@@ -2,25 +2,40 @@
 	email {$ACME_EMAIL}
 }
 
+# Content-Security-Policy values are quoted "Name Value" strings. Inside a
+# header block the bare-token form parses every directive as its own header
+# name, so CSP is always written as a single quoted pair.
+#
+# S5.6 script-src 'self': the SPA ships no inline script (see
+# apps/web/public/theme-boot.js), so no 'unsafe-inline' exception and no
+# per-response nonce is needed. Nonce minting would require a request-id
+# placeholder that the stock caddy:2-alpine image does not expose (verified
+# against v2.11.4: `{http.request.id}` is not registered as a placeholder and
+# there is no request_id directive), and adding one would mean building a
+# custom Caddy binary -- deferred until there is inline script to protect.
+
 {$DOMAIN} {
 	encode zstd gzip
 
 	# Security headers
 	header {
-		Strict-Transport-Security "max-age=31536000; include-subdomain"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options nosniff
 		X-Frame-Options DENY
 		Referrer-Policy strict-origin-when-cross-origin
 		-Server
 	}
 
-	# API: strip the /api prefix before proxying to FastAPI
+	# API: strip the /api prefix before proxying to FastAPI.
+	# CSP/nonce for API responses is set by the app itself
+	# (SecurityHeadersMiddleware); no HTML is served from this prefix.
 	handle_path /api/* {
 		reverse_proxy api:8000
 	}
 
-	# Static dashboard
+	# Static dashboard (SPA): hashed assets + client-rendered routes.
 	handle {
+		header "Content-Security-Policy" "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 		reverse_proxy web:80
 	}
 }

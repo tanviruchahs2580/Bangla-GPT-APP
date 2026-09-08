@@ -1,7 +1,11 @@
+import logging
 from pathlib import Path
 
 from bangla_gpt_api.curriculum.models import Chunk, CurriculumMeta
 from bangla_gpt_api.ingestion.text_ingester import TextIngester
+from bangla_gpt_api.logging_config import json_log
+
+logger = logging.getLogger(__name__)
 
 SAMPLE_DIR = Path(__file__).parent / "sample_nctb"
 
@@ -87,4 +91,12 @@ def load_sample_corpus() -> list[Chunk]:
         meta = CurriculumMeta(source=filename, **fields)
         text = (SAMPLE_DIR / filename).read_text(encoding="utf-8")
         chunks.extend(ingester.ingest(text, meta))
+    if ingester.dropped_injections:
+        # R11: counts only -- never the dropped text.
+        json_log(
+            logger,
+            logging.WARNING,
+            "corpus_injection_sentences_dropped",
+            count=ingester.dropped_injections,
+        )
     return chunks

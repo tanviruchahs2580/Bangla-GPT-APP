@@ -138,7 +138,11 @@ def test_progress_aggregates_and_flags_weak_chapters(client: TestClient) -> None
     correct_total = sum(c["correct"] for c in progress["by_chapter"])
     assert asked_total == submitted.json()["total"]
     assert correct_total == submitted.json()["correct"]
-    weak = {c["chapter"] for c in progress["by_chapter"] if c["accuracy"] < 60.0}
+    # S4.6 single-source rule: weak == accuracy < 50% with >= 3 graded answers
+    # (knowledge.WEAK_THRESHOLD_PCT / MIN_ATTEMPTS via services.weakness).
+    weak = {
+        c["chapter"] for c in progress["by_chapter"] if c["accuracy"] < 50.0 and c["asked"] >= 3
+    }
     assert set(progress["weak_chapters"]) == weak
 
 

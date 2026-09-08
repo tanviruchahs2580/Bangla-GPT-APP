@@ -5,6 +5,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
 from bangla_gpt_api.config import Settings
@@ -238,6 +239,17 @@ def test_production_boot_guard_refuses_insecure_settings(tmp_path) -> None:
                 admin_password="short12",
             )
         )
+    with pytest.raises(RuntimeError, match="PII_ENC_KEY"):
+        create_app(
+            Settings(
+                env="production",
+                database_url=f"sqlite:///{tmp_path}/prod-guard-nokey.db",
+                jwt_secret="x" * 40,
+                admin_email="a@b.com",
+                admin_password="longenoughpass1",
+                allowed_origins="https://app.example.com",
+            )
+        )
     app = create_app(
         Settings(
             env="production",
@@ -245,6 +257,8 @@ def test_production_boot_guard_refuses_insecure_settings(tmp_path) -> None:
             jwt_secret="x" * 40,
             admin_email="a@b.com",
             admin_password="longenoughpass1",
+            allowed_origins="https://app.example.com",  # CORS allowlist required in prod (S0.5)
+            pii_enc_key=Fernet.generate_key().decode(),  # PII encryption required in prod (S5.6)
         )
     )
     assert app.title == "Bangla GPT API"

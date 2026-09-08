@@ -50,4 +50,5 @@ export const ROLE_HOME: Record<string, string> = {
   teacher: '/teacher',
   parent: '/parent',
   admin: '/admin',
+  school_admin: '/school',
 }

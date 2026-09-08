@@ -38,7 +38,9 @@ def main() -> int:
             if integrity != "ok":
                 return 1
             for table in ("users", "students", "quiz_attempts", "password_resets"):
-                count = connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                count = connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[
+                    0
+                ]
                 print(f"rows[{table}]: {count}")
         finally:
             connection.close()

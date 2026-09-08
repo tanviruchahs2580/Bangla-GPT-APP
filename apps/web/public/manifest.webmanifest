@@ -4,8 +4,8 @@
   "description": "NCTB পাঠ্যবই-ভিত্তিক বাংলা AI টিউটর",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f5f7fb",
-  "theme_color": "#0f6b4f",
+  "background_color": "#f4f6fd",
+  "theme_color": "#4353b8",
   "lang": "bn",
   "dir": "ltr",
   "icons": [
@@ -20,6 +20,18 @@
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "maskable"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }

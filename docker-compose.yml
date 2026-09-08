@@ -2,6 +2,7 @@
 
 # Profiles:
 #   core        Ã¢â‚¬â€œ api + redis            (docker compose --profile core up -d)
+#   worker      Ã¢â‚¬â€œ ARQ cron worker        (add --profile worker; set JOBS_BACKEND=arq)
 #   web         Ã¢â‚¬â€œ static dashboard       (add --profile web)
 #   tls         Ã¢â‚¬â€œ Caddy auto-HTTPS proxy (add --profile tls; requires DOMAIN/ACME_EMAIL)
 #   postgres    Ã¢â‚¬â€œ Postgres service       (add --profile postgres)
@@ -43,6 +44,7 @@ services:
       RATE_LIMIT_BACKEND: ${RATE_LIMIT_BACKEND:-redis}
       RATE_LIMIT_FAIL_OPEN: ${RATE_LIMIT_FAIL_OPEN:-false}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      JOBS_BACKEND: ${JOBS_BACKEND:-inline}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -76,6 +78,34 @@ services:
     command: ["redis-server", "--save", "", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
     # Not exposed to the host on purpose.
 
+  # S5.4: ARQ cron worker. Run INSTEAD of the in-process loops: set
+  # JOBS_BACKEND=arq on the api service so its web workers stop scheduling,
+  # and start exactly ONE of these (job_runs still guarantees no double runs).
+  worker:
+    build: .
+    image: ghcr.io/tanviruchahs2580/bangla-gpt-app/api:${API_TAG:-local}
+    profiles: [worker]
+    restart: unless-stopped
+    working_dir: /app/apps/api
+    command: ["arq", "worker.WorkerSettings"]
+    environment:
+      ENV: ${ENV:-production}
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////data/app.db}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      JOBS_BACKEND: arq
+      SMTP_ENABLED: ${SMTP_ENABLED:-false}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - api_data:/data
+    depends_on:
+      redis:
+        condition: service_started
+
   web:
     build:
       context: ./apps/web
@@ -108,15 +138,27 @@ services:
       - web
 
   postgres:
-    image: postgres:16-alpine
+    # S5.7: postgres 16 + pgBackRest binary (archive-push runs inside this
+    # container); the pgbackrest sidecar shares the socket + repo volumes.
+    build: ./deploy/postgres
     profiles: [postgres]
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-bgpt}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
       POSTGRES_DB: ${POSTGRES_DB:-bgpt}
+    command:
+      [
+        "postgres",
+        "-c", "wal_level=replica",
+        "-c", "archive_mode=on",
+        "-c", "archive_command=pgbackrest --stanza=bgpt archive-push %p",
+        "-c", "archive_timeout=60",
+      ]
     volumes:
       - pg_data:/var/lib/postgresql/data
+      - pg_sock:/var/run/postgresql
+      - pgbackrest_repo:/repo
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
@@ -160,9 +202,34 @@ services:
       - backup_data:/backups
       - ./scripts:/srv/scripts:ro
 
+  pgbackrest:
+    # S5.7: nightly pgBackRest full backups (WAL archiving runs continuously
+    # via the postgres service's archive_command, so effective RPO is
+    # minutes, not a day). Restore drill: scripts/pgbackrest_drill.sh.
+    build: ./deploy/postgres
+    profiles: [backup]
+    restart: unless-stopped
+    user: postgres  # peer auth against the shared socket as the postgres role
+    depends_on:
+      postgres:
+        # `required: false` so `--profile backup` alone still parses; real
+        # deploys enable both profiles (postgres + backup).
+        condition: service_healthy
+        required: false
+    environment:
+      PGBR_STANZA: ${PGBR_STANZA:-bgpt}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+    entrypoint: ["/usr/local/bin/pgbackrest_nightly.sh"]
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - pg_sock:/var/run/postgresql
+      - pgbackrest_repo:/repo
+
 volumes:
   api_data:
   pg_data:
+  pg_sock:
+  pgbackrest_repo:
   caddy_data:
   caddy_config:
   backup_data:

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   BookOpen,
+  Download,
   GraduationCap,
   Home,
   User,
@@ -12,8 +13,11 @@ import {
   LogOut,
 } from 'lucide-react'
 import { useAuth } from './AuthContext'
+import { exitImpersonation, isImpersonating } from './api'
+import { SearchBox } from './components/SearchBox'
 import { getLang, onLangChange, setLang, t } from './i18n'
 import { toggleTheme, currentTheme } from './lib/theme'
+import { canInstall, onInstallChange, promptInstall } from './lib/installPrompt'
 
 const STUDENT_NAV = [
   { to: '/student', end: true, label: 'home', icon: Home },
@@ -43,16 +47,54 @@ export function OfflineBanner() {
   )
 }
 
+export function ImpersonationBanner() {
+  const { me } = useAuth()
+  const [ending, setEnding] = useState(false)
+  if (!isImpersonating()) return null
+  return (
+    <div
+      role="status"
+      style={{
+        background: 'var(--brand)',
+        color: '#fff',
+        padding: '8px 16px',
+        display: 'flex',
+        gap: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexWrap: 'wrap',
+      }}
+    >
+      <span>{t('actingAs', { name: me?.name ?? me?.email ?? '?' })}</span>
+      <button
+        className="small"
+        disabled={ending}
+        onClick={async () => {
+          setEnding(true)
+          await exitImpersonation()
+          window.location.assign('/')
+        }}
+      >
+        {t('exitImpersonation')}
+      </button>
+    </div>
+  )
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { me, signOut } = useAuth()
   const [, force] = useState(0)
   useEffect(() => onLangChange(() => force((n) => n + 1)), [])
   const navigate = useNavigate()
   const dark = currentTheme() === 'dark'
+  // S1.14: show the install affordance only when Chromium offers it
+  const [installable, setInstallable] = useState(canInstall())
+  useEffect(() => onInstallChange(() => setInstallable(canInstall())), [])
 
   return (
     <div className="shell">
       <OfflineBanner />
+      <ImpersonationBanner />
       <header className="topbar">
         <button
           className="brand"
@@ -64,11 +106,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </span>
           {t('appName')}
         </button>
+        {me?.role === 'student' && <SearchBox />}
         <nav className="row-flex" style={{ gap: '8px' }}>
           {me && (
             <span className="muted" style={{ fontSize: 'var(--fs-sm)' }}>
               {me.name ?? me.email}
             </span>
+          )}
+          {installable && (
+            <button className="icon-btn" aria-label={t('installApp')} onClick={() => void promptInstall()}>
+              <Download size={18} aria-hidden />
+            </button>
           )}
           <button
             className="icon-btn"

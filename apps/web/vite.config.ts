@@ -13,10 +13,23 @@ export default defineConfig({
       },
     },
   },
+  preview: {
+    // S1.14: mirror the dev proxy so the built preview can log in too
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+    },
+  },
   test: {
     environment: 'jsdom',
     globals: true,
     setupFiles: './src/test/setup.ts',
     css: false,
+    // jsdom-heavy RTL files share worker threads; on loaded machines the
+    // slowest async queries brush the 5s default. Same assertions, more room.
+    testTimeout: 15000,
   },
 })

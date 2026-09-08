@@ -125,6 +125,7 @@ export async function postStream<T>(
   path: string,
   body: unknown,
   onToken: (text: string) => void,
+  options?: { signal?: AbortSignal },
 ): Promise<T> {
   const headers = new Headers({ 'Content-Type': 'application/json' })
   const token = getToken()
@@ -133,6 +134,7 @@ export async function postStream<T>(
     method: 'POST',
     headers,
     body: JSON.stringify(body),
+    signal: options?.signal,
   })
   if (!res.ok || !res.headers.get('content-type')?.includes('text/event-stream')) {
     throw new ApiError(res.status, 'stream unavailable', 'llm_unavailable')
@@ -208,29 +210,20 @@ export async function generateInviteCode(): Promise<{ code: string; expires_in_m
   return post('/students/me/invite-code')
 }
 
-let meCache: MeResponse | null = null
-
 export async function fetchMe(): Promise<MeResponse | null> {
   if (!getToken()) {
-    meCache = null
     return null
   }
   try {
-    meCache = await get<MeResponse>('/users/me')
-    return meCache
+    return await get<MeResponse>('/users/me')
   } catch {
     logout()
     return null
   }
 }
 
-export function cachedMe(): MeResponse | null {
-  return meCache
-}
-
 export function logout(): void {
   localStorage.removeItem(TOKEN_KEY)
-  meCache = null
 }
 
 /* -------- Learn catalog (grounded corpus) -------- */
@@ -256,3 +249,78 @@ export const getChapterContent = (
       chapter,
     )}${classLevel ? `?class_level=${classLevel}` : ''}`,
   )
+
+export const getLearnProgress = (subject?: string, classLevel?: number) => {
+  const qs = new URLSearchParams()
+  if (subject) qs.set('subject', subject)
+  if (classLevel) qs.set('class_level', String(classLevel))
+  const q = qs.toString() ? `?${qs}` : ''
+  return get<import('./types').ChapterProgressOut[]>(`/learn/progress${q}`)
+}
+
+export const upsertLearnProgress = (payload: {
+  subject: string
+  chapter: string
+  class_level: number
+  read_pct?: number
+  completed?: boolean
+  bookmarked?: boolean
+}) => post<import('./types').ChapterProgressOut>('/learn/progress', payload)
+
+/* -------- S5.10 support ops -------- */
+
+const ADMIN_TOKEN_KEY = 'bgpt_admin_token_backup'
+const IMP_ACTIVE_KEY = 'bgpt_impersonating'
+
+export interface ImpersonateOut {
+  access_token: string
+  user_id: number
+  role: string
+  expires_in_min: number
+}
+
+/**
+ * Admin mints a short-lived support token for a target user. The admin's own
+ * token is kept aside so `exitImpersonation` can restore it; every request in
+ * between runs as the impersonated user (the server audits start and exit).
+ */
+export async function startImpersonation(userId: number, reason: string): Promise<ImpersonateOut> {
+  const adminToken = getToken()
+  const res = await post<ImpersonateOut>(`/admin/users/${userId}/impersonate`, { reason })
+  if (adminToken) localStorage.setItem(ADMIN_TOKEN_KEY, adminToken)
+  localStorage.setItem(IMP_ACTIVE_KEY, String(res.user_id))
+  localStorage.setItem(TOKEN_KEY, res.access_token)
+  return res
+}
+
+export function isImpersonating(): boolean {
+  return localStorage.getItem(IMP_ACTIVE_KEY) !== null
+}
+
+/**
+ * Revokes the impersonation token server-side (POST /auth/impersonate/exit)
+ * and puts the admin's own token back. The revoke is what makes the exit
+ * real; the 15-min token expiry is only the backstop.
+ */
+export async function exitImpersonation(): Promise<void> {
+  try {
+    await post<void>('/auth/impersonate/exit')
+  } catch {
+    /* expired or already-revoked tokens still leave the local state fixable */
+  }
+  const adminToken = localStorage.getItem(ADMIN_TOKEN_KEY)
+  if (adminToken) localStorage.setItem(TOKEN_KEY, adminToken)
+  localStorage.removeItem(ADMIN_TOKEN_KEY)
+  localStorage.removeItem(IMP_ACTIVE_KEY)
+}
+
+export const getFeedbackQueue = (status: 'open' | 'all', limit = 20, offset = 0) =>
+  get<import('./types').FeedbackQueuePage>(
+    `/admin/feedback?status=${status}&limit=${limit}&offset=${offset}`,
+  )
+
+export const triageFeedback = (id: number, payload: { triaged: boolean; note?: string }) =>
+  patch<import('./types').FeedbackAdminRow>(`/admin/feedback/${id}`, payload)
+
+export const getStatus = () => get<import('./types').StatusOut>('/status')
+

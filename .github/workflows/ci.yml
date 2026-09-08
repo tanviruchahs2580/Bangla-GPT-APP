@@ -151,6 +151,12 @@ jobs:
       - name: Install dependencies (npm ci)
         run: npm ci
 
+      # S5.6: gate the shipped dependency set (the deployed image is static
+      # nginx; vite/esbuild dev-server advisories are dev-machine-only and
+      # triaged in docs/security_scans.md -- run a full `npm audit` there too).
+      - name: Dependency audit (npm audit, prod deps)
+        run: npm audit --audit-level=high --omit=dev
+
       - name: Unit tests (vitest)
         run: npx vitest run --no-file-parallelism
 

@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Download, KeyRound, LogOut, Moon, Sun, Trash2 } from 'lucide-react'
-import { apiBase, del, generateInviteCode } from '../../api'
+import { useQuery } from '@tanstack/react-query'
+import { Download, Flame, KeyRound, LogOut, Moon, Sun, Trash2 } from 'lucide-react'
+import { apiBase, del, generateInviteCode, get } from '../../api'
+import type { ActivitySummary } from '../../types'
 import { useAuth } from '../../AuthContext'
 import { Badge, Button, Card } from '../../components/ui'
 import { friendlyError } from '../../errors'
 import { getLang, setLang, t } from '../../i18n'
+import { getLowData, toggleLowData } from '../../lib/lowData'
 import { currentTheme, toggleTheme } from '../../lib/theme'
 
 export default function MePage() {
@@ -18,6 +21,15 @@ export default function MePage() {
   const [inviteBusy, setInviteBusy] = useState(false)
   const [inviteError, setInviteError] = useState<string | null>(null)
   const dark = currentTheme() === 'dark'
+  // S1.13: low-data mode (skip images + short tutor answers)
+  const [lowData, setLowDataState] = useState(getLowData())
+
+  // S1.9: daily practice heatmap + streak (GitHub-style grid).
+  const { data: activity } = useQuery({
+    queryKey: ['activity', me?.profile_id],
+    queryFn: () => get<ActivitySummary>(`/students/${me?.profile_id}/activity`),
+    enabled: me?.role === 'student' && me?.profile_id != null,
+  })
 
   const createInvite = async () => {
     setInviteBusy(true)
@@ -70,6 +82,38 @@ export default function MePage() {
           </Button>
         </div>
       </Card>
+
+      {me?.role === 'student' && activity && (
+        <Card>
+          <div className="card-title">{t('activityTitle')}</div>
+          <div className="row-flex" style={{ gap: 'var(--space-3)' }}>
+            <span className="quick-icon" style={{ width: 44, height: 44, borderRadius: 14 }}>
+              <Flame size={20} aria-hidden />
+            </span>
+            <div className="row-main">
+              <div className="row-title">{t('streakLabel', { days: activity.streak })}</div>
+              <div className="row-sub">{t('activityHint')}</div>
+            </div>
+          </div>
+          <div
+            className="heatmap"
+            data-testid="activity-heatmap"
+            aria-label={t('streakLabel', { days: activity.streak })}
+          >
+            {activity.days.map((d) => {
+              const total = d.questions + d.quizzes
+              const lvl = total === 0 ? 0 : total <= 2 ? 1 : total <= 5 ? 2 : 3
+              const title = [
+                d.date,
+                t('activityQuestions', { n: d.questions }),
+                t('activityQuizzes', { n: d.quizzes }),
+                t('activityMinutes', { n: d.minutes }),
+              ].join(' · ')
+              return <span key={d.date} className={`heat-cell lvl-${lvl}`} title={title} />
+            })}
+          </div>
+        </Card>
+      )}
 
       {me?.role === 'student' && (
         <Card>
@@ -124,6 +168,19 @@ export default function MePage() {
           <button className="icon-btn" aria-label={t('darkMode')} onClick={() => { toggleTheme(); navigate(0) }}>
             {dark ? <Sun size={18} aria-hidden /> : <Moon size={18} aria-hidden />}
           </button>
+        </div>
+        <div className="row-flex" style={{ justifyContent: 'space-between', marginTop: 'var(--space-3)' }}>
+          <div>
+            <div style={{ fontWeight: 600 }}>{t('lowDataTitle')}</div>
+            <div className="muted" style={{ fontSize: 'var(--fs-sm)' }}>{t('lowDataHint')}</div>
+          </div>
+          <button
+            className="switch"
+            role="switch"
+            aria-checked={lowData}
+            aria-label={t('lowDataTitle')}
+            onClick={() => setLowDataState(toggleLowData())}
+          />
         </div>
       </Card>
 

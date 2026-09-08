@@ -20,7 +20,9 @@ import httpx
 def percentile(sorted_values: list[float], pct: float) -> float:
     if not sorted_values:
         return float("nan")
-    index = min(len(sorted_values) - 1, max(0, round(pct / 100 * len(sorted_values)) - 1))
+    index = min(
+        len(sorted_values) - 1, max(0, round(pct / 100 * len(sorted_values)) - 1)
+    )
     return sorted_values[index]
 
 
@@ -47,7 +49,9 @@ def main() -> int:
             },
         )
         assert register.status_code == 201, register.text
-        login = client.post("/auth/login", json={"email": email, "password": "probe-pass-123"})
+        login = client.post(
+            "/auth/login", json={"email": email, "password": "probe-pass-123"}
+        )
         token = login.json()["access_token"]
         auth_headers = {"Authorization": f"Bearer {token}"}
 
@@ -58,7 +62,11 @@ def main() -> int:
                 response = call.post(
                     "/tutor/ask",
                     headers=auth_headers,
-                    json={"question": "কোষ কী?", "class_level": 6, "subject": "science"},
+                    json={
+                        "question": "কোষ কী?",
+                        "class_level": 6,
+                        "subject": "science",
+                    },
                 )
             else:
                 response = call.get("/health")
@@ -78,8 +86,7 @@ def main() -> int:
         ):
             started = time.perf_counter()
             futures = [
-                pool.submit(one_request, client, i % 10 < 7)
-                for i in range(args.reqs)
+                pool.submit(one_request, client, i % 10 < 7) for i in range(args.reqs)
             ]
             for future in futures:
                 results.append(future.result())

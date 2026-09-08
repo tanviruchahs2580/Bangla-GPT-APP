@@ -1,0 +1,13 @@
+{
+ "recorded_by": "eval-v2 --write-baseline",
+ "metrics": {
+  "total": 634,
+  "grounded_rate": 0.9984,
+  "coverage_true": 0.9984,
+  "coverage_false": 1.0,
+  "precision_true": 1.0,
+  "faithfulness_avg": 0.8548,
+  "faithfulness_mode": "local_overlap",
+  "grammar_avg": 0.9008
+ }
+}

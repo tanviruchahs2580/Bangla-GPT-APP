@@ -16,7 +16,7 @@ export default function ParentDashboard() {
   const loadChildren = useCallback(() => {
     get<StudentBrief[]>('/parents/me/children')
       .then(setChildren)
-      .catch((err: Error) => setError(err.message))
+      .catch((err: unknown) => setError(friendlyError((err as { rawDetail?: unknown }).rawDetail)?.text ?? t('errorGeneric')))
   }, [])
 
   useEffect(() => {
@@ -30,7 +30,7 @@ export default function ParentDashboard() {
     }
     get<StudentProgress>(`/parents/me/children/${selected}/progress`)
       .then(setProgress)
-      .catch((err: Error) => setError(err.message))
+      .catch((err: unknown) => setError(friendlyError((err as { rawDetail?: unknown }).rawDetail)?.text ?? t('errorGeneric')))
   }, [selected])
 
   async function link(e: React.FormEvent) {
@@ -46,7 +46,7 @@ export default function ParentDashboard() {
       setCode('')
       loadChildren()
     } catch (err) {
-      setError(friendlyError((err as { code?: string }).code ?? 'invalid_invite').text)
+      setError(friendlyError((err as { rawDetail?: unknown }).rawDetail)?.text ?? t('errorGeneric'))
     } finally {
       setBusy(false)
     }

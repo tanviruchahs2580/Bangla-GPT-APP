@@ -1096,11 +1096,6 @@ table.data th {
   border: 0;
 }
 
-/* Markdown / katex */
-.katex {
-  font-size: 1.1em;
-}
-
 /* Responsive */
 @media (min-width: 760px) {
   .stat-grid {
@@ -1116,4 +1111,222 @@ table.data th {
   .hero {
     padding: var(--space-5);
   }
+}
+
+/* S1.4 — structured tutor answer sections */
+.structured-answer section {
+  margin-bottom: var(--space-3);
+}
+.structured-answer .section-label {
+  margin: 0 0 2px;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--brand);
+}
+.structured-answer ul {
+  margin: 0;
+  padding-left: var(--space-4);
+}
+.structured-answer .check-question {
+  margin-bottom: 0;
+  padding-top: var(--space-2);
+  border-top: 1px dashed var(--line);
+  font-weight: 600;
+}
+
+/* S1.6 — source chip is now a button (evidence modal trigger) */
+button.source-chip {
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+button.source-chip:hover {
+  filter: brightness(0.95);
+}
+/* S1.9: GitHub-style daily activity heatmap (MePage). */
+.heatmap {
+  display: grid;
+  grid-template-rows: repeat(7, 12px);
+  grid-auto-flow: column;
+  grid-auto-columns: 12px;
+  gap: 3px;
+  justify-content: start;
+  margin-top: var(--space-3);
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+.heat-cell {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--brand) 8%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--brand) 14%, transparent);
+}
+.heat-cell.lvl-1 { background: color-mix(in srgb, var(--brand) 30%, transparent); outline-color: transparent; }
+.heat-cell.lvl-2 { background: color-mix(in srgb, var(--brand) 55%, transparent); outline-color: transparent; }
+.heat-cell.lvl-3 { background: var(--brand); outline-color: transparent; }
+
+/* S1.11: global search box + results dropdown */
+.searchbox {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  max-width: 260px;
+  margin-inline: var(--space-2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.searchbox > svg { color: var(--muted); flex: none; }
+.searchbox .search-input {
+  width: 100%;
+  padding: 6px 10px 6px 2px;
+  font-size: var(--fs-sm);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elev);
+  color: var(--ink);
+}
+.search-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 18%);
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.search-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  color: var(--ink);
+  font: inherit;
+}
+.search-item:hover { background: color-mix(in srgb, var(--brand) 12%, transparent); }
+.search-kind {
+  font-size: var(--fs-xs);
+  color: var(--brand);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.search-title { font-size: var(--fs-sm); }
+.search-sub { font-size: var(--fs-xs); color: var(--muted); }
+.search-empty { padding: 10px 12px; font-size: var(--fs-sm); color: var(--muted); }
+@media (max-width: 560px) { .searchbox { max-width: 150px; } }
+
+/* S1.12: voice-input mic button (bn-BD Web Speech API) */
+.voice-btn { flex: none; }
+.voice-live { color: var(--danger); animation: voice-pulse 1.2s var(--ease) infinite; }
+@keyframes voice-pulse { 50% { opacity: 0.45; } }
+
+/* S1.13: low-data mode */
+.switch {
+  width: 40px;
+  height: 22px;
+  flex: none;
+  border-radius: var(--radius);
+  background: var(--line);
+  border: none;
+  cursor: pointer;
+  position: relative;
+  transition: background var(--m-fast) var(--ease);
+}
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--card);
+  transition: transform var(--m-fast) var(--ease);
+}
+.switch[aria-checked='true'] {
+  background: var(--brand);
+}
+.switch[aria-checked='true']::after {
+  transform: translateX(18px);
+}
+[data-lowdata='1'] img {
+  display: none;
+}
+[data-lowdata='1'] .skeleton {
+  animation: none;
+}
+
+/* S2.6 lesson-plan print view: only the plan reaches the page. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .lesson-print,
+  .lesson-print * {
+    visibility: visible;
+  }
+  .lesson-print {
+    position: absolute;
+    inset: 0 0 auto 0;
+    width: 100%;
+    padding: 0;
+  }
+  .lesson-print textarea {
+    border: none;
+    background: transparent;
+    resize: none;
+    overflow: hidden;
+    color: #000;
+    font-size: 12pt;
+  }
+  .lesson-print .lp-no-print {
+    display: none !important;
+  }
+}
+
+/* S2.7: weakness heatmap cells -- token colors only (R5: no new tokens). */
+.wm-cell {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.wm-bad {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.wm-mid {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.wm-good {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.wm-na {
+  color: var(--muted);
+}
+
+/* S4.5 adaptive practice: KG-grounded re-teach cards on the quiz flow. */
+.reteach-card {
+  border-left: 3px solid var(--brand);
+}
+.reteach-item {
+  border-top: 1px solid var(--line);
+  padding-top: var(--space-2);
+}
+.reteach-excerpt {
+  margin: var(--space-1) 0 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
 }

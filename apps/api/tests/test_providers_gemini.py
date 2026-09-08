@@ -119,6 +119,26 @@ async def test_non_retryable_client_error_does_not_retry() -> None:
     assert len(calls) == 1
 
 
+async def test_stream_error_after_retries_raises_provider_error() -> None:
+    # Regression: the stream error path passed a parsed dict into the
+    # Response-shaped _error_message helper, crashing with AttributeError
+    # instead of ProviderError -- which escaped the SSE handler's
+    # `except ProviderError` and killed the connection mid-stream.
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _error_response(429, "Resource has been exhausted", "RESOURCE_EXHAUSTED")
+
+    provider = GeminiProvider(
+        api_key="k",
+        model=MODEL,
+        timeout_seconds=5.0,
+        max_retries=0,
+        transport=httpx.MockTransport(handler),
+    )
+    with pytest.raises(ProviderError, match="Gemini API error 429"):
+        async for _ in provider.stream("q"):
+            pass
+
+
 async def test_blocked_candidate_raises() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(

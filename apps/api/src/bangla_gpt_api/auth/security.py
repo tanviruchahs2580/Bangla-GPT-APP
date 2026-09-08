@@ -32,13 +32,26 @@ def verify_password(password: str, stored: str) -> bool:
     return hmac.compare_digest(candidate, expected)
 
 
-def create_access_token(user: User, *, settings: Settings, minutes: int | None = None) -> str:
+def create_access_token(
+    user: User,
+    *,
+    settings: Settings,
+    minutes: int | None = None,
+    extra_claims: dict[str, object] | None = None,
+    jti: str | None = None,
+) -> str:
     expires_delta = timedelta(minutes=settings.jwt_expire_minutes if minutes is None else minutes)
-    payload = {
+    payload: dict[str, object] = {
         "sub": str(user.id),
         "role": user.role,
         "exp": datetime.now(UTC) + expires_delta,
     }
+    if jti is not None:
+        # S5.10: impersonation tokens carry an id so a live session can be
+        # revoked before its (short) expiry through the shared cache deny-list.
+        payload["jti"] = jti
+    if extra_claims:
+        payload.update(extra_claims)
     return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 
 

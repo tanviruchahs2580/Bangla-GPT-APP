@@ -4,8 +4,15 @@
  *  - Navigations: network-first, offline fallback page.
  *  - API calls: never cached.
  */
-const CACHE = 'bgpt-v1';
-const SHELL = ['/', '/index.html', '/icon.svg'];
+const CACHE = 'bgpt-v2';
+const SHELL = [
+  '/',
+  '/index.html',
+  '/icon.svg',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/manifest.webmanifest',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

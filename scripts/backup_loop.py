@@ -58,7 +58,11 @@ def backup_sqlite(database_url: str, dest_dir: Path) -> Path:
         source.close()
 
     integrity = subprocess.run(
-        [sys.executable, "-c", f"import sqlite3;c=sqlite3.connect({str(target)!r});print(c.execute('PRAGMA integrity_check').fetchone()[0])"],
+        [
+            sys.executable,
+            "-c",
+            f"import sqlite3;c=sqlite3.connect({str(target)!r});print(c.execute('PRAGMA integrity_check').fetchone()[0])",
+        ],
         capture_output=True,
         text=True,
         check=True,
@@ -111,7 +115,9 @@ def run_once() -> None:
 
     if offsite:
         result = subprocess.run(["sh", "-c", offsite], check=False)
-        status = "completed" if result.returncode == 0 else f"failed rc={result.returncode}"
+        status = (
+            "completed" if result.returncode == 0 else f"failed rc={result.returncode}"
+        )
         logger.info("offsite sync %s", status)
 
 

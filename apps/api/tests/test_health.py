@@ -81,4 +81,7 @@ def test_mock_provider_quotes_evidence_without_markup() -> None:
     out = asyncio.run(provider.generate(prompt, system="SYSTEM-PROMPT-TEXT"))
     assert "SYSTEM-PROMPT-TEXT" not in out
     assert "<evidence>" not in out and "<user_question>" not in out
-    assert "কোষ হলো ক্ষুদ্রতম একক।" in out
+    # S1.4: the mock returns the evidence in sectioned layout; sentences are split
+    # on the danda, so assert the clause text itself is quoted.
+    assert "কোষ হলো ক্ষুদ্রতম একক" in out
+    assert "সহজ ব্যাখ্যা:" in out and "মূল বিষয়:" in out

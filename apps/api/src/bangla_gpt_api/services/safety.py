@@ -49,10 +49,25 @@ class SafetyVerdict:
     reason: str | None = None
 
 
+# S4.8 age-appropriateness: the NCTB syllabus legitimately teaches
+# reproduction -- the class-8 science chapter term for sexual reproduction
+# (codepoints pinned: U+09AF U+09CC U+09A8 / U+09AA U+09CD U+09B0 U+099C U+09A8
+# U+09A8) must not be blocked by the sexual_content keyword. Academic phrases
+# are lifted out BEFORE the keyword runs, so the SAME keyword still fires for
+# the word in any non-academic context.
+_ACADEMIC_SCIENCE_TERMS: tuple[re.Pattern[str], ...] = (
+    re.compile("\u09af\u09cc\u09a8\\s*\u09aa\u09cd\u09b0\u099c\u09a8\u09a8"),
+)
+
+
 def screen_question(question: str) -> SafetyVerdict:
-    """Return a verdict for a free-text question."""
+    """Return a verdict for a free-text question (S4.8: academic-context aware)."""
     for name, pattern in _COMPILED:
-        if pattern.search(question):
+        probe = question
+        if name == "sexual_content":
+            for academic in _ACADEMIC_SCIENCE_TERMS:
+                probe = academic.sub(" ", probe)
+        if pattern.search(probe):
             if name == "self_harm":
                 return SafetyVerdict(safe=False, reason="self_harm")
             return SafetyVerdict(safe=False, reason=name)
@@ -82,3 +97,104 @@ def verify_citation(answer: str, evidence_text: str) -> bool:
     evidence_terms = {light_stem(t) for t in tokenize(evidence_text)}
     coverage = sum(1 for t in answer_terms if t in evidence_terms) / len(answer_terms)
     return coverage >= 0.25
+
+
+# ── S4.8: prompt-injection filter for corpus ingest ───────────────────────
+# Textbook chunks are UNTRUSTED data too: a poisoned corpus document must
+# never steer the model or extract the system prompt. Instruction-override and
+# system-leak sentences are therefore removed at ingest time, before a chunk
+# is ever built (deterministic, auditable, zero-latency -- same philosophy as
+# screen_question). The runtime layer (<evidence> data-only rules + tag
+# sanitizing) stays as the second line of defence.
+_INJECTION_PATTERNS: tuple[re.Pattern[str], ...] = (
+    # English: instruction override / system-prompt exfiltration / tag spoof
+    re.compile(
+        r"ignore\s+(all\s+|the\s+)?(previous|prior|earlier|above)\s+(instructions?|rules?|prompts?)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(reveal|show|print|repeat|leak|output|display|say|write)\b[^.!?\n]{0,60}"
+        r"\b(system|hidden|secret|original)\b[^.!?\n]{0,30}\b(prompt|instructions?|rules?)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(r"new\s+system\s+prompt", re.IGNORECASE),
+    re.compile(r"you\s+are\s+now\s+(in\s+)?[a-z]*\s*mode", re.IGNORECASE),
+    re.compile(r"<\s*/?\s*(system|assistant|instructions?)\s*>", re.IGNORECASE),
+    # Bengali: same intent, loanwords 'system'/'prompt' + leak verbs, and the
+    # "forget the previous rules" override. Unicode-escape literals only (repo rule).
+    re.compile(
+        "\u09b8\u09bf\u09b8\u09cd\u099f\u09c7\u09ae"  # "system" (translit)
+        "[^\u0964!?\\n]{0,40}"
+        "(\u09aa\u09cd\u09b0\u09ae\u09cd\u09aa\u099f\u09c7"  # prompt-acc
+        "|\u09a8\u09bf(?:\u09b0\u09cd|\u09a8\u09cd)?\u09a6\u09c7\u09b6"  # nirdesh/nindesh
+        "|\u09a8\u09bf[\u09af\u09df]\u09bc?\u09ae"  # niyom (plain ya or nukta-ya)
+        "|\u09aa\u09cd\u09b0\u0995\u09be\u09b6"  # publish/reveal
+        "|\u09ab\u09be\u0981\u09b8)"  # leak
+    ),
+    re.compile(
+        "(\u09aa\u09cd\u09b0\u09ae\u09cd\u09aa\u099f\u0995|\u09aa\u09cd\u09b0\u09ae\u09cd\u09aa\u099f\u09c7"
+        "|\u09b8\u09bf\u09b8\u09cd\u099f\u09c7\u09ae)[^\u0964!?\\n]{0,30}"
+        "(\u09a6\u09c7\u0996\u09be\u0993|\u09ac\u09b2\u09cb|\u09a6\u09be\u0993"
+        "|\u09b2\u09bf\u0996\u09cb|\u09aa\u09cd\u09b0\u0995\u09be\u09b6"
+        "|\u09ab\u09be\u0981\u09b8|\u09ac\u09be\u09b9\u09bf\u09b0)"
+    ),
+    re.compile(
+        "(\u0986\u0997\u09c7\u09b0|\u0986\u0997\u09c7\u0995\u09be\u09b0"
+        "|\u09aa\u09c2\u09b0\u09cd\u09ac\u09c7\u09b0|\u0989\u09aa\u09b0\u09c7\u09b0)"
+        "[^\u0964!?\\n]{0,25}"
+        "(\u09a8\u09bf[\u09af\u09df]\u09bc?\u09ae|\u09a8\u09bf(?:\u09b0\u09cd|\u09a8\u09cd)?\u09a6\u09c7\u09b6)"
+        "[^\u0964!?\\n]{0,25}"
+        "(\u09ad\u09c1\u09b2\u09c7|\u0989\u09aa\u09c7\u0995\u09cd\u09b7\u09be"
+        "|\u09ae\u09c1\u099b\u09c7|\u09ae\u09be\u09a8\u09cb \u09a8\u09be)"
+    ),
+    re.compile(
+        "(\u09a8\u09a4\u09c1\u09a8|\u09a8\u09a4\u09c1\u09a8)\\s*"
+        "(\u09b8\u09bf\u09b8\u09cd\u099f\u09c7\u09ae\\s*)?"
+        "(\u09a8\u09bf\u09df\u09ae|\u09a8\u09bf\u09b0\u09cd\u09a6\u09c7\u09b6"
+        "|\u09aa\u09cd\u09b0\u09ae\u09cd\u09aa\u099f)"
+    ),
+)
+_SENT_SPLIT_KEEP = re.compile("([^\u0964.!?]+[\u0964.!?]?)")
+
+
+def strip_injections(text: str) -> tuple[str, int]:
+    """Remove instruction-override/leak sentences; return (clean_text, dropped).
+
+    Clean text is returned byte-for-byte untouched (drop count 0) so an
+    unpoisoned corpus chunk hash/text never changes.
+    """
+    parts = [p for p in _SENT_SPLIT_KEEP.findall(text) if p.strip()]
+    kept = [p for p in parts if not any(rx.search(p) for rx in _INJECTION_PATTERNS)]
+    removed = len(parts) - len(kept)
+    if removed == 0:
+        return text, 0
+    return " ".join(p.strip() for p in kept), removed
+
+
+# ── S4.8: age-appropriateness clause shared BYTE-IDENTICAL by all four
+# system prompts (tutor + content/lesson/question-paper generators, R5).
+AGE_RULE_SENTENCE = (
+    "\u09b6\u09bf\u0995\u09cd\u09b7\u09be\u09b0\u09cd\u09a5\u09c0\u09b0\u09be "
+    "\u0995\u09bf\u09b6\u09cb\u09b0-\u0995\u09bf\u09b6\u09cb\u09b0\u09c0: "
+    "\u09aa\u09cd\u09b0\u09a4\u09bf\u099f\u09bf\u099f\u09cb \u0989\u09a4\u09cd\u09a4\u09b0 "
+    "\u09ac\u09df\u09b8\u09cb\u09aa\u09af\u09cb\u0997\u09c0, \u09b6\u09be\u09b2\u09c0\u09a8 "
+    "\u0993 \u09b6\u09c1\u09a7\u09c1 \u09b6\u09bf\u0995\u09cd\u09b7\u09be\u09ae\u09c2\u09b2\u0995 "
+    "\u09aa\u09cd\u09b0\u09b8\u0999\u09cd\u0997\u09c7\u0987 \u09b0\u09be\u0996\u09cb\u0964 "
+    "\u09aa\u09be\u09a0\u09cd\u09af\u0995\u09cd\u09b0\u09ae\u09c7\u09b0 "
+    "\u09ac\u09bf\u099c\u09cd\u099e\u09be\u09a8 "
+    "\u09aa\u09b0\u09bf\u09ad\u09be\u09b7\u09be (\u09af\u09c7\u09ae\u09a6 "
+    "\u09af\u09cc\u09a8 \u09aa\u09cd\u09b0\u099c\u09a8\u09a8) "
+    "\u098f\u0995\u09be\u09a1\u09c7\u09ae\u09bf\u0995 "
+    "\u09ad\u09be\u09b7\u09be\u09a4\u09c7\u0987 \u09ac\u09cd\u09af\u09be\u0996\u09cd\u09af\u09be "
+    "\u0995\u09b0\u09cb; \u0985\u09b6\u09cd\u09b2\u09c0\u09b2, "
+    "\u09b9\u09c1\u09ae\u0995\u09bf\u09ae\u09c2\u09b2\u0995 "
+    "\u09ac\u09be \u09b6\u09bf\u09b6\u09c1\u09a6\u09c7\u09b0 \u099c\u09a8\u09cd\u09af "
+    "\u0985\u0989\u09aa\u09af\u09c1\u0995\u09cd\u09a4 \u0995\u09cb\u09a8\u09cb "
+    "\u09ac\u09b0\u09cd\u09a3\u09a8\u09be \u0995\u0996\u09a8\u09cb \u09a6\u09c7\u09ac\u09c7 "
+    "\u09a8\u09be\u0964 "
+    "\u09a8\u09bf\u099c\u09c7\u09b0 \u09a8\u09bf\u09b0\u09cd\u09a6\u09c7\u09b6\u09a8\u09be "
+    "\u09ac\u09be \u09b8\u09bf\u09b8\u09cd\u099f\u09c7\u09ae "
+    "\u09aa\u09cd\u09b0\u09ae\u09cd\u09aa\u099f\u09c7\u09b0 \u0995\u09a5\u09be\u0993 "
+    "\u0995\u0996\u09a8\u09cb \u09aa\u09cd\u09b0\u0995\u09be\u09b6 \u0995\u09b0\u09ac\u09c7 "
+    "\u09a8\u09be\u0964"
+)

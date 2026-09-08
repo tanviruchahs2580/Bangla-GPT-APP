@@ -2,7 +2,10 @@ from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-PRODUCTION_ENVS = frozenset({"production", "prod"})
+PRODUCTION_ENVS = frozenset({"production", "prod", "staging"})
+# S5.1 staging/prod parity: staging runs the SAME strict boot guard and secret
+# suppression as production (no default JWT_SECRET, no raw reset-token logs);
+# only the data is non-authoritative. Enforced by tests/test_env_parity.py.
 DEFAULT_JWT_SECRET = "dev-insecure-change-me"
 
 
@@ -26,8 +29,21 @@ class Settings(BaseSettings):
     # access legacy models like gemini-2.5-flash ("no longer available to new
     # users"). Override via GEMINI_MODEL if your account has broader access.
     gemini_model: str = "gemini-3.1-flash-lite"
+    # S4.2 model router: model serving SIMPLE routes. Empty -> the main
+    # model serves every route (routes are still decided + logged).
+    gemini_fast_model: str = ""
     llm_timeout_seconds: float = 30.0
     llm_max_retries: int = 2
+
+    # --- S4.3 RAG v2 retrieval ---
+    # "hybrid" = lexical BM25 lane + vector lane fused by reciprocal rank
+    # fusion, then lexically reranked (retrieval/hybrid_index.py).
+    # "bm25" = lexical lane only (v1 baseline).
+    retrieval_mode: str = "hybrid"
+    # Real multilingual embedding models are a staging human decision (R8).
+    # Empty -> the deterministic local hash-ngram embedder serves the vector
+    # lane; naming a model without the staging backend is a config error.
+    embedding_model: str = ""
 
     # --- persistence ---
     database_url: str = "sqlite://"
@@ -54,9 +70,16 @@ class Settings(BaseSettings):
     rate_limit_backend: str = "memory"  # memory | redis
     rate_limit_fail_open: bool = False
     redis_url: str | None = None
+    # S5.4: inline = scheduler loops inside the web process (default);
+    # arq = an external ARQ worker owns the schedule (job bodies live in jobs.py).
+    jobs_backend: str = "inline"  # inline | arq
     # Enable ONLY behind a trusted reverse proxy (Caddy/nginx) that overwrites
     # X-Forwarded-For; otherwise clients can spoof their rate-limit identity.
     trust_proxy_headers: bool = False
+    # S5.6: Fernet key (PII_ENC_KEY) for encrypting guardian phone at rest.
+    # Without it values pass through unchanged (dev/test); production boot
+    # refuses to start without a key (enforce_production_safety).
+    pii_enc_key: str | None = None
 
     # --- chat ---
     chat_history_messages: int = 8
@@ -76,6 +99,19 @@ class Settings(BaseSettings):
     smtp_user: str | None = None
     smtp_password: str | None = None
     smtp_from: str | None = None
+
+    # --- parent weekly digest (S3.4) ---
+    # Sunday ~22:00 Dhaka, once per ISO week; summary aggregates only, never
+    # conversation content. Check cadence for the in-process scheduler loop.
+    parent_digest_enabled: bool = True
+    parent_digest_check_minutes: int = 60
+
+    # --- S4.6 nightly weakness reconciliation ---
+    # Daily 03:00 Dhaka: recompute chapter-root ConceptMastery from the graded
+    # answer log (aggregate counts only, R11). Keeps the persisted per-concept
+    # mastery in sync with the rollup that Home/Teacher/Parent read.
+    weakness_refresh_enabled: bool = True
+    weakness_refresh_check_minutes: int = 60
 
     # --- data ---
     nctb_corpus_dir: str | None = None
