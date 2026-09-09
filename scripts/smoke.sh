@@ -30,7 +30,7 @@ cat > "$TMPD/ask1.json" <<'BGPT_EOF'
 {"question":"কোষ কী?","class_level":6,"subject":"science"}
 BGPT_EOF
 cat > "$TMPD/ask2_head.json" <<'BGPT_EOF'
-{"question":"এই কুইজ প্ৰশ্নের ব্যাখ্যা দাও","class_level":6,"subject":"science","explain":
+{"question":"এই কুইজ প্রশ্নের ব্যাখ্যা দাও","class_level":6,"subject":"science","explain":
 BGPT_EOF
 
 echo "→ learn subjects"

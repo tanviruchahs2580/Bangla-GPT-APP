@@ -84,7 +84,7 @@ def test_ask_with_explain_returns_grounded_answer(client: TestClient, student: d
         "/tutor/ask",
         headers=student,
         json={
-            "question": "এই কুইজ প্ৰশ্নের ব্যাখ্যা দাও",
+            "question": "এই কুইজ প্রশ্নের ব্যাখ্যা দাও",
             "class_level": 6,
             "subject": "science",
             "explain": {

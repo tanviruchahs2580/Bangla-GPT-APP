@@ -38,7 +38,7 @@ def test_grounded_sources_carry_sanitized_excerpt(client: TestClient, student: d
     r = client.post(
         "/tutor/ask",
         headers=student,
-        json={"question": "কোষের প্ৰধান অংশ কী কী?", "class_level": 6, "subject": "science"},
+        json={"question": "কোষের প্রধান অংশ কী কী?", "class_level": 6, "subject": "science"},
     )
     assert r.status_code == 200, r.text
     body = r.json()
@@ -58,7 +58,7 @@ def test_sanitized_excerpt_still_shows_textbook_text(client: TestClient, student
     r = client.post(
         "/tutor/ask",
         headers=student,
-        json={"question": "কোষের প্ৰধান অংশ কী কী?", "class_level": 6, "subject": "science"},
+        json={"question": "কোষের প্রধান অংশ কী কী?", "class_level": 6, "subject": "science"},
     )
     src = r.json()["sources"][0]
     assert "কোষ" in src["excerpt"]

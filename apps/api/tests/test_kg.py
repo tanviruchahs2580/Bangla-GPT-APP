@@ -161,7 +161,7 @@ def test_prereq_closure_transitive_depth() -> None:
 def _chunk(idx: int, chapter: str, class_level: int, subject: str = "mathematics") -> Chunk:
     return Chunk(
         id=f"c{idx}",
-        text="পাঠ্য প্ৰস্তাবনা",
+        text="পাঠ্য প্রস্তাবনা",
         meta=CurriculumMeta(
             curriculum_year=2023,
             class_level=class_level,

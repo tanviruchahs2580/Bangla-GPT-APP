@@ -242,7 +242,7 @@ class MockLLMProvider:
                 "answers": answers,
                 "marking_guide": {
                     "total_marks": n,
-                    "per_mark_note": "প্ৰতয়টি ধাপ স্পষ্ট হলে পূর্ণ নম্বর।",
+                    "per_mark_note": "প্রতিটি ধাপ স্পষ্ট হলে পূর্ণ নম্বর।",
                 },
             },
             ensure_ascii=False,
@@ -258,7 +258,7 @@ class MockLLMProvider:
                 "class_level": class_level,
                 "chapter": chapter,
                 "items": [f"অনুশীলন {i + 1}: {s[i % len(s)]}" for i in range(3)],
-                "instructions": "খাতা পৰিষ়ার লিখে, নিজের ভাষায় উত্তর দাও।",
+                "instructions": "খাতা পরিষ্কার করে লিখে, নিজের ভাষায় উত্তর দাও।",
                 "due_suggestion": "পরের দিনের ক্লাসের আগে জমা দাও।",
                 "parent_note": "আজকের হোমওয়ার্কটি শিশু নিজে লিক্বে; আপনাব শুধু দেখবেন সে লিখেছ্যে কি না।",
                 "estimated_minutes": 25,
