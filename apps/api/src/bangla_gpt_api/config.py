@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_name: str = "Bangla GPT API"
-    version: str = "0.5.0"
+    version: str = "0.6.0"
     env: str = "development"
 
     # --- LLM provider ---
@@ -60,7 +60,10 @@ class Settings(BaseSettings):
 
     # --- HTTP hardening ---
     allowed_origins: str = ""
-    max_body_bytes: int = 65536
+    # Ceiling must fit the wave-2 vision contract (up to 1_500_000 decoded
+    # bytes of base64 in one chat turn); a smaller limit makes the middleware
+    # reject a valid image turn before the route can answer image_invalid.
+    max_body_bytes: int = 4_000_000
 
     # --- rate limiting ---
     rate_limit_login_per_minute: int = 10

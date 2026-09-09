@@ -1,6 +1,6 @@
 [project]
 name = "bangla-gpt-api"
-version = "0.5.0"
+version = "0.6.0"
 description = "Bangla GPT APP - NCTB-grounded AI tutor platform (API service)"
 requires-python = ">=3.11"
 dependencies = [

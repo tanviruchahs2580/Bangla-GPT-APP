@@ -2,8 +2,21 @@
 
 **NCTB-grounded Bangla-first AI personal tutor platform.**
 
-> **Status: v0.5.0 — full multi-role platform (student + teacher + parent + admin).**
-> New in v0.5: reader with bookmarks/TTS/font-size + offline chapter copies,
+> **Status: v0.6.0 — NCTB AI Tutor blueprint release (5 roles incl. school_admin).**
+> New in v0.6: Bangladesh-green design system per the NCTB blueprint (AI-indigo
+> accent, Noto Sans Bengali), welcome screen, unified teacher **Create hub**
+> (worksheet / answer key / homework / rubric generators + async job queue
+> Queued→Generating→Validating→Ready), persisted lesson plans & document
+> library, workload-saved metric, **school_admin dashboard** (learning health,
+> at-risk list, students/teachers/classes, curriculum coverage, usage), strict
+> **school tenancy isolation**, tutor upgrades (strategy chips, numeric
+> confidence badge, image-question path, save-to-notes), AI memory + learning
+> preferences (view/edit/disable), in-app **notification bell** (short-test
+> fan-out, job-ready), persisted analytics events, admin **AI-quality board**
+> (grounding/refusal counts) and feedback triage, parent activity feed + AI
+> report sentences — plus notification bell, i18n and error-copy fixes from
+> live all-role user testing.
+> v0.5 baseline: reader with bookmarks/TTS/font-size + offline chapter copies,
 > quiz→tutor “explain this” deep-links, revision mini-quizzes + streak
 > heatmap, teacher dashboards (classrooms, CSV roster import, take-home and
 > per-student quiz assignments, AI question papers with review→finalize→PDF,
