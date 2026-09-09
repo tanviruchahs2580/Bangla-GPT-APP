@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, Check, ClipboardCheck, RefreshCcw, Repeat2 } from 'lucide-react'
 import { get, post } from '../../api'
+import { track } from '../../lib/analytics'
 import type {
   AssignmentMine,
   QuizResult,
@@ -144,6 +145,7 @@ export default function QuizPage() {
       setAnswers({})
       setCurrent(0)
       setResult(null)
+      track('quiz_started', { subject: subject, n: res.questions.length })
     } catch (e) {
       setError(friendlyError((e as { rawDetail?: unknown }).rawDetail)?.text ?? t('errorGeneric'))
     } finally {
@@ -159,6 +161,7 @@ export default function QuizPage() {
       })
       setResult(res)
       setStarted(null)
+      track('quiz_completed', { score_pct: res.score_pct, correct: res.correct, total: res.total })
       // S1.7: keep the result for the tutor explain back-link (?result=1).
       try {
         sessionStorage.setItem(LAST_RESULT_KEY, JSON.stringify(res))

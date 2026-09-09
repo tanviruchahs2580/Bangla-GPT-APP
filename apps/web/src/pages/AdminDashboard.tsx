@@ -9,6 +9,7 @@ import {
   triageFeedback,
 } from '../api'
 import { friendlyError } from '../errors'
+import { AiQualityCard } from '../components/admin/AiQualityCard'
 import { t } from '../i18n'
 import type {
   AdminOverview,
@@ -195,6 +196,8 @@ export default function AdminDashboard() {
   return (
     <>
       <h1 className="page-title">{t('adminDashboard')}</h1>
+
+      <AiQualityCard />
 
       <div className="card">
         <h2>{t('maintenance')}</h2>

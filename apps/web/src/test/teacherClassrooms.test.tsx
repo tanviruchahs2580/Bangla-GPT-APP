@@ -9,7 +9,7 @@ const apiMock = vi.hoisted(() => ({
   post: vi.fn(),
 }))
 
-vi.mock('../api', () => apiMock)
+vi.mock('../api', async (importOriginal) => ({ ...(await importOriginal<typeof import('../api')>()), ...apiMock }))
 
 const ROOMS = [
   { id: 1, class_level: 6, section: 'GEN', student_count: 2 },

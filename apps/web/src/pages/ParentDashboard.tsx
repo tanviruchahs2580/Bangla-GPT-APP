@@ -1,8 +1,26 @@
 import { useCallback, useEffect, useState } from 'react'
-import { get, post } from '../api'
+import { get, getParentReport, post } from '../api'
+import type { ParentReport } from '../api'
 import { friendlyError } from '../errors'
 import { t } from '../i18n'
-import type { StudentBrief, StudentProgress } from '../types'
+import { track } from '../lib/analytics'
+import type { ActivitySummary, StudentBrief, StudentProgress } from '../types'
+
+// Server sends a suggestion CODE + params; the client renders the sentence (i18n).
+function suggestionSentence(report: ParentReport): string {
+  const key = report.suggestion_code as Parameters<typeof t>[0]
+  const vars: Record<string, string | number> = {}
+  for (const [k, v] of Object.entries(report.suggestion_params ?? {})) {
+    vars[k] = Array.isArray(v) ? v.join(', ') : String(v ?? '')
+  }
+  try {
+    const text = t(key, vars)
+    if (text && text !== report.suggestion_code) return text
+  } catch {
+    // unknown code falls through to the raw code below
+  }
+  return report.suggestion_code
+}
 
 export default function ParentDashboard() {
   const [children, setChildren] = useState<StudentBrief[]>([])
@@ -12,6 +30,9 @@ export default function ParentDashboard() {
   const [busy, setBusy] = useState(false)
   const [selected, setSelected] = useState<number | null>(null)
   const [progress, setProgress] = useState<StudentProgress | null>(null)
+  const [activity, setActivity] = useState<ActivitySummary | null>(null)
+  const [report, setReport] = useState<ParentReport | null>(null)
+  const [period, setPeriod] = useState<'weekly' | 'monthly'>('weekly')
 
   const loadChildren = useCallback(() => {
     get<StudentBrief[]>('/parents/me/children')
@@ -26,12 +47,23 @@ export default function ParentDashboard() {
   useEffect(() => {
     if (selected === null) {
       setProgress(null)
+      setReport(null)
+      setActivity(null)
       return
     }
     get<StudentProgress>(`/parents/me/children/${selected}/progress`)
       .then(setProgress)
       .catch((err: unknown) => setError(friendlyError((err as { rawDetail?: unknown }).rawDetail)?.text ?? t('errorGeneric')))
-  }, [selected])
+    get<ActivitySummary>(`/parents/me/children/${selected}/activity`)
+      .then(setActivity)
+      .catch(() => setActivity(null))
+    getParentReport(selected, period)
+      .then((r) => {
+        setReport(r)
+        track('report_viewed', { role: 'parent', period })
+      })
+      .catch(() => setReport(null))
+  }, [selected, period])
 
   async function link(e: React.FormEvent) {
     e.preventDefault()
@@ -161,6 +193,85 @@ export default function ParentDashboard() {
               </table>
             </div>
           )}
+        </div>
+      )}
+      {selected !== null && activity && (
+        <div className="card">
+          <h2>{t('activityTitle')}</h2>
+          <p className="muted" style={{ marginTop: 0 }}>
+            {t('streakLabel', { days: activity.streak })} · {t('activityHint')}
+          </p>
+          <div className="heatmap" aria-label={t('streakLabel', { days: activity.streak })}>
+            {activity.days.map((d) => {
+              const total = d.questions + d.quizzes
+              const lvl = total === 0 ? 0 : total <= 2 ? 1 : total <= 5 ? 2 : 3
+              const title = [
+                d.date,
+                t('activityQuestions', { n: d.questions }),
+                t('activityQuizzes', { n: d.quizzes }),
+                t('activityMinutes', { n: d.minutes }),
+              ].join(' · ')
+              return <span key={d.date} className={`heat-cell lvl-${lvl}`} title={title} />
+            })}
+          </div>
+        </div>
+      )}
+      {selected !== null && report && (
+        <div className="card">
+          <h2>
+            {report.name} · {t('progressTitle')}
+          </h2>
+          <div className="chips" role="group" aria-label={t('progressTitle')} style={{ marginBottom: 'var(--space-2)' }}>
+            <button className={`chip${period === 'weekly' ? ' active' : ''}`} onClick={() => setPeriod('weekly')}>
+              {t('periodWeekly')}
+            </button>
+            <button className={`chip${period === 'monthly' ? ' active' : ''}`} onClick={() => setPeriod('monthly')}>
+              {t('periodMonthly')}
+            </button>
+          </div>
+          <div className="stat-row">
+            <div className="stat">
+              <div className="num">{report.quizzes_taken}</div>
+              <div className="lbl">{t('reportQuizzesGraded')}</div>
+            </div>
+            <div className="stat">
+              <div className="num">{report.avg_score_pct == null ? '—' : `${Math.round(report.avg_score_pct)}%`}</div>
+              <div className="lbl">{t('reportAvg')}</div>
+            </div>
+            <div className="stat">
+              <div className="num">{report.chapters_read}</div>
+              <div className="lbl">{t('reportChaptersRead')}</div>
+            </div>
+            <div className="stat">
+              <div className="num">{report.questions_asked}</div>
+              <div className="lbl">{t('reportQuestions')}</div>
+            </div>
+          </div>
+          {report.weak_chapters.length > 0 && (
+            <p style={{ margin: '8px 0 0' }}>
+              <span className="muted">{t('reportWeak')}: </span>
+              {report.weak_chapters.map((c) => (
+                <span key={c} className="badge weak">
+                  {' '}
+                  {c}
+                </span>
+              ))}
+            </p>
+          )}
+          {report.strengths.length > 0 && (
+            <p style={{ margin: '8px 0 0' }}>
+              <span className="muted">{t('reportStrengths')}: </span>
+              {report.strengths.map((c) => (
+                <span key={c} className="badge ok">
+                  {' '}
+                  {c}
+                </span>
+              ))}
+            </p>
+          )}
+          <p className="muted" style={{ margin: '8px 0 0' }}>
+            {t('reportSuggestion')}: {suggestionSentence(report)}
+          </p>
         </div>
       )}
     </>

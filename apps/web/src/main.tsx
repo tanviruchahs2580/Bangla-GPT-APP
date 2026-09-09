@@ -25,6 +25,7 @@ import { initInstallPrompt } from './lib/installPrompt'
 import { initLowData } from './lib/lowData'
 
 const LoginPage = lazy(() => import('./pages/LoginPage'))
+const WelcomePage = lazy(() => import('./pages/WelcomePage'))
 const RegisterPage = lazy(() => import('./pages/RegisterPage'))
 const ForgotResetPage = lazy(() => import('./pages/ForgotResetPage'))
 const LegalPage = lazy(() => import('./pages/LegalPage'))
@@ -88,12 +89,13 @@ function Loading() {
 
 function RoutesSwitch() {
   const { me, loading } = useAuth()
-  const home = me ? ROLE_HOME[me.role] ?? '/login' : '/login'
+  const home = me ? ROLE_HOME[me.role] ?? '/login' : '/welcome'
   if (loading) return <Loading />
 
   return (
     <Routes>
       <Route path="/" element={<Navigate to={home} replace />} />
+      <Route path="/welcome" element={me ? <Navigate to={ROLE_HOME[me.role] ?? '/login'} replace /> : <WelcomePage />} />
       <Route path="/login" element={me ? <Navigate to={home} replace /> : <LoginPage />} />
       <Route path="/register" element={me ? <Navigate to={home} replace /> : <RegisterPage />} />
       <Route path="/forgot" element={<ForgotResetPage />} />

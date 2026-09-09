@@ -14,6 +14,8 @@ export interface AskResponse {
   sources: SourceRef[]
   refused_reason?: string | null
   citation_verified?: boolean | null
+  // Wave 2: numeric grounding confidence 0-1 (null = pre-wave answer)
+  confidence?: number | null
 }
 
 export interface ConversationOut {
@@ -92,6 +94,8 @@ export interface ChatMessage {
   grounded?: boolean | null
   refused_reason?: string | null
   sources: SourceRef[]
+  // Wave 2: numeric confidence from the SSE done event
+  confidence?: number | null
   rating?: number | null
   created_at?: string
 }

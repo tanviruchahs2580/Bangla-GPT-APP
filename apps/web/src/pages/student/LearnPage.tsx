@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { BookOpen, Download, FileText } from 'lucide-react'
 import { getChapterContent, getLearnProgress, getSubjectChapters, getSubjects, post, upsertLearnProgress } from '../../api'
+import { track } from '../../lib/analytics'
 import type { AskResponse, ChapterSummaryOut, QuizResult, QuizStarted, SubjectOut } from '../../types'
 import { useAuth } from '../../AuthContext'
 import { Card } from '../../components/ui'
@@ -127,7 +128,10 @@ export function LearnPage() {
                         {t('preview')}: {ch.excerpt}
                       </div>
                     </div>
-                    <button className="btn btn-soft btn-sm" onClick={() => navigate(`/student/learn/${encodeURIComponent(activeSubject)}/${encodeURIComponent(ch.chapter)}?class=${selected}`)}>
+                    <button className="btn btn-soft btn-sm" onClick={() => {
+                      track('chapter_open', { subject: activeSubject, chapter: ch.chapter })
+                      navigate(`/student/learn/${encodeURIComponent(activeSubject)}/${encodeURIComponent(ch.chapter)}?class=${selected}`)
+                    }}>
                       {t('readConcept')}
                     </button>
                   </Card>
@@ -206,6 +210,7 @@ export function LearnChapterPage() {
     if (!query.data || !subject || !chapter || !classLevel) return
     const t = setTimeout(() => {
       upsertLearnProgress({ subject, chapter, class_level: classLevel, read_pct: 40 }).catch(() => {})
+      track('chapter_read', { subject, chapter })
     }, 1500)
     const onScroll = () => {
       const pct = Math.min(100, Math.round((window.scrollY / Math.max(1, document.body.scrollHeight - window.innerHeight)) * 100))

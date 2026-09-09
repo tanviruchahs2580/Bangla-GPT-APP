@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ArrowLeft, BookOpenText, Check, MessageSquarePlus, Pencil, Search, Send, ThumbsUp, ThumbsDown, Trash2, X } from 'lucide-react'
-import { del, get, patch, post, postStream } from '../../api'
+import { ArrowLeft, BookOpenText, Bookmark, Check, MessageSquarePlus, Paperclip, Pencil, RefreshCcw, Search, Send, Square, ThumbsUp, ThumbsDown, Trash2, X } from 'lucide-react'
+import { createNote, del, get, patch, post, postStream } from '../../api'
 import type { ChatDoneEvent, ChatMessage, ConversationOut, MessageSearchHit, SourceRef } from '../../types'
 import { useAuth } from '../../AuthContext'
 import { Badge, Button, Card } from '../../components/ui'
@@ -10,6 +10,7 @@ import { VoiceButton } from '../../components/VoiceButton'
 import { friendlyError } from '../../errors'
 import { t } from '../../i18n'
 import { getLowData } from '../../lib/lowData'
+import { track } from '../../lib/analytics'
 import { explainMessage, type QuizExplainPayload } from '../../lib/quizExplain'
 import { SafeMarkdown } from '../../lib/safeMarkdown'
 import { parseStructuredAnswer } from '../../lib/structuredAnswer'
@@ -20,6 +21,16 @@ const SUBJECTS = [
   { value: 'mathematics', label: 'গণিত' },
   { value: 'bangla', label: 'বাংলা' },
 ]
+
+// Wave 2: explicit teaching strategies accepted by ChatSendRequest.strategy.
+const STRATEGIES = ['simple', 'example', 'book_language', 'steps', 'analogy'] as const
+const STRAT_LABELS: Record<(typeof STRATEGIES)[number], 'stratSimple' | 'stratExample' | 'stratBook' | 'stratSteps' | 'stratAnalogy'> = {
+  simple: 'stratSimple',
+  example: 'stratExample',
+  book_language: 'stratBook',
+  steps: 'stratSteps',
+  analogy: 'stratAnalogy',
+}
 
 export default function AITutorPage() {
   const { me } = useAuth()
@@ -32,6 +43,11 @@ export default function AITutorPage() {
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [thanks, setThanks] = useState<number | null>(null)
+  const [savedId, setSavedId] = useState<number | null>(null)
+  // Wave 2: explicit explanation strategy + image attachment.
+  const [strategy, setStrategy] = useState<string | null>(null)
+  const [image, setImage] = useState<{ mime_type: string; data_base64: string } | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
   // S1.6: source → evidence modal.
   const [evidence, setEvidence] = useState<SourceRef | null>(null)
   // S1.8: history search + rename/delete.
@@ -81,6 +97,7 @@ export default function AITutorPage() {
     if (!text || streaming) return
     setInput('')
     setError(null)
+    track('tutor_question_sent', { reteach: opts?.reteach === true, subject_present: subject != null })
     let id = conversationId
     if (!id) {
       try {
@@ -95,6 +112,7 @@ export default function AITutorPage() {
     }
     setMessages((m) => [...m, { id: 0, role: 'user', content: text, grounded: null, sources: [] }])
     setStreaming(true)
+    if (image) setImage(null)
     const acc = { text: '' }
     const controller = new AbortController()
     abortRef.current = controller
@@ -106,6 +124,8 @@ export default function AITutorPage() {
           subject,
           low_data: getLowData(),
           ...(opts?.reteach ? { reteach: true } : {}),
+          ...(strategy ? { strategy } : {}),
+          ...(image ? { image } : {}),
         },
         (tok) => {
           acc.text += tok
@@ -141,6 +161,7 @@ export default function AITutorPage() {
           grounded: undone.grounded,
           refused_reason: undone.refused_reason,
           sources: undone.sources ?? [],
+          confidence: undone.confidence ?? null,
         }
         if (li >= 0) copy[li] = { ...copy[li], ...final }
         else copy.push(final)
@@ -153,7 +174,7 @@ export default function AITutorPage() {
       setStreaming(false)
       if (abortRef.current === controller) abortRef.current = null
     }
-  }, [input, streaming, conversationId, subject, refetchConvs])
+  }, [input, streaming, conversationId, subject, refetchConvs, strategy, image])
 
   // S1.7: a wrong quiz item can arrive here as `location.state.explain` —
   // ask once, then drop the explain payload so a refresh does not re-ask.
@@ -183,10 +204,46 @@ export default function AITutorPage() {
     try {
       await post('/feedback', { rating, message_id: messageId })
       setThanks(messageId)
+      track('tutor_feedback', { rating })
       setTimeout(() => setThanks(null), 2000)
     } catch {
       /* ignore */
     }
+  }
+
+  // Blueprint §26: any tutor answer can be kept in the student's saved notes.
+  const saveNote = async (m: ChatMessage) => {
+    try {
+      await createNote({
+        body: m.content,
+        source: 'tutor',
+        source_ref: { subject },
+      })
+      setSavedId(m.id)
+      track('note_saved', { source: 'tutor' })
+      setTimeout(() => setSavedId(null), 2000)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // Wave 2: attach an optional photo (question paper, whiteboard) to the next
+  // turn. Server re-validates mime + decoded size and answers 422 image_invalid.
+  const attachFile = (f: File | null) => {
+    if (!f) return
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(f.type) || f.size > 1_500_000) {
+      setError(t('imageTooLarge'))
+      return
+    }
+    const rd = new FileReader()
+    rd.onload = () => {
+      const res = String(rd.result ?? '')
+      const b64 = res.slice(res.indexOf(',') + 1)
+      if (!b64) return
+      setImage({ mime_type: f.type, data_base64: b64 })
+      track('tutor_image_attached', { kb: Math.round(f.size / 1024) })
+    }
+    rd.readAsDataURL(f)
   }
 
   // S1.8: message search over this student's own history.
@@ -391,6 +448,11 @@ export default function AITutorPage() {
                       <Check size={12} aria-hidden /> {t('supportedBadge')}
                     </Badge>
                   )}
+                  {m.confidence != null && (
+                    <Badge tone={m.confidence >= 0.6 ? 'ok' : 'warn'}>
+                      {t('confidenceBadge').replace('{pct}', String(Math.round(m.confidence * 100)))}
+                    </Badge>
+                  )}
                   <div className="row-flex" style={{ gap: '6px', marginTop: '6px' }}>
                     {m.sources.map((s: SourceRef, si) => (
                       <button
@@ -416,13 +478,33 @@ export default function AITutorPage() {
                           className="chip"
                           style={{ alignSelf: 'center' }}
                           onClick={() => {
-                            // S1.5 'আমি বুঝিনি': re-ask the same question with the
+                            // S1.5 'আমি বুঝিন': re-ask the same question with the
                             // next teaching strategy (server rotates conversation strategy).
                             const q = [...messages.slice(0, i)].reverse().find((x) => x.role === 'user')?.content
                             if (q) send(q, { reteach: true })
                           }}
                         >
                           {t('reteach')}
+                        </button>
+                      )}
+                      <button
+                        className="icon-btn"
+                        style={{ width: 32, height: 32 }}
+                        aria-label={t('saveAsNote')}
+                        onClick={() => void saveNote(m)}
+                      >
+                        {savedId === m.id ? <Check size={16} aria-hidden /> : <Bookmark size={16} aria-hidden />}
+                      </button>
+                      {i === messages.length - 1 && (
+                        <button
+                          className="chip"
+                          style={{ alignSelf: 'center' }}
+                          onClick={() => {
+                            const q = [...messages.slice(0, i)].reverse().find((x) => x.role === 'user')?.content
+                            if (q) send(q)
+                          }}
+                        >
+                          <RefreshCcw size={13} aria-hidden /> {t('regenerate')}
                         </button>
                       )}
                     </div>
@@ -443,6 +525,36 @@ export default function AITutorPage() {
 
         {error && <p className="error" style={{ margin: 'var(--space-2) 0 0' }}>{error}</p>}
 
+        <div
+          className="chips"
+          role="group"
+          aria-label={t('strategyTitle')}
+          style={{ marginTop: 'var(--space-2)' }}
+        >
+          {STRATEGIES.map((s) => (
+            <button
+              key={s}
+              className={`chip${strategy === s ? ' active' : ''}`}
+              aria-pressed={strategy === s}
+              onClick={() => {
+                const next = strategy === s ? null : s
+                setStrategy(next)
+                if (next) track('tutor_strategy_chosen', { strategy: next })
+              }}
+            >
+              {t(STRAT_LABELS[s])}
+            </button>
+          ))}
+        </div>
+        {image && (
+          <div className="row-flex" style={{ gap: '6px', alignItems: 'center', marginTop: '6px' }}>
+            <img src={`data:${image.mime_type};base64,${image.data_base64}`} alt="" style={{ height: 40, borderRadius: 8 }} />
+            <button className="icon-btn" style={{ width: 32, height: 32 }} aria-label={t('removeImage')} onClick={() => setImage(null)}>
+              <X size={14} aria-hidden />
+            </button>
+          </div>
+        )}
+
         <div className="chat-input">
           <input
             className="input"
@@ -452,12 +564,31 @@ export default function AITutorPage() {
             onKeyDown={(e) => e.key === 'Enter' && send()}
             aria-label={t('askPlaceholder')}
           />
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            hidden
+            onChange={(e) => {
+              attachFile(e.target.files?.[0] ?? null)
+              e.target.value = ''
+            }}
+          />
+          <button className="icon-btn" style={{ width: 32, height: 32 }} aria-label={t('attachImage')} onClick={() => fileRef.current?.click()}>
+            <Paperclip size={16} aria-hidden />
+          </button>
           <VoiceButton
             onTranscript={(text) => setInput((cur) => (cur ? cur + ' ' + text : text))}
           />
-          <Button variant="primary" onClick={() => send()} disabled={streaming || !input.trim()}>
-            <Send size={18} aria-hidden />
-          </Button>
+          {streaming ? (
+            <Button variant="soft" onClick={() => abortRef.current?.abort()} aria-label={t('stopGenerating')}>
+              <Square size={18} aria-hidden />
+            </Button>
+          ) : (
+            <Button variant="primary" onClick={() => send()} disabled={!input.trim()}>
+              <Send size={18} aria-hidden />
+            </Button>
+          )}
         </div>
         {me && (
           <span className="muted" style={{ fontSize: 'var(--fs-xs)' }}>

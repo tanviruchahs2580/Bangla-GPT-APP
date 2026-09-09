@@ -12,7 +12,8 @@ const apiMock = vi.hoisted(() => ({
   post: vi.fn(),
 }))
 
-vi.mock('../api', () => ({
+vi.mock('../api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../api')>()),
   ...apiMock,
   apiBase: '/api',
   getToken: () => 'tok',

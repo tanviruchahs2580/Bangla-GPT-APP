@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from './AuthContext'
 import { exitImpersonation, isImpersonating } from './api'
+import { NotificationBell } from './components/NotificationBell'
 import { SearchBox } from './components/SearchBox'
 import { getLang, onLangChange, setLang, t } from './i18n'
 import { toggleTheme, currentTheme } from './lib/theme'
@@ -118,6 +119,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Download size={18} aria-hidden />
             </button>
           )}
+          {me && <NotificationBell />}
           <button
             className="icon-btn"
             aria-label="Switch language"

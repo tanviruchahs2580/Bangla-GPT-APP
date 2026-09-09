@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { get } from '../api'
 import { Badge } from '../components/ui'
+import { SchoolSections } from '../components/school/SchoolSections'
 import { t } from '../i18n'
 import type { SchoolHealth } from '../types'
 
@@ -121,6 +122,8 @@ export default function SchoolDashboard() {
           </div>
         )}
       </section>
+
+      <SchoolSections />
     </main>
   )
 }

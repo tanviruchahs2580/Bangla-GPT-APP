@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { apiBase, get, getToken, post } from '../api'
 import { Badge } from '../components/ui'
+import { CreateHub } from '../components/teacher/CreateHub'
 import { friendlyError } from '../errors'
 import { t } from '../i18n'
 import type {
@@ -497,6 +498,8 @@ export default function TeacherDashboard() {
   return (
     <>
       <h1 className="page-title">{t('teacherDashboard')}</h1>
+
+      <CreateHub />
 
       <div className="card">
         <div className="row-flex" style={{ gap: '8px', flexWrap: 'wrap' }}>

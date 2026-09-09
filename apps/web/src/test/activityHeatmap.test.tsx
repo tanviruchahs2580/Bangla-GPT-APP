@@ -20,7 +20,7 @@ const authMock = vi.hoisted(() => ({
   useAuth: vi.fn(),
 }))
 
-vi.mock('../api', () => apiMock)
+vi.mock('../api', async (importOriginal) => ({ ...(await importOriginal<typeof import('../api')>()), ...apiMock }))
 vi.mock('../AuthContext', () => authMock)
 
 const me = { user_id: 1, email: 's@x.com', role: 'student', profile_id: 7, name: 'S', class_level: 6 }

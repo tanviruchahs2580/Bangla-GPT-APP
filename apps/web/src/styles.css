@@ -1,20 +1,29 @@
 /* ============================================================
-   Bangla GPT Tutor — design system (v2, indigo/navy)
+   Bangla GPT Tutor — design system (v3, Bangladesh green)
+   Per Master Implementation Prompt v1.0 §7: primary #166534,
+   secondary #16A34A, fresh #22C55E, light #DCFCE7, AI indigo
+   #4F46E5, sky #0EA5E9, earth #78350F, background #F5F1E8.
    Mobile-first, Bangla-first, accessible. Single source of truth.
    ============================================================ */
 
 :root {
-  /* Brand — indigo/navy primary (decision D1) */
-  --brand: #4353b8;
-  --brand-strong: #33409b;
-  --brand-ink: #1c2a6b;
-  --brand-soft: #e9ecfb;
-  --brand-soft-2: #dfe4fa;
+  /* Brand — Bangladesh green primary (blueprint §7) */
+  --brand: #166534;
+  --brand-strong: #14532d;
+  --brand-ink: #052e16;
+  --brand-soft: #dcfce7;
+  --brand-soft-2: #bbf7d0;
 
-  /* Secondary — teal */
-  --teal: #0d9488;
-  --teal-strong: #0f766e;
-  --teal-soft: #d9f2ef;
+  /* Accent — sky blue (formerly teal slot) */
+  --teal: #0284c7;
+  --teal-strong: #0369a1;
+  --teal-soft: #e0f2fe;
+
+  /* AI accent — indigo for AI chrome (composer, streaming, badges) */
+  --ai: #4f46e5;
+  --ai-soft: #eef2ff;
+  --fresh: #22c55e;
+  --earth: #78350f;
 
   /* Semantic */
   --danger: #e11d3c;
@@ -24,18 +33,18 @@
   --ok: #15803d;
   --ok-soft: #e3f6e9;
 
-  /* Surfaces */
-  --bg: #f4f6fd;
-  --bg-elev: #ffffff;
+  /* Surfaces — warm paper background */
+  --bg: #f5f1e8;
+  --bg-elev: #fffdf8;
   --card: #ffffff;
-  --card-2: #f7f9ff;
-  --ink: #101840;
-  --muted: #5a6486;
-  --line: #e4e8f5;
-  --line-strong: #cdd4ec;
+  --card-2: #faf7ef;
+  --ink: #1f291c;
+  --muted: #5d6b57;
+  --line: #e5e0d2;
+  --line-strong: #d1cbb8;
 
   /* Typography */
-  --font: 'Hind Siliguri', 'Noto Sans Bengali', -apple-system, 'Segoe UI', system-ui,
+  --font: 'Noto Sans Bengali', 'Hind Siliguri', -apple-system, 'Segoe UI', system-ui,
     sans-serif;
   --fs-xs: 0.75rem;
   --fs-sm: 0.85rem;
@@ -48,9 +57,9 @@
   --radius-sm: 10px;
   --radius: 16px;
   --radius-lg: 24px;
-  --shadow-1: 0 1px 2px rgba(16, 24, 64, 0.06);
-  --shadow-2: 0 6px 24px rgba(28, 42, 107, 0.10);
-  --shadow-3: 0 16px 48px rgba(20, 30, 80, 0.18);
+  --shadow-1: 0 1px 2px rgba(31, 41, 28, 0.07);
+  --shadow-2: 0 6px 24px rgba(31, 41, 28, 0.12);
+  --shadow-3: 0 16px 48px rgba(15, 25, 12, 0.20);
 
   /* Spacing — 4/8/12/16/24/32/48 */
   --space-1: 4px;
@@ -76,15 +85,20 @@
 }
 
 [data-theme='dark'] {
-  --brand: #7f8ff7;
-  --brand-strong: #93a1fb;
-  --brand-ink: #bec7ff;
-  --brand-soft: #262f6b;
-  --brand-soft-2: #2c3576;
+  --brand: #4ade80;
+  --brand-strong: #86efac;
+  --brand-ink: #bbf7d0;
+  --brand-soft: #14321f;
+  --brand-soft-2: #1a4027;
 
-  --teal: #2dd4bf;
-  --teal-strong: #5eead4;
-  --teal-soft: #153a38;
+  --teal: #38bdf8;
+  --teal-strong: #7dd3fc;
+  --teal-soft: #0c3350;
+
+  --ai: #818cf8;
+  --ai-soft: #1e1b4b;
+  --fresh: #4ade80;
+  --earth: #d6a35c;
 
   --danger: #fb7185;
   --danger-soft: #431a22;
@@ -93,14 +107,14 @@
   --ok: #34d399;
   --ok-soft: #163527;
 
-  --bg: #0e1226;
-  --bg-elev: #151a36;
-  --card: #161c3c;
-  --card-2: #1a2144;
-  --ink: #eef1ff;
-  --muted: #9aa3c8;
-  --line: #262e57;
-  --line-strong: #37406e;
+  --bg: #12140e;
+  --bg-elev: #1a1c14;
+  --card: #1b1e14;
+  --card-2: #21251a;
+  --ink: #f0efe4;
+  --muted: #a8ab9a;
+  --line: #2c2f22;
+  --line-strong: #3d4130;
 
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-2: 0 6px 24px rgba(0, 0, 0, 0.45);
@@ -852,6 +866,7 @@ form .btn[type='submit'] {
   align-self: flex-start;
   background: var(--card);
   border: 1px solid var(--line);
+  border-left: 3px solid var(--ai);
   color: var(--ink);
   border-top-left-radius: var(--radius-sm);
 }
@@ -869,7 +884,7 @@ form .btn[type='submit'] {
   height: 7px;
   margin-right: 4px;
   border-radius: 50%;
-  background: var(--muted);
+  background: var(--ai);
   animation: blink 1.2s infinite both;
 }
 
@@ -1329,4 +1344,231 @@ button.source-chip:hover {
   margin: var(--space-1) 0 0;
   color: var(--muted);
   font-size: var(--fs-sm);
+}
+
+/* Welcome screen (blueprint §11 screens 01-02) */
+.welcome-tagline {
+  font-size: var(--fs-xl);
+  color: var(--brand-strong);
+  font-weight: 600;
+  margin: 0;
+}
+.welcome-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: min(360px, 90vw);
+}
+.welcome-sub {
+  max-width: 480px;
+  margin: 0;
+}
+
+/* ------------------------------------------------------------
+   Legacy vocabulary compat layer. The dashboards written before
+   the v2/v3 design system (parent / teacher / admin / forgot) use
+   a shorter class vocabulary; map it onto the token system so
+   those pages render with the real design instead of unstyled
+   defaults. New markup should prefer the .btn-*/stat-*/table-wrap
+   names above.
+   ------------------------------------------------------------ */
+.page-title {
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  margin: 0 0 var(--space-4);
+}
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3);
+  align-items: end;
+}
+button.primary,
+button.secondary {
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  padding: 10px 18px;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  transition: background var(--m-fast) var(--ease);
+}
+button.primary {
+  background: var(--brand);
+  color: #fff;
+}
+button.primary:hover {
+  background: var(--brand-strong);
+}
+button.primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+button.secondary {
+  background: var(--card);
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+button.secondary:hover {
+  background: var(--card-2);
+}
+button.small {
+  padding: 6px 12px;
+  font-size: var(--fs-sm);
+}
+.ok {
+  color: var(--ok);
+  font-size: var(--fs-sm);
+}
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  animation: spin 0.8s linear infinite;
+  vertical-align: -2px;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.stat-row {
+  display: flex;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  margin: var(--space-3) 0;
+}
+.stat-row > div,
+.stat-row .num {
+  display: flex;
+  flex-direction: column;
+}
+.stat-row .num {
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  color: var(--ink);
+}
+.stat-row .lbl {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+.lbl {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.badge.weak {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* Notification bell (blueprint §33) */
+.notif-wrap {
+  position: relative;
+}
+.notif-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.notif-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 60;
+  width: min(340px, 86vw);
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+}
+.notif-head {
+  padding: var(--space-3) var(--space-4);
+  font-weight: 700;
+  font-size: var(--fs-sm);
+  border-bottom: 1px solid var(--line);
+}
+.notif-empty {
+  padding: var(--space-4);
+  text-align: center;
+  font-size: var(--fs-sm);
+}
+.notif-item {
+  display: block;
+  width: 100%;
+  text-align: start;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  padding: var(--space-3) var(--space-4);
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  cursor: pointer;
+}
+.notif-item:hover {
+  background: var(--card-2);
+}
+.notif-item.unread {
+  border-left: 3px solid var(--brand);
+  font-weight: 600;
+}
+
+/* --- Teacher Create hub (wave 2) --- */
+.gen-questions {
+  margin: var(--space-2) 0 0;
+  padding-left: 1.4em;
+  display: grid;
+  gap: var(--space-2);
+}
+.gen-json {
+  margin-top: var(--space-2);
+  max-height: 320px;
+  overflow: auto;
+}
+.gen-doc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.gen-doc-open {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+.gen-doc-title {
+  font-weight: 600;
 }

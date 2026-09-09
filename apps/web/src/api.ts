@@ -18,7 +18,7 @@ export class ApiError extends Error {
 export interface MeResponse {
   user_id: number
   email: string
-  role: 'student' | 'teacher' | 'parent' | 'admin'
+  role: 'student' | 'teacher' | 'parent' | 'admin' | 'school_admin'
   profile_id: number | null
   name: string | null
   class_level: number | null
@@ -324,3 +324,262 @@ export const triageFeedback = (id: number, payload: { triaged: boolean; note?: s
 
 export const getStatus = () => get<import('./types').StatusOut>('/status')
 
+/* -------- Blueprint v1: notifications / notes / documents / jobs / workload -------- */
+
+export interface NotificationItem {
+  id: number
+  kind: string
+  /** i18n code resolved client-side (server never sends final copy). */
+  code: string
+  params: Record<string, string | number>
+  link: string | null
+  read_at: string | null
+  created_at: string | null
+}
+
+export interface NotificationList {
+  items: NotificationItem[]
+  unread_count: number
+}
+
+export const getNotifications = () => get<NotificationList>('/notifications')
+export const markNotificationRead = (id: number) =>
+  post<NotificationItem>(`/notifications/${id}/read`)
+
+export interface SavedNote {
+  id: number
+  title: string
+  body: string
+  source: string
+  source_ref: Record<string, unknown> | null
+  created_at: string | null
+}
+
+export const getNotes = (limit = 100) => get<SavedNote[]>(`/notes?limit=${limit}`)
+export const createNote = (input: {
+  title?: string
+  body: string
+  source?: 'tutor' | 'chapter' | 'other'
+  source_ref?: Record<string, unknown>
+}) => post<SavedNote>('/notes', input)
+export const deleteNote = (id: number) => del(`/notes/${id}`)
+
+export interface TeacherDocument {
+  id: number
+  kind: 'worksheet' | 'answer_key' | 'homework' | 'rubric' | 'lesson_plan' | string
+  class_level: number
+  subject: string
+  chapter: string | null
+  title: string
+  payload: Record<string, unknown>
+  created_at: string | null
+}
+
+export interface GeneratedDocument extends TeacherDocument {
+  sources: import('./types').SourceRef[]
+}
+
+export const generateDocument = (kind: string, body: Record<string, unknown>) =>
+  post<GeneratedDocument>(`/teacher/generate/${kind}`, body)
+export const getTeacherDocuments = (kind?: string, limit = 100) =>
+  get<TeacherDocument[]>(
+    `/teacher/documents?limit=${limit}${kind ? `&kind=${encodeURIComponent(kind)}` : ''}`,
+  )
+export const getTeacherDocument = (id: number) =>
+  get<TeacherDocument>(`/teacher/documents/${id}`)
+export const deleteTeacherDocument = (id: number) => del(`/teacher/documents/${id}`)
+
+/**
+ * Authed binary download (auth is header-based, a bare <a href> would 401).
+ * The server may fall back to an HTML print view when shaping libs are
+ * unavailable — that variant opens in a new tab instead of downloading.
+ */
+export async function downloadTeacherDocumentPdf(doc: TeacherDocument): Promise<void> {
+  const headers = new Headers()
+  const token = getToken()
+  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const res = await fetch(`${API_BASE}/teacher/documents/${doc.id}/pdf`, { headers })
+  if (!res.ok) throw new ApiError(res.status, 'download failed', 'download')
+  const ct = res.headers.get('content-type') ?? ''
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  if (ct.includes('html')) {
+    a.href = url
+    a.target = '_blank'
+  } else {
+    a.href = url
+    a.download = `document-${doc.id}-${doc.kind}.pdf`
+  }
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+export interface AiJob {
+  id: string
+  kind: string
+  status: 'queued' | 'generating' | 'validating' | 'ready' | 'failed' | string
+  payload: Record<string, unknown>
+  result: { document_id?: number } | null
+  error: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export const createTeacherJob = (kind: string, payload: Record<string, unknown>) =>
+  post<AiJob>('/teacher/jobs', { kind, payload })
+export const getTeacherJobs = () => get<AiJob[]>('/teacher/jobs')
+export const getTeacherJob = (id: string) => get<AiJob>(`/teacher/jobs/${id}`)
+
+export interface TeacherWorkload {
+  counts: Record<string, number>
+  minutes_saved: Record<string, number>
+  total_minutes_saved: number
+  estimate: boolean
+  methodology: string
+}
+
+export const getTeacherWorkload = () => get<TeacherWorkload>('/teacher/workload')
+
+
+// --- Wave 2: school section (school_admin = own school; admin = platform) --------
+
+export interface SchoolStaffRow {
+  id: number
+  name: string
+  email: string
+  role: string
+  classroom_count: number
+}
+export interface SchoolOverview {
+  school_id: number
+  name: string
+  code: string
+  students: number
+  teachers: number
+  classrooms: number
+  staff: SchoolStaffRow[]
+}
+export interface SchoolStudentRow {
+  student_id: number
+  name: string
+  class_level: number
+  section: string
+  last_active: string | null
+  quiz_attempts: number
+}
+export interface SchoolStudentPage {
+  total: number
+  limit: number
+  offset: number
+  items: SchoolStudentRow[]
+}
+export interface SchoolTeacherRow {
+  teacher_id: number
+  name: string
+  subjects: string[]
+  classrooms: number
+}
+export interface SchoolClassRow {
+  classroom_id: number
+  class_level: number
+  section: string
+  students: number
+  quiz_attempts: number
+  attempts_graded: number
+  avg_quiz_accuracy: number | null
+}
+export interface SchoolCoverageRow {
+  class_level: number
+  content_subjects: string[]
+  asked_subjects: string[]
+  uncovered_subjects: string[]
+  chapters_available: number
+  chapters_read: number
+  chapters_completed: number
+}
+export interface SchoolCoverageOut {
+  rows: SchoolCoverageRow[]
+}
+export interface SchoolActiveDay {
+  date: string
+  students: number
+}
+export interface SchoolAnalytics {
+  days: number
+  active_by_date: SchoolActiveDay[]
+  daily_active_avg: number
+  questions_asked: number
+  quiz_attempts: number
+  attempts_graded: number
+  avg_quiz_score_pct: number | null
+}
+
+export const getSchoolOverview = () => get<SchoolOverview>('/school/overview')
+export const getSchoolStudents = (limit = 50, offset = 0) =>
+  get<SchoolStudentPage>(`/school/students?limit=${limit}&offset=${offset}`)
+export const getSchoolTeachers = () => get<SchoolTeacherRow[]>('/school/teachers')
+export const getSchoolClasses = () => get<SchoolClassRow[]>('/school/classes')
+export const getSchoolCoverage = () => get<SchoolCoverageOut>('/school/coverage')
+export const getSchoolAnalytics = (days = 30) => get<SchoolAnalytics>(`/school/analytics?days=${days}`)
+
+// --- Wave 2: parent period report -------------------------------------------------
+
+export interface ParentReport {
+  student_id: number
+  name: string
+  class_level: number
+  period: string
+  window_start: string
+  window_end: string
+  quizzes_taken: number
+  quizzes_graded: number
+  avg_score_pct: number | null
+  chapters_read: number
+  chapters_completed: number
+  questions_asked: number
+  weak_chapters: string[]
+  strengths: string[]
+  suggestion_code: string
+  suggestion_params: Record<string, unknown>
+}
+
+export const getParentReport = (studentId: number, period: 'weekly' | 'monthly' = 'weekly') =>
+  get<ParentReport>(`/parents/me/children/${studentId}/report?period=${period}`)
+
+// --- Wave 2: admin AI quality dashboard --------------------------------------------
+
+export interface AdminAiQuality {
+  days: number
+  answers_total: number
+  grounded_count: number
+  ungrounded_count: number
+  refusals_total: number
+  refusals_by_reason: Record<string, number>
+  thumbs_up: number
+  thumbs_down: number
+  low_confidence_count: number
+  by_model: Record<string, number>
+}
+
+export const getAdminAiQuality = (days = 30) => get<AdminAiQuality>(`/admin/ai/quality?days=${days}`)
+
+// --- Wave 2: student learning preferences + memory ----------------------------------
+
+export interface StudentPrefs {
+  memory_enabled: boolean
+  learning_prefs: Record<string, unknown>
+}
+export interface MemoryFacts {
+  memory_enabled: boolean
+  facts: Record<string, unknown>
+  on_disable_note_code: string
+}
+
+export const getMyPrefs = () => get<StudentPrefs>('/students/me/prefs')
+export const patchMyPrefs = (body: { memory_enabled?: boolean; learning_prefs?: Record<string, unknown> }) =>
+  patch<StudentPrefs>('/students/me/prefs', body)
+export const getMyMemory = () => get<MemoryFacts>('/students/me/memory')
+export const clearMyMemory = () => del('/students/me/memory')
+export const getMyReport = (period: 'weekly' | 'monthly' = 'weekly') =>
+  get<ParentReport>(`/students/me/report?period=${period}`)

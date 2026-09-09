@@ -1,8 +1,18 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Download, Flame, KeyRound, LogOut, Moon, Sun, Trash2 } from 'lucide-react'
-import { del, generateInviteCode, get } from '../../api'
+import { Brain, Download, FileText, Flame, KeyRound, LogOut, Moon, Sun, Trash2 } from 'lucide-react'
+import {
+  clearMyMemory,
+  del,
+  generateInviteCode,
+  get,
+  getMyMemory,
+  getMyPrefs,
+  getMyReport,
+  patchMyPrefs,
+} from '../../api'
+import { track } from '../../lib/analytics'
 import type { ActivitySummary } from '../../types'
 import { useAuth } from '../../AuthContext'
 import { Badge, Button, Card } from '../../components/ui'
@@ -26,6 +36,66 @@ export default function MePage() {
   // S1.13: low-data mode (skip images + short tutor answers)
   const [lowData, setLowDataState] = useState(getLowData())
 
+  // Wave 2: learning preferences + tutor memory + own progress report.
+  const isStudent = me?.role === 'student'
+  const { data: prefs, refetch: refetchPrefs } = useQuery({
+    queryKey: ['my-prefs'],
+    queryFn: getMyPrefs,
+    enabled: isStudent,
+  })
+  const { data: mem, refetch: refetchMem } = useQuery({
+    queryKey: ['my-memory'],
+    queryFn: getMyMemory,
+    enabled: isStudent,
+  })
+  const [reportPeriod, setReportPeriod] = useState<'weekly' | 'monthly'>('weekly')
+  const { data: report } = useQuery({
+    queryKey: ['my-report', reportPeriod],
+    queryFn: () => getMyReport(reportPeriod),
+    enabled: isStudent,
+  })
+  const [style, setStyle] = useState('standard')
+  const [focus, setFocus] = useState('')
+  const [memory, setMemory] = useState(true)
+  const [prefsBusy, setPrefsBusy] = useState(false)
+  const [prefsMsg, setPrefsMsg] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!prefs) return
+    setStyle(String(prefs.learning_prefs.explanation_style ?? 'standard'))
+    setFocus(String(prefs.learning_prefs.subject_focus ?? ''))
+    setMemory(prefs.memory_enabled)
+  }, [prefs])
+
+  const savePrefs = async () => {
+    setPrefsBusy(true)
+    setPrefsMsg(null)
+    try {
+      const lp: Record<string, unknown> = { explanation_style: style }
+      if (focus.trim()) lp.subject_focus = focus.trim().slice(0, 60)
+      await patchMyPrefs({ memory_enabled: memory, learning_prefs: lp })
+      track('prefs_updated', { style, memory })
+      await refetchPrefs()
+      await refetchMem()
+      setPrefsMsg(t('prefsSaved'))
+    } catch {
+      setPrefsMsg(t('errorGeneric'))
+    } finally {
+      setPrefsBusy(false)
+    }
+  }
+
+  const wipeMemory = async () => {
+    try {
+      await clearMyMemory()
+      track('memory_cleared')
+      await refetchMem()
+      await refetchPrefs()
+    } catch {
+      /* keep the facts visible on failure */
+    }
+  }
+
   // S1.9: daily practice heatmap + streak (GitHub-style grid).
   const { data: activity } = useQuery({
     queryKey: ['activity', me?.profile_id],
@@ -37,7 +107,9 @@ export default function MePage() {
     setInviteBusy(true)
     setInviteError(null)
     try {
-      setInvite(await generateInviteCode())
+      const inv = await generateInviteCode()
+      setInvite(inv)
+      track('parent_invite_generated')
     } catch (e) {
       setInviteError(friendlyError((e as { rawDetail?: unknown }).rawDetail)?.text ?? t('errorGeneric'))
     } finally {
@@ -160,6 +232,128 @@ export default function MePage() {
             </Button>
           )}
           {inviteError && <p className="error" style={{ margin: 0 }}>{inviteError}</p>}
+        </Card>
+      )}
+
+      {me?.role === 'student' && (
+        <Card>
+          <div className="card-title">{t('learningStyleTitle')}</div>
+          <div className="grid-2">
+            <div className="field">
+              <label htmlFor="expstyle">{t('explanationStyle')}</label>
+              <select id="expstyle" className="select" value={style} onChange={(e) => setStyle(e.target.value)}>
+                <option value="simple">{t('styleSimple')}</option>
+                <option value="standard">{t('styleStandard')}</option>
+                <option value="detailed">{t('styleDetailed')}</option>
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="subjfocus">{t('subjectFocus')}</label>
+              <input id="subjfocus" className="input" value={focus} maxLength={60} onChange={(e) => setFocus(e.target.value)} />
+            </div>
+          </div>
+          <div className="row-flex" style={{ justifyContent: 'space-between', marginTop: 'var(--space-2)' }}>
+            <div>
+              <div style={{ fontWeight: 600 }}>{t('memoryTitle')}</div>
+              <div className="muted" style={{ fontSize: 'var(--fs-sm)' }}>{t('memoryHint')}</div>
+            </div>
+            <button
+              className="switch"
+              role="switch"
+              aria-checked={memory}
+              aria-label={t('memoryTitle')}
+              onClick={() => setMemory((v) => !v)}
+            />
+          </div>
+          {prefsMsg && (
+            <p className="ok" style={{ margin: 'var(--space-2) 0 0', fontSize: 'var(--fs-sm)' }}>
+              {prefsMsg}
+            </p>
+          )}
+          <div className="row-flex" style={{ gap: '8px', marginTop: 'var(--space-3)' }}>
+            <Button variant="primary" size="sm" onClick={() => void savePrefs()} disabled={prefsBusy}>
+              {prefsBusy ? <span className="spinner" aria-hidden /> : null}
+              {t('save')}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => void wipeMemory()}>
+              <Brain size={15} aria-hidden /> {t('clearMemory')}
+            </Button>
+          </div>
+          {mem && (
+            <div style={{ marginTop: 'var(--space-3)' }}>
+              <div className="row-flex" style={{ gap: '6px', alignItems: 'center' }}>
+                <Badge tone={mem.memory_enabled ? 'teal' : 'warn'}>{t('memoryFacts')}</Badge>
+                <span className="muted" style={{ fontSize: 'var(--fs-xs)' }}>{mem.memory_enabled ? t('on') : t('off')}</span>
+              </div>
+              {Object.keys(mem.facts).length === 0 ? (
+                <p className="muted" style={{ margin: '6px 0 0', fontSize: 'var(--fs-sm)' }}>{t('noMemoryFacts')}</p>
+              ) : (
+                <div className="chips" style={{ marginTop: '6px' }}>
+                  {Object.entries(mem.facts).map(([k, v]) => (
+                    <span key={k} className="chip">{k}: {String(v)}</span>
+                  ))}
+                </div>
+              )}
+              {!mem.memory_enabled && (
+                <p className="muted" style={{ margin: '6px 0 0', fontSize: 'var(--fs-sm)' }}>
+                  {t(mem.on_disable_note_code as Parameters<typeof t>[0]) || mem.on_disable_note_code}
+                </p>
+              )}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {me?.role === 'student' && report && (
+        <Card>
+          <div className="row-flex" style={{ gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <div className="card-title" style={{ margin: 0 }}>
+              <FileText size={16} aria-hidden /> {t('myReportTitle')}
+            </div>
+            <button className={`chip${reportPeriod === 'weekly' ? ' active' : ''}`} onClick={() => setReportPeriod('weekly')}>
+              {t('periodWeekly')}
+            </button>
+            <button className={`chip${reportPeriod === 'monthly' ? ' active' : ''}`} onClick={() => setReportPeriod('monthly')}>
+              {t('periodMonthly')}
+            </button>
+          </div>
+          <div className="stat-row" style={{ marginTop: 'var(--space-3)' }}>
+            <div>
+              <div className="num">{report.quizzes_taken}</div>
+              <div className="lbl">{t('reportQuizzesGraded')}</div>
+            </div>
+            <div>
+              <div className="num">{report.avg_score_pct == null ? '—' : `${Math.round(report.avg_score_pct)}%`}</div>
+              <div className="lbl">{t('reportAvg')}</div>
+            </div>
+            <div>
+              <div className="num">{report.chapters_read}</div>
+              <div className="lbl">{t('reportChaptersRead')}</div>
+            </div>
+            <div>
+              <div className="num">{report.questions_asked}</div>
+              <div className="lbl">{t('reportQuestions')}</div>
+            </div>
+          </div>
+          {report.weak_chapters.length > 0 && (
+            <div style={{ marginTop: 'var(--space-2)' }}>
+              <span className="muted" style={{ fontSize: 'var(--fs-sm)' }}>{t('reportWeak')}: </span>
+              {report.weak_chapters.map((c) => (
+                <Badge key={c} tone="warn">{c}</Badge>
+              ))}
+            </div>
+          )}
+          {report.strengths.length > 0 && (
+            <div style={{ marginTop: 'var(--space-2)' }}>
+              <span className="muted" style={{ fontSize: 'var(--fs-sm)' }}>{t('reportStrengths')}: </span>
+              {report.strengths.map((c) => (
+                <Badge key={c} tone="ok">{c}</Badge>
+              ))}
+            </div>
+          )}
+          <p className="muted" style={{ margin: 'var(--space-2) 0 0', fontSize: 'var(--fs-sm)' }}>
+            {t('reportSuggestion')}: {t(report.suggestion_code as Parameters<typeof t>[0]) || report.suggestion_code}
+          </p>
         </Card>
       )}
 
