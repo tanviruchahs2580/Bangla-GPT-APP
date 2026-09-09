@@ -2,8 +2,9 @@
 
 **NCTB-grounded Bangla-first AI personal tutor platform.**
 
-> **Status: v0.6.1 — Bangladesh Bangla language correction release (universal Bangla).**
-> New in v0.6.1: Bangladesh Academy-standard Bangla across entire app (fixed 56 Assamese `ৰ`/`ৱ` glyphs, all CreateHub/Teacher UI strings: `ওয়ার্কশীট`, `উত্তরমালা`, `হোমওয়ার্ক`, `রুব্রিক`, `লেসন প্ল্যান`, `সেভ করা ডকুমেন্ট`, `মুছে ফেলুন` etc), distinct `প্রশ্নপত্র তৈরি করুন`/`পাঠ পরিকল্পনা তৈরি করুন` buttons, universal `Noto Sans Bengali` + `Hind Siliguri` font audit.
+> **Status: v0.6.2 — Bangladesh Bangla language correction release (universal Bangla, CI green).**
+> New in v0.6.2: Fix `test_health` version assertion to dynamic `Settings().version` (was hard-coded `0.6.0`), unblocking CI 3.11/3.12 matrix.
+> v0.6.1 — Bangladesh Academy-standard Bangla across entire app (fixed 56 Assamese `ৰ`/`ৱ` glyphs, all CreateHub/Teacher UI strings: `ওয়ার্কশীট`, `উত্তরমালা`, `হোমওয়ার্ক`, `রুব্রিক`, `লেসন প্ল্যান`, `সেভ করা ডকুমেন্ট`, `মুছে ফেলুন` etc), distinct `প্রশ্নপত্র তৈরি করুন`/`পাঠ পরিকল্পনা তৈরি করুন` buttons, universal `Noto Sans Bengali` + `Hind Siliguri` font audit.
 > v0.6.0 — NCTB AI Tutor blueprint release (5 roles incl. school_admin).
 > New in v0.6: Bangladesh-green design system per the NCTB blueprint (AI-indigo
 > accent, Noto Sans Bengali), welcome screen, unified teacher **Create hub**
