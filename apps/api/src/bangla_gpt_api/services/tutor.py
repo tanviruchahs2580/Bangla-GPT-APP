@@ -31,6 +31,15 @@ INSUFFICIENT_EVIDENCE_ANSWER = (
     "উত্তরটি পাঠ্যবইয়ের বিষয়বস্তুর ভিত্তিতে দেওয়া সম্ভব নয়। অনুগ্রহ করে পাঠ্যবইয়ের সংশ্লিষ্ট অধ্যায় থেকে প্রশ্ন করুন।"
 )
 
+# Wave 2 (vision contract): honest refusal for LLM_PROVIDER=mock, which cannot
+# see images. A NEW constant -- the four protected SYSTEM_PROMPT constants and
+# INSUFFICIENT_EVIDENCE_ANSWER above stay exactly as they are. The copy never
+# claims to have looked at the picture (refused_reason='vision_unsupported').
+VISION_UNSUPPORTED_ANSWER = (
+    "দুঃখিত, এই সংস্করনে ছবি থেকে উত্তর দেওয়া এখনো সম্ভব হয়নি। "
+    "অনুগ্রহ করে প্রশ্নটি লিখে পাঠান — আমি পঠ্যবইয়ের ভিত্তিতে উত্তর দেব।"
+)
+
 EVIDENCE_OPEN = "<evidence>"
 EVIDENCE_CLOSE = "</evidence>"
 
@@ -186,6 +195,7 @@ class TutorService:
         low_data: bool = False,
         context: RequestContext | None = None,
         search_query: str | None = None,
+        image: dict | None = None,
     ) -> AskResponse:
         """One tutoring turn: safety screen → retrieve → gate → generate.
 
@@ -193,19 +203,34 @@ class TutorService:
         ``question`` still feeds the evidence prompt and routing (S1.7 intent:
         quiz-explain turns retrieve on the quiz item, not the generic
         'explain this' phrasing, which dilutes gate coverage).
+
+        Wave 2: ``image`` (already route-validated: mime + decoded size) is
+        forwarded to the provider as an inline part; retrieval still runs on
+        the text. The fast lane never carries images (vision needs the full
+        model).
         """
         unsafe = _screen_safety(question)
         if unsafe:
             refusal_copy, reason = unsafe
-            return AskResponse(answer=refusal_copy, grounded=False, refused_reason=reason)
+            from bangla_gpt_api.services.safety import answer_confidence
+
+            return AskResponse(
+                answer=refusal_copy,
+                grounded=False,
+                refused_reason=reason,
+                confidence=answer_confidence(False, reason, []),
+            )
 
         retrieval_query = search_query or question
         hits = self._retrieve(retrieval_query, class_level, subject, chapter)
         if not self._gate(retrieval_query, hits):
+            from bangla_gpt_api.services.safety import answer_confidence
+
             return AskResponse(
                 answer=INSUFFICIENT_EVIDENCE_ANSWER,
                 grounded=False,
                 refused_reason="insufficient_evidence",
+                confidence=answer_confidence(False, "insufficient_evidence", []),
             )
         context_blocks = build_evidence_prompt(hits, question, history)
         if low_data:
@@ -227,10 +252,18 @@ class TutorService:
         set_current_route(route)
         fast = self.fast_provider
         provider: LLMProvider = (
-            fast if fast is not None and fast_eligible(route, fast) else self.provider
+            fast
+            if fast is not None and fast_eligible(route, fast) and image is None
+            else self.provider
         )
         started = time.perf_counter()
-        answer = await provider.generate(context_blocks, system=SYSTEM_PROMPT)
+        answer = await provider.generate(
+            context_blocks,
+            system=SYSTEM_PROMPT,
+            # Wave 2: image kwarg only when attached, so providers predating
+            # the vision contract stay callable.
+            **({"image": image} if image is not None else {}),
+        )
         json_log(
             logger,
             logging.INFO,
@@ -241,14 +274,20 @@ class TutorService:
             prompt_chars=len(context_blocks),
             answer_chars=len(answer),
         )
-        from bangla_gpt_api.services.safety import verify_citation
+        from bangla_gpt_api.services.safety import answer_confidence, verify_citation
 
         citation_ok = verify_citation(answer, " ".join(h.chunk.text for h in hits))
+        refs = self._sources(hits)
         return AskResponse(
             answer=answer,
             grounded=True,
-            sources=self._sources(hits),
+            sources=refs,
             citation_verified=citation_ok,
+            confidence=answer_confidence(
+                True,
+                None,
+                [float(getattr(r, "score", 0.0)) for r in refs],
+            ),
         )
 
     async def ask_stream(
@@ -262,8 +301,10 @@ class TutorService:
         low_data: bool = False,
         context: RequestContext | None = None,
         search_query: str | None = None,
+        image: dict | None = None,
     ) -> AsyncIterator["StreamEvent"]:
-        """Streaming variant of :meth:`ask` (same ``search_query`` override).
+        """Streaming variant of :meth:`ask` (same ``search_query`` override and
+        Wave 2 ``image`` forwarding rules).
 
         Yields ``StreamEvent`` items: zero or more ``token`` events followed by
         exactly one ``final`` event carrying the complete AskResponse.
@@ -311,11 +352,17 @@ class TutorService:
         set_current_route(route)
         fast = self.fast_provider
         provider: LLMProvider = (
-            fast if fast is not None and fast_eligible(route, fast) else self.provider
+            fast
+            if fast is not None and fast_eligible(route, fast) and image is None
+            else self.provider
         )
         chunks: list[str] = []
         started = time.perf_counter()
-        async for delta in provider.stream(context_blocks, system=SYSTEM_PROMPT):
+        async for delta in provider.stream(
+            context_blocks,
+            system=SYSTEM_PROMPT,
+            **({"image": image} if image is not None else {}),
+        ):
             chunks.append(delta)
             yield StreamEvent(type="token", text=delta)
         answer = "".join(chunks).strip()

@@ -1,7 +1,21 @@
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
+
+# --- Wave 2: explicit explanation strategies -----------------------------------
+
+# Set accepted by ChatSendRequest.strategy. Deliberately independent of the
+# reteach rotation cycle (services/teach_strategy.STRATEGIES): an explicit
+# student choice overrides the rotation for that turn and persists as
+# Conversation.last_strategy. Invalid values are rejected with 422 by the
+# Literal typing itself.
+CHAT_STRATEGIES: tuple[str, ...] = ("simple", "example", "book_language", "steps", "analogy")
+ChatStrategy = Literal["simple", "example", "book_language", "steps", "analogy"]
+
+# Whitelisted learning-preference keys (PATCH /students/me/prefs).
+EXPLANATION_STYLES: tuple[str, ...] = ("simple", "standard", "detailed")
+ExplanationStyle = Literal["simple", "standard", "detailed"]
 
 
 class QuizExplainContext(BaseModel):
@@ -44,6 +58,8 @@ class AskResponse(BaseModel):
     refused_reason: str | None = None
     # Soft post-generation signal that the answer leans on the cited evidence.
     citation_verified: bool | None = None
+    # Wave 2: honest numeric confidence (formula in services/safety).
+    confidence: float | None = None
 
 
 class ConversationCreate(BaseModel):
@@ -86,6 +102,12 @@ class ChatSendRequest(BaseModel):
     reteach: bool = False
     # S1.13: low-data mode — request a short answer to cut payload size.
     low_data: bool = False
+    # Wave 2: explicit strategy -- overrides the reteach rotation for this
+    # turn and persists as Conversation.last_strategy. Literal typing makes
+    # an invalid value a 422 without any route code.
+    strategy: ChatStrategy | None = None
+    # Wave 2 vision contract: optional inline image (validated in route).
+    image: "ChatImageIn | None" = None
 
 
 class ChatMessageOut(BaseModel):
@@ -97,6 +119,10 @@ class ChatMessageOut(BaseModel):
     sources: list[SourceRef] = []
     rating: int | None = None
     created_at: datetime
+    # Wave 2: honest numeric confidence (formula documented in
+    # main._answer_confidence). None for user turns / pre-wave answers read
+    # before this field existed is impossible -- it is always computed.
+    confidence: float | None = None
 
 
 class FeedbackRequest(BaseModel):
@@ -753,6 +779,9 @@ class LessonPlanOut(BaseModel):
     chapter: str
     minutes: int
     level: str
+    # Wave 1 (additive): the plan is now also persisted as a TeacherDocument;
+    # the id is exposed here without changing any existing field.
+    document_id: int | None = None
 
 
 # --- S2.7: weak heatmap + at-risk detection + support plan --------------------
@@ -924,6 +953,9 @@ class SchoolHealthOut(BaseModel):
     support_pct: float
     risk_pct: float
     at_risk: list[SchoolAtRiskRow]
+    # Wave 2: capacity info. The schools table has NO capacity column today,
+    # so this is honestly None until one exists (no fabricated numbers).
+    capacity: int | None = None
 
 
 class CoverageCell(BaseModel):
@@ -1007,3 +1039,310 @@ class KgRebuildOut(BaseModel):
     concepts: int
     llm_concepts: int
     edges: int
+
+
+# --- Wave 1: teacher documents (generic generators) --------------------------
+
+# Kinds accepted by POST /teacher/generate/{kind}. lesson_plan documents are
+# persisted by POST /teacher/lesson-plans and are NOT generatable here.
+TEACHER_DOCUMENT_KINDS: tuple[str, ...] = ("worksheet", "answer_key", "homework", "rubric")
+TEACHER_DOCUMENT_PDF_KINDS: tuple[str, ...] = ("worksheet", "answer_key", "lesson_plan")
+
+
+class WorksheetIn(BaseModel):
+    class_level: int = Field(ge=1, le=12)
+    subject: str = Field(min_length=1, max_length=60)
+    chapter: str = Field(min_length=1, max_length=200)
+
+
+class HomeworkIn(WorksheetIn):
+    pass
+
+
+class RubricIn(WorksheetIn):
+    pass
+
+
+class AnswerKeyIn(BaseModel):
+    """Answer key from an own paper (paper_id) OR an inline question list."""
+
+    class_level: int = Field(ge=1, le=12)
+    subject: str = Field(min_length=1, max_length=60)
+    chapter: str | None = Field(default=None, max_length=200)
+    paper_id: int | None = None
+    questions: list[str] | None = Field(default=None, min_length=1, max_length=50)
+
+    @model_validator(mode="after")
+    def _questions_source(self) -> "AnswerKeyIn":
+        if (self.paper_id is None) == (self.questions is None):
+            raise ValueError("exactly one of paper_id or questions must be provided")
+        if self.questions is not None and not all(
+            isinstance(q, str) and q.strip() for q in self.questions
+        ):
+            raise ValueError("questions entries must be non-empty strings")
+        return self
+
+
+class TeacherDocumentOut(BaseModel):
+    id: int
+    kind: str
+    class_level: int
+    subject: str
+    chapter: str | None = None
+    title: str
+    payload: dict[str, Any] = {}
+    created_at: datetime | None = None
+
+
+class GenerateDocumentOut(TeacherDocumentOut):
+    """Generator response: the persisted document plus cited sources."""
+
+    sources: list[SourceRef] = []
+
+
+# --- Wave 1: saved notes ------------------------------------------------------
+
+
+class SavedNoteIn(BaseModel):
+    title: str | None = Field(default=None, max_length=200)
+    body: str = Field(min_length=1, max_length=20000)
+    source: Literal["tutor", "chapter", "other"] = "other"
+    source_ref: dict[str, Any] | None = None
+
+
+class SavedNoteOut(BaseModel):
+    id: int
+    title: str
+    body: str
+    source: str
+    source_ref: dict[str, Any] | None = None
+    created_at: datetime | None = None
+
+
+# --- Wave 1: notification feed -------------------------------------------------
+
+
+class NotificationOut(BaseModel):
+    id: int
+    kind: str
+    # i18n code resolved client-side (never final copy), e.g. notif_quiz_assigned
+    code: str
+    params: dict[str, Any] = {}
+    link: str | None = None
+    read_at: datetime | None = None
+    created_at: datetime | None = None
+
+
+class NotificationListOut(BaseModel):
+    items: list[NotificationOut]
+    unread_count: int
+
+
+# --- Wave 1: async generation jobs (spec section 37) ---------------------------
+
+# All five generator kinds can run as a background job.
+AI_JOB_KINDS: tuple[str, ...] = ("worksheet", "answer_key", "homework", "rubric", "lesson_plan")
+
+
+class AiJobIn(BaseModel):
+    """Kind is NOT whitelisted at the door: unknown kinds are accepted into a
+    queued job and fail in the runner (visible ``failed`` state + error is
+    better product behavior than a bare 422 on a long-running API)."""
+
+    kind: str = Field(min_length=1, max_length=40, pattern=r"^[a-z0-9_]+$")
+    payload: dict[str, Any] = {}
+
+
+class AiJobOut(BaseModel):
+    id: str
+    kind: str
+    status: str  # queued | generating | validating | ready | failed
+    payload: dict[str, Any] = {}
+    result: dict[str, Any] | None = None
+    error: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+# --- Wave 1: teacher workload metric ------------------------------------------
+
+
+class WorkloadOut(BaseModel):
+    """Artifact counts x documented planning constants -- an ESTIMATE built
+    from real row counts only (nothing is fabricated)."""
+
+    counts: dict[str, int]
+    minutes_saved: dict[str, int]
+    total_minutes_saved: int
+    estimate: bool
+    methodology: str
+
+
+# --- Wave 2: vision contract ----------------------------------------------------
+# (CHAT_STRATEGIES / ChatStrategy / EXPLANATION_STYLES live at the TOP of this
+# module because ChatSendRequest, defined much earlier, references them.)
+
+
+class ChatImageIn(BaseModel):
+    """Optional inline image on a chat turn. Validated in the route:
+    mime must be in _IMAGE_MIME_ALLOWED, the base64 payload must decode and
+    the decoded bytes must stay <= _IMAGE_MAX_BYTES; violations answer with
+    422 {"code": "image_invalid"}."""
+
+    mime_type: str = Field(min_length=1, max_length=64)
+    data_base64: str = Field(min_length=1)
+
+
+# --- Wave 2: school section (school_admin own school; admin platform-wide) ------
+
+
+class SchoolStudentRow(BaseModel):
+    """One roster row for the school-section list. Minimal PII: name only --
+    never email/phone (R11 child-data minimization)."""
+
+    student_id: int
+    name: str
+    class_level: int
+    section: str
+    last_active: str | None = None  # ISO date (Dhaka) or None = no signal
+    quiz_attempts: int = 0
+
+
+class SchoolStudentPage(BaseModel):
+    total: int
+    limit: int
+    offset: int
+    items: list[SchoolStudentRow]
+
+
+class SchoolTeacherRow(BaseModel):
+    teacher_id: int
+    name: str
+    # '' rows in ClassTeacher mean 'all subjects' -- surfaced as the literal
+    # string 'all' so clients never have to special-case the empty string.
+    subjects: list[str] = []
+    classrooms: int = 0
+
+
+class SchoolClassRow(BaseModel):
+    classroom_id: int
+    class_level: int
+    section: str
+    students: int
+    quiz_attempts: int
+    attempts_graded: int
+    avg_quiz_accuracy: float | None = None
+
+
+class SchoolCoverageRow(BaseModel):
+    """Per class_level: content coverage vs the subjects the school's
+    students actually practice, plus chapter read coverage. Honest empty
+    values -- an empty list means NO signal, not 'covered'."""
+
+    class_level: int
+    content_subjects: list[str] = []  # subjects with chapter_content rows
+    asked_subjects: list[str] = []  # subjects seen in quiz attempts (proxy:
+    # chat messages do not persist a subject column -- documented deviation)
+    uncovered_subjects: list[str] = []
+    chapters_available: int = 0
+    chapters_read: int = 0
+    chapters_completed: int = 0
+
+
+class SchoolCoverageOut(BaseModel):
+    rows: list[SchoolCoverageRow]
+
+
+class SchoolActiveDay(BaseModel):
+    date: str
+    students: int
+
+
+class SchoolAnalyticsOut(BaseModel):
+    """K-anonymity-safe aggregate counts only (R11): never per-student rows,
+    never message content."""
+
+    days: int
+    active_by_date: list[SchoolActiveDay] = []
+    daily_active_avg: float = 0.0
+    questions_asked: int = 0
+    quiz_attempts: int = 0
+    attempts_graded: int = 0
+    avg_quiz_score_pct: float | None = None
+
+
+# --- Wave 2: parent activity + period report ------------------------------------
+
+
+class ParentReportOut(BaseModel):
+    """JSON report for one linked child over a window. Server returns
+    suggestion CODES + params only; the client renders the copy (i18n)."""
+
+    student_id: int
+    name: str
+    class_level: int
+    period: str  # weekly | monthly
+    window_start: str
+    window_end: str
+    quizzes_taken: int
+    quizzes_graded: int
+    avg_score_pct: float | None = None
+    chapters_read: int
+    chapters_completed: int
+    questions_asked: int
+    weak_chapters: list[str] = []  # same source as the weekly digest (<60%)
+    strengths: list[str] = []  # chapter accuracy >= 85 in the window
+    suggestion_code: str
+    suggestion_params: dict[str, Any] = {}
+
+
+# --- Wave 2: admin AI quality -----------------------------------------------------
+
+
+class AdminAiQualityOut(BaseModel):
+    """Counts only, never message content (R11)."""
+
+    days: int
+    answers_total: int
+    grounded_count: int
+    ungrounded_count: int
+    refusals_total: int
+    refusals_by_reason: dict[str, int] = {}
+    thumbs_up: int = 0
+    thumbs_down: int = 0
+    # confidence < 0.5 under the documented formula (see main._answer_confidence)
+    low_confidence_count: int = 0
+    # ChatMessage carries no model column -> always empty today (audit finding).
+    by_model: dict[str, int] = {}
+
+
+# --- Wave 2: student memory / learning preferences --------------------------------
+
+
+class StudentPrefsOut(BaseModel):
+    memory_enabled: bool
+    learning_prefs: dict[str, Any] = {}
+
+
+class StudentPrefsPatch(BaseModel):
+    """Partial update; learning_prefs keys are whitelisted in the route
+    (explanation_style in EXPLANATION_STYLES, subject_focus 1-60 chars)."""
+
+    memory_enabled: bool | None = None
+    learning_prefs: dict[str, Any] | None = None
+
+
+class MemoryFactsOut(BaseModel):
+    """Derived facts. When memory_enabled is false the facts are STILL
+    returned to the owner (flagged enabled:false) but the tutor excludes
+    the personalized context block."""
+
+    memory_enabled: bool
+    facts: dict[str, Any] = {}
+    # i18n code explaining what disabling does (client renders the copy).
+    on_disable_note_code: str = "memory_on_disable_note"
+
+
+# Resolve the forward reference in ChatSendRequest.image (ChatImageIn is
+# defined further down in this module).
+ChatSendRequest.model_rebuild()

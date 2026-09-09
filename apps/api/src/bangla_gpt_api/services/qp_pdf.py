@@ -95,3 +95,176 @@ def _esc(text: str) -> str:
     return (
         text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
     )
+
+
+# ── Wave 1: printable PDFs for persisted teacher documents ────────────────
+# Same engine + bundled font as render_qp_pdf above; one renderer per
+# printable kind (worksheet / answer_key / lesson_plan).
+
+
+def render_document_pdf(doc: dict) -> bytes:
+    """Render one persisted TeacherDocument. ``doc`` keys: kind, title,
+    class_level, subject, chapter, payload."""
+    if not font_available():
+        raise RuntimeError("bundled Bengali font missing")
+    kind = str(doc.get("kind", ""))
+    if kind not in ("worksheet", "answer_key", "lesson_plan"):
+        raise ValueError(f"no PDF renderer for kind {kind!r}")
+    payload = dict(doc.get("payload") or {})
+    pdf = FPDF(format="A4")
+    pdf.set_margins(15, 15, 15)
+    pdf.add_page()
+    pdf.add_font("nbg", style="", fname=str(_FONT))
+    pdf.set_font("nbg", size=15)
+    pdf.cell(
+        w=0,
+        h=9,
+        text=f"{doc.get('title') or kind} ({doc.get('class_level')}) - {doc.get('subject')}",
+        new_x="LMARGIN",
+        new_y="NEXT",
+    )
+    pdf.set_font("nbg", size=10)
+    pdf.set_text_color(90, 90, 90)
+    chapter = doc.get("chapter") or "-"
+    pdf.cell(w=0, h=7, text=f"chapter: {chapter}", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(0, 0, 0)
+    if kind == "worksheet":
+        _worksheet_pdf(pdf, payload)
+    elif kind == "answer_key":
+        _answer_key_pdf(pdf, payload)
+    else:
+        _lesson_plan_pdf(pdf, payload)
+    return bytes(pdf.output())
+
+
+def _worksheet_pdf(pdf: FPDF, payload: dict) -> None:
+    for tier in payload.get("tiers") or []:
+        pdf.set_font("nbg", size=12)
+        pdf.cell(
+            w=0,
+            h=8,
+            text=f"[{tier.get('tier')}]",
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
+        pdf.set_font("nbg", size=11)
+        for i, q in enumerate(tier.get("questions") or [], start=1):
+            pdf.multi_cell(
+                w=0,
+                h=6,
+                text=f"{i}. {q.get('text')} ({q.get('marks')})",
+                new_x="LMARGIN",
+                new_y="NEXT",
+            )
+            pdf.set_font("nbg", size=10)
+            for oi, opt in enumerate(q.get("options") or []):
+                pdf.cell(
+                    w=0,
+                    h=5,
+                    text=f"   {chr(ord('a') + oi)}) {opt}",
+                    new_x="LMARGIN",
+                    new_y="NEXT",
+                )
+            pdf.set_font("nbg", size=11)
+            pdf.ln(2)
+    pdf.set_font("nbg", size=12)
+    pdf.cell(w=0, h=8, text="ANSWER SHEET", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("nbg", size=10)
+    for row in payload.get("answer_sheet") or []:
+        pdf.cell(
+            w=0,
+            h=5,
+            text=f"{row.get('ref')}: {row.get('answer')}",
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
+
+
+def _answer_key_pdf(pdf: FPDF, payload: dict) -> None:
+    pdf.set_font("nbg", size=11)
+    for a in payload.get("answers") or []:
+        pdf.multi_cell(
+            w=0,
+            h=6,
+            text=f"{a.get('ref')} ({a.get('marks')}): {a.get('answer')}",
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
+        pdf.set_font("nbg", size=10)
+        pdf.set_text_color(70, 70, 70)
+        pdf.multi_cell(
+            w=0, h=5, text=f"  {a.get('detailed_solution')}", new_x="LMARGIN", new_y="NEXT"
+        )
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font("nbg", size=11)
+        pdf.ln(1)
+    guide = payload.get("marking_guide") or {}
+    pdf.set_font("nbg", size=12)
+    pdf.cell(
+        w=0,
+        h=8,
+        text=f"MARKING GUIDE - TOTAL {guide.get('total_marks')}",
+        new_x="LMARGIN",
+        new_y="NEXT",
+    )
+    pdf.set_font("nbg", size=10)
+    note = str(guide.get("per_mark_note") or "")
+    if note:
+        pdf.multi_cell(w=0, h=5, text=note, new_x="LMARGIN", new_y="NEXT")
+
+
+def _lesson_plan_pdf(pdf: FPDF, payload: dict) -> None:
+    sections = payload.get("sections") or {}
+    for key in (
+        "objective",
+        "previous_knowledge",
+        "introduction",
+        "main_explanation",
+        "activity",
+        "questions",
+        "assessment",
+        "homework",
+    ):
+        value = str(sections.get(key) or "").strip()
+        if not value:
+            continue
+        pdf.set_font("nbg", size=12)
+        pdf.cell(w=0, h=8, text=key.replace("_", " ").upper(), new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font("nbg", size=11)
+        for line in value.splitlines() or [value]:
+            pdf.multi_cell(w=0, h=6, text=line, new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(2)
+
+
+def render_document_html(doc: dict) -> str:
+    """Print-friendly HTML fallback for teacher documents (Ctrl+P gives a PDF)."""
+    rows: list[str] = []
+    payload = dict(doc.get("payload") or {})
+
+    def add(text: str) -> None:
+        rows.append(f"<p>{_esc(text)}</p>")
+
+    for tier in payload.get("tiers") or []:
+        rows.append(f"<h2>{_esc(str(tier.get('tier')))}</h2>")
+        for i, q in enumerate(tier.get("questions") or [], start=1):
+            rows.append(f"<p>{i}. {_esc(str(q.get('text')))} ({q.get('marks')})</p>")
+    for a in payload.get("answers") or []:
+        rows.append(
+            f"<p><b>{_esc(str(a.get('ref')))}</b> {_esc(str(a.get('answer')))} "
+            f"({a.get('marks')})<br><i>{_esc(str(a.get('detailed_solution')))}</i></p>"
+        )
+    for row in payload.get("answer_sheet") or []:
+        add(f"{row.get('ref')}: {row.get('answer')}")
+    sections = payload.get("sections") or {}
+    for key, value in sections.items():
+        rows.append(f"<h2>{_esc(str(key))}</h2><p>{_esc(str(value))}</p>")
+    guide = payload.get("marking_guide") or {}
+    if guide:
+        add(f"Total marks: {guide.get('total_marks')}")
+    return (
+        "<!doctype html><html><head><meta charset='utf-8'>"
+        f"<title>{_esc(str(doc.get('title') or ''))}</title><style>"
+        "body{font-family:'Noto Sans Bengali','Hind Siliguri',sans-serif;max-width:800px;"
+        "margin:2rem auto;line-height:1.7}@media print{body{margin:0}}</style></head><body>"
+        f"<h1>{_esc(str(doc.get('title') or ''))}</h1>{''.join(rows)}</body></html>"
+    )

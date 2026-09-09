@@ -31,6 +31,10 @@ class RequestContext:
     goal: str = "question"  # question | chat | reteach | quiz_explain | ...
     history_summary: str = "0 turns"  # counts/strategy only, never content
     mastery_snapshot: Mapping[str, float] = field(default_factory=dict)
+    # Wave 2: gated personalization line (weak-chapter facts + explanation
+    # style directive). Empty string -> NO personalization is rendered; the
+    # caller leaves it empty when the student disabled their learning memory.
+    memory_block: str = ""
 
     def log_fields(self) -> dict[str, object]:
         """JSON-safe observability fields (eval + cost attribution)."""
@@ -55,11 +59,16 @@ class RequestContext:
             if self.mastery_snapshot
             else "none"
         )
+        # Wave 2: the personalization line renders ONLY when the caller put
+        # content in memory_block (memory enabled). Byte-identical output
+        # when empty -- existing consumers/tests are unaffected.
+        memory_line = f"\nmemory: {self.memory_block}" if self.memory_block else ""
         return (
             "[education-context]\n"
             f"role={self.role} class_level={self.class_level} subject={self.subject or 'any'}"
             f" chapter={self.chapter_id or 'any'} goal={self.goal}"
             f" history={self.history_summary} mastery_recent={mastery}"
+            f"{memory_line}"
             "\n[/education-context]"
         )
 

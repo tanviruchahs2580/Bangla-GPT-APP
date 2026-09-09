@@ -117,6 +117,19 @@ def _error_message_text(body: bytes) -> str:
         return body[:200].decode(errors="replace")
 
 
+def _build_payload(prompt: str, system: str | None, image: dict | None) -> dict:
+    """One user message: the text prompt plus, when given, the validated
+    inline image part (Wave 2 vision contract: ``{"inline_data":
+    {"mime_type", "data"}}`` next to the text part in the same contents)."""
+    parts: list[dict] = [{"text": prompt}]
+    if image:
+        parts.append({"inline_data": {"mime_type": image["mime_type"], "data": image["data"]}})
+    payload: dict = {"contents": [{"role": "user", "parts": parts}]}
+    if system:
+        payload["systemInstruction"] = {"parts": [{"text": system}]}
+    return payload
+
+
 class GeminiProvider:
     name = "gemini"
 
@@ -148,7 +161,9 @@ class GeminiProvider:
             await self._http.aclose()
             self._http = None
 
-    async def stream(self, prompt: str, *, system: str | None = None) -> AsyncIterator[str]:
+    async def stream(
+        self, prompt: str, *, system: str | None = None, image: dict | None = None
+    ) -> AsyncIterator[str]:
         """Stream tokens via ``streamGenerateContent`` SSE transport.
 
         Falls back to a single chunk of the non-streaming answer when the
@@ -156,9 +171,7 @@ class GeminiProvider:
         """
         url = f"{_API_BASE}/models/{self.model}:streamGenerateContent?alt=sse"
         headers = {"x-goog-api-key": self._api_key}
-        payload: dict = {"contents": [{"role": "user", "parts": [{"text": prompt}]}]}
-        if system:
-            payload["systemInstruction"] = {"parts": [{"text": system}]}
+        payload = _build_payload(prompt, system, image)
 
         attempt = 0
         start = time.perf_counter()
@@ -209,12 +222,12 @@ class GeminiProvider:
                 continue
             raise ProviderError(f"Gemini API error {status}: {_error_message_text(body)}")
 
-    async def generate(self, prompt: str, *, system: str | None = None) -> str:
+    async def generate(
+        self, prompt: str, *, system: str | None = None, image: dict | None = None
+    ) -> str:
         url = f"{_API_BASE}/models/{self.model}:generateContent"
         headers = {"x-goog-api-key": self._api_key}
-        payload: dict = {"contents": [{"role": "user", "parts": [{"text": prompt}]}]}
-        if system:
-            payload["systemInstruction"] = {"parts": [{"text": system}]}
+        payload = _build_payload(prompt, system, image)
 
         attempt = 0
         start = time.perf_counter()

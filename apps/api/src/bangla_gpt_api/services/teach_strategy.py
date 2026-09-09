@@ -46,3 +46,25 @@ def reteach_instruction(last: str | None) -> tuple[str, str]:
     else:
         instruction = f"শিক্ষক-নির্দেশ: পুরোপুরি সহজভাবে, {strategy_name(key)} পদ্ধতিতে বোঝাও।"
     return key, instruction
+
+
+# --- Wave 2: explicit student-chosen strategies ---------------------------------
+# The set a student may force per turn (schemas.CHAT_STRATEGIES). Deliberately
+# independent from the reteach cycle above: 'book_language' and 'analogy' are
+# new, 'visual'/'story' are not offered. Each maps to ONE short teacher-level
+# instruction line injected as trusted app text (same placement rule as the
+# reteach instruction) -- the protected SYSTEM_PROMPT constants are NEVER
+# edited; the mapping only ever PREPENDS a line to the user-side prompt.
+EXPLICIT_STRATEGY_NAMES: dict[str, str] = {
+    "simple": "সহজ ভাষা",
+    "example": "বাস্তব উদাহরণ",
+    "book_language": "পাঠ্যবইয়ের ভাষা",
+    "steps": "ধাপে ধাপে",
+    "analogy": "উপমা দিয়ে",
+}
+
+
+def explicit_strategy_instruction(key: str) -> str:
+    """Teacher instruction line for an explicitly requested strategy."""
+    name = EXPLICIT_STRATEGY_NAMES.get(key, key)
+    return f"শিক্ষক-নির্দেশ: এবার {name} পদ্ধতিতে ব্যাখ্যা কর।"

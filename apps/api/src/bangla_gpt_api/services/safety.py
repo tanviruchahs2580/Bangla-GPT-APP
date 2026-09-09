@@ -198,3 +198,24 @@ AGE_RULE_SENTENCE = (
     "\u0995\u0996\u09a8\u09cb \u09aa\u09cd\u09b0\u0995\u09be\u09b6 \u0995\u09b0\u09ac\u09c7 "
     "\u09a8\u09be\u0964"
 )
+
+
+def answer_confidence(
+    grounded: bool | None,
+    refused_reason: str | None,
+    scores: list[float],
+) -> float | None:
+    """Wave 2: honest numeric confidence for a tutoring answer.
+
+    0.0 for refusals; None when there is no evidence signal at all;
+    otherwise 0.5*breadth (source count, 2+ sources saturate) +
+    0.5*depth (mean per-source score, capped to [0,1])."""
+    if refused_reason:
+        return 0.0
+    if grounded is None and not scores:
+        return None
+    breadth = min(1.0, len(scores) / 2)
+    capped = [max(0.0, min(1.0, float(s))) for s in scores]
+    depth = (sum(capped) / len(capped)) if capped else 0.0
+    value = 0.5 * breadth + 0.5 * depth
+    return round(max(0.0, min(1.0, value)), 4)
