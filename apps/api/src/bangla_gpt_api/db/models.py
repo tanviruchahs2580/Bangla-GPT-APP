@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from uuid import uuid4
 
 from sqlalchemy import (
     JSON,
@@ -66,6 +67,16 @@ class Student(Base):
     )
     name: Mapped[str] = mapped_column(String(120))
     class_level: Mapped[int] = mapped_column(Integer)
+    # Wave 1: per-student learning preferences and the memory opt-out flag.
+    # Both are additive; existing rows keep working via the server defaults.
+    # Wave 2: the JSON payload is a keyed dict (whitelisted keys:
+    # explanation_style, subject_focus) -- annotation-only change of the
+    # stale 'list' annotation; the column itself is untyped JSON, so NO
+    # migration is needed.
+    learning_prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    memory_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default=sa_true()
+    )
     # Guardian-consent evidence trail (child-safety compliance, D20).
     consent_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
     consent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -79,6 +90,8 @@ class Teacher(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(120))
+    # Wave 1: free-form teacher UI/workflow preferences (dict, additive).
+    prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 
@@ -654,3 +667,103 @@ class AuditLog(Base):
     action: Mapped[str] = mapped_column(String(40), index=True)
     target: Mapped[str | None] = mapped_column(String(120), nullable=True)
     detail: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+# ── Backend wave 1 ---------------------------------------------------------
+# Five additive tables: teacher documents, saved notes, user notifications,
+# a privacy-safe analytics trail and async generation jobs. All user-FK
+# children here are cleaned in DELETE /users/me (BUG-4 / FK-completeness).
+
+
+class TeacherDocument(Base):
+    """Wave 1: persisted artifacts from the generic teacher generators.
+
+    ``kind`` is one of lesson_plan | worksheet | answer_key | homework |
+    rubric; ``payload`` holds the validated generator output so the document
+    stays readable/printable even if the provider changes later.
+    """
+
+    __tablename__ = "teacher_documents"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    teacher_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    class_level: Mapped[int] = mapped_column(Integer)
+    subject: Mapped[str] = mapped_column(String(60))
+    chapter: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    title: Mapped[str] = mapped_column(String(200))
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
+
+
+class SavedNote(Base):
+    """Wave 1: user notes clipped from the tutor, a chapter or elsewhere."""
+
+    __tablename__ = "saved_notes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(String(16))  # tutor | chapter | other
+    source_ref: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class Notification(Base):
+    """Wave 1: in-app notification feed entry.
+
+    ``code`` is an i18n code resolved by the client (never final copy) and
+    ``params`` carries only ids/counts/safe labels (R11).
+    """
+
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(40))
+    code: Mapped[str] = mapped_column(String(64))
+    params: Mapped[dict] = mapped_column(JSON, default=dict)
+    link: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
+
+
+class AnalyticsEventRow(Base):
+    """Wave 1: persisted product analytics events (sanitized scalars only).
+
+    ``user_id`` deliberately has NO FK: the trail is append-only privacy
+    history cleaned by the retention sweep, so it must never block (or be
+    blocked by) account deletion. Only sanitized scalar props live in
+    ``props`` -- PII-looking keys are dropped before the row is written.
+    """
+
+    __tablename__ = "analytics_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(64))
+    role: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    props: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
+
+
+class AiJob(Base):
+    """Wave 1: async generation job (§37) with a linear status lifecycle.
+
+    queued -> generating -> validating -> ready | failed. The job row is the
+    single source of truth; the inline runner opens its own session so the
+    request session is never reused.
+    """
+
+    __tablename__ = "ai_jobs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(40))
+    status: Mapped[str] = mapped_column(String(16), default="queued")
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    error: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)

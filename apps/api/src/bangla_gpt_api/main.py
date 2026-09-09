@@ -1,11 +1,14 @@
 import asyncio
+import base64
 import csv
 import hashlib
 import json
 import logging
 import random
+import re
 import secrets
 import time
+import uuid
 from collections import defaultdict
 from collections.abc import AsyncIterator, Generator
 from datetime import UTC, datetime, timedelta
@@ -19,6 +22,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from pydantic import ValidationError
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError, OperationalError
@@ -36,6 +40,8 @@ from bangla_gpt_api.config import DEFAULT_JWT_SECRET, Settings, get_settings
 from bangla_gpt_api.curriculum.models import Chunk
 from bangla_gpt_api.data.loader import load_sample_corpus
 from bangla_gpt_api.db.models import (
+    AiJob,
+    AnalyticsEventRow,
     AnswerLog,
     Assignment,
     AuditLog,
@@ -50,6 +56,7 @@ from bangla_gpt_api.db.models import (
     DailyActivity,
     EmailVerification,
     Feedback,
+    Notification,
     Parent,
     ParentInvite,
     ParentStudentLink,
@@ -58,6 +65,7 @@ from bangla_gpt_api.db.models import (
     QuestionPaper,
     QuizAttempt,
     RevisionItem,
+    SavedNote,
     School,
     SchoolInvite,
     ShortTest,
@@ -66,6 +74,7 @@ from bangla_gpt_api.db.models import (
     StudentInvite,
     SupportPlan,
     Teacher,
+    TeacherDocument,
     User,
 )
 from bangla_gpt_api.db.session import init_db, make_engine, make_session_factory
@@ -92,13 +101,20 @@ from bangla_gpt_api.retrieval.bm25 import BM25Index, tokenize
 from bangla_gpt_api.retrieval.embedding import build_embedder
 from bangla_gpt_api.retrieval.hybrid_index import HybridIndex
 from bangla_gpt_api.schemas import (
+    EXPLANATION_STYLES,
+    TEACHER_DOCUMENT_KINDS,
+    TEACHER_DOCUMENT_PDF_KINDS,
     ActivityDay,
     ActivitySummary,
+    AdminAiQualityOut,
     AdminAuditPage,
     AdminOverview,
     AdminSchoolStatsOut,
     AdminUsersPage,
+    AiJobIn,
+    AiJobOut,
     AnalyticsEvent,
+    AnswerKeyIn,
     AskRequest,
     AskResponse,
     AssignmentIn,
@@ -114,6 +130,7 @@ from bangla_gpt_api.schemas import (
     ChapterProgressOut,
     ChapterSections,
     ChapterStat,
+    ChatImageIn,
     ChatMessageOut,
     ChatSendRequest,
     ClassAnalytics,
@@ -137,6 +154,8 @@ from bangla_gpt_api.schemas import (
     FeedbackQueuePage,
     FeedbackRequest,
     ForgotPasswordRequest,
+    GenerateDocumentOut,
+    HomeworkIn,
     ImpersonateOut,
     ImpersonateRequest,
     KgGapOut,
@@ -145,10 +164,14 @@ from bangla_gpt_api.schemas import (
     LessonPlanIn,
     LessonPlanOut,
     LoginRequest,
+    MemoryFactsOut,
     MeResponse,
     MessageSearchHit,
+    NotificationListOut,
+    NotificationOut,
     ParentInviteLinkRequest,
     ParentLinkRequest,
+    ParentReportOut,
     QPDraftIn,
     QPOut,
     QPQuestion,
@@ -172,7 +195,15 @@ from bangla_gpt_api.schemas import (
     RevisionReviewIn,
     RoleUpdateRequest,
     RosterEntryOut,
+    RubricIn,
+    SavedNoteIn,
+    SavedNoteOut,
+    SchoolActiveDay,
+    SchoolAnalyticsOut,
     SchoolAtRiskRow,
+    SchoolClassRow,
+    SchoolCoverageOut,
+    SchoolCoverageRow,
     SchoolCreateIn,
     SchoolHealthOut,
     SchoolInviteAdminOut,
@@ -182,6 +213,9 @@ from bangla_gpt_api.schemas import (
     SchoolOut,
     SchoolOverviewOut,
     SchoolStaffOut,
+    SchoolStudentPage,
+    SchoolStudentRow,
+    SchoolTeacherRow,
     SearchHit,
     SearchResponse,
     ShortTestIn,
@@ -191,11 +225,14 @@ from bangla_gpt_api.schemas import (
     StatusComponent,
     StatusOut,
     StudentBrief,
+    StudentPrefsOut,
+    StudentPrefsPatch,
     StudentProgress,
     StudentResponse,
     SupportPlanIn,
     SupportPlanOut,
     TeacherContentOut,
+    TeacherDocumentOut,
     TokenResponse,
     TriageUpdate,
     UserPublic,
@@ -203,6 +240,8 @@ from bangla_gpt_api.schemas import (
     WeakCell,
     WeakMatrixOut,
     WeakStudent,
+    WorkloadOut,
+    WorksheetIn,
 )
 from bangla_gpt_api.security import decrypt_pii, encrypt_pii, write_audit
 from bangla_gpt_api.services import (
@@ -211,6 +250,7 @@ from bangla_gpt_api.services import (
     coverage,
     govt_report,
     knowledge,
+    parent_digest,
     revision,
     weakness,
 )
@@ -227,9 +267,13 @@ from bangla_gpt_api.services.context import (
     snapshot_mastery,
 )
 from bangla_gpt_api.services.generators import (
+    generate_answer_key,
     generate_chapter_content,
+    generate_homework,
     generate_lesson_plan,
     generate_question_paper,
+    generate_rubric,
+    generate_worksheet,
 )
 from bangla_gpt_api.services.learn import (
     ChapterContentOut,
@@ -240,7 +284,12 @@ from bangla_gpt_api.services.learn import (
     subject_chapters,
 )
 from bangla_gpt_api.services.mailer import send_mail, smtp_configured
-from bangla_gpt_api.services.qp_pdf import render_qp_html, render_qp_pdf
+from bangla_gpt_api.services.qp_pdf import (
+    render_document_html,
+    render_document_pdf,
+    render_qp_html,
+    render_qp_pdf,
+)
 from bangla_gpt_api.services.question_bank import (
     bank_keys,
     dedupe_key,
@@ -250,7 +299,7 @@ from bangla_gpt_api.services.question_bank import (
 from bangla_gpt_api.services.quiz import ClozeQuizGenerator, dump_quiz
 from bangla_gpt_api.services.quiz_explain import quiz_explain_instruction
 from bangla_gpt_api.services.retention import run_retention_sweep
-from bangla_gpt_api.services.tutor import TutorService
+from bangla_gpt_api.services.tutor import VISION_UNSUPPORTED_ANSWER, TutorService
 
 logger = logging.getLogger(__name__)
 
@@ -362,7 +411,6 @@ def enforce_production_safety(settings: Settings) -> None:
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        import uuid
 
         request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex[:16]
         request.state.request_id = request_id
@@ -517,6 +565,194 @@ def _unauthorized(detail: str = "Not authenticated") -> HTTPException:
     )
 
 
+# --- Wave 1: analytics event hygiene ------------------------------------------
+# POST /events props are persisted; anything that could smuggle PII (keys
+# whose NAME hints at free text or identifiers) is dropped before it can ever
+# reach the database, values are primitive-only and strings are truncated.
+_EVENT_DROP_KEY_RE = re.compile(
+    r"email|name|phone|address|token|code|password|question|message|content|answer",
+    re.IGNORECASE,
+)
+_EVENT_PROP_MAX_LEN = 40
+
+
+def _sanitize_event_props(props: dict[str, Any]) -> dict[str, Any]:
+    """Primitives only, keys matching the drop-list removed, strings <= 40."""
+    clean: dict[str, Any] = {}
+    for key, value in props.items():
+        if _EVENT_DROP_KEY_RE.search(str(key)):
+            continue
+        if isinstance(value, bool) or isinstance(value, int):
+            clean[str(key)[:_EVENT_PROP_MAX_LEN]] = value
+        elif isinstance(value, float):
+            clean[str(key)[:_EVENT_PROP_MAX_LEN]] = value
+        elif isinstance(value, str):
+            clean[str(key)[:_EVENT_PROP_MAX_LEN]] = value[:_EVENT_PROP_MAX_LEN]
+        # anything non-primitive is dropped entirely
+    return clean
+
+
+def notify_user(
+    db: Session,
+    user_id: int | None,
+    kind: str,
+    code: str,
+    params: dict[str, Any] | None = None,
+    link: str | None = None,
+) -> None:
+    """Queue one in-app notification for ``user_id`` (skips NULL users, e.g.
+    CSV-imported students without an account yet). Adds only -- the CALLER's
+    commit persists it together with the business row that triggered it."""
+    if user_id is None:
+        return
+    db.add(
+        Notification(
+            user_id=user_id,
+            kind=kind[:40],
+            code=code[:64],
+            params=params or {},
+            link=link[:200] if link else None,
+        )
+    )
+
+
+# --- Wave 2: server-side product analytics -------------------------------------
+
+
+def _record_analytics(
+    db: Session,
+    actor_id: int | None,
+    actor_role: str | None,
+    name: str,
+    props: dict[str, Any] | None = None,
+) -> None:
+    """Queue one sanitized AnalyticsEventRow (same drop-list as POST /events).
+
+    Adds only -- the caller's commit persists it. Props must be code/count
+    flavoured; anything PII-shaped is stripped by ``_sanitize_event_props``.
+    """
+    db.add(
+        AnalyticsEventRow(
+            user_id=actor_id,
+            name=name[:64],
+            role=actor_role[:40] if actor_role else None,
+            props=_sanitize_event_props(dict(props or {})),
+        )
+    )
+
+
+# --- Wave 2: answer confidence ---------------------------------------------------
+# Documented formula (0..1, computed at answer finalization, stored nowhere but
+# in the payload/schema field):
+#
+#   refused answer                      -> 0.0
+#   no grounding info at all            -> None (unknown, honest)
+#   otherwise: clamp01(
+#       0.5 * min(1.0, len(source_scores) / 2)        # retrieval breadth
+#       + 0.5 * mean(min(1.0, s) for s in scores)     # retrieval depth
+#   )
+#
+# SourceRef.score is an unbounded BM25 value, so every raw score is capped at
+# 1.0 before averaging. When grounding is known but no sources survived, the
+# depth term is 0 and only the (zero) breadth term counts.
+def _answer_confidence(
+    grounded: bool | None,
+    refused_reason: str | None,
+    scores: list[float],
+) -> float | None:
+    from bangla_gpt_api.services.safety import answer_confidence
+
+    return answer_confidence(grounded, refused_reason, scores)
+
+
+def source_scores(refs: Any) -> list[float]:
+    """BM25 scores of a SourceRef list (unbounded values; capped by caller)."""
+    return [float(getattr(r, "score", 0.0)) for r in refs]
+
+
+# --- Wave 2: chat image (vision) contract ---------------------------------------
+_IMAGE_MIME_ALLOWED = frozenset({"image/png", "image/jpeg", "image/webp"})
+# Decoded size ceiling (base64 inflates ~4/3, so ~2 MB of JSON on the wire).
+_IMAGE_MAX_BYTES = 1_500_000
+
+
+def _validate_chat_image(image: ChatImageIn | None) -> dict[str, Any] | None:
+    """Decode + validate an inline image, returning the provider payload dict
+    ``{"mime_type": ..., "data": <raw bytes>}`` or None for text-only turns.
+
+    Every failure -- disallowed mime, undecodable base64, oversize payload --
+    is a 422 with detail code ``image_invalid`` (never a partial accept).
+    """
+    if image is None:
+        return None
+    mime = image.mime_type.strip().lower()
+    if mime not in _IMAGE_MIME_ALLOWED:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "image_invalid", "message": "Unsupported image mime type"},
+        )
+    try:
+        raw = base64.b64decode(image.data_base64, validate=True)
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "image_invalid", "message": "Image data is not valid base64"},
+        ) from exc
+    if not raw or len(raw) > _IMAGE_MAX_BYTES:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "image_invalid", "message": "Image is empty or exceeds size limit"},
+        )
+    return {"mime_type": mime, "data": raw}
+
+
+# --- Wave 2: minimal honest personalization --------------------------------------
+# The ONLY personalized blocks the tutor is allowed to receive: which chapters
+# the student is demonstrably weak in (from graded attempts) and the requested
+# explanation style. Both are gated on the per-student memory opt-out: when
+# memory_enabled is False the builder returns "" and the prompt stays exactly
+# as impersonal as it was before Wave 2.
+EXPLANATION_STYLE_DIRECTIVES: dict[str, str] = {
+    "simple": "সবচাইতে সহজ শব্দে ছোট করে বল।",
+    "standard": "স্বাভাবিক ধারাবাহিক বিবরণ দাও।",
+    "detailed": "প্রয়োজনীয় সব ধাপ ও উদাহরণসহ বিস্তারিত বল।",
+}
+
+
+def build_personalization_block(
+    *,
+    memory_enabled: bool,
+    weak_chapters: list[str],
+    explanation_style: str | None,
+) -> str:
+    """Compose the ``memory:`` line for RequestContext ("" = no personalization)."""
+    if not memory_enabled:
+        return ""
+    parts: list[str] = []
+    if weak_chapters:
+        parts.append("weak_chapters=" + ",".join(weak_chapters[:3]))
+    directive = EXPLANATION_STYLE_DIRECTIVES.get(explanation_style or "")
+    if directive:
+        parts.append(f"explanation_style={explanation_style}: {directive}")
+    return " ".join(parts)
+
+
+# --- Wave 1: teacher workload metric ------------------------------------------
+# PLANNING ESTIMATES -- minutes a teacher typically spends producing each
+# artifact by hand, documented here so the workload endpoint stays auditable.
+# They are NOT measured; response always carries estimate=true.
+_MINUTES_SAVED_PER_ARTIFACT: dict[str, int] = {
+    "question_paper": 180,
+    "short_test": 40,
+    "lesson_plan": 60,
+    "worksheet": 45,
+    "study_material": 90,
+    "answer_key": 30,
+    "homework": 20,
+    "rubric": 40,
+}
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level)
@@ -606,9 +842,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if hasattr(provider, "aclose"):
             app.router.on_shutdown.append(provider.aclose)
 
+    def _is_mock_provider() -> bool:
+        """Wave 2: the chat routes refuse vision turns for the mock provider
+        (it has no eyes); the honest refusal happens at the route, not inside
+        the service, so the LLM pipeline never sees an unusable image."""
+        return tutor is not None and getattr(tutor.provider, "name", "") == "mock"
+
     engine = make_engine(settings)
     _safe_init_db(engine)
     session_factory = make_session_factory(engine)
+    # Wave 1: strong references to fire-and-forget AiJob tasks (asyncio may
+    # garbage-collect bare create_task handles).
+    app.state.ai_job_tasks = set()
 
     if settings.admin_email and settings.admin_password:
         force_change = settings.force_admin_password_change
@@ -739,12 +984,61 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Chapter not found")
         return content
 
+    # --- Wave 2: school tenancy helpers -----------------------------------------
+    # Tenancy anchor is User.school_id. A student belongs to a school EXACTLY
+    # when one of their ClassRoom memberships carries that school_id. A teacher
+    # WITHOUT a school keeps the pre-Wave-2 behavior (no tenancy wall) so every
+    # standalone-teacher flow stays byte-compatible; once a teacher is attached
+    # to a school, students and classrooms of OTHER schools become invisible
+    # (403 other_school, same code the /school/* routes use).
+    def _tenant_school_id(user: User) -> int | None:
+        if user.role == "admin":
+            return None
+        if user.role in ("teacher", "school_admin") and user.school_id is not None:
+            return user.school_id
+        return None
+
+    def _school_student_id_set(db: Session, school_id: int) -> set[int]:
+        rows = (
+            db.execute(
+                select(ClassStudent.student_id)
+                .join(ClassRoom, ClassRoom.id == ClassStudent.classroom_id)
+                .where(ClassRoom.school_id == school_id)
+            )
+            .scalars()
+            .all()
+        )
+        return set(rows)
+
+    def _assert_student_in_school(db: Session, user: User, student: Student) -> Student:
+        """Tenancy gate for per-student reads/writes (closes cross-school IDOR)."""
+        school_id = _tenant_school_id(user)
+        if school_id is None:
+            return student
+        if student.id not in _school_student_id_set(db, school_id):
+            raise HTTPException(
+                status_code=403,
+                detail={"code": "other_school", "message": "Student is outside your school"},
+            )
+        return student
+
+    def _assert_room_in_school(user: User, room: ClassRoom) -> ClassRoom:
+        school_id = _tenant_school_id(user)
+        if school_id is None:
+            return room
+        if room.school_id != school_id:
+            raise HTTPException(
+                status_code=403,
+                detail={"code": "other_school", "message": "Classroom is outside your school"},
+            )
+        return room
+
     def authorize_student_access(db: Session, student_id: int, user: User) -> Student:
         student = db.get(Student, student_id)
         if student is None:
             raise HTTPException(status_code=404, detail="Student not found")
         if user.role in ("teacher", "admin"):
-            return student
+            return _assert_student_in_school(db, user, student)
         if user.role == "student" and student.user_id == user.id:
             return student
         raise HTTPException(status_code=403, detail="Not allowed to access this student")
@@ -1162,10 +1456,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         Also logs it (event ``ai_request_context``) for eval/cost attribution:
         log_fields carries counts and ids only -- never message content (R11).
+
+        Wave 2 memory opt-out: with ``Student.memory_enabled`` false NEITHER
+        the mastery snapshot nor the personalization line is computed, so the
+        prompt carries nothing learned about this student (honest, not
+        cosmetic -- the derivation itself is skipped).
         """
         mastery: dict[str, float] = {}
+        memory_block = ""
         student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one_or_none()
-        if student is not None:
+        memory_enabled = student is None or bool(student.memory_enabled)
+        if student is not None and memory_enabled:
             rows = db.execute(
                 select(AnswerLog.chapter, AnswerLog.is_correct)
                 .join(QuizAttempt, AnswerLog.attempt_id == QuizAttempt.id)
@@ -1178,6 +1479,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             mastery = snapshot_mastery(
                 {c: atrisk.cell_accuracy(asked, correct) for c, (asked, correct) in stats.items()}
             )
+            prefs = student.learning_prefs if isinstance(student.learning_prefs, dict) else {}
+            style = prefs.get("explanation_style")
+            memory_block = build_personalization_block(
+                memory_enabled=True,
+                weak_chapters=[c for c, acc in mastery.items() if acc < 60.0],
+                explanation_style=style if style in EXPLANATION_STYLES else None,
+            )
         ctx = RequestContext(
             role=user.role,
             class_level=class_level,
@@ -1186,6 +1494,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             goal=goal,
             history_summary=history_summary(len(history or []), strategy),
             mastery_snapshot=mastery,
+            memory_block=memory_block,
         )
         json_log(logger, logging.INFO, "ai_request_context", **ctx.log_fields())
         return ctx
@@ -1294,6 +1603,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 grounded=m.grounded,
                 refused_reason=m.refused_reason,
                 sources=[SourceRef(**s) for s in (m.sources_json or [])],
+                # Wave 2: recomputed from the persisted evidence rows (the DB
+                # stores no confidence column; the formula is pure).
+                confidence=_answer_confidence(
+                    m.grounded,
+                    m.refused_reason,
+                    [float(s.get("score", 0.0)) for s in (m.sources_json or [])],
+                ),
                 rating=m.rating,
                 created_at=m.created_at,
             )
@@ -1396,12 +1712,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         student = _student_profile(db, user)
         class_level = payload.class_level or student.class_level or 6
         history = _chat_history(db, conv.id)
+        # Wave 2 vision contract: validated BEFORE anything is persisted.
+        image_payload = _validate_chat_image(payload.image)
 
         # S1.5 'আমি বুঝিন': swap to the next explanation strategy and remember it.
-        reteach_instruction: str | None = None
-        if payload.reteach:
-            strategy_key, reteach_instruction = teach.reteach_instruction(conv.last_strategy)
+        # Wave 2: an explicit strategy request OVERRIDES the rotation and is
+        # persisted as last_strategy so the next turn keeps learning from it.
+        extra_instruction: str | None = None
+        goal = "chat"
+        if payload.strategy:
+            extra_instruction = teach.explicit_strategy_instruction(payload.strategy)
+            conv.last_strategy = payload.strategy
+        elif payload.reteach:
+            strategy_key, extra_instruction = teach.reteach_instruction(conv.last_strategy)
             conv.last_strategy = strategy_key
+            goal = "reteach"
 
         user_msg = ChatMessage(conversation_id=conv.id, role="user", content=payload.message)
         db.add(user_msg)
@@ -1409,32 +1734,42 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # otherwise the provider error leaves an orphan message behind.
         db.flush()
 
-        try:
-            result = await tutor.ask(
-                payload.message,
-                class_level,
-                canonical_subject(payload.subject),
-                history,
-                chapter=payload.chapter,
-                extra_instruction=reteach_instruction,
-                low_data=payload.low_data,
-                context=_request_context(
-                    db,
-                    user,
-                    class_level=class_level,
-                    subject=canonical_subject(payload.subject),
-                    chapter=payload.chapter,
-                    goal="reteach" if payload.reteach else "chat",
-                    history=history,
-                    strategy=conv.last_strategy,
-                ),
+        if image_payload is not None and _is_mock_provider():
+            # Honest refusal: the mock provider cannot see images at all.
+            result = AskResponse(
+                answer=VISION_UNSUPPORTED_ANSWER,
+                grounded=False,
+                sources=[],
+                refused_reason="vision_unsupported",
             )
-        except ProviderError as exc:
-            db.rollback()
-            raise HTTPException(
-                status_code=502,
-                detail={"code": "llm_unavailable", "message": "LLM provider unavailable"},
-            ) from exc
+        else:
+            try:
+                result = await tutor.ask(
+                    payload.message,
+                    class_level,
+                    canonical_subject(payload.subject),
+                    history,
+                    chapter=payload.chapter,
+                    extra_instruction=extra_instruction,
+                    low_data=payload.low_data,
+                    context=_request_context(
+                        db,
+                        user,
+                        class_level=class_level,
+                        subject=canonical_subject(payload.subject),
+                        chapter=payload.chapter,
+                        goal=goal,
+                        history=history,
+                        strategy=conv.last_strategy,
+                    ),
+                    image=image_payload,
+                )
+            except ProviderError as exc:
+                db.rollback()
+                raise HTTPException(
+                    status_code=502,
+                    detail={"code": "llm_unavailable", "message": "LLM provider unavailable"},
+                ) from exc
 
         assistant_msg = ChatMessage(
             conversation_id=conv.id,
@@ -1457,6 +1792,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             grounded=assistant_msg.grounded,
             refused_reason=assistant_msg.refused_reason,
             sources=result.sources,
+            confidence=_answer_confidence(
+                assistant_msg.grounded, assistant_msg.refused_reason, source_scores(result.sources)
+            ),
             rating=None,
             created_at=assistant_msg.created_at,
         )
@@ -1472,12 +1810,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         student = _student_profile(db, user)
         class_level = payload.class_level or student.class_level or 6
         history = _chat_history(db, conv.id)
+        # Wave 2 vision contract: validated BEFORE anything is persisted.
+        image_payload = _validate_chat_image(payload.image)
 
         # S1.5 'আমি বুঝিন': swap to the next explanation strategy and remember it.
-        reteach_instruction: str | None = None
-        if payload.reteach:
-            strategy_key, reteach_instruction = teach.reteach_instruction(conv.last_strategy)
+        # Wave 2: explicit strategy OVERRIDES the rotation (persisted likewise).
+        extra_instruction: str | None = None
+        goal = "chat"
+        if payload.strategy:
+            extra_instruction = teach.explicit_strategy_instruction(payload.strategy)
+            conv.last_strategy = payload.strategy
+        elif payload.reteach:
+            strategy_key, extra_instruction = teach.reteach_instruction(conv.last_strategy)
             conv.last_strategy = strategy_key
+            goal = "reteach"
 
         user_msg = ChatMessage(conversation_id=conv.id, role="user", content=payload.message)
         db.add(user_msg)
@@ -1491,29 +1837,45 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             class_level=class_level,
             subject=canonical_subject(payload.subject),
             chapter=payload.chapter,
-            goal="reteach" if payload.reteach else "chat",
+            goal=goal,
             history=history,
             strategy=conv.last_strategy,
         )
+        mock_vision = image_payload is not None and _is_mock_provider()
 
         async def event_stream() -> AsyncIterator[str]:
             try:
                 final_response: AskResponse | None = None
-                async for event in tutor.ask_stream(  # type: ignore[union-attr]
-                    payload.message,
-                    class_level,
-                    canonical_subject(payload.subject),
-                    history,
-                    chapter=payload.chapter,
-                    extra_instruction=reteach_instruction,
-                    low_data=payload.low_data,
-                    context=ctx,
-                ):
-                    if event.type == "token":
-                        token_payload = json.dumps({"text": event.text}, ensure_ascii=False)
-                        yield f"event: token\ndata: {token_payload}\n\n"
-                    elif event.response is not None:
-                        final_response = event.response
+                if mock_vision:
+                    # Honest refusal: the mock provider cannot see images at
+                    # all -- emitted as one token + the normal done event.
+                    final_response = AskResponse(
+                        answer=VISION_UNSUPPORTED_ANSWER,
+                        grounded=False,
+                        sources=[],
+                        refused_reason="vision_unsupported",
+                    )
+                    token_payload = json.dumps(
+                        {"text": VISION_UNSUPPORTED_ANSWER}, ensure_ascii=False
+                    )
+                    yield f"event: token\ndata: {token_payload}\n\n"
+                else:
+                    async for event in tutor.ask_stream(  # type: ignore[union-attr]
+                        payload.message,
+                        class_level,
+                        canonical_subject(payload.subject),
+                        history,
+                        chapter=payload.chapter,
+                        extra_instruction=extra_instruction,
+                        low_data=payload.low_data,
+                        context=ctx,
+                        image=image_payload,
+                    ):
+                        if event.type == "token":
+                            token_payload = json.dumps({"text": event.text}, ensure_ascii=False)
+                            yield f"event: token\ndata: {token_payload}\n\n"
+                        elif event.response is not None:
+                            final_response = event.response
                 if final_response is None:  # never leak a naked 500 under -O
                     db.rollback()
                     yield (
@@ -1539,6 +1901,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     "user_message_id": user_msg.id,
                     "message_id": assistant_msg.id,
                     **final_response.model_dump(),
+                    # Wave 2: additive grounding-confidence in [0,1] (see
+                    # _answer_confidence for the documented formula).
+                    "confidence": _answer_confidence(
+                        final_response.grounded,
+                        final_response.refused_reason,
+                        source_scores(final_response.sources),
+                    ),
                 }
                 yield (
                     "event: done\ndata: " + json.dumps(done_payload, ensure_ascii=False) + "\n\n"
@@ -1656,7 +2025,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     @app.post("/events", status_code=202)
-    def record_event(payload: AnalyticsEvent, request: Request, user: CurrentUser) -> dict:
+    def record_event(
+        payload: AnalyticsEvent, request: Request, db: DbSession, user: CurrentUser
+    ) -> dict:
         # Privacy: log only which prop keys were sent, never their values —
         # props are arbitrary client input and may contain personal data.
         json_log(
@@ -1667,6 +2038,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             props_keys=sorted(payload.props.keys()),
             role=user.role,
         )
+        # Wave 1: persist the event server-side after sanitization (drop
+        # PII-flavoured keys, primitive values, 40-char strings). The trail
+        # table has no FK by design: product analytics survive account
+        # deletion as an aggregate-only record (user_id included).
+        db.add(
+            AnalyticsEventRow(
+                user_id=user.id,
+                name=payload.name,
+                role=user.role,
+                props=_sanitize_event_props(dict(payload.props)),
+            )
+        )
+        db.commit()
         return {"status": "accepted"}
 
     @app.get("/users/me", response_model=MeResponse)
@@ -1747,6 +2131,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         db.execute(delete(Assignment).where(Assignment.teacher_id == user.id))
         db.execute(delete(QuestionBankEntry).where(QuestionBankEntry.teacher_id == user.id))
         db.execute(delete(SupportPlan).where(SupportPlan.teacher_id == user.id))
+        # Wave 1 FK-children: teacher_documents, saved_notes, notifications
+        # and ai_jobs must go before the users row (same BUG-4 rule).
+        # analytics_events is deliberately NOT cleaned: it carries no FK to
+        # users and the append-only product trail survives erasure.
+        db.execute(delete(TeacherDocument).where(TeacherDocument.teacher_id == user.id))
+        db.execute(delete(SavedNote).where(SavedNote.user_id == user.id))
+        db.execute(delete(Notification).where(Notification.user_id == user.id))
+        db.execute(delete(AiJob).where(AiJob.user_id == user.id))
         # Invites this account created go with it (redeemed staff links are
         # kept as evidence in the User row itself); redemption pointers to this
         # account are nulled.
@@ -2562,11 +2954,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     def _load_class_students(
-        db: Session, class_level: int | None, limit: int | None = None
+        db: Session,
+        class_level: int | None,
+        limit: int | None = None,
+        school_id: int | None = None,
     ) -> list[Student]:
+        # Wave 2 tenancy: when the caller is bound to a school, only students
+        # enrolled in a classroom of THAT school are visible. school_id=None
+        # keeps the legacy platform-wide view (school-less teachers, admins).
         statement = select(Student).order_by(Student.id)
         if class_level is not None:
             statement = statement.where(Student.class_level == class_level)
+        if school_id is not None:
+            statement = (
+                statement.join(ClassStudent, ClassStudent.student_id == Student.id)
+                .join(ClassRoom, ClassRoom.id == ClassStudent.classroom_id)
+                .where(ClassRoom.school_id == school_id)
+            )
         if limit is not None:
             statement = statement.limit(limit)
         return list(db.execute(statement).scalars().all())
@@ -2610,14 +3014,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         limit: Annotated[int, Query(ge=1, le=1000)] = 200,
     ) -> list[StudentBrief]:
         # S5.5: capped (class_level omitted used to pull the whole student table).
-        students = _load_class_students(db, class_level, limit=limit)
+        # Wave 2 tenancy: school-bound teachers only ever see their own school.
+        students = _load_class_students(
+            db, class_level, limit=limit, school_id=_tenant_school_id(teacher)
+        )
         return _student_briefs(db, students)
 
     @app.get("/teacher/classes/{class_level}/analytics", response_model=ClassAnalytics)
     def teacher_analytics(
         class_level: int, db: DbSession, teacher: TeacherOrAdminUser
     ) -> ClassAnalytics:
-        students = _load_class_students(db, class_level)
+        students = _load_class_students(db, class_level, school_id=_tenant_school_id(teacher))
         briefs = _student_briefs(db, students)
 
         stats: dict[str, list[int]] = defaultdict(lambda: [0, 0])
@@ -2703,12 +3110,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/teacher/classrooms", response_model=list[ClassRoomOut])
     def teacher_list_classrooms(db: DbSession, teacher: TeacherOrAdminUser) -> list[ClassRoomOut]:
-        """S2.2: all classrooms with enrollment counts (school scoping arrives in S3.1)."""
-        rooms = (
-            db.execute(select(ClassRoom).order_by(ClassRoom.class_level, ClassRoom.section))
-            .scalars()
-            .all()
-        )
+        """S2.2: all classrooms with enrollment counts.
+
+        Wave 2 tenancy: a teacher attached to a school only sees that school's
+        rooms; school-less teachers and platform admins keep the old view.
+        """
+        statement = select(ClassRoom).order_by(ClassRoom.class_level, ClassRoom.section)
+        tenant = _tenant_school_id(teacher)
+        if tenant is not None:
+            statement = statement.where(ClassRoom.school_id == tenant)
+        rooms = db.execute(statement).scalars().all()
         counts = _room_counts(db)
         return [
             ClassRoomOut(
@@ -2746,7 +3157,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def classroom_roster(
         room_id: int, db: DbSession, teacher: TeacherOrAdminUser
     ) -> list[RosterEntryOut]:
-        room = _classroom_or_404(db, room_id)
+        room = _assert_room_in_school(teacher, _classroom_or_404(db, room_id))
         students = list(
             db.execute(
                 select(Student)
@@ -2806,7 +3217,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         supplies guardian consent on behalf of imported minors (R11): consent
         is recorded with version 'CSV-IMPORT-1'.
         """
-        room = _classroom_or_404(db, room_id)
+        room = _assert_room_in_school(teacher, _classroom_or_404(db, room_id))
         reader = csv.reader(payload.csv_text.splitlines())
         data_rows: list[list[str]] = []
         for i, row in enumerate(reader):
@@ -3391,6 +3802,354 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             at_risk=at_risk_rows,
         )
 
+    # ── Wave 2: school section (school_admin own school, admin platform-wide) ──
+
+    def _actor_school(db: Session, user: User, school_id: int | None) -> School:
+        """Resolve the school a /school/* request is allowed to read.
+
+        school_admin is hard-scoped to their own row; platform admin may name
+        any school and falls back to the default school (same rule as
+        /school/overview).
+        """
+        if user.role == "school_admin":
+            if school_id is not None and school_id != user.school_id:
+                raise HTTPException(
+                    status_code=403,
+                    detail={"code": "other_school", "message": "Scoped to your own school"},
+                )
+            school = db.get(School, user.school_id) if user.school_id else None
+            if school is None:
+                raise HTTPException(status_code=404, detail="school not found")
+            return school
+        school = db.get(School, school_id) if school_id else None
+        if school is None:
+            school = _default_school(db)
+        return school
+
+    def _school_rooms(db: Session, school_id: int) -> list[ClassRoom]:
+        return list(
+            db.execute(
+                select(ClassRoom)
+                .where(ClassRoom.school_id == school_id)
+                .order_by(ClassRoom.class_level, ClassRoom.section, ClassRoom.id)
+            ).scalars()
+        )
+
+    def _school_students_by_room(
+        db: Session, room_ids: list[int]
+    ) -> tuple[list[Student], dict[int, int]]:
+        """Enrolled students (school membership is classroom membership) plus
+        the room each student belongs to (v1 rule: exactly one room)."""
+        room_of: dict[int, int] = {}
+        if not room_ids:
+            return [], room_of
+        for sid, rid in db.execute(
+            select(ClassStudent.student_id, ClassStudent.classroom_id)
+            .where(ClassStudent.classroom_id.in_(room_ids))
+            .order_by(ClassStudent.classroom_id, ClassStudent.student_id)
+        ).all():
+            room_of.setdefault(int(sid), int(rid))
+        ids = sorted(room_of)
+        if not ids:
+            return [], room_of
+        rows = {
+            s.id: s for s in db.execute(select(Student).where(Student.id.in_(ids))).scalars().all()
+        }
+        return [rows[i] for i in ids if i in rows], room_of
+
+    @app.get("/school/students", response_model=SchoolStudentPage)
+    def school_students(
+        db: DbSession,
+        user: SchoolStaffUser,
+        school_id: Annotated[int | None, Query()] = None,
+        class_level: Annotated[int | None, Query(ge=1, le=12)] = None,
+        limit: Annotated[int, Query(ge=1, le=200)] = 50,
+        offset: Annotated[int, Query(ge=0)] = 0,
+    ) -> SchoolStudentPage:
+        """Paginated school roster: id, name, grade, section, approximate last
+        activity and quiz-attempt count. NO email/phone ever (R11).
+
+        "last_active" is the best honest signal available server-side: the
+        newer of the last tracked activity day and the last quiz attempt.
+        """
+        school = _actor_school(db, user, school_id)
+        rooms = _school_rooms(db, school.id)
+        students, room_of = _school_students_by_room(db, [r.id for r in rooms])
+        room_by_id = {r.id: r for r in rooms}
+        if class_level is not None:
+            students = [s for s in students if s.class_level == class_level]
+        total = len(students)
+        page = students[offset : offset + limit]
+        ids = [s.id for s in page]
+        last_day: dict[int, str] = {}
+        attempts: dict[int, int] = {}
+        if ids:
+            for sid, day in db.execute(
+                select(DailyActivity.student_id, func.max(DailyActivity.date))
+                .where(DailyActivity.student_id.in_(ids))
+                .group_by(DailyActivity.student_id)
+            ).all():
+                last_day[sid] = str(day)
+            for sid, ts in db.execute(
+                select(QuizAttempt.student_id, func.max(QuizAttempt.created_at))
+                .where(QuizAttempt.student_id.in_(ids))
+                .group_by(QuizAttempt.student_id)
+            ).all():
+                if ts is None:
+                    continue
+                iso = str(ts)[:10]
+                if sid not in last_day or iso > last_day[sid]:
+                    last_day[sid] = iso
+            for sid, n in db.execute(
+                select(QuizAttempt.student_id, func.count())
+                .where(QuizAttempt.student_id.in_(ids))
+                .group_by(QuizAttempt.student_id)
+            ).all():
+                attempts[sid] = int(n)
+        items = [
+            SchoolStudentRow(
+                student_id=s.id,
+                name=s.name,
+                class_level=s.class_level,
+                section=room_by_id[room_of[s.id]].section if s.id in room_of else "GEN",
+                last_active=last_day.get(s.id),
+                quiz_attempts=attempts.get(s.id, 0),
+            )
+            for s in page
+        ]
+        return SchoolStudentPage(total=total, limit=limit, offset=offset, items=items)
+
+    @app.get("/school/teachers", response_model=list[SchoolTeacherRow])
+    def school_teachers(
+        db: DbSession,
+        user: SchoolStaffUser,
+        school_id: Annotated[int | None, Query()] = None,
+    ) -> list[SchoolTeacherRow]:
+        """Staff roster of the school: accounts with a teacher profile plus
+        the subjects/classrooms they are assigned (ClassTeacher '' = all)."""
+        school = _actor_school(db, user, school_id)
+        staff = db.execute(
+            select(User, Teacher)
+            .join(Teacher, Teacher.user_id == User.id)
+            .where(
+                User.school_id == school.id,
+                User.role.in_(["teacher", "school_admin"]),
+            )
+            .order_by(User.id)
+        ).all()
+        teacher_ids = [t.id for _, t in staff]
+        subjects: dict[int, set[str]] = defaultdict(set)
+        rooms: dict[int, set[int]] = defaultdict(set)
+        if teacher_ids:
+            for tid, cid, subject in db.execute(
+                select(
+                    ClassTeacher.teacher_id, ClassTeacher.classroom_id, ClassTeacher.subject
+                ).where(ClassTeacher.teacher_id.in_(teacher_ids))
+            ).all():
+                subjects[int(tid)].add(subject or "all")
+                rooms[int(tid)].add(int(cid))
+        return [
+            SchoolTeacherRow(
+                teacher_id=t.id,
+                name=t.name,
+                subjects=sorted(subjects.get(t.id, set())),
+                classrooms=len(rooms.get(t.id, set())),
+            )
+            for _, t in staff
+        ]
+
+    @app.get("/school/classes", response_model=list[SchoolClassRow])
+    def school_classes(
+        db: DbSession,
+        user: SchoolStaffUser,
+        school_id: Annotated[int | None, Query()] = None,
+    ) -> list[SchoolClassRow]:
+        """Per classroom: enrollment, attempt volume and graded accuracy."""
+        school = _actor_school(db, user, school_id)
+        rooms = _school_rooms(db, school.id)
+        students, room_of = _school_students_by_room(db, [r.id for r in rooms])
+        percents = _attempt_percents(db, [s.id for s in students])
+        counts: dict[int, list[float]] = defaultdict(lambda: [0, 0, 0, 0.0])
+        for s in students:
+            counts[room_of[s.id]][0] += 1
+        # one grouped count + one grouped average instead of 2 queries/student
+        ids = [s.id for s in students]
+        if ids:
+            for sid, n in db.execute(
+                select(QuizAttempt.student_id, func.count())
+                .where(QuizAttempt.student_id.in_(ids))
+                .group_by(QuizAttempt.student_id)
+            ).all():
+                counts[room_of[int(sid)]][1] += int(n)
+            for sid, pcts in percents.items():
+                room_id = room_of[sid]
+                counts[room_id][2] += len(pcts)
+                counts[room_id][3] += sum(pcts)
+        rows: list[SchoolClassRow] = []
+        for r in rooms:
+            students_n, att, graded, total_pct = counts[r.id]
+            rows.append(
+                SchoolClassRow(
+                    classroom_id=r.id,
+                    class_level=r.class_level,
+                    section=r.section,
+                    students=int(students_n),
+                    quiz_attempts=int(att),
+                    attempts_graded=int(graded),
+                    avg_quiz_accuracy=round(total_pct / graded, 2) if graded else None,
+                )
+            )
+        return rows
+
+    @app.get("/school/coverage", response_model=SchoolCoverageOut)
+    def school_coverage(
+        db: DbSession,
+        user: SchoolStaffUser,
+        school_id: Annotated[int | None, Query()] = None,
+    ) -> SchoolCoverageOut:
+        """Per grade the school runs: subjects the content library HAS versus
+        the subjects this school's students actually practice, plus chapter
+        read coverage. Empty lists are honest "no signal", never "covered".
+
+        Practice proxy: ChatMessage rows carry no subject column, so asked
+        subjects come from graded quiz attempts (documented deviation).
+        """
+        school = _actor_school(db, user, school_id)
+        rooms = _school_rooms(db, school.id)
+        students, _room_of = _school_students_by_room(db, [r.id for r in rooms])
+        level_of = {s.id: s.class_level for s in students}
+        levels = sorted({r.class_level for r in rooms})
+        rows: list[SchoolCoverageRow] = []
+        for level in levels:
+            level_students = [sid for sid, lvl in level_of.items() if lvl == level]
+            content = db.execute(
+                select(ChapterContent.subject, ChapterContent.chapter).where(
+                    ChapterContent.class_level == level
+                )
+            ).all()
+            content_subjects = sorted({str(subject) for subject, _ in content})
+            asked: set[str] = set()
+            if level_students:
+                asked = {
+                    str(subject)
+                    for (subject,) in db.execute(
+                        select(QuizAttempt.subject)
+                        .where(
+                            QuizAttempt.student_id.in_(level_students),
+                            QuizAttempt.subject.is_not(None),
+                        )
+                        .distinct()
+                    ).all()
+                    if subject
+                }
+            read = completed = 0
+            if level_students:
+                read = int(
+                    db.execute(
+                        select(func.count(ChapterProgress.id)).where(
+                            ChapterProgress.student_id.in_(level_students),
+                            ChapterProgress.class_level == level,
+                        )
+                    ).scalar_one()
+                )
+                completed = int(
+                    db.execute(
+                        select(func.count(ChapterProgress.id)).where(
+                            ChapterProgress.student_id.in_(level_students),
+                            ChapterProgress.class_level == level,
+                            ChapterProgress.completed.is_(True),
+                        )
+                    ).scalar_one()
+                )
+            rows.append(
+                SchoolCoverageRow(
+                    class_level=level,
+                    content_subjects=content_subjects,
+                    asked_subjects=sorted(asked),
+                    uncovered_subjects=sorted(set(content_subjects) - asked),
+                    chapters_available=len({(s, c) for s, c in content}),
+                    chapters_read=read,
+                    chapters_completed=completed,
+                )
+            )
+        return SchoolCoverageOut(rows=rows)
+
+    @app.get("/school/analytics", response_model=SchoolAnalyticsOut)
+    def school_analytics(
+        db: DbSession,
+        user: SchoolStaffUser,
+        school_id: Annotated[int | None, Query()] = None,
+        days: Annotated[int, Query(ge=1, le=90)] = 30,
+    ) -> SchoolAnalyticsOut:
+        """K-anonymity-safe trend counts only: daily actives, questions asked
+        and quiz volume. No per-student row, no message content ever (R11)."""
+        school = _actor_school(db, user, school_id)
+        rooms = _school_rooms(db, school.id)
+        students, _room_of = _school_students_by_room(db, [r.id for r in rooms])
+        student_ids = [s.id for s in students]
+        now = datetime.now(UTC).replace(tzinfo=None)
+        since = now - timedelta(days=days)
+        since_day = since.strftime("%Y-%m-%d")
+        active_by_date: list[SchoolActiveDay] = []
+        questions_asked = 0
+        attempts = graded = 0
+        avg_score: float | None = None
+        if student_ids:
+            for day, n in db.execute(
+                select(DailyActivity.date, func.count(func.distinct(DailyActivity.student_id)))
+                .where(
+                    DailyActivity.student_id.in_(student_ids),
+                    DailyActivity.date >= since_day,
+                )
+                .group_by(DailyActivity.date)
+                .order_by(DailyActivity.date)
+            ).all():
+                active_by_date.append(SchoolActiveDay(date=str(day), students=int(n)))
+            conv_ids = select(Conversation.id).where(Conversation.student_id.in_(student_ids))
+            questions_asked = int(
+                db.execute(
+                    select(func.count(ChatMessage.id)).where(
+                        ChatMessage.conversation_id.in_(conv_ids),
+                        ChatMessage.role == "user",
+                        ChatMessage.created_at >= since,
+                    )
+                ).scalar_one()
+            )
+            attempts = int(
+                db.execute(
+                    select(func.count(QuizAttempt.id)).where(
+                        QuizAttempt.student_id.in_(student_ids),
+                        QuizAttempt.created_at >= since,
+                    )
+                ).scalar_one()
+            )
+            graded, avg = db.execute(
+                select(func.count(QuizAttempt.id), func.avg(QuizAttempt.score_pct)).where(
+                    QuizAttempt.student_id.in_(student_ids),
+                    QuizAttempt.status == "graded",
+                    QuizAttempt.score_pct.is_not(None),
+                    QuizAttempt.created_at >= since,
+                )
+            ).one()
+            graded = int(graded)
+            avg_score = round(float(avg), 2) if avg is not None else None
+        _record_analytics(db, user.id, user.role, "school_analytics_viewed", {"days": days})
+        db.commit()
+        daily_active_avg = (
+            round(sum(d.students for d in active_by_date) / len(active_by_date), 2)
+            if active_by_date
+            else 0.0
+        )
+        return SchoolAnalyticsOut(
+            days=days,
+            active_by_date=active_by_date,
+            daily_active_avg=daily_active_avg,
+            questions_asked=questions_asked,
+            quiz_attempts=attempts,
+            attempts_graded=graded,
+            avg_quiz_score_pct=avg_score,
+        )
+
     def _content_next_version(db: Session, subject: str, class_level: int, chapter: str) -> int:
         current = db.execute(
             select(func.max(ChapterContent.version)).where(
@@ -3952,32 +4711,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     ) -> LessonPlanOut:
         """S2.6: one retrieval + one AI call drafts an eight-section plan.
 
-        Stateless by design: the teacher edits and prints it in the browser,
-        so nothing is persisted (see spec: editable + printable only).
+        Wave 1: the plan is now ALSO persisted as a TeacherDocument
+        (kind=lesson_plan) through the shared generator runner, and the
+        response gains the additive ``document_id`` only -- every previously
+        existing field keeps its exact shape.
         """
         if tutor is None:
             raise HTTPException(status_code=503, detail="provider not configured")
         started = time.perf_counter()
         try:
-            sections, sources = await generate_lesson_plan(
-                tutor.index,
-                tutor.provider,
-                class_level=payload.class_level,
-                subject=payload.subject,
-                chapter=payload.chapter,
-                minutes=payload.minutes,
-                level=payload.level,
-                context=_request_context(
-                    db,
-                    teacher,
-                    class_level=payload.class_level,
-                    subject=payload.subject,
-                    chapter=payload.chapter,
-                    goal="lesson_plan",
-                ),
+            doc_payload, sources, _chapter = await _generate_document(
+                db, teacher, "lesson_plan", payload
             )
         except ProviderError as exc:
             raise HTTPException(status_code=502, detail="lesson plan generation failed") from exc
+        doc = _persist_document(
+            db,
+            user_id=teacher.id,
+            kind="lesson_plan",
+            class_level=payload.class_level,
+            subject=payload.subject,
+            chapter=payload.chapter,
+            payload=doc_payload,
+        )
         json_log(
             logger,
             logging.INFO,
@@ -3989,13 +4745,584 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             elapsed_ms=int((time.perf_counter() - started) * 1000),
         )
         return LessonPlanOut(
-            sections=sections,
+            sections=dict(doc_payload["sections"]),
             sources=sources,
             class_level=payload.class_level,
             subject=payload.subject,
             chapter=payload.chapter,
             minutes=payload.minutes,
             level=payload.level,
+            document_id=doc.id,
+        )
+
+    # --- Wave 1: generic document generators + document library ---------------
+
+    _DOC_IN_MODELS: dict[str, Any] = {
+        "worksheet": WorksheetIn,
+        "answer_key": AnswerKeyIn,
+        "homework": HomeworkIn,
+        "rubric": RubricIn,
+        "lesson_plan": LessonPlanIn,
+    }
+    _DOC_LABELS: dict[str, str] = {
+        "worksheet": "Worksheet",
+        "answer_key": "Answer key",
+        "homework": "Homework",
+        "rubric": "Rubric",
+        "lesson_plan": "Lesson plan",
+    }
+
+    def _doc_in_for(kind: str, body: dict) -> Any:
+        """Validate a raw body against the per-kind input model.
+
+        Unknown kinds raise LookupError and malformed bodies raise
+        pydantic.ValidationError; callers map them to HTTP codes (sync) or
+        to the failed job state (background)."""
+        model = _DOC_IN_MODELS.get(kind)
+        if model is None:
+            raise LookupError(f"unsupported generator kind: {kind!r}")
+        return model.model_validate(body)
+
+    async def _generate_document(
+        db: Session, actor: User, kind: str, gen: Any
+    ) -> tuple[dict, list[SourceRef], str | None]:
+        """THE single execution path of the document generators: the sync
+        endpoints and the AiJob runner below share it, so a background job
+        behaves exactly like the synchronous call."""
+        if tutor is None:
+            raise ProviderError("provider not configured")
+        class_level = int(gen.class_level)
+        subject = str(gen.subject)
+        chapter: str | None = getattr(gen, "chapter", None)
+        questions: list[str] = []
+        if kind == "answer_key":
+            questions = [q.strip() for q in (gen.questions or []) if q.strip()]
+            if gen.paper_id is not None:
+                qp = db.get(QuestionPaper, gen.paper_id)
+                if qp is None or (qp.teacher_id != actor.id and actor.role != "admin"):
+                    raise LookupError("question paper not found")
+                questions = [
+                    str(q.get("text", "")).strip()
+                    for q in qp.questions
+                    if str(q.get("text", "")).strip()
+                ]
+                chapter = chapter or (str(qp.chapters[0]) if qp.chapters else None)
+            if not questions:
+                raise ValueError("answer key needs at least one question")
+        ctx = _request_context(
+            db,
+            actor,
+            class_level=class_level,
+            subject=subject,
+            chapter=chapter,
+            # lesson_plan keeps its S2 goal string; the new kinds are prefixed
+            goal="lesson_plan" if kind == "lesson_plan" else f"generate_{kind}",
+        )
+        doc_payload: dict
+        sources: list[SourceRef]
+        if kind == "worksheet":
+            doc_payload, sources = await generate_worksheet(
+                tutor.index,
+                tutor.provider,
+                class_level=class_level,
+                subject=subject,
+                chapter=str(chapter),
+                context=ctx,
+            )
+        elif kind == "homework":
+            doc_payload, sources = await generate_homework(
+                tutor.index,
+                tutor.provider,
+                class_level=class_level,
+                subject=subject,
+                chapter=str(chapter),
+                context=ctx,
+            )
+        elif kind == "rubric":
+            doc_payload, sources = await generate_rubric(
+                tutor.index,
+                tutor.provider,
+                class_level=class_level,
+                subject=subject,
+                chapter=str(chapter),
+                context=ctx,
+            )
+        elif kind == "answer_key":
+            doc_payload, sources = await generate_answer_key(
+                tutor.index,
+                tutor.provider,
+                class_level=class_level,
+                subject=subject,
+                chapter=chapter,
+                questions=questions,
+                context=ctx,
+            )
+            chapter = doc_payload.get("chapter") or chapter
+        elif kind == "lesson_plan":
+            sections, sources = await generate_lesson_plan(
+                tutor.index,
+                tutor.provider,
+                class_level=class_level,
+                subject=subject,
+                chapter=str(chapter),
+                minutes=int(gen.minutes),
+                level=str(gen.level),
+                context=ctx,
+            )
+            doc_payload = {
+                "sections": dict(sections),
+                "minutes": int(gen.minutes),
+                "level": str(gen.level),
+            }
+        else:
+            raise ValueError(f"unsupported generator kind: {kind!r}")
+        return doc_payload, sources, chapter
+
+    def _document_title(kind: str, subject: str, chapter: str | None, class_level: int) -> str:
+        label = _DOC_LABELS.get(kind, kind)
+        tail = f" - {chapter}" if chapter else ""
+        return f"{label} - {subject} (class {class_level}){tail}"[:200]
+
+    def _persist_document(
+        db: Session,
+        *,
+        user_id: int,
+        kind: str,
+        class_level: int,
+        subject: str,
+        chapter: str | None,
+        payload: dict,
+    ) -> TeacherDocument:
+        doc = TeacherDocument(
+            teacher_id=user_id,
+            kind=kind[:20],
+            class_level=class_level,
+            subject=subject[:60],
+            chapter=(chapter or "")[:200] or None,
+            title=_document_title(kind, subject, chapter, class_level),
+            payload=payload,
+        )
+        db.add(doc)
+        db.commit()
+        db.refresh(doc)
+        return doc
+
+    def _document_or_404(db: Session, document_id: int, actor: User) -> TeacherDocument:
+        doc = db.get(TeacherDocument, document_id)
+        if doc is None or (doc.teacher_id != actor.id and actor.role != "admin"):
+            raise HTTPException(status_code=404, detail="document not found")
+        return doc
+
+    def _document_out(doc: TeacherDocument) -> TeacherDocumentOut:
+        return TeacherDocumentOut(
+            id=doc.id,
+            kind=doc.kind,
+            class_level=doc.class_level,
+            subject=doc.subject,
+            chapter=doc.chapter,
+            title=doc.title,
+            payload=dict(doc.payload or {}),
+            created_at=doc.created_at,
+        )
+
+    @app.post("/teacher/generate/{kind}", response_model=GenerateDocumentOut, status_code=201)
+    async def teacher_generate_document(
+        kind: str, body: dict, db: DbSession, teacher: TeacherOrAdminUser
+    ) -> GenerateDocumentOut:
+        """One endpoint, four generators: worksheet | answer_key | homework |
+        rubric. The persisted TeacherDocument is returned with the cited
+        sources (answer_key takes {paper_id} OR {questions})."""
+        if kind not in TEACHER_DOCUMENT_KINDS:
+            raise HTTPException(status_code=404, detail="unknown generator kind")
+        if tutor is None:
+            raise HTTPException(status_code=503, detail="provider not configured")
+        try:
+            gen_in = _doc_in_for(kind, body)
+        except ValidationError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=[
+                    {"loc": [str(p) for p in e["loc"]], "msg": str(e["msg"])}
+                    for e in exc.errors()[:5]
+                ],
+            ) from exc
+        started = time.perf_counter()
+        try:
+            doc_payload, sources, chapter = await _generate_document(db, teacher, kind, gen_in)
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ProviderError as exc:
+            raise HTTPException(status_code=502, detail=f"{kind} generation failed") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        doc = _persist_document(
+            db,
+            user_id=teacher.id,
+            kind=kind,
+            class_level=gen_in.class_level,
+            subject=gen_in.subject,
+            chapter=chapter,
+            payload=doc_payload,
+        )
+        json_log(
+            logger,
+            logging.INFO,
+            "teacher_document_generated",
+            teacher_id=teacher.id,
+            document_id=doc.id,
+            kind=kind,
+            elapsed_ms=int((time.perf_counter() - started) * 1000),
+        )
+        # Wave 2: server-side product analytics (kind + id only, no PII).
+        _record_analytics(
+            db,
+            teacher.id,
+            teacher.role,
+            "teacher_document_generated",
+            {"kind": kind, "document_id": doc.id},
+        )
+        db.commit()
+        return GenerateDocumentOut(
+            id=doc.id,
+            kind=doc.kind,
+            class_level=doc.class_level,
+            subject=doc.subject,
+            chapter=doc.chapter,
+            title=doc.title,
+            payload=dict(doc.payload or {}),
+            created_at=doc.created_at,
+            sources=sources,
+        )
+
+    @app.get("/teacher/documents", response_model=list[TeacherDocumentOut])
+    def teacher_documents_list(
+        db: DbSession,
+        teacher: TeacherOrAdminUser,
+        kind: str | None = None,
+        limit: Annotated[int, Query(ge=1, le=200)] = 100,
+    ) -> list[TeacherDocumentOut]:
+        """Own library, newest first; optional kind filter (includes the
+        lesson_plan kind persisted by POST /teacher/lesson-plans)."""
+        allowed = (*TEACHER_DOCUMENT_KINDS, "lesson_plan")
+        if kind is not None and kind not in allowed:
+            raise HTTPException(status_code=422, detail="unknown document kind")
+        q = select(TeacherDocument).where(TeacherDocument.teacher_id == teacher.id)
+        if kind is not None:
+            q = q.where(TeacherDocument.kind == kind)
+        rows = (
+            db.execute(
+                q.order_by(TeacherDocument.created_at.desc(), TeacherDocument.id.desc()).limit(
+                    limit
+                )
+            )
+            .scalars()
+            .all()
+        )
+        return [_document_out(r) for r in rows]
+
+    @app.get("/teacher/documents/{document_id}", response_model=TeacherDocumentOut)
+    def teacher_document_get(
+        document_id: int, db: DbSession, teacher: TeacherOrAdminUser
+    ) -> TeacherDocumentOut:
+        return _document_out(_document_or_404(db, document_id, teacher))
+
+    @app.delete("/teacher/documents/{document_id}", status_code=204)
+    def teacher_document_delete(
+        document_id: int, db: DbSession, teacher: TeacherOrAdminUser
+    ) -> Response:
+        # Deletion is strictly own-only (admins included).
+        doc = db.get(TeacherDocument, document_id)
+        if doc is None or doc.teacher_id != teacher.id:
+            raise HTTPException(status_code=404, detail="document not found")
+        db.delete(doc)
+        db.commit()
+        return Response(status_code=204)
+
+    @app.get("/teacher/documents/{document_id}/pdf")
+    def teacher_document_pdf(
+        document_id: int, db: DbSession, teacher: TeacherOrAdminUser
+    ) -> Response:
+        doc = _document_or_404(db, document_id, teacher)
+        if doc.kind not in TEACHER_DOCUMENT_PDF_KINDS:
+            raise HTTPException(status_code=400, detail="no PDF export for this document kind")
+        doc_dict = {
+            "kind": doc.kind,
+            "title": doc.title,
+            "class_level": doc.class_level,
+            "subject": doc.subject,
+            "chapter": doc.chapter,
+            "payload": dict(doc.payload or {}),
+        }
+        try:
+            data = render_document_pdf(doc_dict)
+        except Exception:  # shaping libs/font unavailable -> HTML print view
+            return HTMLResponse(render_document_html(doc_dict))
+        return Response(
+            content=data,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="document-{doc.id}-{doc.kind}.pdf"'
+            },
+        )
+
+    # --- Wave 1: saved notes ----------------------------------------------------
+
+    def _note_out(note: SavedNote) -> SavedNoteOut:
+        return SavedNoteOut(
+            id=note.id,
+            title=note.title,
+            body=note.body,
+            source=note.source,
+            source_ref=dict(note.source_ref) if note.source_ref is not None else None,
+            created_at=note.created_at,
+        )
+
+    @app.post("/notes", response_model=SavedNoteOut, status_code=201)
+    def create_note(payload: SavedNoteIn, db: DbSession, user: CurrentUser) -> SavedNoteOut:
+        title = (payload.title or payload.body.strip()[:80] or "Note")[:200]
+        note = SavedNote(
+            user_id=user.id,
+            title=title,
+            body=payload.body,
+            source=payload.source,
+            source_ref=payload.source_ref,
+        )
+        db.add(note)
+        db.commit()
+        db.refresh(note)
+        return _note_out(note)
+
+    @app.get("/notes", response_model=list[SavedNoteOut])
+    def list_notes(
+        db: DbSession, user: CurrentUser, limit: Annotated[int, Query(ge=1, le=100)] = 100
+    ) -> list[SavedNoteOut]:
+        rows = (
+            db.execute(
+                select(SavedNote)
+                .where(SavedNote.user_id == user.id)
+                .order_by(SavedNote.created_at.desc(), SavedNote.id.desc())
+                .limit(limit)
+            )
+            .scalars()
+            .all()
+        )
+        return [_note_out(r) for r in rows]
+
+    @app.delete("/notes/{note_id}", status_code=204)
+    def delete_note(note_id: int, db: DbSession, user: CurrentUser) -> Response:
+        note = db.get(SavedNote, note_id)
+        if note is None or note.user_id != user.id:
+            raise HTTPException(status_code=404, detail="note not found")
+        db.delete(note)
+        db.commit()
+        return Response(status_code=204)
+
+    # --- Wave 1: in-app notification feed ----------------------------------------
+
+    def _notification_out(row: Notification) -> NotificationOut:
+        return NotificationOut(
+            id=row.id,
+            kind=row.kind,
+            code=row.code,
+            params=dict(row.params or {}),
+            link=row.link,
+            read_at=row.read_at,
+            created_at=row.created_at,
+        )
+
+    @app.get("/notifications", response_model=NotificationListOut)
+    def notifications_list(db: DbSession, user: CurrentUser) -> NotificationListOut:
+        """The 50 newest notifications of THIS account + unread count."""
+        rows = list(
+            db.execute(
+                select(Notification)
+                .where(Notification.user_id == user.id)
+                .order_by(Notification.created_at.desc(), Notification.id.desc())
+                .limit(50)
+            )
+            .scalars()
+            .all()
+        )
+        unread = db.execute(
+            select(func.count())
+            .select_from(Notification)
+            .where(Notification.user_id == user.id, Notification.read_at.is_(None))
+        ).scalar_one()
+        return NotificationListOut(
+            items=[_notification_out(r) for r in rows], unread_count=int(unread)
+        )
+
+    @app.post("/notifications/{notification_id}/read", response_model=NotificationOut)
+    def notification_mark_read(
+        notification_id: int, db: DbSession, user: CurrentUser
+    ) -> NotificationOut:
+        row = db.get(Notification, notification_id)
+        if row is None or row.user_id != user.id:
+            raise HTTPException(status_code=404, detail="notification not found")
+        if row.read_at is None:  # idempotent: re-marking keeps the first timestamp
+            row.read_at = datetime.now(UTC).replace(tzinfo=None)
+            db.commit()
+            db.refresh(row)
+        return _notification_out(row)
+
+    # --- Wave 1: background generation jobs (AiJob) --------------------------------
+
+    async def _execute_ai_job(job_id: str) -> None:
+        """Run one AiJob to completion. Runs detached from the request, so it
+        opens its OWN session (session_factory) and never touches the request
+        session -- the study of jobs.py: `db = session_factory(); finally close`."""
+        db = session_factory()
+        try:
+            job = db.get(AiJob, job_id)
+            if job is None:  # deleted between queue and run
+                return
+            actor = db.get(User, job.user_id)
+            if actor is None:
+                return
+            job.status = "generating"
+            db.commit()
+            try:
+                gen_in = _doc_in_for(job.kind, dict(job.payload or {}))
+                doc_payload, _sources, chapter = await _generate_document(
+                    db, actor, job.kind, gen_in
+                )
+                job.status = "validating"
+                db.commit()
+                doc = _persist_document(
+                    db,
+                    user_id=job.user_id,
+                    kind=job.kind,
+                    class_level=gen_in.class_level,
+                    subject=gen_in.subject,
+                    chapter=chapter,
+                    payload=doc_payload,
+                )
+                job.status = "ready"
+                job.result = {"document_id": doc.id}
+                job.error = None
+                # Wave 2: job lifecycle as sanitized product analytics.
+                _record_analytics(
+                    db,
+                    job.user_id,
+                    actor.role,
+                    "ai_job_ready",
+                    {"kind": job.kind, "document_id": doc.id},
+                )
+                db.commit()
+                json_log(logger, logging.INFO, "ai_job_ready", job_id=job_id, kind=job.kind)
+            except Exception as exc:
+                db.rollback()
+                fresh = db.get(AiJob, job_id)
+                if fresh is not None:
+                    fresh.status = "failed"
+                    fresh.error = str(exc)[:300]
+                    _record_analytics(
+                        db, fresh.user_id, actor.role, "ai_job_failed", {"kind": fresh.kind}
+                    )
+                    db.commit()
+                # Never leak exception bodies to logs beyond the type name.
+                json_log(
+                    logger,
+                    logging.WARNING,
+                    "ai_job_failed",
+                    job_id=job_id,
+                    kind=job.kind,
+                    error_type=type(exc).__name__,
+                )
+        finally:
+            db.close()
+
+    def _job_out(job: AiJob) -> AiJobOut:
+        return AiJobOut(
+            id=job.id,
+            kind=job.kind,
+            status=job.status,
+            payload=dict(job.payload or {}),
+            result=dict(job.result) if job.result is not None else None,
+            error=job.error,
+            created_at=job.created_at,
+            updated_at=job.updated_at,
+        )
+
+    @app.post("/teacher/jobs", response_model=AiJobOut, status_code=202)
+    async def teacher_job_create(
+        payload: AiJobIn, db: DbSession, teacher: TeacherOrAdminUser
+    ) -> AiJobOut:
+        """Queue a generation as an AiJob: queued -> generating -> validating
+        -> ready (or failed + error). Kind is intentionally not whitelisted at
+        the door: an unsupported kind becomes a VISIBLE failed job, which beats
+        a bare 422 on a long-running API."""
+        job = AiJob(user_id=teacher.id, kind=payload.kind[:40], payload=dict(payload.payload))
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        task = asyncio.create_task(_execute_ai_job(job.id))
+        app.state.ai_job_tasks.add(task)
+        task.add_done_callback(app.state.ai_job_tasks.discard)
+        json_log(
+            logger, logging.INFO, "ai_job_queued", job_id=job.id, kind=job.kind, user_id=teacher.id
+        )
+        return _job_out(job)
+
+    @app.get("/teacher/jobs", response_model=list[AiJobOut])
+    def teacher_jobs_list(db: DbSession, teacher: TeacherOrAdminUser) -> list[AiJobOut]:
+        rows = (
+            db.execute(
+                select(AiJob)
+                .where(AiJob.user_id == teacher.id)
+                .order_by(AiJob.created_at.desc(), AiJob.id.desc())
+                .limit(50)
+            )
+            .scalars()
+            .all()
+        )
+        return [_job_out(r) for r in rows]
+
+    @app.get("/teacher/jobs/{job_id}", response_model=AiJobOut)
+    def teacher_job_get(job_id: str, db: DbSession, teacher: TeacherOrAdminUser) -> AiJobOut:
+        job = db.get(AiJob, job_id)
+        if job is None or (job.user_id != teacher.id and teacher.role != "admin"):
+            raise HTTPException(status_code=404, detail="job not found")
+        return _job_out(job)
+
+    # --- Wave 1: teacher workload metric -------------------------------------------
+
+    @app.get("/teacher/workload", response_model=WorkloadOut)
+    def teacher_workload(db: DbSession, teacher: TeacherOrAdminUser) -> WorkloadOut:
+        """Real per-artifact row counts from THIS account multiplied by the
+        documented planning constants in _MINUTES_SAVED_PER_ARTIFACT. Only
+        stored rows are counted; the minutes are estimates, never measured."""
+
+        def count_artifact(model: Any, column: Any, kind: str | None = None) -> int:
+            q = select(func.count()).select_from(model).where(column == teacher.id)
+            if kind is not None:
+                q = q.where(model.kind == kind)
+            return int(db.execute(q).scalar_one())
+
+        doc_counts = {
+            kind: count_artifact(TeacherDocument, TeacherDocument.teacher_id, kind)
+            for kind in ("lesson_plan", "worksheet", "answer_key", "homework", "rubric")
+        }
+        counts = {
+            "question_paper": count_artifact(QuestionPaper, QuestionPaper.teacher_id),
+            "short_test": count_artifact(ShortTest, ShortTest.teacher_id),
+            # study material = chapters this account authored (content engine)
+            "study_material": count_artifact(ChapterContent, ChapterContent.created_by),
+            **doc_counts,
+        }
+        minutes_saved = {k: counts[k] * _MINUTES_SAVED_PER_ARTIFACT[k] for k in counts}
+        return WorkloadOut(
+            counts=counts,
+            minutes_saved=minutes_saved,
+            total_minutes_saved=sum(minutes_saved.values()),
+            estimate=True,
+            methodology=(
+                "Counts of artifacts this account generated through the app "
+                "(real DB rows) multiplied by documented planning constants: "
+                f"{_MINUTES_SAVED_PER_ARTIFACT} minutes typically spent "
+                "producing each artifact manually. Planning estimate only -- "
+                "not a measured time saving."
+            ),
         )
 
     # --- S2.5: short tests (class+chapter ultra-fast, whole classroom) ------
@@ -4038,7 +5365,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 status_code=503,
                 detail={"code": "index_unavailable", "message": "Curriculum index unavailable"},
             )
-        room = _classroom_or_404(db, payload.classroom_id)
+        room = _assert_room_in_school(teacher, _classroom_or_404(db, payload.classroom_id))
         roster = list(
             db.execute(
                 select(Student)
@@ -4094,6 +5421,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             attempts=attempts,
         )
         db.add(st)
+        db.flush()
+        # Wave 1: every roster student with a user account gets a notification.
+        for student in roster:
+            notify_user(
+                db,
+                student.user_id,
+                "shorttest",
+                "notif_shorttest_assigned",
+                {"short_test_id": st.id, "subject": payload.subject, "chapter": payload.chapter},
+                # Wave 2: students open assigned work at the quiz hub.
+                link="/student/quiz",
+            )
         db.commit()
         db.refresh(st)
         elapsed_ms = int((time.perf_counter() - started) * 1000)
@@ -4239,8 +5578,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             out[sid].add(chapter)
         return out
 
-    def _weak_matrix(db: Session, class_level: int) -> WeakMatrixOut:
-        students = _load_class_students(db, class_level)
+    def _weak_matrix(db: Session, class_level: int, school_id: int | None = None) -> WeakMatrixOut:
+        students = _load_class_students(db, class_level, school_id=school_id)
         ids = [s.id for s in students]
         cells = _answer_cells(db, ids)
         percents = _attempt_percents(db, ids)
@@ -4296,7 +5635,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         db: DbSession, teacher: TeacherOrAdminUser, class_level: int
     ) -> WeakMatrixOut:
         """Concept x student accuracy grid with at-risk flags for a class."""
-        return _weak_matrix(db, class_level)
+        return _weak_matrix(db, class_level, school_id=_tenant_school_id(teacher))
 
     @app.get("/teacher/curriculum-coverage", response_model=CoverageOut)
     def teacher_curriculum_coverage(db: DbSession, teacher: TeacherOrAdminUser) -> CoverageOut:
@@ -4401,6 +5740,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         student = db.get(Student, payload.student_id)
         if student is None:
             raise HTTPException(status_code=404, detail="student not found")
+        # Wave 2 tenancy: plans can only be opened for own-school students.
+        _assert_student_in_school(db, teacher, student)
         cells = _answer_cells(db, [student.id]).get(student.id, {})
         scored = sorted(
             (
@@ -4422,6 +5763,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             plan=plan,
         )
         db.add(row)
+        db.flush()
+        # Wave 1: tell the student's own account a support plan was created
+        # (skipped silently when the student profile has no login yet).
+        notify_user(
+            db,
+            student.user_id,
+            "support_plan",
+            "notif_support_plan",
+            {"support_plan_id": row.id, "focus": len(plan["focus_concepts"])},
+            # Wave 2: revision lives behind the student quiz hub.
+            link="/student/quiz",
+        )
         db.commit()
         db.refresh(row)
         json_log(
@@ -4493,6 +5846,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     status_code=404,
                     detail={"code": "unknown_student", "message": f"Student {sid} not found"},
                 )
+            # Wave 2 tenancy: never open an attempt for a student outside the
+            # actor's school (IDOR guard; no-op for school-less teachers/admins).
+            _assert_student_in_school(db, teacher, student)
             students.append(student)
         levels = {st.class_level for st in students}
         if len(levels) > 1:
@@ -4545,6 +5901,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             attempts=attempts,
         )
         db.add(assignment)
+        db.flush()
+        # Wave 1: every assigned student with a user account gets a notification.
+        for student in students:
+            notify_user(
+                db,
+                student.user_id,
+                "assignment",
+                "notif_quiz_assigned",
+                {
+                    "assignment_id": assignment.id,
+                    "subject": payload.subject,
+                    "chapter": payload.chapter,
+                    "count": payload.num_questions,
+                },
+                # Wave 2: assigned quizzes open at the student quiz hub.
+                link="/student/quiz",
+            )
         db.commit()
         db.refresh(assignment)
         elapsed_ms = int((time.perf_counter() - started) * 1000)
@@ -4942,6 +6315,65 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             last_refusal_at=last_at,
         )
 
+    @app.get("/admin/ai/quality", response_model=AdminAiQualityOut)
+    def admin_ai_quality(
+        db: DbSession,
+        admin: AdminUser,
+        days: Annotated[int, Query(ge=1, le=365)] = 30,
+    ) -> AdminAiQualityOut:
+        """Wave 2 AI-quality dashboard: last-N-days answer quality COUNTS only
+        -- refusals by reason, thumbs, grounding split and the share of
+        low-confidence answers under the documented confidence formula.
+
+        Audit finding reflected in the payload: ChatMessage has no model
+        column, so ``by_model`` is honestly empty today (no fabricated split).
+        """
+        cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)
+        rows = db.execute(
+            select(
+                ChatMessage.grounded, ChatMessage.refused_reason, ChatMessage.sources_json
+            ).where(
+                ChatMessage.role == "assistant",
+                ChatMessage.created_at >= cutoff,
+            )
+        ).all()
+        by_reason: dict[str, int] = defaultdict(int)
+        grounded_count = 0
+        ungrounded_count = 0
+        low_confidence = 0
+        for grounded, reason, sources_json in rows:
+            if reason:
+                by_reason[reason] += 1
+            if grounded is True:
+                grounded_count += 1
+            elif grounded is False:
+                # None (pre-grounding rows) is counted in answers_total only --
+                # it is neither grounded nor ungrounded, and we do not guess.
+                ungrounded_count += 1
+            scores = [float(s.get("score", 0.0)) for s in (sources_json or [])]
+            confidence = _answer_confidence(grounded, reason, scores)
+            if confidence is not None and confidence < 0.5:
+                low_confidence += 1
+        thumbs = db.execute(
+            select(Feedback.rating, func.count())
+            .where(Feedback.created_at >= cutoff, Feedback.message_id.is_not(None))
+            .group_by(Feedback.rating)
+        ).all()
+        thumbs_up = sum(int(n) for rating, n in thumbs if rating == 1)
+        thumbs_down = sum(int(n) for rating, n in thumbs if rating == -1)
+        return AdminAiQualityOut(
+            days=days,
+            answers_total=len(rows),
+            grounded_count=grounded_count,
+            ungrounded_count=ungrounded_count,
+            refusals_total=sum(by_reason.values()),
+            refusals_by_reason=dict(by_reason),
+            thumbs_up=thumbs_up,
+            thumbs_down=thumbs_down,
+            low_confidence_count=low_confidence,
+            by_model={},
+        )
+
     @app.post("/admin/maintenance/purge", response_model=dict)
     def admin_purge_expired(db: DbSession, admin: AdminUser, dry_run: bool = False) -> dict:
         """Retention sweep (D20, S5.8): expired tokens, stale invites, old chats.
@@ -5000,6 +6432,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if existing is not None:
             raise HTTPException(status_code=409, detail="Already linked")
         db.add(ParentStudentLink(parent_id=parent_profile.id, student_id=student.id))
+        # Wave 1: both sides of a successful link are notified (the student
+        # only when their profile is claimed by a user account).
+        # Wave 2: each side is pointed at the screen they can actually open.
+        notify_user(
+            db,
+            parent.id,
+            "parent_link",
+            "notif_parent_linked",
+            {"student_id": student.id},
+            link="/parent",
+        )
+        notify_user(
+            db,
+            student.user_id,
+            "parent_link",
+            "notif_parent_linked",
+            {"student_id": student.id},
+            link="/student/me",
+        )
         try:
             db.commit()
         except IntegrityError as exc:
@@ -5046,6 +6497,130 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         db.commit()
         return {"code": code, "expires_in_minutes": settings.invite_ttl_minutes}
 
+    # --- Wave 2: student learning preferences + memory --------------------------
+    # learning_prefs is a WHITELISTED dict; unknown keys are a hard 422 so no
+    # client can smuggle arbitrary state into the prompt path. The memory
+    # endpoints only ever expose facts DERIVED from real rows -- nothing the
+    # model "remembered" -- and DELETE is a soft opt-out (flag + cleared prefs),
+    # never a data-destroying surprise for the account owner.
+
+    @app.get("/students/me/prefs", response_model=StudentPrefsOut)
+    def get_my_prefs(db: DbSession, user: CurrentUser) -> StudentPrefsOut:
+        if user.role != "student":
+            raise HTTPException(status_code=403, detail="Students only")
+        student = _student_profile(db, user)
+        prefs = student.learning_prefs if isinstance(student.learning_prefs, dict) else {}
+        return StudentPrefsOut(memory_enabled=bool(student.memory_enabled), learning_prefs=prefs)
+
+    @app.patch("/students/me/prefs", response_model=StudentPrefsOut)
+    def patch_my_prefs(
+        payload: StudentPrefsPatch, db: DbSession, user: CurrentUser
+    ) -> StudentPrefsOut:
+        if user.role != "student":
+            raise HTTPException(status_code=403, detail="Students only")
+        student = _student_profile(db, user)
+        if payload.learning_prefs is not None:
+            merged = (
+                dict(student.learning_prefs) if isinstance(student.learning_prefs, dict) else {}
+            )
+            for key, value in payload.learning_prefs.items():
+                if key == "explanation_style":
+                    if value not in EXPLANATION_STYLES:
+                        raise HTTPException(
+                            status_code=422,
+                            detail={
+                                "code": "invalid_explanation_style",
+                                "message": "explanation_style must be simple|standard|detailed",
+                            },
+                        )
+                    merged["explanation_style"] = value
+                elif key == "subject_focus":
+                    if not isinstance(value, str) or not 1 <= len(value.strip()) <= 60:
+                        raise HTTPException(
+                            status_code=422,
+                            detail={
+                                "code": "invalid_subject_focus",
+                                "message": "subject_focus must be a 1-60 character string",
+                            },
+                        )
+                    merged["subject_focus"] = value.strip()
+                else:
+                    raise HTTPException(
+                        status_code=422,
+                        detail={
+                            "code": "unknown_learning_pref",
+                            "message": f"Unsupported preference key: {key}",
+                        },
+                    )
+            student.learning_prefs = merged
+        if payload.memory_enabled is not None:
+            student.memory_enabled = payload.memory_enabled
+        db.commit()
+        db.refresh(student)
+        prefs = student.learning_prefs if isinstance(student.learning_prefs, dict) else {}
+        return StudentPrefsOut(memory_enabled=bool(student.memory_enabled), learning_prefs=prefs)
+
+    @app.get("/students/me/memory", response_model=MemoryFactsOut)
+    def get_my_memory(db: DbSession, user: CurrentUser) -> MemoryFactsOut:
+        """The facts the tutor is allowed to personalize with -- all derived
+        live from real rows (identity, graded quiz accuracy, prefs). Nothing
+        here is generated copy."""
+        if user.role != "student":
+            raise HTTPException(status_code=403, detail="Students only")
+        student = _student_profile(db, user)
+        prefs = student.learning_prefs if isinstance(student.learning_prefs, dict) else {}
+        cells = _answer_cells(db, [student.id]).get(student.id, {})
+        weak = sorted(
+            (
+                chapter
+                for chapter, (asked, correct) in cells.items()
+                if (acc := atrisk.cell_accuracy(asked, correct)) is not None and acc < 60.0
+            )
+        )[:5]
+        recent_subjects = [
+            str(subject)
+            for (subject,) in db.execute(
+                select(QuizAttempt.subject)
+                .where(
+                    QuizAttempt.student_id == student.id,
+                    QuizAttempt.subject.is_not(None),
+                )
+                .group_by(QuizAttempt.subject)
+                .order_by(func.max(QuizAttempt.created_at).desc())
+                .limit(5)
+            ).all()
+            if subject
+        ]
+        style = prefs.get("explanation_style")
+        return MemoryFactsOut(
+            memory_enabled=bool(student.memory_enabled),
+            facts={
+                "name": student.name,
+                "class_level": student.class_level,
+                "recent_subjects": recent_subjects,
+                "weak_chapters": weak,
+                "explanation_style": style if style in EXPLANATION_STYLES else None,
+            },
+        )
+
+    @app.delete("/students/me/memory", response_model=MemoryFactsOut)
+    def disable_my_memory(db: DbSession, user: CurrentUser) -> MemoryFactsOut:
+        """Opt out: memory_enabled=false AND the stored learning preferences
+        are cleared. Derived facts are never stored, so clearing the prefs is
+        the complete deletion the owner asked for; the response says what the
+        next personalized request will look like via the note code."""
+        if user.role != "student":
+            raise HTTPException(status_code=403, detail="Students only")
+        student = _student_profile(db, user)
+        student.memory_enabled = False
+        student.learning_prefs = None
+        db.commit()
+        return MemoryFactsOut(
+            memory_enabled=False,
+            facts={},
+            on_disable_note_code="memory_on_disable_note",
+        )
+
     @app.post("/parents/link/invite", status_code=201)
     def link_via_invite(
         payload: ParentInviteLinkRequest, db: DbSession, parent: ParentUser
@@ -5074,6 +6649,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         ).scalar_one_or_none()
         if existing is None:
             db.add(ParentStudentLink(parent_id=parent_profile.id, student_id=invite.student_id))
+            # Wave 1: a successful consented link notifies both sides.
+            # Wave 2: per-role landing links (parent view vs student profile).
+            linked_student = db.get(Student, invite.student_id)
+            notify_user(
+                db,
+                parent.id,
+                "parent_link",
+                "notif_parent_linked",
+                {"student_id": invite.student_id},
+                link="/parent",
+            )
+            notify_user(
+                db,
+                linked_student.user_id if linked_student is not None else None,
+                "parent_link",
+                "notif_parent_linked",
+                {"student_id": invite.student_id},
+                link="/student/me",
+            )
         invite.used_at = now
         invite.used_by_parent_id = parent_profile.id
         try:
@@ -5175,6 +6769,191 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             by_chapter=by_chapter,
             weak_chapters=weak_chapters,
         )
+
+    # --- Wave 2: guardian activity + period report ------------------------------
+
+    def _linked_child(db: Session, parent: User, student_id: int) -> Student:
+        """Guardian access = an explicit consented ParentStudentLink (C17);
+        anything else is a 404, identical to the existing progress route."""
+        parent_profile = db.execute(
+            select(Parent).where(Parent.user_id == parent.id)
+        ).scalar_one_or_none()
+        if parent_profile is not None:
+            link = db.execute(
+                select(ParentStudentLink).where(
+                    ParentStudentLink.parent_id == parent_profile.id,
+                    ParentStudentLink.student_id == student_id,
+                )
+            ).scalar_one_or_none()
+            if link is not None:
+                student = db.get(Student, student_id)
+                if student is not None:
+                    return student
+        raise HTTPException(status_code=404, detail="Not linked to this student")
+
+    @app.get("/parents/me/children/{student_id}/activity", response_model=ActivitySummary)
+    def parent_child_activity(
+        student_id: int,
+        db: DbSession,
+        parent: ParentUser,
+        days: Annotated[int, Query(ge=7, le=370)] = 91,
+    ) -> ActivitySummary:
+        """Wave 2: the SAME activity summary the student sees on their own
+        /students/{id}/activity, for one linked child (streak + Dhaka heatmap)."""
+        _linked_child(db, parent, student_id)
+        today = dhaka_date(datetime.now(UTC))
+        rows = (
+            db.execute(
+                select(DailyActivity)
+                .where(DailyActivity.student_id == student_id)
+                .order_by(DailyActivity.date)
+            )
+            .scalars()
+            .all()
+        )
+        window = heatmap_days(list(rows), today, days)
+        date_axis = [
+            (datetime.strptime(today, "%Y-%m-%d") - timedelta(days=i)).date().isoformat()
+            for i in range(days - 1, -1, -1)
+        ]
+        active = {r.date for r in rows if (r.questions or r.quizzes or r.minutes)}
+        return ActivitySummary(
+            streak=streak_days(active, today),
+            today=today,
+            days=[ActivityDay(date=d, **c) for d, c in zip(date_axis, window, strict=True)],
+        )
+
+    def _window_report(db: Session, student: Student, period: str) -> ParentReportOut:
+        """Wave 2: shared window-report math for parent + student views.
+
+        DATA + suggestion CODE only; clients render the sentence (i18n).
+        Single-source weakness rollup keeps this identical to the digest."""
+        student_id = student.id
+        window_days = 7 if period == "weekly" else 30
+        now = datetime.now(UTC).replace(tzinfo=None)
+        since = now - timedelta(days=window_days)
+        attempts = (
+            db.execute(
+                select(QuizAttempt).where(
+                    QuizAttempt.student_id == student_id,
+                    QuizAttempt.created_at >= since,
+                    QuizAttempt.created_at <= now,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        graded = [a for a in attempts if a.status == "graded" and a.score_pct is not None]
+        percents = [float(a.score_pct or 0.0) for a in graded]
+        avg_score = atrisk.avg_pct(percents)
+        # window chapter accuracy (strengths inside the window)
+        stats: dict[str, list[int]] = defaultdict(lambda: [0, 0])
+        if graded:
+            for chapter, ok in db.execute(
+                select(AnswerLog.chapter, AnswerLog.is_correct).where(
+                    AnswerLog.attempt_id.in_([a.id for a in graded])
+                )
+            ).all():
+                stats[chapter][0] += 1
+                stats[chapter][1] += int(ok)
+        strengths = sorted(
+            (
+                chapter
+                for chapter, (asked, correct) in stats.items()
+                if asked and 100.0 * correct / asked >= 85.0
+            ),
+            key=lambda c: (-(stats[c][1] / stats[c][0]), c),
+        )[:3]
+        # Digest agreement: the exact rollup source the weekly e-mail uses.
+        weak_chapters = [w.concept for w in weakness.weak_concepts(db, student_id)][
+            : parent_digest.WEAK_CHAPTER_LIMIT
+        ]
+        conv_ids = select(Conversation.id).where(Conversation.student_id == student_id)
+        questions_asked = int(
+            db.execute(
+                select(func.count(ChatMessage.id)).where(
+                    ChatMessage.conversation_id.in_(conv_ids),
+                    ChatMessage.role == "user",
+                    ChatMessage.created_at >= since,
+                )
+            ).scalar_one()
+        )
+        chapters_read = int(
+            db.execute(
+                select(func.count(ChapterProgress.id)).where(
+                    ChapterProgress.student_id == student_id
+                )
+            ).scalar_one()
+        )
+        chapters_completed = int(
+            db.execute(
+                select(func.count(ChapterProgress.id)).where(
+                    ChapterProgress.student_id == student_id,
+                    ChapterProgress.completed.is_(True),
+                )
+            ).scalar_one()
+        )
+        # Code + params only -- the client renders the sentence.
+        params: dict[str, Any]
+        if not attempts and questions_asked == 0:
+            code, params = "sugg_no_activity", {}
+        elif weak_chapters:
+            code, params = "sugg_practice_weak", {"chapters": weak_chapters}
+        elif avg_score is not None and avg_score >= 85.0:
+            code, params = "sugg_keep_momentum", {"avg_score_pct": avg_score}
+        else:
+            code, params = "sugg_general_support", {}
+
+        return ParentReportOut(
+            student_id=student.id,
+            name=student.name,
+            class_level=student.class_level,
+            period=period,
+            window_start=since.isoformat(timespec="seconds"),
+            window_end=now.isoformat(timespec="seconds"),
+            quizzes_taken=len(attempts),
+            quizzes_graded=len(graded),
+            avg_score_pct=avg_score,
+            chapters_read=chapters_read,
+            chapters_completed=chapters_completed,
+            questions_asked=questions_asked,
+            weak_chapters=weak_chapters,
+            strengths=strengths,
+            suggestion_code=code,
+            suggestion_params=params,
+        )
+
+    @app.get("/parents/me/children/{student_id}/report", response_model=ParentReportOut)
+    def parent_child_report(
+        student_id: int,
+        db: DbSession,
+        parent: ParentUser,
+        period: Annotated[str, Query(pattern="^(weekly|monthly)$")] = "weekly",
+    ) -> ParentReportOut:
+        """Wave 2: JSON window report for one linked child.
+
+        The server returns DATA + a suggestion CODE only; the final guardian-
+        facing copy is rendered client-side (i18n). Weak chapters come from the
+        same single-source weakness rollup the weekly digest uses, so the two
+        views can never disagree; strengths are window chapter accuracy >= 85.
+        """
+        student = _linked_child(db, parent, student_id)
+        report = _window_report(db, student, period)
+        _record_analytics(db, parent.id, parent.role, "parent_report_viewed", {"period": period})
+        db.commit()
+        return report
+
+    @app.get("/students/me/report", response_model=ParentReportOut)
+    def student_self_report(
+        db: DbSession,
+        user: CurrentUser,
+        period: Annotated[str, Query(pattern="^(weekly|monthly)$")] = "weekly",
+    ) -> ParentReportOut:
+        """Wave 2: same window report for the signed-in student (Me page)."""
+        if user.role != "student":
+            raise HTTPException(status_code=403, detail="Students only")
+        student = _student_profile(db, user)
+        return _window_report(db, student, period)
 
     # S3.4: in-process weekly digest scheduler. Once per ISO week, Sunday
     # ~22:00 Dhaka (digest_due owns the rule). The job reads ONLY aggregates
