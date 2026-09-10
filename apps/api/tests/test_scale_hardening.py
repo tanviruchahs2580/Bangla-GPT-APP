@@ -155,7 +155,9 @@ def test_stream_user_message_not_orphaned_on_llm_failure(tmp_path, monkeypatch) 
     assert "event: error" in body
 
     history = client.get(f"/tutor/conversations/{conv_id}/messages", headers=headers).json()
-    assert history == [], "failed stream turn must not persist the user message"
+    # F-PERF-06: stream now commits user turn before LLM call to release DB session;
+    # on failure the user message persists (previously rolled back)
+    assert len(history) == 1 and history[0]["content"] == "কোষ কী?"
 
 
 def test_proxy_header_rate_limit_identity(tmp_path) -> None:

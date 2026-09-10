@@ -18,7 +18,8 @@ def client(tmp_path) -> TestClient:
 def test_health_live_ready_and_request_id(client: TestClient) -> None:
     health = client.get("/health")
     assert health.status_code == 200
-    assert health.json()["app"] == "Bangla GPT API"
+    # F-SEC-07: health is minimal {"status":"ok"}; detail at /admin/system/info
+    assert health.json()["status"] == "ok"
     assert "X-Request-ID" in health.headers
     assert len(health.headers["X-Request-ID"]) >= 8
 

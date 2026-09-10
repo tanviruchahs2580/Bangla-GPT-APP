@@ -259,6 +259,9 @@ def test_production_boot_guard_refuses_insecure_settings(tmp_path) -> None:
             admin_password="longenoughpass1",
             allowed_origins="https://app.example.com",  # CORS allowlist required in prod (S0.5)
             pii_enc_key=Fernet.generate_key().decode(),  # PII encryption required in prod (S5.6)
+            smtp_enabled=True,
+            smtp_host="smtp.example.com",
+            smtp_from="noreply@example.com",
         )
     )
     assert app.title == "Bangla GPT API"
