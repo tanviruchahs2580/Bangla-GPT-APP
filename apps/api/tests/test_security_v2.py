@@ -329,6 +329,9 @@ def _prod_settings(**overrides) -> Settings:
         "admin_password": "longenough123",
         "allowed_origins": "https://tutor.example.com",
         "llm_provider": "mock",
+        "smtp_enabled": True,
+        "smtp_host": "smtp.example.com",
+        "smtp_from": "noreply@example.com",
     }
     base.update(overrides)
     return Settings(**base)
@@ -336,7 +339,7 @@ def _prod_settings(**overrides) -> Settings:
 
 def test_production_boot_requires_pii_enc_key() -> None:
     with pytest.raises(RuntimeError, match="PII_ENC_KEY"):
-        enforce_production_safety(_prod_settings())
+        enforce_production_safety(_prod_settings(pii_enc_key=None))
     # and passes once a key is configured
     enforce_production_safety(_prod_settings(pii_enc_key=Fernet.generate_key().decode()))
 
