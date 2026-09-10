@@ -365,12 +365,13 @@ _FORCE_CHANGE_EXEMPT_PATHS = frozenset(
 
 def _safe_init_db(engine, settings=None) -> None:
     """create_all tolerant of concurrent multi-worker boot (gunicorn -w N)."""
-    # F-INFRA-01: gate create_all behind non-production; production uses Alembic
+    # F-INFRA-01: gate create_all behind non-production for Postgres (Alembic owns schema);
+    # SQLite file still creates (test + small deploys), per not blindly deleting safety path
     try:
         from bangla_gpt_api.config import get_settings as _get_s
 
         s = settings or _get_s()
-        if s.is_production:
+        if s.is_production and s.database_url.strip().startswith("postgresql"):
             return
     except Exception:
         pass
