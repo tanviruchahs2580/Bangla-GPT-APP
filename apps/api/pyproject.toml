@@ -56,6 +56,8 @@ exclude = ["alembic"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+per-file-ignores = { "tests/test_phase1_exploits.py" = ["B011"] }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -15,10 +15,33 @@ def test_health_reports_app_identity(client: TestClient) -> None:
     res = client.get("/health")
     assert res.status_code == 200
     body = res.json()
+    # F-SEC-07: health is now minimal {"status":"ok"}; version/env moved to /admin/system/info
     assert body["status"] == "ok"
-    assert body["env"] == "test"
-    assert body["app"] == "Bangla GPT API"
-    assert body["version"] == Settings(env="test").version
+    assert "version" not in body or body.get("version") is None
+    # authenticated detail endpoint still carries version
+    from fastapi.testclient import TestClient as _TC
+
+    from bangla_gpt_api.main import create_app as _ca
+
+    c2 = _TC(
+        _ca(
+            Settings(
+                env="test",
+                database_url="sqlite:///:memory:",
+                jwt_secret="test-secret-0123456789abcdef0123456789",
+                admin_email="adm@test.com",
+                admin_password="supersecret1",
+                force_admin_password_change=False,
+            )
+        )
+    )
+    adm_tok = c2.post(
+        "/auth/login",
+        json={"email": "adm@test.com", "password": "supersecret1"},
+    ).json()["access_token"]
+    r2 = c2.get("/admin/system/info", headers={"Authorization": f"Bearer {adm_tok}"})
+    assert r2.status_code == 200
+    assert r2.json()["version"] == Settings(env="test").version
 
 
 def test_live_endpoint(client: TestClient) -> None:

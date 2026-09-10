@@ -62,7 +62,7 @@ def sync_corpus(
     for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
         for obj in page.get("Contents", []):
             key = obj["Key"]
-            rel = key[len(prefix) :] if key.startswith(prefix) else key
+            rel = key.removeprefix(prefix)
             rel = rel.lstrip("/")
             if not rel or rel.endswith("/"):
                 continue  # directory marker / prefix object

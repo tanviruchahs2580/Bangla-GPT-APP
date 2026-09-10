@@ -26,8 +26,15 @@ from fontTools.ttLib import TTFont
 
 REPO = Path(__file__).resolve().parent.parent
 WEB = REPO / "apps" / "web"
-FULL_TTF = REPO / "apps" / "api" / "src" / "bangla_gpt_api" / "data" / "fonts" / (
-    "NotoSansBengali-Regular.ttf"
+FULL_TTF = (
+    REPO
+    / "apps"
+    / "api"
+    / "src"
+    / "bangla_gpt_api"
+    / "data"
+    / "fonts"
+    / ("NotoSansBengali-Regular.ttf")
 )
 
 # Ranges the app legitimately needs beyond what appears statically:
@@ -63,7 +70,16 @@ def subset_to_woff2(src: Path, charset: set[int]) -> bytes:
     opts.flavor = "woff2"
     opts.drop_tables += ["DSIG"]
     opts.layout_features = [
-        "kern", "liga", "calt", "mark", "mkmk", "akhn", "half", "pres", "blwf", "cjct",
+        "kern",
+        "liga",
+        "calt",
+        "mark",
+        "mkmk",
+        "akhn",
+        "half",
+        "pres",
+        "blwf",
+        "cjct",
     ]
     opts.name_IDs = [1, 2]
     opts.notdef_outline = True

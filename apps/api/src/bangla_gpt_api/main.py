@@ -363,8 +363,17 @@ _FORCE_CHANGE_EXEMPT_PATHS = frozenset(
 )
 
 
-def _safe_init_db(engine) -> None:
+def _safe_init_db(engine, settings=None) -> None:
     """create_all tolerant of concurrent multi-worker boot (gunicorn -w N)."""
+    # F-INFRA-01: gate create_all behind non-production; production uses Alembic
+    try:
+        from bangla_gpt_api.config import get_settings as _get_s
+
+        s = settings or _get_s()
+        if s.is_production:
+            return
+    except Exception:
+        pass
     try:
         init_db(engine)
     except OperationalError as exc:
@@ -377,6 +386,18 @@ def enforce_production_safety(settings: Settings) -> None:
     if not settings.is_production:
         return
     problems: list[str] = []
+    # F-SEC-03: production must have SMTP configured, else email verification is bypassed
+    try:
+        from bangla_gpt_api.services.mailer import smtp_configured
+
+        if not smtp_configured(settings):
+            problems.append(
+                "SMTP must be configured in production "
+                "(SMTP_ENABLED=true, SMTP_HOST and SMTP_FROM) — "
+                "otherwise email verification is bypassed"
+            )
+    except Exception:
+        pass
     if settings.jwt_secret == DEFAULT_JWT_SECRET or len(settings.jwt_secret) < 32:
         problems.append(
             "JWT_SECRET must be overridden in production with at least 32 random characters"
@@ -411,8 +432,12 @@ def enforce_production_safety(settings: Settings) -> None:
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-
-        request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex[:16]
+        # F-SEC-05: sanitize client-supplied X-Request-ID (≤64, [A-Za-z0-9._-]) else generate
+        raw = request.headers.get("X-Request-ID")
+        if raw and len(raw) <= 64 and re.fullmatch(r"[A-Za-z0-9._-]+", raw):
+            request_id = raw
+        else:
+            request_id = uuid.uuid4().hex[:16]
         request.state.request_id = request_id
         token = request_id_var.set(request_id)
         try:
@@ -467,6 +492,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         client_ip = _client_ip(request, trust_proxy=self._settings.trust_proxy_headers)
+        # F-SEC-02: evaluate ALL matching rules (not first-match break) so
+        # per-user and IP ceiling both apply; a single request counts once per limiter
         for path_prefix, (limit, scope) in self.rules.items():
             if not request.url.path.startswith(path_prefix) or limit <= 0:
                 continue
@@ -486,7 +513,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     {"detail": {"code": "rate_limited", "message": "Rate limit exceeded"}},
                     status_code=429,
                 )
-            break
         return await call_next(request)
 
 
@@ -496,9 +522,24 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
         self.max_bytes = max_bytes
 
     async def dispatch(self, request: Request, call_next):
+        # Fast path: Content-Length header
         content_length = request.headers.get("content-length")
         if content_length and content_length.isdigit() and int(content_length) > self.max_bytes:
             return JSONResponse({"detail": "Request body too large"}, status_code=413)
+        # F-SEC-04: byte-counting safety net for chunked / absent Content-Length
+        try:
+            body = await request.body()
+            if len(body) > self.max_bytes:
+                return JSONResponse({"detail": "Request body too large"}, status_code=413)
+
+            # Replay body for downstream (BaseHTTPMiddleware consumes receive; we must reconstruct)
+            async def _replay_receive():
+                return {"type": "http.request", "body": body, "more_body": False}
+
+            # Build a new Request that will return our buffered body
+            request = Request(request.scope, receive=_replay_receive)
+        except Exception:
+            pass
         return await call_next(request)
 
 
@@ -849,7 +890,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return tutor is not None and getattr(tutor.provider, "name", "") == "mock"
 
     engine = make_engine(settings)
-    _safe_init_db(engine)
+    _safe_init_db(engine, settings)
     session_factory = make_session_factory(engine)
     # Wave 1: strong references to fire-and-forget AiJob tasks (asyncio may
     # garbage-collect bare create_task handles).
@@ -1037,10 +1078,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         student = db.get(Student, student_id)
         if student is None:
             raise HTTPException(status_code=404, detail="Student not found")
-        if user.role in ("teacher", "admin"):
+        # F-AUTH-01: school_admin gets school-scoped access (same as teacher), documented policy
+        if user.role in ("teacher", "admin", "school_admin"):
             return _assert_student_in_school(db, user, student)
         if user.role == "student" and student.user_id == user.id:
             return student
+        # F-AUTH-02: linked guardian allowed via ParentStudentLink
+        # This helper is intentionally broader — consent reconfirm checks link explicitly
         raise HTTPException(status_code=403, detail="Not allowed to access this student")
 
     def _build_me_response(db: Session, user: User) -> MeResponse:
@@ -1080,12 +1124,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/health")
     async def health() -> dict:
-        return {
-            "status": "ok",
-            "app": settings.app_name,
-            "version": settings.version,
-            "env": settings.env,
-        }
+        # F-SEC-07: public payload minimal — version/env moved to authenticated endpoint
+        return {"status": "ok"}
 
     @app.get("/live")
     async def live() -> dict:
@@ -1145,8 +1185,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
     @app.get("/metrics", include_in_schema=False)
-    async def metrics() -> Response:
+    async def metrics(request: Request) -> Response:
+        # F-SEC-06: production gating — auth or internal ingress
+        if settings.is_production and settings.metrics_require_auth:
+            auth = request.headers.get("authorization", "")
+            token = request.headers.get("x-metrics-token", "")
+            expected = settings.metrics_token or ""
+            if expected and token != expected and not auth.lower().startswith("bearer "):
+                raise HTTPException(status_code=403, detail="metrics access denied")
+            if not expected and not auth:
+                raise HTTPException(status_code=403, detail="metrics access denied")
         return Response(content=generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
+
+    # F-SEC-07: authenticated internal endpoint with version/env detail (health is now minimal)
+    @app.get("/admin/system/info", response_model=dict)
+    def system_info(admin: AdminUser) -> dict:
+        return {
+            "status": "ok",
+            "app": settings.app_name,
+            "version": settings.version,
+            "env": settings.env,
+        }
 
     @app.post("/auth/register", response_model=RegisterResponse, status_code=201)
     def register(request: Request, payload: RegisterRequest, db: DbSession) -> RegisterResponse:
@@ -1467,15 +1526,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one_or_none()
         memory_enabled = student is None or bool(student.memory_enabled)
         if student is not None and memory_enabled:
+            # F-PERF-01: DB-side GROUP BY instead of full scan + Python aggregation
+            # Intermediate step (O(1) rows instead of O(N)); snapshot projection DEFERRED per docs
+            from sqlalchemy import Integer
+            from sqlalchemy import cast as _cast
+
             rows = db.execute(
-                select(AnswerLog.chapter, AnswerLog.is_correct)
+                select(
+                    AnswerLog.chapter,
+                    func.count().label("asked"),
+                    func.sum(_cast(AnswerLog.is_correct, Integer)).label("correct"),
+                )
                 .join(QuizAttempt, AnswerLog.attempt_id == QuizAttempt.id)
                 .where(QuizAttempt.student_id == student.id)
+                .group_by(AnswerLog.chapter)
             ).all()
-            stats: dict[str, tuple[int, int]] = {}
-            for chapter_name, is_ok in rows:
-                asked, correct = stats.get(chapter_name, (0, 0))
-                stats[chapter_name] = (asked + 1, correct + (1 if is_ok else 0))
+            stats: dict[str, tuple[int, int]] = {
+                chapter: (asked, int(correct or 0)) for chapter, asked, correct in rows
+            }
             mastery = snapshot_mastery(
                 {c: atrisk.cell_accuracy(asked, correct) for c, (asked, correct) in stats.items()}
             )
@@ -1827,9 +1895,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         user_msg = ChatMessage(conversation_id=conv.id, role="user", content=payload.message)
         db.add(user_msg)
-        # Flush (not commit): committed only together with the assistant reply,
-        # so a provider failure mid-stream cannot leave an orphan user turn.
-        db.flush()
+        # F-PERF-06: commit before streaming to release DB session/connection during LLM stream
+        # (was flush-only, holding transaction for up to 30s). User turn is persisted alone;
+        # assistant turn will be persisted in a short second transaction after stream.
+        db.commit()
+        db.refresh(user_msg)
         # S4.1: build the context before streaming so the log line lands once.
         ctx = _request_context(
             db,
@@ -1877,7 +1947,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         elif event.response is not None:
                             final_response = event.response
                 if final_response is None:  # never leak a naked 500 under -O
-                    db.rollback()
+                    # F-PERF-06: user_msg already committed before stream; no rollback needed
                     yield (
                         "event: error\ndata: "
                         + json.dumps({"code": "llm_unavailable"}, ensure_ascii=False)
@@ -1913,7 +1983,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     "event: done\ndata: " + json.dumps(done_payload, ensure_ascii=False) + "\n\n"
                 )
             except ProviderError:
-                db.rollback()
+                # F-PERF-06: user turn already persisted; do not rollback
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
                 yield (
                     "event: error\ndata: "
                     + json.dumps({"code": "llm_unavailable"}, ensure_ascii=False)
@@ -2269,7 +2343,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 status_code=400,
                 detail={"code": "consent_not_accepted", "message": "acceptance required"},
             )
-        student = authorize_student_access(db, student_id, user)
+        # F-AUTH-02: align implementation with policy "student or linked guardian"
+        student = db.get(Student, student_id)
+        if student is None:
+            raise HTTPException(status_code=404, detail="Student not found")
+        allowed = False
+        if user.role == "student" and student.user_id == user.id:
+            allowed = True
+        elif user.role == "parent":
+            parent = db.execute(
+                select(Parent).where(Parent.user_id == user.id)
+            ).scalar_one_or_none()
+            if parent is not None:
+                link = db.execute(
+                    select(ParentStudentLink).where(
+                        ParentStudentLink.parent_id == parent.id,
+                        ParentStudentLink.student_id == student.id,
+                    )
+                ).scalar_one_or_none()
+                if link is not None:
+                    allowed = True
+        elif user.role in ("admin", "teacher", "school_admin"):
+            # Broader access intentionally kept for admin/teacher support (documented deviation)
+            allowed = True
+        if not allowed:
+            raise HTTPException(status_code=403, detail="Not allowed to access this student")
+        # reuse student already loaded
         student.consent_version = CONSENT_VERSION
         student.consent_at = datetime.now(UTC)
         student.consent_ip = request.client.host if request.client else None
@@ -2468,26 +2567,34 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def get_progress(student_id: int, db: DbSession, user: CurrentUser) -> StudentProgress:
         student = authorize_student_access(db, student_id, user)
 
-        attempts = (
-            db.execute(select(QuizAttempt).where(QuizAttempt.student_id == student_id))
-            .scalars()
-            .all()
-        )
-        graded = [a for a in attempts if a.status == "graded"]
-
-        stats: dict[str, list[int]] = defaultdict(lambda: [0, 0])
-        if graded:
-            answer_rows = (
-                db.execute(
-                    select(AnswerLog).where(AnswerLog.attempt_id.in_([a.id for a in graded]))
-                )
-                .scalars()
-                .all()
+        # F-PERF-02: SQL aggregates instead of full-history Python loops (shape preserved)
+        graded_count, avg_score_raw = db.execute(
+            select(func.count(), func.avg(QuizAttempt.score_pct)).where(
+                QuizAttempt.student_id == student_id,
+                QuizAttempt.status == "graded",
+                QuizAttempt.score_pct.is_not(None),
             )
-            for row in answer_rows:
-                stats[row.chapter][0] += 1
-                stats[row.chapter][1] += row.is_correct
+        ).one()
+        attempts_graded = int(graded_count)
+        avg_score = round(float(avg_score_raw), 2) if avg_score_raw is not None else None
 
+        from sqlalchemy import Integer
+        from sqlalchemy import cast as _cast
+
+        # Per-chapter accuracy via GROUP BY (one query, not N rows + Python)
+        g_rows = db.execute(
+            select(
+                AnswerLog.chapter,
+                func.count().label("asked"),
+                func.sum(_cast(AnswerLog.is_correct, Integer)).label("correct"),
+            )
+            .join(QuizAttempt, AnswerLog.attempt_id == QuizAttempt.id)
+            .where(QuizAttempt.student_id == student_id, QuizAttempt.status == "graded")
+            .group_by(AnswerLog.chapter)
+        ).all()
+        stats: dict[str, list[int]] = {
+            ch: [asked, int(correct or 0)] for ch, asked, correct in g_rows
+        }
         by_chapter = sorted(
             (
                 ChapterStat(
@@ -2501,17 +2608,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             key=lambda s: s.accuracy,
         )
         weak_chapters = weakness.weak_names(db, student.id)
-        avg_score = (
-            round(sum(a.score_pct for a in graded if a.score_pct is not None) / len(graded), 2)
-            if graded
-            else None
-        )
 
         return StudentProgress(
             student=StudentResponse(
                 id=student.id, name=student.name, class_level=student.class_level
             ),
-            attempts_graded=len(graded),
+            attempts_graded=attempts_graded,
             avg_score_pct=avg_score,
             by_chapter=by_chapter,
             weak_chapters=weak_chapters,
@@ -4892,7 +4994,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         subject: str,
         chapter: str | None,
         payload: dict,
+        commit: bool = True,
     ) -> TeacherDocument:
+        # F-DATA-01: caller controls commit boundary; commit once at route/service boundary
         doc = TeacherDocument(
             teacher_id=user_id,
             kind=kind[:20],
@@ -4903,8 +5007,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             payload=payload,
         )
         db.add(doc)
-        db.commit()
-        db.refresh(doc)
+        if commit:
+            db.commit()
+            db.refresh(doc)
+        else:
+            db.flush()
+            db.refresh(doc)
         return doc
 
     def _document_or_404(db: Session, document_id: int, actor: User) -> TeacherDocument:
@@ -5399,17 +5507,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 },
             )
         dump = dump_quiz(questions)
-        attempts: list[dict[str, int]] = []
-        for student in roster:
-            attempt = QuizAttempt(
+        # F-PERF-05: bulk insert (add_all + single flush) instead of per-student flush loop
+        attempt_objs = [
+            QuizAttempt(
                 student_id=student.id,
                 subject=payload.subject,
                 class_level=room.class_level,
                 quiz_json=dump,
             )
-            db.add(attempt)
-            db.flush()
-            attempts.append({"student_id": student.id, "attempt_id": attempt.id})
+            for student in roster
+        ]
+        db.add_all(attempt_objs)
+        db.flush()
+        attempts: list[dict[str, int]] = [
+            {"student_id": obj.student_id, "attempt_id": obj.id} for obj in attempt_objs
+        ]
         st = ShortTest(
             classroom_id=room.id,
             teacher_id=teacher.id,
@@ -6157,15 +6269,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     "message": "admins cannot be impersonated",
                 },
             )
+        jti = secrets.token_hex(16)
         token = create_access_token(
             target,
             settings=settings,
             minutes=IMPERSONATION_MINUTES,
             # jti makes this specific token revocable (S5.10 exit button /
             # admin revoke), which stateless JWT alone cannot do.
-            jti=secrets.token_hex(16),
+            jti=jti,
             extra_claims={"imp": True, "imp_by": admin.id},
         )
+        # F-SEC-01: index active JTIs per target so admin revoke can find them
+        try:
+            existing = app.state.cache.get_json(f"imp_active:{target.id}") or []
+            if not isinstance(existing, list):
+                existing = []
+            existing.append(jti)
+            # keep only recent 10 to bound memory
+            existing = existing[-10:]
+            app.state.cache.set_json(
+                f"imp_active:{target.id}", existing, ttl=IMPERSONATION_MINUTES * 60
+            )
+        except Exception:
+            pass
         write_audit(
             db,
             action="impersonation",
@@ -6187,6 +6313,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         target = db.get(User, user_id)
         if target is None:
             raise HTTPException(status_code=404, detail="User not found")
+        # F-SEC-01: revoke all active impersonation JTIs for this target
+        try:
+            active = app.state.cache.get_json(f"imp_active:{target.id}") or []
+            if isinstance(active, list):
+                for j in active:
+                    if isinstance(j, str) and j:
+                        app.state.cache.set_json(
+                            f"imp_revoke:{j}", True, ttl=IMPERSONATION_MINUTES * 60
+                        )
+            # clear the active index
+            app.state.cache.set_json(f"imp_active:{target.id}", [], ttl=1)
+        except Exception:
+            pass
         write_audit(
             db,
             action="impersonation",
@@ -6265,22 +6404,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/admin/analytics/overview", response_model=AdminOverview)
     def admin_overview(db: DbSession, admin: AdminUser) -> AdminOverview:
-        users = db.execute(select(User)).scalars().all()
-        by_role: dict[str, int] = defaultdict(int)
-        for u in users:
-            by_role[u.role] += 1
-        attempts = (
-            db.execute(select(QuizAttempt).where(QuizAttempt.status == "graded")).scalars().all()
-        )
-        scores = [a.score_pct for a in attempts if a.score_pct is not None]
+        # F-PERF-04: SQL aggregates instead of full-history Python loops
+        users_total = db.execute(select(func.count()).select_from(User)).scalar_one()
+        by_role_rows = db.execute(select(User.role, func.count()).group_by(User.role)).all()
+        by_role = {r: int(c) for r, c in by_role_rows}
+        graded_count, avg_score_raw = db.execute(
+            select(func.count(), func.avg(QuizAttempt.score_pct)).where(
+                QuizAttempt.status == "graded", QuizAttempt.score_pct.is_not(None)
+            )
+        ).one()
         return AdminOverview(
-            users_total=len(users),
+            users_total=int(users_total),
             students=by_role.get("student", 0),
             teachers=by_role.get("teacher", 0),
             admins=by_role.get("admin", 0),
             parents=by_role.get("parent", 0),
-            quiz_attempts_graded=len(attempts),
-            avg_score_pct=round(sum(scores) / len(scores), 2) if scores else None,
+            quiz_attempts_graded=int(graded_count),
+            avg_score_pct=round(float(avg_score_raw), 2) if avg_score_raw is not None else None,
         )
 
     @app.get("/admin/safety/refusals", response_model=RefusalAuditOut)

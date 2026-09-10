@@ -124,6 +124,11 @@ class Settings(BaseSettings):
     sentry_dsn: str | None = None
     sentry_env: str = "development"
 
+    # --- hardening (Phase 4) ---
+    # F-SEC-06: protect /metrics in production — internal ingress or bearer token
+    metrics_require_auth: bool = False
+    metrics_token: str | None = None
+
     @property
     def is_production(self) -> bool:
         return self.env.strip().lower() in PRODUCTION_ENVS
