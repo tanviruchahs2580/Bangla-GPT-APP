@@ -66,7 +66,7 @@ function RequireAuth({
 }) {
   const { me, loading } = useAuth();
   if (!getToken()) return <Navigate to="/login" replace />;
-  if (loading || me === null)
+  if (loading)
     return (
       <main className="container" aria-live="polite">
         <p className="muted">{t("loading")}</p>
@@ -74,6 +74,9 @@ function RequireAuth({
         <div className="skeleton" style={{ width: "40%" }} />
       </main>
     );
+  // Token present but profile unloadable (e.g. expired token, offline):
+  // never trap the user on a skeleton — send them to re-login.
+  if (me === null) return <Navigate to="/login" replace />;
   if (role && me.role !== role)
     return <Navigate to={ROLE_HOME[me.role] ?? "/login"} replace />;
   return <AppShell>{children}</AppShell>;

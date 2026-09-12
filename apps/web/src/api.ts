@@ -194,7 +194,13 @@ export async function login(email: string, password: string): Promise<string> {
   const res = await post<TokenResponse>("/auth/login", { email, password });
   localStorage.setItem(TOKEN_KEY, res.access_token);
   // Validate the session and refresh the authoritative role from the server.
-  await fetchMe();
+  // A null here (transient failure AFTER a successful login) must NOT look
+  // like a success: the caller would navigate into authed routes with a
+  // dead session and bounce straight back out ("instant logout").
+  const me = await fetchMe();
+  if (!me) {
+    throw new ApiError(0, "session verification failed", "verify_failed");
+  }
   return decodeRole(res.access_token) ?? "student";
 }
 
@@ -259,8 +265,14 @@ export async function fetchMe(): Promise<MeResponse | null> {
   }
   try {
     return await get<MeResponse>("/users/me");
-  } catch {
-    logout();
+  } catch (e) {
+    // Only a 401 proves the token is dead. Transient failures (network
+    // blips, tunnel reconnects, non-JSON error pages) must NOT wipe a
+    // freshly stored token — that turned every hiccup into an "instant
+    // logout" right after login.
+    if (e instanceof ApiError && e.status === 401) {
+      logout();
+    }
     return null;
   }
 }
