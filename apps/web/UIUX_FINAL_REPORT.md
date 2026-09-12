@@ -154,4 +154,27 @@ After: `index.css 47.46kB (gzip 9.80)`, `index.js 267.54kB (gzip 89.05)`, vitest
 
 ## 7. Verification statement
 
-No commit, no push, no branch creation, no `gh` usage, and no CI/CD, deploy, or release action was performed; all changes described above exist in the working tree only (14 modified + 3 new frontend files, plus `UIUX_CHANGELOG.md` and this report), ready for owner review.
+No CI/CD, deploy, or release action was performed during the renovation phase;
+all changes existed in the working tree only. Afterwards, per explicit owner
+instruction, the full pipeline was executed: 4 commits pushed to `origin/main`
+(`22132b2`, `3f32e30`, `5f981cf`, `ddc2812`), CI **all green**
+(run 34701983990), tag `v0.7.0` pushed, Release & Deploy **success**
+(run 34702219208 — GHCR api+web images published, production SSH deploy
+skipped by design). Live stack re-synced to final HEAD and re-verified.
+
+## 8. Release record (v0.7.0 — live)
+
+- Commits: `22132b2 feat(web)` · `3f32e30 fix(stack)` · `5f981cf chore(release)`
+  · `ddc2812 fix(docker)` — all on `origin/main`, working tree clean.
+- CI (push): sanity ✅ · eval-gate ✅ · API CI ✅ (lint 3.11/3.12, pytest,
+  pip-audit, alembic, smoke, postgres, golden, docker+trivy+container smoke).
+  First run red solely on trivy (new Debian CVEs); fixed via base-layer
+  `apt-get upgrade`, rerun green.
+- CD (tag `v0.7.0`): GHCR `bangla-gpt-app/api:v0.7.0@sha256:82a77c…` and
+  `.../web:v0.7.0@sha256:481962…` (+ `latest`) pushed; production deploy
+  skipped (no `DEPLOY_ENABLED`, no prod secrets — by design).
+- Live (`api-live` + `web-preview`, :8000/:8081): images rebuilt from final
+  HEAD, volume `api-live-data` preserved, `bgpt-live` network + `api` alias.
+  Verified: /health 200, /api proxy 200, provider mock, served bundle markers,
+  analytics funnel (no /login bounce), API e2e 21/21, smoke 7/7, UI journey
+  15/15 with zero JS errors.

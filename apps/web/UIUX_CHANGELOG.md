@@ -256,3 +256,26 @@ User-journey evidence (live :8081 + :8000, headless Edge):
 - Final gates after the above: `tsc` clean, `npm run build` clean
   (CSS 47.46kB/9.80 gzip, JS 267.54kB/89.05 gzip), prettier clean,
   **full suite 36/36 files, 103/103 tests green**.
+
+## Addendum — CI/CD pipeline execution (v0.7.0, per owner instruction)
+
+Pre-push gates: API ruff + format clean; web tsc/prettier/vitest/build clean;
+backend byte-identical to green HEAD (local mass pytest failures are
+Windows order-dependent flakes — suites pass in isolation and CI).
+Commits (pushed once to `origin/main`):
+`22132b2 feat(web)` renovation → `3f32e30 fix(stack)` nginx+funnel →
+`5f981cf chore(release)` 0.7.0 bump (incl. lockfile sync for `npm ci`).
+- CI run 34701455572: sanity ✅, eval-gate ✅, web ✅, lint/test 3.11+3.12 ✅,
+  postgres ✅, golden ✅ — **docker job red ONLY on trivy**: newly published
+  Debian CVEs (sqlite/perl, fixable) in fresh `python:3.12-slim` pulls.
+  Fixed by `ddc2812 fix(docker)` (`apt-get upgrade -y` in Dockerfile;
+  targeted installs would re-red on the next advisory). Proven locally with
+  the exact gate (`trivy:0.58.0 … --exit-code 1` → **0 HIGH/CRITICAL**), then
+  pushed.
+- CI rerun 34701983990: **all green** (API CI 4m9s).
+- Tag `v0.7.0` pushed → Release 34702219208 **success**: api
+  (`sha256:82a77c…`) + web (`sha256:481962…`) images pushed to GHCR as
+  `v0.7.0` and `latest` (push receipts in job log). Deploy-to-production
+  skipped by design (`DEPLOY_ENABLED` unset; no prod secrets configured).
+- Live stack re-synced to final HEAD (rebuilt + recreated images, volume
+  preserved) and re-verified: /health, /api proxy, markers, funnel.
