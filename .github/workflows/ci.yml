@@ -61,7 +61,9 @@ jobs:
           alembic upgrade head
 
       - name: Smoke start (import app + open routes)
-        run: python -c "from bangla_gpt_api.main import create_app; app = create_app(); print(sorted(r.path for r in app.routes))"
+        # FastAPI >=0.118 keeps lazy _IncludedRouter entries in app.routes
+        # (no .path attr); app.openapi() expands all registered routes.
+        run: python -c "from bangla_gpt_api.main import create_app; app = create_app(); print(len(app.openapi()['paths']), 'openapi paths ok')"
 
   postgres:
     name: Postgres engine check (alembic + API flows)
@@ -177,7 +179,7 @@ jobs:
       - name: Trivy vulnerability gate (fail on FIXABLE high/critical)
         run: |
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy@sha256:e13109945074f0a163bb3f66f0b3e09bfbd2627b7d1e3b5e3f8c3a3b3e3b3e3b image --scanners vuln --severity HIGH,CRITICAL --exit-code 1 bangla-gpt-api:ci
+            aquasec/trivy@sha256:e13109945074f0a163bb3f66f0b3e09bfbd2627b7d1e3b5e3f8c3a3b3e3b3e3b image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 bangla-gpt-api:ci
 
       - name: Run container
         run: docker run -d --name api-smoke -p 8080:8000 -e ENV=ci bangla-gpt-api:ci
