@@ -1,4 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#0f6b4f"/>
-  <text x="256" y="330" font-family="'Noto Sans Bengali','Hind Siliguri',sans-serif" font-size="220" font-weight="700" fill="#ffffff" text-anchor="middle">বাং</text>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#16a34a"/>
+      <stop offset="55%" stop-color="#166534"/>
+      <stop offset="100%" stop-color="#052e16"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#g)"/>
+  <ellipse cx="160" cy="96" rx="144" ry="56" fill="#ffffff" opacity="0.12"/>
+  <g fill="none" stroke="#ffffff" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" opacity="0.95">
+    <path d="M256 112 L112 160 v176 l144 -48 144 48 V160 Z"/>
+    <path d="M256 112 v176" opacity="0.85"/>
+  </g>
+  <g fill="#fde68a" opacity="0.95">
+    <path d="M368 96 l56 24 -56 24 -56 -24 Z"/>
+    <rect x="411" y="122" width="14" height="48" rx="7"/>
+  </g>
+  <text x="256" y="440" font-family="'Noto Sans Bengali','Hind Siliguri',sans-serif" font-size="136" font-weight="800" fill="#ffffff" text-anchor="middle">বাং</text>
 </svg>

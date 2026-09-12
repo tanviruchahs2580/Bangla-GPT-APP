@@ -45,22 +45,14 @@ export default function HomePage() {
       <section className="hero">
         <h2>
           {t("welcome")}, {me?.name?.split(/\s+/)[0] ?? "শিক্ষার্থী"}!{" "}
-          <Sparkles size={20} style={{ verticalAlign: "middle" }} aria-hidden />
+          <Sparkles size={20} className="hero-sparkle" aria-hidden />
         </h2>
         <p>{t("whatToDo")}</p>
         <div className="hero-actions">
-          <Link
-            to="/student/learn"
-            className="btn btn-teal"
-            style={{ color: "#fff" }}
-          >
+          <Link to="/student/learn" className="btn btn-teal">
             <BookOpen size={18} aria-hidden /> {t("startLearning")}
           </Link>
-          <Link
-            to="/student/tutor"
-            className="btn"
-            style={{ background: "rgba(255,255,255,0.15)", color: "#fff" }}
-          >
+          <Link to="/student/tutor" className="btn hero-btn-glass">
             <Zap size={18} aria-hidden /> {t("askTutor")}
           </Link>
         </div>
@@ -68,11 +60,7 @@ export default function HomePage() {
 
       <section className="section-head">
         <h2>{t("browseCurriculum")}</h2>
-        <Link
-          to="/student/learn"
-          className="row-flex"
-          style={{ fontStyle: "inherit" }}
-        >
+        <Link to="/student/learn" className="row-flex">
           {t("chapters")} <ArrowRight size={16} aria-hidden />
         </Link>
       </section>
@@ -83,40 +71,27 @@ export default function HomePage() {
             <BookOpen size={22} aria-hidden />
           </span>
           <span>
-            <span className="quick-title" style={{ display: "block" }}>
-              {t("learn")}
-            </span>
+            <span className="quick-title quick-title-block">{t("learn")}</span>
             <span className="quick-sub">{t("conceptRead")}</span>
           </span>
         </Link>
         <Link to="/student/tutor" className="quick-tile">
-          <span
-            className="quick-icon"
-            style={{
-              background: "var(--teal-soft)",
-              color: "var(--teal-strong)",
-            }}
-          >
+          <span className="quick-icon tile-teal">
             <Zap size={22} aria-hidden />
           </span>
           <span>
-            <span className="quick-title" style={{ display: "block" }}>
+            <span className="quick-title quick-title-block">
               {t("aiTutor")}
             </span>
             <span className="quick-sub">{t("askTutor")}</span>
           </span>
         </Link>
         <Link to="/student/quiz" className="quick-tile">
-          <span
-            className="quick-icon"
-            style={{ background: "var(--warn-soft)", color: "var(--warn)" }}
-          >
+          <span className="quick-icon tile-warn">
             <GraduationCap size={22} aria-hidden />
           </span>
           <span>
-            <span className="quick-title" style={{ display: "block" }}>
-              {t("quiz")}
-            </span>
+            <span className="quick-title quick-title-block">{t("quiz")}</span>
             <span className="quick-sub">{t("takeQuiz")}</span>
           </span>
         </Link>
@@ -129,14 +104,14 @@ export default function HomePage() {
       <Card>
         {isLoading ? (
           <div className="stack">
-            <div className="skeleton" style={{ height: 18 }} />
-            <div className="skeleton" style={{ height: 18, width: "70%" }} />
+            <div className="skeleton" />
+            <div className="skeleton skeleton-text" />
           </div>
         ) : graded === 0 ? (
           <div className="row-flex">
             <ProgressRing value={0} />
             <div className="row-main">
-              <div style={{ fontWeight: 700 }}>{t("notStarted")}</div>
+              <div className="empty-title">{t("notStarted")}</div>
               <div className="muted">{t("takeQuiz")}</div>
             </div>
             <Button variant="soft" onClick={() => navigate("/student/quiz")}>
@@ -145,7 +120,7 @@ export default function HomePage() {
           </div>
         ) : (
           <>
-            <div className="row-flex">
+            <div className="row-flex progress-hero-row">
               <ProgressRing
                 value={avg}
                 size={96}
@@ -156,19 +131,23 @@ export default function HomePage() {
                 <div className="stat-label">{t("avgScore")}</div>
               </div>
             </div>
-            <div className="stat-grid" style={{ marginTop: "var(--space-4)" }}>
+            <div className="stat-grid section-gap-top">
               <Stat value={graded} label={t("gradedQuizzes")} />
               <Stat value={weak.length} label={t("weakChapters")} />
             </div>
             {weak.length > 0 && (
-              <div className="row-flex" style={{ marginTop: "var(--space-3)" }}>
-                <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                  {t("weakChapters")}:
-                </span>
+              <div className="weak-chip-row">
+                <span className="muted muted-sm">{t("weakChapters")}:</span>
                 {weak.slice(0, 4).map((w) => (
-                  <span key={w} className="badge badge-warn">
+                  <button
+                    key={w}
+                    type="button"
+                    className="badge badge-warn weak-chip"
+                    onClick={() => navigate("/student/learn")}
+                    aria-label={w}
+                  >
                     {w}
-                  </span>
+                  </button>
                 ))}
               </div>
             )}
@@ -202,7 +181,7 @@ export default function HomePage() {
         return (
           <>
             {showCont && (
-              <Card>
+              <Card className="next-step-card">
                 <div className="card-title">
                   চালিয়ে যান: {showCont.chapter}
                 </div>
@@ -228,7 +207,7 @@ export default function HomePage() {
               </Card>
             )}
             {rec && rec.chapter && (
-              <Card>
+              <Card className="next-step-card">
                 <div className="card-title">প্রস্তাবিত: {rec.chapter}</div>
                 <p className="muted">
                   {rec.reason ?? "দুর্বল অধ্যায়"} — {rec.subject}

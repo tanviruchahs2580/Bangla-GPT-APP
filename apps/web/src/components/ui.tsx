@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { cn } from "../lib/cn";
+import { BrandMark } from "./BrandMark";
 
 type Variant = "primary" | "teal" | "ghost" | "soft" | "danger" | "default";
 type Size = "sm" | "md" | "lg";
@@ -19,12 +20,14 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
   size?: Size;
   block?: boolean;
+  loading?: boolean;
 }
 
 export function Button({
   variant = "default",
   size = "md",
   block,
+  loading,
   className,
   type = "button",
   ...rest
@@ -32,10 +35,12 @@ export function Button({
   return (
     <button
       type={type}
+      aria-busy={loading || undefined}
       className={cn(
         VARIANTS[variant],
         SIZES[size],
         block && "btn-block",
+        loading && "btn-loading",
         className,
       )}
       {...rest}
@@ -48,22 +53,18 @@ export function Card({
   className,
   title,
   action,
-  style,
 }: {
   children: ReactNode;
   className?: string;
   title?: ReactNode;
   action?: ReactNode;
-  style?: React.CSSProperties;
 }) {
   return (
-    <section className={cn("card", className)} style={style}>
+    <section className={cn("card", className)}>
       {(title || action) && (
-        <div className="row-flex" style={{ marginBottom: "8px" }}>
-          <div className="card-title" style={{ margin: 0 }}>
-            {title}
-          </div>
-          <div style={{ marginLeft: "auto" }}>{action}</div>
+        <div className="row-flex card-head-row">
+          <div className="card-title card-title-flush">{title}</div>
+          <div className="card-action">{action}</div>
         </div>
       )}
       {children}
@@ -76,7 +77,7 @@ export function Badge({
   tone = "default",
 }: {
   children: ReactNode;
-  tone?: "default" | "ok" | "warn" | "teal";
+  tone?: "default" | "ok" | "warn" | "teal" | "ai";
 }) {
   return (
     <span
@@ -85,6 +86,7 @@ export function Badge({
         tone === "ok" && "badge-ok",
         tone === "warn" && "badge-warn",
         tone === "teal" && "badge-teal",
+        tone === "ai" && "badge-ai",
       )}
     >
       {children}
@@ -96,15 +98,7 @@ export function Spinner({ label }: { label?: string }) {
   return (
     <span role="status" aria-live="polite">
       <span className="visually-hidden">{label ?? "Loading…"}</span>
-      <span
-        className="skeleton"
-        style={{
-          display: "inline-block",
-          width: "1.1em",
-          height: "1.1em",
-          verticalAlign: "middle",
-        }}
-      />
+      <span className="skeleton spinner-dot" aria-hidden />
     </span>
   );
 }
@@ -122,7 +116,7 @@ export function ProgressRing({
   const inner = size - 14;
   return (
     <div
-      className="ring"
+      className="ring ring-draw"
       style={{
         width: size,
         height: size,
@@ -170,20 +164,7 @@ export function Row({
   );
   if (onClick) {
     return (
-      <button
-        className="row"
-        style={{
-          width: "100%",
-          background: "none",
-          border: "none",
-          borderBottom: "1px solid var(--line)",
-          textAlign: "left",
-          color: "inherit",
-          cursor: "pointer",
-          font: "inherit",
-        }}
-        onClick={onClick}
-      >
+      <button className="row row-action" onClick={onClick}>
         {content}
       </button>
     );
@@ -201,18 +182,13 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div
-      className="center"
-      style={{ padding: "var(--space-6) var(--space-4)" }}
-    >
-      <div style={{ fontSize: "2.2rem", marginBottom: "8px" }}>📘</div>
-      <div style={{ fontWeight: 700 }}>{title}</div>
-      {sub && (
-        <div className="muted" style={{ marginTop: "4px" }}>
-          {sub}
-        </div>
-      )}
-      {action && <div style={{ marginTop: "16px" }}>{action}</div>}
+    <div className="center empty-state empty-pad">
+      <div className="empty-mark" aria-hidden>
+        <BrandMark size={56} />
+      </div>
+      <div className="empty-title">{title}</div>
+      {sub && <div className="muted empty-sub">{sub}</div>}
+      {action && <div className="empty-action">{action}</div>}
     </div>
   );
 }

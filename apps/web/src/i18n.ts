@@ -418,6 +418,17 @@ const bn = {
   admNoteLabel: "নোট (শুধু অ্যাডমিন)",
   admNoFeedback: "এই ভিউতে কোনো ফিডব্যাক নেই",
   admOpenCount: "খোলা: {n} / {t}",
+  // WP-02/WP-07 new microcopy (bn+en parity, Bangla-first)
+  trustNctb: "NCTB পাঠ্যবই-ভিত্তিক",
+  trustAi: "প্রমাণসহ AI ব্যাখ্যা",
+  trustOffline: "অফলাইনে পড়া যায়",
+  emptyChatTitle: "AI টিউটরকে প্রশ্ন করুন",
+  emptyChatSub: "নিচের একটি বেছে নিন অথবা নিজে লিখুন",
+  suggestQ1: "ভগ্নাংশ সহজে বুঝিয়ে দাও",
+  suggestQ2: "নিউটনের প্রথম সূত্র উদাহরণসহ",
+  suggestQ3: "এই অধ্যায় থেকে কুইজ বানাও",
+  brandHome: "হোমে যান",
+  dashboard: "ড্যাশবোর্ড",
 } as const;
 
 type Dict = Record<keyof typeof bn, string>;
@@ -834,6 +845,16 @@ const en: Dict = {
   admNoteLabel: "Note (admin only)",
   admNoFeedback: "No feedback in this view",
   admOpenCount: "Open: {n} of {t}",
+  trustNctb: "NCTB textbook-grounded",
+  trustAi: "AI answers with evidence",
+  trustOffline: "Read offline",
+  emptyChatTitle: "Ask the AI tutor",
+  emptyChatSub: "Pick one below or write your own",
+  suggestQ1: "Explain fractions simply",
+  suggestQ2: "Newton's first law with an example",
+  suggestQ3: "Make a quiz from this chapter",
+  brandHome: "Go home",
+  dashboard: "Dashboard",
 };
 
 const DICTS: Record<Lang, Dict> = { bn, en };

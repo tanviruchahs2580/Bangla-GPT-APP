@@ -4,6 +4,7 @@ import { useAuth } from "../AuthContext";
 import { friendlyError, type ErrorCopy } from "../errors";
 import { t } from "../i18n";
 import { Button, Card } from "../components/ui";
+import { BrandMark } from "../components/BrandMark";
 
 export default function RegisterPage() {
   const { setMe } = useAuth();
@@ -55,7 +56,7 @@ export default function RegisterPage() {
   return (
     <div className="splash">
       <div className="splash-logo" aria-hidden>
-        🎓
+        <BrandMark size={72} />
       </div>
       <h1>{t("appName")}</h1>
       <Card className="auth-card">
@@ -127,17 +128,14 @@ export default function RegisterPage() {
                 />
               </div>
               <div className="field">
-                <label
-                  htmlFor="consent"
-                  style={{ display: "flex", gap: 8, alignItems: "flex-start" }}
-                >
+                <label htmlFor="consent" className="consent-label">
                   <input
                     id="consent"
                     type="checkbox"
                     checked={consent}
                     onChange={(e) => setConsent(e.target.checked)}
                     required
-                    style={{ width: "auto", marginTop: 3 }}
+                    className="consent-check"
                   />
                   <span>
                     {t("consentText").replace("গোপনীয়তা নীতি ও শর্তাবলি", "")}{" "}
@@ -168,7 +166,7 @@ export default function RegisterPage() {
             {t("register")}
           </Button>
         </form>
-        <div className="link-row" style={{ justifyContent: "center" }}>
+        <div className="link-row link-row-center">
           <a href="/login">
             {t("haveAccount")} {t("login")}
           </a>

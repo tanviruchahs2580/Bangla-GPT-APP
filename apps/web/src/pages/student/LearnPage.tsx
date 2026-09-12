@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { BookOpen, Download, FileText } from "lucide-react";
+import { BookOpen, Bookmark, Download, FileText } from "lucide-react";
 import {
   getChapterContent,
   getLearnProgress,
@@ -31,15 +31,10 @@ import {
 } from "../../lib/offlineStore";
 import { getLowData } from "../../lib/lowData";
 
-const EMOJI: Record<string, string> = {
-  science: "🔬",
-  mathematics: "📐",
-  bangla: "📖",
-  6: "🔬",
-  7: "🧲",
-  8: "🧪",
-  9: "⚡",
-  10: "🧬",
+const SUBJECT_TONE: Record<string, string> = {
+  science: "tile-teal",
+  mathematics: "tile-warn",
+  bangla: "",
 };
 
 export function LearnPage() {
@@ -76,10 +71,9 @@ export function LearnPage() {
       </section>
 
       <div
-        className="chips"
+        className="chips chips-gap"
         role="group"
         aria-label={t("selectClass")}
-        style={{ marginBottom: "var(--space-4)" }}
       >
         {classes.map((c) => (
           <button
@@ -97,8 +91,8 @@ export function LearnPage() {
 
       {subjectsQuery.isLoading ? (
         <div className="stack">
-          <div className="skeleton" style={{ height: 80 }} />
-          <div className="skeleton" style={{ height: 80 }} />
+          <div className="skeleton skeleton-card" />
+          <div className="skeleton skeleton-card" />
         </div>
       ) : (
         <div className="subject-grid">
@@ -109,22 +103,24 @@ export function LearnPage() {
                 "subject-card",
                 activeSubject === s.subject && "active",
               )}
-              style={
-                activeSubject === s.subject
-                  ? { borderColor: "var(--brand)" }
-                  : {}
-              }
+              aria-pressed={activeSubject === s.subject}
               onClick={() =>
                 setActiveSubject((cur) =>
                   cur === s.subject ? null : s.subject,
                 )
               }
             >
-              <span className="subject-emoji">{EMOJI[s.subject] ?? "📘"}</span>
+              <span
+                className={cn("quick-icon", SUBJECT_TONE[s.subject] ?? "")}
+                aria-hidden
+              >
+                <BookOpen size={22} />
+              </span>
               <div className="subject-name">{s.subject}</div>
               <div className="subject-meta">
                 {t("classLabel")} {s.class_levels.join(", ")}
               </div>
+              <span className="subject-progress" aria-hidden />
             </button>
           ))}
         </div>
@@ -140,7 +136,7 @@ export function LearnPage() {
           <div className="stack">
             {chaptersQuery.isLoading ? (
               <Card>
-                <div className="skeleton" style={{ height: 16 }} />
+                <div className="skeleton skeleton-text" />
               </Card>
             ) : (chaptersQuery.data ?? []).length === 0 ? (
               <Card>
@@ -156,21 +152,11 @@ export function LearnPage() {
                     : badgeKind === "reading"
                       ? "○"
                       : null;
-                const bm = prog?.bookmarked ? "🔖" : "";
+                const pct = prog?.completed ? 100 : prog ? 45 : 0;
                 return (
-                  <Card
-                    key={ch.chapter}
-                    className="row"
-                    style={{ padding: "var(--space-4)" }}
-                  >
-                    <span
-                      className="quick-icon"
-                      style={{
-                        background: "var(--teal-soft)",
-                        color: "var(--teal-strong)",
-                      }}
-                    >
-                      <FileText size={20} aria-hidden />
+                  <Card key={ch.chapter} className="row chapter-card">
+                    <span className="quick-icon tile-teal" aria-hidden>
+                      <FileText size={20} />
                     </span>
                     <div className="row-main">
                       <div className="row-title">
@@ -180,16 +166,30 @@ export function LearnPage() {
                             className={
                               prog?.completed ? "badge badge-teal" : "badge"
                             }
-                            style={{ marginLeft: 6 }}
                           >
                             {badge}
                           </span>
                         )}{" "}
-                        {bm && <span style={{ marginLeft: 4 }}>{bm}</span>}
+                        {prog?.bookmarked && (
+                          <Bookmark
+                            size={14}
+                            className="bookmark-inline"
+                            aria-label={t("downloaded")}
+                          />
+                        )}
                       </div>
                       <div className="row-sub">
                         {t("preview")}: {ch.excerpt}
                       </div>
+                      {pct > 0 && (
+                        <div
+                          className="chapter-progress"
+                          role="img"
+                          aria-label={`${pct}%`}
+                        >
+                          <span style={{ width: `${pct}%` }} />
+                        </div>
+                      )}
                     </div>
                     <button
                       className="btn btn-soft btn-sm"
@@ -378,17 +378,16 @@ export function LearnChapterPage() {
   return (
     <main className="shell-main">
       <button
-        className="btn btn-ghost btn-sm"
+        className="btn btn-ghost btn-sm chips-gap"
         onClick={() => navigate(-1)}
-        style={{ marginBottom: "var(--space-3)" }}
       >
         ← {t("back")}
       </button>
       {query.isLoading ? (
         <Card>
-          <div className="skeleton" style={{ height: 20 }} />
-          <div className="skeleton" style={{ height: 14 }} />
-          <div className="skeleton" style={{ height: 120 }} />
+          <div className="skeleton skeleton-text" />
+          <div className="skeleton skeleton-text" />
+          <div className="skeleton skeleton-card" />
         </Card>
       ) : query.isError || !content ? (
         <Card>
@@ -396,18 +395,17 @@ export function LearnChapterPage() {
         </Card>
       ) : (
         <Card>
-          <div
-            className="row-flex"
-            style={{ marginBottom: "var(--space-2)", flexWrap: "wrap" }}
-          >
+          <div className="reader-controls">
             <span className="badge badge-teal">{content.subject}</span>
             <span className="badge">
               {t("classLabel")} {content.class_level}
             </span>
             <button
-              className={`btn btn-sm ${bookmarked ? "btn-teal" : "btn-ghost"}`}
+              key={String(bookmarked)}
+              className={`btn btn-sm ${bookmarked ? "btn-teal bookmark-pop" : "btn-ghost"}`}
               onClick={toggleBookmark}
               aria-label="bookmark"
+              aria-pressed={bookmarked}
             >
               {bookmarked ? "🔖 বুকমার্ক" : "☆ বুকমার্ক"}
             </button>
@@ -416,6 +414,7 @@ export function LearnChapterPage() {
                 className="btn btn-sm btn-ghost"
                 onClick={speak}
                 aria-label="tts"
+                aria-pressed={speaking}
               >
                 {speaking ? "⏹️ থামুন" : "🔊 শুনুন"}
               </button>
@@ -430,8 +429,8 @@ export function LearnChapterPage() {
               <Download size={14} aria-hidden />{" "}
               {saved ? t("downloaded") : t("downloadChapter")}
             </button>
-            <span className="row-flex" style={{ gap: 6, marginLeft: "auto" }}>
-              <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+            <span className="row-flex font-scale-row">
+              <span className="muted muted-sm" aria-hidden>
                 A
               </span>
               <input
@@ -441,10 +440,10 @@ export function LearnChapterPage() {
                 step={0.1}
                 value={fontScale}
                 onChange={(e) => setFontScale(parseFloat(e.target.value))}
-                style={{ width: 90 }}
+                className="font-range"
                 aria-label="font size"
               />
-              <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+              <span className="muted muted-sm" aria-hidden>
                 A+
               </span>
             </span>
@@ -452,10 +451,9 @@ export function LearnChapterPage() {
 
           {/* S1.3: in-page tabs — read / practice / ask without leaving the chapter */}
           <div
-            className="chips"
+            className="chips workspace-tabs"
             role="tablist"
             aria-label="workspace"
-            style={{ margin: "var(--space-3) 0 var(--space-4)" }}
           >
             {(["read", "practice", "ask"] as const).map((k) => (
               <button
@@ -476,24 +474,14 @@ export function LearnChapterPage() {
 
           {tab === "read" && (
             <>
-              <h1
-                className="card-title"
-                style={{ marginTop: "var(--space-2)" }}
-              >
-                {content.chapter}
-              </h1>
+              <h1 className="card-title reader-title">{content.chapter}</h1>
               <p className="muted">
-                <BookOpen
-                  size={15}
-                  style={{ verticalAlign: "middle" }}
-                  aria-hidden
-                />{" "}
+                <BookOpen size={15} className="reader-book" aria-hidden />{" "}
                 {content.book}
               </p>
               <div
-                className="md stack"
+                className="md stack reader-md"
                 style={{
-                  marginTop: "var(--space-4)",
                   fontSize: `${fontScale}em`,
                 }}
               >
@@ -620,7 +608,7 @@ function ChapterPractice({
           </div>
         </div>
         {result.review.map((r, i) => (
-          <Card key={i} style={{ padding: "var(--space-3)" }}>
+          <Card key={i} className="quiz-review-row">
             <div className="row-title">{r.question_text}</div>
             <div className="row-sub">
               {r.is_correct ? "✓" : `✗ — ${r.options[r.correct_index] ?? ""}`}
@@ -643,26 +631,23 @@ function ChapterPractice({
           <span className="badge">
             {current + 1}/{started.questions.length}
           </span>
-          <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-            {chapter}
-          </span>
+          <span className="muted muted-sm">{chapter}</span>
         </div>
-        <div className="row-title" style={{ fontSize: "var(--fs-lg)" }}>
-          {q.question_text}
-        </div>
-        <div className="stack">
+        <div className="row-title quiz-q-title">{q.question_text}</div>
+        <div className="stack" role="radiogroup" aria-label={q.question_text}>
           {q.options.map((opt, oi) => (
             <button
               key={oi}
-              className={cn("btn btn-ghost", chosen === oi && "btn-soft")}
-              style={{ textAlign: "left", justifyContent: "flex-start" }}
+              role="radio"
+              aria-checked={chosen === oi}
+              className={cn("quiz-option", chosen === oi && "selected")}
               onClick={() => setAnswers((a) => ({ ...a, [current]: oi }))}
             >
               {opt}
             </button>
           ))}
         </div>
-        <div className="row-flex" style={{ justifyContent: "space-between" }}>
+        <div className="row-flex quiz-pager">
           <button
             className="btn btn-ghost btn-sm"
             disabled={current === 0}
@@ -748,15 +733,14 @@ function ChapterAsk({
 
   return (
     <div className="stack">
-      <div className="row-flex" style={{ gap: 6, flexWrap: "wrap" }}>
+      <div className="row-flex ask-context-row">
         <span className="badge badge-teal">
           {t("contextChip")}: {chapter}
         </span>
       </div>
-      <div className="row-flex" style={{ gap: "var(--space-2)" }}>
+      <div className="row-flex ask-row">
         <input
-          className="input"
-          style={{ flex: 1 }}
+          className="input ask-input"
           value={question}
           placeholder={t("askAboutChapter")}
           onChange={(e) => setQuestion(e.target.value)}
@@ -775,18 +759,15 @@ function ChapterAsk({
       {busy && <p className="muted">{t("thinking")}</p>}
       {error && <p className="error">{error}</p>}
       {answer && (
-        <Card style={{ padding: "var(--space-4)" }}>
-          <div style={{ marginBottom: "var(--space-2)" }}>
+        <Card className="chapter-card">
+          <div className="chips-gap">
             <span className={answer.grounded ? "badge badge-teal" : "badge"}>
               {answer.grounded ? t("supportedBadge") : t("unsupportedBadge")}
             </span>
           </div>
           <SafeMarkdown content={answer.answer} />
           {answer.sources.length > 0 && (
-            <p
-              className="muted"
-              style={{ fontSize: "var(--fs-sm)", marginTop: "var(--space-2)" }}
-            >
+            <p className="muted muted-sm section-gap-top">
               {t("chapter")}: {answer.sources[0].chapter}
             </p>
           )}

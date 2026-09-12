@@ -12,9 +12,10 @@ import {
   Sun,
   LogOut,
 } from "lucide-react";
-import { useAuth } from "./AuthContext";
+import { useAuth, ROLE_HOME } from "./AuthContext";
 import { exitImpersonation, isImpersonating } from "./api";
 import { NotificationBell } from "./components/NotificationBell";
+import { BrandMark } from "./components/BrandMark";
 import { SearchBox } from "./components/SearchBox";
 import { getLang, onLangChange, setLang, t } from "./i18n";
 import { toggleTheme, currentTheme } from "./lib/theme";
@@ -57,19 +58,7 @@ export function ImpersonationBanner() {
   const [ending, setEnding] = useState(false);
   if (!isImpersonating()) return null;
   return (
-    <div
-      role="status"
-      style={{
-        background: "var(--brand)",
-        color: "#fff",
-        padding: "8px 16px",
-        display: "flex",
-        gap: 12,
-        alignItems: "center",
-        justifyContent: "center",
-        flexWrap: "wrap",
-      }}
-    >
+    <div role="status" className="impersonation-banner">
       <span>{t("actingAs", { name: me?.name ?? me?.email ?? "?" })}</span>
       <button
         className="small"
@@ -95,31 +84,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // S1.14: show the install affordance only when Chromium offers it
   const [installable, setInstallable] = useState(canInstall());
   useEffect(() => onInstallChange(() => setInstallable(canInstall())), []);
+  const isStaff = !!me && me.role !== "student";
+  const roleHome = (me && ROLE_HOME[me.role]) || "/";
 
   return (
-    <div className="shell">
+    <div className={isStaff ? "shell has-sidebar" : "shell"}>
       <OfflineBanner />
       <ImpersonationBanner />
       <header className="topbar">
         <button
-          className="brand"
-          style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            font: "inherit",
-          }}
+          className="brand brand-reset"
           onClick={() => navigate(me ? `/` : "/login")}
+          aria-label={t("brandHome")}
         >
-          <span className="brand-mark">
-            <GraduationCap size={18} aria-hidden />
+          <span className="brand-mark" aria-hidden>
+            <BrandMark size={30} />
           </span>
           {t("appName")}
         </button>
         {me?.role === "student" && <SearchBox />}
-        <nav className="row-flex" style={{ gap: "8px" }}>
+        <nav className="row-flex topbar-actions" aria-label="Settings">
           {me && (
-            <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+            <span className="muted muted-sm topbar-user">
               {me.name ?? me.email}
             </span>
           )}
@@ -169,7 +155,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
       </header>
 
-      {children}
+      {isStaff && (
+        <div className="shell-body">
+          <aside className="sidebar" aria-label={t("dashboard")}>
+            <NavLink
+              to={roleHome}
+              end
+              className={({ isActive }) => (isActive ? "active" : undefined)}
+            >
+              {t("dashboard")}
+            </NavLink>
+            <NavLink
+              to="/status"
+              className={({ isActive }) => (isActive ? "active" : undefined)}
+            >
+              {t("statusPage")}
+            </NavLink>
+          </aside>
+          <div className="shell-content">{children}</div>
+        </div>
+      )}
+
+      {!isStaff && <>{children}</>}
 
       {me?.role === "student" && (
         <nav className="bottombar" aria-label="Primary">

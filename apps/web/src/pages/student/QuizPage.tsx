@@ -27,6 +27,7 @@ import { Badge, Button, Card, ProgressRing, Stat } from "../../components/ui";
 import { friendlyError } from "../../errors";
 import { t } from "../../i18n";
 import { cn } from "../../lib/cn";
+import { celebrate } from "../../lib/confetti";
 
 const SUBJECTS = [
   { value: "science", label: "বিজ্ঞান" },
@@ -35,17 +36,19 @@ const SUBJECTS = [
 ];
 
 // S4.5: KG gap -> grounded re-teach card (textbook excerpt, never AI text).
+function QuizCelebration({ score }: { score: number }) {
+  useEffect(() => {
+    celebrate(score);
+  }, [score]);
+  return null;
+}
+
 function ReteachCards({ cards }: { cards: ReteachCard[] }) {
   if (cards.length === 0) return null;
   return (
-    <Card className="reteach-card">
+    <Card className="reteach-card card-ai">
       <div className="card-title">{t("reteachTitle")}</div>
-      <p
-        className="muted"
-        style={{ margin: "0 0 var(--space-2)", fontSize: "var(--fs-sm)" }}
-      >
-        {t("reteachHint")}
-      </p>
+      <p className="muted muted-sm reteach-hint">{t("reteachHint")}</p>
       <div className="stack">
         {cards.map((c, i) => (
           <div key={i} className="reteach-item">
@@ -218,44 +221,29 @@ export default function QuizPage() {
         <section className="section-head">
           <h2>{t("yourQuizResult")}</h2>
         </section>
-        <Card>
-          <div
-            className="row-flex"
-            style={{
-              justifyContent: "center",
-              flexDirection: "column",
-              textAlign: "center",
-            }}
-          >
+        <QuizCelebration score={result.score_pct} />
+        <Card className="card-featured">
+          <div className="row-flex quiz-result-hero">
             <ProgressRing
               value={result.score_pct}
               size={120}
               label={<strong>{Math.round(result.score_pct)}%</strong>}
             />
-            <div className="stat-value" style={{ marginTop: "var(--space-3)" }}>
+            <div className="stat-value quiz-result-score">
               {t("correctOutOf", {
                 correct: result.correct,
                 total: result.total,
               })}
             </div>
           </div>
-          <div className="stack" style={{ marginTop: "var(--space-5)" }}>
+          <div className="stack section-gap-top">
             {result.review.map((r, i) => (
-              <Card
-                key={i}
-                className="row"
-                style={{ padding: "var(--space-3)" }}
-              >
+              <Card key={i} className="row quiz-review-row">
                 <span
-                  className="quick-icon"
-                  style={
-                    r.is_correct
-                      ? { background: "var(--ok-soft)", color: "var(--ok)" }
-                      : {
-                          background: "var(--danger-soft)",
-                          color: "var(--danger)",
-                        }
-                  }
+                  className={cn(
+                    "quick-icon",
+                    r.is_correct ? "tile-ok" : "tile-danger",
+                  )}
                 >
                   {r.is_correct ? (
                     <Check size={18} aria-hidden />
@@ -274,7 +262,7 @@ export default function QuizPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      style={{ marginTop: "var(--space-2)" }}
+                      className="section-gap-top"
                       onClick={() =>
                         navigate("/student/tutor", {
                           state: {
@@ -293,11 +281,11 @@ export default function QuizPage() {
           </div>
         </Card>
         {result.reteach && result.reteach.length > 0 && (
-          <div style={{ marginTop: "var(--space-4)" }}>
+          <div className="section-gap-top">
             <ReteachCards cards={result.reteach} />
           </div>
         )}
-        <div style={{ marginTop: "var(--space-4)" }}>
+        <div className="section-gap-top">
           <Button
             variant="primary"
             block
@@ -327,12 +315,12 @@ export default function QuizPage() {
           </Badge>
         </section>
         {started.reteach && started.reteach.length > 0 && current === 0 && (
-          <div className="stack" style={{ marginBottom: "var(--space-3)" }}>
+          <div className="stack chips-gap">
             <ReteachCards cards={started.reteach} />
           </div>
         )}
-        <Card>
-          <div className="row-flex" style={{ marginBottom: "var(--space-3)" }}>
+        <Card key={current} className="quiz-q">
+          <div className="row-flex chips-gap">
             <ProgressRing
               value={(answeredCount / started.questions.length) * 100}
               size={64}
@@ -343,33 +331,24 @@ export default function QuizPage() {
               }
             />
             <div className="row-main">
-              <div className="row-title" style={{ fontSize: "var(--fs-lg)" }}>
-                {q.question_text}
-              </div>
-              <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                {t("chooseAnswers")}
-              </div>
+              <div className="row-title quiz-q-title">{q.question_text}</div>
+              <div className="muted muted-sm">{t("chooseAnswers")}</div>
             </div>
           </div>
-          <div className="stack">
+          <div className="stack" role="radiogroup" aria-label={q.question_text}>
             {q.options.map((opt, oi) => (
               <button
                 key={oi}
-                className={cn("btn btn-ghost", chosen === oi && "btn-soft")}
-                style={{ textAlign: "left", justifyContent: "flex-start" }}
+                role="radio"
+                aria-checked={chosen === oi}
+                className={cn("quiz-option", chosen === oi && "selected")}
                 onClick={() => setAnswers((a) => ({ ...a, [current]: oi }))}
               >
                 {opt}
               </button>
             ))}
           </div>
-          <div
-            className="row-flex"
-            style={{
-              justifyContent: "space-between",
-              marginTop: "var(--space-5)",
-            }}
-          >
+          <div className="row-flex quiz-pager">
             <Button
               variant="ghost"
               size="sm"
@@ -392,11 +371,7 @@ export default function QuizPage() {
               </Button>
             )}
           </div>
-          {error && (
-            <p className="error" style={{ marginTop: "var(--space-3)" }}>
-              {error}
-            </p>
-          )}
+          {error && <p className="error section-gap-top">{error}</p>}
         </Card>
       </main>
     );
@@ -409,12 +384,7 @@ export default function QuizPage() {
       <section className="section-head">
         <h2>{t("quiz")}</h2>
       </section>
-      <div
-        className="chips"
-        style={{ marginBottom: "var(--space-3)" }}
-        role="tablist"
-        aria-label={t("quiz")}
-      >
+      <div className="chips chips-gap" role="tablist" aria-label={t("quiz")}>
         <button
           role="tab"
           aria-selected={tab === "quiz"}
@@ -461,43 +431,28 @@ export default function QuizPage() {
         <div className="stack">
           {due && due.items.length === 0 && (
             <Card>
-              <p className="muted" style={{ margin: 0 }}>
-                {t("revisionEmpty")}
-              </p>
+              <p className="muted flush">{t("revisionEmpty")}</p>
             </Card>
           )}
           {due?.items.map((item) => (
-            <Card
-              key={item.id}
-              className="row"
-              style={{ padding: "var(--space-3)" }}
-            >
+            <Card key={item.id} className="row quiz-review-row">
               <div className="row-main">
                 <div className="row-title">{item.question}</div>
                 <div className="row-sub">
                   {t("chapter")}: {item.chapter}
                 </div>
-                <div className="stack" style={{ marginTop: "var(--space-2)" }}>
+                <div className="stack section-gap-top">
                   {item.options.map((opt, oi) => (
                     <button
                       key={oi}
-                      className="btn btn-ghost"
-                      style={{
-                        textAlign: "left",
-                        justifyContent: "flex-start",
-                      }}
+                      className="quiz-option"
                       disabled={revisionBusy}
                       onClick={() => answerRevision(item, oi)}
                     >
                       {opt}
                     </button>
                   ))}
-                  <p
-                    className="muted"
-                    style={{ margin: 0, fontSize: "var(--fs-sm)" }}
-                  >
-                    {t("revisionChoose")}
-                  </p>
+                  <p className="muted muted-sm flush">{t("revisionChoose")}</p>
                 </div>
               </div>
             </Card>
@@ -508,17 +463,11 @@ export default function QuizPage() {
         <div className="stack">
           {(!stMine || stMine.length === 0) && (
             <Card>
-              <p className="muted" style={{ margin: 0 }}>
-                {t("stEmpty")}
-              </p>
+              <p className="muted flush">{t("stEmpty")}</p>
             </Card>
           )}
           {stMine?.map((st) => (
-            <Card
-              key={st.id}
-              className="row"
-              style={{ padding: "var(--space-3)" }}
-            >
+            <Card key={st.id} className="row quiz-review-row">
               <div className="row-main">
                 <div className="row-title">{st.chapter}</div>
                 <div className="row-sub">
@@ -528,7 +477,7 @@ export default function QuizPage() {
                 <Button
                   variant="primary"
                   size="sm"
-                  style={{ marginTop: "var(--space-2)" }}
+                  className="section-gap-top"
                   disabled={st.attempt_id === null}
                   onClick={() => openShortTest(st)}
                 >
@@ -542,17 +491,11 @@ export default function QuizPage() {
         <div className="stack">
           {(!asMine || asMine.length === 0) && (
             <Card>
-              <p className="muted" style={{ margin: 0 }}>
-                {t("baNone")}
-              </p>
+              <p className="muted flush">{t("baNone")}</p>
             </Card>
           )}
           {asMine?.map((a) => (
-            <Card
-              key={a.id}
-              className="row"
-              style={{ padding: "var(--space-3)" }}
-            >
+            <Card key={a.id} className="row quiz-review-row">
               <div className="row-main">
                 <div className="row-title">{a.chapter}</div>
                 <div className="row-sub">
@@ -567,7 +510,7 @@ export default function QuizPage() {
                 <Button
                   variant="primary"
                   size="sm"
-                  style={{ marginTop: "var(--space-2)" }}
+                  className="section-gap-top"
                   disabled={a.done}
                   onClick={() => openAssigned(a)}
                 >
@@ -596,8 +539,9 @@ export default function QuizPage() {
             </select>
           </div>
           <div className="field">
-            <label>{t("subject")}</label>
+            <label htmlFor="quiz-subject">{t("subject")}</label>
             <select
+              id="quiz-subject"
               className="select"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
@@ -610,7 +554,7 @@ export default function QuizPage() {
             </select>
           </div>
           {progress && progress.attempts_graded > 0 && (
-            <div className="stat-grid" style={{ marginTop: "var(--space-3)" }}>
+            <div className="stat-grid section-gap-top">
               <Stat value={Math.round(avg ?? 0) + "%"} label={t("avgScore")} />
               <Stat
                 value={progress.attempts_graded}
@@ -628,12 +572,7 @@ export default function QuizPage() {
             {t("startQuiz")}
           </Button>
           {!me?.profile_id && (
-            <p
-              className="muted"
-              style={{ fontSize: "var(--fs-sm)", marginTop: "var(--space-2)" }}
-            >
-              {t("notStarted")}
-            </p>
+            <p className="muted muted-sm section-gap-top">{t("notStarted")}</p>
           )}
         </Card>
       )}

@@ -4,6 +4,7 @@ import { useAuth } from "../AuthContext";
 import { friendlyError, type ErrorCopy } from "../errors";
 import { t } from "../i18n";
 import { Button, Card } from "../components/ui";
+import { BrandMark } from "../components/BrandMark";
 
 export default function LoginPage() {
   const { setMe } = useAuth();
@@ -36,7 +37,7 @@ export default function LoginPage() {
   return (
     <div className="splash">
       <div className="splash-logo" aria-hidden>
-        🎓
+        <BrandMark size={72} />
       </div>
       <h1>{t("appName")}</h1>
       <Card className="auth-card">

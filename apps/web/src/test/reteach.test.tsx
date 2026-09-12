@@ -140,7 +140,9 @@ describe("S4.5 re-teach cards in the quiz flow", () => {
       await screen.findByRole("button", { name: new RegExp(t("startQuiz")) }),
     );
     await screen.findByText(/Question-One?/);
-    await user.click(screen.getByRole("button", { name: "Ans-A" }));
+    // WP-09: quiz options are now radio inputs in a radiogroup (same intent:
+    // select an answer; accessible semantics instead of plain buttons).
+    await user.click(screen.getByRole("radio", { name: "Ans-A" }));
     await user.click(
       await screen.findByRole("button", { name: new RegExp(t("finishQuiz")) }),
     );

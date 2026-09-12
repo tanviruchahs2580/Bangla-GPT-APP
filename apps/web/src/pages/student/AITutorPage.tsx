@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
-  BookOpenText,
   Bookmark,
   Check,
   MessageSquarePlus,
@@ -28,10 +27,12 @@ import type {
 } from "../../types";
 import { useAuth } from "../../AuthContext";
 import { Badge, Button, Card } from "../../components/ui";
+import { AiSparkle, BrandMark } from "../../components/BrandMark";
 import { VoiceButton } from "../../components/VoiceButton";
 import { friendlyError } from "../../errors";
 import { t } from "../../i18n";
 import { getLowData } from "../../lib/lowData";
+import { toast } from "../../lib/toast";
 import { track } from "../../lib/analytics";
 import { explainMessage, type QuizExplainPayload } from "../../lib/quizExplain";
 import { SafeMarkdownLazy as SafeMarkdown } from "../../lib/safeMarkdownLazy";
@@ -282,6 +283,7 @@ export default function AITutorPage() {
       });
       setSavedId(m.id);
       track("note_saved", { source: "tutor" });
+      toast(t("noteSaved"));
       setTimeout(() => setSavedId(null), 2000);
     } catch {
       /* ignore */
@@ -368,14 +370,14 @@ export default function AITutorPage() {
         <Button
           variant="ghost"
           size="sm"
-          style={{ marginBottom: "var(--space-3)" }}
+          className="section-gap-top"
           onClick={() => navigate("/student/quiz?result=1")}
         >
           <ArrowLeft size={16} aria-hidden /> {t("backToQuizResult")}
         </Button>
       )}
 
-      <div className="chips" style={{ marginBottom: "var(--space-3)" }}>
+      <div className="chips chips-gap">
         {SUBJECTS.map((s) => (
           <button
             key={s.value}
@@ -388,13 +390,9 @@ export default function AITutorPage() {
       </div>
 
       {/* S1.8: history search */}
-      <div
-        className="row-flex"
-        style={{ gap: "6px", marginBottom: "var(--space-3)" }}
-      >
+      <div className="row-flex chat-search-row">
         <input
-          className="input"
-          style={{ flex: 1 }}
+          className="input chat-search-input"
           value={query}
           placeholder={t("searchHistory")}
           aria-label={t("searchHistory")}
@@ -411,13 +409,12 @@ export default function AITutorPage() {
         </Button>
       </div>
       {hits && (
-        <div className="stack" style={{ marginBottom: "var(--space-3)" }}>
+        <div className="stack chips-gap">
           {hits.length === 0 && <span className="muted">{t("noResults")}</span>}
           {hits.slice(0, 6).map((h) => (
             <button
               key={h.message_id}
-              className="btn btn-ghost"
-              style={{ textAlign: "left", justifyContent: "flex-start" }}
+              className="btn btn-ghost search-hit-btn"
               onClick={() => {
                 void loadConversation(h.conversation_id);
                 setHits(null);
@@ -436,13 +433,12 @@ export default function AITutorPage() {
       )}
 
       {conversations && conversations.length > 0 && (
-        <div className="chips" style={{ marginBottom: "var(--space-3)" }}>
+        <div className="chips chips-gap">
           {conversations.slice(0, 8).map((c) =>
             renamingId === c.id ? (
               <input
                 key={c.id}
-                className="input"
-                style={{ width: 160 }}
+                className="input conv-rename-input"
                 autoFocus
                 value={renameValue}
                 aria-label={t("rename")}
@@ -465,7 +461,7 @@ export default function AITutorPage() {
                     role="button"
                     tabIndex={0}
                     aria-label={t("rename")}
-                    style={{ marginLeft: 6 }}
+                    className="conv-icon-action"
                     onClick={(e) => {
                       e.stopPropagation();
                       setRenamingId(c.id);
@@ -480,7 +476,7 @@ export default function AITutorPage() {
                   role="button"
                   tabIndex={0}
                   aria-label={t("deleteChat")}
-                  style={{ marginLeft: 6 }}
+                  className="conv-icon-action"
                   onClick={(e) => {
                     e.stopPropagation();
                     void removeConversation(c.id);
@@ -497,186 +493,235 @@ export default function AITutorPage() {
         </div>
       )}
 
-      <Card style={{ display: "flex", flexDirection: "column" }}>
+      <Card className="chat-card">
         <div
           ref={viewportRef}
-          className="chat-thread"
-          style={{ minHeight: "38vh", maxHeight: "52vh", overflowY: "auto" }}
+          className="chat-thread chat-viewport"
           aria-live="polite"
         >
           {messages.length === 0 && !streaming && (
-            <div className="center muted" style={{ padding: "var(--space-6)" }}>
-              <BookOpenText size={40} aria-hidden style={{ opacity: 0.4 }} />
-              <p>{t("askPlaceholder")}</p>
+            <div className="center empty-state">
+              <div className="empty-mark" aria-hidden>
+                <BrandMark size={56} />
+              </div>
+              <div className="empty-title">{t("emptyChatTitle")}</div>
+              <p className="muted">{t("emptyChatSub")}</p>
+              <div className="suggest-row">
+                {[t("suggestQ1"), t("suggestQ2"), t("suggestQ3")].map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    className="suggest-chip"
+                    onClick={() => setInput(q)}
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
-          {messages.map((m, i) => (
-            <div key={m.id || i}>
-              <div className={`bubble ${m.role}`}>
-                {m.role === "assistant" ? (
-                  <AssistantContent content={m.content} />
-                ) : (
-                  m.content
-                )}
-              </div>
-              {m.role === "assistant" &&
-                i === messages.length - 1 &&
-                !streaming &&
-                m.grounded && (
-                  <div
-                    className="chips"
-                    role="group"
-                    aria-label={t("quickFollowups")}
-                    style={{ margin: "6px 0" }}
-                  >
-                    <button
-                      className="chip"
-                      onClick={() => send(t("chipSimpler"))}
-                    >
-                      {t("chipSimpler")}
-                    </button>
-                    <button
-                      className="chip"
-                      onClick={() => send(t("chipExample"))}
-                    >
-                      {t("chipExample")}
-                    </button>
-                    <button
-                      className="chip"
-                      onClick={() =>
-                        navigate(`/student/quiz?subject=${subject}`)
-                      }
-                    >
-                      {t("chipQuiz")}
-                    </button>
+          {messages.map((m, i) => {
+            const prev = messages[i - 1];
+            const tight = prev && prev.role === m.role;
+            const day = m.created_at
+              ? (() => {
+                  try {
+                    return new Date(m.created_at).toLocaleDateString(
+                      undefined,
+                      { day: "numeric", month: "short" },
+                    );
+                  } catch {
+                    return null;
+                  }
+                })()
+              : null;
+            const prevDay = prev?.created_at
+              ? (() => {
+                  try {
+                    return new Date(prev.created_at).toLocaleDateString(
+                      undefined,
+                      { day: "numeric", month: "short" },
+                    );
+                  } catch {
+                    return null;
+                  }
+                })()
+              : null;
+            const showDay = day && day !== prevDay;
+            return (
+              <div
+                key={m.id || i}
+                className={tight ? "chat-group-tight" : undefined}
+              >
+                {showDay && (
+                  <div className="chat-day" aria-hidden>
+                    {day}
                   </div>
                 )}
-              {m.role === "assistant" && m.sources && m.sources.length > 0 && (
-                <div className="sources">
-                  {m.refused_reason ? (
-                    <Badge tone="warn">{t("unsupportedBadge")}</Badge>
+                <div className={`bubble ${m.role}`}>
+                  {m.role === "assistant" && (
+                    <span className="bubble-id" aria-hidden>
+                      <AiSparkle size={14} /> AI
+                    </span>
+                  )}
+                  {m.role === "assistant" ? (
+                    <AssistantContent content={m.content} />
                   ) : (
-                    <Badge tone="teal">
-                      <Check size={12} aria-hidden /> {t("supportedBadge")}
-                    </Badge>
+                    m.content
                   )}
-                  {m.confidence != null && (
-                    <Badge tone={m.confidence >= 0.6 ? "ok" : "warn"}>
-                      {t("confidenceBadge").replace(
-                        "{pct}",
-                        String(Math.round(m.confidence * 100)),
-                      )}
-                    </Badge>
+                  {streaming && i === messages.length - 1 && (
+                    <span className="stream-cursor" aria-hidden />
                   )}
-                  <div
-                    className="row-flex"
-                    style={{ gap: "6px", marginTop: "6px" }}
-                  >
-                    {m.sources.map((s: SourceRef, si) => (
-                      <button
-                        className="source-chip"
-                        key={si}
-                        onClick={() => setEvidence(s)}
-                        aria-label={`${t("evidenceTitle")}: ${s.chapter || s.book}`}
-                      >
-                        {s.chapter || s.book}
-                      </button>
-                    ))}
-                  </div>
-                  {m.id !== 0 && (
+                </div>
+                {m.role === "assistant" &&
+                  i === messages.length - 1 &&
+                  !streaming &&
+                  m.grounded && (
                     <div
-                      className="row-flex"
-                      style={{ gap: "6px", marginTop: "6px" }}
+                      className="chips chips-gap"
+                      role="group"
+                      aria-label={t("quickFollowups")}
                     >
                       <button
-                        className="icon-btn"
-                        style={{ width: 32, height: 32 }}
-                        aria-label={t("rateUp")}
-                        onClick={() => rate(m.id, 1)}
+                        className="chip"
+                        onClick={() => send(t("chipSimpler"))}
                       >
-                        {thanks === m.id ? (
-                          <Check size={16} aria-hidden />
-                        ) : (
-                          <ThumbsUp size={16} aria-hidden />
-                        )}
+                        {t("chipSimpler")}
                       </button>
                       <button
-                        className="icon-btn"
-                        style={{ width: 32, height: 32 }}
-                        aria-label={t("rateDown")}
-                        onClick={() => rate(m.id, -1)}
+                        className="chip"
+                        onClick={() => send(t("chipExample"))}
                       >
-                        <ThumbsDown size={16} aria-hidden />
+                        {t("chipExample")}
                       </button>
-                      {m.grounded && (
-                        <button
-                          className="chip"
-                          style={{ alignSelf: "center" }}
-                          onClick={() => {
-                            // S1.5 'আমি বুঝিন': re-ask the same question with the
-                            // next teaching strategy (server rotates conversation strategy).
-                            const q = [...messages.slice(0, i)]
-                              .reverse()
-                              .find((x) => x.role === "user")?.content;
-                            if (q) send(q, { reteach: true });
-                          }}
-                        >
-                          {t("reteach")}
-                        </button>
+                      <button
+                        className="chip"
+                        onClick={() =>
+                          navigate(`/student/quiz?subject=${subject}`)
+                        }
+                      >
+                        {t("chipQuiz")}
+                      </button>
+                    </div>
+                  )}
+                {m.role === "assistant" &&
+                  m.sources &&
+                  m.sources.length > 0 && (
+                    <div className="sources">
+                      {m.refused_reason ? (
+                        <Badge tone="warn">{t("unsupportedBadge")}</Badge>
+                      ) : (
+                        <Badge tone="teal">
+                          <Check size={12} aria-hidden /> {t("supportedBadge")}
+                        </Badge>
                       )}
-                      <button
-                        className="icon-btn"
-                        style={{ width: 32, height: 32 }}
-                        aria-label={t("saveAsNote")}
-                        onClick={() => void saveNote(m)}
-                      >
-                        {savedId === m.id ? (
-                          <Check size={16} aria-hidden />
-                        ) : (
-                          <Bookmark size={16} aria-hidden />
-                        )}
-                      </button>
-                      {i === messages.length - 1 && (
-                        <button
-                          className="chip"
-                          style={{ alignSelf: "center" }}
-                          onClick={() => {
-                            const q = [...messages.slice(0, i)]
-                              .reverse()
-                              .find((x) => x.role === "user")?.content;
-                            if (q) send(q);
-                          }}
-                        >
-                          <RefreshCcw size={13} aria-hidden /> {t("regenerate")}
-                        </button>
+                      {m.confidence != null && (
+                        <Badge tone={m.confidence >= 0.6 ? "ok" : "warn"}>
+                          {t("confidenceBadge").replace(
+                            "{pct}",
+                            String(Math.round(m.confidence * 100)),
+                          )}
+                        </Badge>
+                      )}
+                      <div className="row-flex source-row">
+                        {m.sources.map((s: SourceRef, si) => (
+                          <button
+                            className="source-chip"
+                            key={si}
+                            onClick={() => setEvidence(s)}
+                            aria-label={`${t("evidenceTitle")}: ${s.chapter || s.book}`}
+                          >
+                            {s.chapter || s.book}
+                          </button>
+                        ))}
+                      </div>
+                      {m.id !== 0 && (
+                        <div className="row-flex rate-row">
+                          <button
+                            className="icon-btn rate-btn"
+                            aria-label={t("rateUp")}
+                            onClick={() => rate(m.id, 1)}
+                          >
+                            {thanks === m.id ? (
+                              <Check size={16} aria-hidden />
+                            ) : (
+                              <ThumbsUp size={16} aria-hidden />
+                            )}
+                          </button>
+                          <button
+                            className="icon-btn rate-btn"
+                            aria-label={t("rateDown")}
+                            onClick={() => rate(m.id, -1)}
+                          >
+                            <ThumbsDown size={16} aria-hidden />
+                          </button>
+                          {m.grounded && (
+                            <button
+                              className="chip"
+                              onClick={() => {
+                                // S1.5 'আমি বুঝিন': re-ask the same question with the
+                                // next teaching strategy (server rotates conversation strategy).
+                                const q = [...messages.slice(0, i)]
+                                  .reverse()
+                                  .find((x) => x.role === "user")?.content;
+                                if (q) send(q, { reteach: true });
+                              }}
+                            >
+                              {t("reteach")}
+                            </button>
+                          )}
+                          <button
+                            className="icon-btn rate-btn"
+                            aria-label={t("saveAsNote")}
+                            onClick={() => void saveNote(m)}
+                          >
+                            {savedId === m.id ? (
+                              <Check size={16} aria-hidden />
+                            ) : (
+                              <Bookmark size={16} aria-hidden />
+                            )}
+                          </button>
+                          {i === messages.length - 1 && (
+                            <button
+                              className="chip"
+                              onClick={() => {
+                                const q = [...messages.slice(0, i)]
+                                  .reverse()
+                                  .find((x) => x.role === "user")?.content;
+                                if (q) send(q);
+                              }}
+                            >
+                              <RefreshCcw size={13} aria-hidden />{" "}
+                              {t("regenerate")}
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   )}
-                </div>
-              )}
-            </div>
-          ))}
+              </div>
+            );
+          })}
           {streaming && (
             <div className="bubble assistant">
+              <span className="bubble-id" aria-hidden>
+                <AiSparkle size={14} /> AI
+              </span>
               <span className="typing-dots">
                 <span /> <span /> <span />
               </span>
+              <span className="stream-cursor" aria-hidden />
               <span className="visually-hidden">{t("thinking")}</span>
             </div>
           )}
         </div>
 
-        {error && (
-          <p className="error" style={{ margin: "var(--space-2) 0 0" }}>
-            {error}
-          </p>
-        )}
+        {error && <p className="error error-flush">{error}</p>}
 
         <div
-          className="chips"
+          className="chips strategy-row"
           role="group"
           aria-label={t("strategyTitle")}
-          style={{ marginTop: "var(--space-2)" }}
         >
           {STRATEGIES.map((s) => (
             <button
@@ -694,18 +739,14 @@ export default function AITutorPage() {
           ))}
         </div>
         {image && (
-          <div
-            className="row-flex"
-            style={{ gap: "6px", alignItems: "center", marginTop: "6px" }}
-          >
+          <div className="row-flex attach-row">
             <img
               src={`data:${image.mime_type};base64,${image.data_base64}`}
               alt=""
-              style={{ height: 40, borderRadius: 8 }}
+              className="attach-preview"
             />
             <button
-              className="icon-btn"
-              style={{ width: 32, height: 32 }}
+              className="icon-btn rate-btn"
               aria-label={t("removeImage")}
               onClick={() => setImage(null)}
             >
@@ -734,8 +775,7 @@ export default function AITutorPage() {
             }}
           />
           <button
-            className="icon-btn"
-            style={{ width: 32, height: 32 }}
+            className="icon-btn rate-btn"
             aria-label={t("attachImage")}
             onClick={() => fileRef.current?.click()}
           >
@@ -759,15 +799,14 @@ export default function AITutorPage() {
               variant="primary"
               onClick={() => send()}
               disabled={!input.trim()}
+              aria-label={t("send")}
             >
               <Send size={18} aria-hidden />
             </Button>
           )}
         </div>
         {me && (
-          <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>
-            {t("continueTutor")}
-          </span>
+          <span className="muted chat-foot-note">{t("continueTutor")}</span>
         )}
       </Card>
 
@@ -786,10 +825,38 @@ function EvidenceModal({
   source: SourceRef;
   onClose: () => void;
 }) {
+  const modalRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const prev = document.activeElement as HTMLElement | null;
+    modalRef.current?.querySelector("button")?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      // Minimal focus trap (WP-12): keep Tab inside the dialog.
+      if (e.key !== "Tab" || !modalRef.current) return;
+      const items = Array.from(
+        modalRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => !el.hasAttribute("disabled"));
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      prev?.focus?.();
+    };
   }, [onClose]);
   const path = [source.book, source.chapter, source.section]
     .filter(Boolean)
@@ -797,6 +864,7 @@ function EvidenceModal({
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
       <div
+        ref={modalRef}
         className="modal"
         role="dialog"
         aria-modal="true"
@@ -804,34 +872,20 @@ function EvidenceModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-head">
-          <h3 style={{ margin: 0, fontSize: "var(--fs-md)" }}>
-            {t("evidenceTitle")}
-          </h3>
+          <h3 className="modal-title">{t("evidenceTitle")}</h3>
           <button
-            className="icon-btn"
-            style={{ width: 32, height: 32 }}
+            className="icon-btn rate-btn"
             onClick={onClose}
             aria-label={t("close")}
           >
             <X size={16} aria-hidden />
           </button>
         </div>
-        <p
-          className="muted"
-          style={{ margin: "0 0 var(--space-3)", fontSize: "var(--fs-sm)" }}
-        >
+        <p className="muted evidence-path">
           {path}
           {source.page != null ? ` · ${t("page")} ${source.page}` : ""}
         </p>
-        <blockquote
-          style={{
-            margin: 0,
-            padding: "var(--space-3)",
-            background: "var(--bg)",
-            borderRadius: "var(--radius-md)",
-            whiteSpace: "pre-wrap",
-          }}
-        >
+        <blockquote className="evidence-quote">
           {source.excerpt ?? source.chapter}
         </blockquote>
       </div>
