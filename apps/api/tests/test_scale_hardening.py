@@ -84,7 +84,9 @@ def test_events_log_props_keys_never_values(tmp_path) -> None:
             self.records.append(record)
 
     capture = _Capture()
-    app_logger = logging.getLogger("bangla_gpt_api.main")
+    # ARCH-001: routes log under bangla_gpt_api.routers.*; attach to the
+    # package root so every child logger's records propagate here.
+    app_logger = logging.getLogger("bangla_gpt_api")
     old_level = app_logger.level
     app_logger.addHandler(capture)
     app_logger.setLevel(logging.INFO)  # pytest's plugin raises root to WARNING

@@ -59,7 +59,9 @@ class _RecordingProvider:
 
 def _app(monkeypatch, tmp_path, db_name: str = "ctx.db") -> tuple[TestClient, _RecordingProvider]:
     provider = _RecordingProvider()
+    # Mock BOTH main and fast providers so every route goes through the recorder.
     monkeypatch.setattr("bangla_gpt_api.main.get_provider", lambda s: provider)
+    monkeypatch.setattr("bangla_gpt_api.main.get_fast_provider", lambda s: provider)
     settings = Settings(
         env="test",
         database_url=f"sqlite:///{tmp_path}/{db_name}",

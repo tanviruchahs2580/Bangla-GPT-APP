@@ -8,24 +8,28 @@
  */
 
 export interface SpeechRecognitionLike {
-  lang: string
-  continuous: boolean
-  interimResults: boolean
-  maxAlternatives: number
-  start(): void
-  stop(): void
-  abort(): void
-  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null
-  onerror: ((event: { error?: string }) => void) | null
-  onend: (() => void) | null
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  maxAlternatives: number;
+  start(): void;
+  stop(): void;
+  abort(): void;
+  onresult:
+    | ((event: {
+        results: ArrayLike<ArrayLike<{ transcript: string }>>;
+      }) => void)
+    | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onend: (() => void) | null;
 }
 
-type RecognitionCtor = new () => SpeechRecognitionLike
+type RecognitionCtor = new () => SpeechRecognitionLike;
 
 export function getSpeechRecognition(): RecognitionCtor | null {
   const w = window as unknown as {
-    SpeechRecognition?: RecognitionCtor
-    webkitSpeechRecognition?: RecognitionCtor
-  }
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
+    SpeechRecognition?: RecognitionCtor;
+    webkitSpeechRecognition?: RecognitionCtor;
+  };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }

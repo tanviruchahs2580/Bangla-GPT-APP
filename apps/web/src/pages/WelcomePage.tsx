@@ -1,7 +1,7 @@
-import { Link } from 'react-router-dom'
-import { t } from '../i18n'
-import { track } from '../lib/analytics'
-import { Button } from '../components/ui'
+import { Link } from "react-router-dom";
+import { t } from "../i18n";
+import { track } from "../lib/analytics";
+import { Button } from "../components/ui";
 
 /**
  * Blueprint §11 screens 01-02: splash + welcome. Public entry shown before
@@ -14,21 +14,27 @@ export default function WelcomePage() {
       <div className="splash-logo" aria-hidden>
         🎓
       </div>
-      <h1>{t('appName')}</h1>
-      <p className="welcome-tagline">{t('welcomeTagline')}</p>
+      <h1>{t("appName")}</h1>
+      <p className="welcome-tagline">{t("welcomeTagline")}</p>
       <div className="welcome-actions">
-        <Link to="/register" onClick={() => track('welcome_cta', { cta: 'register' })}>
+        <Link
+          to="/register"
+          onClick={() => track("welcome_cta", { cta: "register" })}
+        >
           <Button variant="primary" size="lg" block>
-            {t('welcomeStart')}
+            {t("welcomeStart")}
           </Button>
         </Link>
-        <Link to="/login" onClick={() => track('welcome_cta', { cta: 'login' })}>
+        <Link
+          to="/login"
+          onClick={() => track("welcome_cta", { cta: "login" })}
+        >
           <Button variant="soft" size="lg" block>
-            {t('welcomeLogin')}
+            {t("welcomeLogin")}
           </Button>
         </Link>
       </div>
-      <p className="muted welcome-sub">{t('welcomeSub')}</p>
+      <p className="muted welcome-sub">{t("welcomeSub")}</p>
     </main>
-  )
+  );
 }

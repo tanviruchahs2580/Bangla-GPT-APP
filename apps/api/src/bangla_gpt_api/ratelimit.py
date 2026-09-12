@@ -99,4 +99,18 @@ def build_limiter(settings) -> RateLimiter:  # noqa: ANN001 (Settings import cyc
         if not settings.redis_url:
             raise ValueError("RATE_LIMIT_BACKEND=redis requires REDIS_URL")
         return RedisRateLimiter(settings.redis_url, fail_open=settings.rate_limit_fail_open)
+    # Merge per-route individual settings into the rules dict so test
+    # overrides of rate_limit_login_per_minute / rate_limit_tutor_per_minute
+    # / rate_limit_tutor_ip_per_minute take effect at runtime.
+    rules: dict[str, tuple[int, str]] = {
+        "/auth/login": (settings.rate_limit_login_per_minute, "ip"),
+        "/tutor/ask": (settings.rate_limit_tutor_per_minute, "user"),
+        "/tutor/chat": (settings.rate_limit_tutor_per_minute, "user"),
+        "/tutor": (settings.rate_limit_tutor_ip_per_minute, "ip"),
+        "/auth/forgot": (10, "ip"),
+        "/auth/reset": (10, "ip"),
+        "/events": (60, "ip"),
+    }
+    # Apply user-provided overrides on top (tests may pass custom rules)
+    rules.update(settings.rate_limit_rules)
     return MemoryRateLimiter()

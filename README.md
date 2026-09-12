@@ -104,6 +104,8 @@ BanglaGptApp/
 ├── docs/architecture.md                      # verified decisions + pending items
 ├── docs/API.md                               # hand-written endpoint reference
 ├── docs/runbook.md                           # operations runbook
+├── docs/archive/                             # superseded FINAL_* snapshots (history only)
+├── BANGLA_GPT_ENTERPRISE_ARCHITECTURE_QA_AUDIT.md  # evidence-driven arch + QA audit
 ├── .github/workflows/repository-sanity.yml   # CI: repo-level sanity checks
 ├── .github/workflows/ci.yml                  # CI: lint/type/tests/audit/web/docker
 ├── LICENSE                                   # MIT

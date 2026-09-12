@@ -1,60 +1,79 @@
-import { useQuery } from '@tanstack/react-query'
-import { Link, useNavigate } from 'react-router-dom'
-import { BookOpen, GraduationCap, Zap, ArrowRight, Sparkles, Play } from 'lucide-react'
-import { get, type MeResponse } from '../../api'
-import type { DashboardSummary, StudentProgress } from '../../types'
-import { useAuth } from '../../AuthContext'
-import { Button, Card, ProgressRing, Stat } from '../../components/ui'
-import { t } from '../../i18n'
+import { useQuery } from "@tanstack/react-query";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  BookOpen,
+  GraduationCap,
+  Zap,
+  ArrowRight,
+  Sparkles,
+  Play,
+} from "lucide-react";
+import { get, type MeResponse } from "../../api";
+import type { DashboardSummary, StudentProgress } from "../../types";
+import { useAuth } from "../../AuthContext";
+import { Button, Card, ProgressRing, Stat } from "../../components/ui";
+import { t } from "../../i18n";
 
 function useProgress(me: MeResponse | null) {
   return useQuery({
-    queryKey: ['progress', me?.profile_id],
+    queryKey: ["progress", me?.profile_id],
     queryFn: () => get<StudentProgress>(`/students/${me!.profile_id}/progress`),
-    enabled: !!me?.profile_id && me.role === 'student',
-  })
+    enabled: !!me?.profile_id && me.role === "student",
+  });
 }
 
 function useDashboard(me: MeResponse | null) {
   return useQuery({
-    queryKey: ['dashboard'],
-    queryFn: () => get<DashboardSummary>('/dashboard/summary'),
-    enabled: !!me && me.role === 'student',
-  })
+    queryKey: ["dashboard"],
+    queryFn: () => get<DashboardSummary>("/dashboard/summary"),
+    enabled: !!me && me.role === "student",
+  });
 }
 
 export default function HomePage() {
-  const { me } = useAuth()
-  const navigate = useNavigate()
-  const { data: progress, isLoading } = useProgress(me)
-  const { data: dashboard } = useDashboard(me)
+  const { me } = useAuth();
+  const navigate = useNavigate();
+  const { data: progress, isLoading } = useProgress(me);
+  const { data: dashboard } = useDashboard(me);
 
-  const avg = progress?.avg_score_pct ?? 0
-  const graded = progress?.attempts_graded ?? 0
-  const weak = progress?.weak_chapters ?? []
+  const avg = progress?.avg_score_pct ?? 0;
+  const graded = progress?.attempts_graded ?? 0;
+  const weak = progress?.weak_chapters ?? [];
 
   return (
     <main className="shell-main">
       <section className="hero">
         <h2>
-          {t('welcome')}, {me?.name?.split(/\s+/)[0] ?? 'শিক্ষার্থী'}!{' '}
-          <Sparkles size={20} style={{ verticalAlign: 'middle' }} aria-hidden />
+          {t("welcome")}, {me?.name?.split(/\s+/)[0] ?? "শিক্ষার্থী"}!{" "}
+          <Sparkles size={20} style={{ verticalAlign: "middle" }} aria-hidden />
         </h2>
-        <p>{t('whatToDo')}</p>
+        <p>{t("whatToDo")}</p>
         <div className="hero-actions">
-          <Link to="/student/learn" className="btn btn-teal" style={{ color: '#fff' }}>
-            <BookOpen size={18} aria-hidden /> {t('startLearning')}
+          <Link
+            to="/student/learn"
+            className="btn btn-teal"
+            style={{ color: "#fff" }}
+          >
+            <BookOpen size={18} aria-hidden /> {t("startLearning")}
           </Link>
-          <Link to="/student/tutor" className="btn" style={{ background: 'rgba(255,255,255,0.15)', color: '#fff' }}>
-            <Zap size={18} aria-hidden /> {t('askTutor')}
+          <Link
+            to="/student/tutor"
+            className="btn"
+            style={{ background: "rgba(255,255,255,0.15)", color: "#fff" }}
+          >
+            <Zap size={18} aria-hidden /> {t("askTutor")}
           </Link>
         </div>
       </section>
 
       <section className="section-head">
-        <h2>{t('browseCurriculum')}</h2>
-        <Link to="/student/learn" className="row-flex" style={{ fontStyle: 'inherit' }}>
-          {t('chapters')} <ArrowRight size={16} aria-hidden />
+        <h2>{t("browseCurriculum")}</h2>
+        <Link
+          to="/student/learn"
+          className="row-flex"
+          style={{ fontStyle: "inherit" }}
+        >
+          {t("chapters")} <ArrowRight size={16} aria-hidden />
         </Link>
       </section>
 
@@ -64,74 +83,87 @@ export default function HomePage() {
             <BookOpen size={22} aria-hidden />
           </span>
           <span>
-            <span className="quick-title" style={{ display: 'block' }}>
-              {t('learn')}
+            <span className="quick-title" style={{ display: "block" }}>
+              {t("learn")}
             </span>
-            <span className="quick-sub">{t('conceptRead')}</span>
+            <span className="quick-sub">{t("conceptRead")}</span>
           </span>
         </Link>
         <Link to="/student/tutor" className="quick-tile">
-          <span className="quick-icon" style={{ background: 'var(--teal-soft)', color: 'var(--teal-strong)' }}>
+          <span
+            className="quick-icon"
+            style={{
+              background: "var(--teal-soft)",
+              color: "var(--teal-strong)",
+            }}
+          >
             <Zap size={22} aria-hidden />
           </span>
           <span>
-            <span className="quick-title" style={{ display: 'block' }}>
-              {t('aiTutor')}
+            <span className="quick-title" style={{ display: "block" }}>
+              {t("aiTutor")}
             </span>
-            <span className="quick-sub">{t('askTutor')}</span>
+            <span className="quick-sub">{t("askTutor")}</span>
           </span>
         </Link>
         <Link to="/student/quiz" className="quick-tile">
-          <span className="quick-icon" style={{ background: 'var(--warn-soft)', color: 'var(--warn)' }}>
+          <span
+            className="quick-icon"
+            style={{ background: "var(--warn-soft)", color: "var(--warn)" }}
+          >
             <GraduationCap size={22} aria-hidden />
           </span>
           <span>
-            <span className="quick-title" style={{ display: 'block' }}>
-              {t('quiz')}
+            <span className="quick-title" style={{ display: "block" }}>
+              {t("quiz")}
             </span>
-            <span className="quick-sub">{t('takeQuiz')}</span>
+            <span className="quick-sub">{t("takeQuiz")}</span>
           </span>
         </Link>
       </div>
 
       <section className="section-head">
-        <h2>{t('myProgress')}</h2>
+        <h2>{t("myProgress")}</h2>
       </section>
 
       <Card>
         {isLoading ? (
           <div className="stack">
             <div className="skeleton" style={{ height: 18 }} />
-            <div className="skeleton" style={{ height: 18, width: '70%' }} />
+            <div className="skeleton" style={{ height: 18, width: "70%" }} />
           </div>
         ) : graded === 0 ? (
           <div className="row-flex">
             <ProgressRing value={0} />
             <div className="row-main">
-              <div style={{ fontWeight: 700 }}>{t('notStarted')}</div>
-              <div className="muted">{t('takeQuiz')}</div>
+              <div style={{ fontWeight: 700 }}>{t("notStarted")}</div>
+              <div className="muted">{t("takeQuiz")}</div>
             </div>
-            <Button variant="soft" onClick={() => navigate('/student/quiz')}>
-              {t('takeQuiz')}
+            <Button variant="soft" onClick={() => navigate("/student/quiz")}>
+              {t("takeQuiz")}
             </Button>
           </div>
         ) : (
           <>
             <div className="row-flex">
-              <ProgressRing value={avg} size={96} label={<strong>{Math.round(avg)}%</strong>} />
+              <ProgressRing
+                value={avg}
+                size={96}
+                label={<strong>{Math.round(avg)}%</strong>}
+              />
               <div>
                 <div className="stat-value">{Math.round(avg)}%</div>
-                <div className="stat-label">{t('avgScore')}</div>
+                <div className="stat-label">{t("avgScore")}</div>
               </div>
             </div>
-            <div className="stat-grid" style={{ marginTop: 'var(--space-4)' }}>
-              <Stat value={graded} label={t('gradedQuizzes')} />
-              <Stat value={weak.length} label={t('weakChapters')} />
+            <div className="stat-grid" style={{ marginTop: "var(--space-4)" }}>
+              <Stat value={graded} label={t("gradedQuizzes")} />
+              <Stat value={weak.length} label={t("weakChapters")} />
             </div>
             {weak.length > 0 && (
-              <div className="row-flex" style={{ marginTop: 'var(--space-3)' }}>
-                <span className="muted" style={{ fontSize: 'var(--fs-sm)' }}>
-                  {t('weakChapters')}:
+              <div className="row-flex" style={{ marginTop: "var(--space-3)" }}>
+                <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
+                  {t("weakChapters")}:
                 </span>
                 {weak.slice(0, 4).map((w) => (
                   <span key={w} className="badge badge-warn">
@@ -145,31 +177,50 @@ export default function HomePage() {
       </Card>
 
       {(() => {
-        const cont = dashboard?.continue_learning
+        const cont = dashboard?.continue_learning;
         // Fallback to localStorage lastChapter (set by LearnChapterPage)
-        let lastLocal: { subject: string; chapter: string; class_level: number } | null = null
+        let lastLocal: {
+          subject: string;
+          chapter: string;
+          class_level: number;
+        } | null = null;
         try {
-          const raw = localStorage.getItem('lastChapter')
-          if (raw) lastLocal = JSON.parse(raw)
+          const raw = localStorage.getItem("lastChapter");
+          if (raw) lastLocal = JSON.parse(raw);
         } catch {}
-        const showCont = cont?.chapter ? cont : lastLocal ? { subject: lastLocal.subject, chapter: lastLocal.chapter, class_level: lastLocal.class_level, excerpt: null } : null
-        const rec = dashboard?.recommendation
+        const showCont = cont?.chapter
+          ? cont
+          : lastLocal
+            ? {
+                subject: lastLocal.subject,
+                chapter: lastLocal.chapter,
+                class_level: lastLocal.class_level,
+                excerpt: null,
+              }
+            : null;
+        const rec = dashboard?.recommendation;
         return (
           <>
             {showCont && (
               <Card>
-                <div className="card-title">চালিয়ে যান: {showCont.chapter}</div>
+                <div className="card-title">
+                  চালিয়ে যান: {showCont.chapter}
+                </div>
                 <p className="muted">
                   {showCont.subject} · শ্রেণি {showCont.class_level}
-                  {showCont.excerpt ? ` — ${showCont.excerpt.slice(0, 80)}…` : ''}
+                  {showCont.excerpt
+                    ? ` — ${showCont.excerpt.slice(0, 80)}…`
+                    : ""}
                 </p>
                 <Button
                   variant="teal"
                   onClick={() => {
-                    const subj = encodeURIComponent(showCont.subject ?? 'science')
-                    const chap = encodeURIComponent(showCont.chapter ?? '')
-                    const cls = showCont.class_level ?? me?.class_level ?? 6
-                    navigate(`/student/learn/${subj}/${chap}?class=${cls}`)
+                    const subj = encodeURIComponent(
+                      showCont.subject ?? "science",
+                    );
+                    const chap = encodeURIComponent(showCont.chapter ?? "");
+                    const cls = showCont.class_level ?? me?.class_level ?? 6;
+                    navigate(`/student/learn/${subj}/${chap}?class=${cls}`);
                   }}
                 >
                   <Play size={18} aria-hidden /> চালিয়ে যান
@@ -179,7 +230,9 @@ export default function HomePage() {
             {rec && rec.chapter && (
               <Card>
                 <div className="card-title">প্রস্তাবিত: {rec.chapter}</div>
-                <p className="muted">{rec.reason ?? 'দুর্বল অধ্যায়'} — {rec.subject}</p>
+                <p className="muted">
+                  {rec.reason ?? "দুর্বল অধ্যায়"} — {rec.subject}
+                </p>
                 <Button
                   variant="soft"
                   onClick={() => navigate(`/student/quiz`)}
@@ -189,14 +242,17 @@ export default function HomePage() {
               </Card>
             )}
             <Card>
-              <div className="card-title">{t('lessonsNote')}</div>
-              <Button variant="primary" onClick={() => navigate('/student/learn')}>
-                <BookOpen size={18} aria-hidden /> {t('browseCurriculum')}
+              <div className="card-title">{t("lessonsNote")}</div>
+              <Button
+                variant="primary"
+                onClick={() => navigate("/student/learn")}
+              >
+                <BookOpen size={18} aria-hidden /> {t("browseCurriculum")}
               </Button>
             </Card>
           </>
-        )
+        );
       })()}
     </main>
-  )
+  );
 }

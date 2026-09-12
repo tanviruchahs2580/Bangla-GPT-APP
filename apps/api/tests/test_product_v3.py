@@ -298,7 +298,9 @@ def test_email_verification_gate(monkeypatch, tmp_path) -> None:
         captured["body"] = body
         return True
 
-    monkeypatch.setattr("bangla_gpt_api.main.send_mail", fake_send_mail)
+    # ARCH-001: send_mail is used (from-imported) by routers.auth now —
+    # patch it where it is looked up, not where it is defined.
+    monkeypatch.setattr("bangla_gpt_api.routers.auth.send_mail", fake_send_mail)
     settings = Settings(
         env="test",
         database_url=f"sqlite:///{tmp_path}/verify.db",

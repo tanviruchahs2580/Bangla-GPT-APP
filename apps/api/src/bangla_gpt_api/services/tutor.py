@@ -2,10 +2,12 @@ import logging
 import re
 import time
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 
 from bangla_gpt_api.logging_config import json_log
-from bangla_gpt_api.providers.base import LLMProvider
+from bangla_gpt_api.metrics import PII_REDACTED_TOTAL
+from bangla_gpt_api.providers.base import LLMProvider, ProviderError
 from bangla_gpt_api.retrieval.base import RankingIndex
 from bangla_gpt_api.retrieval.bm25 import tokenize
 from bangla_gpt_api.retrieval.hybrid import light_stem
@@ -17,7 +19,14 @@ from bangla_gpt_api.services.answer_structure import (  # noqa: F401  (re-export
     SECTION_SIMPLE,
     SHORT_ANSWER_INSTRUCTION,
 )
+from bangla_gpt_api.services.circuit_breaker import (
+    CircuitBreaker,
+    CircuitBreakerMiddleware,
+    CircuitOpenError,
+    ProviderFallbackRouter,
+)
 from bangla_gpt_api.services.context import RequestContext, set_current_context
+from bangla_gpt_api.services.pii import redact_pii
 from bangla_gpt_api.services.router import (
     classify,
     fast_eligible,
@@ -42,6 +51,13 @@ VISION_UNSUPPORTED_ANSWER = (
 
 EVIDENCE_OPEN = "<evidence>"
 EVIDENCE_CLOSE = "</evidence>"
+
+
+@asynccontextmanager
+async def _null_ctx() -> AsyncIterator[None]:
+    """Async context manager that does nothing — for optional circuit breaker."""
+    yield
+
 
 # Prompt-injection guard (B2): corpus chunks are untrusted data. They are
 # wrapped in <evidence> delimiters and the system rule explicitly states
@@ -82,13 +98,32 @@ def build_evidence_prompt(
     question: str,
     history: list[dict[str, str]] | None = None,
 ) -> str:
+    # PRIV-001: strip pasted PII (phones, emails, NID runs) at the egress
+    # boundary — retrieval/gating above run on the raw question (no ranking
+    # drift); only the text sent upstream is sanitized, and every removal is
+    # metered by kind.
+    question, q_counts = redact_pii(question)
+    redacted_history: list[dict[str, str]] | None = None
+    h_counts: dict[str, int] = {"phone": 0, "email": 0, "nid": 0}
+    if history:
+        redacted_history = []
+        for turn in history:
+            content, counts = redact_pii(turn.get("content", ""))
+            for kind, num in counts.items():
+                h_counts[kind] += num
+            redacted_history.append({"role": turn.get("role", "user"), "content": content})
+    for kind in ("phone", "email", "nid"):
+        total = q_counts[kind] + h_counts[kind]
+        if total:
+            PII_REDACTED_TOTAL.labels(kind=kind).inc(total)
     blocks = "\n".join(
         f"{EVIDENCE_OPEN}\n{sanitize_evidence(hit.chunk.text)}\n{EVIDENCE_CLOSE}" for hit in hits
     )
     parts = [f"পাঠ্যবইয়ের অংশ:\n{blocks}"]
-    if history:
+    if redacted_history:
         turns = "\n".join(
-            f"{'শিক্ষার্থী' if m['role'] == 'user' else 'শিক্ষক'}: {m['content']}" for m in history
+            f"{'শিক্ষার্থী' if m['role'] == 'user' else 'শিক্ষক'}: {m['content']}"
+            for m in redacted_history
         )
         parts.append(f"পূর্ববর্তী কথোপকথন (প্রসঙ্গ):\n{turns}")
     safe_question = sanitize_evidence(question)
@@ -115,6 +150,8 @@ class TutorService:
         min_score: float = 0.0,
         min_coverage: float = 0.5,
         top_k: int = 3,
+        circuit_breaker: CircuitBreaker | None = None,
+        fallback_provider: LLMProvider | None = None,
     ) -> None:
         self.index = index
         self.provider = provider
@@ -127,6 +164,13 @@ class TutorService:
         self.min_score = min_score
         self.min_coverage = min_coverage
         self.top_k = top_k
+
+        # Circuit breaker + fallback for AI resilience
+        self._breaker = circuit_breaker
+        self._fallback = fallback_provider
+        self._router: ProviderFallbackRouter | None = None
+        if circuit_breaker is not None:
+            self._router = ProviderFallbackRouter(provider, fallback_provider, circuit_breaker)
 
     def _gate(self, question: str, hits: list) -> bool:
         """Coverage gate over the best retrieved chunk.
@@ -257,13 +301,67 @@ class TutorService:
             else self.provider
         )
         started = time.perf_counter()
-        answer = await provider.generate(
-            context_blocks,
-            system=SYSTEM_PROMPT,
-            # Wave 2: image kwarg only when attached, so providers predating
-            # the vision contract stay callable.
-            **({"image": image} if image is not None else {}),
-        )
+        # Select provider (with fallback if circuit is open)
+        # Start from the route-based selection (fast for SIMPLE, main otherwise)
+        provider_for_call: LLMProvider = provider
+        if self._router is not None:
+            # Circuit breaker router only overrides when primary is unhealthy;
+            # otherwise preserves the route-based fast/main selection.
+            cb_provider = await self._router.select_provider(
+                context_blocks, system=SYSTEM_PROMPT, image=image
+            )
+            provider_for_call = provider if cb_provider is self.provider else cb_provider
+
+        # Attempt with circuit breaker, fall back to fallback provider if failed
+        answer: str | None = None
+        fallback = self._fallback
+        try:
+            async with CircuitBreakerMiddleware(self._breaker) if self._breaker else _null_ctx():
+                answer = await provider_for_call.generate(
+                    context_blocks,
+                    system=SYSTEM_PROMPT,
+                    **({"image": image} if image is not None else {}),
+                )
+        except ProviderError:
+            # Circuit breaker opened or provider error
+            if self._router is not None and fallback is not None and self._router.fallback_active:
+                logger.warning(
+                    "tutor: primary provider failed, using fallback",
+                    exc_info=True,
+                )
+                answer = await fallback.generate(
+                    context_blocks,
+                    system=SYSTEM_PROMPT,
+                    **({"image": image} if image is not None else {}),
+                )
+            else:
+                raise
+        except CircuitOpenError:
+            # Circuit is open — try fallback
+            if self._fallback is not None:
+                logger.warning(
+                    "tutor: circuit breaker OPEN, using fallback provider",
+                )
+                answer = await self._fallback.generate(
+                    context_blocks,
+                    system=SYSTEM_PROMPT,
+                    **({"image": image} if image is not None else {}),
+                )
+            else:
+                raise ProviderError(
+                    f"AI provider unavailable (circuit OPEN for {provider_for_call.name}; no fallback configured)"
+                ) from None
+
+        if answer is None:
+            answer = await provider_for_call.generate(
+                context_blocks,
+                system=SYSTEM_PROMPT,
+                **({"image": image} if image is not None else {}),
+            )
+
+        # Record result for circuit breaker
+        if self._router is not None:
+            self._router.record_result(True)
         json_log(
             logger,
             logging.INFO,
@@ -358,20 +456,84 @@ class TutorService:
         )
         chunks: list[str] = []
         started = time.perf_counter()
-        async for delta in provider.stream(
-            context_blocks,
-            system=SYSTEM_PROMPT,
-            **({"image": image} if image is not None else {}),
-        ):
-            chunks.append(delta)
-            yield StreamEvent(type="token", text=delta)
+
+        # Select provider (with fallback if circuit is open)
+        # Start from the route-based selection (fast for SIMPLE, main otherwise)
+        provider_for_stream: LLMProvider = provider
+        fallback_stream = self._fallback
+        if self._router is not None:
+            cb_provider = await self._router.select_provider(
+                context_blocks, system=SYSTEM_PROMPT, image=image
+            )
+            provider_for_stream = provider if cb_provider is self.provider else cb_provider
+
+        try:
+            async with CircuitBreakerMiddleware(self._breaker) if self._breaker else _null_ctx():
+                async for delta in provider_for_stream.stream(
+                    context_blocks,
+                    system=SYSTEM_PROMPT,
+                    **({"image": image} if image is not None else {}),
+                ):
+                    chunks.append(delta)
+                    yield StreamEvent(type="token", text=delta)
+        except ProviderError:
+            # Circuit breaker opened or provider error — try fallback
+            if (
+                self._router is not None
+                and fallback_stream is not None
+                and self._router.fallback_active
+            ):
+                logger.warning(
+                    "tutor_stream: primary provider failed during stream, switching to fallback",
+                    exc_info=True,
+                )
+                # Drain remaining chunks from the failed stream, yield fallback
+                async for delta in fallback_stream.stream(
+                    context_blocks,
+                    system=SYSTEM_PROMPT,
+                    **({"image": image} if image is not None else {}),
+                ):
+                    chunks.append(delta)
+                    yield StreamEvent(type="token", text=delta)
+            else:
+                raise
+        except CircuitOpenError:
+            # Circuit is open — stream from fallback
+            if self._fallback is not None:
+                logger.warning(
+                    "tutor_stream: circuit breaker OPEN during stream, using fallback provider",
+                )
+                async for delta in self._fallback.stream(
+                    context_blocks,
+                    system=SYSTEM_PROMPT,
+                    **({"image": image} if image is not None else {}),
+                ):
+                    chunks.append(delta)
+                    yield StreamEvent(type="token", text=delta)
+            else:
+                yield StreamEvent(
+                    type="token",
+                    text="দুঃখিত, AI সেবা বর্তমানে অস্থায়ীভাবে অ্যাক্সেসযোগ্য নয়। অনুগ্রহ করে পরে আবার চেষ্টা করুন।",
+                )
+
+        if not chunks:
+            # No chunks were yielded at all — provide a fallback response
+            yield StreamEvent(
+                type="token",
+                text="দুঃখিত, AI সেবা বর্তমানে অ্যাক্সেসযোগ্য নয়। অনুগ্রহ করে পরে আবার চেষ্টা করুন।",
+            )
+            chunks = ["দুঃখিত, AI সেবা বর্তমানে অ্যাক্সেসযোগ্য নয়। অনুগ্রহ করে পরে আবার চেষ্টা করুন।"]
+
         answer = "".join(chunks).strip()
+        # Record result for circuit breaker
+        if self._router is not None:
+            self._router.record_result(True)
         json_log(
             logger,
             logging.INFO,
-            "ai_call",
+            "ai_call_stream",
             route=route.value,
-            model=getattr(provider, "name", "unknown"),
+            model=getattr(provider_for_stream, "name", "unknown"),
             latency_ms=int((time.perf_counter() - started) * 1000),
             prompt_chars=len(context_blocks),
             answer_chars=len(answer),

@@ -43,6 +43,9 @@ class User(Base):
     email_verified: Mapped[bool] = mapped_column(
         Boolean, default=True, nullable=False, server_default=sa_true()
     )
+    # AUTH-001: TOTP secret (base32). NULL = MFA disabled. The secret is only
+    # stored after the user proves possession (verify step), never at enroll.
+    totp_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 
@@ -767,3 +770,24 @@ class AiJob(Base):
     error: Mapped[str | None] = mapped_column(String(300), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class AiUsage(Base):
+    """AI-002: per-request LLM usage ledger (cost control foundation).
+
+    One row per generation that reached a provider (ask/chat/stream/document
+    jobs). Token counts are planning estimates (see services/costs.py), never
+    vendor-metered values — good enough for budgets and dashboards, honest
+    about precision. Cleaned by DELETE /users/me (BUG-4 rule).
+    """
+
+    __tablename__ = "ai_usage"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    route: Mapped[str] = mapped_column(String(40), default="tutor.ask")
+    model: Mapped[str] = mapped_column(String(80), default="mock")
+    prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    completion_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    estimated_cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)

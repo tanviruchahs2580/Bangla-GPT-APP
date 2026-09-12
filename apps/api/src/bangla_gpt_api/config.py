@@ -1,12 +1,31 @@
+from __future__ import annotations
+
+import logging
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 PRODUCTION_ENVS = frozenset({"production", "prod", "staging"})
 # S5.1 staging/prod parity: staging runs the SAME strict boot guard and secret
 # suppression as production (no default JWT_SECRET, no raw reset-token logs);
 # only the data is non-authoritative. Enforced by tests/test_env_parity.py.
 DEFAULT_JWT_SECRET = "dev-insecure-change-me"
+
+
+def _get_version() -> str:
+    """Read version from the installed package metadata.
+
+    Falls back to a hardcoded constant when the package is not installed
+    (editable install, test harness, or bare-source execution).
+    """
+    try:
+        from importlib.metadata import version as _version
+
+        return _version("bangla-gpt-api")
+    except Exception:
+        return "0.6.2"
 
 
 class Settings(BaseSettings):
@@ -19,10 +38,11 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_name: str = "Bangla GPT API"
-    version: str = "0.6.2"
+    version: str = _get_version()
     env: str = "development"
 
-    # --- LLM provider ---
+    # --- AI providers ---
+    # Primary provider: "mock", "gemini", or "openai"
     llm_provider: str = "mock"
     gemini_api_key: str | None = None
     # Verified live 2026-08-26 with new-format ("AQ.") API keys, which cannot
@@ -32,8 +52,23 @@ class Settings(BaseSettings):
     # S4.2 model router: model serving SIMPLE routes. Empty -> the main
     # model serves every route (routes are still decided + logged).
     gemini_fast_model: str = ""
+    # OpenAI-compatible provider settings
+    openai_api_key: str | None = None
+    openai_model: str = "gpt-4o-mini"
+    openai_base_url: str | None = None  # None -> official OpenAI endpoint
+    # Fallback provider (secondary). E.g., "gemini" when primary is "openai".
+    # Empty -> no fallback. When set and primary fails with ProviderError,
+    # the fallback is used automatically (circuit breaker enabled).
+    llm_fallback_provider: str = ""  # "gemini" | "openai" | ""
     llm_timeout_seconds: float = 30.0
     llm_max_retries: int = 2
+    # AI-002: monthly per-user AI budget (USD, estimated — see services/costs.py).
+    # 0 (default) = unlimited. When set, generation entry points refuse with
+    # 429 ai_budget_exceeded once the user's current-month ledger hits the cap.
+    ai_monthly_budget_usd_per_user: float = 0.0
+    # Circuit breaker thresholds
+    circuit_breaker_failure_threshold: int = 3  # failures before opening
+    circuit_breaker_reset_timeout_seconds: float = 60.0  # seconds before half-open
 
     # --- S4.3 RAG v2 retrieval ---
     # "hybrid" = lexical BM25 lane + vector lane fused by reciprocal rank
@@ -119,6 +154,17 @@ class Settings(BaseSettings):
     # --- data ---
     nctb_corpus_dir: str | None = None
 
+    # --- default rate limit rules (config-driven, replaces hardcoded dict in main.py) ---
+    rate_limit_rules: dict[str, tuple[int, str]] = {
+        "/auth/login": (10, "ip"),
+        "/tutor/ask": (30, "user"),
+        "/tutor/chat": (30, "user"),
+        "/tutor": (60, "ip"),
+        "/auth/forgot": (10, "ip"),
+        "/auth/reset": (10, "ip"),
+        "/events": (60, "ip"),
+    }
+
     # --- observability ---
     log_level: str = "INFO"
     sentry_dsn: str | None = None
@@ -136,6 +182,27 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> list[str]:
         return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
+
+
+class SettingsRegistry:
+    """Thread-safe settings cache with optional hot-reload capability.
+
+    By default it uses :func:`get_settings` (cached singleton) for simplicity.
+    When ``force_reload=True`` is passed, a fresh ``Settings`` instance is
+    constructed (useful for tests or config-reload scenarios).
+    """
+
+    _settings: Settings | None = None
+
+    @classmethod
+    def get(cls, force_reload: bool = False) -> Settings:
+        if cls._settings is None or force_reload:
+            cls._settings = Settings()
+        return cls._settings
+
+    @classmethod
+    def clear(cls) -> None:
+        cls._settings = None
 
 
 @lru_cache

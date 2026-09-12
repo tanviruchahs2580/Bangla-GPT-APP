@@ -120,7 +120,7 @@ def test_build_cache_defaults_to_memory(tmp_path):
 
 def test_build_cache_redis_requires_url(tmp_path):
     s = _settings(tmp_path, rate_limit_backend="redis", redis_url=None)
-    with pytest.raises(ValueError, match="REDIS_URL"):
+    with pytest.raises(RuntimeError, match="REDIS_URL"):
         build_cache(s)
 
 
@@ -227,13 +227,17 @@ def _register_login(client, email):
 def test_dashboard_summary_cached_for_60s(tmp_path, monkeypatch):
     monkeypatch.setattr(bgpt_main.caching, "SUMMARY_CACHE_TTL_SECONDS", 60.0)
     calls = {"n": 0}
-    orig = bgpt_main.weakness.weak_names
+    # ARCH-001: patch weak_names at its canonical home (services.weakness);
+    # routers call it via module attribute, so this covers every caller.
+    from bangla_gpt_api.services import weakness as weakness_svc
+
+    orig = weakness_svc.weak_names
 
     def counting(db, sid):
         calls["n"] += 1
         return orig(db, sid)
 
-    monkeypatch.setattr(bgpt_main.weakness, "weak_names", counting)
+    monkeypatch.setattr(weakness_svc, "weak_names", counting)
     c = TestClient(create_app(_settings(tmp_path)))
     h = _register_login(c, "cache1@example.com")
     r1 = c.get("/dashboard/summary", headers=h)

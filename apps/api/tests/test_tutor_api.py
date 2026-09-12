@@ -160,7 +160,10 @@ def test_provider_failure_maps_to_502(tmp_path) -> None:
     original = main_module.TutorService.__init__
 
     def inject(self, *args, **kwargs):
+        # Inject the exploding provider for BOTH main and fast lanes so that
+        # the route-based fast-lane selection in tutor.py cannot bypass it.
         kwargs["provider"] = ExplodingProvider()
+        kwargs["fast_provider"] = ExplodingProvider()
         original(self, *args, **kwargs)
 
     main_module.TutorService.__init__ = inject  # type: ignore[method-assign]
@@ -181,6 +184,8 @@ def test_provider_failure_maps_to_502(tmp_path) -> None:
         tok = client.post("/auth/login", json={"email": "x@y.com", "password": PASSWORD}).json()[
             "access_token"
         ]
+        # "কোষ কী?" routes SIMPLE → fast lane. By injecting ExplodingProvider
+        # into BOTH main and fast lanes, the route can never bypass it.
         res = client.post(
             "/tutor/ask",
             json={"question": "কোষ কী?", "class_level": 6, "subject": "science"},

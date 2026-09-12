@@ -11,7 +11,7 @@ Every test here pins behaviour that the scale audit changed:
 
 import json
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -60,7 +60,7 @@ def _ts(dt: datetime) -> str:
 
 
 def _seed_student(conn: sqlite3.Connection, email: str, class_level: int = 6) -> int:
-    now = _ts(datetime.utcnow())
+    now = _ts(datetime.now(UTC).replace(tzinfo=None))
     conn.execute(
         "INSERT INTO users (email, password_hash, role, created_at) VALUES (?, 'x', 'student', ?)",
         (email, now),
@@ -113,7 +113,7 @@ def test_roster_briefs_batched_and_identical(tmp_path, monkeypatch) -> None:
     client = TestClient(create_app(settings))
     teacher = _register(client, "teacher", "t@scale.test")
     conn = sqlite3.connect(f"{tmp_path}/scale.db")
-    now = datetime.utcnow()
+    now = datetime.now(UTC).replace(tzinfo=None)
     s1 = _seed_student(conn, "s1@scale.test")
     s2 = _seed_student(conn, "s2@scale.test")
     _seed_student(conn, "s3@scale.test")  # zero attempts
@@ -172,7 +172,7 @@ def test_messages_capped_and_conversation_counts(env) -> None:
     sid = conn.execute(
         "SELECT id FROM students WHERE user_id=( SELECT id FROM users WHERE email='kid@scale.test')"
     ).fetchone()[0]
-    now = datetime.utcnow()
+    now = datetime.now(UTC).replace(tzinfo=None)
     counts = {}
     for title, n in (("full", 5), ("empty", 0)):
         conn.execute(
@@ -222,7 +222,7 @@ def test_assignments_mine_window_and_flags(tmp_path) -> None:
         "SELECT id FROM students WHERE user_id=("
         " SELECT id FROM users WHERE email='kid3@scale.test')"
     ).fetchone()[0]
-    now = datetime.utcnow()
+    now = datetime.now(UTC).replace(tzinfo=None)
     q_json = json.dumps([{"id": "q1", "question_text": "2+2?", "options": ["3", "4"]}])
     made = []
     for i, hrs in enumerate((0, 1, 2)):  # newest first by created_at desc
@@ -281,7 +281,7 @@ def test_qp_and_shorttest_pagination(env) -> None:
     client, conn, _ = env
     teacher = _register(client, "teacher", "t4@scale.test")
     tid = conn.execute("SELECT id FROM users WHERE email='t4@scale.test'").fetchone()[0]
-    now = datetime.utcnow()
+    now = datetime.now(UTC).replace(tzinfo=None)
     qp_ids = []
     for hrs in (0, 1, 2):
         conn.execute(

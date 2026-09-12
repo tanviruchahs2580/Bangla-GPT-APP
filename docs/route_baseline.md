@@ -1,141 +1,147 @@
-# Route Baseline — captured Phase 0.1
+# Route Baseline — regenerated from the live app
 
-Source: `apps/api/src/bangla_gpt_api/main.py` — 7018 lines
-Captured: 2026-09-10T12:33:12.105194Z
-Total route decorators: 129
+Source: `apps/api/src/bangla_gpt_api/routers/` (ARCH-001 split of main.py)
+Captured: 2026-09-11T19:20:44.459062+00:00
+Total unique method+path routes: 139
 
-| # | Line | Method | Path | Function | Auth | ResponseModel | Status |
-|---|---|---|---|---|---|---|---|
-| 1 | 957 | GET | `/learn/subjects` | `learn_subjects` | `CurrentUser` | `list[SubjectOut]` | 200 |
-| 2 | 964 | GET | `/learn/subjects/{subject}/chapters` | `learn_subject_chapters` | `CurrentUser` | `list[ChapterSummaryOut]` | 200 |
-| 3 | 975 | GET | `/learn/subjects/{subject}/chapters/{chapter}` | `learn_chapter_content` | `CurrentUser` | `ChapterContentOut` | 200 |
-| 4 | 1081 | GET | `/health` | `health` | `-` | `-` | 200 |
-| 5 | 1090 | GET | `/live` | `live` | `-` | `-` | 200 |
-| 6 | 1094 | GET | `/ready` | `ready` | `-` | `-` | 200 |
-| 7 | 1108 | GET | `/status` | `status` | `-` | `StatusOut` | 200 |
-| 8 | 1147 | GET | `/metrics` | `metrics` | `-` | `-` | 200 |
-| 9 | 1151 | POST | `/auth/register` | `register` | `-` | `RegisterResponse` | 201 |
-| 10 | 1229 | POST | `/auth/verify-email` | `verify_email` | `-` | `TokenResponse` | 200 |
-| 11 | 1258 | POST | `/auth/resend-verification` | `resend_verification` | `CurrentUser` | `-` | 202 |
-| 12 | 1264 | POST | `/auth/login` | `login` | `-` | `TokenResponse` | 200 |
-| 13 | 1291 | POST | `/auth/forgot` | `forgot_password` | `-` | `-` | 202 |
-| 14 | 1347 | POST | `/auth/reset` | `reset_password` | `-` | `TokenResponse` | 200 |
-| 15 | 1367 | POST | `/auth/change-password` | `change_password` | `CurrentUser` | `TokenResponse` | 200 |
-| 16 | 1382 | POST | `/tutor/ask` | `ask` | `CurrentUser` | `AskResponse` | 200 |
-| 17 | 1522 | POST | `/tutor/conversations` | `create_conversation` | `CurrentUser` | `ConversationOut` | 201 |
-| 18 | 1536 | GET | `/tutor/conversations` | `list_conversations` | `CurrentUser` | `list[ConversationOut]` | 200 |
-| 19 | 1571 | GET | `/tutor/conversations/{conversation_id}/messages` | `conversation_messages` | `CurrentUser` | `list[ChatMessageOut]` | 200 |
-| 20 | 1623 | PATCH | `/tutor/conversations/{conversation_id}` | `rename_conversation` | `CurrentUser` | `ConversationOut` | 200 |
-| 21 | 1648 | DELETE | `/tutor/conversations/{conversation_id}` | `delete_conversation` | `CurrentUser` | `-` | 204 |
-| 22 | 1655 | GET | `/tutor/messages/search` | `search_messages` | `CurrentUser` | `list[MessageSearchHit]` | 200 |
-| 23 | 1704 | POST | `/tutor/conversations/{conversation_id}/messages` | `send_chat_message` | `CurrentUser` | `ChatMessageOut` | 200 |
-| 24 | 1802 | POST | `/tutor/conversations/{conversation_id}/messages/stream` | `stream_chat_message` | `CurrentUser` | `-` | 200 |
-| 25 | 1929 | POST | `/feedback` | `submit_feedback` | `CurrentUser` | `-` | 201 |
-| 26 | 1951 | GET | `/admin/feedback` | `admin_feedback_queue` | `AdminUser` | `FeedbackQueuePage` | 200 |
-| 27 | 1995 | PATCH | `/admin/feedback/{feedback_id}` | `admin_feedback_triage` | `AdminUser` | `FeedbackAdminRow` | 200 |
-| 28 | 2027 | POST | `/events` | `record_event` | `CurrentUser` | `-` | 202 |
-| 29 | 2056 | GET | `/users/me` | `read_me` | `CurrentUser` | `MeResponse` | 200 |
-| 30 | 2060 | DELETE | `/users/me` | `delete_me` | `CurrentUser` | `-` | 204 |
-| 31 | 2164 | GET | `/users/me/export` | `export_me` | `CurrentUser` | `DataExportResponse` | 200 |
-| 32 | 2240 | GET | `/students/{student_id}` | `get_student` | `CurrentUser` | `StudentResponse` | 200 |
-| 33 | 2245 | GET | `/students/{student_id}/consent` | `get_consent_status` | `CurrentUser` | `ConsentStatusOut` | 200 |
-| 34 | 2257 | POST | `/students/{student_id}/consent/reconfirm` | `post_consent_reconfirm` | `CurrentUser` | `ConsentStatusOut` | 200 |
-| 35 | 2285 | POST | `/quizzes` | `start_quiz` | `CurrentUser` | `QuizStarted` | 200 |
-| 36 | 2355 | POST | `/quizzes/{attempt_id}/submit` | `submit_quiz` | `CurrentUser` | `QuizResult` | 200 |
-| 37 | 2467 | GET | `/students/{student_id}/progress` | `get_progress` | `CurrentUser` | `StudentProgress` | 200 |
-| 38 | 2520 | GET | `/students/{student_id}/activity` | `get_activity` | `CurrentUser` | `ActivitySummary` | 200 |
-| 39 | 2568 | GET | `/revision/due` | `get_revision_due` | `CurrentUser` | `RevisionDueOut` | 200 |
-| 40 | 2581 | POST | `/revision/{item_id}/review` | `review_revision_item` | `CurrentUser` | `RevisionItemOut` | 200 |
-| 41 | 2607 | GET | `/kg/gaps` | `kg_gaps` | `CurrentUser` | `KgGapsOut` | 200 |
-| 42 | 2630 | POST | `/kg/rebuild` | `kg_rebuild` | `AdminUser` | `KgRebuildOut` | 200 |
-| 43 | 2656 | GET | `/search` | `global_search` | `CurrentUser` | `SearchResponse` | 200 |
-| 44 | 2741 | GET | `/dashboard/summary` | `dashboard_summary` | `CurrentUser` | `DashboardSummary` | 200 |
-| 45 | 2875 | GET | `/learn/progress` | `get_learn_progress` | `CurrentUser` | `list[ChapterProgressOut]` | 200 |
-| 46 | 2904 | POST | `/learn/progress` | `upsert_learn_progress` | `CurrentUser` | `ChapterProgressOut` | 200 |
-| 47 | 3009 | GET | `/teacher/students` | `teacher_roster` | `AdminUser` | `list[StudentBrief]` | 200 |
-| 48 | 3023 | GET | `/teacher/classes/{class_level}/analytics` | `teacher_analytics` | `AdminUser` | `ClassAnalytics` | 200 |
-| 49 | 3111 | GET | `/teacher/classrooms` | `teacher_list_classrooms` | `AdminUser` | `list[ClassRoomOut]` | 200 |
-| 50 | 3134 | POST | `/teacher/classrooms` | `teacher_create_classroom` | `AdminUser` | `ClassRoomOut` | 201 |
-| 51 | 3156 | GET | `/teacher/classrooms/{room_id}/roster` | `classroom_roster` | `AdminUser` | `list[RosterEntryOut]` | 200 |
-| 52 | 3207 | POST | `/teacher/classrooms/{room_id}/import` | `classroom_import` | `AdminUser` | `ClassImportOut` | 200 |
-| 53 | 3304 | POST | `/admin/schools` | `admin_school_create` | `AdminUser` | `SchoolOut` | 201 |
-| 54 | 3316 | GET | `/admin/schools` | `admin_school_list` | `AdminUser` | `list[SchoolOut]` | 200 |
-| 55 | 3323 | GET | `/admin/schools/stats` | `admin_school_stats` | `AdminUser` | `list[AdminSchoolStatsOut]` | 200 |
-| 56 | 3375 | GET | `/admin/schools/{school_id}/invites` | `admin_school_invite_list` | `AdminUser` | `list[SchoolInviteAdminOut]` | 200 |
-| 57 | 3403 | DELETE | `/admin/schools/{school_id}/invites/{invite_id}` | `admin_school_invite_revoke` | `AdminUser` | `-` | 204 |
-| 58 | 3426 | GET | `/admin/content/versions` | `admin_content_versions` | `AdminUser` | `list[ContentVersionRowOut]` | 200 |
-| 59 | 3468 | GET | `/admin/reports/aggregate` | `admin_report_aggregate` | `AdminUser` | `-` | 200 |
-| 60 | 3519 | POST | `/schools/{school_id}/invites` | `school_invite_create` | `SchoolStaffUser` | `SchoolInviteOut` | 201 |
-| 61 | 3548 | POST | `/auth/join-school` | `auth_join_school` | `-` | `TokenResponse` | 201 |
-| 62 | 3602 | GET | `/schools/mine` | `school_my_overview` | `SchoolStaffUser` | `SchoolOverviewOut` | 200 |
-| 63 | 3660 | POST | `/schools/{school_id}/classes` | `school_class_register` | `SchoolStaffUser` | `ClassRoomOut` | 201 |
-| 64 | 3687 | GET | `/school/overview` | `school_health_overview` | `SchoolStaffUser` | `SchoolHealthOut` | 200 |
-| 65 | 3860 | GET | `/school/students` | `school_students` | `SchoolStaffUser` | `SchoolStudentPage` | 200 |
-| 66 | 3922 | GET | `/school/teachers` | `school_teachers` | `SchoolStaffUser` | `list[SchoolTeacherRow]` | 200 |
-| 67 | 3961 | GET | `/school/classes` | `school_classes` | `SchoolStaffUser` | `list[SchoolClassRow]` | 200 |
-| 68 | 4004 | GET | `/school/coverage` | `school_coverage` | `SchoolStaffUser` | `SchoolCoverageOut` | 200 |
-| 69 | 4077 | GET | `/school/analytics` | `school_analytics` | `SchoolStaffUser` | `SchoolAnalyticsOut` | 200 |
-| 70 | 4190 | POST | `/teacher/content/generate` | `teacher_content_generate` | `AdminUser` | `TeacherContentOut` | 200 |
-| 71 | 4239 | GET | `/teacher/content/history` | `teacher_content_history` | `AdminUser` | `list[ChapterContentVersionOut]` | 200 |
-| 72 | 4273 | GET | `/teacher/content` | `teacher_content_get` | `AdminUser` | `TeacherContentOut` | 200 |
-| 73 | 4286 | PUT | `/teacher/content` | `teacher_content_edit` | `AdminUser` | `TeacherContentOut` | 200 |
-| 74 | 4359 | POST | `/teacher/qpapers` | `teacher_qp_create` | `AdminUser` | `QPOut` | 201 |
-| 75 | 4416 | GET | `/teacher/qpapers` | `teacher_qp_list` | `AdminUser` | `list[QPOut]` | 200 |
-| 76 | 4438 | GET | `/teacher/qpapers/{qp_id}` | `teacher_qp_get` | `AdminUser` | `QPOut` | 200 |
-| 77 | 4446 | POST | `/teacher/qpapers/{qp_id}/regenerate` | `teacher_qp_regenerate` | `AdminUser` | `QPOut` | 200 |
-| 78 | 4483 | POST | `/teacher/qpapers/{qp_id}/shuffle` | `teacher_qp_shuffle` | `AdminUser` | `QPOut` | 200 |
-| 79 | 4504 | POST | `/teacher/qpapers/{qp_id}/review` | `teacher_qp_review` | `AdminUser` | `QPOut` | 200 |
-| 80 | 4556 | POST | `/teacher/qpapers/{qp_id}/replace` | `teacher_qp_replace` | `AdminUser` | `QPOut` | 200 |
-| 81 | 4652 | POST | `/teacher/qpapers/{qp_id}/finalize` | `teacher_qp_finalize` | `AdminUser` | `QPOut` | 200 |
-| 82 | 4680 | GET | `/teacher/qpapers/{qp_id}/pdf` | `teacher_qp_pdf` | `AdminUser` | `-` | 200 |
-| 83 | 4708 | POST | `/teacher/lesson-plans` | `teacher_lesson_plan` | `AdminUser` | `LessonPlanOut` | 200 |
-| 84 | 4928 | POST | `/teacher/generate/{kind}` | `teacher_generate_document` | `AdminUser` | `GenerateDocumentOut` | 201 |
-| 85 | 4997 | GET | `/teacher/documents` | `teacher_documents_list` | `AdminUser` | `list[TeacherDocumentOut]` | 200 |
-| 86 | 5023 | GET | `/teacher/documents/{document_id}` | `teacher_document_get` | `AdminUser` | `TeacherDocumentOut` | 200 |
-| 87 | 5029 | DELETE | `/teacher/documents/{document_id}` | `teacher_document_delete` | `AdminUser` | `-` | 204 |
-| 88 | 5041 | GET | `/teacher/documents/{document_id}/pdf` | `teacher_document_pdf` | `AdminUser` | `-` | 200 |
-| 89 | 5080 | POST | `/notes` | `create_note` | `CurrentUser` | `SavedNoteOut` | 201 |
-| 90 | 5095 | GET | `/notes` | `list_notes` | `CurrentUser` | `list[SavedNoteOut]` | 200 |
-| 91 | 5111 | DELETE | `/notes/{note_id}` | `delete_note` | `CurrentUser` | `-` | 204 |
-| 92 | 5133 | GET | `/notifications` | `notifications_list` | `CurrentUser` | `NotificationListOut` | 200 |
-| 93 | 5155 | POST | `/notifications/{notification_id}/read` | `notification_mark_read` | `CurrentUser` | `NotificationOut` | 200 |
-| 94 | 5247 | POST | `/teacher/jobs` | `teacher_job_create` | `AdminUser` | `AiJobOut` | 202 |
-| 95 | 5267 | GET | `/teacher/jobs` | `teacher_jobs_list` | `AdminUser` | `list[AiJobOut]` | 200 |
-| 96 | 5281 | GET | `/teacher/jobs/{job_id}` | `teacher_job_get` | `AdminUser` | `AiJobOut` | 200 |
-| 97 | 5290 | GET | `/teacher/workload` | `teacher_workload` | `AdminUser` | `WorkloadOut` | 200 |
-| 98 | 5354 | POST | `/teacher/shorttests` | `teacher_shorttest_create` | `AdminUser` | `ShortTestOut` | 201 |
-| 99 | 5452 | GET | `/teacher/shorttests` | `teacher_shorttest_list` | `AdminUser` | `list[ShortTestOut]` | 200 |
-| 100 | 5476 | GET | `/shorttests/mine` | `shorttests_mine` | `CurrentUser` | `list[ShortTestMineOut]` | 200 |
-| 101 | 5633 | GET | `/teacher/weak-matrix` | `teacher_weak_matrix` | `AdminUser` | `WeakMatrixOut` | 200 |
-| 102 | 5640 | GET | `/teacher/curriculum-coverage` | `teacher_curriculum_coverage` | `AdminUser` | `CoverageOut` | 200 |
-| 103 | 5735 | POST | `/teacher/support-plans` | `teacher_create_support_plan` | `AdminUser` | `SupportPlanOut` | 201 |
-| 104 | 5790 | GET | `/teacher/support-plans` | `teacher_list_support_plans` | `AdminUser` | `list[SupportPlanOut]` | 200 |
-| 105 | 5827 | POST | `/teacher/assignments` | `teacher_assignment_create` | `AdminUser` | `AssignmentOut` | 201 |
-| 106 | 5936 | GET | `/teacher/assignments` | `teacher_assignment_list` | `AdminUser` | `list[AssignmentOut]` | 200 |
-| 107 | 6014 | GET | `/assignments/mine` | `assignments_mine` | `CurrentUser` | `list[AssignmentMineOut]` | 200 |
-| 108 | 6077 | GET | `/admin/users` | `admin_list_users` | `AdminUser` | `AdminUsersPage` | 200 |
-| 109 | 6106 | PATCH | `/admin/users/{user_id}/role` | `admin_update_role` | `AdminUser` | `UserPublic` | 200 |
-| 110 | 6145 | POST | `/admin/users/{user_id}/impersonate` | `admin_impersonate` | `AdminUser` | `ImpersonateOut` | 200 |
-| 111 | 6185 | DELETE | `/admin/users/{user_id}/impersonate` | `admin_impersonate_end` | `AdminUser` | `-` | 204 |
-| 112 | 6200 | POST | `/auth/impersonate/exit` | `impersonate_exit` | `CurrentUser` | `-` | 204 |
-| 113 | 6232 | GET | `/admin/audit` | `admin_audit` | `AdminUser` | `AdminAuditPage` | 200 |
-| 114 | 6266 | GET | `/admin/analytics/overview` | `admin_overview` | `AdminUser` | `AdminOverview` | 200 |
-| 115 | 6286 | GET | `/admin/safety/refusals` | `admin_refusal_audit` | `AdminUser` | `RefusalAuditOut` | 200 |
-| 116 | 6318 | GET | `/admin/ai/quality` | `admin_ai_quality` | `AdminUser` | `AdminAiQualityOut` | 200 |
-| 117 | 6377 | POST | `/admin/maintenance/purge` | `admin_purge_expired` | `AdminUser` | `dict` | 200 |
-| 118 | 6400 | POST | `/parents/link` | `parent_link` | `ParentUser` | `-` | 201 |
-| 119 | 6470 | POST | `/students/me/invite-code` | `create_parent_invite` | `CurrentUser` | `-` | 201 |
-| 120 | 6507 | GET | `/students/me/prefs` | `get_my_prefs` | `CurrentUser` | `StudentPrefsOut` | 200 |
-| 121 | 6515 | PATCH | `/students/me/prefs` | `patch_my_prefs` | `CurrentUser` | `StudentPrefsOut` | 200 |
-| 122 | 6563 | GET | `/students/me/memory` | `get_my_memory` | `CurrentUser` | `MemoryFactsOut` | 200 |
-| 123 | 6606 | DELETE | `/students/me/memory` | `disable_my_memory` | `CurrentUser` | `MemoryFactsOut` | 200 |
-| 124 | 6624 | POST | `/parents/link/invite` | `link_via_invite` | `ParentUser` | `-` | 201 |
-| 125 | 6684 | GET | `/parents/me/children` | `parent_children` | `ParentUser` | `list[StudentBrief]` | 200 |
-| 126 | 6707 | GET | `/parents/me/children/{student_id}/progress` | `parent_child_progress` | `ParentUser` | `StudentProgress` | 200 |
-| 127 | 6794 | GET | `/parents/me/children/{student_id}/activity` | `parent_child_activity` | `ParentUser` | `ActivitySummary` | 200 |
-| 128 | 6926 | GET | `/parents/me/children/{student_id}/report` | `parent_child_report` | `ParentUser` | `ParentReportOut` | 200 |
-| 129 | 6946 | GET | `/students/me/report` | `student_self_report` | `CurrentUser` | `ParentReportOut` | 200 |
-
-## Notes
-- This is the regression contract per R9. Any decomposition must preserve identical method+path+auth+status+shape.
-- `on_event` handlers (startup/shutdown) at lines 6975,6982,7002,7009 are NOT routes but lifecycle hooks.
+| # | Method | Path |
+|---|---|---|
+| 1 | DELETE | `/admin/schools/{school_id}/invites/{invite_id}` |
+| 2 | DELETE | `/admin/users/{user_id}/impersonate` |
+| 3 | DELETE | `/notes/{note_id}` |
+| 4 | DELETE | `/students/me/memory` |
+| 5 | DELETE | `/teacher/documents/{document_id}` |
+| 6 | DELETE | `/tutor/conversations/{conversation_id}` |
+| 7 | DELETE | `/users/me` |
+| 8 | GET | `/admin/ai/quality` |
+| 9 | GET | `/admin/analytics/overview` |
+| 10 | GET | `/admin/audit` |
+| 11 | GET | `/admin/content/versions` |
+| 12 | GET | `/admin/feedback` |
+| 13 | GET | `/admin/reports/aggregate` |
+| 14 | GET | `/admin/safety/refusals` |
+| 15 | GET | `/admin/schools` |
+| 16 | GET | `/admin/schools/stats` |
+| 17 | GET | `/admin/schools/{school_id}/invites` |
+| 18 | GET | `/admin/system/info` |
+| 19 | GET | `/admin/users` |
+| 20 | GET | `/assignments/mine` |
+| 21 | GET | `/dashboard/summary` |
+| 22 | GET | `/docs` |
+| 23 | GET | `/docs/oauth2-redirect` |
+| 24 | GET | `/health` |
+| 25 | GET | `/kg/gaps` |
+| 26 | GET | `/learn/progress` |
+| 27 | GET | `/learn/subjects` |
+| 28 | GET | `/learn/subjects/{subject}/chapters` |
+| 29 | GET | `/learn/subjects/{subject}/chapters/{chapter}` |
+| 30 | GET | `/live` |
+| 31 | GET | `/metrics` |
+| 32 | GET | `/notes` |
+| 33 | GET | `/notifications` |
+| 34 | GET | `/openapi.json` |
+| 35 | GET | `/parents/me/children` |
+| 36 | GET | `/parents/me/children/{student_id}/activity` |
+| 37 | GET | `/parents/me/children/{student_id}/progress` |
+| 38 | GET | `/parents/me/children/{student_id}/report` |
+| 39 | GET | `/ready` |
+| 40 | GET | `/redoc` |
+| 41 | GET | `/revision/due` |
+| 42 | GET | `/school/analytics` |
+| 43 | GET | `/school/classes` |
+| 44 | GET | `/school/coverage` |
+| 45 | GET | `/school/overview` |
+| 46 | GET | `/school/students` |
+| 47 | GET | `/school/teachers` |
+| 48 | GET | `/schools/mine` |
+| 49 | GET | `/search` |
+| 50 | GET | `/shorttests/mine` |
+| 51 | GET | `/status` |
+| 52 | GET | `/students/me/memory` |
+| 53 | GET | `/students/me/prefs` |
+| 54 | GET | `/students/me/report` |
+| 55 | GET | `/students/{student_id}` |
+| 56 | GET | `/students/{student_id}/activity` |
+| 57 | GET | `/students/{student_id}/consent` |
+| 58 | GET | `/students/{student_id}/progress` |
+| 59 | GET | `/teacher/assignments` |
+| 60 | GET | `/teacher/assignments/{assignment_id}/progress` |
+| 61 | GET | `/teacher/classes/{class_level}/analytics` |
+| 62 | GET | `/teacher/classrooms` |
+| 63 | GET | `/teacher/classrooms/{room_id}/roster` |
+| 64 | GET | `/teacher/content` |
+| 65 | GET | `/teacher/content/history` |
+| 66 | GET | `/teacher/curriculum-coverage` |
+| 67 | GET | `/teacher/documents` |
+| 68 | GET | `/teacher/documents/{document_id}` |
+| 69 | GET | `/teacher/documents/{document_id}/pdf` |
+| 70 | GET | `/teacher/jobs` |
+| 71 | GET | `/teacher/jobs/{job_id}` |
+| 72 | GET | `/teacher/qpapers` |
+| 73 | GET | `/teacher/qpapers/{qp_id}` |
+| 74 | GET | `/teacher/qpapers/{qp_id}/pdf` |
+| 75 | GET | `/teacher/shorttests` |
+| 76 | GET | `/teacher/students` |
+| 77 | GET | `/teacher/support-plans` |
+| 78 | GET | `/teacher/weak-matrix` |
+| 79 | GET | `/teacher/workload` |
+| 80 | GET | `/tutor/conversations` |
+| 81 | GET | `/tutor/conversations/{conversation_id}/messages` |
+| 82 | GET | `/tutor/messages/search` |
+| 83 | GET | `/users/me` |
+| 84 | GET | `/users/me/export` |
+| 85 | PATCH | `/admin/feedback/{feedback_id}` |
+| 86 | PATCH | `/admin/users/{user_id}/role` |
+| 87 | PATCH | `/students/me/prefs` |
+| 88 | PATCH | `/tutor/conversations/{conversation_id}` |
+| 89 | POST | `/admin/maintenance/purge` |
+| 90 | POST | `/admin/schools` |
+| 91 | POST | `/admin/users/{user_id}/impersonate` |
+| 92 | POST | `/auth/change-password` |
+| 93 | POST | `/auth/forgot` |
+| 94 | POST | `/auth/impersonate/exit` |
+| 95 | POST | `/auth/join-school` |
+| 96 | POST | `/auth/login` |
+| 97 | POST | `/auth/mfa/challenge` |
+| 98 | POST | `/auth/mfa/disable` |
+| 99 | POST | `/auth/mfa/enroll` |
+| 100 | POST | `/auth/mfa/verify` |
+| 101 | POST | `/auth/register` |
+| 102 | POST | `/auth/resend-verification` |
+| 103 | POST | `/auth/reset` |
+| 104 | POST | `/auth/verify-email` |
+| 105 | POST | `/events` |
+| 106 | POST | `/feedback` |
+| 107 | POST | `/kg/rebuild` |
+| 108 | POST | `/learn/progress` |
+| 109 | POST | `/notes` |
+| 110 | POST | `/notifications/{notification_id}/read` |
+| 111 | POST | `/parents/link` |
+| 112 | POST | `/parents/link/invite` |
+| 113 | POST | `/quizzes` |
+| 114 | POST | `/quizzes/{attempt_id}/submit` |
+| 115 | POST | `/revision/{item_id}/review` |
+| 116 | POST | `/schools/{school_id}/classes` |
+| 117 | POST | `/schools/{school_id}/invites` |
+| 118 | POST | `/students/me/invite-code` |
+| 119 | POST | `/students/{student_id}/consent/reconfirm` |
+| 120 | POST | `/teacher/assignments` |
+| 121 | POST | `/teacher/classrooms` |
+| 122 | POST | `/teacher/classrooms/{room_id}/import` |
+| 123 | POST | `/teacher/content/generate` |
+| 124 | POST | `/teacher/generate/{kind}` |
+| 125 | POST | `/teacher/jobs` |
+| 126 | POST | `/teacher/lesson-plans` |
+| 127 | POST | `/teacher/qpapers` |
+| 128 | POST | `/teacher/qpapers/{qp_id}/finalize` |
+| 129 | POST | `/teacher/qpapers/{qp_id}/regenerate` |
+| 130 | POST | `/teacher/qpapers/{qp_id}/replace` |
+| 131 | POST | `/teacher/qpapers/{qp_id}/review` |
+| 132 | POST | `/teacher/qpapers/{qp_id}/shuffle` |
+| 133 | POST | `/teacher/shorttests` |
+| 134 | POST | `/teacher/support-plans` |
+| 135 | POST | `/tutor/ask` |
+| 136 | POST | `/tutor/conversations` |
+| 137 | POST | `/tutor/conversations/{conversation_id}/messages` |
+| 138 | POST | `/tutor/conversations/{conversation_id}/messages/stream` |
+| 139 | PUT | `/teacher/content` |

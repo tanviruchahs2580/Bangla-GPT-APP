@@ -22,9 +22,8 @@ from collections.abc import AsyncIterator
 
 import httpx
 
-from bangla_gpt_api.config import Settings
 from bangla_gpt_api.logging_config import json_log
-from bangla_gpt_api.providers.base import ProviderError
+from bangla_gpt_api.providers.base import ProviderError, ProviderSettings
 from bangla_gpt_api.services.context import get_current_context
 
 
@@ -272,7 +271,7 @@ class GeminiProvider:
             )
 
 
-def build_gemini_provider(settings: Settings, model: str | None = None) -> GeminiProvider:
+def build_gemini_provider(settings: ProviderSettings, model: str | None = None) -> GeminiProvider:
     """Build a Gemini client; ``model`` overrides GEMINI_MODEL (S4.2 fast lane)."""
     from bangla_gpt_api.providers.base import ProviderNotConfigured
 

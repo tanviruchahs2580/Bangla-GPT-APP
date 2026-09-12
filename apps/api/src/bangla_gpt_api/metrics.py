@@ -29,3 +29,10 @@ UNHANDLED_EXCEPTIONS_TOTAL = Counter(
     labelnames=["method", "path"],
     registry=REGISTRY,
 )
+
+PII_REDACTED_TOTAL = Counter(
+    "bgpt_pii_redacted_total",
+    "PII spans stripped by the pre-LLM redactor before upstream egress.",
+    labelnames=["kind"],
+    registry=REGISTRY,
+)

@@ -59,6 +59,30 @@ def _stable_id(*parts: object) -> str:
     return hashlib.sha1(joined.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
 
 
+def _text_fingerprint(text: str) -> str:
+    """Normalized content hash for cross-page/edition duplicate detection."""
+    return hashlib.sha256(" ".join(text.split()).encode("utf-8")).hexdigest()
+
+
+def dedupe_chunks(chunks: list[RawChunk]) -> tuple[list[RawChunk], int]:
+    """Drop byte-identical (post-normalization) chunks, keeping first wins.
+
+    Overlapping PDF pages and reprinted editions otherwise index the same
+    passage twice, diluting retrieval diversity. Returns ``(unique, removed)``.
+    """
+    seen: set[str] = set()
+    unique: list[RawChunk] = []
+    removed = 0
+    for chunk in chunks:
+        digest = _text_fingerprint(chunk.text)
+        if digest in seen:
+            removed += 1
+            continue
+        seen.add(digest)
+        unique.append(chunk)
+    return unique, removed
+
+
 def _is_chapter_heading(line: str) -> str | None:
     for pattern in CHAPTER_PATTERNS:
         match = pattern.match(line)

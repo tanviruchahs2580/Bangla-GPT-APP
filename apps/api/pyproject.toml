@@ -62,8 +62,35 @@ per-file-ignores = { "tests/test_phase1_exploits.py" = ["B011"] }
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "skipif: conditional skip (pytest.mark.skipif)",
+    "integration: slow integration tests requiring external services",
+]
+
+[tool.coverage.run]
+source = ["bangla_gpt_api"]
+omit = [
+    "*/alembic/*",
+    "*/tests/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+precision = 2
+fail_under = 0
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING",
+    "if __name__ ==",
+]
 
 [tool.mypy]
 python_version = "3.11"
 ignore_missing_imports = true
 exclude = ["alembic"]
+
+# bijoy2unicode ships no stubs/py.typed (import-untyped at the lazy import in
+# nctb/bijoy.py); silence that code at the single import site.
+[[tool.mypy.overrides]]
+module = "bangla_gpt_api.nctb.bijoy"
+disable_error_code = "import-untyped"

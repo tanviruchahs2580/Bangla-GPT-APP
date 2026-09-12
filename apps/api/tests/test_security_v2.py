@@ -332,6 +332,9 @@ def _prod_settings(**overrides) -> Settings:
         "smtp_enabled": True,
         "smtp_host": "smtp.example.com",
         "smtp_from": "noreply@example.com",
+        # SEC-001: /metrics is never public in production.
+        "metrics_require_auth": True,
+        "metrics_token": "m" * 32,
     }
     base.update(overrides)
     return Settings(**base)

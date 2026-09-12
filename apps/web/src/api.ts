@@ -1,121 +1,146 @@
-const API_BASE: string = import.meta.env.VITE_API_BASE ?? '/api'
+const API_BASE: string = import.meta.env.VITE_API_BASE ?? "/api";
 
 /** Absolute API base for direct navigation links (downloads etc.). */
-export const apiBase = API_BASE
+export const apiBase = API_BASE;
 
 export class ApiError extends Error {
-  status: number
-  code?: string
-  rawDetail: unknown
-  constructor(status: number, message: string, code?: string, rawDetail?: unknown) {
-    super(message)
-    this.status = status
-    this.code = code
-    this.rawDetail = rawDetail
+  status: number;
+  code?: string;
+  rawDetail: unknown;
+  constructor(
+    status: number,
+    message: string,
+    code?: string,
+    rawDetail?: unknown,
+  ) {
+    super(message);
+    this.status = status;
+    this.code = code;
+    this.rawDetail = rawDetail;
   }
 }
 
 export interface MeResponse {
-  user_id: number
-  email: string
-  role: 'student' | 'teacher' | 'parent' | 'admin' | 'school_admin'
-  profile_id: number | null
-  name: string | null
-  class_level: number | null
+  user_id: number;
+  email: string;
+  role: "student" | "teacher" | "parent" | "admin" | "school_admin";
+  profile_id: number | null;
+  name: string | null;
+  class_level: number | null;
 }
 
-const TOKEN_KEY = 'bgpt_token'
+const TOKEN_KEY = "bgpt_token";
 
 /** Called when any API call comes back 401 — lets the app force re-login. */
-let onUnauthorized: (() => void) | null = null
+let onUnauthorized: (() => void) | null = null;
 export function setUnauthorizedHandler(fn: () => void): void {
-  onUnauthorized = fn
+  onUnauthorized = fn;
 }
 
 // Auth endpoints where a 401 is part of the API contract (bad credentials / bad code).
 // Failing there must surface the inline friendly error, not force a page reload.
-const AUTH_401_PATHS = ['/auth/login', '/auth/verify-email', '/auth/reset']
+const AUTH_401_PATHS = ["/auth/login", "/auth/verify-email", "/auth/reset"];
 
 export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY)
+  return localStorage.getItem(TOKEN_KEY);
 }
 
 function parseDetail(body: unknown): { message: string; code?: string } {
-  if (body && typeof body === 'object' && 'detail' in (body as Record<string, unknown>)) {
-    const detail = (body as Record<string, unknown>).detail
-    if (detail && typeof detail === 'object') {
-      const d = detail as Record<string, unknown>
-      return { message: String(d.message ?? JSON.stringify(d)), code: d.code ? String(d.code) : undefined }
+  if (
+    body &&
+    typeof body === "object" &&
+    "detail" in (body as Record<string, unknown>)
+  ) {
+    const detail = (body as Record<string, unknown>).detail;
+    if (detail && typeof detail === "object") {
+      const d = detail as Record<string, unknown>;
+      return {
+        message: String(d.message ?? JSON.stringify(d)),
+        code: d.code ? String(d.code) : undefined,
+      };
     }
-    return { message: String(detail) }
+    return { message: String(detail) };
   }
-  if (typeof body === 'string' && body) return { message: body }
-  return { message: 'Request failed' }
+  if (typeof body === "string" && body) return { message: body };
+  return { message: "Request failed" };
 }
 
-async function parseSse(response: Response, onToken: (text: string) => void): Promise<Record<string, unknown> | null> {
-  const reader = response.body?.getReader()
-  if (!reader) return null
-  const decoder = new TextDecoder()
-  let buffer = ''
-  let currentEvent = ''
-  let done: Record<string, unknown> | null = null
+async function parseSse(
+  response: Response,
+  onToken: (text: string) => void,
+): Promise<Record<string, unknown> | null> {
+  const reader = response.body?.getReader();
+  if (!reader) return null;
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let currentEvent = "";
+  let done: Record<string, unknown> | null = null;
   for (;;) {
-    const { value, done: finished } = await reader.read()
-    if (finished) break
-    buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split('\n')
-    buffer = lines.pop() ?? ''
+    const { value, done: finished } = await reader.read();
+    if (finished) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
     for (const line of lines) {
-      if (line.startsWith('event:')) currentEvent = line.slice(6).trim()
-      else if (line.startsWith('data:') && currentEvent) {
+      if (line.startsWith("event:")) currentEvent = line.slice(6).trim();
+      else if (line.startsWith("data:") && currentEvent) {
         try {
-          const data = JSON.parse(line.slice(5).trim())
-          if (currentEvent === 'token') onToken(String(data.text ?? ''))
-          else if (currentEvent === 'done') done = data
-          else if (currentEvent === 'error') done = { __error: true, ...data }
+          const data = JSON.parse(line.slice(5).trim());
+          if (currentEvent === "token") onToken(String(data.text ?? ""));
+          else if (currentEvent === "done") done = data;
+          else if (currentEvent === "error") done = { __error: true, ...data };
         } catch {
           /* ignore malformed frames */
         }
       }
     }
   }
-  return done
+  return done;
 }
 
-export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const headers = new Headers(options.headers)
+export async function api<T>(
+  path: string,
+  options: RequestInit = {},
+): Promise<T> {
+  const headers = new Headers(options.headers);
   if (options.body !== undefined && !(options.body instanceof FormData)) {
-    headers.set('Content-Type', 'application/json')
+    headers.set("Content-Type", "application/json");
   }
-  const token = getToken()
-  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const token = getToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  let res: Response
+  let res: Response;
   try {
-    res = await fetch(`${API_BASE}${path}`, { ...options, headers })
+    res = await fetch(`${API_BASE}${path}`, { ...options, headers });
   } catch {
-    throw new ApiError(0, 'network error', 'network')
+    throw new ApiError(0, "network error", "network");
   }
-  if (res.status === 204) return undefined as T
+  if (res.status === 204) return undefined as T;
   if (!res.ok) {
-    let parsed: { message: string; code?: string } = { message: res.statusText }
+    let parsed: { message: string; code?: string } = {
+      message: res.statusText,
+    };
     try {
-      parsed = parseDetail(await res.json())
+      parsed = parseDetail(await res.json());
     } catch {
       /* keep statusText */
     }
-    if (res.status === 401 && !AUTH_401_PATHS.some((p) => path.startsWith(p))) onUnauthorized?.()
-    throw new ApiError(res.status, parsed.message, parsed.code, parsed)
-  }  return (await res.json()) as T
+    if (res.status === 401 && !AUTH_401_PATHS.some((p) => path.startsWith(p)))
+      onUnauthorized?.();
+    throw new ApiError(res.status, parsed.message, parsed.code, parsed);
+  }
+  return (await res.json()) as T;
 }
 
-export const get = <T>(path: string) => api<T>(path)
+export const get = <T>(path: string) => api<T>(path);
 export const post = <T>(path: string, body?: unknown) =>
-  api<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) })
+  api<T>(path, {
+    method: "POST",
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
 export const patch = <T>(path: string, body: unknown) =>
-  api<T>(path, { method: 'PATCH', body: JSON.stringify(body) })
-export const del = (path: string) => api<void>(path, { method: 'DELETE' })
+  api<T>(path, { method: "PATCH", body: JSON.stringify(body) });
+export const del = (path: string) => api<void>(path, { method: "DELETE" });
 
 /**
  * POST an SSE endpoint and stream `token` events through `onToken`.
@@ -127,156 +152,174 @@ export async function postStream<T>(
   onToken: (text: string) => void,
   options?: { signal?: AbortSignal },
 ): Promise<T> {
-  const headers = new Headers({ 'Content-Type': 'application/json' })
-  const token = getToken()
-  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const headers = new Headers({ "Content-Type": "application/json" });
+  const token = getToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
   const res = await fetch(`${API_BASE}${path}`, {
-    method: 'POST',
+    method: "POST",
     headers,
     body: JSON.stringify(body),
     signal: options?.signal,
-  })
-  if (!res.ok || !res.headers.get('content-type')?.includes('text/event-stream')) {
-    throw new ApiError(res.status, 'stream unavailable', 'llm_unavailable')
+  });
+  if (
+    !res.ok ||
+    !res.headers.get("content-type")?.includes("text/event-stream")
+  ) {
+    throw new ApiError(res.status, "stream unavailable", "llm_unavailable");
   }
-  const done = await parseSse(res, onToken)
-  if (done && '__error' in done) throw new ApiError(502, 'stream failed', 'llm_unavailable')
-  return done as T
+  const done = await parseSse(res, onToken);
+  if (done && "__error" in done)
+    throw new ApiError(502, "stream failed", "llm_unavailable");
+  return done as T;
 }
 
 export interface TokenResponse {
-  access_token: string
-  token_type?: string
-  must_change_password?: boolean
+  access_token: string;
+  token_type?: string;
+  must_change_password?: boolean;
 }
 
 function decodeRole(token: string): string | null {
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]!.replace(/-/g, '+').replace(/_/g, '/')))
-    return typeof payload.role === 'string' ? payload.role : null
+    const payload = JSON.parse(
+      atob(token.split(".")[1]!.replace(/-/g, "+").replace(/_/g, "/")),
+    );
+    return typeof payload.role === "string" ? payload.role : null;
   } catch {
-    return null
+    return null;
   }
 }
 
 export async function login(email: string, password: string): Promise<string> {
-  const res = await post<TokenResponse>('/auth/login', { email, password })
-  localStorage.setItem(TOKEN_KEY, res.access_token)
+  const res = await post<TokenResponse>("/auth/login", { email, password });
+  localStorage.setItem(TOKEN_KEY, res.access_token);
   // Validate the session and refresh the authoritative role from the server.
-  await fetchMe()
-  return decodeRole(res.access_token) ?? 'student'
+  await fetchMe();
+  return decodeRole(res.access_token) ?? "student";
 }
 
 export async function register(input: {
-  email: string
-  password: string
-  name: string
-  role: 'student' | 'teacher' | 'parent'
-  class_level?: number
-  guardian_consent?: boolean
+  email: string;
+  password: string;
+  name: string;
+  role: "student" | "teacher" | "parent";
+  class_level?: number;
+  guardian_consent?: boolean;
 }): Promise<void> {
-  await post('/auth/register', input)
+  await post("/auth/register", input);
 }
 
 export async function forgotPassword(email: string): Promise<void> {
-  await post('/auth/forgot', { email })
+  await post("/auth/forgot", { email });
 }
 
-export async function resetPassword(token: string, newPassword: string): Promise<void> {
-  const res = await post<TokenResponse>('/auth/reset', { token, new_password: newPassword })
-  localStorage.setItem(TOKEN_KEY, res.access_token)
+export async function resetPassword(
+  token: string,
+  newPassword: string,
+): Promise<void> {
+  const res = await post<TokenResponse>("/auth/reset", {
+    token,
+    new_password: newPassword,
+  });
+  localStorage.setItem(TOKEN_KEY, res.access_token);
 }
 
 export async function verifyEmail(token: string): Promise<void> {
   // V1 contract: token only — the endpoint takes no password fields.
-  const res = await post<TokenResponse>('/auth/verify-email', { token })
-  localStorage.setItem(TOKEN_KEY, res.access_token)
+  const res = await post<TokenResponse>("/auth/verify-email", { token });
+  localStorage.setItem(TOKEN_KEY, res.access_token);
 }
 
 export async function resendVerification(): Promise<void> {
-  await post('/auth/resend-verification')
+  await post("/auth/resend-verification");
 }
 
-export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
-  const res = await post<TokenResponse>('/auth/change-password', {
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  const res = await post<TokenResponse>("/auth/change-password", {
     current_password: currentPassword,
     new_password: newPassword,
-  })
-  localStorage.setItem(TOKEN_KEY, res.access_token)
+  });
+  localStorage.setItem(TOKEN_KEY, res.access_token);
 }
 
 /** Student generates a single-use code (BGPT-XXXXXXXX) a parent can redeem to link. */
-export async function generateInviteCode(): Promise<{ code: string; expires_in_minutes: number }> {
-  return post('/students/me/invite-code')
+export async function generateInviteCode(): Promise<{
+  code: string;
+  expires_in_minutes: number;
+}> {
+  return post("/students/me/invite-code");
 }
 
 export async function fetchMe(): Promise<MeResponse | null> {
   if (!getToken()) {
-    return null
+    return null;
   }
   try {
-    return await get<MeResponse>('/users/me')
+    return await get<MeResponse>("/users/me");
   } catch {
-    logout()
-    return null
+    logout();
+    return null;
   }
 }
 
 export function logout(): void {
-  localStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem(TOKEN_KEY);
 }
 
 /* -------- Learn catalog (grounded corpus) -------- */
 export const getSubjects = (classLevel?: number) =>
-  get<import('./types').SubjectOut[]>(
-    `/learn/subjects${classLevel ? `?class_level=${classLevel}` : ''}`,
-  )
+  get<import("./types").SubjectOut[]>(
+    `/learn/subjects${classLevel ? `?class_level=${classLevel}` : ""}`,
+  );
 
 export const getSubjectChapters = (subject: string, classLevel?: number) =>
-  get<import('./types').ChapterSummaryOut[]>(
+  get<import("./types").ChapterSummaryOut[]>(
     `/learn/subjects/${encodeURIComponent(subject)}/chapters${
-      classLevel ? `?class_level=${classLevel}` : ''
+      classLevel ? `?class_level=${classLevel}` : ""
     }`,
-  )
+  );
 
 export const getChapterContent = (
   subject: string,
   chapter: string,
   classLevel?: number,
 ) =>
-  get<import('./types').ChapterContentOut>(
+  get<import("./types").ChapterContentOut>(
     `/learn/subjects/${encodeURIComponent(subject)}/chapters/${encodeURIComponent(
       chapter,
-    )}${classLevel ? `?class_level=${classLevel}` : ''}`,
-  )
+    )}${classLevel ? `?class_level=${classLevel}` : ""}`,
+  );
 
 export const getLearnProgress = (subject?: string, classLevel?: number) => {
-  const qs = new URLSearchParams()
-  if (subject) qs.set('subject', subject)
-  if (classLevel) qs.set('class_level', String(classLevel))
-  const q = qs.toString() ? `?${qs}` : ''
-  return get<import('./types').ChapterProgressOut[]>(`/learn/progress${q}`)
-}
+  const qs = new URLSearchParams();
+  if (subject) qs.set("subject", subject);
+  if (classLevel) qs.set("class_level", String(classLevel));
+  const q = qs.toString() ? `?${qs}` : "";
+  return get<import("./types").ChapterProgressOut[]>(`/learn/progress${q}`);
+};
 
 export const upsertLearnProgress = (payload: {
-  subject: string
-  chapter: string
-  class_level: number
-  read_pct?: number
-  completed?: boolean
-  bookmarked?: boolean
-}) => post<import('./types').ChapterProgressOut>('/learn/progress', payload)
+  subject: string;
+  chapter: string;
+  class_level: number;
+  read_pct?: number;
+  completed?: boolean;
+  bookmarked?: boolean;
+}) => post<import("./types").ChapterProgressOut>("/learn/progress", payload);
 
 /* -------- S5.10 support ops -------- */
 
-const ADMIN_TOKEN_KEY = 'bgpt_admin_token_backup'
-const IMP_ACTIVE_KEY = 'bgpt_impersonating'
+const ADMIN_TOKEN_KEY = "bgpt_admin_token_backup";
+const IMP_ACTIVE_KEY = "bgpt_impersonating";
 
 export interface ImpersonateOut {
-  access_token: string
-  user_id: number
-  role: string
-  expires_in_min: number
+  access_token: string;
+  user_id: number;
+  role: string;
+  expires_in_min: number;
 }
 
 /**
@@ -284,17 +327,22 @@ export interface ImpersonateOut {
  * token is kept aside so `exitImpersonation` can restore it; every request in
  * between runs as the impersonated user (the server audits start and exit).
  */
-export async function startImpersonation(userId: number, reason: string): Promise<ImpersonateOut> {
-  const adminToken = getToken()
-  const res = await post<ImpersonateOut>(`/admin/users/${userId}/impersonate`, { reason })
-  if (adminToken) localStorage.setItem(ADMIN_TOKEN_KEY, adminToken)
-  localStorage.setItem(IMP_ACTIVE_KEY, String(res.user_id))
-  localStorage.setItem(TOKEN_KEY, res.access_token)
-  return res
+export async function startImpersonation(
+  userId: number,
+  reason: string,
+): Promise<ImpersonateOut> {
+  const adminToken = getToken();
+  const res = await post<ImpersonateOut>(`/admin/users/${userId}/impersonate`, {
+    reason,
+  });
+  if (adminToken) localStorage.setItem(ADMIN_TOKEN_KEY, adminToken);
+  localStorage.setItem(IMP_ACTIVE_KEY, String(res.user_id));
+  localStorage.setItem(TOKEN_KEY, res.access_token);
+  return res;
 }
 
 export function isImpersonating(): boolean {
-  return localStorage.getItem(IMP_ACTIVE_KEY) !== null
+  return localStorage.getItem(IMP_ACTIVE_KEY) !== null;
 }
 
 /**
@@ -304,282 +352,309 @@ export function isImpersonating(): boolean {
  */
 export async function exitImpersonation(): Promise<void> {
   try {
-    await post<void>('/auth/impersonate/exit')
+    await post<void>("/auth/impersonate/exit");
   } catch {
     /* expired or already-revoked tokens still leave the local state fixable */
   }
-  const adminToken = localStorage.getItem(ADMIN_TOKEN_KEY)
-  if (adminToken) localStorage.setItem(TOKEN_KEY, adminToken)
-  localStorage.removeItem(ADMIN_TOKEN_KEY)
-  localStorage.removeItem(IMP_ACTIVE_KEY)
+  const adminToken = localStorage.getItem(ADMIN_TOKEN_KEY);
+  if (adminToken) localStorage.setItem(TOKEN_KEY, adminToken);
+  localStorage.removeItem(ADMIN_TOKEN_KEY);
+  localStorage.removeItem(IMP_ACTIVE_KEY);
 }
 
-export const getFeedbackQueue = (status: 'open' | 'all', limit = 20, offset = 0) =>
-  get<import('./types').FeedbackQueuePage>(
+export const getFeedbackQueue = (
+  status: "open" | "all",
+  limit = 20,
+  offset = 0,
+) =>
+  get<import("./types").FeedbackQueuePage>(
     `/admin/feedback?status=${status}&limit=${limit}&offset=${offset}`,
-  )
+  );
 
-export const triageFeedback = (id: number, payload: { triaged: boolean; note?: string }) =>
-  patch<import('./types').FeedbackAdminRow>(`/admin/feedback/${id}`, payload)
+export const triageFeedback = (
+  id: number,
+  payload: { triaged: boolean; note?: string },
+) =>
+  patch<import("./types").FeedbackAdminRow>(`/admin/feedback/${id}`, payload);
 
-export const getStatus = () => get<import('./types').StatusOut>('/status')
+export const getStatus = () => get<import("./types").StatusOut>("/status");
 
 /* -------- Blueprint v1: notifications / notes / documents / jobs / workload -------- */
 
 export interface NotificationItem {
-  id: number
-  kind: string
+  id: number;
+  kind: string;
   /** i18n code resolved client-side (server never sends final copy). */
-  code: string
-  params: Record<string, string | number>
-  link: string | null
-  read_at: string | null
-  created_at: string | null
+  code: string;
+  params: Record<string, string | number>;
+  link: string | null;
+  read_at: string | null;
+  created_at: string | null;
 }
 
 export interface NotificationList {
-  items: NotificationItem[]
-  unread_count: number
+  items: NotificationItem[];
+  unread_count: number;
 }
 
-export const getNotifications = () => get<NotificationList>('/notifications')
+export const getNotifications = () => get<NotificationList>("/notifications");
 export const markNotificationRead = (id: number) =>
-  post<NotificationItem>(`/notifications/${id}/read`)
+  post<NotificationItem>(`/notifications/${id}/read`);
 
 export interface SavedNote {
-  id: number
-  title: string
-  body: string
-  source: string
-  source_ref: Record<string, unknown> | null
-  created_at: string | null
+  id: number;
+  title: string;
+  body: string;
+  source: string;
+  source_ref: Record<string, unknown> | null;
+  created_at: string | null;
 }
 
-export const getNotes = (limit = 100) => get<SavedNote[]>(`/notes?limit=${limit}`)
+export const getNotes = (limit = 100) =>
+  get<SavedNote[]>(`/notes?limit=${limit}`);
 export const createNote = (input: {
-  title?: string
-  body: string
-  source?: 'tutor' | 'chapter' | 'other'
-  source_ref?: Record<string, unknown>
-}) => post<SavedNote>('/notes', input)
-export const deleteNote = (id: number) => del(`/notes/${id}`)
+  title?: string;
+  body: string;
+  source?: "tutor" | "chapter" | "other";
+  source_ref?: Record<string, unknown>;
+}) => post<SavedNote>("/notes", input);
+export const deleteNote = (id: number) => del(`/notes/${id}`);
 
 export interface TeacherDocument {
-  id: number
-  kind: 'worksheet' | 'answer_key' | 'homework' | 'rubric' | 'lesson_plan' | string
-  class_level: number
-  subject: string
-  chapter: string | null
-  title: string
-  payload: Record<string, unknown>
-  created_at: string | null
+  id: number;
+  kind:
+    "worksheet" | "answer_key" | "homework" | "rubric" | "lesson_plan" | string;
+  class_level: number;
+  subject: string;
+  chapter: string | null;
+  title: string;
+  payload: Record<string, unknown>;
+  created_at: string | null;
 }
 
 export interface GeneratedDocument extends TeacherDocument {
-  sources: import('./types').SourceRef[]
+  sources: import("./types").SourceRef[];
 }
 
 export const generateDocument = (kind: string, body: Record<string, unknown>) =>
-  post<GeneratedDocument>(`/teacher/generate/${kind}`, body)
+  post<GeneratedDocument>(`/teacher/generate/${kind}`, body);
 export const getTeacherDocuments = (kind?: string, limit = 100) =>
   get<TeacherDocument[]>(
-    `/teacher/documents?limit=${limit}${kind ? `&kind=${encodeURIComponent(kind)}` : ''}`,
-  )
+    `/teacher/documents?limit=${limit}${kind ? `&kind=${encodeURIComponent(kind)}` : ""}`,
+  );
 export const getTeacherDocument = (id: number) =>
-  get<TeacherDocument>(`/teacher/documents/${id}`)
-export const deleteTeacherDocument = (id: number) => del(`/teacher/documents/${id}`)
+  get<TeacherDocument>(`/teacher/documents/${id}`);
+export const deleteTeacherDocument = (id: number) =>
+  del(`/teacher/documents/${id}`);
 
 /**
  * Authed binary download (auth is header-based, a bare <a href> would 401).
  * The server may fall back to an HTML print view when shaping libs are
  * unavailable — that variant opens in a new tab instead of downloading.
  */
-export async function downloadTeacherDocumentPdf(doc: TeacherDocument): Promise<void> {
-  const headers = new Headers()
-  const token = getToken()
-  if (token) headers.set('Authorization', `Bearer ${token}`)
-  const res = await fetch(`${API_BASE}/teacher/documents/${doc.id}/pdf`, { headers })
-  if (!res.ok) throw new ApiError(res.status, 'download failed', 'download')
-  const ct = res.headers.get('content-type') ?? ''
-  const blob = await res.blob()
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  if (ct.includes('html')) {
-    a.href = url
-    a.target = '_blank'
+export async function downloadTeacherDocumentPdf(
+  doc: TeacherDocument,
+): Promise<void> {
+  const headers = new Headers();
+  const token = getToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const res = await fetch(`${API_BASE}/teacher/documents/${doc.id}/pdf`, {
+    headers,
+  });
+  if (!res.ok) throw new ApiError(res.status, "download failed", "download");
+  const ct = res.headers.get("content-type") ?? "";
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  if (ct.includes("html")) {
+    a.href = url;
+    a.target = "_blank";
   } else {
-    a.href = url
-    a.download = `document-${doc.id}-${doc.kind}.pdf`
+    a.href = url;
+    a.download = `document-${doc.id}-${doc.kind}.pdf`;
   }
-  a.click()
-  URL.revokeObjectURL(url)
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export interface AiJob {
-  id: string
-  kind: string
-  status: 'queued' | 'generating' | 'validating' | 'ready' | 'failed' | string
-  payload: Record<string, unknown>
-  result: { document_id?: number } | null
-  error: string | null
-  created_at: string | null
-  updated_at: string | null
+  id: string;
+  kind: string;
+  status: "queued" | "generating" | "validating" | "ready" | "failed" | string;
+  payload: Record<string, unknown>;
+  result: { document_id?: number } | null;
+  error: string | null;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
-export const createTeacherJob = (kind: string, payload: Record<string, unknown>) =>
-  post<AiJob>('/teacher/jobs', { kind, payload })
-export const getTeacherJobs = () => get<AiJob[]>('/teacher/jobs')
-export const getTeacherJob = (id: string) => get<AiJob>(`/teacher/jobs/${id}`)
+export const createTeacherJob = (
+  kind: string,
+  payload: Record<string, unknown>,
+) => post<AiJob>("/teacher/jobs", { kind, payload });
+export const getTeacherJobs = () => get<AiJob[]>("/teacher/jobs");
+export const getTeacherJob = (id: string) => get<AiJob>(`/teacher/jobs/${id}`);
 
 export interface TeacherWorkload {
-  counts: Record<string, number>
-  minutes_saved: Record<string, number>
-  total_minutes_saved: number
-  estimate: boolean
-  methodology: string
+  counts: Record<string, number>;
+  minutes_saved: Record<string, number>;
+  total_minutes_saved: number;
+  estimate: boolean;
+  methodology: string;
 }
 
-export const getTeacherWorkload = () => get<TeacherWorkload>('/teacher/workload')
-
+export const getTeacherWorkload = () =>
+  get<TeacherWorkload>("/teacher/workload");
 
 // --- Wave 2: school section (school_admin = own school; admin = platform) --------
 
 export interface SchoolStaffRow {
-  id: number
-  name: string
-  email: string
-  role: string
-  classroom_count: number
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  classroom_count: number;
 }
 export interface SchoolOverview {
-  school_id: number
-  name: string
-  code: string
-  students: number
-  teachers: number
-  classrooms: number
-  staff: SchoolStaffRow[]
+  school_id: number;
+  name: string;
+  code: string;
+  students: number;
+  teachers: number;
+  classrooms: number;
+  staff: SchoolStaffRow[];
 }
 export interface SchoolStudentRow {
-  student_id: number
-  name: string
-  class_level: number
-  section: string
-  last_active: string | null
-  quiz_attempts: number
+  student_id: number;
+  name: string;
+  class_level: number;
+  section: string;
+  last_active: string | null;
+  quiz_attempts: number;
 }
 export interface SchoolStudentPage {
-  total: number
-  limit: number
-  offset: number
-  items: SchoolStudentRow[]
+  total: number;
+  limit: number;
+  offset: number;
+  items: SchoolStudentRow[];
 }
 export interface SchoolTeacherRow {
-  teacher_id: number
-  name: string
-  subjects: string[]
-  classrooms: number
+  teacher_id: number;
+  name: string;
+  subjects: string[];
+  classrooms: number;
 }
 export interface SchoolClassRow {
-  classroom_id: number
-  class_level: number
-  section: string
-  students: number
-  quiz_attempts: number
-  attempts_graded: number
-  avg_quiz_accuracy: number | null
+  classroom_id: number;
+  class_level: number;
+  section: string;
+  students: number;
+  quiz_attempts: number;
+  attempts_graded: number;
+  avg_quiz_accuracy: number | null;
 }
 export interface SchoolCoverageRow {
-  class_level: number
-  content_subjects: string[]
-  asked_subjects: string[]
-  uncovered_subjects: string[]
-  chapters_available: number
-  chapters_read: number
-  chapters_completed: number
+  class_level: number;
+  content_subjects: string[];
+  asked_subjects: string[];
+  uncovered_subjects: string[];
+  chapters_available: number;
+  chapters_read: number;
+  chapters_completed: number;
 }
 export interface SchoolCoverageOut {
-  rows: SchoolCoverageRow[]
+  rows: SchoolCoverageRow[];
 }
 export interface SchoolActiveDay {
-  date: string
-  students: number
+  date: string;
+  students: number;
 }
 export interface SchoolAnalytics {
-  days: number
-  active_by_date: SchoolActiveDay[]
-  daily_active_avg: number
-  questions_asked: number
-  quiz_attempts: number
-  attempts_graded: number
-  avg_quiz_score_pct: number | null
+  days: number;
+  active_by_date: SchoolActiveDay[];
+  daily_active_avg: number;
+  questions_asked: number;
+  quiz_attempts: number;
+  attempts_graded: number;
+  avg_quiz_score_pct: number | null;
 }
 
-export const getSchoolOverview = () => get<SchoolOverview>('/school/overview')
+export const getSchoolOverview = () => get<SchoolOverview>("/school/overview");
 export const getSchoolStudents = (limit = 50, offset = 0) =>
-  get<SchoolStudentPage>(`/school/students?limit=${limit}&offset=${offset}`)
-export const getSchoolTeachers = () => get<SchoolTeacherRow[]>('/school/teachers')
-export const getSchoolClasses = () => get<SchoolClassRow[]>('/school/classes')
-export const getSchoolCoverage = () => get<SchoolCoverageOut>('/school/coverage')
-export const getSchoolAnalytics = (days = 30) => get<SchoolAnalytics>(`/school/analytics?days=${days}`)
+  get<SchoolStudentPage>(`/school/students?limit=${limit}&offset=${offset}`);
+export const getSchoolTeachers = () =>
+  get<SchoolTeacherRow[]>("/school/teachers");
+export const getSchoolClasses = () => get<SchoolClassRow[]>("/school/classes");
+export const getSchoolCoverage = () =>
+  get<SchoolCoverageOut>("/school/coverage");
+export const getSchoolAnalytics = (days = 30) =>
+  get<SchoolAnalytics>(`/school/analytics?days=${days}`);
 
 // --- Wave 2: parent period report -------------------------------------------------
 
 export interface ParentReport {
-  student_id: number
-  name: string
-  class_level: number
-  period: string
-  window_start: string
-  window_end: string
-  quizzes_taken: number
-  quizzes_graded: number
-  avg_score_pct: number | null
-  chapters_read: number
-  chapters_completed: number
-  questions_asked: number
-  weak_chapters: string[]
-  strengths: string[]
-  suggestion_code: string
-  suggestion_params: Record<string, unknown>
+  student_id: number;
+  name: string;
+  class_level: number;
+  period: string;
+  window_start: string;
+  window_end: string;
+  quizzes_taken: number;
+  quizzes_graded: number;
+  avg_score_pct: number | null;
+  chapters_read: number;
+  chapters_completed: number;
+  questions_asked: number;
+  weak_chapters: string[];
+  strengths: string[];
+  suggestion_code: string;
+  suggestion_params: Record<string, unknown>;
 }
 
-export const getParentReport = (studentId: number, period: 'weekly' | 'monthly' = 'weekly') =>
-  get<ParentReport>(`/parents/me/children/${studentId}/report?period=${period}`)
+export const getParentReport = (
+  studentId: number,
+  period: "weekly" | "monthly" = "weekly",
+) =>
+  get<ParentReport>(
+    `/parents/me/children/${studentId}/report?period=${period}`,
+  );
 
 // --- Wave 2: admin AI quality dashboard --------------------------------------------
 
 export interface AdminAiQuality {
-  days: number
-  answers_total: number
-  grounded_count: number
-  ungrounded_count: number
-  refusals_total: number
-  refusals_by_reason: Record<string, number>
-  thumbs_up: number
-  thumbs_down: number
-  low_confidence_count: number
-  by_model: Record<string, number>
+  days: number;
+  answers_total: number;
+  grounded_count: number;
+  ungrounded_count: number;
+  refusals_total: number;
+  refusals_by_reason: Record<string, number>;
+  thumbs_up: number;
+  thumbs_down: number;
+  low_confidence_count: number;
+  by_model: Record<string, number>;
 }
 
-export const getAdminAiQuality = (days = 30) => get<AdminAiQuality>(`/admin/ai/quality?days=${days}`)
+export const getAdminAiQuality = (days = 30) =>
+  get<AdminAiQuality>(`/admin/ai/quality?days=${days}`);
 
 // --- Wave 2: student learning preferences + memory ----------------------------------
 
 export interface StudentPrefs {
-  memory_enabled: boolean
-  learning_prefs: Record<string, unknown>
+  memory_enabled: boolean;
+  learning_prefs: Record<string, unknown>;
 }
 export interface MemoryFacts {
-  memory_enabled: boolean
-  facts: Record<string, unknown>
-  on_disable_note_code: string
+  memory_enabled: boolean;
+  facts: Record<string, unknown>;
+  on_disable_note_code: string;
 }
 
-export const getMyPrefs = () => get<StudentPrefs>('/students/me/prefs')
-export const patchMyPrefs = (body: { memory_enabled?: boolean; learning_prefs?: Record<string, unknown> }) =>
-  patch<StudentPrefs>('/students/me/prefs', body)
-export const getMyMemory = () => get<MemoryFacts>('/students/me/memory')
-export const clearMyMemory = () => del('/students/me/memory')
-export const getMyReport = (period: 'weekly' | 'monthly' = 'weekly') =>
-  get<ParentReport>(`/students/me/report?period=${period}`)
+export const getMyPrefs = () => get<StudentPrefs>("/students/me/prefs");
+export const patchMyPrefs = (body: {
+  memory_enabled?: boolean;
+  learning_prefs?: Record<string, unknown>;
+}) => patch<StudentPrefs>("/students/me/prefs", body);
+export const getMyMemory = () => get<MemoryFacts>("/students/me/memory");
+export const clearMyMemory = () => del("/students/me/memory");
+export const getMyReport = (period: "weekly" | "monthly" = "weekly") =>
+  get<ParentReport>(`/students/me/report?period=${period}`);

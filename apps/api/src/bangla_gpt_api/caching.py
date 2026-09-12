@@ -160,7 +160,7 @@ def build_cache(settings: Any) -> Cache:
         raise TypeError("build_cache expects a Settings instance")
     if settings.rate_limit_backend.strip().lower() == "redis":
         if not settings.redis_url:
-            raise ValueError("redis backend requires REDIS_URL")
+            raise RuntimeError("redis backend requires REDIS_URL")
         return RedisCache(settings.redis_url)
     return MemoryCache()
 

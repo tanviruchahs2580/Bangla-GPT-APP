@@ -262,6 +262,8 @@ def test_production_boot_guard_refuses_insecure_settings(tmp_path) -> None:
             smtp_enabled=True,
             smtp_host="smtp.example.com",
             smtp_from="noreply@example.com",
+            metrics_require_auth=True,  # SEC-001: /metrics never public in prod
+            metrics_token="m" * 32,
         )
     )
     assert app.title == "Bangla GPT API"

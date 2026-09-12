@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import secrets
 from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 import jwt
 
@@ -40,16 +41,20 @@ def create_access_token(
     extra_claims: dict[str, object] | None = None,
     jti: str | None = None,
 ) -> str:
+    """Create a JWT access token with a unique ``jti`` for every token.
+
+    Unlike the legacy flow that only set ``jti`` for impersonation, this
+    version embeds a ``jti`` (JWT ID) on *all* access tokens so every token
+    can be individually revoked before expiry via the shared token deny-list
+    (S5.10).
+    """
     expires_delta = timedelta(minutes=settings.jwt_expire_minutes if minutes is None else minutes)
     payload: dict[str, object] = {
         "sub": str(user.id),
         "role": user.role,
         "exp": datetime.now(UTC) + expires_delta,
+        "jti": jti or uuid4().hex,  # unique id per token for revocation
     }
-    if jti is not None:
-        # S5.10: impersonation tokens carry an id so a live session can be
-        # revoked before its (short) expiry through the shared cache deny-list.
-        payload["jti"] = jti
     if extra_claims:
         payload.update(extra_claims)
     return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")

@@ -21,10 +21,14 @@ Every response carries `X-Request-ID` (echoed if supplied, otherwise generated).
 | Method | Path | Auth | Body / notes |
 |---|---|---|---|
 | POST | `/auth/register` | - | `{email, password(min 8), name, role: student\|teacher\|parent, class_level?, guardian_consent?}` - `class_level` AND `guardian_consent: true` required for students; admin role cannot be self-registered. Returns 201 `{user_id, role, profile_id}` |
-| POST | `/auth/login` | - | `{email, password}` → `{access_token, must_change_password}` (HS256 JWT: `sub`, `role`, `exp`) |
+| POST | `/auth/login` | - | `{email, password}` → `{access_token, must_change_password}` (HS256 JWT: `sub`, `role`, `exp`). MFA-enabled accounts get HTTP 202 + `token_type: "mfa"` step-up token (5 min, rejected by normal routes) — complete with `/auth/mfa/challenge` |
 | POST | `/auth/forgot` | - | `{email}` → always `202 {"status":"accepted"}` (anti-enumeration). Emails a single-use reset token (30 min); token stored only as SHA-256 hash. Dev fallback logs the token to console when SMTP is off and ENV≠production |
 | POST | `/auth/reset` | - | `{token, new_password(min 8)}` → fresh `{access_token}`; single-use + expiry enforced |
 | POST | `/auth/change-password` | Bearer | `{current_password, new_password}` → rotates password and clears the forced-change flag |
+| POST | `/auth/mfa/enroll` | Bearer | Returns unstored `{secret, otpauth_uri}` for the authenticator app; nothing is enabled yet |
+| POST | `/auth/mfa/verify` | Bearer | `{secret, code}` → proves possession and stores the secret (= MFA enabled). 409 if already enabled |
+| POST | `/auth/mfa/disable` | Bearer | `{password}` → clears the secret (= disabled). 409 if not enabled |
+| POST | `/auth/mfa/challenge` | - | `{mfa_token, code}` → real bearer `{access_token}`. 401 on wrong/expired token or code |
 | GET | `/users/me` | any | Profile of the caller: `{user_id, email, role, profile_id, name, class_level}` |
 | GET | `/users/me/export` | any | GDPR-style data export: account, profile, quiz attempts, parent links (`Content-Disposition: attachment`) |
 | DELETE | `/users/me` | any | Self-service account deletion (GDPR-style). Removes profile, quiz attempts + answer logs, parent links. Last remaining admin is refused (409). Returns 204 |

@@ -28,7 +28,9 @@ services:
       DATABASE_URL: ${DATABASE_URL:-sqlite:////data/app.db}
       JWT_SECRET: ${JWT_SECRET:-}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
-      MAX_BODY_BYTES: ${MAX_BODY_BYTES:-65536}
+      # DATA-001: 4 MB fits the wave-2 vision contract (~2 MB base64 image
+      # JSON per chat turn); smaller values 413 valid image turns.
+      MAX_BODY_BYTES: ${MAX_BODY_BYTES:-4000000}
       JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-60}
       PASSWORD_RESET_TOKEN_MINUTES: ${PASSWORD_RESET_TOKEN_MINUTES:-30}
       FORCE_ADMIN_PASSWORD_CHANGE: ${FORCE_ADMIN_PASSWORD_CHANGE:-true}

@@ -13,9 +13,10 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
+from datetime import UTC, datetime
 from pathlib import Path
 
-from bangla_gpt_api.nctb.chunking import RawChunk, chunk_pages
+from bangla_gpt_api.nctb.chunking import RawChunk, chunk_pages, dedupe_chunks
 from bangla_gpt_api.nctb.extract import ExtractionResult, extract_pdf, qc_pages
 from bangla_gpt_api.nctb.manifest import SourceRecord, load_manifest
 
@@ -60,6 +61,9 @@ def process_source(
 
     qc = qc_pages(result.pages)
     chunks = chunk_pages(result.pages, source_id=source_id)
+    # RAG-001: dedupe identical passages (reprints/overlapping pages) and
+    # stamp version + build time so staleness is answerable per artifact.
+    chunks, duplicates_removed = dedupe_chunks(chunks)
 
     out_normalized.mkdir(parents=True, exist_ok=True)
     with (out_normalized / f"{source_id}.chunks.jsonl").open("w", encoding="utf-8") as fh:
@@ -68,6 +72,9 @@ def process_source(
 
     summary.update(qc)
     summary["chunks"] = len(chunks)
+    summary["duplicates_removed"] = duplicates_removed
+    summary["content_version"] = f"{record.processing_version}:{record.content_hash[:12]}"
+    summary["built_at"] = datetime.now(UTC).isoformat(timespec="seconds")
     _write_report(report_path, summary)
     return summary
 

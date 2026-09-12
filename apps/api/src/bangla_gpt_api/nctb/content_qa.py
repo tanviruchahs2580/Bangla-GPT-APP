@@ -87,6 +87,9 @@ class ChunkQAReport:
     worst: list[dict] = field(default_factory=list)
     passed: bool = False
     threshold: float = DEFAULT_FLAGGED_THRESHOLD
+    # RAG-001: duplicate-text rate (additive; older consumers ignore it).
+    duplicate_chunks: int = 0
+    duplicate_ratio: float = 0.0
 
     def to_dict(self) -> dict:
         return {
@@ -97,6 +100,8 @@ class ChunkQAReport:
             "worst": self.worst,
             "pass": self.passed,
             "threshold": self.threshold,
+            "duplicate_chunks": self.duplicate_chunks,
+            "duplicate_ratio": self.duplicate_ratio,
         }
 
 
@@ -111,10 +116,18 @@ def qa_chunks(
     flagged = 0
     counts: dict[str, int] = {code: 0 for code in ISSUE_CODES}
     worst: list[dict] = []
+    seen_texts: set[str] = set()
+    duplicates = 0
     for chunk in chunks:
         chunk_id = str(chunk.get("chunk_id", ""))
         text = str(chunk.get("text", ""))
         total += 1
+        # RAG-001: identical normalized text indexed twice.
+        fingerprint = " ".join(text.split())
+        if fingerprint and fingerprint in seen_texts:
+            duplicates += 1
+        else:
+            seen_texts.add(fingerprint)
         issues = qa_text(text)
         if not issues:
             continue
@@ -133,6 +146,8 @@ def qa_chunks(
         worst=worst,
         passed=passed,
         threshold=threshold,
+        duplicate_chunks=duplicates,
+        duplicate_ratio=round(duplicates / total, 4) if total else 0.0,
     )
 
 

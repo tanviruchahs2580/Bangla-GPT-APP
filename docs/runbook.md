@@ -18,6 +18,14 @@ curl http://127.0.0.1:8000/health
 curl http://127.0.0.1:8000/ready
 ```
 
+> SEC-002 note: local/dev boots use the insecure `dev-insecure-change-me`
+> JWT default on purpose and log an `InsecureKeyLengthWarning` — that noise
+> is expected locally and never reaches staging/production (the boot guard
+> refuses short/default secrets there). For the quiet, CI-equivalent local
+> path, run servers and one-off checks with `ENV=ci` plus a 32+ byte
+> `JWT_SECRET`; the pytest suite already uses 39-char test secrets, so its
+> warnings come only from the shortest-lived dev-default cases.
+
 Web dashboard (dev): `cd apps/web && npm install && npm run dev` → http://localhost:5173
 (dev server proxies `/api/*` to `http://127.0.0.1:8000`). Production build: `npm run build`.
 

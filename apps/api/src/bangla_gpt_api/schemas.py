@@ -200,6 +200,28 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(min_length=8, max_length=128)
 
 
+# --- AUTH-001: TOTP multi-factor authentication -------------------------------
+class MfaEnrollOut(BaseModel):
+    """Fresh (unstored) secret + authenticator URI. Nothing is enabled yet."""
+
+    secret: str
+    otpauth_uri: str
+
+
+class MfaVerifyIn(BaseModel):
+    secret: str = Field(min_length=16, max_length=64)
+    code: str = Field(min_length=6, max_length=6)
+
+
+class MfaDisableIn(BaseModel):
+    password: str = Field(min_length=1, max_length=128)
+
+
+class MfaChallengeIn(BaseModel):
+    mfa_token: str = Field(min_length=16, max_length=2048)
+    code: str = Field(min_length=6, max_length=6)
+
+
 class DataExportResponse(BaseModel):
     """Self-service GDPR-style export of everything we store about the user."""
 
@@ -1314,6 +1336,9 @@ class AdminAiQualityOut(BaseModel):
     low_confidence_count: int = 0
     # ChatMessage carries no model column -> always empty today (audit finding).
     by_model: dict[str, int] = {}
+    # AI-002: estimated LLM spend (USD) over the same window, from ai_usage.
+    cost_usd_total: float = 0.0
+    cost_usd_by_model: dict[str, float] = {}
 
 
 # --- Wave 2: student memory / learning preferences --------------------------------
