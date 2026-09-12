@@ -9,7 +9,11 @@ WORKDIR /app
 # Security patching of base-layer packages with available vendor fixes
 # (rescanned with trivy; remaining unfixed advisories documented in the
 # validation report — no vendor fix published yet, exposure mitigated).
+# Full `upgrade` (not just targeted installs): the trivy gate fails on ANY
+# fixable HIGH/CRITICAL, and new Debian advisories (sqlite/perl/...) appear
+# continuously — targeted installs are whack-a-mole that reds the pipeline.
 RUN apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends openssl libssl3t64 \
     && rm -rf /var/lib/apt/lists/*
 
