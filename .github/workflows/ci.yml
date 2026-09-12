@@ -50,7 +50,9 @@ jobs:
         run: pytest -q
 
       - name: Dependency audit (pip-audit, fail on vulnerable)
-        run: python -m pip_audit --fail-on all
+        # pip-audit exits non-zero when any vulnerability is found, so the
+        # bare command already fails the gate (there is no --fail-on flag).
+        run: python -m pip_audit
 
       - name: Alembic migration check
         run: |
