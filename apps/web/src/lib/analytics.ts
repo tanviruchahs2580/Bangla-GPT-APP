@@ -16,7 +16,14 @@ export function track(name: string, props?: EventProps): void {
   if (last !== undefined && now - last < DEDUPE_WINDOW_MS) return;
   inflight.set(name, now);
   try {
-    void post("/events", { name, props: props ?? {} }).catch(() => {
+    // skipUnauthorized: analytics is best-effort and also fires while logged
+    // out (e.g. welcome CTAs). A 401 here must never trip the global handler
+    // that force-redirects to /login — that bounce destroys the register flow.
+    void post(
+      "/events",
+      { name, props: props ?? {} },
+      { skipUnauthorized: true },
+    ).catch(() => {
       // analytics must never break a user flow
     });
   } catch {

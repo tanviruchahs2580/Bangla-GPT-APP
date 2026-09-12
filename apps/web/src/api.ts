@@ -101,6 +101,7 @@ async function parseSse(
 export async function api<T>(
   path: string,
   options: RequestInit = {},
+  opts?: { skipUnauthorized?: boolean },
 ): Promise<T> {
   const headers = new Headers(options.headers);
   if (options.body !== undefined && !(options.body instanceof FormData)) {
@@ -125,7 +126,11 @@ export async function api<T>(
     } catch {
       /* keep statusText */
     }
-    if (res.status === 401 && !AUTH_401_PATHS.some((p) => path.startsWith(p)))
+    if (
+      res.status === 401 &&
+      !opts?.skipUnauthorized &&
+      !AUTH_401_PATHS.some((p) => path.startsWith(p))
+    )
       onUnauthorized?.();
     throw new ApiError(res.status, parsed.message, parsed.code, parsed);
   }
@@ -133,11 +138,19 @@ export async function api<T>(
 }
 
 export const get = <T>(path: string) => api<T>(path);
-export const post = <T>(path: string, body?: unknown) =>
-  api<T>(path, {
-    method: "POST",
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+export const post = <T>(
+  path: string,
+  body?: unknown,
+  opts?: { skipUnauthorized?: boolean },
+) =>
+  api<T>(
+    path,
+    {
+      method: "POST",
+      body: body === undefined ? undefined : JSON.stringify(body),
+    },
+    opts,
+  );
 export const patch = <T>(path: string, body: unknown) =>
   api<T>(path, { method: "PATCH", body: JSON.stringify(body) });
 export const del = (path: string) => api<void>(path, { method: "DELETE" });

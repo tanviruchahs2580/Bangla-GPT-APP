@@ -38,9 +38,15 @@ describe("WelcomePage", () => {
       </MemoryRouter>,
     );
     fireEvent.click(screen.getByRole("link", { name: t("welcomeStart") }));
-    expect(apiMock.post).toHaveBeenCalledWith("/events", {
-      name: "welcome_cta",
-      props: { cta: "register" },
-    });
+    // Third arg: analytics must skip the global 401 handler so a logged-out
+    // 401 can never bounce the user to /login mid-funnel.
+    expect(apiMock.post).toHaveBeenCalledWith(
+      "/events",
+      {
+        name: "welcome_cta",
+        props: { cta: "register" },
+      },
+      { skipUnauthorized: true },
+    );
   });
 });
