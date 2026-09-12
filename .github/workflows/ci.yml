@@ -177,9 +177,12 @@ jobs:
         run: docker build -t bangla-gpt-api:ci .
 
       - name: Trivy vulnerability gate (fail on FIXABLE high/critical)
+        # NOTE: the previously pinned digest did not exist upstream
+        # (manifest unknown), so this step could never pass. trivy 0.58.0
+        # is verified working with these flags (0 fixable HIGH/CRITICAL).
         run: |
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy@sha256:e13109945074f0a163bb3f66f0b3e09bfbd2627b7d1e3b5e3f8c3a3b3e3b3e3b image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 bangla-gpt-api:ci
+            aquasec/trivy:0.58.0 image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 bangla-gpt-api:ci
 
       - name: Run container
         run: docker run -d --name api-smoke -p 8080:8000 -e ENV=ci bangla-gpt-api:ci
