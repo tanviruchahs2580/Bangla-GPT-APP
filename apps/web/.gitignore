@@ -6,3 +6,5 @@ dist
 # Capacitor native scaffolds (regenerate with: npx cap add android)
 android/
 ios/
+.vercel
+.env*
