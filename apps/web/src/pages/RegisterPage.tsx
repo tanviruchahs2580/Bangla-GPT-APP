@@ -5,6 +5,7 @@ import { friendlyError, type ErrorCopy } from "../errors";
 import { t } from "../i18n";
 import { Button, Card } from "../components/ui";
 import { BrandMark } from "../components/BrandMark";
+import { BadgeCheck, BookOpenCheck, CloudOff } from "lucide-react";
 
 export default function RegisterPage() {
   const { setMe } = useAuth();
@@ -54,11 +55,34 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="splash">
-      <div className="splash-logo" aria-hidden>
-        <BrandMark size={72} />
-      </div>
-      <h1>{t("appName")}</h1>
+    <div className="splash auth-shell">
+      <section className="auth-brand">
+        <div className="auth-brand-head">
+          <span className="auth-brand-logo" aria-hidden>
+            <BrandMark size={64} />
+          </span>
+          <div>
+            <p className="auth-brand-kicker">{t("landingKicker")}</p>
+            <h1 className="auth-brand-title">{t("appName")}</h1>
+            <p className="auth-brand-sub">{t("welcomeTagline")}</p>
+          </div>
+        </div>
+        <ul className="auth-brand-list">
+          <li>
+            <BadgeCheck size={18} aria-hidden />
+            <span>{t("trustNctb")}</span>
+          </li>
+          <li>
+            <BookOpenCheck size={18} aria-hidden />
+            <span>{t("trustAi")}</span>
+          </li>
+          <li>
+            <CloudOff size={18} aria-hidden />
+            <span>{t("trustOffline")}</span>
+          </li>
+        </ul>
+        <p className="auth-brand-note muted">{t("authBrandNote")}</p>
+      </section>
       <Card className="auth-card">
         <h2>{t("register")}</h2>
         <form onSubmit={submit}>

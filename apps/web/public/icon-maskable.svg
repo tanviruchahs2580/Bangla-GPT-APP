@@ -5,11 +5,28 @@
       <stop offset="55%" stop-color="#166534"/>
       <stop offset="100%" stop-color="#052e16"/>
     </linearGradient>
+    <linearGradient id="s" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fde68a"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
   </defs>
   <rect width="512" height="512" fill="url(#g)"/>
-  <g fill="none" stroke="#ffffff" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" opacity="0.95">
-    <path d="M256 132 L132 176 v156 l124 -42 124 42 V176 Z"/>
-    <path d="M256 132 v156" opacity="0.85"/>
+  <g transform="translate(256 256) scale(0.75) translate(-256 -256)">
+    <g fill="url(#s)">
+      <path d="M256 92 C232 136 227.2 187.2 256 238.4 C284.8 187.2 280 136 256 92 Z"/>
+      <path d="M203.2 136 C208 182.4 225.6 214.4 256 236.8 C244.8 188.8 227.2 156.8 203.2 136 Z" opacity="0.92"/>
+      <path d="M308.8 136 C304 182.4 286.4 214.4 256 236.8 C267.2 188.8 284.8 156.8 308.8 136 Z" opacity="0.92"/>
+      <path d="M161.6 177.6 C177.6 209.6 206.4 233.6 256 246.4 C235.2 204.8 203.2 184 161.6 177.6 Z" opacity="0.8"/>
+      <path d="M350.4 177.6 C334.4 209.6 305.6 233.6 256 246.4 C276.8 204.8 308.8 184 350.4 177.6 Z" opacity="0.8"/>
+    </g>
+    <path d="M380.8 73.6 l12 31.2 31.2 12 -31.2 12 -12 31.2 -12 -31.2 -31.2 -12 31.2 -12 Z" fill="#ffffff" opacity="0.95"/>
+    <g fill="#ffffff" opacity="0.97">
+      <path d="M256 307.2 C222.4 283.2 172.8 276.8 116 288 L116 395.2 C172.8 384 222.4 390.4 256 416 Z"/>
+      <path d="M256 307.2 C289.6 283.2 339.2 276.8 396 288 L396 395.2 C339.2 384 289.6 390.4 256 416 Z"/>
+    </g>
+    <g fill="none" stroke="#166534" stroke-width="10.4" stroke-linecap="round" opacity="0.35">
+      <path d="M144 321.6 C187.2 315.2 224 320.8 256 339.2"/>
+      <path d="M368 321.6 C324.8 315.2 288 320.8 256 339.2"/>
+    </g>
   </g>
-  <text x="256" y="420" font-family="'Noto Sans Bengali','Hind Siliguri',sans-serif" font-size="120" font-weight="800" fill="#ffffff" text-anchor="middle">বাং</text>
 </svg>
