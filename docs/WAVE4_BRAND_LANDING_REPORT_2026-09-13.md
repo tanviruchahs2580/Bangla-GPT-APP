@@ -93,7 +93,34 @@ Live stack = `web-preview` docker container (nginx, port 8081, network `bgpt-liv
 
 ## 9. Recommendations (not done — product decisions)
 
-- Bump release version + commit when the owner is satisfied (deliberately not done).
 - Named Cloudflare tunnel / real hosting for a stable public URL.
 - Regenerate Android splash drawables (brand-aligned splash screens) in a future wave.
 - Promote the axe sweep to CI (carried over from the previous wave).
+
+---
+
+## 10. CI/CD pipeline execution (owner-authorized, 2026-09-13)
+
+Strict SOP followed: full gate re-run → credentials verified → version bump → conventional commit → push → CI watched → tag → release watched → post-pipeline live verification.
+
+| Stage | Run | Result |
+|---|---|---|
+| Repository Sanity (`push` main) | 34749397028 | ✅ success (14s) |
+| Eval gate — golden-set regression (`push` main) | 34749397008 | ✅ success (35s) |
+| API CI — py3.11, py3.12, Postgres, golden-eval, web (tsc+build), docker smoke | 34749397164 | ✅ success, **6/6 jobs** (3m53s) |
+| Commit | `7acf1fb` `feat(web): WAVE-4 … (release 0.9.0)` | 29 files, +933/−124 |
+| Tag | `v0.9.0` (annotated) → pushed | ✅ |
+| Release & Deploy — Build & push API image | 34750126703 | ✅ `ghcr.io/tanviruchahs2580/bangla-gpt-app/api:v0.9.0` (+`latest`) @ `sha256:88504d86…` |
+| Release & Deploy — Build & push Web image (`VITE_API_BASE=/api`) | 34750126703 | ✅ `ghcr.io/tanviruchahs2580/bangla-gpt-app/web:v0.9.0` (+`latest`) @ `sha256:0b46a077…` |
+| Release & Deploy — SSH deploy | skipped by design | `vars.DEPLOY_ENABLED != 'true'` (documented clean-skip; no production host configured) |
+
+**Pipeline notes:**
+
+1. The tag-push triggered run (34749563805) sat in GitHub's runner queue for 16+ minutes with zero jobs materialized (platform-side queue glitch; previous releases ran in ~2 min). Mitigated by `gh workflow run release.yml --ref v0.9.0` (workflow_dispatch on the same tag ref, same commit, same artifacts). The queued zombie entry eventually resolved on GitHub's side without producing builds.
+2. `package-lock.json` version field (stale at 0.7.0 from earlier waves) was resynced to 0.9.0 — 2-line diff, zero dependency change.
+3. GHCR images cannot be pulled with the local `gh` token (no `read:packages` scope); publication is proven by the successful `push: true` buildx steps + manifest digests above. Packages inherit private visibility by default — if a host deploy ever needs an anonymous pull, flip the package to public in GitHub → Packages settings.
+
+**Post-pipeline live verification (as a user, on the public tunnel):**
+
+- `web-preview` (healthy) + `api-live` (healthy); local `:8081` **and** the tunnel both serve `assets/index-o7564-N7.js` — identical to the committed build; `/api/health` 200 through both.
+- Browser pass on the tunnel: landing (bn) → UI login with the student credential → `/student` home with live progress (20% avg, 1-day streak from the earlier quiz) → **zero console errors**. Evidence: `docs/uiux_renovation_evidence/wave4/after/final-tunnel-student-home.png`.
