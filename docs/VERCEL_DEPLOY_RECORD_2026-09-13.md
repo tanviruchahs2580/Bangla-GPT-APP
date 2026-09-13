@@ -49,11 +49,20 @@ Evidence: `docs/uiux_renovation_evidence/vercel/vercel-student-home.png`
 4. LLM provider on the live API is `mock` — grounded canned answers, no external AI key
    needed. Wire `LLM_PROVIDER`/key in the API environment to enable real AI responses.
 
-## Test accounts (all verified working)
+## Test accounts
+
+**Fixed demo credentials (work on every domain — one shared API/database):**
 
 | Role | Email | Password |
 |---|---|---|
-| Student (has progress data) | `wave4_1789289768166@example.com` | `StrongPass123!` |
-| Teacher | `renuqa_teacher@example.com` | `StrongPass123!` |
-| Student | `beforeqa_1789260126@example.com` | `StrongPass123!` |
-| Student (created on Vercel) | `vercel_1789304870801@example.com` | `StrongPass123!` |
+| Student (class 6) | `student@demo.com` | `Demo@1234` |
+| Teacher | `teacher@demo.com` | `Demo@1234` |
+| Parent | `parent@demo.com` | `Demo@1234` |
+
+Verified via API on all three entry points (direct :8000, Vercel `/api` proxy, tunnel
+proxy) and via UI login on the Vercel domain (teacher dashboard + student home render,
+zero console errors).
+
+Earlier QA accounts (also valid, same password `StrongPass123!`): `wave4_1789289768166@example.com`
+(student with progress data), `renuqa_teacher@example.com`, `beforeqa_1789260126@example.com`,
+`vercel_1789304870801@example.com`.
