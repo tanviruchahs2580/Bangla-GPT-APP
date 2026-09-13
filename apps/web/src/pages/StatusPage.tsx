@@ -39,7 +39,7 @@ export default function StatusPage() {
   const ok = data?.status === "ok";
 
   return (
-    <div className="card" style={{ maxWidth: 680, margin: "40px auto" }}>
+    <div className="card card-narrow">
       <h2>{t("statusPage")}</h2>
       {error && (
         <p className="error" role="alert">
@@ -51,13 +51,7 @@ export default function StatusPage() {
         <>
           <div
             role="status"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              fontWeight: 700,
-              color: ok ? "var(--ok, #178a4c)" : "var(--warn, #b3541e)",
-            }}
+            className={ok ? "status-hero" : "status-hero degraded"}
           >
             {ok ? (
               <CheckCircle2 size={20} aria-hidden />
@@ -66,28 +60,16 @@ export default function StatusPage() {
             )}
             {ok ? t("statusAllOk") : t("statusDegraded")}
           </div>
-          <ul style={{ listStyle: "none", padding: 0 }}>
+          <ul className="status-list">
             {data.components.map((c) => (
-              <li
-                key={c.name}
-                style={{
-                  display: "flex",
-                  gap: 8,
-                  alignItems: "baseline",
-                  padding: "6px 0",
-                }}
-              >
+              <li key={c.name} className="status-item">
                 {c.ok ? (
-                  <CheckCircle2
-                    size={16}
-                    aria-hidden
-                    style={{ color: "var(--ok, #178a4c)" }}
-                  />
+                  <CheckCircle2 size={16} aria-hidden className="status-ok" />
                 ) : (
                   <AlertTriangle
                     size={16}
                     aria-hidden
-                    style={{ color: "var(--warn, #b3541e)" }}
+                    className="status-warn"
                   />
                 )}
                 <strong>{c.name}</strong>

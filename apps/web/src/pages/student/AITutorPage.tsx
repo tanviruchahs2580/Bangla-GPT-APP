@@ -39,10 +39,11 @@ import { SafeMarkdownLazy as SafeMarkdown } from "../../lib/safeMarkdownLazy";
 import { parseStructuredAnswer } from "../../lib/structuredAnswer";
 import { SECTION } from "../../lib/structuredAnswer";
 
-const SUBJECTS = [
-  { value: "science", label: "বিজ্ঞান" },
-  { value: "mathematics", label: "গণিত" },
-  { value: "bangla", label: "বাংলা" },
+// RENO: labels from i18n, evaluated per render (lang switch remounts).
+const subjectOptions = () => [
+  { value: "science", label: t("subjectScience") },
+  { value: "mathematics", label: t("subjectMath") },
+  { value: "bangla", label: t("subjectBangla") },
 ];
 
 // Wave 2: explicit teaching strategies accepted by ChatSendRequest.strategy.
@@ -118,7 +119,7 @@ export default function AITutorPage() {
       );
       setMessages(msgs);
     } catch {
-      setError("লোড করা যায়নি");
+      setError(t("loadFailed"));
     }
   }, []);
 
@@ -128,7 +129,7 @@ export default function AITutorPage() {
       await refetchConvs();
       await loadConversation(res.id);
     } catch {
-      setError("নতুন চ্যাট শুরু করা যায়নি");
+      setError(t("newChatFailed"));
     }
   }, [loadConversation, refetchConvs]);
 
@@ -150,7 +151,7 @@ export default function AITutorPage() {
           setConversationId(id);
           await refetchConvs();
         } catch {
-          setError("নতুন চ্যাট শুরু করা যায়নি");
+          setError(t("newChatFailed"));
           return;
         }
       }
@@ -378,7 +379,7 @@ export default function AITutorPage() {
       )}
 
       <div className="chips chips-gap">
-        {SUBJECTS.map((s) => (
+        {subjectOptions().map((s) => (
           <button
             key={s.value}
             className={subject === s.value ? "chip active" : "chip"}
@@ -507,16 +508,25 @@ export default function AITutorPage() {
               <div className="empty-title">{t("emptyChatTitle")}</div>
               <p className="muted">{t("emptyChatSub")}</p>
               <div className="suggest-row">
-                {[t("suggestQ1"), t("suggestQ2"), t("suggestQ3")].map((q) => (
-                  <button
-                    key={q}
-                    type="button"
-                    className="suggest-chip"
-                    onClick={() => setInput(q)}
-                  >
-                    {q}
-                  </button>
-                ))}
+                {[t("suggestTeach"), t("suggestSolve"), t("suggestQuizMe")].map(
+                  (q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      className="suggest-chip"
+                      onClick={() => setInput(q)}
+                    >
+                      {q}
+                    </button>
+                  ),
+                )}
+                <button
+                  type="button"
+                  className="suggest-chip suggest-chip-image"
+                  onClick={() => fileRef.current?.click()}
+                >
+                  {t("suggestImage")}
+                </button>
               </div>
             </div>
           )}
@@ -573,12 +583,13 @@ export default function AITutorPage() {
                     <span className="stream-cursor" aria-hidden />
                   )}
                 </div>
-                {m.role === "assistant" &&
-                  i === messages.length - 1 &&
-                  !streaming &&
-                  m.grounded && (
+                {!streaming &&
+                  m.role === "assistant" &&
+                  m.grounded &&
+                  m.id !== 0 && (
+                    // WP-DR smart action bar: one obvious row under every answer.
                     <div
-                      className="chips chips-gap"
+                      className="chips chips-gap action-bar"
                       role="group"
                       aria-label={t("quickFollowups")}
                     >
@@ -602,8 +613,30 @@ export default function AITutorPage() {
                       >
                         {t("chipQuiz")}
                       </button>
+                      <button
+                        className="chip"
+                        onClick={() => navigate("/student/quiz")}
+                      >
+                        {t("actionPractice")}
+                      </button>
                     </div>
                   )}
+                {m.role === "assistant" && m.confidence != null && (
+                  <div className="confidence-row">
+                    <Badge tone={m.confidence >= 0.6 ? "ok" : "warn"}>
+                      {t("confidenceBadge").replace(
+                        "{pct}",
+                        String(Math.round(m.confidence * 100)),
+                      )}
+                    </Badge>
+                    {/* WP-DR low-confidence state: distinct, not alarming. */}
+                    {m.confidence < 0.6 && (
+                      <p className="low-conf-hint" role="status">
+                        {t("lowConfidenceHint")}
+                      </p>
+                    )}
+                  </div>
+                )}
                 {m.role === "assistant" &&
                   m.sources &&
                   m.sources.length > 0 && (
@@ -613,14 +646,6 @@ export default function AITutorPage() {
                       ) : (
                         <Badge tone="teal">
                           <Check size={12} aria-hidden /> {t("supportedBadge")}
-                        </Badge>
-                      )}
-                      {m.confidence != null && (
-                        <Badge tone={m.confidence >= 0.6 ? "ok" : "warn"}>
-                          {t("confidenceBadge").replace(
-                            "{pct}",
-                            String(Math.round(m.confidence * 100)),
-                          )}
                         </Badge>
                       )}
                       <div className="row-flex source-row">
@@ -739,19 +764,47 @@ export default function AITutorPage() {
           ))}
         </div>
         {image && (
-          <div className="row-flex attach-row">
-            <img
-              src={`data:${image.mime_type};base64,${image.data_base64}`}
-              alt=""
-              className="attach-preview"
-            />
-            <button
-              className="icon-btn rate-btn"
-              aria-label={t("removeImage")}
-              onClick={() => setImage(null)}
+          <div className="attach-row attach-flow">
+            <div className="row-flex">
+              <img
+                src={`data:${image.mime_type};base64,${image.data_base64}`}
+                alt=""
+                className="attach-preview"
+              />
+              <button
+                className="icon-btn rate-btn"
+                aria-label={t("removeImage")}
+                onClick={() => setImage(null)}
+              >
+                <X size={14} aria-hidden />
+              </button>
+            </div>
+            {/* WP-DR image-question path: capture → preview → pick intent. */}
+            <div
+              className="chips attach-intents"
+              role="group"
+              aria-label={t("imgPromptTitle")}
             >
-              <X size={14} aria-hidden />
-            </button>
+              <span className="muted muted-sm attach-intent-label">
+                {t("imgPromptTitle")}
+              </span>
+              {(
+                [
+                  ["imgSolve", "imgSolve"],
+                  ["imgExplain", "imgExplain"],
+                  ["imgCheck", "imgCheck"],
+                  ["imgSteps", "imgSteps"],
+                ] as const
+              ).map(([key]) => (
+                <button
+                  key={key}
+                  className="chip"
+                  onClick={() => void send(t(key))}
+                >
+                  {t(key)}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 

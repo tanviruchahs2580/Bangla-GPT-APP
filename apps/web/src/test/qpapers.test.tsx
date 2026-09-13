@@ -1,7 +1,8 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import TeacherDashboard from "../pages/TeacherDashboard";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import CreatePage from "../pages/teacher/CreatePage";
 import { t } from "../i18n";
 
 const apiMock = vi.hoisted(() => ({
@@ -15,6 +16,16 @@ vi.mock("../api", async (importOriginal) => ({
   apiBase: "/api",
   getToken: () => "tok",
 }));
+
+function renderPage() {
+  return render(
+    <MemoryRouter initialEntries={["/teacher/create?kind=question_paper"]}>
+      <Routes>
+        <Route path="/teacher/create" element={<CreatePage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
 
 const ROOMS = [{ id: 1, class_level: 6, section: "GEN", student_count: 2 }];
 
@@ -101,10 +112,10 @@ beforeEach(() => {
 });
 
 async function openQpCard(user: ReturnType<typeof userEvent.setup>) {
-  render(<TeacherDashboard />);
-  await screen.findByText(t("qpTitle"));
+  renderPage();
+  await screen.findByLabelText(t("qpExamType"));
   await user.type(screen.getByLabelText(t("qpExamType")), "Exam 2026");
-  await user.type(screen.getByLabelText(t("chapter")), "kosh, bol");
+  await user.type(screen.getByLabelText(t("qpChaptersLabel")), "kosh, bol");
   await user.click(screen.getByRole("button", { name: t("qpGenerate") }));
   await screen.findByText("TEXT q1");
 }

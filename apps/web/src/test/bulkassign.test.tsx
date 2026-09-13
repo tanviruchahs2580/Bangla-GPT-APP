@@ -1,7 +1,8 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import TeacherDashboard from "../pages/TeacherDashboard";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import AssessmentsPage from "../pages/teacher/AssessmentsPage";
 import { t } from "../i18n";
 import type { AssignmentProgressRow, AssignmentRow } from "../types";
 
@@ -16,6 +17,16 @@ vi.mock("../api", async (importOriginal) => ({
   apiBase: "/api",
   getToken: () => "tok",
 }));
+
+function renderPage() {
+  return render(
+    <MemoryRouter initialEntries={["/teacher/assessments?tab=assignments"]}>
+      <Routes>
+        <Route path="/teacher/assessments" element={<AssessmentsPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
 
 const ROOMS = [{ id: 1, class_level: 6, section: "GEN", student_count: 2 }];
 
@@ -108,7 +119,7 @@ beforeEach(() => {
 describe("S2.8 bulk assign card", () => {
   it("multi-selects students, assigns one quiz with a due date", async () => {
     const user = userEvent.setup();
-    render(<TeacherDashboard />);
+    renderPage();
     await screen.findByText("Rahim");
 
     expect(screen.getByText(t("baNone"))).toBeInTheDocument();
@@ -160,13 +171,17 @@ describe("S2.8 bulk assign card", () => {
         return Promise.resolve(structuredClone(EMPTY_ANALYTICS));
       return Promise.resolve(null);
     });
-    render(<TeacherDashboard />);
+    renderPage();
     await screen.findByText("Rahim");
 
     const before = apiMock.get.mock.calls.length;
     await user.click(screen.getByRole("button", { name: t("baProgress") }));
     expect(apiMock.get).toHaveBeenCalledWith("/teacher/assignments/5/progress");
-    expect(await screen.findByText("80%")).toBeInTheDocument();
+    // WP-DR: result header now shows avg/high/low stats next to the table,
+    // so the score text legitimately appears more than once.
+    expect((await screen.findAllByText("80%")).length).toBeGreaterThanOrEqual(
+      1,
+    );
     expect(screen.getByText(t("baDone"))).toBeInTheDocument();
     expect(screen.getByText(t("baPending"))).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: t("baProgress") }));

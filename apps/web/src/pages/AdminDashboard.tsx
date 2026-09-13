@@ -229,23 +229,23 @@ export default function AdminDashboard() {
           <div className="stat-row">
             <div className="stat">
               <div className="num">{overview.users_total}</div>
-              <div className="lbl">মোট</div>
+              <div className="lbl">{t("statTotal")}</div>
             </div>
             <div className="stat">
               <div className="num">{overview.students}</div>
-              <div className="lbl">শিক্ষার্থী</div>
+              <div className="lbl">{t("roleStudent")}</div>
             </div>
             <div className="stat">
               <div className="num">{overview.teachers}</div>
-              <div className="lbl">শিক্ষক</div>
+              <div className="lbl">{t("roleTeacher")}</div>
             </div>
             <div className="stat">
               <div className="num">{overview.parents}</div>
-              <div className="lbl">অভিভাবক</div>
+              <div className="lbl">{t("roleParent")}</div>
             </div>
             <div className="stat">
               <div className="num">{overview.quiz_attempts_graded}</div>
-              <div className="lbl">কুইজ</div>
+              <div className="lbl">{t("statQuizzes")}</div>
             </div>
           </div>
         )}
@@ -270,8 +270,8 @@ export default function AdminDashboard() {
               <p className="muted">{t("admNoRefusals")}</p>
             ) : (
               <>
-                <div className="table-scroll">
-                  <table>
+                <div className="table-wrap">
+                  <table className="data">
                     <thead>
                       <tr>
                         <th scope="col">{t("admRefusalReason")}</th>
@@ -290,7 +290,7 @@ export default function AdminDashboard() {
                 </div>
                 <p className="muted">
                   {Object.entries(refusals.by_class).map(([cls, n]) => (
-                    <span key={cls} style={{ marginRight: 10 }}>
+                    <span key={cls} className="mr-2">
                       {`${t("admRefusalClass")} ${cls}: ${n}`}
                     </span>
                   ))}
@@ -310,7 +310,7 @@ export default function AdminDashboard() {
       {/* S5.10: feedback triage queue (reporter identity withheld, R11). */}
       <div className="card">
         <h2>{t("admTriage")}</h2>
-        <div className="row-flex" style={{ gap: 8, marginBottom: 8 }}>
+        <div className="row-flex gap-2 mb-2">
           <button
             className={
               triageStatus === "open" ? "primary small" : "secondary small"
@@ -345,8 +345,8 @@ export default function AdminDashboard() {
         ) : queue.rows.length === 0 ? (
           <p className="muted">{t("admNoFeedback")}</p>
         ) : (
-          <div className="table-scroll">
-            <table>
+          <div className="table-wrap">
+            <table className="data">
               <thead>
                 <tr>
                   <th scope="col">#</th>
@@ -365,7 +365,7 @@ export default function AdminDashboard() {
                     <td>{row.id}</td>
                     <td>{row.role}</td>
                     <td>{row.rating > 0 ? "+" : row.rating < 0 ? "−" : "·"}</td>
-                    <td style={{ whiteSpace: "normal", maxWidth: 320 }}>
+                    <td className="cell-wrap">
                       {row.comment ?? "—"}
                       {row.note && (
                         <div className="muted">
@@ -439,8 +439,8 @@ export default function AdminDashboard() {
         {schools.length === 0 ? (
           <p className="muted">{t("admNoSchools")}</p>
         ) : (
-          <div className="table-scroll">
-            <table>
+          <div className="table-wrap">
+            <table className="data">
               <thead>
                 <tr>
                   <th scope="col">{t("admNewSchool")}</th>
@@ -455,7 +455,7 @@ export default function AdminDashboard() {
               <tbody>
                 {schools.map((s) => (
                   <tr key={s.id}>
-                    <td style={{ whiteSpace: "normal" }}>
+                    <td className="cell-wrap-sm">
                       <button
                         className="small secondary"
                         onClick={() =>
@@ -502,8 +502,8 @@ export default function AdminDashboard() {
           </div>
         )}
         {selSchool !== null && (
-          <div className="table-scroll">
-            <table>
+          <div className="table-wrap">
+            <table className="data">
               <caption>{t("admInvites")}</caption>
               <thead>
                 <tr>
@@ -542,8 +542,8 @@ export default function AdminDashboard() {
         {versions.length === 0 ? (
           <p className="muted">{t("admNoVersions")}</p>
         ) : (
-          <div className="table-scroll">
-            <table>
+          <div className="table-wrap">
+            <table className="data">
               <thead>
                 <tr>
                   <th scope="col">{t("admSubject")}</th>
@@ -559,12 +559,12 @@ export default function AdminDashboard() {
                     <td>
                       {v.subject} · {v.class_level}
                     </td>
-                    <td style={{ whiteSpace: "normal" }}>{v.chapter}</td>
+                    <td className="cell-wrap-sm">{v.chapter}</td>
                     <td>
                       v{v.current_version} ({v.versions_total})
                     </td>
                     <td>{v.source}</td>
-                    <td style={{ whiteSpace: "normal" }}>
+                    <td className="cell-wrap-sm">
                       {v.updated_by_email ?? "—"}
                     </td>
                   </tr>
@@ -612,8 +612,8 @@ export default function AdminDashboard() {
           </button>
         </form>
 
-        <div className="table-scroll">
-          <table>
+        <div className="table-wrap">
+          <table className="data">
             <thead>
               <tr>
                 <th scope="col">#</th>
@@ -626,7 +626,7 @@ export default function AdminDashboard() {
               {page.items.map((u) => (
                 <tr key={u.id}>
                   <td>{u.id}</td>
-                  <td style={{ whiteSpace: "normal" }}>{u.email}</td>
+                  <td className="cell-wrap-sm">{u.email}</td>
                   <td>{u.role}</td>
                   <td>
                     <select

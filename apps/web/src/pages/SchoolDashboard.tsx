@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { get } from "../api";
-import { Badge } from "../components/ui";
+import { Badge, Skeleton } from "../components/ui";
 import { SchoolSections } from "../components/school/SchoolSections";
 import { t } from "../i18n";
 import type { SchoolHealth } from "../types";
@@ -20,8 +20,8 @@ export default function SchoolDashboard() {
     return (
       <main className="container" aria-live="polite">
         <p className="muted">{t("loading")}</p>
-        <div className="skeleton" style={{ width: "60%" }} />
-        <div className="skeleton" style={{ width: "40%" }} />
+        <Skeleton w="60%" />
+        <Skeleton w="40%" />
       </main>
     );
   }

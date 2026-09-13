@@ -112,6 +112,7 @@ export default function ParentDashboard() {
             <label htmlFor="icode">{t("inviteCodeLabel")}</label>
             <input
               id="icode"
+              className="input"
               value={code}
               placeholder="BGPT-XXXXXXXX"
               required
@@ -119,7 +120,7 @@ export default function ParentDashboard() {
               onChange={(e) => setCode(e.target.value)}
             />
           </div>
-          <div style={{ alignSelf: "end" }}>
+          <div className="align-end">
             <button className="primary" type="submit" disabled={busy}>
               {busy ? <span className="spinner" aria-hidden /> : t("redeem")}
             </button>
@@ -142,8 +143,8 @@ export default function ParentDashboard() {
         {children.length === 0 ? (
           <p className="muted">—</p>
         ) : (
-          <div className="table-scroll">
-            <table>
+          <div className="table-wrap">
+            <table className="data">
               <thead>
                 <tr>
                   <th scope="col">#</th>
@@ -194,8 +195,8 @@ export default function ParentDashboard() {
             </div>
           </div>
           {progress.by_chapter.length > 0 && (
-            <div className="table-scroll">
-              <table>
+            <div className="table-wrap">
+              <table className="data">
                 <thead>
                   <tr>
                     <th scope="col">{t("chapter")}</th>
@@ -227,7 +228,7 @@ export default function ParentDashboard() {
       {selected !== null && activity && (
         <div className="card">
           <h2>{t("activityTitle")}</h2>
-          <p className="muted" style={{ marginTop: 0 }}>
+          <p className="muted m-0">
             {t("streakLabel", { days: activity.streak })} · {t("activityHint")}
           </p>
           <div
@@ -260,10 +261,9 @@ export default function ParentDashboard() {
             {report.name} · {t("progressTitle")}
           </h2>
           <div
-            className="chips"
+            className="chips mb-2"
             role="group"
             aria-label={t("progressTitle")}
-            style={{ marginBottom: "var(--space-2)" }}
           >
             <button
               className={`chip${period === "weekly" ? " active" : ""}`}
@@ -301,7 +301,7 @@ export default function ParentDashboard() {
             </div>
           </div>
           {report.weak_chapters.length > 0 && (
-            <p style={{ margin: "8px 0 0" }}>
+            <p className="mt-2 m-0">
               <span className="muted">{t("reportWeak")}: </span>
               {report.weak_chapters.map((c) => (
                 <span key={c} className="badge weak">
@@ -312,7 +312,7 @@ export default function ParentDashboard() {
             </p>
           )}
           {report.strengths.length > 0 && (
-            <p style={{ margin: "8px 0 0" }}>
+            <p className="mt-2 m-0">
               <span className="muted">{t("reportStrengths")}: </span>
               {report.strengths.map((c) => (
                 <span key={c} className="badge ok">
@@ -322,7 +322,7 @@ export default function ParentDashboard() {
               ))}
             </p>
           )}
-          <p className="muted" style={{ margin: "8px 0 0" }}>
+          <p className="muted mt-2 m-0">
             {t("reportSuggestion")}: {suggestionSentence(report)}
           </p>
         </div>

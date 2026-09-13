@@ -181,9 +181,7 @@ export function SchoolSections() {
       {analytics.data && (
         <section className="card" aria-label={t("anaTitle")}>
           <h2>{t("anaTitle")}</h2>
-          <p className="muted" style={{ marginTop: 0 }}>
-            {analytics.data.days}d
-          </p>
+          <p className="muted m-0">{analytics.data.days}d</p>
           <div className="stat-grid">
             <div className="stat">
               <span className="stat-value">

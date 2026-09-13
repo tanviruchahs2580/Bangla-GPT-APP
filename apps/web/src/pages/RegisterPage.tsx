@@ -70,9 +70,9 @@ export default function RegisterPage() {
               value={role}
               onChange={(e) => setRole(e.target.value as typeof role)}
             >
-              <option value="student">শিক্ষার্থী</option>
-              <option value="teacher">শিক্ষক</option>
-              <option value="parent">অভিভাবক</option>
+              <option value="student">{t("roleStudent")}</option>
+              <option value="teacher">{t("roleTeacher")}</option>
+              <option value="parent">{t("roleParent")}</option>
             </select>
           </div>
           <div className="field">

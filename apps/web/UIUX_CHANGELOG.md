@@ -279,3 +279,109 @@ Commits (pushed once to `origin/main`):
   skipped by design (`DEPLOY_ENABLED` unset; no prod secrets configured).
 - Live stack re-synced to final HEAD (rebuilt + recreated images, volume
   preserved) and re-verified: /health, /api proxy, markers, funnel.
+
+---
+
+# RENO — World-class polish pass (post-WP-DR, 2026-09-13)
+
+> Scope: frontend only (`apps/web/src`). No commit/push/CI executed (standing
+> directive). Backend byte-untouched. Features/content unchanged — polish,
+> consistency and completion only. Baseline: WP-DR working tree (tsc clean,
+> 41 files / 115 tests green, live stack synced at `index-Ba0QY06e.js`).
+
+## RENO-1 — Design-system hardening
+- **Broken CSS comment repaired**: the "Legacy vocabulary compat layer"
+  comment closed early at `.btn-*/`, orphaning parser garbage that consumed
+  the `.page-title` rule. Comment re-wrapped; rule restored.
+- **Elevation tokens consolidated**: 3 overlapping sets (`--elev-*`,
+  `--shadow-sm/md/lg`, `--shadow-1/2/3`) → one canonical `--elev-1/2/3`
+  scale; legacy names are `var()` aliases (dark block now overrides 3 tokens
+  instead of 9). All prior usages resolve identically.
+- **Breakpoints unified**: stray `min-width: 768px` (create-grid) joined the
+  760px step. Scale is now 480 / 560 / 760 / 1024.
+- **New primitives in `ui.tsx`**: `Modal` (portal, focus trap, Esc,
+  backdrop close, scroll lock, focus restore), `Skeleton`, `Field`,
+  `Segmented`, `Avatar` — token-only CSS in the `RENO` section
+  (`.modal-wide/.modal-close/.modal-footer`, `.field-hint`, `.avatar*`).
+- **Reactive locale**: `setLang` no longer needs `navigate(0)` — `LangRoot`
+  in `main.tsx` remounts the tree in place on lang change (instant switch,
+  no network reload, PWA-safe). Removed `navigate(0)` from AppShell,
+  MePage (language + dark-mode toggle now pure re-render) and
+  TeacherProfilePage.
+- **Spinner** default label `i18n`-ized (`t("loading")`); ErrorBoundary
+  button uses `t("retry")`.
+
+## RENO-2 — Inline-style elimination (token utilities)
+- Added semantic micro-utilities (all token-mapped): `.text-sm/.text-xs`,
+  `.mt-1..4/.mb-2/.mb-3/.m-0`, `.spread`, `.gap-1..4`, `.stack-sm`,
+  `.wrap-list`, `.badge-row`, `.profile-name`, `.invite-code`,
+  `.setting-label`, `.btn-start`, `.form-grid`, `.form-grid-span`,
+  `.field-inline`, `.w-min-field/.w-num/.w-num-lg/.w-90/.maxw-220`,
+  `.grow-field`, `.mono-block`, `.align-end`, `.status-*`, `.card-narrow`,
+  `.card-legal`, `.cell-wrap(-sm)`, `.mr-2`, `.block`.
+- Converted to 0 inline styles: **MePage (44→0), CreatePage (16→0),
+  CreateHub (16→0)**; teacher pages (Classes/Assessments/Analytics/Profile),
+  QPaperReviewPanel, AdminDashboard, ParentDashboard, StatusPage,
+  LegalPage, SchoolDashboard, AiQualityCard, SchoolSections converted.
+  Repo total `style={{}}` in pages/components: ~150 → ~5 (all dynamic
+  layout values like ProgressRing `--p`, reader font-scale, Stat widths —
+  theme values are never hardcoded).
+- **Bare form controls tokenized**: CreatePage flows and staff pages had
+  unstyled `<input>/<select>/<textarea>` (browser defaults); now
+  `.input/.select/.textarea` + `Field` wrappers.
+- **Legacy double bottom-nav indicator removed**: `.bnav-dot` (superseded
+  by the WP-04 pill) deleted from AppShell + CSS.
+- **`table-scroll` → `table-wrap` unification** (deferred WP known-issue):
+  14 wrappers across 5 files migrated to `.table-wrap` + `table.data`;
+  dead `.table-scroll` CSS block deleted.
+- **Staff sidebar consistency**: parent/admin/school links now use the same
+  `side-link` pattern with icons (LayoutDashboard/Activity) as teachers.
+
+## RENO-3 — i18n completeness (English toggle now honest)
+- Localized (bn text byte-identical, en added): role badges
+  (`roleStudent/...` + AdminDashboard stat labels), AITutorPage errors,
+  HomePage name fallback + **API subject values** (`tSubject()` helper:
+  science/mathematics/math/bangla → localized labels) used in HomePage,
+  QuizPage rows, CreateHub subject options, LearnPage reader buttons
+  (bookmark/stop/listen incl. aria-labels), RegisterPage role options,
+  LegalPage auth links, `errors.ts` (all 14 friendly-error strings flow
+  through i18n; legacy Bengali backend strings remain match keys).
+- Deliberately left as-is (content, not chrome): `lib/structuredAnswer.ts`
+  SECTION labels (parsing contract mirroring the API answer structure),
+  `lib/quizExplain.ts` tutor prompt lines (Bangla-first tutor input),
+  LegalPage bilingual legal body (product/legal content), language names
+  shown in their own language (`বাংলা` option).
+
+## RENO-4 — A11y & verification
+- New `test/axeSweep.test.tsx`: axe-core WCAG 2.1 A/AA sweep over student
+  home/practice/me + teacher home/classes/assessments/analytics/profile +
+  open Modal — **0 serious/critical violations**.
+- New `test/uiPrimitives.test.tsx` (8 tests): Modal focus trap/Esc/portal/
+  backdrop, Skeleton variants, Field wiring, Segmented tablist, Avatar,
+  i18n Spinner.
+- Gates at every step: `tsc` clean · prettier clean · **vitest 43 files /
+  126 tests green** (baseline 41/115 — count only grew) · `vite build` ok.
+
+## RENO-5 — Live sync + full QA (no CI/CD, docker only)
+- Rebuilt `bangla-gpt-web:preview` + recreated `web-preview` (network
+  `bgpt-live`, :8081, api-live untouched).
+- **Caught & fixed a deploy-tooling bug**: Git-Bash MSYS path mangling
+  turned `--build-arg VITE_API_BASE=/api` into `C:/Program Files/Git/api`,
+  baking a broken API base into the served bundle (login → `file://` fetch
+  → network error). Fixed with `MSYS_NO_PATHCONV=1`; re-verified.
+- **QA-found content bug fixed**: raw API subject values rendered in
+  student home ("science · শ্রেণি 6") → now localized ("বিজ্ঞান · শ্রেণি 6").
+  Re-gated (126/126), rebuilt, re-synced.
+- Final state: served bundle `index-C4XU3Z_2.js` **identical** to local
+  `dist/`; `/health` 200; `/api` proxy 200; PWA service worker safe
+  (network-first navigations); tunnel re-created (old ephemeral
+  trycloudflare URL had died *before* this work — "Tunnel not found" since
+  01:42) and serves the same bundle.
+- As-user browser QA (zero console errors everywhere): student
+  register→login→home→tutor (grounded refusal + low-confidence hint +
+  conversation persisted)→practice→learn→me; theme dark↔light and
+  language bn↔en **in-place** (no reload); conditional guardian-consent on
+  register; teacher register→all 6 pages (home/create/classes/assessments/
+  analytics/profile). API: `smoke.sh` all steps ✓, `e2e_user_journey.py`
+  **21/21** ✓.
+- Before/after screenshots: `docs/uiux_renovation_evidence/{before,after}/`.

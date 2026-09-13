@@ -8,11 +8,13 @@ import {
   ClipboardCheck,
   RefreshCcw,
   Repeat2,
+  Target,
 } from "lucide-react";
 import { get, post } from "../../api";
 import { track } from "../../lib/analytics";
 import type {
   AssignmentMine,
+  DashboardSummary,
   QuizResult,
   QuizStarted,
   ReteachCard,
@@ -25,14 +27,15 @@ import { buildExplainPayload, LAST_RESULT_KEY } from "../../lib/quizExplain";
 import { useAuth } from "../../AuthContext";
 import { Badge, Button, Card, ProgressRing, Stat } from "../../components/ui";
 import { friendlyError } from "../../errors";
-import { t } from "../../i18n";
+import { t, tSubject } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { celebrate } from "../../lib/confetti";
 
-const SUBJECTS = [
-  { value: "science", label: "বিজ্ঞান" },
-  { value: "mathematics", label: "গণিত" },
-  { value: "bangla", label: "বাংলা" },
+// RENO: labels from i18n, evaluated per render (lang switch remounts).
+const subjectOptions = () => [
+  { value: "science", label: t("subjectScience") },
+  { value: "mathematics", label: t("subjectMath") },
+  { value: "bangla", label: t("subjectBangla") },
 ];
 
 // S4.5: KG gap -> grounded re-teach card (textbook excerpt, never AI text).
@@ -70,7 +73,7 @@ export default function QuizPage() {
   const [number, setNumber] = useState<string>("5");
   // S1.4: the tutor's quiz chip preselects the subject via ?subject=.
   const [subject, setSubject] = useState<string>(
-    searchParams.get("subject") ?? SUBJECTS[0].value,
+    searchParams.get("subject") ?? subjectOptions()[0].value,
   );
   const [started, setStarted] = useState<QuizStarted | null>(null);
   const [answers, setAnswers] = useState<Record<number, number>>({});
@@ -84,22 +87,31 @@ export default function QuizPage() {
     queryFn: () => get<StudentProgress>(`/students/${me!.profile_id}/progress`),
     enabled: !!me?.profile_id && me.role === "student",
   });
+  const { data: dashboard } = useQuery({
+    queryKey: ["dashboard"],
+    queryFn: () => get<DashboardSummary>("/dashboard/summary"),
+    enabled: me?.role === "student",
+  });
 
   // S1.10: spaced-revision tab (SM-2-lite queue) with due badge.
-  const [tab, setTab] = useState<
-    "quiz" | "revision" | "shorttest" | "assigned"
-  >("quiz");
+  const [tab, setTab] = useState<"quiz" | "revision" | "assigned">("quiz");
   const { data: due, refetch: refetchDue } = useQuery({
     queryKey: ["revision-due"],
     queryFn: () => get<RevisionDue>("/revision/due"),
     enabled: me?.role === "student",
   });
-  // S2.5: teacher-assigned short tests (soft time window).
+  // S2.5 + S2.8 merged "assigned by teacher" list (short tests + bulk).
   const { data: stMine } = useQuery({
     queryKey: ["shorttests-mine"],
     queryFn: () => get<ShortTestMine[]>("/shorttests/mine"),
     enabled: me?.role === "student",
   });
+  const { data: asMine } = useQuery({
+    queryKey: ["assignments-mine"],
+    queryFn: () => get<AssignmentMine[]>("/assignments/mine"),
+    enabled: me?.role === "student",
+  });
+
   const openShortTest = (st: ShortTestMine) => {
     if (st.attempt_id === null) return;
     setStarted({
@@ -111,12 +123,6 @@ export default function QuizPage() {
     setCurrent(0);
     setResult(null);
   };
-  // S2.8: teacher bulk-assigned quizzes (shared question set + due date).
-  const { data: asMine } = useQuery({
-    queryKey: ["assignments-mine"],
-    queryFn: () => get<AssignmentMine[]>("/assignments/mine"),
-    enabled: me?.role === "student",
-  });
   const openAssigned = (a: AssignmentMine) => {
     if (a.done) return;
     setStarted({
@@ -157,21 +163,30 @@ export default function QuizPage() {
     }
   }, [searchParams]);
 
-  const start = async () => {
+  const start = async (opts?: {
+    subject?: string;
+    chapter?: string;
+    count?: number;
+  }) => {
     setBusy(true);
     setError(null);
+    const useSubject = opts?.subject ?? subject;
     try {
       const res = await post<QuizStarted>("/quizzes", {
         student_id: me?.profile_id,
         class_level: me?.class_level ?? 6,
-        subject: subject,
-        num_questions: Math.min(20, Math.max(1, Number(number) || 5)),
+        subject: useSubject,
+        ...(opts?.chapter ? { chapter: opts.chapter } : {}),
+        num_questions: Math.min(
+          20,
+          Math.max(1, Number(opts?.count ?? number) || 5),
+        ),
       });
       setStarted(res);
       setAnswers({});
       setCurrent(0);
       setResult(null);
-      track("quiz_started", { subject: subject, n: res.questions.length });
+      track("quiz_started", { subject: useSubject, n: res.questions.length });
     } catch (e) {
       setError(
         friendlyError((e as { rawDetail?: unknown }).rawDetail)?.text ??
@@ -285,13 +300,14 @@ export default function QuizPage() {
             <ReteachCards cards={result.reteach} />
           </div>
         )}
+        {/* one clear next step; everything else is secondary */}
         <div className="section-gap-top">
           <Button
             variant="primary"
             block
             onClick={() => {
               setResult(null);
-              start();
+              void start();
             }}
           >
             <RefreshCcw size={18} aria-hidden /> {t("startQuiz")}
@@ -309,7 +325,7 @@ export default function QuizPage() {
     return (
       <main className="shell-main">
         <section className="section-head">
-          <h2>{t("quiz")}</h2>
+          <h2>{t("practiceTitle")}</h2>
           <Badge>
             {current + 1}/{started.questions.length}
           </Badge>
@@ -377,21 +393,88 @@ export default function QuizPage() {
     );
   }
 
-  // ----- start screen -----
+  // ----- practice hub start screen -----
   const avg = progress?.avg_score_pct;
+  const weakChapters = progress?.weak_chapters ?? [];
+  const rec = dashboard?.recommendation;
+  const assigned: Array<
+    | { kind: "shorttest"; item: ShortTestMine }
+    | { kind: "bulk"; item: AssignmentMine }
+  > = [
+    ...(Array.isArray(stMine) ? stMine : []).map((item) => ({
+      kind: "shorttest" as const,
+      item,
+    })),
+    ...(Array.isArray(asMine) ? asMine : []).map((item) => ({
+      kind: "bulk" as const,
+      item,
+    })),
+  ].sort((a, b) => {
+    // open work first, then done/expired history
+    const openA = a.kind === "shorttest" ? !a.item.expired : !a.item.done;
+    const openB = b.kind === "shorttest" ? !b.item.expired : !b.item.done;
+    if (openA !== openB) return openA ? -1 : 1;
+    return 0;
+  });
+
   return (
     <main className="shell-main">
       <section className="section-head">
-        <h2>{t("quiz")}</h2>
+        <h2>{t("practiceTitle")}</h2>
       </section>
-      <div className="chips chips-gap" role="tablist" aria-label={t("quiz")}>
+
+      {/* 🎯 আমার দুর্বলতা — the most prominent entry, from the weakness rollup */}
+      <Card className="practice-weak-card card-featured">
+        <div className="row-flex">
+          <span className="quick-icon tile-warn" aria-hidden>
+            <Target size={22} />
+          </span>
+          <div className="row-main">
+            <div className="row-title">{t("weakPracticeTitle")}</div>
+            <div className="row-sub">{t("weakPracticeHint")}</div>
+            <div className="chips section-gap-top">
+              {weakChapters.length === 0 && (
+                <span className="muted muted-sm">{t("noWeakChapters")}</span>
+              )}
+              {weakChapters.slice(0, 4).map((w) => (
+                <span key={w} className="badge badge-warn">
+                  {w}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+        {rec?.chapter && (
+          <Button
+            variant="primary"
+            className="section-gap-top"
+            loading={busy}
+            onClick={() =>
+              void start({
+                subject: rec.subject ?? subject,
+                chapter: rec.chapter ?? undefined,
+                count: 3,
+              })
+            }
+          >
+            <Target size={18} aria-hidden /> {t("weakPracticeStart")}
+          </Button>
+        )}
+        {error && <p className="error section-gap-top">{error}</p>}
+      </Card>
+
+      <div
+        className="chips chips-gap"
+        role="tablist"
+        aria-label={t("practiceTitle")}
+      >
         <button
           role="tab"
           aria-selected={tab === "quiz"}
           className={cn("chip", tab === "quiz" && "active")}
           onClick={() => setTab("quiz")}
         >
-          {t("startQuiz")}
+          {t("chapterPracticeTab")}
         </button>
         <button
           role="tab"
@@ -406,27 +489,15 @@ export default function QuizPage() {
         </button>
         <button
           role="tab"
-          aria-selected={tab === "shorttest"}
-          className={cn("chip", tab === "shorttest" && "active")}
-          onClick={() => setTab("shorttest")}
-        >
-          <ClipboardCheck size={14} aria-hidden /> {t("stTitle")}
-          {stMine && stMine.length > 0 && (
-            <Badge tone="teal">{stMine.length}</Badge>
-          )}
-        </button>
-        <button
-          role="tab"
           aria-selected={tab === "assigned"}
           className={cn("chip", tab === "assigned" && "active")}
           onClick={() => setTab("assigned")}
         >
-          <ClipboardCheck size={14} aria-hidden /> {t("asTitle")}
-          {asMine && asMine.length > 0 && (
-            <Badge tone="teal">{asMine.length}</Badge>
-          )}
+          <ClipboardCheck size={14} aria-hidden /> {t("teacherAssignedTab")}
+          {assigned.length > 0 && <Badge tone="teal">{assigned.length}</Badge>}
         </button>
       </div>
+
       {tab === "revision" ? (
         <div className="stack">
           {due && due.items.length === 0 && (
@@ -459,66 +530,72 @@ export default function QuizPage() {
           ))}
           {error && <p className="error">{error}</p>}
         </div>
-      ) : tab === "shorttest" ? (
-        <div className="stack">
-          {(!stMine || stMine.length === 0) && (
-            <Card>
-              <p className="muted flush">{t("stEmpty")}</p>
-            </Card>
-          )}
-          {stMine?.map((st) => (
-            <Card key={st.id} className="row quiz-review-row">
-              <div className="row-main">
-                <div className="row-title">{st.chapter}</div>
-                <div className="row-sub">
-                  {st.subject} · {t("stMinutes", { n: st.duration_min })}
-                  {st.expired && <Badge tone="warn"> {t("stExpired")}</Badge>}
-                </div>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  className="section-gap-top"
-                  disabled={st.attempt_id === null}
-                  onClick={() => openShortTest(st)}
-                >
-                  {t("startQuiz")}
-                </Button>
-              </div>
-            </Card>
-          ))}
-        </div>
       ) : tab === "assigned" ? (
         <div className="stack">
-          {(!asMine || asMine.length === 0) && (
+          {assigned.length === 0 && (
             <Card>
-              <p className="muted flush">{t("baNone")}</p>
+              <p className="muted flush">{t("assignedEmpty")}</p>
             </Card>
           )}
-          {asMine?.map((a) => (
-            <Card key={a.id} className="row quiz-review-row">
-              <div className="row-main">
-                <div className="row-title">{a.chapter}</div>
-                <div className="row-sub">
-                  {a.subject} · {t("baDue")}:{" "}
-                  {new Date(a.due_at).toLocaleString()}
-                  {a.done ? (
-                    <Badge tone="ok"> {t("baDone")}</Badge>
-                  ) : a.overdue ? (
-                    <Badge tone="warn"> {t("baOverdue")}</Badge>
-                  ) : null}
+          {assigned.map(({ kind, item }) => {
+            if (kind === "shorttest") {
+              const st = item;
+              return (
+                <Card key={`st-${st.id}`} className="row quiz-review-row">
+                  <div className="row-main">
+                    <div className="row-title">
+                      <Badge tone="teal">{t("assignedShortTest")}</Badge>{" "}
+                      {st.chapter}
+                    </div>
+                    <div className="row-sub">
+                      {tSubject(st.subject)} ·{" "}
+                      {t("stMinutes", { n: st.duration_min })}
+                      {st.expired && (
+                        <Badge tone="warn"> {t("stExpired")}</Badge>
+                      )}
+                    </div>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      className="section-gap-top"
+                      disabled={st.attempt_id === null || st.expired}
+                      onClick={() => openShortTest(st)}
+                    >
+                      {t("startQuiz")}
+                    </Button>
+                  </div>
+                </Card>
+              );
+            }
+            const a = item;
+            return (
+              <Card key={`ba-${a.id}`} className="row quiz-review-row">
+                <div className="row-main">
+                  <div className="row-title">
+                    <Badge>{t("assignedBulk")}</Badge> {a.chapter}
+                  </div>
+                  <div className="row-sub">
+                    {tSubject(a.subject)} · {t("baDue")}:{" "}
+                    {new Date(a.due_at).toLocaleString()}
+                    {a.done ? (
+                      <Badge tone="ok"> {t("baDone")}</Badge>
+                    ) : a.overdue ? (
+                      <Badge tone="warn"> {t("baOverdue")}</Badge>
+                    ) : null}
+                  </div>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="section-gap-top"
+                    disabled={a.done}
+                    onClick={() => openAssigned(a)}
+                  >
+                    {t("startQuiz")}
+                  </Button>
                 </div>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  className="section-gap-top"
-                  disabled={a.done}
-                  onClick={() => openAssigned(a)}
-                >
-                  {t("startQuiz")}
-                </Button>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </div>
       ) : (
         <Card>
@@ -546,7 +623,7 @@ export default function QuizPage() {
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
             >
-              {SUBJECTS.map((s) => (
+              {subjectOptions().map((s) => (
                 <option key={s.value} value={s.value}>
                   {s.label}
                 </option>
@@ -566,7 +643,7 @@ export default function QuizPage() {
           <Button
             variant="primary"
             block
-            onClick={start}
+            onClick={() => void start()}
             disabled={busy || !me?.profile_id}
           >
             {t("startQuiz")}

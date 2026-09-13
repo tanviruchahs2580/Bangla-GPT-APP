@@ -80,3 +80,8 @@ data/nctb/normalized/
 
 # --- Local live-testing evidence (screenshots, not for repo) ---
 live_evidence/
+
+# --- Local tooling / test artifacts (not for repo) ---
+.zcode/
+apps/api/.coverage
+.coverage

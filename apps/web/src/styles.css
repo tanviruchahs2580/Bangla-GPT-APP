@@ -16,7 +16,12 @@
 
   /* Brand gradients + glow (WP-01: hue-correct, tokenized) */
   --grad-brand: linear-gradient(135deg, var(--brand), var(--brand-strong));
-  --grad-hero: linear-gradient(135deg, var(--brand-ink) 0%, var(--brand) 55%, var(--brand-strong) 100%);
+  --grad-hero: linear-gradient(
+    135deg,
+    var(--brand-ink) 0%,
+    var(--brand) 55%,
+    var(--brand-strong) 100%
+  );
   --grad-ai: linear-gradient(135deg, #6366f1, var(--ai));
   --grad-cta: linear-gradient(135deg, var(--brand), var(--fresh));
   --brand-glow: 0 0 24px rgba(22, 101, 52, 0.18);
@@ -75,16 +80,18 @@
   --radius-lg: 24px;
   --radius-full: 999px;
 
-  /* Elevation — layered, hue-neutral (WP-01) */
+  /* Elevation — single canonical scale (RENO: legacy --shadow-* sets
+     are aliases, so every component shares one elevation language) */
   --elev-1: 0 1px 3px rgba(31, 41, 28, 0.08), 0 1px 2px rgba(31, 41, 28, 0.05);
   --elev-2: 0 4px 12px rgba(31, 41, 28, 0.1), 0 2px 4px rgba(31, 41, 28, 0.06);
-  --elev-3: 0 12px 32px rgba(31, 41, 28, 0.14), 0 4px 8px rgba(31, 41, 28, 0.08);
-  --shadow-sm: 0 1px 2px rgba(31, 41, 28, 0.06);
-  --shadow-md: 0 4px 14px rgba(31, 41, 28, 0.1);
-  --shadow-lg: 0 12px 32px rgba(31, 41, 28, 0.14);
-  --shadow-1: 0 1px 2px rgba(31, 41, 28, 0.07);
-  --shadow-2: 0 6px 24px rgba(31, 41, 28, 0.12);
-  --shadow-3: 0 16px 48px rgba(15, 25, 12, 0.2);
+  --elev-3:
+    0 12px 32px rgba(31, 41, 28, 0.14), 0 4px 8px rgba(31, 41, 28, 0.08);
+  --shadow-sm: var(--elev-1);
+  --shadow-md: var(--elev-2);
+  --shadow-lg: var(--elev-3);
+  --shadow-1: var(--elev-1);
+  --shadow-2: var(--elev-2);
+  --shadow-3: var(--elev-3);
 
   /* Spacing — 4/8/12/16/24/32/48 */
   --space-1: 4px;
@@ -157,9 +164,11 @@
   --line: #2c2f22;
   --line-strong: #3d4130;
 
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-2: 0 6px 24px rgba(0, 0, 0, 0.45);
-  --shadow-3: 0 16px 48px rgba(0, 0, 0, 0.55);
+  /* RENO: only the canonical --elev-* trio needs dark values; the
+     legacy --shadow-* aliases from :root resolve through them. */
+  --elev-1: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --elev-2: 0 4px 12px rgba(0, 0, 0, 0.45);
+  --elev-3: 0 12px 32px rgba(0, 0, 0, 0.55);
 
   /* WP-01 dark parity for new tokens */
   --grad-brand: linear-gradient(135deg, #22c55e, #4ade80);
@@ -169,12 +178,6 @@
   --brand-glow: 0 0 24px rgba(74, 222, 128, 0.22);
   --shadow-brand: 0 4px 14px rgba(0, 0, 0, 0.45);
   --shadow-brand-lg: 0 6px 20px rgba(0, 0, 0, 0.55);
-  --elev-1: 0 1px 3px rgba(0, 0, 0, 0.4);
-  --elev-2: 0 4px 12px rgba(0, 0, 0, 0.45);
-  --elev-3: 0 12px 32px rgba(0, 0, 0, 0.55);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.45);
-  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
   --glass-bg: color-mix(in srgb, var(--bg-elev) 88%, transparent);
 
   color-scheme: dark;
@@ -243,7 +246,6 @@ h3 {
 .stat .num,
 .stat-num,
 .table-wrap td,
-.table-scroll td,
 .ring-inner,
 .score-ring {
   font-variant-numeric: tabular-nums;
@@ -414,18 +416,6 @@ p {
 .bnav-item.active::before {
   width: 28px;
   transform: translateX(-50%) scaleX(1);
-}
-
-.bnav-item.active .bnav-dot {
-  background: var(--brand);
-}
-
-.bnav-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 999px;
-  background: transparent;
-  transition: background var(--m-fast) var(--ease);
 }
 
 /* WP-04: desktop sidebar for staff roles (teacher/parent/school/admin).
@@ -2709,7 +2699,7 @@ button.source-chip:hover {
    a shorter class vocabulary; map it onto the token system so
    those pages render with the real design instead of unstyled
    defaults. New markup should prefer the .btn-*/
-stat-*/table-wrap
+.stat-*/.table-wrap
   names
   above.
   ------------------------------------------------------------
@@ -2810,44 +2800,6 @@ button.small {
 .lbl {
   font-size: var(--fs-xs);
   color: var(--muted);
-}
-.table-scroll {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--card);
-}
-
-.table-scroll table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--fs-sm);
-  min-width: 560px;
-}
-
-.table-scroll th,
-.table-scroll td {
-  padding: 10px 12px;
-  text-align: left;
-  border-bottom: 1px solid var(--line);
-  font-variant-numeric: tabular-nums;
-}
-
-.table-scroll thead th {
-  position: sticky;
-  top: 0;
-  background: var(--card-2);
-  font-weight: 800;
-  color: var(--muted);
-}
-
-.table-scroll tbody tr:nth-child(even) {
-  background: color-mix(in srgb, var(--card-2) 60%, transparent);
-}
-
-.table-scroll tbody tr:hover {
-  background: var(--brand-soft);
 }
 
 @media (min-width: 760px) {
@@ -2961,4 +2913,553 @@ button.small {
 }
 .gen-doc-title {
   font-weight: 600;
+}
+
+/* ============================================================
+   WP-DR — Dashboard redesign (student + teacher), token-only.
+   Every rule below resolves design tokens, so the dark theme
+   picks it up automatically; no new hardcoded colors.
+   ============================================================ */
+
+/* ── AppShell: teacher sidebar links with icons ── */
+.side-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ── Student home: prompt bar + snapshot ── */
+.home-prompt {
+  gap: 8px;
+  margin-top: var(--space-3);
+}
+.home-prompt .input {
+  flex: 1;
+  min-width: 0;
+}
+.home-snapshot .stat-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+/* ── Practice hub: weak-block is the most prominent entry ── */
+.practice-weak-card {
+  border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--line));
+  background: color-mix(in srgb, var(--warn-soft) 40%, var(--card));
+}
+.practice-weak-card .row-sub {
+  margin-top: 2px;
+}
+.action-bar .chip {
+  background: color-mix(in srgb, var(--ai-soft) 70%, var(--card));
+}
+
+/* ── AI tutor: image intent menu + low-confidence hint ── */
+.attach-flow {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+.attach-intents {
+  align-items: center;
+  flex-wrap: wrap;
+}
+.attach-intent-label {
+  font-weight: 600;
+}
+.low-conf-hint {
+  margin: var(--space-1) 0 0;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  background: var(--warn-soft);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  width: fit-content;
+  max-width: 100%;
+}
+
+/* ── Learn: subject progress ring + AI suggestion strip ── */
+.subject-ring {
+  --p: 0;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: conic-gradient(var(--fresh) calc(var(--p) * 1%), var(--line) 0);
+  display: grid;
+  place-items: center;
+  align-self: center;
+}
+.subject-ring-inner {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--card);
+  display: grid;
+  place-items: center;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+.ai-suggest-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin: var(--space-3) 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  background: var(--ai-soft);
+  border: 1px solid color-mix(in srgb, var(--ai) 25%, transparent);
+}
+.ai-suggest-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: var(--fs-sm);
+  color: var(--ai);
+}
+.ai-suggest-text {
+  flex: 1;
+  min-width: 180px;
+  font-size: var(--fs-sm);
+}
+
+/* ── Teacher: AI insight line ── */
+.ai-insight-line {
+  display: block;
+  margin: 0 0 var(--space-1);
+  font-size: var(--fs-sm);
+}
+.ai-insight-line:first-of-type {
+  font-size: var(--fs-md);
+}
+.teacher-hero p {
+  margin: 0;
+}
+
+/* ── Create: generator grid (mobile-first, real desktop grid) ── */
+.create-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+.create-grid-compact {
+  margin-bottom: 0;
+}
+@media (min-width: 760px) {
+  .create-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.create-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--m-fast) var(--ease),
+    box-shadow var(--m-fast) var(--ease),
+    transform var(--m-fast) var(--ease);
+}
+.create-tile:hover {
+  border-color: var(--brand);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+.create-tile.active {
+  border-color: var(--brand);
+  background: color-mix(in srgb, var(--brand-soft) 55%, var(--card));
+  box-shadow: var(--brand-glow);
+}
+.create-tile:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.create-tile-body {
+  display: grid;
+  gap: 2px;
+}
+.mode-toggle {
+  margin: var(--space-2) 0;
+}
+
+/* ── Question paper: stepper, validation checklist, question list ── */
+.qp-stepper {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+  margin: var(--space-3) 0 var(--space-2);
+}
+.qp-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--line);
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  background: var(--card-2);
+}
+.qp-step.done {
+  border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+  color: var(--ok);
+  background: var(--ok-soft);
+}
+.qp-step.current {
+  border-color: var(--brand);
+  color: var(--ink);
+  background: var(--brand-soft);
+  font-weight: 600;
+}
+.qp-step-dot {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: var(--fs-xs);
+  background: var(--line);
+  color: inherit;
+}
+.qp-step.done .qp-step-dot,
+.qp-step.current .qp-step-dot {
+  background: transparent;
+}
+.qp-validation {
+  margin: var(--space-2) 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card-2);
+}
+.qp-val-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 3px 0;
+  font-size: var(--fs-sm);
+}
+.qp-val-dot {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+}
+.qp-val-dot.ok {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.qp-val-dot.warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.qp-val-label {
+  font-weight: 600;
+}
+.qp-question-list {
+  margin: var(--space-3) 0;
+  padding-left: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-3);
+}
+.qp-question-row {
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.qp-qnum {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--brand-soft);
+  color: var(--brand-ink);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+}
+.qp-options {
+  margin: var(--space-1) 0 var(--space-2);
+  padding-left: 30px;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+/* ── Assessments: result rows ── */
+.as-result-row {
+  display: grid;
+  gap: var(--space-2);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--line);
+}
+.as-result-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+/* ============================================================
+   RENO — world-class polish pass additions. Token-only: every
+   rule resolves design tokens, so dark mode picks it up
+   automatically; no hardcoded colors.
+   ============================================================ */
+
+/* ── Modal primitive (shared) ── */
+.modal-wide {
+  max-width: 640px;
+}
+.modal-close {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+}
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+/* ── Field hint ── */
+.field-hint {
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+/* ── Avatar primitive ── */
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-full);
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+  font-weight: 800;
+  font-size: var(--fs-lg);
+  flex-shrink: 0;
+  user-select: none;
+}
+.avatar-sm {
+  width: 28px;
+  height: 28px;
+  font-size: var(--fs-sm);
+}
+.avatar-lg {
+  width: 56px;
+  height: 56px;
+  font-size: var(--fs-xl);
+}
+.avatar-xl {
+  width: 72px;
+  height: 72px;
+  font-size: var(--fs-2xl);
+}
+.avatar-teal {
+  background: var(--teal-soft);
+  color: var(--teal-strong);
+}
+.avatar-ai {
+  background: var(--ai-soft);
+  color: var(--ai);
+}
+
+/* ── Shell: page header pattern (replaces per-page inline headers) ── */
+.page-head {
+  margin: 0 0 var(--space-4);
+}
+.page-head h1,
+.page-head h2 {
+  margin: 0;
+}
+.page-head-sub {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: var(--fs-md);
+}
+
+/* ── Utility: balanced two-col form/grid rows on desktop ── */
+.form-grid {
+  display: grid;
+  gap: 0 var(--space-4);
+}
+@media (min-width: 760px) {
+  .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ── RENO: token-mapped micro-utilities (replace per-page inline styles).
+      Names are intentionally semantic-neutral so any page can compose them;
+      every value resolves a design token. ── */
+.text-sm {
+  font-size: var(--fs-sm);
+}
+.text-xs {
+  font-size: var(--fs-xs);
+}
+.mt-1 {
+  margin-top: var(--space-1);
+}
+.mt-2 {
+  margin-top: var(--space-2);
+}
+.mt-3 {
+  margin-top: var(--space-3);
+}
+.mt-4 {
+  margin-top: var(--space-4);
+}
+.m-0 {
+  margin: 0;
+}
+.spread {
+  justify-content: space-between;
+}
+.gap-1 {
+  gap: var(--space-1);
+}
+.gap-2 {
+  gap: var(--space-2);
+}
+.gap-3 {
+  gap: var(--space-3);
+}
+.stack-sm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.wrap-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.profile-name {
+  font-size: var(--fs-lg);
+}
+.invite-code {
+  font-size: var(--fs-lg);
+  letter-spacing: 1px;
+  font-variant-numeric: tabular-nums;
+}
+.setting-label {
+  font-weight: 600;
+}
+
+.btn-start {
+  justify-content: flex-start;
+}
+.mb-2 {
+  margin-bottom: var(--space-2);
+}
+.form-grid-span {
+  grid-column: 1 / -1;
+}
+.field-inline {
+  margin-bottom: 0;
+}
+.w-min-field {
+  min-width: 140px;
+}
+.w-num {
+  width: 84px;
+}
+.w-num-lg {
+  width: 92px;
+}
+.mb-3 {
+  margin-bottom: var(--space-3);
+}
+.block {
+  display: block;
+}
+.gap-4 {
+  gap: var(--space-4);
+}
+.grow-field {
+  flex: 1;
+  min-width: 180px;
+}
+.w-90 {
+  width: 90px;
+}
+.maxw-220 {
+  max-width: 220px;
+}
+.mono-block {
+  width: 100%;
+  font-family: ui-monospace, "Cascadia Mono", Menlo, monospace;
+  font-size: var(--fs-sm);
+}
+.align-end {
+  align-self: flex-end;
+}
+.status-hero {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 700;
+  color: var(--ok);
+}
+.status-hero.degraded {
+  color: var(--warn);
+}
+.status-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-3) 0;
+}
+.status-item {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  padding: 6px 0;
+}
+.status-ok {
+  color: var(--ok);
+}
+.status-warn {
+  color: var(--warn);
+}
+.card-narrow {
+  max-width: 680px;
+  margin: var(--space-6) auto;
+}
+.card-legal {
+  max-width: 780px;
+  margin: var(--space-6) auto;
+}
+.cell-wrap {
+  white-space: normal;
+  max-width: 320px;
+}
+.cell-wrap-sm {
+  white-space: normal;
+}
+.mr-2 {
+  margin-right: var(--space-2);
 }

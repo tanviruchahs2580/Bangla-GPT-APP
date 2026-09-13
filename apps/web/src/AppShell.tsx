@@ -1,11 +1,18 @@
 import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
+  BarChart3,
   BookOpen,
+  ClipboardList,
   Download,
+  FilePlus2,
   GraduationCap,
   Home,
+  LayoutDashboard,
+  Activity,
+  School,
   User,
+  UserRound,
   Zap,
   Languages,
   Moon,
@@ -29,8 +36,28 @@ const STUDENT_NAV = [
   { to: "/student", end: true, label: "home", icon: Home },
   { to: "/student/learn", end: false, label: "learn", icon: BookOpen },
   { to: "/student/tutor", end: false, label: "aiTutor", icon: Zap },
-  { to: "/student/quiz", end: false, label: "quiz", icon: GraduationCap },
+  { to: "/student/quiz", end: false, label: "practice", icon: GraduationCap },
   { to: "/student/me", end: false, label: "me", icon: User },
+] as const;
+
+// WP-DR: teacher gets a full 5-item IA; other staff roles keep their
+// existing dashboard-only sidebar untouched.
+const TEACHER_NAV = [
+  { to: "/teacher", end: true, label: "tNavHome", icon: Home },
+  { to: "/teacher/create", end: false, label: "tNavCreate", icon: FilePlus2 },
+  { to: "/teacher/classes", end: false, label: "tNavClasses", icon: School },
+  {
+    to: "/teacher/assessments",
+    end: false,
+    label: "tNavAssessments",
+    icon: ClipboardList,
+  },
+  {
+    to: "/teacher/analytics",
+    end: false,
+    label: "tNavAnalytics",
+    icon: BarChart3,
+  },
 ] as const;
 
 export function OfflineBanner() {
@@ -119,6 +146,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </button>
           )}
           {me && <NotificationBell />}
+          {me?.role === "teacher" && (
+            <button
+              className="icon-btn"
+              aria-label={t("tNavProfile")}
+              onClick={() => navigate("/teacher/profile")}
+            >
+              <UserRound size={18} aria-hidden />
+            </button>
+          )}
           <button
             className="icon-btn"
             aria-label="Switch language"
@@ -126,8 +162,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               const next = getLang() === "bn" ? "en" : "bn";
               setLang(next);
               document.documentElement.setAttribute("lang", next);
-              // Pages render t() during render; remount so every string updates.
-              navigate(0);
+              // setLang notifies subscribers; LangRoot remounts the tree in
+              // place so every t() string updates without a page reload.
             }}
           >
             <Languages size={18} aria-hidden />
@@ -158,17 +194,41 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {isStaff && (
         <div className="shell-body">
           <aside className="sidebar" aria-label={t("dashboard")}>
-            <NavLink
-              to={roleHome}
-              end
-              className={({ isActive }) => (isActive ? "active" : undefined)}
-            >
-              {t("dashboard")}
-            </NavLink>
+            {me?.role === "teacher" ? (
+              TEACHER_NAV.map(({ to, end, label, icon: Icon }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={end}
+                  className={({ isActive }) =>
+                    isActive ? "active side-link" : "side-link"
+                  }
+                >
+                  <Icon size={17} aria-hidden />
+                  {t(label)}
+                </NavLink>
+              ))
+            ) : (
+              <>
+                <NavLink
+                  to={roleHome}
+                  end
+                  className={({ isActive }) =>
+                    isActive ? "active side-link" : "side-link"
+                  }
+                >
+                  <LayoutDashboard size={17} aria-hidden />
+                  {t("dashboard")}
+                </NavLink>
+              </>
+            )}
             <NavLink
               to="/status"
-              className={({ isActive }) => (isActive ? "active" : undefined)}
+              className={({ isActive }) =>
+                isActive ? "active side-link" : "side-link"
+              }
             >
+              <Activity size={17} aria-hidden />
               {t("statusPage")}
             </NavLink>
           </aside>
@@ -191,7 +251,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             >
               <Icon size={22} aria-hidden />
               <span>{t(label)}</span>
-              <span className="bnav-dot" aria-hidden />
             </NavLink>
           ))}
         </nav>

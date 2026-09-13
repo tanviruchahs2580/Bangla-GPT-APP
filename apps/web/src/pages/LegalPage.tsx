@@ -1,3 +1,5 @@
+import { t } from "../i18n";
+
 const SECTIONS: {
   titleBn: string;
   titleEn: string;
@@ -41,7 +43,7 @@ const SECTIONS: {
 export default function LegalPage({ kind }: { kind: "privacy" | "terms" }) {
   const isPrivacy = kind === "privacy";
   return (
-    <div className="card" style={{ maxWidth: 780, margin: "40px auto" }}>
+    <div className="card card-legal">
       <h2>
         {isPrivacy
           ? "গোপনীয়তা নীতি / Privacy Policy"
@@ -101,7 +103,8 @@ export default function LegalPage({ kind }: { kind: "privacy" | "terms" }) {
         </>
       )}
       <p className="muted">
-        <a href="/login">লগইন</a> · <a href="/register">নিবন্ধন</a>
+        <a href="/login">{t("login")}</a> ·{" "}
+        <a href="/register">{t("register")}</a>
       </p>
     </div>
   );

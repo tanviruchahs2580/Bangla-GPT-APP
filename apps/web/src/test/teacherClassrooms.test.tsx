@@ -1,7 +1,8 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import TeacherDashboard from "../pages/TeacherDashboard";
+import ClassesPage from "../pages/teacher/ClassesPage";
 import { t } from "../i18n";
 
 const apiMock = vi.hoisted(() => ({
@@ -13,6 +14,14 @@ vi.mock("../api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api")>()),
   ...apiMock,
 }));
+
+function renderPage() {
+  return render(
+    <MemoryRouter>
+      <ClassesPage />
+    </MemoryRouter>,
+  );
+}
 
 const ROOMS = [
   { id: 1, class_level: 6, section: "GEN", student_count: 2 },
@@ -98,9 +107,14 @@ beforeEach(() => {
 describe("S2.2 classroom chips + roster + CSV import", () => {
   it("renders classroom chips and switches roster on click", async () => {
     const user = userEvent.setup();
-    render(<TeacherDashboard />);
+    renderPage();
 
-    const chips = await screen.findAllByRole("button", { pressed: true });
+    const chipRow = await screen.findByRole("group", {
+      name: t("classrooms"),
+    });
+    const chips = await within(chipRow).findAllByRole("button", {
+      pressed: true,
+    });
     expect(chips.length).toBe(1); // first room selected by default
     await waitFor(() => expect(screen.getByText("Rahim")).toBeInTheDocument());
     expect(screen.getByText("rahim@school.edu")).toBeInTheDocument();
@@ -122,7 +136,7 @@ describe("S2.2 classroom chips + roster + CSV import", () => {
 
   it("creates a new classroom with level + section", async () => {
     const user = userEvent.setup();
-    render(<TeacherDashboard />);
+    renderPage();
     await screen.findByText("Rahim");
 
     const selects = screen.getAllByRole("combobox");
@@ -142,16 +156,19 @@ describe("S2.2 classroom chips + roster + CSV import", () => {
       }),
     );
     await waitFor(() =>
-      expect(screen.getByRole("button", { pressed: true })).toHaveTextContent(
-        "8",
-      ),
+      expect(
+        within(screen.getByRole("group", { name: t("classrooms") })).getByRole(
+          "button",
+          { pressed: true },
+        ),
+      ).toHaveTextContent("8"),
     );
   });
 
   it("imports a CSV and shows per-row invite codes once", async () => {
     const user = userEvent.setup();
     apiMock.post.mockResolvedValue(structuredClone(IMPORT_RESULT));
-    render(<TeacherDashboard />);
+    renderPage();
     await screen.findByText("Rahim");
 
     await user.type(

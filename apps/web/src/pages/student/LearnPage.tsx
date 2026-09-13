@@ -53,16 +53,53 @@ export function LearnPage() {
     queryFn: () => getSubjectChapters(activeSubject!, selected),
     enabled: !!activeSubject,
   });
-  const progressQuery = useQuery({
-    queryKey: ["learnProgress", activeSubject, selected],
-    queryFn: () => getLearnProgress(activeSubject!, selected),
-    enabled: !!activeSubject,
+  // WP-DR: one progress query for the whole class powers both the subject
+  // rings and the chapter status icons (all data already returned by the API).
+  const allProgressQuery = useQuery({
+    queryKey: ["learnProgressAll", selected],
+    queryFn: () => getLearnProgress(undefined, selected),
   });
+  const subjects = subjectsQuery.data ?? [];
+
+  // Chapter totals per subject (for the ring denominator), from the same
+  // existing chapters endpoint the list view already uses.
+  const [totals, setTotals] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (subjects.length === 0) return;
+    let alive = true;
+    void Promise.all(
+      subjects.map(async (s: SubjectOut) => {
+        try {
+          const rows = await getSubjectChapters(s.subject, selected);
+          return [s.subject, rows.length] as const;
+        } catch {
+          return [s.subject, 0] as const;
+        }
+      }),
+    ).then((entries) => {
+      if (alive) setTotals(Object.fromEntries(entries));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [subjects, selected]);
+
   const progressMap = new Map(
-    (progressQuery.data ?? []).map((p) => [p.chapter, p]),
+    (allProgressQuery.data ?? []).map((p) => [p.chapter, p]),
   );
 
-  const subjects = subjectsQuery.data ?? [];
+  const subjectStats = (subject: string) => {
+    const rows = (allProgressQuery.data ?? []).filter(
+      (p) => p.subject === subject,
+    );
+    const done = rows.filter((p) => p.completed).length;
+    const total = totals[subject] ?? 0;
+    return {
+      done,
+      total,
+      pct: total > 0 ? Math.round((done / total) * 100) : 0,
+    };
+  };
 
   return (
     <main className="shell-main">
@@ -96,33 +133,56 @@ export function LearnPage() {
         </div>
       ) : (
         <div className="subject-grid">
-          {subjects.map((s: SubjectOut) => (
-            <button
-              key={s.subject}
-              className={cn(
-                "subject-card",
-                activeSubject === s.subject && "active",
-              )}
-              aria-pressed={activeSubject === s.subject}
-              onClick={() =>
-                setActiveSubject((cur) =>
-                  cur === s.subject ? null : s.subject,
-                )
-              }
-            >
-              <span
-                className={cn("quick-icon", SUBJECT_TONE[s.subject] ?? "")}
-                aria-hidden
+          {subjects.map((s: SubjectOut) => {
+            const stat = subjectStats(s.subject);
+            return (
+              <button
+                key={s.subject}
+                className={cn(
+                  "subject-card",
+                  activeSubject === s.subject && "active",
+                )}
+                aria-pressed={activeSubject === s.subject}
+                onClick={() =>
+                  setActiveSubject((cur) =>
+                    cur === s.subject ? null : s.subject,
+                  )
+                }
               >
-                <BookOpen size={22} />
-              </span>
-              <div className="subject-name">{s.subject}</div>
-              <div className="subject-meta">
-                {t("classLabel")} {s.class_levels.join(", ")}
-              </div>
-              <span className="subject-progress" aria-hidden />
-            </button>
-          ))}
+                <span
+                  className={cn("quick-icon", SUBJECT_TONE[s.subject] ?? "")}
+                  aria-hidden
+                >
+                  <BookOpen size={22} />
+                </span>
+                <div className="subject-name">{s.subject}</div>
+                <div className="subject-meta">
+                  {t("classLabel")} {s.class_levels.join(", ")}
+                </div>
+                {stat.total > 0 && (
+                  <>
+                    <span
+                      className="subject-ring"
+                      role="img"
+                      aria-label={t("chaptersDone", {
+                        done: stat.done,
+                        total: stat.total,
+                      })}
+                      style={{ ["--p" as string]: stat.pct }}
+                    >
+                      <span className="subject-ring-inner">
+                        {stat.done}/{stat.total}
+                      </span>
+                    </span>
+                    <span className="subject-progress" aria-hidden />
+                  </>
+                )}
+                {stat.total === 0 && (
+                  <span className="subject-progress" aria-hidden />
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -146,12 +206,12 @@ export function LearnPage() {
               (chaptersQuery.data ?? []).map((ch: ChapterSummaryOut) => {
                 const prog = progressMap.get(ch.chapter);
                 const badgeKind = chapterBadge(prog);
-                const badge =
+                const icon =
                   badgeKind === "done"
                     ? "✓"
                     : badgeKind === "reading"
-                      ? "○"
-                      : null;
+                      ? "▶"
+                      : "○";
                 const pct = prog?.completed ? 100 : prog ? 45 : 0;
                 return (
                   <Card key={ch.chapter} className="row chapter-card">
@@ -161,15 +221,14 @@ export function LearnPage() {
                     <div className="row-main">
                       <div className="row-title">
                         {ch.chapter}{" "}
-                        {badge && (
-                          <span
-                            className={
-                              prog?.completed ? "badge badge-teal" : "badge"
-                            }
-                          >
-                            {badge}
-                          </span>
-                        )}{" "}
+                        <span
+                          className={
+                            badgeKind === "done" ? "badge badge-teal" : "badge"
+                          }
+                          aria-hidden
+                        >
+                          {icon}
+                        </span>{" "}
                         {prog?.bookmarked && (
                           <Bookmark
                             size={14}
@@ -404,19 +463,19 @@ export function LearnChapterPage() {
               key={String(bookmarked)}
               className={`btn btn-sm ${bookmarked ? "btn-teal bookmark-pop" : "btn-ghost"}`}
               onClick={toggleBookmark}
-              aria-label="bookmark"
+              aria-label={t("bookmark")}
               aria-pressed={bookmarked}
             >
-              {bookmarked ? "🔖 বুকমার্ক" : "☆ বুকমার্ক"}
+              {bookmarked ? `🔖 ${t("bookmark")}` : `☆ ${t("bookmark")}`}
             </button>
             {ttsSupported && (
               <button
                 className="btn btn-sm btn-ghost"
                 onClick={speak}
-                aria-label="tts"
+                aria-label={t("listen")}
                 aria-pressed={speaking}
               >
-                {speaking ? "⏹️ থামুন" : "🔊 শুনুন"}
+                {speaking ? `⏹️ ${t("stop")}` : `🔊 ${t("listen")}`}
               </button>
             )}
             {offlineCopy && <span className="badge">{t("offlineBadge")}</span>}
@@ -493,6 +552,37 @@ export function LearnChapterPage() {
                 ))}
               </div>
             </>
+          )}
+          {tab !== "ask" && (
+            /* WP-DR: visible "AI suggestion: continue with X" card. */
+            <div className="ai-suggest-card" role="status">
+              <span className="ai-suggest-label" aria-hidden>
+                <Bookmark size={14} /> {t("aiSuggestion")}
+              </span>
+              <span className="ai-suggest-text">
+                {(progressQuery.data ?? []).find((x) => x.chapter === chapter)
+                  ?.completed
+                  ? t("nextSuggestionAsk")
+                  : t("nextSuggestionPractice")}
+              </span>
+              <button
+                className="btn btn-soft btn-sm"
+                onClick={() =>
+                  setTab(
+                    (progressQuery.data ?? []).find(
+                      (x) => x.chapter === chapter,
+                    )?.completed
+                      ? "ask"
+                      : "practice",
+                  )
+                }
+              >
+                {(progressQuery.data ?? []).find((x) => x.chapter === chapter)
+                  ?.completed
+                  ? t("tabAsk")
+                  : t("tabPractice")}
+              </button>
+            </div>
           )}
           {tab === "practice" && (
             <ChapterPractice

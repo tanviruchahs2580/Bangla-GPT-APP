@@ -6,7 +6,7 @@ import type {
   TeacherDocument,
   TeacherWorkload,
 } from "../../api";
-import { Badge, Button, Card } from "../ui";
+import { Badge, Button, Card, Segmented } from "../ui";
 import { friendlyError } from "../../errors";
 import { t } from "../../i18n";
 import { track } from "../../lib/analytics";
@@ -15,10 +15,12 @@ const KINDS = ["worksheet", "answer_key", "homework", "rubric"] as const;
 type Kind = (typeof KINDS)[number];
 const PDF_KINDS = new Set(["worksheet", "answer_key", "lesson_plan"]);
 
-const SUBJECTS = [
-  { value: "science", label: "বিজ্ঞান" },
-  { value: "mathematics", label: "গণিত" },
-  { value: "bangla", label: "বাংলা" },
+// RENO: subject labels come from i18n (were hardcoded Bengali). Evaluated
+// at render time so a language switch (in-place remount) is reflected.
+const subjectOptions = () => [
+  { value: "science", label: t("subjectScience") },
+  { value: "mathematics", label: t("subjectMath") },
+  { value: "bangla", label: t("subjectBangla") },
 ];
 
 const KIND_LABEL: Record<
@@ -61,10 +63,7 @@ function PayloadView({ payload }: { payload: Record<string, unknown> }) {
                   {String(item.question ?? item.text ?? JSON.stringify(item))}
                 </span>
                 {item.answer != null && (
-                  <span
-                    className="muted"
-                    style={{ display: "block", fontSize: "var(--fs-sm)" }}
-                  >
+                  <span className="muted text-sm block">
                     {String(item.answer)}
                   </span>
                 )}
@@ -81,8 +80,13 @@ function PayloadView({ payload }: { payload: Record<string, unknown> }) {
   );
 }
 
-export function CreateHub() {
-  const [kind, setKind] = useState<Kind>("worksheet");
+export function CreateHub({
+  initialKind,
+}: {
+  /** WP-DR: when embedded in the Create page grid, the kind is preselected. */
+  initialKind?: Kind;
+}) {
+  const [kind, setKind] = useState<Kind>(initialKind ?? "worksheet");
   const [level, setLevel] = useState(6);
   const [subject, setSubject] = useState("science");
   const [chapter, setChapter] = useState("");
@@ -218,24 +222,13 @@ export function CreateHub() {
     <Card>
       <div className="card-title">{t("createHubTitle")}</div>
 
-      <div
-        className="chips"
-        role="tablist"
-        aria-label={t("genKind")}
-        style={{ marginBottom: "var(--space-3)" }}
-      >
-        {KINDS.map((k) => (
-          <button
-            key={k}
-            role="tab"
-            className={`chip${kind === k ? " active" : ""}`}
-            aria-selected={kind === k}
-            onClick={() => setKind(k)}
-          >
-            {t(KIND_LABEL[k])}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        className="mb-3"
+        ariaLabel={t("genKind")}
+        value={kind}
+        onChange={(k) => setKind(k)}
+        options={KINDS.map((k) => ({ value: k, label: t(KIND_LABEL[k]) }))}
+      />
 
       <div className="grid-2">
         <label className="field">
@@ -256,7 +249,7 @@ export function CreateHub() {
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
           >
-            {SUBJECTS.map((s) => (
+            {subjectOptions().map((s) => (
               <option key={s.value} value={s.value}>
                 {s.label}
               </option>
@@ -277,7 +270,7 @@ export function CreateHub() {
         </label>
       </div>
       {kind === "answer_key" && (
-        <label className="field" style={{ marginTop: "var(--space-3)" }}>
+        <label className="field mt-3">
           <span className="lbl">{t("genQuestionsHint")}</span>
           <textarea
             className="input"
@@ -288,10 +281,7 @@ export function CreateHub() {
         </label>
       )}
 
-      <div
-        className="row-flex"
-        style={{ gap: "8px", marginTop: "var(--space-3)" }}
-      >
+      <div className="row-flex gap-2 mt-3">
         {/* Server-side contracts: answer_key needs question lines; homework and
             rubric need a chapter. Keep the buttons quiet until they exist. */}
         <Button
@@ -317,21 +307,14 @@ export function CreateHub() {
           {t("genLater")}
         </Button>
       </div>
-      {msg && (
-        <p className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-          {msg}
-        </p>
-      )}
+      {msg && <p className="muted text-sm">{msg}</p>}
 
       {result && (
-        <div className="card" style={{ marginTop: "var(--space-3)" }}>
+        <div className="card mt-3">
           <div className="card-title">{result.title}</div>
           <PayloadView payload={result.payload} />
           {result.sources.length > 0 && (
-            <p
-              className="muted"
-              style={{ fontSize: "var(--fs-sm)", marginTop: "var(--space-2)" }}
-            >
+            <p className="muted text-sm mt-2">
               {t("genSourcesCount").replace(
                 "{n}",
                 String(result.sources.length),
@@ -342,7 +325,7 @@ export function CreateHub() {
             <Button
               variant="teal"
               size="sm"
-              style={{ marginTop: "var(--space-2)" }}
+              className="mt-2"
               onClick={() => void downloadTeacherDocumentPdf(result)}
             >
               {t("genDownloadPdf")}
@@ -352,10 +335,10 @@ export function CreateHub() {
       )}
 
       {jobs.length > 0 && (
-        <div style={{ marginTop: "var(--space-4)" }}>
+        <div className="mt-4">
           <div className="card-title">{t("genJobs")}</div>
-          <div className="table-scroll">
-            <table className="table">
+          <div className="table-wrap">
+            <table className="data">
               <tbody>
                 {jobs.slice(0, 8).map((j) => (
                   <tr key={j.id}>
@@ -389,11 +372,8 @@ export function CreateHub() {
         </div>
       )}
 
-      <div style={{ marginTop: "var(--space-4)" }}>
-        <div
-          className="row-flex"
-          style={{ gap: "8px", flexWrap: "wrap", alignItems: "center" }}
-        >
+      <div className="mt-4">
+        <div className="row-flex gap-2">
           <div className="card-title">{t("genLibrary")}</div>
           <button
             className={`chip${docKind === null ? " active" : ""}`}
@@ -412,11 +392,9 @@ export function CreateHub() {
           ))}
         </div>
         {docs.length === 0 && (
-          <p className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-            {t("noDocumentsYet")}
-          </p>
+          <p className="muted text-sm">{t("noDocumentsYet")}</p>
         )}
-        <div className="table-scroll">
+        <div className="table-wrap">
           {docs.map((d) => (
             <div key={d.id} className="gen-doc-row">
               <button
@@ -427,11 +405,11 @@ export function CreateHub() {
                 <Badge tone="teal">
                   {KIND_LABEL[d.kind] ? t(KIND_LABEL[d.kind]) : d.kind}
                 </Badge>
-                <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>
+                <span className="muted text-xs">
                   {d.subject} · {d.class_level}
                 </span>
               </button>
-              <span className="row-flex" style={{ gap: "6px" }}>
+              <span className="row-flex gap-1">
                 {PDF_KINDS.has(d.kind) && (
                   <button
                     className="small secondary"
@@ -451,7 +429,7 @@ export function CreateHub() {
           ))}
         </div>
         {openDoc != null && docs.find((d) => d.id === openDoc) && (
-          <div className="card" style={{ marginTop: "var(--space-2)" }}>
+          <div className="card mt-2">
             <PayloadView
               payload={docs.find((d) => d.id === openDoc)!.payload}
             />
@@ -460,11 +438,7 @@ export function CreateHub() {
       </div>
 
       {workload && (
-        <div
-          className="stat-row"
-          style={{ marginTop: "var(--space-4)" }}
-          title={workload.methodology}
-        >
+        <div className="stat-row mt-4" title={workload.methodology}>
           <div>
             <div className="num">{workload.total_minutes_saved}</div>
             <div className="lbl">

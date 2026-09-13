@@ -25,11 +25,20 @@ import {
 import { track } from "../../lib/analytics";
 import type { ActivitySummary } from "../../types";
 import { useAuth } from "../../AuthContext";
-import { Badge, Button, Card } from "../../components/ui";
+import { Avatar, Badge, Button, Card, Segmented } from "../../components/ui";
 import { friendlyError } from "../../errors";
 import { getLang, setLang, t } from "../../i18n";
 import { getLowData, toggleLowData } from "../../lib/lowData";
 import { currentTheme, toggleTheme } from "../../lib/theme";
+
+// RENO: roles come from the API in English; display them localized.
+const ROLE_LABEL: Record<string, Parameters<typeof t>[0]> = {
+  student: "roleStudent",
+  teacher: "roleTeacher",
+  parent: "roleParent",
+  admin: "roleAdmin",
+  school_admin: "roleSchoolAdmin",
+};
 
 export default function MePage() {
   const { me, signOut } = useAuth();
@@ -45,7 +54,7 @@ export default function MePage() {
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
-  const dark = currentTheme() === "dark";
+  const [dark, setDark] = useState(currentTheme() === "dark");
   // S1.13: low-data mode (skip images + short tutor answers)
   const [lowData, setLowDataState] = useState(getLowData());
 
@@ -184,19 +193,20 @@ export default function MePage() {
 
       <Card>
         <div className="row-flex">
-          <span
-            className="quick-icon"
-            style={{ width: 60, height: 60, borderRadius: 20 }}
-          >
-            {(me?.name ?? "?").slice(0, 1).toUpperCase()}
-          </span>
+          <Avatar name={me?.name ?? me?.email ?? "?"} size="lg" />
           <div className="row-main">
-            <div className="row-title" style={{ fontSize: "var(--fs-lg)" }}>
+            <div className="row-title profile-name">
               {me?.name ?? me?.email}
             </div>
             <div className="row-sub">{me?.email}</div>
-            <div style={{ marginTop: "6px" }}>
-              <Badge>{me?.role}</Badge>
+            <div className="badge-row">
+              <Badge>
+                {me
+                  ? ROLE_LABEL[me.role]
+                    ? t(ROLE_LABEL[me.role])
+                    : me.role
+                  : "—"}
+              </Badge>
               {me?.class_level ? (
                 <Badge tone="teal">
                   {t("classLabel")} {me.class_level}
@@ -213,11 +223,8 @@ export default function MePage() {
       {me?.role === "student" && activity && (
         <Card>
           <div className="card-title">{t("activityTitle")}</div>
-          <div className="row-flex" style={{ gap: "var(--space-3)" }}>
-            <span
-              className="quick-icon"
-              style={{ width: 44, height: 44, borderRadius: 14 }}
-            >
+          <div className="row-flex gap-3">
+            <span className="quick-icon">
               <Flame size={20} aria-hidden />
             </span>
             <div className="row-main">
@@ -256,32 +263,14 @@ export default function MePage() {
       {me?.role === "student" && (
         <Card>
           <div className="card-title">{t("parentInviteTitle")}</div>
-          <p
-            className="muted"
-            style={{ marginTop: 0, fontSize: "var(--fs-sm)" }}
-          >
-            {t("parentInviteHint")}
-          </p>
+          <p className="muted text-sm m-0">{t("parentInviteHint")}</p>
           {invite ? (
             <div className="stack">
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "var(--space-2)",
-                }}
-              >
+              <div className="row-flex gap-2">
                 <KeyRound size={18} aria-hidden />
-                <strong
-                  style={{ fontSize: "var(--fs-lg)", letterSpacing: "1px" }}
-                >
-                  {invite.code}
-                </strong>
+                <strong className="invite-code">{invite.code}</strong>
               </div>
-              <p
-                className="muted"
-                style={{ margin: 0, fontSize: "var(--fs-sm)" }}
-              >
+              <p className="muted text-sm m-0">
                 {t("parentInviteExpires", {
                   minutes: invite.expires_in_minutes,
                 })}
@@ -297,11 +286,7 @@ export default function MePage() {
               {t("parentInviteGenerate")}
             </Button>
           )}
-          {inviteError && (
-            <p className="error" style={{ margin: 0 }}>
-              {inviteError}
-            </p>
-          )}
+          {inviteError && <p className="error m-0">{inviteError}</p>}
         </Card>
       )}
 
@@ -333,39 +318,8 @@ export default function MePage() {
               />
             </div>
           </div>
-          <div
-            className="row-flex"
-            style={{
-              justifyContent: "space-between",
-              marginTop: "var(--space-2)",
-            }}
-          >
-            <div>
-              <div style={{ fontWeight: 600 }}>{t("memoryTitle")}</div>
-              <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                {t("memoryHint")}
-              </div>
-            </div>
-            <button
-              className="switch"
-              role="switch"
-              aria-checked={memory}
-              aria-label={t("memoryTitle")}
-              onClick={() => setMemory((v) => !v)}
-            />
-          </div>
-          {prefsMsg && (
-            <p
-              className="ok"
-              style={{ margin: "var(--space-2) 0 0", fontSize: "var(--fs-sm)" }}
-            >
-              {prefsMsg}
-            </p>
-          )}
-          <div
-            className="row-flex"
-            style={{ gap: "8px", marginTop: "var(--space-3)" }}
-          >
+          {prefsMsg && <p className="ok text-sm mt-2">{prefsMsg}</p>}
+          <div className="row-flex gap-2 mt-3">
             <Button
               variant="primary"
               size="sm"
@@ -375,32 +329,47 @@ export default function MePage() {
               {prefsBusy ? <span className="spinner" aria-hidden /> : null}
               {t("save")}
             </Button>
+          </div>
+        </Card>
+      )}
+
+      {me?.role === "student" && (
+        /* WP-DR: AI memory transparency panel — what the tutor knows,
+           with the same consent model (toggle off + clear facts). */
+        <Card className="card-ai">
+          <div className="card-title">{t("aiMemoryPanel")}</div>
+          <div className="row-flex spread mt-2">
+            <div>
+              <div className="setting-label">{t("memoryTitle")}</div>
+              <div className="muted text-sm">{t("memoryHint")}</div>
+            </div>
+            <button
+              className="switch"
+              role="switch"
+              aria-checked={memory}
+              aria-label={t("memoryTitle")}
+              onClick={() => setMemory((v) => !v)}
+            />
+          </div>
+          <div className="row-flex gap-2 mt-3">
             <Button variant="ghost" size="sm" onClick={() => void wipeMemory()}>
               <Brain size={15} aria-hidden /> {t("clearMemory")}
             </Button>
           </div>
           {mem && (
-            <div style={{ marginTop: "var(--space-3)" }}>
-              <div
-                className="row-flex"
-                style={{ gap: "6px", alignItems: "center" }}
-              >
+            <div className="mt-3">
+              <div className="wrap-list">
                 <Badge tone={mem.memory_enabled ? "teal" : "warn"}>
                   {t("memoryFacts")}
                 </Badge>
-                <span className="muted" style={{ fontSize: "var(--fs-xs)" }}>
+                <span className="muted text-xs">
                   {mem.memory_enabled ? t("on") : t("off")}
                 </span>
               </div>
               {Object.keys(mem.facts).length === 0 ? (
-                <p
-                  className="muted"
-                  style={{ margin: "6px 0 0", fontSize: "var(--fs-sm)" }}
-                >
-                  {t("noMemoryFacts")}
-                </p>
+                <p className="muted text-sm mt-1">{t("noMemoryFacts")}</p>
               ) : (
-                <div className="chips" style={{ marginTop: "6px" }}>
+                <div className="chips mt-1">
                   {Object.entries(mem.facts).map(([k, v]) => (
                     <span key={k} className="chip">
                       {k}: {String(v)}
@@ -409,13 +378,39 @@ export default function MePage() {
                 </div>
               )}
               {!mem.memory_enabled && (
-                <p
-                  className="muted"
-                  style={{ margin: "6px 0 0", fontSize: "var(--fs-sm)" }}
-                >
+                <p className="muted text-sm mt-1">
                   {t(mem.on_disable_note_code as Parameters<typeof t>[0]) ||
                     mem.on_disable_note_code}
                 </p>
+              )}
+            </div>
+          )}
+          {report && (
+            /* pattern lines sourced from the existing progress report */
+            <div className="mt-3">
+              {report.weak_chapters.length > 0 && (
+                <div className="wrap-list">
+                  <span className="badge badge-warn">
+                    {t("aiMemoryPatternWeak")}
+                  </span>
+                  {report.weak_chapters.slice(0, 3).map((c) => (
+                    <span key={c} className="chip">
+                      {c}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {report.strengths.length > 0 && (
+                <div className="wrap-list mt-2">
+                  <span className="badge badge-teal">
+                    {t("aiMemoryPatternStrong")}
+                  </span>
+                  {report.strengths.slice(0, 3).map((c) => (
+                    <span key={c} className="chip">
+                      {c}
+                    </span>
+                  ))}
+                </div>
               )}
             </div>
           )}
@@ -424,27 +419,22 @@ export default function MePage() {
 
       {me?.role === "student" && report && (
         <Card>
-          <div
-            className="row-flex"
-            style={{ gap: "8px", flexWrap: "wrap", alignItems: "center" }}
-          >
-            <div className="card-title" style={{ margin: 0 }}>
+          <div className="row-flex gap-2">
+            <div className="card-title m-0">
               <FileText size={16} aria-hidden /> {t("myReportTitle")}
             </div>
-            <button
-              className={`chip${reportPeriod === "weekly" ? " active" : ""}`}
-              onClick={() => setReportPeriod("weekly")}
-            >
-              {t("periodWeekly")}
-            </button>
-            <button
-              className={`chip${reportPeriod === "monthly" ? " active" : ""}`}
-              onClick={() => setReportPeriod("monthly")}
-            >
-              {t("periodMonthly")}
-            </button>
+            <Segmented
+              className="section-gap-top"
+              ariaLabel={t("myReportTitle")}
+              value={reportPeriod}
+              onChange={(v) => setReportPeriod(v)}
+              options={[
+                { value: "weekly", label: t("periodWeekly") },
+                { value: "monthly", label: t("periodMonthly") },
+              ]}
+            />
           </div>
-          <div className="stat-row" style={{ marginTop: "var(--space-3)" }}>
+          <div className="stat-row mt-3">
             <div>
               <div className="num">{report.quizzes_taken}</div>
               <div className="lbl">{t("reportQuizzesGraded")}</div>
@@ -467,10 +457,8 @@ export default function MePage() {
             </div>
           </div>
           {report.weak_chapters.length > 0 && (
-            <div style={{ marginTop: "var(--space-2)" }}>
-              <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                {t("reportWeak")}:{" "}
-              </span>
+            <div className="mt-2">
+              <span className="muted text-sm">{t("reportWeak")}: </span>
               {report.weak_chapters.map((c) => (
                 <Badge key={c} tone="warn">
                   {c}
@@ -479,10 +467,8 @@ export default function MePage() {
             </div>
           )}
           {report.strengths.length > 0 && (
-            <div style={{ marginTop: "var(--space-2)" }}>
-              <span className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-                {t("reportStrengths")}:{" "}
-              </span>
+            <div className="mt-2">
+              <span className="muted text-sm">{t("reportStrengths")}: </span>
               {report.strengths.map((c) => (
                 <Badge key={c} tone="ok">
                   {c}
@@ -490,10 +476,7 @@ export default function MePage() {
               ))}
             </div>
           )}
-          <p
-            className="muted"
-            style={{ margin: "var(--space-2) 0 0", fontSize: "var(--fs-sm)" }}
-          >
+          <p className="muted text-sm mt-2">
             {t("reportSuggestion")}:{" "}
             {t(report.suggestion_code as Parameters<typeof t>[0]) ||
               report.suggestion_code}
@@ -513,27 +496,22 @@ export default function MePage() {
               const v = e.target.value as "bn" | "en";
               setLang(v);
               document.documentElement.setAttribute("lang", v);
-              navigate(0);
+              // RENO: LangRoot remounts the tree in place — no page reload.
             }}
           >
             <option value="bn">বাংলা</option>
             <option value="en">English</option>
           </select>
         </div>
-        <div className="row-flex" style={{ justifyContent: "space-between" }}>
+        <div className="row-flex spread">
           <div>
-            <div style={{ fontWeight: 600 }}>{t("appearance")}</div>
-            <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-              {t("darkMode")}
-            </div>
+            <div className="setting-label">{t("appearance")}</div>
+            <div className="muted text-sm">{t("darkMode")}</div>
           </div>
           <button
             className="icon-btn"
             aria-label={t("darkMode")}
-            onClick={() => {
-              toggleTheme();
-              navigate(0);
-            }}
+            onClick={() => setDark(toggleTheme() === "dark")}
           >
             {dark ? (
               <Sun size={18} aria-hidden />
@@ -542,18 +520,10 @@ export default function MePage() {
             )}
           </button>
         </div>
-        <div
-          className="row-flex"
-          style={{
-            justifyContent: "space-between",
-            marginTop: "var(--space-3)",
-          }}
-        >
+        <div className="row-flex spread mt-3">
           <div>
-            <div style={{ fontWeight: 600 }}>{t("lowDataTitle")}</div>
-            <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>
-              {t("lowDataHint")}
-            </div>
+            <div className="setting-label">{t("lowDataTitle")}</div>
+            <div className="muted text-sm">{t("lowDataHint")}</div>
           </div>
           <button
             className="switch"
@@ -567,18 +537,12 @@ export default function MePage() {
 
       <Card>
         <div className="card-title">{t("account")}</div>
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "var(--space-2)",
-          }}
-        >
+        <div className="stack-sm">
           <Button
             variant="ghost"
             onClick={exportData}
             disabled={exporting}
-            style={{ justifyContent: "flex-start" }}
+            className="btn-start"
           >
             {exporting ? (
               <span className="spinner" aria-hidden />
@@ -587,20 +551,14 @@ export default function MePage() {
             )}{" "}
             {t("exportData")}
           </Button>
-          {exportError && (
-            <p className="error" style={{ margin: 0 }}>
-              {exportError}
-            </p>
-          )}
+          {exportError && <p className="error m-0">{exportError}</p>}
           {!confirming ? (
             <Button variant="danger" onClick={() => setConfirming(true)}>
               <Trash2 size={18} aria-hidden /> {t("deleteAccount")}
             </Button>
           ) : (
             <div className="stack">
-              <p className="error" style={{ margin: 0 }}>
-                {t("deleteWarning")}
-              </p>
+              <p className="error m-0">{t("deleteWarning")}</p>
               <div className="row-flex">
                 <Button
                   variant="danger"
@@ -613,11 +571,7 @@ export default function MePage() {
                   {t("cancel")}
                 </Button>
               </div>
-              {error && (
-                <p className="error" style={{ margin: 0 }}>
-                  {error}
-                </p>
-              )}
+              {error && <p className="error m-0">{error}</p>}
             </div>
           )}
         </div>

@@ -26,9 +26,7 @@ export function AiQualityCard() {
   return (
     <section className="card">
       <h2>{t("aiqTitle")}</h2>
-      <p className="muted" style={{ marginTop: 0 }}>
-        {q.days}d
-      </p>
+      <p className="muted m-0">{q.days}d</p>
       <div className="stat-grid">
         <div className="stat">
           <span className="stat-value">{q.answers_total}</span>
@@ -47,7 +45,7 @@ export function AiQualityCard() {
           <span className="stat-label">{t("aiqLowConf")}</span>
         </div>
       </div>
-      <p style={{ margin: "var(--space-2) 0 0" }}>
+      <p className="mt-2 m-0">
         <Badge tone="ok">
           {t("aiqThumbsUp")} {q.thumbs_up}
         </Badge>{" "}
@@ -59,19 +57,13 @@ export function AiQualityCard() {
         </Badge>
       </p>
       {reasons.length > 0 && (
-        <p
-          className="muted"
-          style={{ margin: "var(--space-2) 0 0", fontSize: "var(--fs-sm)" }}
-        >
+        <p className="muted mt-2 m-0 text-sm">
           {t("aiqReasons")}:{" "}
           {reasons.map(([code, n]) => `${code} ×${n}`).join(" · ")}
         </p>
       )}
       {models.length > 0 && (
-        <p
-          className="muted"
-          style={{ margin: "var(--space-2) 0 0", fontSize: "var(--fs-sm)" }}
-        >
+        <p className="muted mt-2 m-0 text-sm">
           {t("aiqByModel")}: {models.map(([m, n]) => `${m} ×${n}`).join(" · ")}
         </p>
       )}

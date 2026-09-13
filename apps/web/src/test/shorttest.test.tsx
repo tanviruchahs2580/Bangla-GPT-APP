@@ -1,7 +1,8 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import TeacherDashboard from "../pages/TeacherDashboard";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import CreatePage from "../pages/teacher/CreatePage";
 import { t } from "../i18n";
 import type { ShortTest } from "../types";
 
@@ -16,6 +17,16 @@ vi.mock("../api", async (importOriginal) => ({
   apiBase: "/api",
   getToken: () => "tok",
 }));
+
+function renderPage() {
+  return render(
+    <MemoryRouter initialEntries={["/teacher/create?kind=short_test"]}>
+      <Routes>
+        <Route path="/teacher/create" element={<CreatePage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
 
 const ROOMS = [{ id: 1, class_level: 6, section: "GEN", student_count: 2 }];
 
@@ -89,8 +100,8 @@ beforeEach(() => {
 describe("S2.5 short test assignment card", () => {
   it("assigns one chapter test to the whole classroom", async () => {
     const user = userEvent.setup();
-    render(<TeacherDashboard />);
-    await screen.findByText("Rahim");
+    renderPage();
+    await screen.findByText(t("stEmpty"));
 
     // empty state until something is assigned
     expect(screen.getByText(t("stEmpty"))).toBeInTheDocument();

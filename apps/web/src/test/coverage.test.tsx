@@ -2,7 +2,8 @@
 
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import TeacherDashboard from "../pages/TeacherDashboard";
+import { MemoryRouter } from "react-router-dom";
+import AnalyticsPage from "../pages/teacher/AnalyticsPage";
 import { t } from "../i18n";
 import type { ClassRoom, Coverage } from "../types";
 
@@ -17,6 +18,14 @@ vi.mock("../api", async (importOriginal) => ({
   apiBase: "/api",
   getToken: () => "tok",
 }));
+
+function renderPage() {
+  return render(
+    <MemoryRouter>
+      <AnalyticsPage />
+    </MemoryRouter>,
+  );
+}
 
 const ROOMS: ClassRoom[] = [
   { id: 1, class_level: 6, section: "GEN", student_count: 2 },
@@ -83,7 +92,7 @@ beforeEach(() => {
 
 describe("S3.3 curriculum coverage card", () => {
   it("renders one row per class with a status badge per subject", async () => {
-    render(<TeacherDashboard />);
+    renderPage();
     await screen.findByText(t("covTitle"));
 
     expect(screen.getByText("6 · GEN")).toBeInTheDocument();
@@ -99,7 +108,7 @@ describe("S3.3 curriculum coverage card", () => {
 
   it("shows the empty hint when nothing is covered yet", async () => {
     mockGet({ subjects: [], cells: [] });
-    render(<TeacherDashboard />);
+    renderPage();
     await waitFor(() =>
       expect(screen.getByText(t("covEmpty"))).toBeInTheDocument(),
     );

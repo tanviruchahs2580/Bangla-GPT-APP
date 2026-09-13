@@ -3,7 +3,8 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import TeacherDashboard from "../pages/TeacherDashboard";
+import { MemoryRouter } from "react-router-dom";
+import AnalyticsPage from "../pages/teacher/AnalyticsPage";
 import { t } from "../i18n";
 import type { SupportPlanRow, WeakMatrix } from "../types";
 
@@ -18,6 +19,14 @@ vi.mock("../api", async (importOriginal) => ({
   apiBase: "/api",
   getToken: () => "tok",
 }));
+
+function renderPage() {
+  return render(
+    <MemoryRouter>
+      <AnalyticsPage />
+    </MemoryRouter>,
+  );
+}
 
 const ROOMS = [{ id: 1, class_level: 6, section: "GEN", student_count: 2 }];
 const ROSTER = [
@@ -130,14 +139,15 @@ beforeEach(() => {
 
 describe("S2.7 weakness heatmap card", () => {
   it("renders the concept x student grid with token-bucket cells", async () => {
-    render(<TeacherDashboard />);
+    renderPage();
     // names appear in both the roster and the heatmap header
     await screen.findAllByText("Rahim");
 
     // concept headers and per-student columns present
     expect(screen.getByText("beta")).toBeInTheDocument();
     expect(screen.getByText("alpha")).toBeInTheDocument();
-    expect(screen.getAllByText("Karim").length).toBeGreaterThan(1);
+    // WP-DR: roster moved to Classes; the heatmap header still names each student.
+    expect(screen.getAllByText("Karim").length).toBeGreaterThan(0);
 
     // accuracies render as percentages, weakest cells take the danger bucket
     expect(screen.getAllByText("0%").length).toBe(2);
@@ -166,7 +176,7 @@ describe("S2.7 weakness heatmap card", () => {
 
   it("flags at-risk students and creates a 3-week support plan", async () => {
     const user = userEvent.setup();
-    render(<TeacherDashboard />);
+    renderPage();
     await screen.findAllByText("Rahim");
 
     // exactly Karim is flagged (avg 25% < 40 OR down trend)
@@ -216,7 +226,7 @@ describe("S2.7 weakness heatmap card", () => {
       if (path.includes("weak-matrix")) return Promise.resolve(withRollup);
       return Promise.resolve(null);
     });
-    render(<TeacherDashboard />);
+    renderPage();
     await screen.findAllByText("Rahim");
     // only Karim carries rollup data in this payload -> exactly one chip row,
     // both weakest concepts in rollup order (querySelectorAll avoids the
@@ -241,7 +251,7 @@ describe("S2.7 weakness heatmap card", () => {
       }
       return Promise.resolve(null);
     });
-    render(<TeacherDashboard />);
+    renderPage();
     await waitFor(() =>
       expect(screen.getByText(t("wmEmpty"))).toBeInTheDocument(),
     );

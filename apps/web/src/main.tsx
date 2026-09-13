@@ -1,4 +1,4 @@
-import React, { lazy, Suspense } from "react";
+import React, { lazy, Suspense, useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes, Link } from "react-router-dom";
@@ -20,7 +20,8 @@ import "@fontsource/hind-siliguri/600.css";
 import { getToken } from "./api";
 import { AuthProvider, ROLE_HOME, useAuth } from "./AuthContext";
 import { AppShell } from "./AppShell";
-import { t } from "./i18n";
+import { Skeleton } from "./components/ui";
+import { onLangChange, t } from "./i18n";
 import { initInstallPrompt } from "./lib/installPrompt";
 import { initLowData } from "./lib/lowData";
 
@@ -41,7 +42,22 @@ const LearnChapterPage = lazy(() =>
     default: m.LearnChapterPage,
   })),
 );
-const TeacherDashboard = lazy(() => import("./pages/TeacherDashboard"));
+const TeacherHomePage = lazy(() =>
+  import("./pages/teacher/TeacherHomePage").then((m) => ({
+    default: m.default,
+  })),
+);
+const CreatePage = lazy(() => import("./pages/teacher/CreatePage"));
+const ClassesPage = lazy(() => import("./pages/teacher/ClassesPage"));
+const AssessmentsPage = lazy(() => import("./pages/teacher/AssessmentsPage"));
+const AnalyticsPage = lazy(() =>
+  import("./pages/teacher/AnalyticsPage").then((m) => ({
+    default: m.default,
+  })),
+);
+const TeacherProfilePage = lazy(
+  () => import("./pages/teacher/TeacherProfilePage"),
+);
 const ParentDashboard = lazy(() => import("./pages/ParentDashboard"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const SchoolDashboard = lazy(() => import("./pages/SchoolDashboard"));
@@ -70,8 +86,10 @@ function RequireAuth({
     return (
       <main className="container" aria-live="polite">
         <p className="muted">{t("loading")}</p>
-        <div className="skeleton" style={{ width: "60%" }} />
-        <div className="skeleton" style={{ width: "40%" }} />
+        <div className="stack">
+          <Skeleton w="60%" />
+          <Skeleton w="40%" />
+        </div>
       </main>
     );
   // Token present but profile unloadable (e.g. expired token, offline):
@@ -86,9 +104,11 @@ function Loading() {
   return (
     <main className="container" aria-live="polite">
       <p className="muted">{t("loading")}</p>
-      <div className="skeleton" style={{ width: "70%" }} />
-      <div className="skeleton" style={{ width: "55%" }} />
-      <div className="skeleton" style={{ width: "80%" }} />
+      <div className="stack">
+        <Skeleton w="70%" />
+        <Skeleton w="55%" />
+        <Skeleton w="80%" />
+      </div>
     </main>
   );
 }
@@ -177,7 +197,47 @@ function RoutesSwitch() {
         path="/teacher"
         element={
           <RequireAuth role="teacher">
-            <TeacherDashboard />
+            <TeacherHomePage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/teacher/create"
+        element={
+          <RequireAuth role="teacher">
+            <CreatePage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/teacher/classes"
+        element={
+          <RequireAuth role="teacher">
+            <ClassesPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/teacher/assessments"
+        element={
+          <RequireAuth role="teacher">
+            <AssessmentsPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/teacher/analytics"
+        element={
+          <RequireAuth role="teacher">
+            <AnalyticsPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/teacher/profile"
+        element={
+          <RequireAuth role="teacher">
+            <TeacherProfilePage />
           </RequireAuth>
         }
       />
@@ -214,12 +274,22 @@ function RoutesSwitch() {
 function App() {
   return (
     <BrowserRouter>
-      <Suspense fallback={<Loading />}>
-        <RoutesSwitch />
-        <Footer />
-      </Suspense>
+      <LangRoot>
+        <Suspense fallback={<Loading />}>
+          <RoutesSwitch />
+          <Footer />
+        </Suspense>
+      </LangRoot>
     </BrowserRouter>
   );
+}
+
+// RENO: language switch remounts the tree in place instead of a full
+// page reload (navigate(0)) — instant, no network round-trip, PWA-safe.
+function LangRoot({ children }: { children: React.ReactNode }) {
+  const [tick, setTick] = useState(0);
+  useEffect(() => onLangChange(() => setTick((n) => n + 1)), []);
+  return <React.Fragment key={tick}>{children}</React.Fragment>;
 }
 
 function Footer() {
@@ -256,7 +326,7 @@ class ErrorBoundary extends React.Component<
               className="btn btn-primary"
               onClick={() => window.location.reload()}
             >
-              Reload
+              {t("retry")}
             </button>
           </div>
         </div>

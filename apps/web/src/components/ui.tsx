@@ -1,5 +1,12 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  type ButtonHTMLAttributes,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
 import { cn } from "../lib/cn";
+import { t } from "../i18n";
 import { BrandMark } from "./BrandMark";
 
 type Variant = "primary" | "teal" | "ghost" | "soft" | "danger" | "default";
@@ -95,9 +102,10 @@ export function Badge({
 }
 
 export function Spinner({ label }: { label?: string }) {
+  // RENO: default label comes from i18n instead of hardcoded English.
   return (
     <span role="status" aria-live="polite">
-      <span className="visually-hidden">{label ?? "Loading…"}</span>
+      <span className="visually-hidden">{label ?? t("loading")}</span>
       <span className="skeleton spinner-dot" aria-hidden />
     </span>
   );
@@ -190,5 +198,222 @@ export function EmptyState({
       {sub && <div className="muted empty-sub">{sub}</div>}
       {action && <div className="empty-action">{action}</div>}
     </div>
+  );
+}
+
+/* ============================================================
+   RENO — shared primitives added during the world-class polish
+   pass. Goal: one focus-trapped modal, one skeleton vocabulary,
+   one form field / segmented / avatar pattern for every page.
+   ============================================================ */
+
+/** Accessible modal dialog: portal, focus trap, Esc to close,
+    scroll lock, focus restore. Styling reuses .modal-backdrop/.modal. */
+export function Modal({
+  open,
+  onClose,
+  title,
+  children,
+  footer,
+  wide,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: ReactNode;
+  children: ReactNode;
+  footer?: ReactNode;
+  wide?: boolean;
+}) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const restoreRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    restoreRef.current = document.activeElement as HTMLElement | null;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    // focus the dialog itself so Tab cycles start inside
+    boxRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab" || !boxRef.current) return;
+      const focusables = boxRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("keydown", onKey, true);
+      document.body.style.overflow = prevOverflow;
+      restoreRef.current?.focus?.();
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+  return createPortal(
+    <div
+      className="modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={boxRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={typeof title === "string" ? title : undefined}
+        className={cn("modal", wide && "modal-wide")}
+        tabIndex={-1}
+      >
+        <div className="modal-head">
+          <h3 className="modal-title">{title}</h3>
+          <button
+            type="button"
+            className="icon-btn modal-close"
+            aria-label={t("close")}
+            onClick={onClose}
+          >
+            ✕
+          </button>
+        </div>
+        {children}
+        {footer && <div className="modal-footer">{footer}</div>}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+/** Shimmer placeholder. `w`/`h` are layout dimensions (not theme values). */
+export function Skeleton({
+  w,
+  h,
+  variant,
+  className,
+}: {
+  w?: number | string;
+  h?: number | string;
+  variant?: "text" | "card" | "row" | "avatar";
+  className?: string;
+}) {
+  const variantClass =
+    variant === "card"
+      ? "skeleton-card"
+      : variant === "row"
+        ? "skeleton-list-row"
+        : variant === "avatar"
+          ? "skeleton-avatar"
+          : undefined;
+  return (
+    <div
+      aria-hidden
+      className={cn("skeleton", variantClass, className)}
+      style={{ width: w, height: h }}
+    />
+  );
+}
+
+/** Label + control + error text, matching the .field contract. */
+export function Field({
+  label,
+  htmlFor,
+  error,
+  hint,
+  children,
+  className,
+}: {
+  label: ReactNode;
+  htmlFor?: string;
+  error?: ReactNode;
+  hint?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("field", !!error && "field-error", className)}>
+      <label htmlFor={htmlFor}>{label}</label>
+      {children}
+      {hint && !error && <span className="field-hint">{hint}</span>}
+      {error && (
+        <span className="field-error-text" role="alert">
+          {error}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** Segmented control over the .chip vocabulary (quiz tabs, class picker…). */
+export function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+  ariaLabel,
+  className,
+}: {
+  options: Array<{ value: T; label: ReactNode }>;
+  value: T;
+  onChange: (v: T) => void;
+  ariaLabel?: string;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn("chips", className)}
+      role="tablist"
+      aria-label={ariaLabel}
+    >
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="tab"
+          aria-selected={o.value === value}
+          className={cn("chip", o.value === value && "active")}
+          onClick={() => onChange(o.value)}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Initial-based avatar with brand-consistent tones. */
+export function Avatar({
+  name,
+  size = "md",
+  tone = "brand",
+}: {
+  name: string;
+  size?: "sm" | "md" | "lg" | "xl";
+  tone?: "brand" | "teal" | "ai";
+}) {
+  const initial = (name || "?").trim().charAt(0).toUpperCase();
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "avatar",
+        size !== "md" && `avatar-${size}`,
+        tone !== "brand" && `avatar-${tone}`,
+      )}
+    >
+      {initial}
+    </span>
   );
 }
