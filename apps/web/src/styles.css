@@ -4675,6 +4675,136 @@ button.small {
   }
 }
 
+/* ── 15c. WAVE-5: mobile topbar + responsive fixes ──────────────
+   Root causes fixed (audited at 360×800, Android Chrome):
+   1. .topbar is a fixed-height flex bar whose children (brand text,
+      search, username, 5 icon buttons ≈ 616px) cannot fit ≤960px
+      viewports — text wrapped inside the bar and icons escaped the
+      64px height over the page. Two-row layout below.
+   2. Staff sidebar was display:none <1024px with no substitute, so
+      teachers had no navigation at all on phones.
+   3. Home snapshot / hero prompt rows squeezed their text into
+      one-word-per-line columns on narrow screens. */
+
+@media (max-width: 960px) {
+  /* Row 1: brand … actions · Row 2: full-width search (students) */
+  .topbar {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: var(--topbar-h);
+    padding: 6px var(--space-3) 8px;
+    row-gap: 6px;
+  }
+
+  .brand {
+    order: 1;
+    min-width: 0;
+    flex: 0 1 auto;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .topbar-actions {
+    order: 2;
+    margin-left: auto;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
+  }
+
+  .searchbox {
+    order: 3;
+    flex: 1 1 100%;
+    max-width: none;
+    margin-inline: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  /* The name is one tap away in আমি (Me); the bar needs the width. */
+  .topbar-user {
+    display: none;
+  }
+
+  .topbar-actions {
+    gap: 4px;
+  }
+
+  .topbar-actions .icon-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .brand {
+    font-size: var(--fs-md);
+  }
+
+  /* Home snapshot: let the CTA drop to its own full-width line so the
+     ring + text keep readable column widths. */
+  .home-snapshot .row-flex {
+    row-gap: var(--space-3);
+  }
+
+  .home-snapshot .row-flex .btn {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Hero prompt: stacked input + full-width button (bigger targets) */
+  .home-prompt .input {
+    flex: 1 1 100%;
+  }
+
+  .home-prompt .btn {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+}
+
+/* Staff navigation on phones/tablets: the desktop sidebar is hidden
+   <1024px; turn the same links into a horizontal chip strip so every
+   staff page stays reachable. */
+@media (max-width: 1023px) {
+  .sidebar {
+    display: flex;
+    flex-direction: row;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 8px var(--space-3);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border-bottom: 1px solid var(--line);
+    scrollbar-width: none;
+  }
+
+  .sidebar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .side-link {
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--line);
+    background: var(--card);
+    color: var(--muted);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .side-link.active {
+    background: var(--brand-soft);
+    border-color: transparent;
+    color: var(--brand-strong);
+  }
+}
+
 /* ── 16. Motion accessibility guard (stays last) ─────────────── */
 @media (prefers-reduced-motion: reduce) {
   .shell-main,
