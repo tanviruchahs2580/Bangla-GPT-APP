@@ -3,7 +3,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://endif-bottom-inputs-pens.trycloudflare.com/:path*"
+      "destination": "https://tablets-forecasts-designed-fair.trycloudflare.com/:path*"
     },
     { "source": "/(.*)", "destination": "/index.html" }
   ]

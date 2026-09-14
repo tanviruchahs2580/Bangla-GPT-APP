@@ -14,12 +14,20 @@ bundled PostgreSQL), so the deployment is:
   2. `/(.*)` → `/index.html` SPA fallback (filesystem still wins for hashed assets)
 - **API origin:** the live `api-live` container exposed through a Cloudflare quick tunnel
   (`api-tunnel` docker container → `host.docker.internal:8000`), currently
-  `https://endif-bottom-inputs-pens.trycloudflare.com`
+  `https://tablets-forecasts-designed-fair.trycloudflare.com`
+
+> **2026-09-15 update:** the quick tunnel rotated after a restart and the deployed
+> `vercel.json` still pointed at the dead `endif-bottom-inputs-pens` URL, which made
+> every live `/api/*` call return `502 DNS_HOSTNAME_NOT_FOUND`. The tunnel was
+> restarted, `vercel.json` updated to the URL above, and the web bundle redeployed.
+> `api-live` now runs the `bangla-gpt-api:v0.9.1` image in **ENV=production** with
+> real `JWT_SECRET`/`PII_ENC_KEY`/`METRICS_TOKEN`, an allowlisted `ALLOWED_ORIGINS`,
+> and email verification delivered over a local `api-mailpit` SMTP sink (STARTTLS).
+> Full QA evidence: `docs/FULL_QA_ENTERPRISE_AUDIT_2026-09-15.md`.
 
 ## Deployed revision
 
-`dfa9fe4` (release v0.9.0 + pipeline record) — same bundle as the local live stack
-(`assets/index-o7564-N7.js`).
+`0c2311b` + v0.9.1 source (release 0.9.1) — same bundle as the local live stack.
 
 ## Functional verification (as a user, on the Vercel URL)
 
