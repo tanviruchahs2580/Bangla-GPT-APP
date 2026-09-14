@@ -61,7 +61,8 @@ def validate_app_config(settings: Settings) -> None:
 
 def validate_database_url(settings: Settings) -> None:
     """Ensure we are not silently using an in-memory DB in production."""
-    if settings.is_production and settings.database_url.strip() == "sqlite://":
+    url = settings.database_url.strip()
+    if settings.is_production and (url in ("sqlite://", "sqlite:///:memory:") or ":memory:" in url):
         logger.critical(
             "production_in_memory_database",
             extra={"op": "config"},

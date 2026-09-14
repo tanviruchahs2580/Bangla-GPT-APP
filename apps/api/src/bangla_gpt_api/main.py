@@ -138,7 +138,8 @@ def _validate_cors(settings: Settings) -> list[str]:
 
 def _validate_database(settings: Settings) -> list[str]:
     """DATABASE_URL must be a persistent store in production."""
-    if settings.database_url.strip() == "sqlite://":
+    url = settings.database_url.strip()
+    if url in ("sqlite://", "sqlite:///:memory:") or ":memory:" in url:
         return [
             "DATABASE_URL must be a persistent store in production "
             "(e.g. sqlite:////data/app.db or PostgreSQL)"

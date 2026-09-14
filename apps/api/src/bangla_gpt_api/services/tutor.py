@@ -1,6 +1,7 @@
 import logging
 import re
 import time
+import unicodedata
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -91,6 +92,17 @@ def sanitize_evidence(text: str) -> str:
     """Neutralize evidence-delimiter escapes inside untrusted chunk text."""
     text = _EVIDENCE_CLOSE_RE.sub("<&#47;evidence>", text)
     return _EVIDENCE_OPEN_RE.sub("<&#91;evidence>", text)
+
+
+def normalize_query(text: str) -> str:
+    """NFKC-normalize free-text input at the AI boundary.
+
+    Folds mobile-keyboard compatibility variants (precomposed vs decomposed
+    Bangla) before safety screening, retrieval, gating and routing. Pure NFKC
+    only — no casefold/whitespace rewrite, so the text sent to the LLM keeps
+    its original casing and spacing.
+    """
+    return unicodedata.normalize("NFKC", text)
 
 
 def build_evidence_prompt(
@@ -253,6 +265,9 @@ class TutorService:
         the text. The fast lane never carries images (vision needs the full
         model).
         """
+        question = normalize_query(question)
+        if search_query is not None:
+            search_query = normalize_query(search_query)
         unsafe = _screen_safety(question)
         if unsafe:
             refusal_copy, reason = unsafe
@@ -407,6 +422,9 @@ class TutorService:
         Yields ``StreamEvent`` items: zero or more ``token`` events followed by
         exactly one ``final`` event carrying the complete AskResponse.
         """
+        question = normalize_query(question)
+        if search_query is not None:
+            search_query = normalize_query(search_query)
         unsafe = _screen_safety(question)
         if unsafe:
             refusal_copy, reason = unsafe

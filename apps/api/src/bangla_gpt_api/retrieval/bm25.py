@@ -1,5 +1,6 @@
 import math
 import re
+import unicodedata
 from collections import Counter
 from dataclasses import dataclass
 
@@ -18,8 +19,14 @@ def tokenize(text: str) -> list[str]:
     ``\\w+`` splits on Bangla combining marks (vowel signs U+09BE-U+09CC,
     virama U+09CD), destroying words like 'বিশ্বকাপ'. The explicit range
     U+0980-U+09FF covers the full Bangla block incl. signs and digits.
+
+    NFKC folds compatibility variants (e.g. mobile-keyboard precomposed vs
+    decomposed Bangla) so indexing and querying stay symmetric.
     """
-    return [match.group(0).lower() for match in _BANGLA_WORD_RE.finditer(text)]
+    return [
+        match.group(0).lower()
+        for match in _BANGLA_WORD_RE.finditer(unicodedata.normalize("NFKC", text))
+    ]
 
 
 @dataclass

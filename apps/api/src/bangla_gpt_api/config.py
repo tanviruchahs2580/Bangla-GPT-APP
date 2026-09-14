@@ -25,7 +25,8 @@ def _get_version() -> str:
 
         return _version("bangla-gpt-api")
     except Exception:
-        return "0.6.2"
+        # Fallback for bare-source execution (must track pyproject version).
+        return "0.9.2"
 
 
 class Settings(BaseSettings):
@@ -81,7 +82,10 @@ class Settings(BaseSettings):
     embedding_model: str = ""
 
     # --- persistence ---
-    database_url: str = "sqlite://"
+    # File-based SQLite by default so local dev data survives restarts.
+    # In-memory ("sqlite://" / "sqlite:///:memory:") is for tests only;
+    # production boot refuses in-memory stores (see enforce_production_safety).
+    database_url: str = "sqlite:///./bangla_gpt.db"
 
     # --- auth ---
     jwt_secret: str = DEFAULT_JWT_SECRET
