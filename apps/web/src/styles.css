@@ -2989,11 +2989,16 @@ button.small {
   line-height: 1;
 }
 .notif-panel {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
+  /* RENO: the bell sits mid-right in the topbar (language/theme/logout
+     icons follow it), so an absolutely-positioned 340px panel anchored
+     to the bell ran off the left edge of phone viewports and the text
+     was clipped. Anchor to the viewport instead: always fully visible,
+     still directly under the sticky topbar. */
+  position: fixed;
+  right: var(--space-4);
+  top: calc(var(--topbar-h) + 6px);
   z-index: 60;
-  width: min(340px, 86vw);
+  width: min(340px, calc(100vw - 2 * var(--space-4)));
   max-height: 60vh;
   overflow-y: auto;
   background: var(--bg-elev);
