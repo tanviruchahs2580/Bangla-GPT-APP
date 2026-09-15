@@ -365,6 +365,15 @@ p {
   padding: var(--space-4) var(--space-4) calc(var(--nav-h) + var(--space-6));
 }
 
+/* RENO: every stacked page section keeps a minimum gap from the one
+   above it. Previously only .card + .card got one, so chip rows, grids
+   and hero blocks could touch the card/section before them (e.g. the
+   practice tabs under "আমার দুর্বলতা"). Larger per-component margins
+   (.section-head, .card + .card) still win via cascade/collapsing. */
+.shell-main > * + * {
+  margin-top: var(--space-4);
+}
+
 /* Top bar */
 .topbar {
   position: sticky;
