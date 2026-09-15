@@ -14,7 +14,7 @@ bundled PostgreSQL), so the deployment is:
   2. `/(.*)` → `/index.html` SPA fallback (filesystem still wins for hashed assets)
 - **API origin:** the live `api-live` container exposed through a Cloudflare quick tunnel
   (`api-tunnel` docker container → `host.docker.internal:8000`), currently
-  `https://tablets-forecasts-designed-fair.trycloudflare.com`
+  `https://amd-reproduction-clips-cricket.trycloudflare.com`
 
 > **2026-09-15 update:** the quick tunnel rotated after a restart and the deployed
 > `vercel.json` still pointed at the dead `endif-bottom-inputs-pens` URL, which made
