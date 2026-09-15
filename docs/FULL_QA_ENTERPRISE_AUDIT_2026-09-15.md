@@ -1,9 +1,10 @@
 # FULL QA / ENTERPRISE AUDIT — 2026-09-15
 
-> **Scope:** app, codebase, repository structure, live deployment sync, user-journey testing.
-> **Release under test:** v0.9.1 (`0c2311b` + in-flight working-tree changes, now green).
-> **Policy:** no git commits, pushes or CI were executed. Container redeploy + Vercel
+> **Scope:** app, codebase, repository structure, live deployment sync, user-journey testing,
+> and (phase 2) the full CI/CD pipeline run under release **v0.9.2**.
+> **Policy (phase 1):** no git commits, pushes or CI were executed. Container redeploy + Vercel
 > redeploy were performed because "live must sync with final" was an explicit goal.
+> **Phase 2 (same day):** the directive was lifted — see §8 for the full pipeline execution.
 
 ---
 
@@ -106,3 +107,74 @@ builds, and vulnerability scans are green.
 - Repository: hygiene-clean, all quality gates green, no commits/pushes made.
 - Running stack: **identical to the final v0.9.1 source**, production-safe boot config.
 - Live URL: https://bangla-gpt-app.vercel.app — every tested user journey and parameter functions; frontend, proxy, streaming, and all role dashboards verified in-browser.
+
+---
+
+## 8. Phase 2 — full CI/CD pipeline execution (v0.9.2, same day)
+
+Directive lifted: the audited condition was shipped through the real pipeline under strict SOP.
+
+### 8.1 Release commits (conventional, logical units — 9 total on `main`)
+
+```
+c289433 fix(api): production-boot guard + Bangla input-boundary NFKC + hermetic tests
+320ed1f chore(repo): move G3 seed script into scripts/, drop tracked DB backup blob
+52281b0 chore(gitignore): exclude local mailpit TLS dir and production env file
+0a4bec2 fix(web): repoint /api proxy at live tunnel URL (live site was 502)
+29f70eb chore(release): v0.9.2 — live-hardening patch release
+052454a docs: enterprise QA audit evidence (2026-09-15) + ADR/architecture/ops records
+791fb88 ci: hermetic import-time settings patch + step-isolated migration DBs
+7d04b14 chore(web): repoint /api proxy to current tunnel host (quick-tunnel rotation)
+45aea3c docs: record final v0.9.2 live sync (tunnel host amd-reproduction-clips-cricket)
+```
+
+Pre-push secret scan of the full diff: no real secrets in any commit (`.env.production.local`,
+`.mailpit/` certs, live env dump all gitignored; only placeholders appear in tracked docs).
+
+### 8.2 First pipeline pass — CI caught a real latent defect (P1)
+
+**Run 34894963825 (API CI) failed** on both Python 3.11/3.12 at "Alembic migration check":
+`sqlite3.OperationalError: table users already exists`.
+
+Root cause (proven locally): `main.py:320` builds a module-level `app = create_app()` for
+gunicorn; test collection imports it **before** any fixture runs. With the new file-DB default
+and no `.env` on CI, that import created `./bangla_gpt.db` with the full schema during the
+pytest step, and the following alembic step then collided with it. The old in-memory default
+had masked this for the suite's whole life — CI was the first honest environment to expose it.
+
+**Fix (commit 791fb88):**
+- `tests/conftest.py` applies the hermetic `Settings` patch at **module (import) time**, not only
+  via the autouse fixture — collection-time `create_app()` now always gets an in-memory DB.
+- CI hardening: the alembic check and smoke steps pin `DATABASE_URL` to throwaway files
+  (step isolation), and the Postgres job now pins `DATABASE_URL` so its "migration cycle against
+  Postgres" genuinely runs against the service instead of silently falling back to SQLite.
+
+### 8.3 Final pipeline results (all green)
+
+| Workflow | Trigger | Run | Result |
+|---|---|---|---|
+| API CI | push `791fb88` | 34929608797 | **success** — lint (3.11+3.12), format, mypy, 628 tests, pip-audit, **alembic up/down/up cycle**, smoke (116 paths), Postgres engine job, golden retrieval benchmark, Docker build, **Trivy HIGH/CRITICAL gate (0 fixable)**, container health + `/ready` provider probe, web job (vitest 126 + npm audit + build) |
+| Repository Sanity | every push | all | success — no tracked `.env`, foundation files, workflow YAML valid |
+| Eval gate | push | all | success — golden-set regression ≤2pp (measured locally first: grounded 1.0000 vs baseline 0.9984) |
+| Release & Deploy | tag **v0.9.2** | 34894969518 | success — GHCR images `api:v0.9.2` + `web:v0.9.2` built and pushed; SSH deploy job skipped by design (`DEPLOY_ENABLED` not set — host secret belongs to owner) |
+| API CI re-run | push `7d04b14`, `45aea3c` | 2 more | success (docs/proxy repoints are config-only) |
+
+### 8.4 Post-pipeline live sync + user re-test
+
+- `api-live` rolled to **v0.9.2** (same production boot config; data volume `api-live-data`
+  preserved; alembic schema unchanged). Docker Desktop had restarted mid-session; the api/web
+  tunnels were recreated (quick-tunnel hostnames rotate — documented caveat, now re-confirmed).
+- `vercel.json` → `https://amd-reproduction-clips-cricket.trycloudflare.com`; Vercel production
+  redeployed. `web-preview` rebuilt to v0.9.2 (:8081) for full-stack parity.
+- **Live evidence:** `https://bangla-gpt-app.vercel.app/api/openapi.json` → **version 0.9.2**;
+  `/api/health` 200; GHCR pull requires `read:packages` (owner PAT) — container was rebuilt
+  from the same CI-validated commit instead (runtime code of `791fb88`/`7d04b14` vs tag `v0.9.2`
+  is identical: test/CI/config only, verified via `git diff v0.9.2..HEAD -- apps/api/src apps/web/src` = empty).
+- **User re-test on v0.9.2 (browser):** student login ✅, tutor ask → 98% confidence,
+  "Textbook-backed" badge, 3 evidence excerpt chips ✅, quiz (3q run → result → explain) ✅,
+  bn/en UI (both verified) ✅.
+
+### 8.5 Verdict (phase 2)
+
+**PASS — current condition live in production: app = v0.9.2 == `main` HEAD == tag `v0.9.2`,
+all four pipelines green, every user-facing parameter functionally verified on the live URL.**
