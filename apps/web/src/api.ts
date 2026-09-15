@@ -192,29 +192,24 @@ export interface TokenResponse {
   must_change_password?: boolean;
 }
 
-function decodeRole(token: string): string | null {
-  try {
-    const payload = JSON.parse(
-      atob(token.split(".")[1]!.replace(/-/g, "+").replace(/_/g, "/")),
-    );
-    return typeof payload.role === "string" ? payload.role : null;
-  } catch {
-    return null;
-  }
-}
-
-export async function login(email: string, password: string): Promise<string> {
+export async function login(
+  email: string,
+  password: string,
+): Promise<MeResponse> {
   const res = await post<TokenResponse>("/auth/login", { email, password });
   localStorage.setItem(TOKEN_KEY, res.access_token);
-  // Validate the session and refresh the authoritative role from the server.
-  // A null here (transient failure AFTER a successful login) must NOT look
-  // like a success: the caller would navigate into authed routes with a
-  // dead session and bounce straight back out ("instant logout").
+  // Validate the session and refresh the authoritative profile from the
+  // server. A null here (transient failure AFTER a successful login) must
+  // NOT look like a success: the caller would navigate into authed routes
+  // with a dead session and bounce straight back out ("instant logout").
+  // The verified profile is returned so callers can seed auth state
+  // directly — re-fetching /users/me after login doubled the post-login
+  // latency (one extra tunnel round-trip per login).
   const me = await fetchMe();
   if (!me) {
     throw new ApiError(0, "session verification failed", "verify_failed");
   }
-  return decodeRole(res.access_token) ?? "student";
+  return me;
 }
 
 export async function register(input: {

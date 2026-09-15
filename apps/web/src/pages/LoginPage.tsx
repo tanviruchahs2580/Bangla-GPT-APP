@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { fetchMe, login } from "../api";
+import { login } from "../api";
 import { useAuth } from "../AuthContext";
 import { friendlyError, type ErrorCopy } from "../errors";
 import { t } from "../i18n";
@@ -20,8 +20,9 @@ export default function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      await login(email, password);
-      setMe(await fetchMe());
+      // login() verifies the session and returns the server profile —
+      // seeding auth state from it avoids a second /users/me round-trip.
+      setMe(await login(email, password));
     } catch (err) {
       const apiErr = err as { code?: unknown; message?: string };
       setError(

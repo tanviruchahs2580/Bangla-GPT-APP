@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { fetchMe, login, register } from "../api";
+import { login, register } from "../api";
 import { useAuth } from "../AuthContext";
 import { friendlyError, type ErrorCopy } from "../errors";
 import { t } from "../i18n";
@@ -37,8 +37,7 @@ export default function RegisterPage() {
       });
       // SMTP-verified deployments land on the verify screen; others go straight in.
       try {
-        await login(email, password);
-        setMe(await fetchMe());
+        setMe(await login(email, password));
       } catch (verifyErr) {
         const code = (verifyErr as { code?: string }).code;
         if (code === "email_unverified") {

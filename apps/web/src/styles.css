@@ -1137,6 +1137,16 @@ p {
   gap: 6px;
 }
 
+/* RENO: students get a fixed .bottombar over the viewport bottom; the
+   footer is a sibling of .shell, so its last lines ("গোপনীয়তা · …" and
+   the copyright) rendered behind the nav and looked clipped. Keep the
+   footer clear of the nav whenever the bottombar is present. */
+.shell:has(.bottombar) ~ .footer {
+  padding-bottom: calc(
+    var(--nav-h) + env(safe-area-inset-bottom, 0px) + var(--space-5)
+  );
+}
+
 /* Auth / splash — WP-02 refined brand story, WAVE-4 aurora backdrop */
 .splash {
   min-height: 100dvh;
