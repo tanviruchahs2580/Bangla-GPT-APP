@@ -176,5 +176,24 @@ had masked this for the suite's whole life — CI was the first honest environme
 
 ### 8.5 Verdict (phase 2)
 
-**PASS — current condition live in production: app = v0.9.2 == `main` HEAD == tag `v0.9.2`,
+**PASS — current condition live in production: app = codebase = repo = tag `v0.9.2`,
 all four pipelines green, every user-facing parameter functionally verified on the live URL.**
+
+### 8.6 Follow-up verification: "is the Vercel link actually on the final version?" (same day)
+
+Direct evidence gathered when re-asked:
+
+| Check | Result |
+|---|---|
+| Production bundle at `bangla-gpt-app.vercel.app` | `index-ncjoE9UB.js` + `index-C316nnxs.css` — **byte-identical hashes** to the local `apps/web/dist` built from v0.9.2 source |
+| `/api/openapi.json` through the live proxy | **version 0.9.2** |
+| Commits after the last successful deploy (`45aea3c`, `f4cc47f`) | docs-only; `git diff` shows zero `apps/web/src` / `apps/api/src` runtime changes → live bundle remains the correct final artifact |
+
+**Finding fixed during this check:** the project's GitHub integration had auto-triggered
+production deploys for every push — and they were **all failing** (`vite: command not found`),
+because the Vercel project's Root Directory was unset (repo root instead of `apps/web`). The
+`bangla-gpt-app.vercel.app` alias therefore remained pinned to the last manual `vercel --prod`
+deploy. Corrected via the Vercel API: `rootDirectory=apps/web`, `installCommand=npm ci`,
+`buildCommand=npm run build`, `outputDirectory=dist`. The push of this commit is the
+verification that git-push auto-deploy now reaches **Ready** and promotes the alias — closing
+the CD gap so future pushes deploy automatically (SOP: CI must be the ship path, not the CLI).
