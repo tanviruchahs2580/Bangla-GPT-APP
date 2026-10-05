@@ -134,10 +134,15 @@ def teacher_analytics(
 
 
 def _room_counts(db: Session) -> dict[int, int]:
-    rows = db.execute(
-        select(ClassStudent.classroom_id.label("cid"), func.count().label("cnt"))
-        .group_by(ClassStudent.classroom_id)
-    ).mappings().all()
+    rows = (
+        db.execute(
+            select(ClassStudent.classroom_id.label("cid"), func.count().label("cnt")).group_by(
+                ClassStudent.classroom_id
+            )
+        )
+        .mappings()
+        .all()
+    )
     return {int(r["cid"]): int(r["cnt"]) for r in rows}
 
 
