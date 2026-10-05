@@ -9,11 +9,10 @@ import logging
 import secrets
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Any, cast
+from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func, select
-from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -135,13 +134,11 @@ def teacher_analytics(
 
 
 def _room_counts(db: Session) -> dict[int, int]:
-    rows = cast(
-        CursorResult[Any],
-        db.execute(
-            select(ClassStudent.classroom_id, func.count()).group_by(ClassStudent.classroom_id)
-        ),
-    )
-    return {int(row[0]): int(row[1]) for row in rows.all()}
+    rows = db.execute(
+        select(ClassStudent.classroom_id.label("cid"), func.count().label("cnt"))
+        .group_by(ClassStudent.classroom_id)
+    ).mappings().all()
+    return {int(r["cid"]): int(r["cnt"]) for r in rows}
 
 
 @router.get("/teacher/classrooms", response_model=list[ClassRoomOut])

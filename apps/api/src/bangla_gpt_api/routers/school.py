@@ -9,11 +9,10 @@ import logging
 import secrets
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Any, cast
+from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Response
 from sqlalchemy import func, select
-from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -432,15 +431,16 @@ def school_my_overview(db: DbSession, user: SchoolStaffUser) -> SchoolOverviewOu
     )
     counts: dict[int, int] = {}
     if staff_rows:
-        rows = cast(
-            CursorResult[Any],
+        rows = (
             db.execute(
-                select(ClassTeacher.teacher_id, func.count())
+                select(ClassTeacher.teacher_id.label("tid"), func.count().label("cnt"))
                 .where(ClassTeacher.teacher_id.in_([p.id for _, p in staff_rows]))
                 .group_by(ClassTeacher.teacher_id)
-            ),
+            )
+            .mappings()
+            .all()
         )
-        counts = {int(r[0]): int(r[1]) for r in rows.all()}
+        counts = {int(r["tid"]): int(r["cnt"]) for r in rows}
     staff = [
         SchoolStaffOut(
             id=u.id,

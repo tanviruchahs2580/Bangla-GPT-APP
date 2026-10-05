@@ -140,7 +140,7 @@ def refresh_mastery(db: Session) -> tuple[int, int]:
         .where(QuizAttempt.status == "graded")
     ).all()
     cells: dict[tuple[int, str], list[int]] = defaultdict(lambda: [0, 0])
-    meta: dict[str, tuple[int, str]] = {}
+    meta: dict[str, tuple[int, str | None]] = {}
     for sid, chapter, class_level, subject, ok in rows:
         cell = cells[(sid, chapter)]
         cell[0] += 1

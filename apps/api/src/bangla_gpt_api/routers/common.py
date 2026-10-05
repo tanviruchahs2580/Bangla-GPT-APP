@@ -614,7 +614,8 @@ def _attempt_percents(db: Session, student_ids: list[int]) -> dict[int, list[flo
         .order_by(QuizAttempt.student_id, QuizAttempt.created_at.asc())
     ).all()
     for sid, pct in rows:
-        out[sid].append(float(pct))
+        if pct is not None:
+            out[sid].append(float(pct))
     return out
 
 
