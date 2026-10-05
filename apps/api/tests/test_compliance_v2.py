@@ -85,9 +85,14 @@ def _student_id(client: TestClient, headers: dict) -> int:
     return me.json()["profile_id"]
 
 
-def _seed_expired(factory) -> int:
-    """One expired set + one fresh conversation that must survive the sweep."""
-    now = datetime.now(UTC).replace(tzinfo=None)
+def _seed_expired(factory, ref_now: datetime | None = None) -> int:
+    """One expired set + one fresh conversation that must survive the sweep.
+
+    ref_now anchors the seeded timestamps; tests that run the sweep at a
+    fixed clock (e.g. the nightly-job ledger test) pass their job time so a
+    "45 days expired" row can never drift into the future relative to it.
+    """
+    now = ref_now or datetime.now(UTC).replace(tzinfo=None)
     db = factory()
     try:
         student = db.execute(select(Student)).scalar_one()
@@ -223,9 +228,9 @@ def test_retention_requires_admin(pair) -> None:
 def test_nightly_retention_job_runs_once_per_day(pair) -> None:
     client, factory, settings = pair
     _register(client, "s58job@example.com")
-    _seed_expired(factory)
 
     now = datetime(2026, 9, 6, 3, 0)  # naive UTC, matches the ledger day key
+    _seed_expired(factory, ref_now=now)
     first = jobs.run_retention_job(factory, settings, now=now)
     assert first["ran"] is True
     assert first["period"] == "2026-09-06"

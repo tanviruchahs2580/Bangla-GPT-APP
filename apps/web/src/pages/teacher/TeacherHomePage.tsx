@@ -36,10 +36,13 @@ export default function TeacherHomePage() {
       .then((rs) => {
         if (!live) return;
         setRooms(rs ?? []);
-        // AI insight rides the first class's existing weak-matrix data.
-        const level = rs?.[0]?.class_level;
-        if (level != null) {
-          get<WeakMatrix>(`/teacher/weak-matrix?class_level=${level}`)
+        // AI insight rides the first class's existing weak-matrix data,
+        // scoped to that classroom's roster (not the whole grade).
+        const first = rs?.[0];
+        if (first != null) {
+          get<WeakMatrix>(
+            `/teacher/weak-matrix?class_level=${first.class_level}&room_id=${first.id}`,
+          )
             .then((m) => {
               if (live) setWm(m);
             })
@@ -95,7 +98,7 @@ export default function TeacherHomePage() {
   return (
     <main className="shell-main">
       <section className="hero teacher-hero">
-        <h2>{t("thGreeting", { name: me?.name?.split(/\s+/)[0] ?? "" })}</h2>
+        <h2>{t("thGreeting", { name: me?.name ?? "" })}</h2>
         <p>{t("teacherDashboard")}</p>
       </section>
 

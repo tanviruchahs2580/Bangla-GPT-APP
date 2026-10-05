@@ -76,7 +76,7 @@ class MockLLMProvider:
                 f"[mock] {SECTION_SIMPLE} {simple}\n"
                 f"{SECTION_EXAMPLE} {example}\n"
                 f"{SECTION_POINTS}\n{bullets}\n"
-                f"{SECTION_CHECK} এই অংশটটা আরও সহজ ভাবো বলবো?"
+                f"{SECTION_CHECK} এই অংশটা আরও সহজ ভাবো বলবো?"
             )
         return f"[mock] {prompt}"
 

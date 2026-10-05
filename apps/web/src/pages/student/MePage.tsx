@@ -27,7 +27,7 @@ import type { ActivitySummary } from "../../types";
 import { useAuth } from "../../AuthContext";
 import { Avatar, Badge, Button, Card, Segmented } from "../../components/ui";
 import { friendlyError } from "../../errors";
-import { getLang, setLang, t } from "../../i18n";
+import { getLang, setLang, t, tSubject } from "../../i18n";
 import { getLowData, toggleLowData } from "../../lib/lowData";
 import { currentTheme, toggleTheme } from "../../lib/theme";
 
@@ -39,6 +39,33 @@ const ROLE_LABEL: Record<string, Parameters<typeof t>[0]> = {
   admin: "roleAdmin",
   school_admin: "roleSchoolAdmin",
 };
+
+// The memory panel shows what the tutor has stored — raw backend keys and
+// null values are noise for students, so map known keys to labels, localize
+// subject values, and drop empty facts entirely.
+const MEMORY_FACT_LABEL: Record<string, Parameters<typeof t>[0]> = {
+  name: "memFactName",
+  class_level: "memFactClass",
+  recent_subjects: "memFactRecentSubjects",
+  weak_chapters: "memFactWeakChapters",
+  explanation_style: "memFactStyle",
+};
+
+function memoryFactRows(
+  facts: Record<string, unknown>,
+): { key: string; value: string }[] {
+  const rows: { key: string; value: string }[] = [];
+  for (const [k, v] of Object.entries(facts)) {
+    if (v === null || v === undefined || v === "") continue;
+    if (Array.isArray(v) && v.length === 0) continue;
+    const label = MEMORY_FACT_LABEL[k] ?? k;
+    const value = Array.isArray(v)
+      ? v.map((item) => tSubject(String(item))).join(", ")
+      : String(v);
+    rows.push({ key: t(label), value });
+  }
+  return rows;
+}
 
 export default function MePage() {
   const { me, signOut } = useAuth();
@@ -244,7 +271,7 @@ export default function MePage() {
               const lvl = total === 0 ? 0 : total <= 2 ? 1 : total <= 5 ? 2 : 3;
               const title = [
                 d.date,
-                t("activityQuestions", { n: d.questions }),
+                t(d.questions === 1 ? "activityQuestion" : "activityQuestions", { n: d.questions }),
                 t("activityQuizzes", { n: d.quizzes }),
                 t("activityMinutes", { n: d.minutes }),
               ].join(" · ");
@@ -366,13 +393,13 @@ export default function MePage() {
                   {mem.memory_enabled ? t("on") : t("off")}
                 </span>
               </div>
-              {Object.keys(mem.facts).length === 0 ? (
+              {memoryFactRows(mem.facts).length === 0 ? (
                 <p className="muted text-sm mt-1">{t("noMemoryFacts")}</p>
               ) : (
                 <div className="chips mt-1">
-                  {Object.entries(mem.facts).map(([k, v]) => (
-                    <span key={k} className="chip">
-                      {k}: {String(v)}
+                  {memoryFactRows(mem.facts).map(({ key, value }) => (
+                    <span key={key} className="chip">
+                      {key}: {value}
                     </span>
                   ))}
                 </div>

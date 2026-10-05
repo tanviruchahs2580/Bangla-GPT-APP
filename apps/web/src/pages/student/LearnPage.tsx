@@ -20,7 +20,7 @@ import type {
 } from "../../types";
 import { useAuth } from "../../AuthContext";
 import { Card } from "../../components/ui";
-import { t } from "../../i18n";
+import { t, tSubject } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { chapterBadge, ttsSupported as ttsAvailable } from "../../lib/progress";
 import { SafeMarkdownLazy as SafeMarkdown } from "../../lib/safeMarkdownLazy";
@@ -155,7 +155,7 @@ export function LearnPage() {
                 >
                   <BookOpen size={22} />
                 </span>
-                <div className="subject-name">{s.subject}</div>
+                <div className="subject-name">{tSubject(s.subject)}</div>
                 <div className="subject-meta">
                   {t("classLabel")} {s.class_levels.join(", ")}
                 </div>
@@ -190,7 +190,7 @@ export function LearnPage() {
         <>
           <section className="section-head">
             <h2>
-              {t("chapters")} · {activeSubject}
+              {t("chapters")} · {tSubject(activeSubject)}
             </h2>
           </section>
           <div className="stack">

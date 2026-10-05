@@ -205,14 +205,55 @@ class ClozeQuizGenerator:
         term: str,
         doc_indices: list[int],
     ) -> list[str] | None:
-        pool = {
-            t
-            for j in doc_indices
-            if j != doc_index
-            for t in self.chunk_terms[j]
-            if t != term and self.df[t] <= self.df[term] + 3
-        }
-        pool.discard(term)
+        """Pick 3 plausible wrong answers, most-specific pool first.
+
+        Topically coherent distractors (same chapter, similar length) read as
+        real options; a bare sample of same-grade vocabulary produced options
+        like "সমুদ্র" in a cell-structure question. The df window keeps
+        ultra-rare noise out. Each layer falls back to the next so the old
+        minimum question yield is never reduced.
+        """
+        chapter = self.chunks[doc_index].meta.chapter
+        df_cap = self.df[term] + 3
+        same_chapter: set[str] = set()
+        all_terms: set[str] = set()
+        for j in doc_indices:
+            if j == doc_index:
+                continue
+            terms = self.chunk_terms[j]
+            all_terms |= terms
+            if self.chunks[j].meta.chapter == chapter:
+                same_chapter |= terms
+        lo, hi = max(3, len(term) - 4), len(term) + 4
+        length_matched = lambda pool: {t for t in pool if lo <= len(t) <= hi}  # noqa: E731
+        candidates = (
+            length_matched(same_chapter) or same_chapter or length_matched(all_terms) or all_terms
+        )
+        pool = {t for t in candidates if t != term and self.df[t] <= df_cap}
+
+        # Collapse morphological twins (the same lemma with a case ending) so
+        # options never read as trick duplicates: two tokens are twins when
+        # the shorter one is a prefix of the other or they share ≥5 code
+        # points ('সালোকসংশ্লেষণ' vs 'সালোকসংশ্লেষণে').
+        def _twin(a: str, b: str) -> bool:
+            shorter = a if len(a) <= len(b) else b
+            if len(shorter) < 3:
+                return False
+            if b.startswith(a) or a.startswith(b):
+                return True
+            shared = 0
+            for x, y in zip(a, b, strict=True):
+                if x != y:
+                    break
+                shared += 1
+            return shared >= 5
+
+        picked: list[str] = []
+        for t in sorted(pool):
+            if _twin(t, term) or any(_twin(t, u) for u in picked):
+                continue
+            picked.append(t)
+        pool = set(picked)
         if len(pool) < 3:
             return None
         return rng.sample(sorted(pool), 3)

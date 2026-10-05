@@ -37,7 +37,7 @@ export default function RegisterPage() {
       });
       // SMTP-verified deployments land on the verify screen; others go straight in.
       try {
-        setMe(await login(email, password));
+        setMe((await login(email, password)).me);
       } catch (verifyErr) {
         const code = (verifyErr as { code?: string }).code;
         if (code === "email_unverified") {

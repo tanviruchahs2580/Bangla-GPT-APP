@@ -15,7 +15,10 @@
       "unusable": 2,
       "bijoy-converted": 91
     },
-    "chunks": 130
+    "chunks": 130,
+    "duplicates_removed": 0,
+    "content_version": "v1:ca0bb834d1b2",
+    "built_at": "2026-10-05T08:41:56+00:00"
   },
   "nctb-secondary-afda21d8556d": {
     "subject_bn": "ইংরেজি",
@@ -33,7 +36,10 @@
       "unusable": 89,
       "bijoy-converted": 4
     },
-    "chunks": 122
+    "chunks": 122,
+    "duplicates_removed": 0,
+    "content_version": "v1:537d2fbf64e9",
+    "built_at": "2026-10-05T08:42:02+00:00"
   },
   "nctb-secondary-be50d8aff8d5": {
     "subject_bn": "গণিত ও উচ্চতর গণিত",
@@ -51,7 +57,10 @@
       "unusable": 3,
       "bijoy-converted": 143
     },
-    "chunks": 88
+    "chunks": 88,
+    "duplicates_removed": 0,
+    "content_version": "v1:d35787da9b1d",
+    "built_at": "2026-10-05T08:42:12+00:00"
   },
   "nctb-secondary-e39c58d35764": {
     "subject_bn": "বিজ্ঞান শাখার বিষয়সমূহ",
@@ -69,7 +78,10 @@
       "unusable": 2,
       "bijoy-converted": 239
     },
-    "chunks": 81
+    "chunks": 81,
+    "duplicates_removed": 0,
+    "content_version": "v1:7e5160d72a38",
+    "built_at": "2026-10-05T08:42:27+00:00"
   },
   "nctb-secondary-ca0d6bd886b7": {
     "subject_bn": "আইসিটি ও ক্যারিয়ার এডুকেশন",
@@ -87,7 +99,10 @@
       "unusable": 2,
       "bijoy-converted": 109
     },
-    "chunks": 85
+    "chunks": 85,
+    "duplicates_removed": 0,
+    "content_version": "v1:17c22d7e89d8",
+    "built_at": "2026-10-05T08:42:35+00:00"
   },
   "nctb-hsc-28d03c592c2c": {
     "subject_bn": "পদার্থবিদ্যা",
@@ -105,7 +120,10 @@
       "bijoy-converted": 40,
       "unusable": 12
     },
-    "chunks": 78
+    "chunks": 78,
+    "duplicates_removed": 0,
+    "content_version": "v1:4bab4adf0487",
+    "built_at": "2026-10-05T08:44:50+00:00"
   },
   "nctb-hsc-a513203336f6": {
     "subject_bn": "রসায়ন",
@@ -123,7 +141,10 @@
       "bijoy-converted": 38,
       "unusable": 7
     },
-    "chunks": 67
+    "chunks": 67,
+    "duplicates_removed": 0,
+    "content_version": "v1:cd17f741e26c",
+    "built_at": "2026-10-05T08:45:46+00:00"
   },
   "nctb-hsc-ca39e5957513": {
     "subject_bn": "জীববিজ্ঞান",
@@ -141,7 +162,10 @@
       "bijoy-converted": 37,
       "unusable": 9
     },
-    "chunks": 69
+    "chunks": 69,
+    "duplicates_removed": 0,
+    "content_version": "v1:6d856b59b212",
+    "built_at": "2026-10-05T08:47:38+00:00"
   },
   "nctb-hsc-9c44bb8ff649": {
     "subject_bn": "উচ্চতর গণিত",
@@ -159,6 +183,9 @@
       "bijoy-converted": 33,
       "unusable": 19
     },
-    "chunks": 80
+    "chunks": 80,
+    "duplicates_removed": 0,
+    "content_version": "v1:ea30a7a6eacd",
+    "built_at": "2026-10-05T08:52:48+00:00"
   }
 }

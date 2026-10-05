@@ -63,8 +63,8 @@ describe("auth session resilience (instant-logout fix)", () => {
     // login() returns the verified profile so callers seed auth state
     // without a second /users/me round-trip.
     await expect(login("a@b.com", "longpassword1")).resolves.toMatchObject({
-      user_id: 1,
-      role: "student",
+      me: { user_id: 1, role: "student" },
+      mustChangePassword: false,
     });
     expect(getToken()).toBe(TOKEN);
   });

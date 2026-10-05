@@ -123,6 +123,10 @@ async def ask(app_ctx: Ctx, payload: AskRequest, db: DbSession, user: CurrentUse
             prompt_text=question,
             answer_text=response.answer,
         )
+        # S1.9: one tutoring question ≈ one minute of study for the daily
+        # counters (the chat routes already record; ask must not be a gap).
+        if user.role == "student":
+            record_activity(db, _student_profile(db, user).id, questions=1, minutes=1)
         db.commit()
         return response
     except ProviderError as exc:

@@ -11,7 +11,7 @@ from bangla_gpt_api.metrics import PII_REDACTED_TOTAL
 from bangla_gpt_api.providers.base import LLMProvider, ProviderError
 from bangla_gpt_api.retrieval.base import RankingIndex
 from bangla_gpt_api.retrieval.bm25 import tokenize
-from bangla_gpt_api.retrieval.hybrid import light_stem
+from bangla_gpt_api.retrieval.hybrid import light_stem, trigram_similarity
 from bangla_gpt_api.schemas import AskResponse, SourceRef
 from bangla_gpt_api.services.answer_structure import (  # noqa: F401  (re-export for prompt/mock/tests)
     SECTION_CHECK,
@@ -184,6 +184,30 @@ class TutorService:
         if circuit_breaker is not None:
             self._router = ProviderFallbackRouter(provider, fallback_provider, circuit_breaker)
 
+    # Trigram similarity a near-identical evidence token must clear for a
+    # missed query term to still count as covered. 0.6 admits single-keystroke
+    # slips (dropped conjunct/vowel, e.g. সালোকসংশলেষণ for সালোকসংশ্লেষণ ≈ 0.75)
+    # while far-off words stay uncovered; tokens with no trigrams (≤2 chars)
+    # can never fuzzy-match.
+    FUZZY_MATCH_SIMILARITY = 0.6
+
+    def _term_covered(self, term: str, evidence_terms: set[str]) -> bool:
+        """Exact stem match, else one conservative near-match allowance.
+
+        Mobile-typed questions carry spelling slips that exact stem matching
+        turns into ``insufficient_evidence`` refusals even when the evidence
+        chunk is the right one; the trigram fallback keeps the gate honest
+        (only near-identical tokens count) without letting paraphrases in.
+        """
+        if term in evidence_terms:
+            return True
+        for candidate in evidence_terms:
+            if abs(len(candidate) - len(term)) > 3:
+                continue
+            if trigram_similarity(term, candidate) >= self.FUZZY_MATCH_SIMILARITY:
+                return True
+        return False
+
     def _gate(self, question: str, hits: list) -> bool:
         """Coverage gate over the best retrieved chunk.
 
@@ -199,7 +223,8 @@ class TutorService:
         query_terms = {light_stem(t) for t in raw_terms}
         for hit in hits:
             evidence_terms = {light_stem(t) for t in tokenize(hit.chunk.text)}
-            coverage = sum(1 for t in query_terms if t in evidence_terms) / len(query_terms)
+            covered = sum(1 for t in query_terms if self._term_covered(t, evidence_terms))
+            coverage = covered / len(query_terms)
             if coverage >= self.min_coverage and hit.score > self.min_score:
                 return True
         return False

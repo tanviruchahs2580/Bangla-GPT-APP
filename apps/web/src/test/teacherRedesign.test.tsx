@@ -185,7 +185,7 @@ describe("WP-DR teacher home", () => {
     renderAt(<TeacherHomePage />, "/teacher", "/teacher");
 
     expect(
-      await screen.findByText(t("thGreeting", { name: "Karima" })),
+      await screen.findByText(t("thGreeting", { name: me.name })),
     ).toBeInTheDocument();
     expect(screen.getByText(t("students"))).toBeInTheDocument();
     expect(screen.getByText(t("thClassesStat"))).toBeInTheDocument();

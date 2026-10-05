@@ -96,7 +96,9 @@ export default function ClassesPage() {
         : Promise.resolve(null),
       selected
         ? get<WeakMatrix>(
-            `/teacher/weak-matrix?class_level=${selected.class_level}`,
+            // Roster-scoped matrix: an empty classroom must show its own
+            // (empty) stats, not the grade-wide platform numbers.
+            `/teacher/weak-matrix?class_level=${selected.class_level}&room_id=${selected.id}`,
           ).catch(() => null)
         : Promise.resolve(null),
       get<SupportPlanRow[]>("/teacher/support-plans").catch(() => []),
@@ -213,13 +215,20 @@ export default function ClassesPage() {
   const classHealth = selected
     ? healthOf(
         (wm?.students ?? []).filter((s) => s.at_risk).length,
-        analytics
-          ? (() => {
-              const rows = analytics.chapters.filter((c) => c.asked > 0);
-              if (rows.length === 0) return null;
-              return rows.reduce((sum, c) => sum + c.accuracy, 0) / rows.length;
-            })()
-          : null,
+        // Accuracy signal from the roster-scoped matrix (not grade-wide
+        // analytics) so an empty class reads neutral, not polluted.
+        (() => {
+          if (!wm) return null;
+          let asked = 0;
+          let correct = 0;
+          for (const s of wm.students) {
+            for (const cell of Object.values(s.cells)) {
+              asked += cell.asked;
+              correct += cell.correct;
+            }
+          }
+          return asked > 0 ? (100 * correct) / asked : null;
+        })(),
       )
     : null;
 
@@ -334,16 +343,27 @@ export default function ClassesPage() {
               </Badge>
             )}
           </div>
-          {analytics && (
-            <div className="stat-row section-gap-top">
-              <Stat value={analytics.students} label={t("students")} />
-              <Stat value={analytics.chapters.length} label={t("chapter")} />
-              <Stat
-                value={analytics.weak_chapters.length}
-                label={t("weakChapters")}
-              />
-            </div>
-          )}
+          <div className="stat-row section-gap-top">
+            {/* Roster-scoped stats: an empty classroom shows zeros, not the
+                grade-wide numbers (analytics is platform/grade-wide). */}
+            <Stat value={roster.length} label={t("students")} />
+            <Stat
+              value={analytics ? analytics.chapters.length : 0}
+              label={t("chapter")}
+            />
+            <Stat
+              value={
+                wm
+                  ? new Set(
+                      wm.students
+                        .flatMap((s) => s.weak_concepts ?? [])
+                        .filter(Boolean),
+                    ).size
+                  : 0
+              }
+              label={t("weakChapters")}
+            />
+          </div>
           {insight && (
             <p className="ai-insight-line section-gap-top" role="status">
               <span aria-hidden>🤖</span>{" "}

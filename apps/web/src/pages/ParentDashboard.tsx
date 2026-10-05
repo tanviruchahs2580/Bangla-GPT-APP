@@ -240,7 +240,7 @@ export default function ParentDashboard() {
               const lvl = total === 0 ? 0 : total <= 2 ? 1 : total <= 5 ? 2 : 3;
               const title = [
                 d.date,
-                t("activityQuestions", { n: d.questions }),
+                t(d.questions === 1 ? "activityQuestion" : "activityQuestions", { n: d.questions }),
                 t("activityQuizzes", { n: d.quizzes }),
                 t("activityMinutes", { n: d.minutes }),
               ].join(" · ");

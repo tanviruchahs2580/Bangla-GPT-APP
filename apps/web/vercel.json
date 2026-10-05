@@ -3,7 +3,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://amd-reproduction-clips-cricket.trycloudflare.com/:path*"
+      "destination": "https://breeding-collaborative-keyboards-cleared.trycloudflare.com/:path*"
     },
     { "source": "/(.*)", "destination": "/index.html" }
   ]

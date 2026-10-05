@@ -190,6 +190,45 @@ def test_weak_matrix_accuracy_order_read_flag_and_risk(client: TestClient, db_pa
     assert s1["attempts_graded"] == 4
 
 
+def test_weak_matrix_room_id_scopes_to_roster(client: TestClient, db_path) -> None:
+    """room_id must scope the matrix to that classroom's roster.
+
+    Regression: an EMPTY classroom showed grade-wide stats (students the
+    teacher never enrolled) because the matrix loaded by class_level.
+    """
+    _seed_two_students(db_path, client)
+    headers = _teacher_headers(client, "teach@example.com")
+    empty_room = client.post(
+        "/teacher/classrooms", json={"class_level": 6, "section": "B"}, headers=headers
+    ).json()["id"]
+
+    # Roster-scoped: the empty room has no students, no insight fuel.
+    scoped = client.get(
+        "/teacher/weak-matrix",
+        params={"class_level": 6, "room_id": empty_room},
+        headers=headers,
+    ).json()
+    assert scoped["students"] == []
+
+    # The populated room still reports its two enrolled students.
+    rooms = client.get("/teacher/classrooms", headers=headers).json()
+    room_a = next(r["id"] for r in rooms if r["section"] == "A")
+    populated = client.get(
+        "/teacher/weak-matrix",
+        params={"class_level": 6, "room_id": room_a},
+        headers=headers,
+    ).json()
+    assert len(populated["students"]) == 2
+
+    # Unknown room still 404s instead of silently falling back to grade-wide.
+    assert (
+        client.get(
+            "/teacher/weak-matrix", params={"class_level": 6, "room_id": 99999}, headers=headers
+        ).status_code
+        == 404
+    )
+
+
 def test_support_plan_created_from_weakest_concepts(client: TestClient, db_path) -> None:
     _seed_two_students(db_path, client)
     headers = _teacher_headers(client, "teach@example.com")

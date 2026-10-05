@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { login } from "../api";
+import { changePassword, login } from "../api";
 import { useAuth } from "../AuthContext";
 import { friendlyError, type ErrorCopy } from "../errors";
 import { t } from "../i18n";
@@ -13,6 +13,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<ErrorCopy | null>(null);
   const [busy, setBusy] = useState(false);
+  // Server flags a mandatory password change (provisioned accounts, temp
+  // secrets). The API 403s every non-exempt route until it is done, so the
+  // change form blocks the session here instead of the dashboard failing.
+  const [pendingMe, setPendingMe] = useState<Awaited<
+    ReturnType<typeof login>
+  >["me"] | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -22,7 +30,12 @@ export default function LoginPage() {
     try {
       // login() verifies the session and returns the server profile —
       // seeding auth state from it avoids a second /users/me round-trip.
-      setMe(await login(email, password));
+      const { me, mustChangePassword } = await login(email, password);
+      if (mustChangePassword) {
+        setPendingMe(me);
+      } else {
+        setMe(me);
+      }
     } catch (err) {
       const apiErr = err as { code?: unknown; message?: string };
       setError(
@@ -34,6 +47,93 @@ export default function LoginPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function submitPasswordChange(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy) return;
+    if (newPassword !== confirmPassword) {
+      setError({ text: t("passwordMismatch") });
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await changePassword(password, newPassword);
+      setMe(pendingMe);
+    } catch (err) {
+      const apiErr = err as { code?: unknown; message?: string };
+      setError(
+        friendlyError({
+          code: typeof apiErr.code === "string" ? apiErr.code : undefined,
+          message: apiErr.message,
+        }),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (pendingMe) {
+    return (
+      <div className="splash auth-shell">
+        <Card className="auth-card">
+          <h2>{t("forceChangeTitle")}</h2>
+          <p className="muted">{t("forceChangeSub")}</p>
+          <form onSubmit={submitPasswordChange}>
+            <div className="field">
+              <label htmlFor="current-password">{t("currentPassword")}</label>
+              <input
+                className="input"
+                id="current-password"
+                name="current-password"
+                autoComplete="current-password"
+                type="password"
+                value={password}
+                required
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="new-password">{t("newPassword")}</label>
+              <input
+                className="input"
+                id="new-password"
+                name="new-password"
+                autoComplete="new-password"
+                type="password"
+                value={newPassword}
+                required
+                minLength={8}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="confirm-password">{t("confirmPassword")}</label>
+              <input
+                className="input"
+                id="confirm-password"
+                name="confirm-password"
+                autoComplete="new-password"
+                type="password"
+                value={confirmPassword}
+                required
+                minLength={8}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+            </div>
+            {error && (
+              <p className="error" role="alert">
+                {error.text}
+              </p>
+            )}
+            <Button variant="primary" block type="submit" disabled={busy}>
+              {t("forceChangeSubmit")}
+            </Button>
+          </form>
+        </Card>
+      </div>
+    );
   }
 
   return (

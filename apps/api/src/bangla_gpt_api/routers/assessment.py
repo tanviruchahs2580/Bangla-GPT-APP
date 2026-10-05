@@ -303,8 +303,25 @@ def _read_chapters(db: Session, student_ids: list[int]) -> dict[int, set[str]]:
     return out
 
 
-def _weak_matrix(db: Session, class_level: int, school_id: int | None = None) -> WeakMatrixOut:
-    students = _load_class_students(db, class_level, school_id=school_id)
+def _weak_matrix(
+    db: Session, class_level: int, school_id: int | None = None, room_id: int | None = None
+) -> WeakMatrixOut:
+    if room_id is not None:
+        # Roster-scoped view (QA bug: an empty classroom showed stats for
+        # every platform student of the same grade). Only students enrolled
+        # in THIS classroom contribute to the matrix.
+        students = list(
+            db.execute(
+                select(Student)
+                .join(ClassStudent, ClassStudent.student_id == Student.id)
+                .where(ClassStudent.classroom_id == room_id)
+                .order_by(Student.id)
+            )
+            .scalars()
+            .all()
+        )
+    else:
+        students = _load_class_students(db, class_level, school_id=school_id)
     ids = [s.id for s in students]
     cells = _answer_cells(db, ids)
     percents = _attempt_percents(db, ids)
@@ -359,10 +376,16 @@ def _support_plan_out(row: SupportPlan) -> SupportPlanOut:
 
 @router.get("/teacher/weak-matrix", response_model=WeakMatrixOut)
 def teacher_weak_matrix(
-    db: DbSession, teacher: TeacherOrAdminUser, class_level: int
+    db: DbSession, teacher: TeacherOrAdminUser, class_level: int, room_id: int | None = None
 ) -> WeakMatrixOut:
-    """Concept x student accuracy grid with at-risk flags for a class."""
-    return _weak_matrix(db, class_level, school_id=_tenant_school_id(teacher))
+    """Concept x student accuracy grid with at-risk flags for a class.
+
+    ``room_id`` scopes the matrix to one classroom's roster; without it the
+    legacy grade-wide view (all students of ``class_level``) is served.
+    """
+    if room_id is not None:
+        _assert_room_in_school(teacher, _classroom_or_404(db, room_id))
+    return _weak_matrix(db, class_level, school_id=_tenant_school_id(teacher), room_id=room_id)
 
 
 @router.get("/teacher/curriculum-coverage", response_model=CoverageOut)

@@ -192,10 +192,15 @@ export interface TokenResponse {
   must_change_password?: boolean;
 }
 
+export interface LoginResult {
+  me: MeResponse;
+  mustChangePassword: boolean;
+}
+
 export async function login(
   email: string,
   password: string,
-): Promise<MeResponse> {
+): Promise<LoginResult> {
   const res = await post<TokenResponse>("/auth/login", { email, password });
   localStorage.setItem(TOKEN_KEY, res.access_token);
   // Validate the session and refresh the authoritative profile from the
@@ -209,7 +214,7 @@ export async function login(
   if (!me) {
     throw new ApiError(0, "session verification failed", "verify_failed");
   }
-  return me;
+  return { me, mustChangePassword: res.must_change_password === true };
 }
 
 export async function register(input: {
