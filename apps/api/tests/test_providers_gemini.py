@@ -189,3 +189,58 @@ def test_factory_rejects_unknown_provider() -> None:
     settings = Settings(env="test", llm_provider="openai")
     with pytest.raises(ProviderNotConfigured):
         get_provider(settings)
+
+
+# ── A9/A16 remediations ───────────────────────────────────────────────────
+
+
+async def test_generate_payload_carries_max_output_tokens() -> None:
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content.decode())
+        return httpx.Response(
+            200,
+            json={"candidates": [{"content": {"parts": [{"text": "ok"}]}}]},
+            request=request,
+        )
+
+    provider = GeminiProvider(
+        api_key="k",
+        model=MODEL,
+        timeout_seconds=5.0,
+        max_retries=0,
+        max_output_tokens=777,
+        transport=httpx.MockTransport(handler),
+    )
+    assert await provider.generate("q") == "ok"
+    assert captured["body"]["generationConfig"]["maxOutputTokens"] == 777
+
+
+async def test_transport_error_is_retried_then_succeeds() -> None:
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise httpx.ConnectError("connection reset", request=request)
+        return httpx.Response(
+            200,
+            json={"candidates": [{"content": {"parts": [{"text": "ok"}]}}]},
+            request=request,
+        )
+
+    provider = GeminiProvider(
+        api_key="k",
+        model=MODEL,
+        timeout_seconds=5.0,
+        max_retries=2,
+        transport=httpx.MockTransport(handler),
+    )
+    assert await provider.generate("q") == "ok"
+    assert calls == 2
+
+
+def test_vision_capability_flag() -> None:
+    assert GeminiProvider.supports_vision is True

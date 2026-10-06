@@ -108,6 +108,7 @@ def _adapt_settings_for_fallback(settings: Settings, fallback_name: str) -> Prov
             gemini_model=settings.gemini_model,
             llm_timeout_seconds=settings.llm_timeout_seconds,
             llm_max_retries=settings.llm_max_retries,
+            llm_max_output_tokens=settings.llm_max_output_tokens,
         )
     if fallback_name == "openai":
         if not settings.openai_api_key:
@@ -119,6 +120,7 @@ def _adapt_settings_for_fallback(settings: Settings, fallback_name: str) -> Prov
             openai_base_url=settings.openai_base_url,
             llm_timeout_seconds=settings.llm_timeout_seconds,
             llm_max_retries=settings.llm_max_retries,
+            llm_max_output_tokens=settings.llm_max_output_tokens,
         )
     return None
 
@@ -140,6 +142,7 @@ class _FallbackSettings:
         openai_base_url: str | None = None,
         llm_timeout_seconds: float = 30.0,
         llm_max_retries: int = 2,
+        llm_max_output_tokens: int = 2048,
     ) -> None:
         self.llm_provider = llm_provider
         self.gemini_api_key = gemini_api_key
@@ -149,6 +152,7 @@ class _FallbackSettings:
         self.openai_base_url = openai_base_url
         self.llm_timeout_seconds = llm_timeout_seconds
         self.llm_max_retries = llm_max_retries
+        self.llm_max_output_tokens = llm_max_output_tokens
 
     @property
     def is_production(self) -> bool:

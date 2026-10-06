@@ -105,6 +105,10 @@ class OpenAIProvider(LLMProvider):
     """OpenAI-compatible provider supporting both OpenAI and compatible APIs."""
 
     name = "openai"
+    # Vision-honesty contract (A10): the standard Chat Completions API used
+    # here is text-only, so image turns are refused at the route — never
+    # answered text-only as if the picture had been seen.
+    supports_vision = False
 
     def __init__(
         self,
@@ -114,6 +118,7 @@ class OpenAIProvider(LLMProvider):
         base_url: str | None = None,
         timeout_seconds: float,
         max_retries: int,
+        max_output_tokens: int | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._api_key = api_key
@@ -121,6 +126,8 @@ class OpenAIProvider(LLMProvider):
         self._base_url = (base_url or _API_BASE).rstrip("/")
         self._timeout_seconds = timeout_seconds
         self._max_retries = max(0, max_retries)
+        # A9: completion ceiling (OpenAI ``max_tokens``); None/0 omits the key.
+        self._max_output_tokens = max_output_tokens
         self._transport = transport
         self._http: httpx.AsyncClient | None = None
 
@@ -149,16 +156,16 @@ class OpenAIProvider(LLMProvider):
         url = f"{self._base_url}{_CHAT_ENDPOINT}"
         messages = _build_messages(prompt, system)
         payload: dict = {"model": self.model, "messages": messages, "stream": True}
-        # OpenAI-compatible providers do not support inline images in the
-        # standard Chat Completions API; if an image was provided we log a
-        # warning but proceed with text-only (the calling code already handles
-        # the vision-unsupported case for mock mode).
+        if self._max_output_tokens:
+            payload["max_tokens"] = self._max_output_tokens
         if image is not None:
-            logger.warning(
-                "OpenAI provider received an image; vision is not supported in this provider"
-            )
+            # A10: this provider cannot see. Refuse loudly — the route-level
+            # vision gate normally answers vision_unsupported before an image
+            # can get here; silence would read as "the picture was understood".
+            raise ProviderError("OpenAI provider cannot process images (vision unsupported)")
 
         attempt = 0
+        emitted_any = False
         start = time.perf_counter()
         while True:
             status = 0
@@ -175,6 +182,7 @@ class OpenAIProvider(LLMProvider):
                             delta = _parse_sse_delta(line)
                             if delta:
                                 emitted += 1
+                                emitted_any = True
                                 chars += len(delta)
                                 yield delta
                         if emitted:
@@ -194,12 +202,21 @@ class OpenAIProvider(LLMProvider):
                         raise ProviderError("OpenAI stream produced no text")
                     status = response.status_code
                     body = await response.aread()
-            except httpx.TimeoutException as exc:
-                raise ProviderError(
-                    f"OpenAI stream timed out after {self._timeout_seconds}s"
-                ) from exc
             except httpx.HTTPError as exc:
-                raise ProviderError(f"OpenAI stream failed: {exc}") from exc
+                # A16: connection-level transport failures retry under the
+                # same backoff policy as retryable statuses — but only while
+                # nothing has streamed yet (a mid-stream drop cannot be
+                # replayed to the consumer).
+                if emitted_any or attempt >= self._max_retries:
+                    detail = (
+                        f"OpenAI stream timed out after {self._timeout_seconds}s"
+                        if isinstance(exc, httpx.TimeoutException)
+                        else f"OpenAI stream failed: {exc}"
+                    )
+                    raise ProviderError(detail) from exc
+                await asyncio.sleep(min(0.5 * (2**attempt), _MAX_BACKOFF_SECONDS))
+                attempt += 1
+                continue
 
             retryable = status in _RETRYABLE_STATUS
             if retryable and attempt < self._max_retries:
@@ -214,11 +231,13 @@ class OpenAIProvider(LLMProvider):
         url = f"{self._base_url}{_CHAT_ENDPOINT}"
         messages = _build_messages(prompt, system)
         payload: dict = {"model": self.model, "messages": messages}
+        if self._max_output_tokens:
+            payload["max_tokens"] = self._max_output_tokens
 
         if image is not None:
-            logger.warning(
-                "OpenAI provider received an image; vision is not supported in this provider"
-            )
+            # A10: see stream() — text-only answers to image turns are
+            # dishonest, so the provider refuses instead of dropping the image.
+            raise ProviderError("OpenAI provider cannot process images (vision unsupported)")
 
         attempt = 0
         start = time.perf_counter()
@@ -226,12 +245,18 @@ class OpenAIProvider(LLMProvider):
             try:
                 client = self._client()
                 response = await client.post(url, json=payload, headers=self._headers())
-            except httpx.TimeoutException as exc:
-                raise ProviderError(
-                    f"OpenAI request timed out after {self._timeout_seconds}s"
-                ) from exc
             except httpx.HTTPError as exc:
-                raise ProviderError(f"OpenAI request failed: {exc}") from exc
+                # A16: transport-level failures retry like retryable statuses.
+                if attempt >= self._max_retries:
+                    detail = (
+                        f"OpenAI request timed out after {self._timeout_seconds}s"
+                        if isinstance(exc, httpx.TimeoutException)
+                        else f"OpenAI request failed: {exc}"
+                    )
+                    raise ProviderError(detail) from exc
+                await asyncio.sleep(min(0.5 * (2**attempt), _MAX_BACKOFF_SECONDS))
+                attempt += 1
+                continue
 
             if response.status_code == 200:
                 try:
@@ -289,4 +314,5 @@ def build_openai_provider(settings: ProviderSettings, model: str | None = None) 
         base_url=settings.openai_base_url or None,
         timeout_seconds=settings.llm_timeout_seconds,
         max_retries=settings.llm_max_retries,
+        max_output_tokens=settings.llm_max_output_tokens,
     )

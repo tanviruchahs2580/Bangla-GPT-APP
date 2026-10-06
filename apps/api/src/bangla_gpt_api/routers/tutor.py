@@ -66,7 +66,7 @@ from .deps import (
     Ctx,
     CurrentUser,
     DbSession,
-    _is_mock_provider,
+    _provider_lacks_vision,
 )
 
 router = APIRouter()
@@ -387,7 +387,7 @@ async def send_chat_message(
     # otherwise the provider error leaves an orphan message behind.
     db.flush()
 
-    if image_payload is not None and _is_mock_provider(app_ctx):
+    if image_payload is not None and _provider_lacks_vision(app_ctx):
         # Honest refusal: the mock provider cannot see images at all.
         result = AskResponse(
             answer=VISION_UNSUPPORTED_ANSWER,
@@ -436,7 +436,7 @@ async def send_chat_message(
     if conv.title is None:
         conv.title = payload.message[:80]
     # AI-002: ledger the generation (vision refusals never reach a provider).
-    if image_payload is None or not _is_mock_provider(app_ctx):
+    if image_payload is None or not _provider_lacks_vision(app_ctx):
         record_ai_usage(
             db,
             user_id=user.id,
@@ -510,12 +510,12 @@ async def stream_chat_message(
         history=history,
         strategy=conv.last_strategy,
     )
-    mock_vision = image_payload is not None and _is_mock_provider(app_ctx)
+    no_vision = image_payload is not None and _provider_lacks_vision(app_ctx)
 
     async def event_stream() -> AsyncIterator[str]:
         try:
             final_response: AskResponse | None = None
-            if mock_vision:
+            if no_vision:
                 # Honest refusal: the mock provider cannot see images at
                 # all -- emitted as one token + the normal done event.
                 final_response = AskResponse(
@@ -563,7 +563,7 @@ async def stream_chat_message(
             if conv.title is None:
                 conv.title = payload.message[:80]
             # AI-002: ledger the generation (mock-vision refusals cost nothing).
-            if not mock_vision:
+            if not no_vision:
                 record_ai_usage(
                     db,
                     user_id=user.id,

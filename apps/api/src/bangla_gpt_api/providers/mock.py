@@ -18,6 +18,9 @@ _SENTENCE_RE = re.compile(r"[।\n]+")
 
 class MockLLMProvider:
     name = "mock"
+    # Vision-honesty contract (A10): the mock has no eyes; chat routes
+    # refuse image turns up front (see deps._provider_lacks_vision).
+    supports_vision = False
 
     async def generate(
         self, prompt: str, *, system: str | None = None, image: dict | None = None

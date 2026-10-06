@@ -12,6 +12,10 @@ class ProviderError(RuntimeError):
 
 class LLMProvider(Protocol):
     name: str
+    # Vision-honesty contract (A10): providers that cannot see images must
+    # declare it, so chat routes refuse image turns up front instead of the
+    # provider silently answering text-only as if the picture was read.
+    supports_vision: bool
 
     async def generate(
         self, prompt: str, *, system: str | None = None, image: dict | None = None
@@ -38,3 +42,4 @@ class ProviderSettings(Protocol):
     openai_base_url: str | None
     llm_timeout_seconds: float
     llm_max_retries: int
+    llm_max_output_tokens: int

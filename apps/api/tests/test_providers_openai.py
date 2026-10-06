@@ -10,6 +10,7 @@ Contract verified against the OpenAI Chat Completions API documentation
 """
 
 import json
+from collections.abc import AsyncIterator
 
 import httpx
 import pytest
@@ -355,3 +356,186 @@ async def test_fallback_empty_string_returns_none() -> None:
     )
     fb = get_fallback_provider(settings)
     assert fb is None
+
+
+# ── A9/A10/A16 remediations ───────────────────────────────────────────────
+
+
+async def test_generate_payload_carries_max_output_tokens() -> None:
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content.decode())
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"role": "assistant", "content": "ok"}}]},
+            request=request,
+        )
+
+    provider = OpenAIProvider(
+        api_key="k",
+        model=MODEL,
+        timeout_seconds=5.0,
+        max_retries=0,
+        max_output_tokens=777,
+        transport=httpx.MockTransport(handler),
+    )
+    assert await provider.generate("q") == "ok"
+    assert captured["body"]["max_tokens"] == 777
+
+
+async def test_generate_omits_max_tokens_when_cap_disabled() -> None:
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content.decode())
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"role": "assistant", "content": "ok"}}]},
+            request=request,
+        )
+
+    provider = OpenAIProvider(
+        api_key="k",
+        model=MODEL,
+        timeout_seconds=5.0,
+        max_retries=0,
+        max_output_tokens=None,
+        transport=httpx.MockTransport(handler),
+    )
+    await provider.generate("q")
+    assert "max_tokens" not in captured["body"]
+
+
+async def test_image_is_refused_not_silently_ignored() -> None:
+    # A10: a text-only answer would read as "the picture was understood".
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"role": "assistant", "content": "ok"}}]},
+            request=request,
+        )
+
+    provider = OpenAIProvider(
+        api_key="k",
+        model=MODEL,
+        timeout_seconds=5.0,
+        max_retries=0,
+        transport=httpx.MockTransport(handler),
+    )
+    image = {"mime_type": "image/png", "data": "AAAA"}
+    with pytest.raises(ProviderError, match="vision"):
+        await provider.generate("q", image=image)
+    with pytest.raises(ProviderError, match="vision"):
+        async for _ in provider.stream("q", image=image):
+            pass
+    assert calls == 0  # nothing was sent upstream
+
+
+async def test_transport_error_is_retried_then_succeeds() -> None:
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise httpx.ConnectError("connection reset", request=request)
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"role": "assistant", "content": "ok"}}]},
+            request=request,
+        )
+
+    provider = OpenAIProvider(
+        api_key="k",
+        model=MODEL,
+        timeout_seconds=5.0,
+        max_retries=2,
+        transport=httpx.MockTransport(handler),
+    )
+    assert await provider.generate("q") == "ok"
+    assert calls == 2
+
+
+async def test_stream_transport_error_retries_before_first_token() -> None:
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise httpx.ReadError("dropped", request=request)
+        raw = 'data: {"choices": [{"delta": {"content": "ন"}}]}\n\ndata: [DONE]\n\n'
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            content=raw.encode(),
+            request=request,
+        )
+
+    provider = OpenAIProvider(
+        api_key="k",
+        model=MODEL,
+        timeout_seconds=5.0,
+        max_retries=2,
+        transport=httpx.MockTransport(handler),
+    )
+    chunks = [delta async for delta in provider.stream("q")]
+    assert "".join(chunks) == "ন"
+    assert calls == 2
+
+
+async def test_stream_transport_error_after_first_token_is_not_retried() -> None:
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+
+        async def body() -> AsyncIterator[bytes]:
+            # emit one real token, then the connection drops mid-stream
+            yield b'data: {"choices": [{"delta": {"content": "first"}}]}\n\n'
+            raise httpx.ReadError("dropped")
+
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/event-stream"},
+            content=body(),
+            request=request,
+        )
+
+    provider = OpenAIProvider(
+        api_key="k",
+        model=MODEL,
+        timeout_seconds=5.0,
+        max_retries=2,
+        transport=httpx.MockTransport(handler),
+    )
+    chunks = []
+    with pytest.raises(ProviderError, match="stream failed"):
+        async for delta in provider.stream("q"):
+            chunks.append(delta)
+    # the one delivered token stands; no second attempt was made
+    assert chunks == ["first"]
+    assert calls == 1
+
+
+def test_vision_capability_flag() -> None:
+    # the route-level vision gate keys off this flag (deps._provider_lacks_vision)
+    assert OpenAIProvider.supports_vision is False
+
+
+def test_builder_wires_max_output_tokens_from_settings() -> None:
+    settings = Settings(
+        env="test",
+        llm_provider="openai",
+        openai_api_key="k",
+        llm_max_output_tokens=512,
+    )
+    provider = get_provider(settings)
+    assert isinstance(provider, OpenAIProvider)
+    assert provider._max_output_tokens == 512

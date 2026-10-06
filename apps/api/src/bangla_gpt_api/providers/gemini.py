@@ -116,7 +116,9 @@ def _error_message_text(body: bytes) -> str:
         return body[:200].decode(errors="replace")
 
 
-def _build_payload(prompt: str, system: str | None, image: dict | None) -> dict:
+def _build_payload(
+    prompt: str, system: str | None, image: dict | None, max_output_tokens: int | None = None
+) -> dict:
     """One user message: the text prompt plus, when given, the validated
     inline image part (vision contract: ``{"inline_data":
     {"mime_type", "data"}}`` next to the text part in the same contents)."""
@@ -126,11 +128,16 @@ def _build_payload(prompt: str, system: str | None, image: dict | None) -> dict:
     payload: dict = {"contents": [{"role": "user", "parts": parts}]}
     if system:
         payload["systemInstruction"] = {"parts": [{"text": system}]}
+    # A9: bound generation size so a looping model cannot run up the ledger.
+    if max_output_tokens:
+        payload["generationConfig"] = {"maxOutputTokens": max_output_tokens}
     return payload
 
 
 class GeminiProvider:
     name = "gemini"
+    # Gemini accepts inline_data image parts (see _build_payload).
+    supports_vision = True
 
     def __init__(
         self,
@@ -139,12 +146,14 @@ class GeminiProvider:
         model: str,
         timeout_seconds: float,
         max_retries: int,
+        max_output_tokens: int | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._api_key = api_key
         self.model = model
         self._timeout_seconds = timeout_seconds
         self._max_retries = max(0, max_retries)
+        self._max_output_tokens = max_output_tokens
         self._transport = transport
         self._http: httpx.AsyncClient | None = None
 
@@ -171,9 +180,10 @@ class GeminiProvider:
         """
         url = f"{_API_BASE}/models/{self.model}:streamGenerateContent?alt=sse"
         headers = {"x-goog-api-key": self._api_key}
-        payload = _build_payload(prompt, system, image)
+        payload = _build_payload(prompt, system, image, self._max_output_tokens)
 
         attempt = 0
+        emitted_any = False
         start = time.perf_counter()
         while True:
             status = 0
@@ -188,6 +198,7 @@ class GeminiProvider:
                             delta = _parse_sse_delta(line)
                             if delta:
                                 emitted += 1
+                                emitted_any = True
                                 chars += len(delta)
                                 yield delta
                         if emitted:
@@ -208,12 +219,21 @@ class GeminiProvider:
                         raise ProviderError("Gemini stream produced no text")
                     status = response.status_code
                     body = await response.aread()
-            except httpx.TimeoutException as exc:
-                raise ProviderError(
-                    f"Gemini stream timed out after {self._timeout_seconds}s"
-                ) from exc
             except httpx.HTTPError as exc:
-                raise ProviderError(f"Gemini stream failed: {exc}") from exc
+                # A16: connection-level transport failures retry under the
+                # same backoff policy as retryable statuses — but only while
+                # nothing has streamed yet (a mid-stream drop cannot be
+                # replayed to the consumer).
+                if emitted_any or attempt >= self._max_retries:
+                    detail = (
+                        f"Gemini stream timed out after {self._timeout_seconds}s"
+                        if isinstance(exc, httpx.TimeoutException)
+                        else f"Gemini stream failed: {exc}"
+                    )
+                    raise ProviderError(detail) from exc
+                await asyncio.sleep(min(0.5 * (2**attempt), _MAX_BACKOFF_SECONDS))
+                attempt += 1
+                continue
 
             retryable = status in _RETRYABLE_STATUS
             if retryable and attempt < self._max_retries:
@@ -227,7 +247,7 @@ class GeminiProvider:
     ) -> str:
         url = f"{_API_BASE}/models/{self.model}:generateContent"
         headers = {"x-goog-api-key": self._api_key}
-        payload = _build_payload(prompt, system, image)
+        payload = _build_payload(prompt, system, image, self._max_output_tokens)
 
         attempt = 0
         start = time.perf_counter()
@@ -235,12 +255,18 @@ class GeminiProvider:
             try:
                 client = self._client()
                 response = await client.post(url, json=payload, headers=headers)
-            except httpx.TimeoutException as exc:
-                raise ProviderError(
-                    f"Gemini request timed out after {self._timeout_seconds}s"
-                ) from exc
             except httpx.HTTPError as exc:
-                raise ProviderError(f"Gemini request failed: {exc}") from exc
+                # A16: transport-level failures retry like retryable statuses.
+                if attempt >= self._max_retries:
+                    detail = (
+                        f"Gemini request timed out after {self._timeout_seconds}s"
+                        if isinstance(exc, httpx.TimeoutException)
+                        else f"Gemini request failed: {exc}"
+                    )
+                    raise ProviderError(detail) from exc
+                await asyncio.sleep(min(0.5 * (2**attempt), _MAX_BACKOFF_SECONDS))
+                attempt += 1
+                continue
 
             if response.status_code == 200:
                 try:
@@ -283,4 +309,5 @@ def build_gemini_provider(settings: ProviderSettings, model: str | None = None) 
         model=model or settings.gemini_model,
         timeout_seconds=settings.llm_timeout_seconds,
         max_retries=settings.llm_max_retries,
+        max_output_tokens=settings.llm_max_output_tokens,
     )

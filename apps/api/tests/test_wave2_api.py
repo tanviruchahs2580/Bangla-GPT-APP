@@ -269,3 +269,35 @@ def test_admin_ai_quality_shape(client: TestClient) -> None:
         assert isinstance(body[key], dict)
     for key in ("refusals_total", "thumbs_up", "thumbs_down", "low_confidence_count"):
         assert isinstance(body[key], int)
+
+
+# --- A10: openai primary gets the same honest vision refusal as mock ----------
+
+
+def test_chat_image_with_openai_primary_is_refused_as_vision_unsupported(tmp_path) -> None:
+    settings = Settings(
+        env="test",
+        database_url=f"sqlite:///{tmp_path}/wave2-openai.db",
+        jwt_secret=SECRET,
+        admin_email="root@example.com",
+        admin_password=PASSWORD,
+        force_admin_password_change=False,
+        llm_provider="openai",
+        openai_api_key="test-key",
+    )
+    oc = TestClient(create_app(settings))
+    kid = _student(oc, "kid2@example.com")
+    conv = _conversation(oc, kid)
+
+    res = oc.post(
+        f"/tutor/conversations/{conv}/messages/stream",
+        json={
+            "message": "what is in this picture",
+            "image": {"mime_type": "image/png", "data_base64": TINY_PNG_B64},
+        },
+        headers=kid,
+    )
+    assert res.status_code == 200, res.text
+    # the SSE refusal final must carry the honesty fields, not a text-only answer
+    assert "vision_unsupported" in res.text
+    assert '"grounded": false' in res.text or '"grounded":false' in res.text

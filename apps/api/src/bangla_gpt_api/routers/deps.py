@@ -180,12 +180,15 @@ AdminUser = Annotated[User, Depends(require_roles("admin"))]
 SchoolStaffUser = Annotated[User, Depends(require_roles("school_admin", "admin"))]
 
 
-def _is_mock_provider(app_ctx: AppContext) -> bool:
-    """the chat routes refuse vision turns for the mock provider
-    (it has no eyes); the honest refusal happens at the route, not inside
-    the service, so the LLM pipeline never sees an unusable image."""
+def _provider_lacks_vision(app_ctx: AppContext) -> bool:
+    """the chat routes refuse vision turns for providers without eyes
+    (mock, and openai-compatible text-only providers — A10); the honest
+    refusal happens at the route, not inside the service, so the LLM
+    pipeline never sees an unusable image."""
     tutor = app_ctx.tutor
-    return tutor is not None and getattr(tutor.provider, "name", "") == "mock"
+    if tutor is None:
+        return False
+    return getattr(tutor.provider, "supports_vision", True) is not True
 
 
 # --- school tenancy helpers -------------------------------------------

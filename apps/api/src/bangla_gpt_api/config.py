@@ -63,6 +63,10 @@ class Settings(BaseSettings):
     llm_fallback_provider: str = ""  # "gemini" | "openai" | ""
     llm_timeout_seconds: float = 30.0
     llm_max_retries: int = 2
+    # A9: hard ceiling on generated completion size, wired into every real
+    # provider payload (OpenAI max_tokens / Gemini maxOutputTokens). Bounds
+    # the cost of a looping model; 0 disables the cap (key omitted).
+    llm_max_output_tokens: int = 2048
     # AI-002: monthly per-user AI budget (USD, estimated — see services/costs.py).
     # 0 (default) = unlimited. When set, generation entry points refuse with
     # 429 ai_budget_exceeded once the user's current-month ledger hits the cap.
