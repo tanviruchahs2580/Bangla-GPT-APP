@@ -115,7 +115,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const roleHome = (me && ROLE_HOME[me.role]) || "/";
 
   return (
-    <div className={isStaff ? "shell has-sidebar" : "shell"}>
+    <div
+      className={
+        isStaff
+          ? "shell has-sidebar"
+          : me?.role === "student"
+            ? "shell shell-student"
+            : "shell"
+      }
+    >
       <OfflineBanner />
       <ImpersonationBanner />
       <header className="topbar">

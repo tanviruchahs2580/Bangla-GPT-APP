@@ -357,6 +357,40 @@ p {
   min-height: 0;
 }
 
+/* ── Student section backdrop (login-gated) ─────────────────────
+   Logged-in student pages carry the education-pattern backdrop
+   (books/caps/bulbs). Fixed pseudo-layer behind shell content so it
+   never scrolls and iOS needs no background-attachment. Theme sync
+   is token-driven: the veil uses var(--bg)/var(--bg-elev), so the
+   same photo reads warm-paper in light mode and fades into ink in
+   dark mode with no extra asset. Low-data mode drops it entirely. */
+.shell-student::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      color-mix(in srgb, var(--bg-elev) 30%, transparent),
+      color-mix(in srgb, var(--bg-elev) 30%, transparent)
+    ),
+    url("./assets/student-bg.jpg") center / cover no-repeat;
+}
+
+[data-theme="dark"] .shell-student::before {
+  background:
+    linear-gradient(
+      color-mix(in srgb, var(--bg) 80%, transparent),
+      color-mix(in srgb, var(--bg) 80%, transparent)
+    ),
+    url("./assets/student-bg.jpg") center / cover no-repeat;
+}
+
+[data-lowdata="1"] .shell-student::before {
+  content: none;
+}
+
 .shell-main {
   flex: 1;
   width: 100%;
