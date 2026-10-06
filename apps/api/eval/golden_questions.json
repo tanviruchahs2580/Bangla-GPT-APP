@@ -1,17 +1,187 @@
 [
-  {"question": "কোষ কী?", "class_level": 6, "subject": "science", "expected_grounded": true, "expected_chapter_contains": "কোষ", "note": "in-corpus: cell definition"},
-  {"question": "কোষের প্রধান অংশ কয়টি ও কী কী?", "class_level": 6, "subject": "science", "expected_grounded": true, "expected_chapter_contains": "কোষ", "note": "in-corpus: cell parts"},
-  {"question": "নিউক্লিয়াসকে কী বলা হয়?", "class_level": 6, "subject": "science", "expected_grounded": true, "expected_chapter_contains": "কোষ", "note": "in-corpus: nucleus control centre"},
-  {"question": "ভগ্নাংশ কাকে বলে?", "class_level": 7, "subject": "mathematics", "expected_grounded": true, "expected_chapter_contains": "ভগ্নাংশ", "note": "in-corpus: fraction definition"},
-  {"question": "১/২ ও ২/৪ কেন সমান ভগ্নাংশ?", "class_level": 7, "subject": "mathematics", "expected_grounded": true, "expected_chapter_contains": "ভগ্নাংশ", "note": "in-corpus: equivalent fractions"},
-  {"question": "লব ও হর দিয়ে কী নির্ণয় করা হয়?", "class_level": 7, "subject": "mathematics", "expected_grounded": true, "expected_chapter_contains": "ভগ্নাংশ", "note": "in-corpus: numerator/denominator"},
-  {"question": "শতকরা মানে কী?", "class_level": 7, "subject": "mathematics", "expected_grounded": true, "expected_chapter_contains": "শতকরা", "note": "in-corpus: percentage meaning"},
-  {"question": "২৫% কত ভাগ বোঝায়?", "class_level": 7, "subject": "mathematics", "expected_grounded": true, "expected_chapter_contains": "শতকরা", "note": "in-corpus: 25 percent"},
-  {"question": "বল কী এবং এটি কী করে?", "class_level": 6, "subject": "science", "expected_grounded": true, "expected_chapter_contains": "বল", "note": "in-corpus: force and motion"},
-  {"question": "অণুবীক্ষণ যন্ত্রে কী দেখা যায়?", "class_level": 6, "subject": "science", "expected_grounded": true, "expected_chapter_contains": "কোষ", "note": "in-corpus: microscope/cell"},
-  {"question": "গত বিশ্বকাপ ফুটবল ফাইনালে কোন দল জিতেছিল?", "class_level": 6, "subject": "science", "expected_grounded": false, "note": "out-of-domain: sports"},
-  {"question": "আগামীকালের আবহাওয়ার পূর্বাভাস কী?", "class_level": 6, "subject": "science", "expected_grounded": false, "note": "out-of-domain: weather"},
-  {"question": "সেরা গেমিং ল্যাপটপ কোনটি?", "class_level": 7, "subject": "mathematics", "expected_grounded": false, "note": "out-of-domain: gaming"},
-  {"question": "ইংরেজি tense কিভাবে শিখবো?", "class_level": 6, "subject": "science", "expected_grounded": false, "note": "wrong subject: english grammar"},
-  {"question": "qxzzv bloop blarp", "class_level": 6, "subject": "science", "expected_grounded": false, "note": "gibberish"}
+  {
+    "question": "কোষ কী?",
+    "class_level": 6,
+    "subject": "science",
+    "expected_grounded": true,
+    "expected_chapter_contains": "কোষ",
+    "note": "in-corpus: cell definition"
+  },
+  {
+    "question": "কোষের প্রধান অংশ কয়টি ও কী কী?",
+    "class_level": 6,
+    "subject": "science",
+    "expected_grounded": true,
+    "expected_chapter_contains": "কোষ",
+    "note": "in-corpus: cell parts"
+  },
+  {
+    "question": "নিউক্লিয়াসকে কী বলা হয়?",
+    "class_level": 6,
+    "subject": "science",
+    "expected_grounded": true,
+    "expected_chapter_contains": "কোষ",
+    "note": "in-corpus: nucleus control centre"
+  },
+  {
+    "question": "সবুজ গাছ সূর্যের আলো দিয়ে কী তৈরি করে?",
+    "class_level": 6,
+    "subject": "science",
+    "expected_grounded": true,
+    "expected_chapter_contains": "উদ্ভিদ ও খাদ্য প্রস্তুতি",
+    "note": "paraphrase A13: photosynthesis, not a section heading"
+  },
+  {
+    "question": "পাতার কোষে সবুজ রঙের কণিকাকে কী বলে?",
+    "class_level": 6,
+    "subject": "science",
+    "expected_grounded": true,
+    "expected_chapter_contains": "উদ্ভিদ ও খাদ্য প্রস্তুতি",
+    "note": "paraphrase A13: chloroplast/chlorophyll"
+  },
+  {
+    "question": "সমুদ্র ও নদীর পানি কীভাবে মেঘ তৈরি করে?",
+    "class_level": 6,
+    "subject": "science",
+    "expected_grounded": true,
+    "expected_chapter_contains": "পানিচক্র",
+    "note": "paraphrase A13: content-window tokens, not the section heading"
+  },
+  {
+    "question": "ভগ্নাংশ কাকে বলে?",
+    "class_level": 7,
+    "subject": "mathematics",
+    "expected_grounded": true,
+    "expected_chapter_contains": "ভগ্নাংশ",
+    "note": "in-corpus: fraction definition"
+  },
+  {
+    "question": "১/২ ও ২/৪ কেন সমান ভগ্নাংশ?",
+    "class_level": 7,
+    "subject": "mathematics",
+    "expected_grounded": true,
+    "expected_chapter_contains": "ভগ্নাংশ",
+    "note": "in-corpus: equivalent fractions"
+  },
+  {
+    "question": "লব ও হর দিয়ে কী নির্ণয় করা হয়?",
+    "class_level": 7,
+    "subject": "mathematics",
+    "expected_grounded": true,
+    "expected_chapter_contains": "ভগ্নাংশ",
+    "note": "in-corpus: numerator/denominator"
+  },
+  {
+    "question": "শতকরা মানে কী?",
+    "class_level": 7,
+    "subject": "mathematics",
+    "expected_grounded": true,
+    "expected_chapter_contains": "শতকরা",
+    "note": "in-corpus: percentage meaning"
+  },
+  {
+    "question": "২৫% কত ভাগ বোঝায়?",
+    "class_level": 7,
+    "subject": "mathematics",
+    "expected_grounded": true,
+    "expected_chapter_contains": "শতকরা",
+    "note": "in-corpus: 25 percent"
+  },
+  {
+    "question": "বস্তুর গতির পরিমাণ বা গতির দিক পরিবর্তন করে কী?",
+    "class_level": 6,
+    "subject": "science",
+    "expected_grounded": true,
+    "expected_chapter_contains": "বল",
+    "note": "paraphrase A13: content-window tokens, not a heading echo"
+  },
+  {
+    "question": "অণুবীক্ষণ যন্ত্রে কী দেখা যায়?",
+    "class_level": 6,
+    "subject": "science",
+    "expected_grounded": true,
+    "expected_chapter_contains": "কোষ",
+    "note": "in-corpus: microscope/cell"
+  },
+  {
+    "question": "সমতল দর্পণে গঠিত প্রতিবিম্ব কেমন হয়?",
+    "class_level": 7,
+    "subject": "science",
+    "expected_grounded": true,
+    "expected_chapter_contains": "আলো",
+    "note": "paraphrase A13: content-window tokens, not the section heading"
+  },
+  {
+    "question": "ছায়া কখন তৈরি হয় এবং কেন বড়-ছোট হয়?",
+    "class_level": 7,
+    "subject": "science",
+    "expected_grounded": true,
+    "expected_chapter_contains": "আলো",
+    "note": "paraphrase A13: shadow formation"
+  },
+  {
+    "question": "চুম্বক কী কী আকর্ষণ করে?",
+    "class_level": 8,
+    "subject": "science",
+    "expected_grounded": true,
+    "expected_chapter_contains": "চুম্বক",
+    "note": "paraphrase A13: content-window tokens, not the section heading"
+  },
+  {
+    "question": "ফুসফুসে অক্সিজেন আসা ও কার্বন ডাই-অক্সাইড বের হওয়াকে কী বলে?",
+    "class_level": 8,
+    "subject": "science",
+    "expected_grounded": true,
+    "expected_chapter_contains": "শ্বসন",
+    "note": "paraphrase A13: content-window tokens, not the section heading"
+  },
+  {
+    "question": "গত বিশ্বকাপ ফুটবল ফাইনালে কোন দল জিতেছিল?",
+    "class_level": 6,
+    "subject": "science",
+    "expected_grounded": false,
+    "note": "out-of-domain: sports"
+  },
+  {
+    "question": "আগামীকালের আবহাওয়ার পূর্বাভাস কী?",
+    "class_level": 6,
+    "subject": "science",
+    "expected_grounded": false,
+    "note": "out-of-domain: weather"
+  },
+  {
+    "question": "সেরা গেমিং ল্যাপটপ কোনটি?",
+    "class_level": 7,
+    "subject": "mathematics",
+    "expected_grounded": false,
+    "note": "out-of-domain: gaming"
+  },
+  {
+    "question": "ইংরেজি tense কিভাবে শিখবো?",
+    "class_level": 6,
+    "subject": "science",
+    "expected_grounded": false,
+    "note": "wrong subject: english grammar"
+  },
+  {
+    "question": "qxzzv bloop blarp",
+    "class_level": 6,
+    "subject": "science",
+    "expected_grounded": false,
+    "note": "gibberish"
+  },
+  {
+    "question": "চ্যাম্পিয়নস লিগের খেলা কবে?",
+    "class_level": 8,
+    "subject": "science",
+    "expected_grounded": false,
+    "note": "paraphrase A13: new out-of-domain negative"
+  },
+  {
+    "question": "নতুন মোবাইল কোনটা কিনবো?",
+    "class_level": 8,
+    "subject": "science",
+    "expected_grounded": false,
+    "note": "paraphrase A13: consumer advice, off-curriculum"
+  }
 ]

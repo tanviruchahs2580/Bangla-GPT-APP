@@ -7,19 +7,26 @@ a built NCTB corpus (``--corpus-dir``). Produces:
   hallucination proxy – grounded answers whose evidence coverage < gate
 Writes eval/golden_report.json and prints a summary. Exit code 1 when
 accuracy gates fail so CI can enforce them.
+
+A13: the gate retrieves through the HYBRID index — the mode production
+serves (retrieval_mode="hybrid") — not the BM25 baseline, so what CI gates
+is what users get.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import sys
 import time
 from pathlib import Path
 
+from bangla_gpt_api.config import Settings
 from bangla_gpt_api.data.loader import load_sample_corpus
 from bangla_gpt_api.data.nctb_loader import load_nctb_corpus
 from bangla_gpt_api.providers.mock import MockLLMProvider
-from bangla_gpt_api.retrieval.bm25 import BM25Index
+from bangla_gpt_api.retrieval.embedding import build_embedder
+from bangla_gpt_api.retrieval.hybrid_index import HybridIndex
 from bangla_gpt_api.services.tutor import TutorService
 
 GOLDEN_PATH = Path(__file__).resolve().parent.parent / "eval" / "golden_questions.json"
@@ -57,7 +64,9 @@ def main() -> int:
         print("NO_INDEXABLE_CHUNKS")
         return 1
 
-    index = BM25Index(chunks)
+    # Hermetic settings: the hash-ngram embedder needs no network or keys.
+    settings = Settings(env="test")
+    index = HybridIndex(chunks, build_embedder(settings))
     tutor = TutorService(index=index, provider=MockLLMProvider())
 
     golden = load_golden(GOLDEN_PATH)
@@ -73,7 +82,6 @@ def main() -> int:
         chapter_hit = bool(expected_chapter) and any(
             expected_chapter in hit.chunk.meta.chapter for hit in hits
         )
-        import asyncio
 
         response = asyncio.run(tutor.ask(item["question"], item["class_level"], item["subject"]))
         grounded_matches = response.grounded == item["expected_grounded"]

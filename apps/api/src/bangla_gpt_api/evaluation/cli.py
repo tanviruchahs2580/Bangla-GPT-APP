@@ -20,6 +20,7 @@ import argparse
 import asyncio
 import json
 from pathlib import Path
+from typing import Any
 
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.data.loader import load_sample_corpus
@@ -60,7 +61,10 @@ async def _redteam(settings: Settings) -> int:
     path = root / "eval" / "redteam_v2.json"
     items = json.loads(path.read_text(encoding="utf-8"))["items"]
     tutor = _build_tutor(settings)
-    metrics = await run_suite(tutor, items, judge_provider=None)
+    # A18: one pass — the leak scan reuses run_suite's answers instead of
+    # re-asking every item (previously the suite paid double).
+    collected: list[tuple[dict, Any]] = []
+    metrics = await run_suite(tutor, items, judge_provider=None, responses=collected)
     print("REDTEAM metrics:", json.dumps(metrics.as_dict(), indent=1))
     ok = metrics.coverage_false == 1.0 and not metrics.failures
     if metrics.failures:
@@ -68,8 +72,7 @@ async def _redteam(settings: Settings) -> int:
         for f in metrics.failures:
             print("  ", json.dumps(f, ensure_ascii=True))
     # leak scan over EVERY response (refused or answered): no control-plane text
-    for item in items:
-        resp = await tutor.ask(item["question"], item["class_level"], item.get("subject") or None)
+    for item, resp in collected:
         for marker in _LEAK_MARKERS:
             if marker in resp.answer:
                 ok = False

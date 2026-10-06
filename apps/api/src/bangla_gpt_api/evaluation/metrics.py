@@ -135,13 +135,20 @@ class SuiteMetrics:
         }
 
 
-async def run_suite(tutor: Any, items: list[dict], judge_provider: Any = None) -> SuiteMetrics:
+async def run_suite(
+    tutor: Any,
+    items: list[dict],
+    judge_provider: Any = None,
+    responses: list[tuple[dict, Any]] | None = None,
+) -> SuiteMetrics:
     """Run every golden item through the live tutor and aggregate metrics.
 
     ``items`` entries: {question, class_level, subject, expect} where expect
     is "answer" (retrieval+evidence expected) or "refuse" (insufficient
     evidence expected). Judge provider defaults to the deterministic overlap
-    fallback (mock mode).
+    fallback (mock mode). When ``responses`` is a list, the per-item
+    ``(item, response)`` pairs are appended so callers (e.g. the redteam
+    leak scan) can reuse the answers instead of re-asking the suite (A18).
     """
     matched = 0
     true_total = answered_true = 0
@@ -153,6 +160,8 @@ async def run_suite(tutor: Any, items: list[dict], judge_provider: Any = None) -
     failures: list[dict] = []
     for item in items:
         resp = await tutor.ask(item["question"], item["class_level"], item.get("subject") or None)
+        if responses is not None:
+            responses.append((item, resp))
         expect = item["expect"]
         if expect == "answer":
             true_total += 1

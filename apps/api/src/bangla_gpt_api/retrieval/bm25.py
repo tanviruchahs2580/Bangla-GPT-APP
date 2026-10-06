@@ -5,7 +5,12 @@ from collections import Counter
 from dataclasses import dataclass
 
 from bangla_gpt_api.curriculum.models import Chunk
-from bangla_gpt_api.retrieval.hybrid import expand_query, light_stem, trigram_similarity
+from bangla_gpt_api.retrieval.hybrid import (
+    expand_query,
+    light_stem,
+    trigram_jaccard,
+    trigram_ngrams,
+)
 
 _BANGLA_WORD_RE = re.compile(r"[A-Za-z0-9\u0980-\u09FF]+")
 
@@ -57,9 +62,10 @@ class BM25Index:
         self.doc_freq: Counter[str] = Counter()
         for tf in self.term_freqs:
             self.doc_freq.update(tf.keys())
-        # Hybrid retrieval (A2): precomputed char-trigram sets per chunk for
-        # the soft-match fallback signal.
-        self._trigrams: list[frozenset[str]] | None = None
+        # Hybrid retrieval (A2): char-trigram sets per chunk for the
+        # soft-match fallback signal. A8: precomputed ONCE at build time —
+        # recomputing them per query over the whole corpus was the hot path.
+        self._trigrams: list[frozenset[str]] = [trigram_ngrams(chunk.text) for chunk in chunks]
 
     def search(
         self,
@@ -75,6 +81,7 @@ class BM25Index:
         # Query-side expansion: stems + curated synonyms improve recall for
         # paraphrased questions without touching document text.
         query_terms = expand_query([light_stem(t) for t in raw_terms])
+        query_grams = trigram_ngrams(query)
         hits: list[Hit] = []
         for i, chunk in enumerate(self.chunks):
             if class_level is not None and chunk.meta.class_level != class_level:
@@ -85,11 +92,11 @@ class BM25Index:
                 continue
             score = self._score(query_terms, i)
             if score <= min_score:
-                soft = _TRIGRAM_WEIGHT * trigram_similarity(query, chunk.text)
+                soft = _TRIGRAM_WEIGHT * trigram_jaccard(query_grams, self._trigrams[i])
                 if soft > score:
                     score = soft
             else:
-                score += 0.3 * _TRIGRAM_WEIGHT * trigram_similarity(query, chunk.text)
+                score += 0.3 * _TRIGRAM_WEIGHT * trigram_jaccard(query_grams, self._trigrams[i])
             if score > 0:
                 hits.append(Hit(chunk=chunk, score=round(score, 4)))
         hits.sort(key=lambda hit: hit.score, reverse=True)

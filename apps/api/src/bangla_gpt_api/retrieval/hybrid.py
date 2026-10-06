@@ -91,9 +91,19 @@ def _char_ngrams(text: str, n: int = 3) -> set[str]:
     return {compact[i : i + n] for i in range(max(len(compact) - n + 1, 0))}
 
 
+def trigram_ngrams(text: str) -> frozenset[str]:
+    """Character-trigram set of a text, for precomputing at index build."""
+    compact = re.sub(r"\s+", "", text.lower())
+    return frozenset(compact[i : i + 3] for i in range(max(len(compact) - 2, 0)))
+
+
+def trigram_jaccard(a: frozenset[str], b: frozenset[str]) -> float:
+    """Jaccard similarity of two precomputed trigram sets, in [0, 1]."""
+    if not a or not b:
+        return 0.0
+    return len(a & b) / len(a | b)
+
+
 def trigram_similarity(a: str, b: str) -> float:
     """Character-trigram Jaccard-style similarity in [0, 1]."""
-    ga, gb = _char_ngrams(a), _char_ngrams(b)
-    if not ga or not gb:
-        return 0.0
-    return len(ga & gb) / len(ga | gb)
+    return trigram_jaccard(trigram_ngrams(a), trigram_ngrams(b))
