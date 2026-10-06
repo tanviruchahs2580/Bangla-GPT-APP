@@ -1,6 +1,6 @@
 # Route Baseline — regenerated from the live app
 
-Source: `apps/api/src/bangla_gpt_api/routers/` (ARCH-001 split of main.py)
+Source: `apps/api/src/bangla_gpt_api/routers/` (split of main.py)
 Captured: 2026-09-11T19:20:44.459062+00:00
 Total unique method+path routes: 139
 

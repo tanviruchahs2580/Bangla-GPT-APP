@@ -82,6 +82,7 @@ data/nctb/normalized/
 live_evidence/
 
 # --- Local tooling / test artifacts (not for repo) ---
+.zcodeignore
 .zcode/
 apps/api/.coverage
 .coverage

@@ -7,11 +7,11 @@ Every command below has been executed and verified on this codebase.
 
 ```powershell
 cd apps/api
-python -m venv .venv
+python -m venv.venv
 .venv\Scripts\python -m pip install -e ".[dev]"
 # optional persistent DB:
 #   set DATABASE_URL=sqlite:///./bangla_gpt.db
-#   .venv\Scripts\alembic upgrade head
+#.venv\Scripts\alembic upgrade head
 .venv\Scripts\python -m uvicorn bangla_gpt_api.main:app --reload
 # verify:
 curl http://127.0.0.1:8000/health
@@ -34,13 +34,13 @@ Web dashboard (dev): `cd apps/web && npm install && npm run dev` → http://loca
 Full topology lives in `docker-compose.yml` with profiles:
 
 ```bash
-cp .env.production.example .env    # fill every required value first!
+cp.env.production.example.env    # fill every required value first!
 docker compose --profile core up -d --wait          # api + redis (shared Redis limiter)
 docker compose --profile core --profile web --profile tls up -d --wait   # + nginx dashboard + Caddy auto-HTTPS
 docker compose --profile monitoring up -d           # Prometheus (+ Grafana)
 ```
 
-- `ENV=production` (and `ENV=staging` — S5.1 parity: staging runs the same
+- `ENV=production` (and `ENV=staging` — parity: staging runs the same
   strict guard) boot guard refuses to start with a default/short `JWT_SECRET`,
   missing `ADMIN_EMAIL/ADMIN_PASSWORD`, or an `ADMIN_PASSWORD` shorter than 12 chars.
 - Env-surface drift is mechanically guarded: `pytest apps/api/tests/test_env_parity.py`
@@ -57,7 +57,7 @@ docker compose --profile monitoring up -d           # Prometheus (+ Grafana)
 Single-container run remains available:
 
 ```bash
-docker build -t bangla-gpt-api:local .
+docker build -t bangla-gpt-api:local.
 docker run -d --name bgpt -p 8080:8000 \
   -e ENV=production -e DATABASE_URL=sqlite:////data/bangla_gpt.db \
   -e JWT_SECRET="$(openssl rand -hex 32)" \
@@ -76,7 +76,7 @@ docker cp scripts/smoke_stack.py <api-container>:/tmp/smoke_stack.py
 docker compose exec -T api python /tmp/smoke_stack.py   # expect SMOKE OK
 ```
 
-### Scheduled background jobs (S5.4): inline vs ARQ
+### Scheduled background jobs: inline vs ARQ
 
 Two jobs run on a schedule: the **weekly parent digest** (ISO Sunday ≥16:00 UTC)
 and the **nightly weakness rollup** (daily ≥21:00 UTC). `JOBS_BACKEND` chooses
@@ -115,7 +115,7 @@ DATABASE_URL=<url> alembic current           # inspect
 Verified cycle: `upgrade head → downgrade base → upgrade head` on SQLite (CI) and
 Postgres 16 (CI service container).
 
-### Expand–contract convention (S5.2 — required for zero-downtime deploys)
+### Expand–contract convention (required for zero-downtime deploys)
 
 Rolling/blue-green deploys keep OLD and NEW app versions running simultaneously
 against ONE database, so every migration must be safe for both at the same
@@ -217,7 +217,7 @@ Quarterly rotation procedure:
   heavy skew (standard trade-off vs sliding-window log).
 - `RATE_LIMIT_FAIL_OPEN=false` (default) answers **503** on protected routes if
   Redis is down; set `true` to prefer availability over strictness.
-- S5.3 caches (`/dashboard/summary` 60 s per user; RAG query results 5 min,
+- caches (`/dashboard/summary` 60 s per user; RAG query results 5 min,
   SHA-256 hashed keys -- never the raw question) share the same
   `RATE_LIMIT_BACKEND=redis` switch: `redis` -> all pods share the caches,
   otherwise a bounded in-process cache. Redis failure never breaks a request;
@@ -227,7 +227,11 @@ Quarterly rotation procedure:
 - Live Gemini behaviour needs a real `GEMINI_API_KEY`; contract tests cover the
   client, live latency/quota behaviour is UNVERIFIED until a key is deployed.
 - Textbook (পাঠ্যপুস্তক) OCR ingestion is implemented behind a permission gate
-  (`BGPT_OCR_CONFIRMED=yes`) pending rights-holder permission (B18).
+  (`BGPT_OCR_CONFIRMED=yes`) pending rights-holder permission.
+- The Vercel web app proxies `/api/*` to the API behind a Cloudflare
+  **quick tunnel** (`apps/web/vercel.json`); quick-tunnel hostnames rotate on
+  every `cloudflared` restart, so each rotation needs one commit that updates
+  the rewrite destination (or promote a named tunnel / stable origin).
 - TOTP/MFA for admins not yet implemented (§6).
 
 ## 9. Pre-production checklist
@@ -272,7 +276,7 @@ Quarterly rotation procedure:
   first login (`email_unverified` code drives UI copy + resend link).
 - Without SMTP, accounts auto-verify (dev/small deployments only).
 
-### Support ops & SLA (S5.10)
+### Support ops & SLA
 - Public status page: the web app serves `/status` from `GET /status`
   (presence/booleans only -- safe to link publicly; never exposes counts).
   Check the API directly with `curl http://api:8000/status`; a `degraded`

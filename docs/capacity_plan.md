@@ -1,6 +1,6 @@
-# S6.6 — Capacity plan: 10k / 100k / 1M monthly active users
+# Capacity plan: 10k / 100k / 1M monthly active users
 
-Status: plan-of-record for GATE G6. Local measurements cited where they
+Status: plan-of-record for GATE Local measurements cited where they
 exist; every assumption is stated so it can be replaced with a pilot
 measurement during S7. No secrets, no PII in this document.
 
@@ -45,7 +45,7 @@ measurement during S7. No secrets, no PII in this document.
 | Redis (rate-limit + imp-revocation keys) | < 10 MB | ~35 MB | < 200 MB |
 | Bandwidth / peak-hour | ~1 GB | ~10 GB | ~100 GB (CDN-fronted static assets) |
 
-Near-term gate (G6 = 100 schools ≈ 5–10k MAU) therefore fits the
+Near-term gate (= 100 schools ≈ 5–10k MAU) therefore fits the
 **existing single compose node** (2 vCPU) for the app tier; the LLM tier
 is the only thing that needs an upgrade decision before pilot scale.
 
@@ -90,7 +90,7 @@ Readings:
 At an assumed paid-tier list price of $0.10/M input + $0.40/M output
 tokens: 3 asks/day × 22 days × (1.2 k in + 0.6 k out) ≈ **$0.024
 (~৳3) per student per month**; 100k MAU ≈ $2.4k/month. Free tier costs
-৳0 but throttles → documented degraded mode (S6.8 drill). **Verify
+৳0 but throttles → documented degraded mode (drill). **Verify
 actual contracted rates at procurement — human sign-off item, do not
 budget from this table without it.**
 
@@ -105,16 +105,16 @@ budget from this table without it.**
 3. **≤ 1M MAU:** k8s (or 3+ node pool) with HPA on SSE connections,
    Postgres read replicas for dashboards/parent views, Redis cluster
    (rate limits are the hot key path), LLM gateway with per-key quotas
-   and queue-based quiz generation; aggregate govt reports (S6.5) move
+   and queue-based quiz generation; aggregate govt reports  move
    to read replica — they scan quiz_attempts fully.
 
 Triggers (measure, don't guess): p95 quiz > 500 ms or > 60 concurrent
 journeys per worker → step 2; > 500 RPS sustained or Postgres CPU >
 70 % → step 3.
 
-## 7. How this plan gets falsified (G6)
+## 7. How this plan gets falsified
 
-- 10× local load game-day (S6.8) against the k6 thresholds;
+- 10× local load game-day  against the k6 thresholds;
 - degraded-mode drill with LLM disabled;
 - pilot-week real DAU/peak replaces §2 assumptions;
 - CDN/network logs replace the §4 theoretical payloads.

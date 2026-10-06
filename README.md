@@ -2,46 +2,20 @@
 
 **NCTB-grounded Bangla-first AI personal tutor platform.**
 
-> **Status: v0.7.0 — world-class UI/UX renovation (Refined Bangladesh Green) + live reliability, CI green.**
-> New in v0.7.0: full frontend visual/interaction renovation (design tokens, vector BrandMark, fluid Bangla typography, animated nav, tutor/quiz/learn polish, a11y + Lighthouse gates green), resilient nginx api proxy, analytics 401 funnel guard, version bump 0.6.2→0.7.0.
-> **Status: v0.6.2 — Bangladesh Bangla language correction release (universal Bangla, CI green).**
-> New in v0.6.2: Fix `test_health` version assertion to dynamic `Settings().version` (was hard-coded `0.6.0`), unblocking CI 3.11/3.12 matrix.
-> v0.6.1 — Bangladesh Academy-standard Bangla across entire app (fixed 56 Assamese `ৰ`/`ৱ` glyphs, all CreateHub/Teacher UI strings: `ওয়ার্কশীট`, `উত্তরমালা`, `হোমওয়ার্ক`, `রুব্রিক`, `লেসন প্ল্যান`, `সেভ করা ডকুমেন্ট`, `মুছে ফেলুন` etc), distinct `প্রশ্নপত্র তৈরি করুন`/`পাঠ পরিকল্পনা তৈরি করুন` buttons, universal `Noto Sans Bengali` + `Hind Siliguri` font audit.
-> v0.6.0 — NCTB AI Tutor blueprint release (5 roles incl. school_admin).
-> New in v0.6: Bangladesh-green design system per the NCTB blueprint (AI-indigo
-> accent, Noto Sans Bengali), welcome screen, unified teacher **Create hub**
-> (worksheet / answer key / homework / rubric generators + async job queue
-> Queued→Generating→Validating→Ready), persisted lesson plans & document
-> library, workload-saved metric, **school_admin dashboard** (learning health,
-> at-risk list, students/teachers/classes, curriculum coverage, usage), strict
-> **school tenancy isolation**, tutor upgrades (strategy chips, numeric
-> confidence badge, image-question path, save-to-notes), AI memory + learning
-> preferences (view/edit/disable), in-app **notification bell** (short-test
-> fan-out, job-ready), persisted analytics events, admin **AI-quality board**
-> (grounding/refusal counts) and feedback triage, parent activity feed + AI
-> report sentences — plus notification bell, i18n and error-copy fixes from
-> live all-role user testing.
-> v0.5 baseline: reader with bookmarks/TTS/font-size + offline chapter copies,
-> quiz→tutor “explain this” deep-links, revision mini-quizzes + streak
-> heatmap, teacher dashboards (classrooms, CSV roster import, take-home and
-> per-student quiz assignments, AI question papers with review→finalize→PDF,
-> short tests, lesson plans, support plans, weak-chapter matrix), parent
-> per-chapter accuracy view, admin audit log, k-anonymised govt aggregate
-> export, safety refusal panel, feedback triage, time-boxed revocable
-> impersonation, public system-status page, unified chat/chapter search,
-> dark mode + bn/en language toggles and authenticated JSON data export.
-> v0.3/v0.4 baseline: multi-turn **tutor chat with SSE streaming + persisted history**, hybrid
-> retrieval (Bangla light-stemming + query expansion + trigram fallback),
-> child-safety moderation layer with supportive refusals, corpus covering
-> classes 6–10 (science/mathematics/bangla), quiz honesty fields
-> (`requested`/`partial_quiz` note), parent **invite-code** linking,
-> email verification gate, per-user rate limiting, admin pagination/search +
-> retention purge endpoint, answer 👍👎 feedback & privacy-safe events,
-> redesigned responsive UI (design system, dark mode, self-hosted Bangla
-> fonts), i18n scaffold (bn/en), PWA (installable + offline shell) and a
-> frontend test suite (vitest).
-> Student-facing পাঠ্যপুস্তক e-books still require rights-holder permission;
-> live Gemini behaviour needs a real API key.
+Five roles (student, teacher, parent, school admin, platform admin), a grounded
+multi-turn AI tutor with SSE streaming, quizzes and question papers with teacher
+review flows, curriculum coverage and weakness analytics, classroom management,
+school tenancy isolation, child-safety moderation, PWA + Android (Capacitor),
+and bn/en i18n with dark mode.
+
+**Current version: 0.9.2** (see `apps/api/pyproject.toml` / `apps/web/package.json`).
+
+- **Live web app:** https://bangla-gpt-app.vercel.app
+- **Known limitation:** the Vercel frontend proxies `/api/*` to the API running
+  behind a Cloudflare quick tunnel whose hostname rotates per session (see
+  `apps/web/vercel.json`). A stable production API origin (VM/PaaS + named
+  tunnel or direct domain) is the top infrastructure TODO —
+  [docs/operations/PRODUCTION_DEPLOYMENT.md](docs/operations/PRODUCTION_DEPLOYMENT.md).
 
 ## API surface (current)
 
@@ -67,10 +41,15 @@
 | `POST /admin/maintenance/purge` | admin | Retention sweep (chats/tokens/invites) |
 | `POST /parents/link` · `POST /parents/link/invite` · `GET /parents/me/children...` | parent | Linking (legacy ID + invite-code flows) |
 
+This table covers the core surface only — the API now exposes ~135 routes
+(short tests, bulk assignments, question papers, schools, notifications, KG
+re-teach, admin center, status page). Generated baseline:
+[docs/route_baseline.md](docs/route_baseline.md).
 Full reference: [docs/API.md](docs/API.md). Operations: [docs/runbook.md](docs/runbook.md).
 Launch gates for the owner: [docs/LAUNCH_READINESS_CHECKLIST.md](docs/LAUNCH_READINESS_CHECKLIST.md).
 RAG design: [docs/RAG_ARCHITECTURE.md](docs/RAG_ARCHITECTURE.md).
 NCTB pipeline: [docs/NCTB_DATA_PIPELINE.md](docs/NCTB_DATA_PIPELINE.md).
+Current QA record: [docs/qa-audit-2026-10-06.md](docs/qa-audit-2026-10-06.md).
 
 ## Quick start
 
@@ -92,7 +71,11 @@ cd apps/web
 npm install
 npm run dev      # http://localhost:5173 (proxies /api to :8000)
 npm run build    # type-checked production build → dist/
+npx vitest run   # frontend test suite
 ```
+
+Backend checks (from `apps/api`): `ruff check .`, `ruff format --check .`,
+`mypy src`, `pytest -q`.
 
 Environment variables are documented in `.env.example`. Default
 `LLM_PROVIDER=mock` requires no API key; unknown providers fail loudly.
@@ -100,37 +83,36 @@ Environment variables are documented in `.env.example`. Default
 ## Repository layout
 
 ```text
-BanglaGptApp/
-├── apps/api/                                 # FastAPI service
-├── apps/web/                                 # React dashboard (Vite + TS)
-├── docs/architecture.md                      # verified decisions + pending items
-├── docs/API.md                               # hand-written endpoint reference
-├── docs/runbook.md                           # operations runbook
-├── docs/archive/                             # superseded FINAL_* snapshots (history only)
-├── BANGLA_GPT_ENTERPRISE_ARCHITECTURE_QA_AUDIT.md  # evidence-driven arch + QA audit
-├── .github/workflows/repository-sanity.yml   # CI: repo-level sanity checks
-├── .github/workflows/ci.yml                  # CI: lint/type/tests/audit/web/docker
-├── LICENSE                                   # MIT
+├── apps/api/                      # FastAPI service (src/tests/scripts/eval)
+├── apps/web/                      # React dashboard (Vite + TS) + Capacitor Android
+├── docs/                          # living documentation (see docs/README.md)
+│   └── archive/                   # superseded point-in-time reports (do not quote)
+├── deploy/                        # caddy / postgres / prometheus / grafana configs
+├── scripts/                       # ops & maintenance scripts
+├── data/nctb/                     # corpus manifests + quality reports
+├── .github/workflows/             # CI, eval gate, release, Vercel deploy
 ├── Dockerfile
-├── .gitignore
+├── docker-compose.yml
 └── README.md
 ```
 
-## CI/CD status
+## CI/CD
 
-| Pipeline | Stage | Status |
+| Workflow | What it does | Trigger |
 |---|---|---|
-| `ci.yml` api job | install → ruff lint → format → mypy → pytest (3.11+3.12) → pip-audit → alembic cycle → smoke | ✅ active |
-| `ci.yml` postgres job | alembic cycle + API journeys against Postgres 16 service container | ✅ active |
-| `ci.yml` golden-eval job | golden retrieval benchmark w/ grounded-accuracy gate | ✅ active |
-| `ci.yml` web job | Node 24 → npm ci → tsc + vite build | ✅ active |
-| `ci.yml` docker job | build image → run → `/health` + `/ready` probes | ✅ active |
-| `release.yml` | tag → GHCR images → optional SSH deploy w/ health-gated rollback | ✅ tag-driven |
-| `repository-sanity.yml` | structure / secret-file / YAML validation | ✅ active |
+| `ci.yml` | api: ruff → format → mypy → pytest (3.11+3.12) → pip-audit → alembic cycle → smoke; postgres journey tests; golden-eval gate; web: tsc + build + vitest; docker build + probes | push/PR to main |
+| `eval-gate.yml` | golden retrieval benchmark w/ grounded-accuracy gate | push to main |
+| `release.yml` | tag → GHCR images → optional SSH deploy w/ health-gated rollback | tag `v*` |
+| `vercel-deploy.yml` | production web deploy (CI-gated) | push to main |
 
-Full roadmap: [docs/architecture.md](docs/architecture.md).
+## Documentation conventions
+
+- `docs/` holds **living documentation** (architecture, runbook, ops, ADRs).
+  Point-in-time session/audit reports go to `docs/archive/` and are never
+  quoted as current state.
+- There is exactly **one current QA record** (`docs/qa-audit-YYYY-MM-DD.md`);
+  it moves to `docs/archive/` when the next one supersedes it.
 
 ## License
 
 [MIT](LICENSE)
-

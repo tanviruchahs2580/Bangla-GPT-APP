@@ -1,4 +1,4 @@
-# OWASP-lite Security Checklist (S5.6)
+# OWASP-lite Security Checklist
 
 Compressed OWASP Top 10 (2021) review for Bangla GPT. Every line points at
 real code and a real test that runs in CI -- nothing here is aspirational.
@@ -36,7 +36,7 @@ Legend: [DONE] implemented + tested | [PARTIAL] implemented, limitation noted
   `Strict-Transport-Security: max-age=31536000; includeSubDomains`
   (`deploy/caddy/Caddyfile`).
 - [PARTIAL] JWT HS256 single shared secret (`JWT_SECRET`). Fine at current
-  scale; RS256 keypair rotation is a post-G5 item.
+  scale; RS256 keypair rotation is a post-item.
 
 ## A03 -- Injection
 - [DONE] SQL: SQLAlchemy ORM/Core only; no string-formatted SQL anywhere in
@@ -62,7 +62,7 @@ Legend: [DONE] implemented + tested | [PARTIAL] implemented, limitation noted
   `test_security_v2.py::test_production_boot_requires_pii_enc_key` (with a
   positive control proving the refusal is specific to the missing key).
 - [DONE] Child-safety design: guardian consent gate at registration, counts-
-  only logging of chat activity (R11), guardian-visible data export.
+  only logging of chat activity, guardian-visible data export.
 
 ## A05 -- Security Misconfiguration
 - [DONE] Security headers on every API response
@@ -75,7 +75,7 @@ Legend: [DONE] implemented + tested | [PARTIAL] implemented, limitation noted
 - [RISK] `/docs`, `/redoc`, `/openapi.json` are exempt from the API CSP and
   are dev surfaces. Accepted for now because they only appear on the API
   origin (behind Caddy's `/api` path strip) and carry no session state;
-  removing them in prod images is a post-G5 hardening ticket.
+  removing them in prod images is a post-hardening ticket.
 
 ## A06 -- Vulnerable & Outdated Components
 - [DONE] CI gates: `pip-audit` on the API job and
@@ -105,8 +105,7 @@ Legend: [DONE] implemented + tested | [PARTIAL] implemented, limitation noted
   pyproject deps); CI `npm ci` (not `npm install`).
 - [PARTIAL] Impersonation tokens are stateless JWTs: a live impersonation
   session cannot be revoked before its hard 15-minute ceiling; stop-endpoint
-  plus audit rows make the window attributable. Revocation list is a S5.10
-  follow-up. Test: `test_security_v2.py::test_impersonated_token_is_short_lived_and_attributable`.
+  plus audit rows make the window attributable. Revocation list is a follow-up. Test: `test_security_v2.py::test_impersonated_token_is_short_lived_and_attributable`.
 
 ## A09 -- Logging & Monitoring Failures
 - [DONE] Audit trail (`audit_log` table, migration
@@ -117,7 +116,7 @@ Legend: [DONE] implemented + tested | [PARTIAL] implemented, limitation noted
   `test_audit_view_filters_and_pages`).
 - [DONE] Privacy-preserving audit detail: purge logs counts only
   (`test_security_v2.py::test_purge_audit_detail_is_counts_only`); chat
-  content is never logged (R11).
+  content is never logged.
 - [DONE] Structured JSON request logs with request-id correlation
   (`test_request_context.py`, `test_health_observability.py`).
 

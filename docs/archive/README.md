@@ -1,4 +1,4 @@
-# Archive — superseded point-in-time reports (DOC-001)
+# Archive — superseded point-in-time reports
 
 These `FINAL_*` snapshots were written during earlier milestones and
 contradict each other and the current tree (e.g. some predate the circuit

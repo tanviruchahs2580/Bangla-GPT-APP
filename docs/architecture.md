@@ -43,7 +43,7 @@ BanglaGptApp/
 │   │   ├── main.py           # app factory: /health /live /ready
 │   │   └── providers/        # LLMProvider protocol, mock impl, factory
 │   └── tests/
-├── .github/workflows/        # repository-sanity.yml, ci.yml
+├──.github/workflows/        # repository-sanity.yml, ci.yml
 └── docs/architecture.md
 ```
 
@@ -89,7 +89,7 @@ BanglaGptApp/
   server-side; double-submit and length-mismatch rejected.
 - **Progress** (`/students/{id}/progress`): per-chapter accuracy computed from
   answer logs; chapters under 60% flagged as weak.
-- **DI style**: FastAPI `Annotated` dependencies; ruff B008 kept enabled.
+- **DI style**: FastAPI `Annotated` dependencies; ruff kept enabled.
 
 ## Verified behaviors (Phase 3)
 

@@ -1,4 +1,4 @@
-# Backup & Disaster Recovery (S5.7)
+# Backup & Disaster Recovery
 
 Goal: **RPO 24h / RTO 4h** for all persistent state. Current design beats
 both targets comfortably; the numbers below are measured, not aspirated.
@@ -7,7 +7,7 @@ both targets comfortably; the numbers below are measured, not aspirated.
 
 | Asset | Where | Protection |
 |---|---|---|
-| App database (users, quiz attempts, chats, audit_log, ...) | Postgres 16 (`pg_data` volume) | pgBackRest WAL archiving + nightly full backups |
+| App database (users, quiz attempts, chats, audit_log,...) | Postgres 16 (`pg_data` volume) | pgBackRest WAL archiving + nightly full backups |
 | NCTB corpus files | `NCTB_CORPUS_DIR` (rebuilt from source) or S3-compatible bucket | `scripts/s3_corpus_sync.py` keeps an S3 copy; corpus is re-creatable anyway |
 | Question-paper PDFs | nowhere -- rendered on demand from DB rows (`services/qp_pdf.py`) | no separate target: a DB restore restores the PDFs |
 | Secrets (JWT_SECRET, PII_ENC_KEY, GEMINI_API_KEY, SMTP creds) | host `.env` / secret store | out-of-band; NOT in backups (encrypted data would be useless without keys anyway -- see Key loss below) |
@@ -68,7 +68,7 @@ volume, restores, restarts, and asserts both markers came back (proving WAL
 replay, not just dump-and-reload). Exit code 0 = drill pass.
 
 **Last executed: 2026-09-07, local docker, PASS.**
-Evidence: drill output `PASS ... (9s restore)`; postgres log during recovery:
+Evidence: drill output `PASS... (9s restore)`; postgres log during recovery:
 `restored log file "000000010000000000000005" from archive`, `archive
 recovery complete`, new timeline 2 selected.
 
@@ -86,7 +86,7 @@ blindly. Store both in the same secret store with the same backup story.
 
 ## SQLite dev fallback
 
-Dev installs on `sqlite:////data/app.db` keep the B12 path:
+Dev installs on `sqlite:////data/app.db` keep the path:
 `scripts/backup_loop.py` (online snapshots, `BACKUP_KEEP_DAYS` pruning,
 optional `OFFSITE_SYNC_CMD`) + `scripts/restore_test.py` (monthly restore
 rehearsal with `PRAGMA integrity_check`). Postgres + pgBackRest above is the

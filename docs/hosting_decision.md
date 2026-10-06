@@ -1,4 +1,4 @@
-# S6.7 — Hosting decision record
+# Hosting decision record
 
 Status: **DRAFT — awaiting human sign-off (🖐).** This document is the
 decision package; the decision itself is a human responsibility (budget
@@ -27,7 +27,7 @@ obligations outrank raw price*.
 1. Child-data handling & residency (30 %) — documented region, DPA
    available (dpa_template.md exists for our own downstream DPA),
    backup encryption (backup_dr.md).
-2. Reliability at pilot load (25 %) — G6 evidence says one 2-vCPU node
+2. Reliability at pilot load (25 %) — evidence says one 2-vCPU node
    covers 100 schools; A/B both fine, D unnecessary.
 3. Cost at pilot (20 %) — A cheapest with margin.
 4. Ops fit with what CI/CD already proves (15 %) — A is literally the
@@ -37,7 +37,7 @@ obligations outrank raw price*.
 
 ## Recommendation (pending sign-off)
 
-**Phase 1 (pilot, G6–G7): Option A** — one VPS in a chosen region,
+**Phase 1 (pilot, –): Option A** — one VPS in a chosen region,
 current compose stack, Caddy TLS, GHCR tag-deploys with health-gated
 rollback (already built), nightly backup loop → offsite object storage.
 Chosen region is itself a sign-off input (see below): default proposal

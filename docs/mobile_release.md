@@ -1,4 +1,4 @@
-# Mobile distribution (S5.9)
+# Mobile distribution
 
 Two supported paths, in order of preference for schools with cheap phones:
 
@@ -45,7 +45,7 @@ unset), so no APK was produced — deliberately not faked. On a build
 machine:
 
 1. Install JDK 21 + Android Studio (SDK 35). `cd apps/web/android &&
-   ./gradlew assembleDebug` for a test APK.
+./gradlew assembleDebug` for a test APK.
 2. Release signing: create a keystore (store it OUTSIDE the repo, never
    in git/CI logs), set `keystore.properties` (git-ignored), then
    `./gradlew assembleRelease` / `bundleRelease`. Play Store prefers
@@ -61,7 +61,7 @@ Push requires human/external work: a Firebase console project,
 `@capacitor/push-notifications` + `@capacitor-firebase/messaging`
 plugins, and a server-side send path (the API currently has no push
 sender). The weekly parent digest and assignment reminders email today
-(mailer, S5.4); push is an ADD-ON, tracked as a 🖐 follow-up, not a
+(mailer, ); push is an ADD-ON, tracked as a 🖐 follow-up, not a
 silent gap: no code claims FCM exists.
 
 ### iOS
@@ -71,5 +71,5 @@ npx cap open ios`. Out of scope locally; 🖐.
 
 ## Status page note
 
-Admin-visible release status lives in S5.10 (`/status` + admin status
+Admin-visible release status lives in (`/status` + admin status
 page), not here.

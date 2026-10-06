@@ -1,4 +1,4 @@
-# Dependency Scan Register (S5.6)
+# Dependency Scan Register
 
 CI gates (`.github/workflows/ci.yml`):
 - API job: `python -m pip_audit` over the locked venv.
@@ -10,7 +10,7 @@ is a static nginx image: `apps/web/Dockerfile` is multi-stage (node build ->
 vite/esbuild dev servers never reach a deployment target.
 
 ## pip-audit (apps/api)
-Latest run (S5.6, this branch): **no known vulnerabilities** across the
+Latest run (, this branch): **no known vulnerabilities** across the
 locked dependency set.
 
 ## npm audit --omit=dev (apps/web)
@@ -36,7 +36,7 @@ Remediation path: fixed by vite >= 6.4.3 / current major line, which is a
 major-version bump of the build toolchain (lockfile-wide churn, plugin
 compatibility checks). Deliberately deferred -- a build-toolchain major
 bump does not belong in a security-hardening step's smallest-change budget
-(R10); tracked for the next scheduled toolchain refresh. Dev-workstation
+; tracked for the next scheduled toolchain refresh. Dev-workstation
 mitigation meanwhile: keep vite's default localhost binding, do not use
 `--host` on untrusted networks.
 

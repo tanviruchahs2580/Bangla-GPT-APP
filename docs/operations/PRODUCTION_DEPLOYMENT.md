@@ -9,7 +9,7 @@
 
 | Environment | Frontend | API | Database | Redis |
 |-------------|----------|-----|----------|-------|
-| **Development** | `npm run dev` (Vite, :5173) | `uvicorn` (localhost:8000) | SQLite file | Optional (memory rate limiter) |
+| **Development** | `npm run dev` (Vite,:5173) | `uvicorn` (localhost:8000) | SQLite file | Optional (memory rate limiter) |
 | **Staging** | Vercel preview | Docker Compose (profile: core) | PostgreSQL 16 | Redis 7 |
 | **Production** | Vercel (bangla-gpt-app.vercel.app) | VM/Docker + Caddy TLS | PostgreSQL 16 (RDS/Cloud SQL) | Redis 7 |
 
@@ -24,7 +24,7 @@
 DOCKER_BUILDKIT=1 docker build \
   --build-arg APP_VERSION=0.9.1 \
   --tag ghcr.io/tanviruchahs2580/bangla-gpt-app/api:v0.9.1 \
-  --push .
+  --push.
 ```
 
 **Dockerfile:** Multi-stage build (builder → runner). Python 3.12-alpine base.
@@ -122,16 +122,16 @@ All of these must pass for a successful deployment:
 domain {
     encode zstd gzip
     # Security headers (HSTS, X-Content-Type-Options, X-Frame-Options DENY)
-    header { ... }
-    
+    header {... }
+
     # API proxy: strip /api prefix
     handle_path /api/* {
         reverse_proxy api:8000
     }
-    
+
     # SPA: hashed assets + client routes
     handle {
-        header "Content-Security-Policy" "default-src 'self'; ..."
+        header "Content-Security-Policy" "default-src 'self';..."
         reverse_proxy web:80
     }
 }

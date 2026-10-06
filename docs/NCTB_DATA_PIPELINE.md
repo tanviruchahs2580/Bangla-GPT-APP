@@ -88,7 +88,7 @@ un- or mis-converted content out of student answers.
 
 - Structure-aware: chapter-parent → section-child units, page ranges kept;
   heading patterns cover both textbook ("অধ্যায়: X") and curriculum
-  ("প্রথম অধ্যায় : X") formats; running-header gluing is un-wound before
+  ("প্রথম অধ্যায়: X") formats; running-header gluing is un-wound before
   line matching.
 - Class level is DERIVED from front matter only when unambiguous; these
   compilation volumes mention multiple classes, so detection correctly
@@ -99,9 +99,9 @@ un- or mis-converted content out of student answers.
 
 ```bash
 git clone <repo> && cd BanglaGptApp/apps/api
-python -m venv .venv && .venv/Scripts/pip install -e ".[dev]"
-.venv/Scripts/python scripts/build_nctb_corpus.py --data-dir ../../data/nctb --subset all
-.venv/Scripts/python scripts/evaluate_nctb_retrieval.py ../../data/nctb
+python -m venv.venv &&.venv/Scripts/pip install -e ".[dev]"
+.venv/Scripts/python scripts/build_nctb_corpus.py --data-dir../../data/nctb --subset all
+.venv/Scripts/python scripts/evaluate_nctb_retrieval.py../../data/nctb
 # then run API with NCTB_CORPUS_DIR=../../data/nctb
 ```
 
