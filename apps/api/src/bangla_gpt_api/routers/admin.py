@@ -17,6 +17,7 @@ from sqlalchemy import func, select
 from bangla_gpt_api.auth.security import (
     create_access_token,
 )
+from bangla_gpt_api.caching import CacheUnavailable
 from bangla_gpt_api.db.models import (
     AiUsage,
     AuditLog,
@@ -50,6 +51,7 @@ from .deps import (
     Ctx,
     CurrentUser,
     DbSession,
+    revocation_store_unavailable,
 )
 
 router = APIRouter()
@@ -155,17 +157,21 @@ def admin_impersonate(
         jti=jti,
         extra_claims={"imp": True, "imp_by": admin.id},
     )
-    # index active JTIs per target so admin revoke can find them
+    # index active JTIs per target so admin revoke can find them.
+    # Strict (F-08): if the revocation store is unreachable, refuse to
+    # start — a session that can never be revoked must not be minted.
     try:
-        existing = app_ctx.cache.get_json(f"imp_active:{target.id}") or []
+        existing = app_ctx.cache.get_json_strict(f"imp_active:{target.id}") or []
         if not isinstance(existing, list):
             existing = []
         existing.append(jti)
         # keep only recent 10 to bound memory
         existing = existing[-10:]
-        app_ctx.cache.set_json(f"imp_active:{target.id}", existing, ttl=IMPERSONATION_MINUTES * 60)
-    except Exception:
-        pass
+        app_ctx.cache.set_json_strict(
+            f"imp_active:{target.id}", existing, ttl=IMPERSONATION_MINUTES * 60
+        )
+    except CacheUnavailable as exc:
+        raise revocation_store_unavailable() from exc
     write_audit(
         db,
         action="impersonation",
@@ -188,17 +194,22 @@ def admin_impersonate_end(app_ctx: Ctx, user_id: int, db: DbSession, admin: Admi
     target = db.get(User, user_id)
     if target is None:
         raise HTTPException(status_code=404, detail="User not found")
-    # revoke all active impersonation JTIs for this target
+    # revoke all active impersonation JTIs for this target.
+    # Strict (F-08): a cache outage must NOT produce a 204 + "stop" audit
+    # row while the token keeps working — the caller gets 503 and the
+    # audit trail stays truthful.
     try:
-        active = app_ctx.cache.get_json(f"imp_active:{target.id}") or []
+        active = app_ctx.cache.get_json_strict(f"imp_active:{target.id}") or []
         if isinstance(active, list):
             for j in active:
                 if isinstance(j, str) and j:
-                    app_ctx.cache.set_json(f"imp_revoke:{j}", True, ttl=IMPERSONATION_MINUTES * 60)
+                    app_ctx.cache.set_json_strict(
+                        f"imp_revoke:{j}", True, ttl=IMPERSONATION_MINUTES * 60
+                    )
         # clear the active index
-        app_ctx.cache.set_json(f"imp_active:{target.id}", [], ttl=1)
-    except Exception:
-        pass
+        app_ctx.cache.set_json_strict(f"imp_active:{target.id}", [], ttl=1)
+    except CacheUnavailable as exc:
+        raise revocation_store_unavailable() from exc
     write_audit(
         db,
         action="impersonation",
@@ -231,7 +242,12 @@ def impersonate_exit(app_ctx: Ctx, request: Request, db: DbSession, user: Curren
         )
     exp = claims.get("exp")
     ttl = max(1.0, float(exp) - time.time()) if isinstance(exp, (int, float)) else 900.0
-    app_ctx.cache.set_json(f"imp_revoke:{claims['jti']}", True, ttl)
+    # Strict (F-08): if the write cannot be confirmed we must not return 204
+    # with an "exit" audit row while the session is still live.
+    try:
+        app_ctx.cache.set_json_strict(f"imp_revoke:{claims['jti']}", True, ttl)
+    except CacheUnavailable as exc:
+        raise revocation_store_unavailable() from exc
     write_audit(
         db,
         action="impersonation",

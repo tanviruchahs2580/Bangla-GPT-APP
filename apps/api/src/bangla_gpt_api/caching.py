@@ -45,10 +45,31 @@ SUMMARY_CACHE_TTL_SECONDS = 60.0
 RAG_CACHE_TTL_SECONDS = 300.0
 
 
+class CacheUnavailable(RuntimeError):
+    """The cache backend could not be reached.
+
+    Only the *strict* operations raise this. Regular cache reads/writes
+    stay fail-soft (the dashboard/RAG caches must never take the site
+    down), but security-critical writes -- impersonation revocation --
+    must know the write landed, so they use the strict pair and fail
+    closed instead of pretending success.
+    """
+
+
 class Cache(Protocol):
     def get_json(self, key: str) -> Any: ...
 
     def set_json(self, key: str, value: Any, ttl: float) -> None: ...
+
+    def get_json_strict(self, key: str) -> Any:
+        """Like ``get_json`` but raises ``CacheUnavailable`` when the
+        backend cannot be reached (a miss still returns ``None``)."""
+        ...
+
+    def set_json_strict(self, key: str, value: Any, ttl: float) -> None:
+        """Like ``set_json`` but raises ``CacheUnavailable`` instead of
+        swallowing a backend write failure."""
+        ...
 
     def clear(self) -> None: ...
 
@@ -92,6 +113,10 @@ class MemoryCache:
                     del self._data[oldest]
             self._data[key] = (time.monotonic() + ttl, copy.deepcopy(value))
 
+    # The memory backend has no "unreachable" state, so strict == regular.
+    get_json_strict = get_json
+    set_json_strict = set_json
+
     def clear(self) -> None:
         with self._lock:
             self._data.clear()
@@ -118,6 +143,20 @@ class RedisCache:
         except redis.exceptions.RedisError:
             logger.warning("cache_backend_unreachable", extra={"op": "get"})
             return None
+        return self._decode_get(raw)
+
+    def get_json_strict(self, key: str) -> Any:
+        import redis.exceptions
+
+        try:
+            raw = self._redis.get(key)
+        except redis.exceptions.RedisError as exc:
+            logger.warning("cache_backend_unreachable", extra={"op": "get_strict"})
+            raise CacheUnavailable("redis get failed") from exc
+        return self._decode_get(raw)
+
+    @staticmethod
+    def _decode_get(raw: Any) -> Any:
         if raw is None:
             return None
         # redis-py types get as str | Awaitable[str] (pipeline mode); this
@@ -139,6 +178,17 @@ class RedisCache:
         except (redis.exceptions.RedisError, TypeError, ValueError):
             # TypeError/ValueError: value not JSON-serialisable -> skip cache.
             logger.warning("cache_write_failed", extra={"op": "set"})
+
+    def set_json_strict(self, key: str, value: Any, ttl: float) -> None:
+        import redis.exceptions
+
+        try:
+            self._redis.set(key, json.dumps(value), ex=max(1, int(ttl)))
+        except redis.exceptions.RedisError as exc:
+            logger.warning("cache_backend_unreachable", extra={"op": "set_strict"})
+            raise CacheUnavailable("redis set failed") from exc
+        # TypeError/ValueError (unserialisable value) are caller bugs: in
+        # strict mode they propagate instead of pretending the write landed.
 
     def clear(self) -> None:
         logger.warning("cache_clear_skipped_on_shared_backend", extra={"op": "clear"})

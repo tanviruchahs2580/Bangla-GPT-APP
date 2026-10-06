@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from bangla_gpt_api.auth.security import decode_token
+from bangla_gpt_api.caching import CacheUnavailable
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.models import ClassRoom, ClassStudent, Parent, Student, Teacher, User
 from bangla_gpt_api.providers.base import LLMProvider
@@ -83,6 +84,22 @@ def _unauthorized(detail: str = "Not authenticated") -> HTTPException:
     )
 
 
+def revocation_store_unavailable() -> HTTPException:
+    """503 used by every impersonation-revocation touch point (F-08).
+
+    Revocation is a security write: when the shared store cannot be reached
+    we refuse loudly instead of pretending the token was stopped. Ordinary
+    caches stay fail-soft; this code path is deliberately not.
+    """
+    return HTTPException(
+        status_code=503,
+        detail={
+            "code": "revocation_unavailable",
+            "message": "session revocation store is unreachable; try again shortly",
+        },
+    )
+
+
 # bumping this string makes every previously-consented student
 # needs_reconfirm=true until they accept via POST /students/{id}/consent/reconfirm
 # (see tests/test_compliance_v2.py for the flow).
@@ -118,9 +135,16 @@ def get_current_user(
     # impersonation tokens are revocable BEFORE their short expiry.
     # The jti lands in the shared cache (Redis when configured: revocation
     # then holds across workers/restarts; memory backend: per-worker) with
-    # a TTL that matches the token's own remaining life.
+    # a TTL that matches the token's own remaining life. The lookup is
+    # strict (F-08): if the revocation store is unreachable we fail CLOSED
+    # for these privileged tokens — an uncheckable impersonation session
+    # must not pass — while every other cache read in the app stays soft.
     if payload.get("imp") and isinstance(payload.get("jti"), str):
-        if ctx.cache.get_json(f"imp_revoke:{payload['jti']}") is True:
+        try:
+            revoked = ctx.cache.get_json_strict(f"imp_revoke:{payload['jti']}")
+        except CacheUnavailable as exc:
+            raise revocation_store_unavailable() from exc
+        if revoked is True:
             raise _unauthorized("Impersonation session has ended")
     # AUTH-001: MFA step-up tokens (mfa:true, token_type "mfa") are accepted
     # ONLY by POST /auth/mfa/challenge — never as API credentials.

@@ -14,9 +14,11 @@ New file kept ASCII-only (repo rule for new files).
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
+from bangla_gpt_api.caching import CacheUnavailable
 from bangla_gpt_api.config import Settings
-from bangla_gpt_api.db.models import ChatMessage, Conversation
+from bangla_gpt_api.db.models import AuditLog, ChatMessage, Conversation
 from bangla_gpt_api.db.session import make_engine, make_session_factory
 from bangla_gpt_api.main import create_app
 
@@ -257,3 +259,131 @@ def test_impersonation_revocation_is_per_session(pair) -> None:
     assert client.get("/users/me", headers=hdr_b).status_code == 200
     # The real student's own token is untouched by any of this.
     assert client.get("/users/me", headers=_login(client, "a@example.com")).status_code == 200
+
+
+# --------------------------------------------- F-08: revocation fails closed
+
+
+class _DownCache:
+    """Cache stub for an unreachable shared backend.
+
+    Regular ops degrade to an empty cache (the dashboard/RAG caches must
+    stay fail-soft); the strict pair raises — the contract every
+    impersonation-revocation touch point now relies on.
+    """
+
+    def get_json(self, key: str) -> object:
+        return None
+
+    def set_json(self, key: str, value: object, ttl: float) -> None:
+        return None
+
+    def clear(self) -> None:
+        return None
+
+    def ping(self) -> bool:
+        return False
+
+    def get_json_strict(self, key: str) -> object:
+        raise CacheUnavailable("backend down")
+
+    def set_json_strict(self, key: str, value: object, ttl: float) -> None:
+        raise CacheUnavailable("backend down")
+
+
+def _swap_cache(client: TestClient, stub: _DownCache) -> object:
+    """Point the app at the dead backend, return the original for restore."""
+    ctx = client.app.state.ctx
+    original = ctx.cache
+    ctx.cache = stub
+    return original
+
+
+def _impersonation_phases(factory) -> list:
+    db = factory()
+    try:
+        rows = (
+            db.execute(select(AuditLog).where(AuditLog.action == "impersonation")).scalars().all()
+        )
+        return [row.detail.get("phase") for row in rows]
+    finally:
+        db.close()
+
+
+def test_impersonation_revoke_fails_closed_when_cache_down(pair) -> None:
+    client, factory = pair
+    me = _register(client, "s@example.com")
+    admin = _admin_headers(client)
+    imp_token = _impersonate(client, admin, me["user_id"])
+    imp = {"Authorization": f"Bearer {imp_token}"}
+
+    original = _swap_cache(client, _DownCache())
+    try:
+        res = client.delete(f"/admin/users/{me['user_id']}/impersonate", headers=admin)
+        assert res.status_code == 503, res.text
+        assert res.json()["detail"]["code"] == "revocation_unavailable"
+        # the audit trail must NOT claim a stop that never happened
+        assert _impersonation_phases(factory) == ["start"]
+    finally:
+        client.app.state.ctx.cache = original
+
+    # revocation did not land, so the session is still live — no lie anywhere
+    assert client.get("/users/me", headers=imp).status_code == 200
+
+
+def test_impersonation_start_fails_closed_when_cache_down(pair) -> None:
+    client, factory = pair
+    me = _register(client, "s@example.com")
+    admin = _admin_headers(client)
+
+    original = _swap_cache(client, _DownCache())
+    try:
+        res = client.post(
+            f"/admin/users/{me['user_id']}/impersonate",
+            json={"reason": "repro"},
+            headers=admin,
+        )
+        assert res.status_code == 503, res.text
+        assert res.json()["detail"]["code"] == "revocation_unavailable"
+        # no token was minted into an unrevokable state and nothing was audited
+        assert _impersonation_phases(factory) == []
+    finally:
+        client.app.state.ctx.cache = original
+
+
+def test_impersonation_exit_fails_closed_when_cache_down(pair) -> None:
+    client, factory = pair
+    me = _register(client, "s@example.com")
+    admin = _admin_headers(client)
+    imp_token = _impersonate(client, admin, me["user_id"])
+    imp = {"Authorization": f"Bearer {imp_token}"}
+
+    original = _swap_cache(client, _DownCache())
+    try:
+        res = client.post("/auth/impersonate/exit", headers=imp)
+        assert res.status_code == 503, res.text
+        assert res.json()["detail"]["code"] == "revocation_unavailable"
+        assert _impersonation_phases(factory) == ["start"]
+    finally:
+        client.app.state.ctx.cache = original
+
+    assert client.get("/users/me", headers=imp).status_code == 200
+
+
+def test_impersonation_tokens_rejected_while_revocation_store_unreachable(pair) -> None:
+    client, _ = pair
+    me = _register(client, "s@example.com")
+    admin = _admin_headers(client)
+    imp_token = _impersonate(client, admin, me["user_id"])
+    imp = {"Authorization": f"Bearer {imp_token}"}
+    student = _login(client, "s@example.com")
+
+    original = _swap_cache(client, _DownCache())
+    try:
+        # an impersonation token whose revocation state cannot be checked
+        # fails closed instead of silently passing
+        assert client.get("/users/me", headers=imp).status_code == 503
+        # plain tokens never touch the revocation store — unaffected
+        assert client.get("/users/me", headers=student).status_code == 200
+    finally:
+        client.app.state.ctx.cache = original
