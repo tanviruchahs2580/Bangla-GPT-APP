@@ -337,7 +337,9 @@ def test_cache_key_includes_corpus_fingerprint():
             self.calls = 0
             self.chunks = [_chunk(chunk_id)]
 
-        def search(self, query, *, class_level=None, subject=None, chapter=None, top_k=4, min_score=0.0):
+        def search(
+            self, query, *, class_level=None, subject=None, chapter=None, top_k=4, min_score=0.0
+        ):
             self.calls += 1
             return [Hit(chunk=_chunk(class_level or 0), score=1.5)]
 

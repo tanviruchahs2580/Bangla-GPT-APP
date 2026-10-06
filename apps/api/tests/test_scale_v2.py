@@ -95,9 +95,9 @@ def _seed_attempt(
 # --------------------------------------------------------------------------
 
 
-
-
-def _enroll_in_default_school(conn: sqlite3.Connection, student_id: int, class_level: int = 6) -> None:
+def _enroll_in_default_school(
+    conn: sqlite3.Connection, student_id: int, class_level: int = 6
+) -> None:
     """Enroll a seeded student into the shared default school (F-04).
 
     The school-less-teacher wall anchors reads to the default school, so

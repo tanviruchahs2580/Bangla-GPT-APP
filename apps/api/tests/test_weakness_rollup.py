@@ -167,9 +167,9 @@ def test_rollup_rule_thresholds_and_order(env) -> None:
 # ---------- the PASS-WHEN: same value, all three endpoints ----------
 
 
-
-
-def _enroll_in_default_school(conn: sqlite3.Connection, student_id: int, class_level: int = 6) -> None:
+def _enroll_in_default_school(
+    conn: sqlite3.Connection, student_id: int, class_level: int = 6
+) -> None:
     """Enroll a student into the shared default school (F-04 contract).
 
     School-less staff reads are walled to the default school, so teacher
