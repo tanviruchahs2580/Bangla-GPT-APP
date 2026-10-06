@@ -108,6 +108,10 @@ def test_grammar_score_units() -> None:
     assert grammar_score(_GOOD.rstrip(_DANDA)) == 0.5
     # a Latin-only sentence scores 0 for the "good Bengali" fraction
     assert grammar_score("hello world") == 0.0
+    # A22: a Latin loanword costs proportionally, not the whole sentence
+    # ("কোষটি একটি cell।": 9 Bengali letters vs 4 Latin -> 9/13)
+    mixed = "কোষটি একটি cell।"
+    assert grammar_score(mixed) == round(9 / 13, 4)
     # scaffolding is stripped before scoring, not counted as Latin noise
     assert grammar_score(f"[mock] {_LABEL} {_GOOD}") == 1.0
     assert grammar_score(f"মূল বিষয়:\n- {_GOOD}\n- {_UNRELATED}") == 1.0

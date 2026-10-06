@@ -114,9 +114,18 @@ class MockLLMProvider:
         def pick(i: int) -> str:
             return sentences[i % len(sentences)]
 
-        m = re.search(r"minutes=(\d+), level=(\w+)", prompt)
-        minutes, level = (m.group(1), m.group(2)) if m else ("35", "average")
+        m = re.search(
+            r"class_level=(\d+), subject=([\w-]+).*?minutes=(\d+), level=(\w+)", prompt
+        )
+        if m:
+            class_level, subject, minutes, level = m.group(1), m.group(2), m.group(3), m.group(4)
+        else:
+            class_level, subject, minutes, level = "6", "science", "35", "average"
         payload = {
+            # A21: the lesson gate (like every generator gate) requires the
+            # payload to echo the requested subject/class_level.
+            "subject": subject,
+            "class_level": int(class_level),
             "objective": f"পাঠ্যবিষয় বুঝে বলা (level={level}): {pick(0)}",
             "previous_knowledge": f"আগের পাঠ মনে করানো: {pick(1)}",
             "introduction": f"প্রশ্ন করে সূচনা: {pick(2)}?",

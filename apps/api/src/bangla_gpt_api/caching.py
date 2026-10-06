@@ -229,6 +229,12 @@ class CachedRankingIndex:
         self.inner = inner
         self._cache = cache
         self._ttl = ttl
+        # A23: corpus fingerprint in every cache key — two pods serving
+        # DIFFERENT corpora behind one Redis must never share retrieval
+        # answers, and a rebuilt corpus invalidates naturally.
+        self._corpus_fp = hashlib.sha256(
+            "|".join(str(getattr(chunk, "id", id(chunk))) for chunk in inner.chunks).encode()
+        ).hexdigest()[:16]
         # Corpus is fixed at build time; share the list so the RankingIndex
         # protocol attribute (read/write) stays satisfied for type-checkers.
         self.chunks: list[Chunk] = inner.chunks
@@ -246,7 +252,7 @@ class CachedRankingIndex:
         digest = hashlib.sha256(
             f"{query}|{class_level}|{subject}|{chapter}|{top_k}|{min_score}".encode()
         ).hexdigest()
-        key = f"rag:{digest}"
+        key = f"rag:{self._corpus_fp}:{digest}"
         cached = self._cache.get_json(key)
         if cached is not None:
             try:

@@ -118,3 +118,42 @@ def test_message_search_finds_own_history(client: TestClient, student: dict) -> 
     # Too-short queries are rejected.
     short = client.get("/tutor/messages/search", headers=student, params={"q": "ক"})
     assert short.status_code == 422
+
+
+def test_chat_history_replays_are_char_capped(tmp_path) -> None:
+    """A24: history replay is count-limited AND per-message char-limited."""
+    from types import SimpleNamespace
+
+    from bangla_gpt_api.db.session import make_engine, make_session_factory
+    from bangla_gpt_api.routers.tutor import _chat_history
+
+    settings = Settings(
+        env="test",
+        database_url=f"sqlite:///{tmp_path}/history.db",
+        jwt_secret="test-secret-0123456789abcdef0123456789",
+        chat_history_messages=4,
+        chat_history_message_char_limit=50,
+    )
+    client = TestClient(create_app(settings))
+    auth = _register_login(client, "cap@example.com")
+    conv = client.post("/tutor/conversations", headers=auth, json={}).json()
+    r = client.post(
+        f"/tutor/conversations/{conv['id']}/messages",
+        headers=auth,
+        json={"message": "বি" * 500},
+    )
+    assert r.status_code == 200, r.text
+
+    factory = make_session_factory(make_engine(settings))
+    db = factory()
+    try:
+        app_ctx = SimpleNamespace(settings=settings)
+        history = _chat_history(app_ctx, db, conv["id"])
+    finally:
+        db.close()
+
+    assert history, "the just-sent turn must appear in the replayed history"
+    # the 500-char user turn is replayed clipped to the 50-char budget
+    # (the last entry is the assistant reply, which is short anyway)
+    assert all(len(m["content"]) <= 50 for m in history)
+    assert any(m["content"] == ("বি" * 500)[:50] for m in history)

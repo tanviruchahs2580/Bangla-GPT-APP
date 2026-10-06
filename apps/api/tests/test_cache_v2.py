@@ -326,3 +326,27 @@ def test_cached_ranking_index_shares_hits_across_instances():
     assert inner_a.calls == 1
     qb.search(query, class_level=6)
     assert inner_b.calls == 0  # pod B reused pod A's retrieval result
+
+
+def test_cache_key_includes_corpus_fingerprint():
+    """A23: two indexes over DIFFERENT corpora never share retrieval keys."""
+    shared_cache = MemoryCache()
+
+    class _Fake:
+        def __init__(self, chunk_id: str) -> None:
+            self.calls = 0
+            self.chunks = [_chunk(chunk_id)]
+
+        def search(self, query, *, class_level=None, subject=None, chapter=None, top_k=4, min_score=0.0):
+            self.calls += 1
+            return [Hit(chunk=_chunk(class_level or 0), score=1.5)]
+
+    inner_a, inner_b = _Fake("corpus-a"), _Fake("corpus-b")
+    idx_a = CachedRankingIndex(inner_a, shared_cache)
+    idx_b = CachedRankingIndex(inner_b, shared_cache)
+    assert idx_a._corpus_fp != idx_b._corpus_fp
+
+    assert idx_a.search("kox ki", class_level=6)[0].score == pytest.approx(1.5)
+    # same query on a different corpus must NOT hit corpus-a's cached answer
+    assert idx_b.search("kox ki", class_level=6)[0].score == pytest.approx(1.5)
+    assert inner_a.calls == 1 and inner_b.calls == 1

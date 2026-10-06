@@ -39,8 +39,12 @@ class _FakeProvider:
         yield self.reply
 
 
-def _valid_payload() -> dict[str, str]:
-    return {key: f"{key}-text" for key in LESSON_KEYS}
+def _valid_payload() -> dict[str, object]:
+    # A21: the gate requires the payload to echo subject/class_level.
+    payload: dict[str, object] = {key: f"{key}-text" for key in LESSON_KEYS}
+    payload["subject"] = "science"
+    payload["class_level"] = 6
+    return payload
 
 
 def _make_client(tmp_path) -> TestClient:
@@ -152,12 +156,29 @@ def test_mock_provider_satisfies_lesson_contract(client: TestClient) -> None:
 
 
 def test_parse_accepts_fenced_json_and_rejects_short_payloads() -> None:
+    kwargs = {"class_level": 6, "subject": "science"}
     fenced = "```json\n" + json.dumps(_valid_payload()) + "\n```"
-    assert parse_lesson_payload(fenced) == _valid_payload()
+    # the returned plan holds ONLY the eight sections (echo keys are gate input)
+    expected = {k: f"{k}-text" for k in LESSON_KEYS}
+    assert parse_lesson_payload(fenced, **kwargs) == expected
     with pytest.raises(ProviderError):
         short = {k: v for k, v in _valid_payload().items() if k != "homework"}
-        parse_lesson_payload(json.dumps(short))
+        parse_lesson_payload(json.dumps(short), **kwargs)
     with pytest.raises(ProviderError):
-        parse_lesson_payload(json.dumps({**_valid_payload(), "questions": "   "}))
+        parse_lesson_payload(json.dumps({**_valid_payload(), "questions": "   "}), **kwargs)
     with pytest.raises(ProviderError):
-        parse_lesson_payload("no json here")
+        parse_lesson_payload("no json here", **kwargs)
+
+
+def test_parse_rejects_wrong_echo() -> None:
+    """A21: a payload for the wrong class/subject fails the echo gate."""
+    kwargs = {"class_level": 6, "subject": "science"}
+    wrong_subject = {**_valid_payload(), "subject": "mathematics"}
+    with pytest.raises(ProviderError, match="subject"):
+        parse_lesson_payload(json.dumps(wrong_subject), **kwargs)
+    wrong_class = {**_valid_payload(), "class_level": 7}
+    with pytest.raises(ProviderError, match="class_level"):
+        parse_lesson_payload(json.dumps(wrong_class), **kwargs)
+    missing = {k: v for k, v in _valid_payload().items() if k != "subject"}
+    with pytest.raises(ProviderError, match="subject"):
+        parse_lesson_payload(json.dumps(missing), **kwargs)

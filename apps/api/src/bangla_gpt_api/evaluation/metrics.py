@@ -4,9 +4,10 @@ Four spec metrics, all deterministic under the mock provider so the gate is
 reproducible without any external model (a real LLM-judge run is a human
 input once a provider is configured -- see:func:`faithfulness`):
 
-*:func:`grammar_score` -- heuristic 0..1 for "clean Bengali prose": every
-  sentence must carry Bengali letters and no Latin characters, and the answer
-  must close with the Bengali full stop (danda). The heuristic definition is
+*:func:`grammar_score` -- heuristic 0..1 for "clean Bengali prose": each
+  sentence contributes its share of Bengali letters (Latin loanwords cost
+  proportionally instead of zeroing the sentence), and the answer must
+  close with the Bengali full stop (danda). The heuristic definition is
   pinned by unit tests (never silently lowered).
 *:func:`faithfulness` -- with a configured provider the judge is an LLM
   asked to grade whether every answer claim is supported by the given
@@ -65,14 +66,27 @@ def _squash(text: str) -> str:
     return re.sub(r"\s+", "", text)
 
 
+def _sentence_bengali_share(sentence: str) -> float:
+    """Share of Bengali letters among all letters (Latin penalty, A22).
+
+    A single Latin loanword used to zero out an otherwise Bengali sentence;
+    the penalty is now proportional to the Latin letter share. A sentence
+    with no letters at all contributes 0.
+    """
+    bengali = len(_BENGALI_RE.findall(sentence))
+    latin = len(_LATIN_RE.findall(sentence))
+    if latin == 0:
+        return 1.0 if bengali > 0 else 0.0
+    return bengali / (bengali + latin)
+
+
 def grammar_score(text: str) -> float:
     """Heuristic Bangla grammar/shape score in [0, 1] (see module docstring)."""
     sentences = [normalize_sentence(s) for s in split_sentences(text)]
     sentences = [s for s in sentences if s]
     if not sentences:
         return 0.0
-    good = sum(1 for s in sentences if _BENGALI_RE.search(s) and not _LATIN_RE.search(s))
-    score = good / len(sentences)
+    score = sum(_sentence_bengali_share(s) for s in sentences) / len(sentences)
     # A danda- or question-mark closure is legitimate Bengali punctuation.
     if not text.rstrip().endswith((_DANDA, "?", "？")):
         score -= 1.0 / (len(sentences) + 1)

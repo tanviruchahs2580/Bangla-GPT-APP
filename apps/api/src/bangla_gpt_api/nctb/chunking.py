@@ -143,9 +143,12 @@ def chunk_pages(
                 if current_chapter
                 else None
             )
+            # A20: the id hashes the FULL text (plus chapter sequence), not
+            # the first 80 chars — two chunks sharing a boilerplate prefix
+            # and a page used to collide into one id.
             chunks.append(
                 RawChunk(
-                    chunk_id=_stable_id(source_id, piece[:80], min(buffer_pages)),
+                    chunk_id=_stable_id(source_id, "chunk", chapter_seq, min(buffer_pages), piece),
                     parent_id=parent_id,
                     text=piece,
                     original_text=" ".join(buffer_lines)[: len(piece) * 2],

@@ -129,6 +129,9 @@ class Settings(BaseSettings):
 
     # --- chat ---
     chat_history_messages: int = 8
+    # A24: per-message cap applied when conversation history is replayed
+    # into a prompt, so one giant pasted turn cannot blow the context.
+    chat_history_message_char_limit: int = 2000
     chat_retention_days: int = 180
 
     # --- parent invites ---

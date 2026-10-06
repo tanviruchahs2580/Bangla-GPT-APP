@@ -40,10 +40,12 @@ class TextIngester:
             if not paragraph:
                 return
             for piece in self._split_paragraph(paragraph):
-                digest = hashlib.sha1(
-                    f"{meta.source}|{chapter}|{section}|{seq}".encode(),
+                # A20: content hash is part of the id so a re-ingested corpus
+                # never remaps ids onto different text.
+                digest = hashlib.sha256(
+                    f"{meta.source}|{chapter}|{section}|{seq}|{piece}".encode(),
                     usedforsecurity=False,
-                ).hexdigest()[:12]
+                ).hexdigest()[:16]
                 chunk_meta = meta.model_copy(
                     update={"chapter": chapter, "section": section or None}
                 )

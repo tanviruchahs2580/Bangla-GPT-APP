@@ -336,3 +336,18 @@ class TestSourcesInventory:
         found = find_artifact("3ce5065b")
         assert found is not None and found.subject_bn == "বাংলা"
         assert find_artifact("nonexistent-zz") is None
+
+
+class TestChunkIdStability:
+    def test_same_prefix_different_text_gets_distinct_ids(self) -> None:
+        """A20: ids hash the FULL text, so a shared boilerplate prefix on the
+        same page no longer collides two different chunks."""
+        filler = "অতিসংক্ষিপ্ত বর্ণনা যা পুনরাবৃত্ত হয়। "
+        prefix = filler * 4  # well past the old 80-char hash window
+        pages_a = [PageText(1, "অধ্যায়: কোষ\n" + prefix + "প্রথম অনন্য পাঠ্যাংশ। " * 15)]
+        pages_b = [PageText(1, "অধ্যায়: কোষ\n" + prefix + "দ্বিতীয় ভিন্ন পাঠ্যাংশ। " * 15)]
+        a = chunk_pages(pages_a, source_id="s1")
+        b = chunk_pages(pages_b, source_id="s1")
+        assert a and b, "both corpora must yield a chunk"
+        assert a[0].text[: len(prefix)] == b[0].text[: len(prefix)]
+        assert a[0].chunk_id != b[0].chunk_id

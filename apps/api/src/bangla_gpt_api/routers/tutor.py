@@ -347,7 +347,10 @@ def _chat_history(app_ctx: Ctx, db: Session, conversation_id: int) -> list[dict[
         .scalars()
         .all()
     )
-    history = [{"role": m.role, "content": m.content} for m in reversed(rows)]
+    # A24: history replay is count-limited AND char-limited per message, so
+    # one giant pasted turn cannot blow the prompt context budget.
+    limit = app_ctx.settings.chat_history_message_char_limit
+    history = [{"role": m.role, "content": m.content[:limit]} for m in reversed(rows)]
     return history
 
 
