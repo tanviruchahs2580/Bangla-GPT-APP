@@ -88,3 +88,5 @@ apps/api/.coverage
 
 # --- Local SMTP sink (mailpit) TLS cert/key — never commit ---
 .mailpit/
+
+.vercel

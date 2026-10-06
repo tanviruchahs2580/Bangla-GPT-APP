@@ -1,0 +1,67 @@
+name: Vercel Production Deploy
+
+# SOP: production deploys run only after the full CI gate ("API CI") is
+# green on main. The Vercel Git integration may still build every push;
+# this workflow is the explicit CI-gated path with a post-deploy smoke
+# check against the production alias. Rollback: Vercel dashboard >
+# Deployments > previous READY deployment > "Promote to Production"
+# (instant, no rebuild), or `vercel rollback` with a scoped token.
+
+on:
+  workflow_run:
+    workflows: ["API CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vercel-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy web to Vercel (production)
+    # CI must be green (workflow_run path); manual dispatch always allowed.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Link Vercel project (from encrypted secrets, never committed)
+        run: |
+          mkdir -p .vercel
+          printf '{"projectId":"%s","orgId":"%s","projectName":"bangla-gpt-app"}\n' \
+            "$VERCEL_PROJECT_ID" "$VERCEL_ORG_ID" > .vercel/project.json
+
+      - name: Deploy (production)
+        run: npx vercel --prod --yes --token="$VERCEL_TOKEN"
+
+      - name: Post-deploy smoke check (production alias, /login)
+        run: |
+          set -e
+          ok=0
+          for i in $(seq 1 12); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" https://bangla-gpt-app.vercel.app/login || true)
+            if [ "$code" = "200" ]; then
+              echo "production alias /login -> 200"
+              ok=1
+              break
+            fi
+            echo "waiting for alias (got $code)"; sleep 10
+          done
+          [ "$ok" = "1" ] || { echo "alias did not return 200 in time"; exit 1; }
