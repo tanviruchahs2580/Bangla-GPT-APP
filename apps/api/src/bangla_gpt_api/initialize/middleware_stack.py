@@ -18,46 +18,6 @@ from bangla_gpt_api.middleware import (
 from bangla_gpt_api.ratelimit import RateLimiter
 
 
-def _derive_default_rules(settings: Settings) -> dict[str, tuple[int, str]]:
-    """Per-route rate limits derived from individual settings so test
-    overrides of the per-field knobs take effect."""
-    return {
-        "/auth/login": (settings.rate_limit_login_per_minute, "ip"),
-        # TOTP second factor: 6-digit space with a ±1 step window —
-        # without this rule the challenge endpoint is brute-forceable.
-        "/auth/mfa/challenge": (5, "ip"),
-        "/tutor/ask": (settings.rate_limit_tutor_per_minute, "user"),
-        # The chat LLM routes are /tutor/conversations/{id}/messages[/stream];
-        # a "/tutor/chat" key matches no real path.
-        "/tutor/conversations": (settings.rate_limit_tutor_per_minute, "user"),
-        "/tutor": (settings.rate_limit_tutor_ip_per_minute, "ip"),
-        "/auth/forgot": (10, "ip"),
-        "/auth/reset": (10, "ip"),
-        "/events": (60, "ip"),
-    }
-
-
-#: Routes whose limit is configurable through the dedicated per-field knobs
-#: (RATE_LIMIT_LOGIN_PER_MINUTE etc.). On these routes the knobs win over
-#: RATE_LIMIT_RULES; everywhere else RATE_LIMIT_RULES entries apply as given.
-_PER_FIELD_ROUTES = frozenset({"/auth/login", "/tutor/ask", "/tutor/conversations", "/tutor"})
-
-
-def _effective_rules(settings: Settings) -> dict[str, tuple[int, str]]:
-    """Merge per-field knob rules with the config-driven ``RATE_LIMIT_RULES``.
-
-    Precedence: per-field knobs on their four routes, ``RATE_LIMIT_RULES``
-    for every other route, derived defaults fill the rest. Previously the
-    config-driven dict was computed and then discarded, so operators
-    setting ``RATE_LIMIT_RULES`` silently changed nothing.
-    """
-    rules = dict(settings.rate_limit_rules)
-    for route, rule in _derive_default_rules(settings).items():
-        if route in _PER_FIELD_ROUTES or route not in rules:
-            rules[route] = rule
-    return rules
-
-
 def build_middleware_stack(
     app: FastAPI,
     settings: Settings,
@@ -80,16 +40,26 @@ def build_middleware_stack(
             CORSMiddleware,
             allow_origins=settings.cors_origins,
             allow_credentials=True,
-            # PATCH is used by admin/parent/tutor/workspace endpoints — the
-            # SPA breaks on cross-origin preflights without it.
-            allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+            allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             allow_headers=["Authorization", "Content-Type", "Accept", "X-Request-ID"],
         )
 
-    # Explicit ``RATE_LIMIT_RULES`` entries apply to every route except the
-    # four with dedicated per-field knobs (see _effective_rules). Previously
-    # the config-driven dict was computed and then discarded.
-    rl_rules = rules if rules is not None else _effective_rules(settings)
+    # Build rate-limit rules from individual settings so test overrides take effect.
+    # This mirrors the logic in ``ratelimit.build_limiter`` so the middleware
+    # and limiter see identical limits.
+    rl_rules = (
+        rules
+        if rules is not None
+        else {
+            "/auth/login": (settings.rate_limit_login_per_minute, "ip"),
+            "/tutor/ask": (settings.rate_limit_tutor_per_minute, "user"),
+            "/tutor/chat": (settings.rate_limit_tutor_per_minute, "user"),
+            "/tutor": (settings.rate_limit_tutor_ip_per_minute, "ip"),
+            "/auth/forgot": (10, "ip"),
+            "/auth/reset": (10, "ip"),
+            "/events": (60, "ip"),
+        }
+    )
 
     # Rate limiting (before body parsing so we reject before expensive work)
     app.add_middleware(

@@ -95,19 +95,9 @@ class CircuitBreaker:
                 self._failure_timestamps.popleft()
 
             consecutive_failures = len(self._failure_timestamps)
-            if (
-                consecutive_failures >= self._failure_threshold
-                or self._state == CircuitState.HALF_OPEN
-            ):
-                probe_failed = self._state == CircuitState.HALF_OPEN
-                self._state = CircuitState.OPEN
-                self._half_open_probe = False
-                if probe_failed:
-                    logger.warning(
-                        "circuit_breaker: [%s] probe failed, re-OPEN",
-                        self._name,
-                    )
-                else:
+            if consecutive_failures >= self._failure_threshold:
+                if self._state != CircuitState.OPEN:
+                    self._state = CircuitState.OPEN
                     logger.warning(
                         "circuit_breaker: [%s] OPEN after %d failures in sliding window",
                         self._name,
@@ -115,16 +105,8 @@ class CircuitBreaker:
                     )
 
     def _record_success(self) -> None:
-        """Record a success and reset the circuit.
-
-        While OPEN, a success (e.g. one served by the fallback provider and
-        routed here by the caller) must NOT clear ``_last_failure_time``:
-        the OPEN→HALF_OPEN timeout transition keys off it, and clearing it
-        would pin traffic to the fallback forever.
-        """
+        """Record a success and reset the circuit."""
         with self._lock:
-            if self._state == CircuitState.OPEN:
-                return
             self._failure_timestamps.clear()
             self._last_failure_time = None
             if self._state == CircuitState.HALF_OPEN:
@@ -133,15 +115,6 @@ class CircuitBreaker:
                 logger.info("circuit_breaker: [%s] CLOSED after successful probe", self._name)
             elif self._state == CircuitState.CLOSED:
                 logger.debug("circuit_breaker: [%s] success, circuit stays CLOSED", self._name)
-
-    def peek_allows_request(self) -> bool:
-        """Non-consuming health check for routing decisions.
-
-        Unlike :meth:`allow_request`, this never takes the HALF_OPEN probe
-        slot — the probe is granted exactly once, at call time, by
-        ``allow_request`` inside the middleware.
-        """
-        return self.state is not CircuitState.OPEN
 
     def allow_request(self) -> bool:
         """Check if a request should be allowed through.
@@ -245,15 +218,10 @@ class ProviderFallbackRouter:
         return self._fallback_active
 
     def check_primary_health(self) -> bool:
-        """Check if the primary circuit breaker would admit a request.
-
-        Non-consuming: taking the HALF_OPEN probe here (the previous
-        behavior) starved the real call of its probe and left the breaker
-        stuck HALF_OPEN forever.
-        """
+        """Check if the primary circuit breaker allows requests."""
         if self._primary_breaker is None:
             return True
-        return self._primary_breaker.peek_allows_request()
+        return self._primary_breaker.allow_request()
 
     def should_switch_to_fallback(self) -> bool:
         """Decide whether to switch to the fallback provider.
@@ -293,14 +261,8 @@ class ProviderFallbackRouter:
         return self._active_provider
 
     def record_result(self, success: bool) -> None:
-        """Record the result and potentially switch back to primary.
-
-        Only calls actually served by the primary feed the primary breaker:
-        attributing fallback successes to it masked primary health and
-        froze the breaker OPEN (successes cleared the recovery timestamp).
-        """
-        primary_served = self._active_provider is self._primary
-        if self._primary_breaker is not None and primary_served:
+        """Record the result and potentially switch back to primary."""
+        if self._primary_breaker is not None:
             if success:
                 self._primary_breaker.record_success()
             else:
