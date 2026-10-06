@@ -84,7 +84,7 @@ export default function ParentDashboard() {
     try {
       // C17: single-use invite code issued by the child — no bare IDs.
       await post("/parents/link/invite", { code: code.trim().toUpperCase() });
-      setMessage(t("myChildren") + " ✓");
+      setMessage(t("parentLinkOk"));
       setCode("");
       loadChildren();
     } catch (err) {
@@ -104,8 +104,10 @@ export default function ParentDashboard() {
       <div className="card">
         <h2>{t("linkChild")}</h2>
         <p className="muted">
-          সন্তানের অ্যাকাউন্টে লগইন করে “{t("account")}” → “
-          {t("parentInviteTitle")}” কোড তৈরি করুন।
+          {t("parentInviteHowTo", {
+            account: t("account"),
+            invite: t("parentInviteTitle"),
+          })}
         </p>
         <form onSubmit={link} className="grid-2">
           <div>
@@ -240,7 +242,10 @@ export default function ParentDashboard() {
               const lvl = total === 0 ? 0 : total <= 2 ? 1 : total <= 5 ? 2 : 3;
               const title = [
                 d.date,
-                t(d.questions === 1 ? "activityQuestion" : "activityQuestions", { n: d.questions }),
+                t(
+                  d.questions === 1 ? "activityQuestion" : "activityQuestions",
+                  { n: d.questions },
+                ),
                 t("activityQuizzes", { n: d.quizzes }),
                 t("activityMinutes", { n: d.minutes }),
               ].join(" · ");

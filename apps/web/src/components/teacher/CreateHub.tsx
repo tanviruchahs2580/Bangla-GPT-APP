@@ -15,7 +15,7 @@ const KINDS = ["worksheet", "answer_key", "homework", "rubric"] as const;
 type Kind = (typeof KINDS)[number];
 const PDF_KINDS = new Set(["worksheet", "answer_key", "lesson_plan"]);
 
-// RENO: subject labels come from i18n (were hardcoded Bengali). Evaluated
+// subject labels come from i18n (were hardcoded Bengali). Evaluated
 // at render time so a language switch (in-place remount) is reflected.
 const subjectOptions = () => [
   { value: "science", label: t("subjectScience") },
@@ -83,7 +83,7 @@ function PayloadView({ payload }: { payload: Record<string, unknown> }) {
 export function CreateHub({
   initialKind,
 }: {
-  /** WP-DR: when embedded in the Create page grid, the kind is preselected. */
+  /** when embedded in the Create page grid, the kind is preselected. */
   initialKind?: Kind;
 }) {
   const [kind, setKind] = useState<Kind>(initialKind ?? "worksheet");

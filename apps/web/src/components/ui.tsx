@@ -102,7 +102,7 @@ export function Badge({
 }
 
 export function Spinner({ label }: { label?: string }) {
-  // RENO: default label comes from i18n instead of hardcoded English.
+  // default label comes from i18n instead of hardcoded English.
   return (
     <span role="status" aria-live="polite">
       <span className="visually-hidden">{label ?? t("loading")}</span>
@@ -201,11 +201,9 @@ export function EmptyState({
   );
 }
 
-/* ============================================================
-   RENO — shared primitives added during the world-class polish
-   pass. Goal: one focus-trapped modal, one skeleton vocabulary,
-   one form field / segmented / avatar pattern for every page.
-   ============================================================ */
+/* Shared primitives: one focus-trapped modal, one skeleton
+   vocabulary, one form field / segmented / avatar pattern for
+   every page. */
 
 /** Accessible modal dialog: portal, focus trap, Esc to close,
     scroll lock, focus restore. Styling reuses .modal-backdrop/.modal. */

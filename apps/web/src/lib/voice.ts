@@ -1,5 +1,5 @@
 /**
- * S1.12: Web Speech API (bn-BD) voice input helpers.
+ * Web Speech API (bn-BD) voice input helpers.
  *
  * The API ships unprefixed only in recent Chromium; Safari still hides it
  * behind webkitSpeechRecognition (and does not support bn-BD recognition).

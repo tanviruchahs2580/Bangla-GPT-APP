@@ -40,7 +40,7 @@ export default function AssessmentsPage() {
   const [assignBusy, setAssignBusy] = useState(false);
   const [assignMsg, setAssignMsg] = useState<string | null>(null);
 
-  // S2.8 bulk assignment.
+  // bulk assignment.
   const [selIds, setSelIds] = useState<Set<number>>(new Set());
   const [asChapter, setAsChapter] = useState("");
   const [asSubject, setAsSubject] = useState("science");

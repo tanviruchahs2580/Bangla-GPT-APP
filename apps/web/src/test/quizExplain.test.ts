@@ -12,7 +12,7 @@ const ITEM: ReviewItem = {
   chapter: "Measurement-Chapter",
 };
 
-describe("S1.7 quiz explain payload", () => {
+describe("quiz explain payload", () => {
   it("buildExplainPayload carries the full quiz context", () => {
     const p = buildExplainPayload(ITEM);
     expect(p).toEqual({

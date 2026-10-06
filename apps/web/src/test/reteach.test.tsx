@@ -1,4 +1,4 @@
-// S4.5: re-teach cards must show before the first question of a new quiz and
+// re-teach cards must show before the first question of a new quiz and
 // on the result screen when wrong answers opened a KG gap.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
@@ -84,7 +84,7 @@ function renderPage() {
   );
 }
 
-describe("S4.5 re-teach cards in the quiz flow", () => {
+describe("re-teach cards in the quiz flow", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authMock.useAuth.mockReturnValue({ me, signOut: vi.fn() });
@@ -140,7 +140,7 @@ describe("S4.5 re-teach cards in the quiz flow", () => {
       await screen.findByRole("button", { name: new RegExp(t("startQuiz")) }),
     );
     await screen.findByText(/Question-One?/);
-    // WP-09: quiz options are now radio inputs in a radiogroup (same intent:
+    // quiz options are now radio inputs in a radiogroup (same intent:
     // select an answer; accessible semantics instead of plain buttons).
     await user.click(screen.getByRole("radio", { name: "Ans-A" }));
     await user.click(

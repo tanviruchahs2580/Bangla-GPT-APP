@@ -1,4 +1,4 @@
-/** RENO: shared primitives — Modal (focus trap, Esc, backdrop close),
+/** shared primitives — Modal (focus trap, Esc, backdrop close),
  *  Skeleton, Field, Segmented, Avatar, and the i18n Spinner default. */
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";

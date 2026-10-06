@@ -75,7 +75,7 @@ beforeEach(() => {
   apiMock.triageFeedback.mockResolvedValue({ ...ROW, triaged: true });
 });
 
-describe("S5.10 feedback triage queue", () => {
+describe("feedback triage queue", () => {
   it("lists open feedback and marks an item triaged through the API", async () => {
     const user = userEvent.setup();
     render(
@@ -102,7 +102,7 @@ describe("S5.10 feedback triage queue", () => {
   });
 });
 
-describe("S5.10 public status page", () => {
+describe("public status page", () => {
   it("renders components and an all-ok headline from the API", async () => {
     apiMock.getStatus.mockResolvedValue({
       status: "ok",

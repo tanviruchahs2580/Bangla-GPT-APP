@@ -13,7 +13,7 @@ declare module "*.css?raw" {
   export default content;
 }
 
-// vitest reads the stylesheet source for the S2.6 print-CSS check
+// vitest reads the stylesheet source for the print-CSS check
 declare module "node:fs" {
   export function readFileSync(path: string, encoding: string): string;
 }

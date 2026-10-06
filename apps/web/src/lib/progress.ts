@@ -2,7 +2,7 @@ import type { ChapterProgressOut } from "../types";
 
 export type Badge = "done" | "reading" | null;
 
-// S1.2 badge logic: completed → ✓, any read progress → ○, none → no badge.
+// badge logic: completed → ✓, any read progress → ○, none → no badge.
 export function chapterBadge(
   prog: Pick<ChapterProgressOut, "completed" | "read_pct"> | undefined,
 ): Badge {
@@ -12,7 +12,7 @@ export function chapterBadge(
   return null;
 }
 
-// S1.2 TTS is feature-guarded: only offer the button when the browser exposes it.
+// TTS is feature-guarded: only offer the button when the browser exposes it.
 export function ttsSupported(
   win: Pick<Window, "speechSynthesis"> | undefined = typeof window !==
   "undefined"

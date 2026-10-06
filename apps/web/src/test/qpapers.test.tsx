@@ -120,7 +120,7 @@ async function openQpCard(user: ReturnType<typeof userEvent.setup>) {
   await screen.findByText("TEXT q1");
 }
 
-describe("S2.4 question paper builder", () => {
+describe("question paper builder", () => {
   it("generates a draft with the difficulty mix and shows questions", async () => {
     const user = userEvent.setup();
     await openQpCard(user);

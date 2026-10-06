@@ -67,7 +67,7 @@ beforeEach(() => {
   apiMock.get.mockResolvedValue(structuredClone(HEALTH));
 });
 
-describe("S3.2 school dashboard", () => {
+describe("school dashboard", () => {
   it("renders counts, health percentages and the cross-class at-risk list", async () => {
     renderPage();
     await screen.findByText("Anondo High School");

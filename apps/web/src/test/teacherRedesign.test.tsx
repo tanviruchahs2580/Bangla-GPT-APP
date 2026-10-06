@@ -1,4 +1,4 @@
-/** WP-DR: teacher shell split — Home, Classes student detail, Assessments
+/** teacher shell split — Home, Classes student detail, Assessments
  *  papers library and Analytics classroom intelligence coverage. */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
@@ -180,7 +180,7 @@ function renderAt(ui: React.ReactElement, path: string, route: string) {
   );
 }
 
-describe("WP-DR teacher home", () => {
+describe("teacher home", () => {
   it("shows greeting stats, quick-create links and the AI insight", async () => {
     renderAt(<TeacherHomePage />, "/teacher", "/teacher");
 
@@ -208,7 +208,7 @@ describe("WP-DR teacher home", () => {
   });
 });
 
-describe("WP-DR classes student view", () => {
+describe("classes student view", () => {
   it("opens a student detail with mastery, weak concepts and support plan", async () => {
     const user = userEvent.setup();
     renderAt(<ClassesPage />, "/teacher/classes", "/teacher/classes");
@@ -240,7 +240,7 @@ describe("WP-DR classes student view", () => {
   });
 });
 
-describe("WP-DR assessments papers tab", () => {
+describe("assessments papers tab", () => {
   it("lists saved papers and opens the review workbench", async () => {
     const user = userEvent.setup();
     renderAt(
@@ -261,7 +261,7 @@ describe("WP-DR assessments papers tab", () => {
   });
 });
 
-describe("WP-DR analytics classroom intelligence", () => {
+describe("analytics classroom intelligence", () => {
   it("combines weak matrix + coverage into one top recommendation", async () => {
     renderAt(<AnalyticsPage />, "/teacher/analytics", "/teacher/analytics");
 

@@ -31,7 +31,7 @@ import { getLang, setLang, t, tSubject } from "../../i18n";
 import { getLowData, toggleLowData } from "../../lib/lowData";
 import { currentTheme, toggleTheme } from "../../lib/theme";
 
-// RENO: roles come from the API in English; display them localized.
+// roles come from the API in English; display them localized.
 const ROLE_LABEL: Record<string, Parameters<typeof t>[0]> = {
   student: "roleStudent",
   teacher: "roleTeacher",
@@ -82,10 +82,10 @@ export default function MePage() {
   const [exportError, setExportError] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [dark, setDark] = useState(currentTheme() === "dark");
-  // S1.13: low-data mode (skip images + short tutor answers)
+  // low-data mode (skip images + short tutor answers)
   const [lowData, setLowDataState] = useState(getLowData());
 
-  // Wave 2: learning preferences + tutor memory + own progress report.
+  // learning preferences + tutor memory + own progress report.
   const isStudent = me?.role === "student";
   const { data: prefs, refetch: refetchPrefs } = useQuery({
     queryKey: ["my-prefs"],
@@ -147,7 +147,7 @@ export default function MePage() {
     }
   };
 
-  // S1.9: daily practice heatmap + streak (GitHub-style grid).
+  // daily practice heatmap + streak (GitHub-style grid).
   const { data: activity } = useQuery({
     queryKey: ["activity", me?.profile_id],
     queryFn: () => get<ActivitySummary>(`/students/${me?.profile_id}/activity`),
@@ -271,7 +271,10 @@ export default function MePage() {
               const lvl = total === 0 ? 0 : total <= 2 ? 1 : total <= 5 ? 2 : 3;
               const title = [
                 d.date,
-                t(d.questions === 1 ? "activityQuestion" : "activityQuestions", { n: d.questions }),
+                t(
+                  d.questions === 1 ? "activityQuestion" : "activityQuestions",
+                  { n: d.questions },
+                ),
                 t("activityQuizzes", { n: d.quizzes }),
                 t("activityMinutes", { n: d.minutes }),
               ].join(" · ");
@@ -361,7 +364,7 @@ export default function MePage() {
       )}
 
       {me?.role === "student" && (
-        /* WP-DR: AI memory transparency panel — what the tutor knows,
+        /* AI memory transparency panel — what the tutor knows,
            with the same consent model (toggle off + clear facts). */
         <Card className="card-ai">
           <div className="card-title">{t("aiMemoryPanel")}</div>
@@ -523,7 +526,7 @@ export default function MePage() {
               const v = e.target.value as "bn" | "en";
               setLang(v);
               document.documentElement.setAttribute("lang", v);
-              // RENO: LangRoot remounts the tree in place — no page reload.
+              // LangRoot remounts the tree in place — no page reload.
             }}
           >
             <option value="bn">বাংলা</option>

@@ -98,7 +98,7 @@ beforeEach(() => {
   });
 });
 
-describe("S2.6 lesson plan copilot card", () => {
+describe("lesson plan copilot card", () => {
   it("generates eight editable sections and offers printing", async () => {
     const user = userEvent.setup();
     renderPage();
@@ -141,7 +141,7 @@ describe("S2.6 lesson plan copilot card", () => {
   });
 });
 
-describe("S2.6 print stylesheet", () => {
+describe("print stylesheet", () => {
   it("contains a clean lesson-plan print rule block", () => {
     const src = readFileSync("src/styles.css", "utf-8"); // vitest cwd = apps/web
     expect(src).toMatch(/@media print\s*\{/);

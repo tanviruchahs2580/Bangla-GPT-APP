@@ -1,4 +1,4 @@
-// B9: lightweight typed i18n. Bengali is the primary product language;
+// lightweight typed i18n. Bengali is the primary product language;
 // English ships as a secondary so non-Bangla stakeholders can navigate.
 export type Lang = "bn" | "en";
 
@@ -7,8 +7,6 @@ const bn = {
   welcomeTagline: "আপনার শেখার নতুন সঙ্গী",
   welcomeStart: "শুরু করুন",
   welcomeLogin: "আমার অ্যাকাউন্ট আছে",
-  welcomeSub:
-    "ছাত্রছাত্রীদের জন্য পাঠ্যবই-ভিত্তিক এআই শিক্ষক · শিক্ষকদের জন্য এআই টিচিং কো-পাইলট",
   landingKicker: "বাংলাদেশের শিক্ষার্থীদের জন্য নির্মিত",
   landingHeroTitle:
     "পাঠ্যবই-ভিত্তিক বাংলা AI টিউটর — এখন প্রতিটি শিক্ষার্থীর জন্য",
@@ -24,7 +22,7 @@ const bn = {
   featTeacherSub: "ওয়ার্কশীট, প্রশ্নপত্র ও লেসন প্ল্যান মিনিটেই",
   landingFeaturesLabel: "মূল ফিচার",
   landingStatsLabel: "এক নজরে",
-  statClassesValue: "৬–১০",
+  statClassesValue: "১–১২",
   statClassesLabel: "শ্রেণির পাঠ্যবই-ভিত্তিক কনটেন্ট",
   statRolesValue: "৫",
   statRolesLabel: "ভূমিকা — এক প্ল্যাটফর্মে",
@@ -116,8 +114,6 @@ const bn = {
     "দারুণ অগ্রগতি! গড় স্কোর {avg_score_pct}% — এই গতি ধরে রাখুন।",
   sugg_general_support:
     "নিয়মিত পড়াশোনা চালিয়ে যেতে প্রতিদিন টিউটর ব্যবহার করতে উৎসাহিত করুন।",
-  memory_on_disable_note:
-    "মনে রাখা বন্ধ করলে টিউটর সবার জন্য একইভাবে উত্তর দেবে।",
   save: "সেভ করুন",
   on: "চালু",
   off: "বন্ধ",
@@ -134,7 +130,6 @@ const bn = {
   secLastActive: "শেষ সক্রিয়",
   secQuizzes: "কুইজ প্রচেষ্টা",
   covContent: "কনটেন্ট আছে এমন বিষয়",
-  covAsked: "অনুশীলন হয়েছে এমন বিষয়",
   covCompleted: "সম্পূর্ণ",
   anaTitle: "ব্যবহারের পরিসংখ্যা",
   anaDaily: "দৈনিক সক্রিয় শিক্ষার্থী",
@@ -209,7 +204,6 @@ const bn = {
   unsupportedBadge: "প্রমাণ নেই",
   quizTitle: "কুইজ",
   startQuiz: "কুইজ শুরু করুন",
-  submitQuiz: "জমা দিন",
   questionCount: "প্রশ্ন সংখ্যা",
   progressTitle: "আমার অগ্রগতি",
   gradedQuizzes: "গ্রেড করা কুইজ",
@@ -228,6 +222,9 @@ const bn = {
   cancel: "বাতিল",
   exportData: "আমার ডেটা ডাউনলোড করুন",
   parentInviteTitle: "অভিভাবক যুক্ত করুন",
+  parentInviteHowTo:
+    "সন্তানের অ্যাকাউন্টে লগইন করে “{account}” → “{invite}” থেকে ইনভাইট কোড তৈরি করুন।",
+  parentLinkOk: "সন্তানের অ্যাকাউন্টের সাথে যুক্ত হয়েছে।",
   parentInviteHint:
     "কোড তৈরি করে অভিভাবককে দিন — তিনি নিজের অ্যাকাউন্ট থেকে কোডটি দিয়ে আপনার অগ্রগতি দেখতে পারবেন।",
   parentInviteGenerate: "কোড তৈরি করুন",
@@ -236,7 +233,6 @@ const bn = {
     "এই শ্রেণি/বিষয়ে এখনো সব প্রশ্ন তৈরি হয়নি — {got}/{want}টি দেওয়া হলো।",
   rateUp: "সহায়ক ছিল",
   rateDown: "সঠিক নয়",
-  thanksFeedback: "মতামতের জন্য ধন্যবাদ!",
   teacherDashboard: "শিক্ষক ড্যাশবোর্ড",
   students: "শিক্ষার্থী",
   classStudents: "শ্রেণির শিক্ষার্থীবৃন্দ",
@@ -287,7 +283,6 @@ const bn = {
   lpSecHomework: "বাড়ির কাজ",
   wmTitle: "দুর্বলতার মানচিত্র",
   wmConcept: "অধ্যায়",
-  wmStudent: "শিক্ষার্থী",
   wmAvg: "গড়",
   wmTrend: "প্রবণতা",
   wmRead: "পড়া হয়েছে",
@@ -310,7 +305,6 @@ const bn = {
   baOverdue: "সময় অতিক্রান্ত",
   baProgress: "অগ্রগতি",
   baNone: "এখনো কোনো বাল্ক অ্যাসাইনমেন্ট নেই।",
-  asTitle: "আমার অ্যাসাইনমেন্ট",
   covTitle: "পাঠ্যক্রম কভারেজ",
   covMastered: "আয়ত্ত",
   covPracticed: "অনুশীলিত",
@@ -368,20 +362,19 @@ const bn = {
   password: "পাসওয়ার্ড (কমপক্ষে ৮ অক্ষর)",
   className: "শ্রেণি (১-১২)",
   subject: "বিষয়",
-  consentText:
-    "আমি অভিভাবক হিসেবে বা অভিভাবকের সম্মতিতে নিবন্ধন করছি এবং গোপনীয়তা নীতি ও শর্তাবলি পড়ে সম্মত হচ্ছি।",
+  consentPrefix: "আমি অভিভাবক হিসেবে বা অভিভাবকের সম্মতিতে নিবন্ধন করছি এবং",
+  consentSuffix: "পড়ে সম্মত হচ্ছি।",
+  consentRequired: "অনুগ্রহ করে অভিভাবকের সম্মতি নিশ্চিত করে নিবন্ধন করুন।",
   privacy: "গোপনীয়তা",
   terms: "শর্তাবলি",
   haveAccount: "অ্যাকাউন্ট আছে?",
-  noAccount: "অ্যাকাউন্ট নেই?",
   forgot: "পাসওয়ার্ড ভুলে গেছেন?",
   resetTitle: "পাসওয়ার্ড রিসেট",
   forgotSent: "ইমেইল পাঠানো হয়েছে — ইনবক্স দেখুন।",
   verifyTitle: "ইমেইল যাচাই",
   verifySent: "ইমেইলে পাঠানো কোডটি দিন।",
   forceChangeTitle: "পাসওয়ার্ড পরিবর্তন করুন",
-  forceChangeSub:
-    "নিরাপত্তার জন্য প্রথম লগইনে নতুন পাসওয়ার্ড সেট করতে হবে।",
+  forceChangeSub: "নিরাপত্তার জন্য প্রথম লগইনে নতুন পাসওয়ার্ড সেট করতে হবে।",
   currentPassword: "বর্তমান পাসওয়ার্ড",
   newPassword: "নতুন পাসওয়ার্ড",
   confirmPassword: "নতুন পাসওয়ার্ড আবার দিন",
@@ -399,10 +392,8 @@ const bn = {
   me: "আমি",
   welcome: "শুভেচ্ছা",
   whatToDo: "আজ কী শিখতে চান?",
-  startLearning: "পাঠ্যবই পড়ুন",
   askTutor: "AI-কে প্রশ্ন করুন",
   takeQuiz: "কুইজ দিন",
-  browseCurriculum: "বিষয় ও অধ্যায়",
   subjects: "বিষয়সমূহ",
   chapters: "অধ্যায়",
   selectClass: "শ্রেণি নির্বাচন করুন",
@@ -416,7 +407,6 @@ const bn = {
   language: "ভাষা",
   appearance: "চেহারা",
   darkMode: "ডার্ক মোড",
-  myProfile: "আমার প্রোফাইল",
   yourQuizResult: "আপনার কুইজ ফলাফল",
   score: "স্কোর",
   correctOutOf: "{correct}/{total} সঠিক",
@@ -426,9 +416,7 @@ const bn = {
   finishQuiz: "শেষ করুন",
   notStarted: "এখনো কোনো কুইজ দেওয়া হয়নি।",
   continueTutor: "চ্যাট চালিয়ে যান",
-  lessonsNote: "নিচের বিষয়গুলো থেকে পাঠ্যবই পড়ে শিখুন",
-  myProgress: "আমার অগ্রগতি",
-  // S4.8 refusal audit (admin safety view). Unicode escapes only: typed
+  // refusal audit (admin safety view). Unicode escapes only: typed
   // Bengali through tool layers has corrupted combining marks before.
   admSafety: "নিরাপত্তা পরীক্ষা",
   admRefusals: "অস্বীকৃত প্রশ্ন",
@@ -436,7 +424,7 @@ const bn = {
   admRefusalClass: "শ্রেণি",
   admLastRefusal: "শেষ অস্বীকার",
   admNoRefusals: "কোনো অস্বীকৃত প্রশ্ন নেই",
-  // S5.10 support-ops strings: admin/support tooling only, kept
+  // support-ops strings: admin/support tooling only, kept
   // English in both dicts (a dedicated Bengali pass is follow-up).
   statusPage: "System status",
   statusAllOk: "All systems operational",
@@ -455,18 +443,15 @@ const bn = {
   admNoteLabel: "নোট (শুধু অ্যাডমিন)",
   admNoFeedback: "এই ভিউতে কোনো ফিডব্যাক নেই",
   admOpenCount: "খোলা: {n} / {t}",
-  // WP-02/WP-07 new microcopy (bn+en parity, Bangla-first)
+  // /new microcopy (bn+en parity, Bangla-first)
   trustNctb: "NCTB পাঠ্যবই-ভিত্তিক",
   trustAi: "প্রমাণসহ AI ব্যাখ্যা",
   trustOffline: "অফলাইনে পড়া যায়",
   emptyChatTitle: "AI টিউটরকে প্রশ্ন করুন",
   emptyChatSub: "নিচের একটি বেছে নিন অথবা নিজে লিখুন",
-  suggestQ1: "ভগ্নাংশ সহজে বুঝিয়ে দাও",
-  suggestQ2: "নিউটনের প্রথম সূত্র উদাহরণসহ",
-  suggestQ3: "এই অধ্যায় থেকে কুইজ বানাও",
   brandHome: "হোমে যান",
   dashboard: "ড্যাশবোর্ড",
-  // ── Dashboard redesign (WP-DR): student practice hub ──
+  // ── Dashboard redesign: student practice hub ──
   practice: "অনুশীলন",
   practiceTitle: "অনুশীলন",
   weakPracticeTitle: "আমার দুর্বলতা",
@@ -478,7 +463,6 @@ const bn = {
   assignedEmpty: "শিক্ষকের দেওয়া কোনো কাজ এখনো নেই।",
   assignedShortTest: "ছোট পরীক্ষা",
   assignedBulk: "অ্যাসাইনমেন্ট",
-  nextStepCta: "পরবর্তী পদক্ষেপ",
   // ── student home ──
   homePromptPlaceholder: "আজ কী শিখতে চাও? লিখে জিজ্ঞাসা করুন…",
   homeAskBtn: "জিজ্ঞাসা করুন",
@@ -508,7 +492,6 @@ const bn = {
   aiSuggestion: "AI পরামর্শ",
   nextSuggestionPractice: "এই অধ্যায়টি অনুশীলন করে শক্ত করুন",
   nextSuggestionAsk: "কিছু অস্পষ্ট থাকলে AI-কে জিজ্ঞাসা করুন",
-  nextSuggestionRead: "পড়া চালিয়ে যান",
   // ── profile ──
   aiMemoryPanel: "AI মেমোরি — টিউটর আপনার সম্পর্কে যা জানে",
   aiMemoryPatternWeak: "আরও অনুশীলন প্রয়োজন",
@@ -521,6 +504,7 @@ const bn = {
   tNavAnalytics: "বিশ্লেষণ",
   tNavProfile: "প্রোফাইল",
   // ── teacher home ──
+  thLoadError: "কিছু তথ্য লোড করা যায়নি।",
   thGreeting: "স্বাগতম, {name}",
   thClassesStat: "শ্রেণি",
   thDraftsStat: "খসড়া প্রশ্নপত্র",
@@ -590,7 +574,7 @@ const bn = {
   tpTitle: "শিক্ষক প্রোফাইল",
   tpDefaultClass: "ডিফল্ট শ্রেণি",
   tpPrefsHint: "এই সেটিংস জেনারেটরে আগে থেকে বসে যাবে।",
-  // ── RENO (world-class polish pass) ──
+  // ── polish-pass microcopy ──
   retry: "আবার চেষ্টা করুন",
   roleStudent: "শিক্ষার্থী",
   roleTeacher: "শিক্ষক",
@@ -617,9 +601,9 @@ const bn = {
   errNotAllowed: "এটি করার অনুমতি নেই।",
   errNetwork: "ইন্টারনেট সংযোগ পরীক্ষা করুন।",
   errGeneric: "কিছু একটা সমস্যা হয়েছে। একটু পরে আবার চেষ্টা করুন।",
-  saSimple: "সহজ ব্যাখ্যা:",
-  saExample: "উদাহরণ:",
-  saPoints: "মূল বিষয়:",
+  saSimple: "সহজ ব্যাখ্যা",
+  saExample: "উদাহরণ",
+  saPoints: "মূল বিষয়",
   saCheck: "তুমি বুঝেছ?",
   statTotal: "মোট",
   statQuizzes: "কুইজ",
@@ -632,8 +616,6 @@ const en: Dict = {
   welcomeTagline: "Your new learning companion",
   welcomeStart: "Get started",
   welcomeLogin: "I already have an account",
-  welcomeSub:
-    "Textbook-grounded AI tutor for students · AI teaching copilot for teachers",
   landingKicker: "Built for Bangladesh's learners",
   landingHeroTitle: "A textbook-grounded Bangla AI tutor — for every learner",
   landingHeroSub:
@@ -737,8 +719,6 @@ const en: Dict = {
   sugg_keep_momentum:
     "Great progress! Average score {avg_score_pct}% — keep up the momentum.",
   sugg_general_support: "Encourage daily tutor use to keep progressing.",
-  memory_on_disable_note:
-    "With memory off, the tutor answers every student the same way.",
   save: "Save",
   on: "On",
   off: "Off",
@@ -755,7 +735,6 @@ const en: Dict = {
   secLastActive: "Last active",
   secQuizzes: "Quiz attempts",
   covContent: "Subjects with content",
-  covAsked: "Subjects practiced",
   covCompleted: "Completed",
   anaTitle: "Usage analytics",
   anaDaily: "Daily active students",
@@ -831,7 +810,6 @@ const en: Dict = {
   unsupportedBadge: "No evidence",
   quizTitle: "Quiz",
   startQuiz: "Start quiz",
-  submitQuiz: "Submit",
   questionCount: "Number of questions",
   progressTitle: "My progress",
   gradedQuizzes: "Graded quizzes",
@@ -850,6 +828,9 @@ const en: Dict = {
   cancel: "Cancel",
   exportData: "Download my data",
   parentInviteTitle: "Link a parent",
+  parentInviteHowTo:
+    "Log in to your child's account and create an invite code under “{account}” → “{invite}.”",
+  parentLinkOk: "Linked to your child's account.",
   parentInviteHint:
     "Generate a code and share it with your parent — they can enter it from their account to follow your progress.",
   parentInviteGenerate: "Generate code",
@@ -858,7 +839,6 @@ const en: Dict = {
     "Not all questions are available for this class/subject yet — showing {got}/{want}.",
   rateUp: "Helpful",
   rateDown: "Incorrect",
-  thanksFeedback: "Thanks for your feedback!",
   teacherDashboard: "Teacher dashboard",
   students: "Students",
   classStudents: "Class roster",
@@ -909,7 +889,6 @@ const en: Dict = {
   lpSecHomework: "Homework",
   wmTitle: "Weakness map",
   wmConcept: "Concept",
-  wmStudent: "Student",
   wmAvg: "Avg",
   wmTrend: "Trend",
   wmRead: "Read",
@@ -932,7 +911,6 @@ const en: Dict = {
   baOverdue: "Overdue",
   baProgress: "Progress",
   baNone: "No bulk assignments yet.",
-  asTitle: "My assignments",
   covTitle: "Curriculum coverage",
   covMastered: "Mastered",
   covPracticed: "Practiced",
@@ -990,12 +968,13 @@ const en: Dict = {
   password: "Password (min 8 chars)",
   className: "Class (1-12)",
   subject: "Subject",
-  consentText:
-    "I am the guardian or register with guardian consent, and I agree to the Privacy Policy and Terms.",
+  consentPrefix:
+    "I am the guardian or register with guardian consent, and I agree to the",
+  consentSuffix: ".",
+  consentRequired: "Please confirm guardian consent to register.",
   privacy: "Privacy",
   terms: "Terms",
   haveAccount: "Have an account?",
-  noAccount: "No account?",
   forgot: "Forgot password?",
   resetTitle: "Reset password",
   forgotSent: "Email sent — please check your inbox.",
@@ -1021,10 +1000,8 @@ const en: Dict = {
   me: "Me",
   welcome: "Welcome",
   whatToDo: "What would you like to learn today?",
-  startLearning: "Read textbook",
   askTutor: "Ask the AI",
   takeQuiz: "Take a quiz",
-  browseCurriculum: "Subjects & chapters",
   subjects: "Subjects",
   chapters: "Chapters",
   selectClass: "Select a class",
@@ -1038,7 +1015,6 @@ const en: Dict = {
   language: "Language",
   appearance: "Appearance",
   darkMode: "Dark mode",
-  myProfile: "My profile",
   yourQuizResult: "Your quiz result",
   score: "Score",
   correctOutOf: "{correct}/{total} correct",
@@ -1048,15 +1024,13 @@ const en: Dict = {
   finishQuiz: "Finish quiz",
   notStarted: "No quiz taken yet.",
   continueTutor: "Continue chat",
-  lessonsNote: "Pick a subject below and read from the textbook",
-  myProgress: "My progress",
   admSafety: "Safety audit",
   admRefusals: "Refused questions (30d)",
   admRefusalReason: "Reason",
   admRefusalClass: "Class",
   admLastRefusal: "Last refusal",
   admNoRefusals: "No refusals in the window.",
-  // S5.10 support-ops strings: admin/support tooling only, kept
+  // support-ops strings: admin/support tooling only, kept
   // English in both dicts (a dedicated Bengali pass is follow-up).
   statusPage: "System status",
   statusAllOk: "All systems operational",
@@ -1080,12 +1054,9 @@ const en: Dict = {
   trustOffline: "Read offline",
   emptyChatTitle: "Ask the AI tutor",
   emptyChatSub: "Pick one below or write your own",
-  suggestQ1: "Explain fractions simply",
-  suggestQ2: "Newton's first law with an example",
-  suggestQ3: "Make a quiz from this chapter",
   brandHome: "Go home",
   dashboard: "Dashboard",
-  // ── Dashboard redesign (WP-DR): student practice hub ──
+  // ── Dashboard redesign: student practice hub ──
   practice: "Practice",
   practiceTitle: "Practice",
   weakPracticeTitle: "My weak spots",
@@ -1097,7 +1068,6 @@ const en: Dict = {
   assignedEmpty: "Nothing assigned by your teacher yet.",
   assignedShortTest: "Short test",
   assignedBulk: "Assignment",
-  nextStepCta: "Next step",
   // ── student home ──
   homePromptPlaceholder: "What do you want to learn today? Ask away…",
   homeAskBtn: "Ask",
@@ -1127,7 +1097,6 @@ const en: Dict = {
   aiSuggestion: "AI suggestion",
   nextSuggestionPractice: "Practice this chapter to strengthen it",
   nextSuggestionAsk: "Ask the AI if anything is unclear",
-  nextSuggestionRead: "Continue reading",
   // ── profile ──
   aiMemoryPanel: "AI memory — what the tutor knows about you",
   aiMemoryPatternWeak: "Needs more practice",
@@ -1140,6 +1109,7 @@ const en: Dict = {
   tNavAnalytics: "Analytics",
   tNavProfile: "Profile",
   // ── teacher home ──
+  thLoadError: "Some dashboard data could not be loaded.",
   thGreeting: "Welcome, {name}",
   thClassesStat: "Classes",
   thDraftsStat: "Draft papers",
@@ -1208,7 +1178,7 @@ const en: Dict = {
   tpTitle: "Teacher profile",
   tpDefaultClass: "Default class",
   tpPrefsHint: "These settings prefill your generators.",
-  // ── RENO (world-class polish pass) ──
+  // ── polish-pass microcopy ──
   retry: "Try again",
   roleStudent: "Student",
   roleTeacher: "Teacher",
@@ -1236,9 +1206,9 @@ const en: Dict = {
   errNotAllowed: "You don't have permission to do that.",
   errNetwork: "Check your internet connection.",
   errGeneric: "Something went wrong. Please try again later.",
-  saSimple: "Simple explanation:",
-  saExample: "Example:",
-  saPoints: "Key points:",
+  saSimple: "Simple explanation",
+  saExample: "Example",
+  saPoints: "Key points",
   saCheck: "Did you understand?",
   statTotal: "Total",
   statQuizzes: "Quizzes",
@@ -1264,7 +1234,7 @@ export function onLangChange(fn: () => void): () => void {
   return () => listeners.delete(fn);
 }
 
-/** RENO: API subject values (science/mathematics/math/bangla) -> localized label. */
+/** API subject values (science/mathematics/math/bangla) -> localized label. */
 export function tSubject(value: string | null | undefined): string {
   const v = String(value ?? "");
   if (v === "science") return t("subjectScience");

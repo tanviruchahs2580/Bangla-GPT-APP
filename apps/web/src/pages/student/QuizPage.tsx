@@ -31,14 +31,14 @@ import { t, tSubject } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { celebrate } from "../../lib/confetti";
 
-// RENO: labels from i18n, evaluated per render (lang switch remounts).
+// labels from i18n, evaluated per render (lang switch remounts).
 const subjectOptions = () => [
   { value: "science", label: t("subjectScience") },
   { value: "mathematics", label: t("subjectMath") },
   { value: "bangla", label: t("subjectBangla") },
 ];
 
-// S4.5: KG gap -> grounded re-teach card (textbook excerpt, never AI text).
+// KG gap -> grounded re-teach card (textbook excerpt, never AI text).
 function QuizCelebration({ score }: { score: number }) {
   useEffect(() => {
     celebrate(score);
@@ -71,7 +71,7 @@ export default function QuizPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [number, setNumber] = useState<string>("5");
-  // S1.4: the tutor's quiz chip preselects the subject via ?subject=.
+  // the tutor's quiz chip preselects the subject via ?subject=.
   const [subject, setSubject] = useState<string>(
     searchParams.get("subject") ?? subjectOptions()[0].value,
   );
@@ -93,14 +93,14 @@ export default function QuizPage() {
     enabled: me?.role === "student",
   });
 
-  // S1.10: spaced-revision tab (SM-2-lite queue) with due badge.
+  // spaced-revision tab (SM-2-lite queue) with due badge.
   const [tab, setTab] = useState<"quiz" | "revision" | "assigned">("quiz");
   const { data: due, refetch: refetchDue } = useQuery({
     queryKey: ["revision-due"],
     queryFn: () => get<RevisionDue>("/revision/due"),
     enabled: me?.role === "student",
   });
-  // S2.5 + S2.8 merged "assigned by teacher" list (short tests + bulk).
+  // + merged "assigned by teacher" list (short tests + bulk).
   const { data: stMine } = useQuery({
     queryKey: ["shorttests-mine"],
     queryFn: () => get<ShortTestMine[]>("/shorttests/mine"),
@@ -152,7 +152,7 @@ export default function QuizPage() {
     }
   };
 
-  // S1.7: restore the last graded result when returning from the tutor explain flow.
+  // restore the last graded result when returning from the tutor explain flow.
   useEffect(() => {
     if (searchParams.get("result") !== "1") return;
     try {
@@ -213,7 +213,7 @@ export default function QuizPage() {
         correct: res.correct,
         total: res.total,
       });
-      // S1.7: keep the result for the tutor explain back-link (?result=1).
+      // keep the result for the tutor explain back-link (?result=1).
       try {
         sessionStorage.setItem(LAST_RESULT_KEY, JSON.stringify(res));
       } catch {
@@ -273,7 +273,7 @@ export default function QuizPage() {
                     {r.options[r.correct_index] ?? ""}
                   </div>
                   {!r.is_correct && (
-                    // S1.7: wrong item → explain loop with full quiz context.
+                    // wrong item → explain loop with full quiz context.
                     <Button
                       variant="ghost"
                       size="sm"

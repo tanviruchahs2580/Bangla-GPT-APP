@@ -43,7 +43,7 @@ function useActivity(me: MeResponse | null) {
   });
 }
 
-/** WP-DR student home: exactly five primary blocks, nothing more.
+/** student home: exactly five primary blocks, nothing more.
  *  1 greeting+prompt  2 continue  3 quick actions  4 recommendation  5 snapshot */
 export default function HomePage() {
   const { me } = useAuth();

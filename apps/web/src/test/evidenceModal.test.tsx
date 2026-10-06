@@ -54,7 +54,7 @@ function renderPage() {
 }
 
 async function askOneQuestion(user: ReturnType<typeof userEvent.setup>) {
-  // S1.8 added a history-search textbox — target the chat input by name.
+  // added a history-search textbox — target the chat input by name.
   const box = await screen.findByRole("textbox", { name: t("askPlaceholder") });
   await user.type(box, "k");
   await user.keyboard("{Enter}");
@@ -69,7 +69,7 @@ function sourceChip(): HTMLElement {
   return chip;
 }
 
-describe("S1.6 evidence modal", () => {
+describe("evidence modal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authMock.useAuth.mockReturnValue({ me, signOut: vi.fn() });

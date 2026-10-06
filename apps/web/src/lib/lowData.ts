@@ -1,5 +1,5 @@
 /**
- * S1.13: low-data mode. Persisted in localStorage; an attribute on <html>
+ * low-data mode. Persisted in localStorage; an attribute on <html>
  * lets CSS drop images app-wide, and the tutor request body carries the flag
  * so answers come back short (measured by backend tests).
  */

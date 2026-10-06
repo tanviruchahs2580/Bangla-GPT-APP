@@ -1,5 +1,5 @@
 /**
- * Quiz confetti (WP-09) — CSS/JS ≤2KB, self-cleaning, reduced-motion safe.
+ * Quiz confetti — CSS/JS ≤2KB, self-cleaning, reduced-motion safe.
  * Call once on good scores; no-ops under prefers-reduced-motion.
  */
 const COLORS = [

@@ -1,5 +1,5 @@
 /**
- * Minimal toast utility (WP-05/WP-11) — vanilla, zero dependencies.
+ * Minimal toast utility (/) — vanilla, zero dependencies.
  * Used ONLY where feedback already exists (save confirmations, errors).
  * No new feature behavior: visual polish over existing flows.
  */

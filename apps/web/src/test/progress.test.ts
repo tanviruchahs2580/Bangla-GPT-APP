@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { chapterBadge, ttsSupported } from "../lib/progress";
 
-describe("S1.2 chapter badge logic", () => {
+describe("chapter badge logic", () => {
   it("no progress row → no badge", () => {
     expect(chapterBadge(undefined)).toBeNull();
   });
@@ -16,7 +16,7 @@ describe("S1.2 chapter badge logic", () => {
   });
 });
 
-describe("S1.2 TTS feature guard", () => {
+describe("TTS feature guard", () => {
   it("unsupported browser (no speechSynthesis) → false, no crash", () => {
     expect(ttsSupported({} as Window)).toBe(false);
     expect(ttsSupported(undefined)).toBe(false);

@@ -38,7 +38,7 @@ afterEach(() => {
   FakeRecognition.instance = null;
 });
 
-describe("S1.12 voice input", () => {
+describe("voice input", () => {
   it("renders nothing when the browser lacks Speech Recognition (no crash)", () => {
     const { container } = render(<VoiceButton onTranscript={vi.fn()} />);
     expect(container).toBeEmptyDOMElement();

@@ -9,7 +9,7 @@ const errText = (err: unknown): string =>
   friendlyError((err as { rawDetail?: unknown }).rawDetail)?.text ??
   t("errorGeneric");
 
-// S2.4 gate, now visible: a paper is publishable only once every question
+// gate, now visible: a paper is publishable only once every question
 // has been reviewed — surface progress instead of an error toast after the fact.
 export function QPaperStepper({ qp }: { qp: QPaper }) {
   const reviewed = qp.questions.filter((q) => q.reviewed).length;

@@ -1,4 +1,4 @@
-// S1.4 — parser for the sectioned tutor answer layout (SYSTEM_PROMPT rule ৬).
+// parser for the sectioned tutor answer layout (SYSTEM_PROMPT rule ৬).
 // Labels mirror apps/api/src/bangla_gpt_api/services/answer_structure.py exactly.
 export const SECTION = {
   simple: "সহজ ব্যাখ্যা:",

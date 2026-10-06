@@ -2,6 +2,13 @@ export type Theme = "light" | "dark";
 
 const THEME_KEY = "bgpt_theme";
 
+const themeListeners = new Set<() => void>();
+
+export function onThemeChange(fn: () => void): () => void {
+  themeListeners.add(fn);
+  return () => themeListeners.delete(fn);
+}
+
 export function initialTheme(): Theme {
   const saved = localStorage.getItem(THEME_KEY);
   if (saved === "light" || saved === "dark") return saved;
@@ -13,6 +20,7 @@ export function initialTheme(): Theme {
 export function applyTheme(theme: Theme): void {
   document.documentElement.setAttribute("data-theme", theme);
   localStorage.setItem(THEME_KEY, theme);
+  for (const fn of themeListeners) fn();
 }
 
 export function toggleTheme(): Theme {

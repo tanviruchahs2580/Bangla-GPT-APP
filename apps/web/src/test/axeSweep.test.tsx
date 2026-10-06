@@ -1,4 +1,4 @@
-/** RENO: accessibility sweep across the redesigned surfaces (axe-core,
+/** accessibility sweep across the redesigned surfaces (axe-core,
  *  WCAG 2.1 A/AA). color-contrast excluded: jsdom cannot compute real
  *  styles (same documented limitation as axeWelcome). Serious + critical
  *  violations fail the suite. Covers: student home/practice/tutor/me,

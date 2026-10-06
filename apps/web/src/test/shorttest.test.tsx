@@ -97,7 +97,7 @@ beforeEach(() => {
   });
 });
 
-describe("S2.5 short test assignment card", () => {
+describe("short test assignment card", () => {
   it("assigns one chapter test to the whole classroom", async () => {
     const user = userEvent.setup();
     renderPage();

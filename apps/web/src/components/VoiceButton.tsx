@@ -4,7 +4,7 @@ import { t } from "../i18n";
 import { getSpeechRecognition, type SpeechRecognitionLike } from "../lib/voice";
 
 /**
- * S1.12: mic button for the tutor composer. Hidden entirely when the browser
+ * mic button for the tutor composer. Hidden entirely when the browser
  * has no Speech Recognition; recognition errors just stop recording so the
  * manual composer always keeps working.
  */

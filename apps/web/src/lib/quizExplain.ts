@@ -1,4 +1,4 @@
-// S1.7 — Quiz explain loop: structured context payload handed from a wrong
+// Quiz explain loop: structured context payload handed from a wrong
 // quiz answer to the AI tutor, plus the message builder. Pure module.
 import type { ReviewItem } from "../types";
 

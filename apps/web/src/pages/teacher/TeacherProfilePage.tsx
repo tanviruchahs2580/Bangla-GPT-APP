@@ -7,7 +7,7 @@ import { currentTheme, toggleTheme } from "../../lib/theme";
 
 const DEFAULT_CLASS_KEY = "bgpt_teacher_default_class";
 
-// RENO: localized role labels (same map as MePage).
+// localized role labels (same map as MePage).
 const ROLE_LABEL: Record<string, Parameters<typeof t>[0]> = {
   student: "roleStudent",
   teacher: "roleTeacher",
@@ -103,7 +103,7 @@ export default function TeacherProfilePage() {
               const v = e.target.value as "bn" | "en";
               setLang(v);
               document.documentElement.setAttribute("lang", v);
-              // RENO: in-place remount via LangRoot — no page reload.
+              // in-place remount via LangRoot — no page reload.
             }}
           >
             <option value="bn">বাংলা</option>

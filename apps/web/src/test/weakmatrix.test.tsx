@@ -1,4 +1,4 @@
-/** S2.7: weakness heatmap + at-risk support plans render in the teacher UI. */
+/** weakness heatmap + at-risk support plans render in the teacher UI. */
 
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -137,7 +137,7 @@ beforeEach(() => {
   });
 });
 
-describe("S2.7 weakness heatmap card", () => {
+describe("weakness heatmap card", () => {
   it("renders the concept x student grid with token-bucket cells", async () => {
     renderPage();
     // names appear in both the roster and the heatmap header
@@ -146,7 +146,7 @@ describe("S2.7 weakness heatmap card", () => {
     // concept headers and per-student columns present
     expect(screen.getByText("beta")).toBeInTheDocument();
     expect(screen.getByText("alpha")).toBeInTheDocument();
-    // WP-DR: roster moved to Classes; the heatmap header still names each student.
+    // roster moved to Classes; the heatmap header still names each student.
     expect(screen.getAllByText("Karim").length).toBeGreaterThan(0);
 
     // accuracies render as percentages, weakest cells take the danger bucket

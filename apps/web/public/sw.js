@@ -1,10 +1,11 @@
-/* Bangla GPT Tutor service worker (B10).
+/* Bangla GPT Tutor service worker.
  * Strategy:
  *  - App shell + static assets: cache-first with background refresh.
  *  - Navigations: network-first, offline fallback page.
  *  - API calls: never cached.
  */
 const CACHE = 'bgpt-v2';
+const MAX_RUNTIME_ENTRIES = 50; // hashed build assets rotate; cap the cache
 const SHELL = [
   '/',
   '/index.html',
@@ -25,9 +26,19 @@ self.addEventListener('activate', (event) => {
     caches
       .keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then(trimRuntimeCache)
       .then(() => self.clients.claim())
   );
 });
+
+// Old hashed assets stay cached forever unless pruned; keep the newest N.
+async function trimRuntimeCache() {
+  const cache = await caches.open(CACHE);
+  const keys = await cache.keys();
+  const runtime = keys.filter((req) => !SHELL.includes(new URL(req.url).pathname));
+  const excess = runtime.slice(0, Math.max(0, runtime.length - MAX_RUNTIME_ENTRIES));
+  await Promise.all(excess.map((req) => cache.delete(req)));
+}
 
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);

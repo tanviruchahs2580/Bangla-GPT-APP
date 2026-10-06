@@ -55,7 +55,7 @@ function renderBox() {
   );
 }
 
-describe("S1.11 global search dropdown", () => {
+describe("global search dropdown", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

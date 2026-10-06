@@ -5,7 +5,7 @@ import { Badge } from "../ui";
 import { t } from "../../i18n";
 import { track } from "../../lib/analytics";
 
-/** Wave 2 (blueprint §admin): AI answer-quality panel — grounding rate,
+/** (blueprint §admin): AI answer-quality panel — grounding rate,
  * refusal breakdown, feedback thumbs, low-confidence count, per-model mix.
  * Manual fetch (AdminDashboard house style: no QueryClient dependency). */
 export function AiQualityCard() {

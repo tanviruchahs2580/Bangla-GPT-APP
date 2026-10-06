@@ -1,5 +1,5 @@
 /**
- * BrandMark — "Shapla Book" vector mark for Bangla GPT Tutor (WAVE-4).
+ * BrandMark — "Shapla Book" vector mark for Bangla GPT Tutor.
  * Open-book base with a golden shapla (Bangladesh's national flower)
  * rising from the spine + a learning spark — national-scale identity.
  * - Inline SVG, zero assets, ~2KB, no text glyphs (font-independent, so
@@ -87,7 +87,7 @@ export function BrandMark({
   );
 }
 
-/** Small AI sparkle used beside assistant messages (WP-07). */
+/** Small AI sparkle used beside assistant messages. */
 export function AiSparkle({ size = 14 }: { size?: number }) {
   return (
     <svg

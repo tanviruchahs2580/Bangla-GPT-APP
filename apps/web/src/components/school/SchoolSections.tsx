@@ -10,7 +10,7 @@ import { Badge } from "../ui";
 import { t } from "../../i18n";
 import { track } from "../../lib/analytics";
 
-/** Wave 2 school section: roster, teachers, classes, coverage, analytics. */
+/** school section: roster, teachers, classes, coverage, analytics. */
 export function SchoolSections() {
   const students = useQuery({
     queryKey: ["school-students"],

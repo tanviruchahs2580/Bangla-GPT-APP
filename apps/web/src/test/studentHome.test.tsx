@@ -1,4 +1,4 @@
-/** WP-DR: student home is capped at five primary blocks and the prompt
+/** student home is capped at five primary blocks and the prompt
  *  bar hands the question straight to the AI tutor. */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
@@ -80,7 +80,7 @@ function renderHome() {
   );
 }
 
-describe("WP-DR student home", () => {
+describe("student home", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.removeItem("lastChapter");

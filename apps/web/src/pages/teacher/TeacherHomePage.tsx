@@ -5,6 +5,7 @@ import {
   ClipboardList,
   FileText,
   NotebookPen,
+  Sparkles,
   Timer,
 } from "lucide-react";
 import { get, getTeacherWorkload, type TeacherWorkload } from "../../api";
@@ -13,7 +14,7 @@ import { Card, Stat } from "../../components/ui";
 import { useAuth } from "../../AuthContext";
 import { t } from "../../i18n";
 
-// ✨ Quick Create shortcuts -> deep links into Create (?kind=…).
+// Quick Create shortcuts -> deep links into Create (?kind=…).
 const QUICK = [
   { kind: "question_paper", label: "qpTitle", icon: FileText },
   { kind: "short_test", label: "stTitle", icon: Timer },
@@ -29,9 +30,12 @@ export default function TeacherHomePage() {
   const [drafts, setDrafts] = useState<number | null>(null);
   const [wm, setWm] = useState<WeakMatrix | null>(null);
   const [workload, setWorkload] = useState<TeacherWorkload | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let live = true;
+    setLoadError(false);
     get<ClassRoom[]>("/teacher/classrooms")
       .then((rs) => {
         if (!live) return;
@@ -51,7 +55,9 @@ export default function TeacherHomePage() {
             });
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (live) setLoadError(true);
+      });
     get<QPaper[]>("/teacher/qpapers")
       .then((rows) => {
         if (live)
@@ -64,11 +70,13 @@ export default function TeacherHomePage() {
       .then((w) => {
         if (live) setWorkload(w ?? null);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (live) setLoadError(true);
+      });
     return () => {
       live = false;
     };
-  }, []);
+  }, [reloadKey]);
 
   const students = useMemo(
     () => rooms.reduce((sum, r) => sum + r.student_count, 0),
@@ -97,6 +105,17 @@ export default function TeacherHomePage() {
 
   return (
     <main className="shell-main">
+      {loadError && (
+        <div className="muted" role="status">
+          {t("thLoadError")}{" "}
+          <button
+            className="btn btn-sm btn-ghost"
+            onClick={() => setReloadKey((k) => k + 1)}
+          >
+            {t("retry")}
+          </button>
+        </div>
+      )}
       <section className="hero teacher-hero">
         <h2>{t("thGreeting", { name: me?.name ?? "" })}</h2>
         <p>{t("teacherDashboard")}</p>
@@ -137,7 +156,7 @@ export default function TeacherHomePage() {
           <p className="muted">{t("wmEmpty")}</p>
         ) : (
           <p className="ai-insight-line" role="status">
-            <span aria-hidden>🤖</span>{" "}
+            <Sparkles size={16} aria-hidden />
             {t(insight.key, insight.vars as Record<string, string | number>)}
           </p>
         )}

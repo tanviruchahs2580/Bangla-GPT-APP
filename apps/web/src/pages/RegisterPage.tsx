@@ -21,7 +21,7 @@ export default function RegisterPage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (role === "student" && !consent) {
-      setError({ text: t("consentText") });
+      setError({ text: t("consentRequired") });
       return;
     }
     setBusy(true);
@@ -161,14 +161,15 @@ export default function RegisterPage() {
                     className="consent-check"
                   />
                   <span>
-                    {t("consentText").replace("গোপনীয়তা নীতি ও শর্তাবলি", "")}{" "}
+                    {t("consentPrefix")}{" "}
                     <a href="/privacy" target="_blank" rel="noreferrer">
                       {t("privacy")}
                     </a>{" "}
                     ·{" "}
                     <a href="/terms" target="_blank" rel="noreferrer">
                       {t("terms")}
-                    </a>
+                    </a>{" "}
+                    {t("consentSuffix")}
                   </span>
                 </label>
               </div>

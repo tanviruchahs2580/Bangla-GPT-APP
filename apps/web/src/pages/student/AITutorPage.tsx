@@ -37,16 +37,15 @@ import { track } from "../../lib/analytics";
 import { explainMessage, type QuizExplainPayload } from "../../lib/quizExplain";
 import { SafeMarkdownLazy as SafeMarkdown } from "../../lib/safeMarkdownLazy";
 import { parseStructuredAnswer } from "../../lib/structuredAnswer";
-import { SECTION } from "../../lib/structuredAnswer";
 
-// RENO: labels from i18n, evaluated per render (lang switch remounts).
+// labels from i18n, evaluated per render (lang switch remounts).
 const subjectOptions = () => [
   { value: "science", label: t("subjectScience") },
   { value: "mathematics", label: t("subjectMath") },
   { value: "bangla", label: t("subjectBangla") },
 ];
 
-// Wave 2: explicit teaching strategies accepted by ChatSendRequest.strategy.
+// explicit teaching strategies accepted by ChatSendRequest.strategy.
 const STRATEGIES = [
   "simple",
   "example",
@@ -77,16 +76,16 @@ export default function AITutorPage() {
   const [error, setError] = useState<string | null>(null);
   const [thanks, setThanks] = useState<number | null>(null);
   const [savedId, setSavedId] = useState<number | null>(null);
-  // Wave 2: explicit explanation strategy + image attachment.
+  // explicit explanation strategy + image attachment.
   const [strategy, setStrategy] = useState<string | null>(null);
   const [image, setImage] = useState<{
     mime_type: string;
     data_base64: string;
   } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  // S1.6: source → evidence modal.
+  // source → evidence modal.
   const [evidence, setEvidence] = useState<SourceRef | null>(null);
-  // S1.8: history search + rename/delete.
+  // history search + rename/delete.
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<MessageSearchHit[] | null>(null);
   const [renamingId, setRenamingId] = useState<number | null>(null);
@@ -236,7 +235,7 @@ export default function AITutorPage() {
     [input, streaming, conversationId, subject, refetchConvs, strategy, image],
   );
 
-  // S1.7: a wrong quiz item can arrive here as `location.state.explain` —
+  // a wrong quiz item can arrive here as `location.state.explain` —
   // ask once, then drop the explain payload so a refresh does not re-ask.
   const quizContextRef = useRef(false);
   const [backToResult, setBackToResult] = useState(false);
@@ -252,7 +251,7 @@ export default function AITutorPage() {
     navigate(location.pathname, { replace: true, state: null });
   }, [location, navigate, send]);
 
-  // S1.11: the search box's "ask in Tutor" action hands the question over via
+  // the search box's "ask in Tutor" action hands the question over via
   // location.state.ask — ask it once, then clear the payload (like explain).
   const askSentRef = useRef(false);
   useEffect(() => {
@@ -291,7 +290,7 @@ export default function AITutorPage() {
     }
   };
 
-  // Wave 2: attach an optional photo (question paper, whiteboard) to the next
+  // attach an optional photo (question paper, whiteboard) to the next
   // turn. Server re-validates mime + decoded size and answers 422 image_invalid.
   const attachFile = (f: File | null) => {
     if (!f) return;
@@ -313,7 +312,7 @@ export default function AITutorPage() {
     rd.readAsDataURL(f);
   };
 
-  // S1.8: message search over this student's own history.
+  // message search over this student's own history.
   const runSearch = async () => {
     const q = query.trim();
     if (q.length < 2) {
@@ -367,7 +366,7 @@ export default function AITutorPage() {
       </section>
 
       {backToResult && (
-        // S1.7: back-link to the quiz result this explain loop came from.
+        // back-link to the quiz result this explain loop came from.
         <Button
           variant="ghost"
           size="sm"
@@ -390,7 +389,7 @@ export default function AITutorPage() {
         ))}
       </div>
 
-      {/* S1.8: history search */}
+      {/* history search */}
       <div className="row-flex chat-search-row">
         <input
           className="input chat-search-input"
@@ -587,7 +586,7 @@ export default function AITutorPage() {
                   m.role === "assistant" &&
                   m.grounded &&
                   m.id !== 0 && (
-                    // WP-DR smart action bar: one obvious row under every answer.
+                    // smart action bar: one obvious row under every answer.
                     <div
                       className="chips chips-gap action-bar"
                       role="group"
@@ -624,12 +623,11 @@ export default function AITutorPage() {
                 {m.role === "assistant" && m.confidence != null && (
                   <div className="confidence-row">
                     <Badge tone={m.confidence >= 0.6 ? "ok" : "warn"}>
-                      {t("confidenceBadge").replace(
-                        "{pct}",
-                        String(Math.round(m.confidence * 100)),
-                      )}
+                      {t("confidenceBadge", {
+                        pct: String(Math.round(m.confidence * 100)),
+                      })}
                     </Badge>
-                    {/* WP-DR low-confidence state: distinct, not alarming. */}
+                    {/* low-confidence state: distinct, not alarming. */}
                     {m.confidence < 0.6 && (
                       <p className="low-conf-hint" role="status">
                         {t("lowConfidenceHint")}
@@ -684,7 +682,7 @@ export default function AITutorPage() {
                             <button
                               className="chip"
                               onClick={() => {
-                                // S1.5 'আমি বুঝিন': re-ask the same question with the
+                                // 'আমি বুঝিন': re-ask the same question with the
                                 // next teaching strategy (server rotates conversation strategy).
                                 const q = [...messages.slice(0, i)]
                                   .reverse()
@@ -779,7 +777,7 @@ export default function AITutorPage() {
                 <X size={14} aria-hidden />
               </button>
             </div>
-            {/* WP-DR image-question path: capture → preview → pick intent. */}
+            {/* image-question path: capture → preview → pick intent. */}
             <div
               className="chips attach-intents"
               role="group"
@@ -870,7 +868,7 @@ export default function AITutorPage() {
   );
 }
 
-/** S1.6 — full sanitized textbook evidence behind the source chip. */
+/** full sanitized textbook evidence behind the source chip. */
 function EvidenceModal({
   source,
   onClose,
@@ -887,7 +885,7 @@ function EvidenceModal({
         onClose();
         return;
       }
-      // Minimal focus trap (WP-12): keep Tab inside the dialog.
+      // Minimal focus trap: keep Tab inside the dialog.
       if (e.key !== "Tab" || !modalRef.current) return;
       const items = Array.from(
         modalRef.current.querySelectorAll<HTMLElement>(
@@ -946,7 +944,7 @@ function EvidenceModal({
   );
 }
 
-/** S1.4 — renders the sectioned answer layout when present, plain markdown otherwise. */
+/** renders the sectioned answer layout when present, plain markdown otherwise. */
 function AssistantContent({ content }: { content: string }) {
   const parsed = parseStructuredAnswer(content);
   if (!parsed.structured) return <SafeMarkdown content={content} />;
@@ -954,25 +952,19 @@ function AssistantContent({ content }: { content: string }) {
     <div className="structured-answer">
       {parsed.simple && (
         <section>
-          <h4 className="section-label">
-            {SECTION.simple.replace(/[:?]\s*$/, "")}
-          </h4>
+          <h4 className="section-label">{t("saSimple")}</h4>
           <SafeMarkdown content={parsed.simple} />
         </section>
       )}
       {parsed.example && (
         <section>
-          <h4 className="section-label">
-            {SECTION.example.replace(/[:?]\s*$/, "")}
-          </h4>
+          <h4 className="section-label">{t("saExample")}</h4>
           <SafeMarkdown content={parsed.example} />
         </section>
       )}
       {parsed.points.length > 0 && (
         <section>
-          <h4 className="section-label">
-            {SECTION.points.replace(/[:?]\s*$/, "")}
-          </h4>
+          <h4 className="section-label">{t("saPoints")}</h4>
           <ul>
             {parsed.points.map((p, i) => (
               <li key={i}>{p}</li>
@@ -982,7 +974,7 @@ function AssistantContent({ content }: { content: string }) {
       )}
       {parsed.check && (
         <section className="check-question">
-          <SafeMarkdown content={`${SECTION.check} ${parsed.check}`.trim()} />
+          <SafeMarkdown content={`${t("saCheck")} ${parsed.check}`.trim()} />
         </section>
       )}
     </div>

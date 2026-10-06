@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { render } from "@testing-library/react";
 import { SafeMarkdown } from "../lib/safeMarkdown";
 
-describe("SafeMarkdown (S0.3)", () => {
+describe("SafeMarkdown", () => {
   it("renders inline math as KaTeX", () => {
     const { container } = render(
       <SafeMarkdown content="Formula $E=mc^2$ test" />,

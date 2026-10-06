@@ -335,7 +335,7 @@ export const upsertLearnProgress = (payload: {
   bookmarked?: boolean;
 }) => post<import("./types").ChapterProgressOut>("/learn/progress", payload);
 
-/* -------- S5.10 support ops -------- */
+/* -------- support ops -------- */
 
 const ADMIN_TOKEN_KEY = "bgpt_admin_token_backup";
 const IMP_ACTIVE_KEY = "bgpt_impersonating";
@@ -531,7 +531,7 @@ export interface TeacherWorkload {
 export const getTeacherWorkload = () =>
   get<TeacherWorkload>("/teacher/workload");
 
-// --- Wave 2: school section (school_admin = own school; admin = platform) --------
+// --- school section (school_admin = own school; admin = platform) --------
 
 export interface SchoolStaffRow {
   id: number;
@@ -615,7 +615,7 @@ export const getSchoolCoverage = () =>
 export const getSchoolAnalytics = (days = 30) =>
   get<SchoolAnalytics>(`/school/analytics?days=${days}`);
 
-// --- Wave 2: parent period report -------------------------------------------------
+// --- parent period report -------------------------------------------------
 
 export interface ParentReport {
   student_id: number;
@@ -644,7 +644,7 @@ export const getParentReport = (
     `/parents/me/children/${studentId}/report?period=${period}`,
   );
 
-// --- Wave 2: admin AI quality dashboard --------------------------------------------
+// --- admin AI quality dashboard --------------------------------------------
 
 export interface AdminAiQuality {
   days: number;
@@ -662,7 +662,7 @@ export interface AdminAiQuality {
 export const getAdminAiQuality = (days = 30) =>
   get<AdminAiQuality>(`/admin/ai/quality?days=${days}`);
 
-// --- Wave 2: student learning preferences + memory ----------------------------------
+// --- student learning preferences + memory ----------------------------------
 
 export interface StudentPrefs {
   memory_enabled: boolean;

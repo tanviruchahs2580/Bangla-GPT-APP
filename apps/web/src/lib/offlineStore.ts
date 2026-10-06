@@ -1,7 +1,7 @@
 import type { ChapterContentOut } from "../types";
 
 /**
- * S1.13: per-chapter offline storage.
+ * per-chapter offline storage.
  *
  * Browsers use IndexedDB; where it is absent (jsdom tests, exotic WebViews)
  * we fall back to an in-memory map so the offline-copy logic stays testable
@@ -119,7 +119,7 @@ export async function deleteChapter(
   }
 }
 
-/** Network first, saved offline copy second (S1.13 PASS: offline readable). */
+/** Network first, saved offline copy second (PASS: offline readable). */
 export async function fetchChapterWithOfflineFallback(
   subject: string,
   chapter: string,

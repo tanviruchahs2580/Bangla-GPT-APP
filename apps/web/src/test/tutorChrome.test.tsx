@@ -1,4 +1,4 @@
-/** WP-DR: tutor chrome — image intent menu, entry suggestions and the
+/** tutor chrome — image intent menu, entry suggestions and the
  *  low-confidence hint. Streaming logic itself is untouched. */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
@@ -62,7 +62,7 @@ beforeEach(() => {
   });
 });
 
-describe("WP-DR tutor chrome", () => {
+describe("tutor chrome", () => {
   it("offers the four entry suggestions and the image intent menu after attach", async () => {
     const user = userEvent.setup();
     renderPage();

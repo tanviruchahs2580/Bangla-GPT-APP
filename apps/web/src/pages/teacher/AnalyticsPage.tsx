@@ -22,7 +22,7 @@ const STAGE_KEYS: Record<string, string> = {
 const stageLabel = (stage: string): string =>
   STAGE_KEYS[stage] ? t(STAGE_KEYS[stage] as Parameters<typeof t>[0]) : stage;
 
-// S2.7 heatmap bucket -> cell class (colors come from the design tokens only).
+// heatmap bucket -> cell class (colors come from the design tokens only).
 const heatClass = (acc: number | null): string =>
   acc === null
     ? "wm-na"
@@ -32,7 +32,7 @@ const heatClass = (acc: number | null): string =>
         ? "wm-mid"
         : "wm-good";
 
-// S3.3 coverage cell status -> badge label + tone.
+// coverage cell status -> badge label + tone.
 const COV_STATUS_KEYS: Record<string, string> = {
   mastered: "covMastered",
   practiced: "covPracticed",

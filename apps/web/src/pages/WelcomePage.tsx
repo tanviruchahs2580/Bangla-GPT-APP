@@ -14,7 +14,7 @@ import { Button } from "../components/ui";
 import { BrandMark } from "../components/BrandMark";
 
 /**
- * Blueprint §11 screens 01-02 (WAVE-4 national-scale landing): brand mark,
+ * Blueprint §11 screens 01-02 (national-scale landing): brand mark,
  * headline, feature grid, stat strip and the two primary calls to action
  * (register / login). Decorative aurora is CSS-only and motion-safe.
  */

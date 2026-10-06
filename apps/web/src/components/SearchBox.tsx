@@ -5,7 +5,7 @@ import { get } from "../api";
 import { t } from "../i18n";
 import type { SearchResponse } from "../types";
 
-// S1.11: global search box in the top bar. Debounced GET /search, dropdown
+// global search box in the top bar. Debounced GET /search, dropdown
 // results, and an "ask in Tutor" action for question-like queries.
 const KIND_LABEL: Record<
   string,

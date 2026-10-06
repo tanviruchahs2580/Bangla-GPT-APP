@@ -1,4 +1,4 @@
-/** S3.5: admin center renders school stats, version rows, invite create/revoke. */
+/** admin center renders school stats, version rows, invite create/revoke. */
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -15,7 +15,7 @@ const apiMock = vi.hoisted(() => ({
   post: vi.fn(),
   patch: vi.fn(),
   del: vi.fn(),
-  // S5.10: AdminDashboard now loads the feedback triage queue on mount.
+  // AdminDashboard now loads the feedback triage queue on mount.
   getFeedbackQueue: vi.fn(() =>
     Promise.resolve({
       rows: [],
@@ -108,7 +108,7 @@ beforeEach(() => {
   });
 });
 
-describe("S3.5 admin center", () => {
+describe("admin center", () => {
   it("renders per-school stats and current content versions", async () => {
     render(<AdminDashboard />);
     await screen.findByText(t("admSchools"));

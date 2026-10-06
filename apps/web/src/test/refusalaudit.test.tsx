@@ -1,4 +1,4 @@
-/** S4.8: admin refusal audit card renders aggregate counts, never content. */
+/** admin refusal audit card renders aggregate counts, never content. */
 
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
@@ -11,7 +11,7 @@ const apiMock = vi.hoisted(() => ({
   post: vi.fn(),
   patch: vi.fn(),
   del: vi.fn(),
-  // S5.10: AdminDashboard now loads the feedback triage queue on mount.
+  // AdminDashboard now loads the feedback triage queue on mount.
   getFeedbackQueue: vi.fn(() =>
     Promise.resolve({
       rows: [],

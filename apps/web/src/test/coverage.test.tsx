@@ -1,4 +1,4 @@
-/** S3.3: curriculum coverage grid renders status badges in the teacher UI. */
+/** curriculum coverage grid renders status badges in the teacher UI. */
 
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -90,7 +90,7 @@ beforeEach(() => {
   mockGet(COV);
 });
 
-describe("S3.3 curriculum coverage card", () => {
+describe("curriculum coverage card", () => {
   it("renders one row per class with a status badge per subject", async () => {
     renderPage();
     await screen.findByText(t("covTitle"));

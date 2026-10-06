@@ -1,4 +1,4 @@
-/** WP-DR: the Practice hub replaces the four-tab quiz page — a prominent
+/** the Practice hub replaces the four-tab quiz page — a prominent
  *  weak-area block on top, and teacher-assigned work merged into one list. */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
@@ -93,7 +93,7 @@ function renderPage() {
   );
 }
 
-describe("WP-DR practice hub", () => {
+describe("practice hub", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authMock.useAuth.mockReturnValue({ me, signOut: vi.fn() });

@@ -16,9 +16,9 @@ export default function LoginPage() {
   // Server flags a mandatory password change (provisioned accounts, temp
   // secrets). The API 403s every non-exempt route until it is done, so the
   // change form blocks the session here instead of the dashboard failing.
-  const [pendingMe, setPendingMe] = useState<Awaited<
-    ReturnType<typeof login>
-  >["me"] | null>(null);
+  const [pendingMe, setPendingMe] = useState<
+    Awaited<ReturnType<typeof login>>["me"] | null
+  >(null);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 

@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { BookOpen, Bookmark, Download, FileText } from "lucide-react";
+import {
+  BookOpen,
+  Bookmark,
+  Download,
+  FileText,
+  Square,
+  Volume2,
+} from "lucide-react";
 import {
   getChapterContent,
   getLearnProgress,
@@ -53,7 +60,7 @@ export function LearnPage() {
     queryFn: () => getSubjectChapters(activeSubject!, selected),
     enabled: !!activeSubject,
   });
-  // WP-DR: one progress query for the whole class powers both the subject
+  // one progress query for the whole class powers both the subject
   // rings and the chapter status icons (all data already returned by the API).
   const allProgressQuery = useQuery({
     queryKey: ["learnProgressAll", selected],
@@ -279,12 +286,12 @@ export function LearnChapterPage() {
   const { subject, chapter, searchParams } = useRouteParams();
   const navigate = useNavigate();
   const classLevel = Number(searchParams.get("class")) || undefined;
-  // S1.13: one normalized class number keeps the offline key stable
+  // one normalized class number keeps the offline key stable
   const offlineClass = classLevel ?? 6;
 
   const query = useQuery({
     queryKey: ["chapterContent", subject, chapter, classLevel],
-    // S1.13: network first; a saved offline copy covers network failure.
+    // network first; a saved offline copy covers network failure.
     queryFn: () =>
       fetchChapterWithOfflineFallback(subject!, chapter!, offlineClass, () =>
         getChapterContent(subject!, chapter!, classLevel),
@@ -302,9 +309,9 @@ export function LearnChapterPage() {
   });
   const [speaking, setSpeaking] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
-  // S1.3: unified workspace tabs — পড়া | অনুশীলন | জিজ্ঞাসা (no page exit).
+  // unified workspace tabs — পড়া | অনুশীলন | জিজ্ঞাসা (no page exit).
   const [tab, setTab] = useState<"read" | "practice" | "ask">("read");
-  // S1.13: offline-copy availability + download button state
+  // offline-copy availability + download button state
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -466,7 +473,12 @@ export function LearnChapterPage() {
               aria-label={t("bookmark")}
               aria-pressed={bookmarked}
             >
-              {bookmarked ? `🔖 ${t("bookmark")}` : `☆ ${t("bookmark")}`}
+              <Bookmark
+                size={14}
+                aria-hidden
+                fill={bookmarked ? "currentColor" : "none"}
+              />{" "}
+              {t("bookmark")}
             </button>
             {ttsSupported && (
               <button
@@ -475,7 +487,12 @@ export function LearnChapterPage() {
                 aria-label={t("listen")}
                 aria-pressed={speaking}
               >
-                {speaking ? `⏹️ ${t("stop")}` : `🔊 ${t("listen")}`}
+                {speaking ? (
+                  <Square size={14} aria-hidden />
+                ) : (
+                  <Volume2 size={14} aria-hidden />
+                )}{" "}
+                {speaking ? t("stop") : t("listen")}
               </button>
             )}
             {offlineCopy && <span className="badge">{t("offlineBadge")}</span>}
@@ -508,7 +525,7 @@ export function LearnChapterPage() {
             </span>
           </div>
 
-          {/* S1.3: in-page tabs — read / practice / ask without leaving the chapter */}
+          {/* in-page tabs — read / practice / ask without leaving the chapter */}
           <div
             className="chips workspace-tabs"
             role="tablist"
@@ -554,7 +571,7 @@ export function LearnChapterPage() {
             </>
           )}
           {tab !== "ask" && (
-            /* WP-DR: visible "AI suggestion: continue with X" card. */
+            /* visible "AI suggestion: continue with X" card. */
             <div className="ai-suggest-card" role="status">
               <span className="ai-suggest-label" aria-hidden>
                 <Bookmark size={14} /> {t("aiSuggestion")}
@@ -621,7 +638,7 @@ function useRouteParams(): {
   };
 }
 
-/** S1.3 অনুশীলন tab: mini quiz with the chapter preselected, no page exit. */
+/** অনুশীলন tab: mini quiz with the chapter preselected, no page exit. */
 function ChapterPractice({
   subject,
   chapter,
@@ -784,7 +801,7 @@ function ChapterPractice({
   );
 }
 
-/** S1.3 জিজ্ঞাসা tab: tutor scoped to this chapter via the chapter context chip. */
+/** জিজ্ঞাসা tab: tutor scoped to this chapter via the chapter context chip. */
 function ChapterAsk({
   subject,
   chapter,

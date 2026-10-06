@@ -104,7 +104,7 @@ beforeEach(() => {
   });
 });
 
-describe("S2.2 classroom chips + roster + CSV import", () => {
+describe("classroom chips + roster + CSV import", () => {
   it("renders classroom chips and switches roster on click", async () => {
     const user = userEvent.setup();
     renderPage();

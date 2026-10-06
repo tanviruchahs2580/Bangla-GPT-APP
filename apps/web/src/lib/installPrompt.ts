@@ -1,5 +1,5 @@
 /**
- * S1.14: PWA install prompt.
+ * PWA install prompt.
  *
  * Chromium fires `beforeinstallprompt` when the app is installable; we defer
  * the event, surface an install affordance in the top bar, and call prompt()

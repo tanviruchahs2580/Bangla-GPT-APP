@@ -1228,8 +1228,7 @@ p {
   );
   background-color: var(--bg);
   background-image:
-    var(--splash-bg-veil),
-    var(--splash-bg-image),
+    var(--splash-bg-veil), var(--splash-bg-image),
     radial-gradient(
       900px 520px at 12% -8%,
       color-mix(in srgb, var(--brand) 20%, transparent),
@@ -1245,7 +1244,9 @@ p {
       color-mix(in srgb, var(--teal) 13%, transparent),
       transparent 62%
     );
-  background-position: 0 0, center;
+  background-position:
+    0 0,
+    center;
   background-size: auto, cover;
   background-repeat: no-repeat;
 }
@@ -1264,9 +1265,7 @@ p {
     --splash-bg-image: url("./assets/login-bg-mobile.jpg");
     --splash-bg-ambient: url("./assets/login-bg-blur.jpg");
     background-image:
-      var(--splash-bg-veil),
-      var(--splash-bg-image),
-      var(--splash-bg-ambient),
+      var(--splash-bg-veil), var(--splash-bg-image), var(--splash-bg-ambient),
       radial-gradient(
         900px 520px at 12% -8%,
         color-mix(in srgb, var(--brand) 20%, transparent),
@@ -1282,7 +1281,10 @@ p {
         color-mix(in srgb, var(--teal) 13%, transparent),
         transparent 62%
       );
-    background-position: 0 0, center top, center;
+    background-position:
+      0 0,
+      center top,
+      center;
     background-size: auto, contain, cover;
   }
 }
@@ -4976,4 +4978,21 @@ button.small {
   .chip {
     transition: none;
   }
+}
+/* classroom health indicator dots */
+.health-dot {
+  display: inline-block;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  vertical-align: -0.05em;
+}
+.health-dot.dot-strong {
+  background: var(--ok);
+}
+.health-dot.dot-support {
+  background: var(--warn);
+}
+.health-dot.dot-risk {
+  background: var(--danger);
 }

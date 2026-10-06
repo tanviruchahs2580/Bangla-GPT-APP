@@ -45,7 +45,7 @@ function renderChapter() {
   );
 }
 
-describe("S1.3 unified workspace tabs", () => {
+describe("unified workspace tabs", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authMock.useAuth.mockReturnValue({ me, signOut: vi.fn() });

@@ -42,7 +42,7 @@ export default function AdminDashboard() {
   const [error, setError] = useState<string | null>(null);
   const LIMIT = 20;
 
-  // S3.5: admin center -- schools + stats, invite management, content versions.
+  // admin center -- schools + stats, invite management, content versions.
   const [schools, setSchools] = useState<AdminSchoolStats[]>([]);
   const [versions, setVersions] = useState<ContentVersionRow[]>([]);
   const [invites, setInvites] = useState<SchoolInviteAdmin[]>([]);
@@ -51,10 +51,10 @@ export default function AdminDashboard() {
   const [inviteRoles, setInviteRoles] = useState<Record<number, string>>({});
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [admMsg, setAdmMsg] = useState<string | null>(null);
-  // S4.8: refusal audit -- aggregate safety-refusal counts only (R11).
+  // refusal audit -- aggregate safety-refusal counts only.
   const [refusals, setRefusals] = useState<RefusalAudit | null>(null);
 
-  // S5.10: feedback triage queue + audited impersonation launch.
+  // feedback triage queue + audited impersonation launch.
   const [triageStatus, setTriageStatus] = useState<"open" | "all">("open");
   const [queue, setQueue] = useState<FeedbackQueuePage | null>(null);
   const [notes, setNotes] = useState<Record<number, string>>({});
@@ -105,7 +105,7 @@ export default function AdminDashboard() {
     Promise.all([
       get<AdminUsersPage>(`/admin/users?${qs}`),
       get<AdminOverview>("/admin/analytics/overview"),
-      // S3.5: center cards ride the same refresh; auxiliary on failure.
+      // center cards ride the same refresh; auxiliary on failure.
       get<AdminSchoolStats[]>("/admin/schools/stats").catch(() => []),
       get<ContentVersionRow[]>("/admin/content/versions").catch(() => []),
       get<RefusalAudit>("/admin/safety/refusals").catch(() => null),
@@ -251,7 +251,7 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      {/* S4.8: refusal audit -- why/where safety refusals happened (counts only). */}
+      {/* refusal audit -- why/where safety refusals happened (counts only). */}
       <div className="card">
         <h2>{t("admSafety")}</h2>
         {refusals === null ? (
@@ -307,7 +307,7 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      {/* S5.10: feedback triage queue (reporter identity withheld, R11). */}
+      {/* feedback triage queue (reporter identity withheld, ). */}
       <div className="card">
         <h2>{t("admTriage")}</h2>
         <div className="row-flex gap-2 mb-2">
@@ -640,7 +640,7 @@ export default function AdminDashboard() {
                         </option>
                       ))}
                     </select>{" "}
-                    {/* S5.10: server refuses admin targets; button mirrors that. */}
+                    {/* server refuses admin targets; button mirrors that. */}
                     {u.role !== "admin" && u.role !== "school_admin" && (
                       <button
                         className="small secondary"

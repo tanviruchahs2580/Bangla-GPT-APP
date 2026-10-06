@@ -26,9 +26,9 @@ function healthOf(atRisk: number, avg: number | null): Health {
 }
 
 const HEALTH_DOT: Record<Health, string> = {
-  strong: "🟢",
-  support: "🟡",
-  risk: "🔴",
+  strong: "dot-strong",
+  support: "dot-support",
+  risk: "dot-risk",
 };
 const HEALTH_LABEL: Record<Health, string> = {
   strong: t("sdStrong"),
@@ -339,7 +339,11 @@ export default function ClassesPage() {
                       : "teal"
                 }
               >
-                {HEALTH_DOT[classHealth]} {HEALTH_LABEL[classHealth]}
+                <span
+                  className={`health-dot ${HEALTH_DOT[classHealth]}`}
+                  aria-hidden
+                />{" "}
+                {HEALTH_LABEL[classHealth]}
               </Badge>
             )}
           </div>
@@ -548,7 +552,10 @@ export default function ClassesPage() {
                           {s.avg_score_pct === null
                             ? "—"
                             : `${s.avg_score_pct}%`}
-                          <span aria-hidden> {HEALTH_DOT[h]}</span>
+                          <span
+                            className={`health-dot ${HEALTH_DOT[h]}`}
+                            aria-hidden
+                          />
                           <span className="visually-hidden">
                             {HEALTH_LABEL[h]}
                           </span>

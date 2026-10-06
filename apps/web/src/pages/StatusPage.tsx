@@ -7,8 +7,8 @@ import { t } from "../i18n";
 import type { StatusOut } from "../types";
 
 /**
- * S5.10 public status page. The payload is presence/booleans only by design
- * (R11): the endpoint never exposes usage counts or configuration.
+ * public status page. The payload is presence/booleans only by design
+ * : the endpoint never exposes usage counts or configuration.
  */
 export default function StatusPage() {
   const [data, setData] = useState<StatusOut | null>(null);

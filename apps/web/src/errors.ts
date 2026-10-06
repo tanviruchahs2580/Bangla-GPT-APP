@@ -1,7 +1,7 @@
-// B8: machine-readable API error codes -> localized, human copy.
+// machine-readable API error codes -> localized, human copy.
 // The backend now emits `detail: {code, message}` on new endpoints; legacy
 // string details still map through the table where possible.
-// RENO: copy now flows through i18n so the English UI gets English errors;
+// copy now flows through i18n so the English UI gets English errors;
 // the legacy Bengali detail strings remain the matching key for old payloads.
 
 import { t } from "./i18n";

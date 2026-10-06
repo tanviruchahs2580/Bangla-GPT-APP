@@ -6,7 +6,7 @@ import { t } from "../i18n";
 import type { SchoolHealth } from "../types";
 
 /**
- * S3.2 school dashboard (school_admin / admin).
+ * school dashboard (school_admin / admin).
  * Summary aggregates only -- students/teachers/classes/sessions, learning
  * health buckets and a cross-class at-risk list. No chat content anywhere.
  */

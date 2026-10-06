@@ -1,4 +1,4 @@
-/** Wave 2: teacher Create hub — generate, filter, delete flows. */
+/** teacher Create hub — generate, filter, delete flows. */
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";

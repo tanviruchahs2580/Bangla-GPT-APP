@@ -60,7 +60,7 @@ function renderPage() {
   );
 }
 
-describe("S1.9 streak heatmap UI", () => {
+describe("streak heatmap UI", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authMock.useAuth.mockReturnValue({ me, signOut: vi.fn() });

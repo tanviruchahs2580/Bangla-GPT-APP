@@ -62,7 +62,7 @@ function renderPage() {
   );
 }
 
-describe("S1.10 revision tab UI", () => {
+describe("revision tab UI", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authMock.useAuth.mockReturnValue({ me, signOut: vi.fn() });

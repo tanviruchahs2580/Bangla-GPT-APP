@@ -116,7 +116,7 @@ beforeEach(() => {
   });
 });
 
-describe("S2.8 bulk assign card", () => {
+describe("bulk assign card", () => {
   it("multi-selects students, assigns one quiz with a due date", async () => {
     const user = userEvent.setup();
     renderPage();
@@ -177,7 +177,7 @@ describe("S2.8 bulk assign card", () => {
     const before = apiMock.get.mock.calls.length;
     await user.click(screen.getByRole("button", { name: t("baProgress") }));
     expect(apiMock.get).toHaveBeenCalledWith("/teacher/assignments/5/progress");
-    // WP-DR: result header now shows avg/high/low stats next to the table,
+    // result header now shows avg/high/low stats next to the table,
     // so the score text legitimately appears more than once.
     expect((await screen.findAllByText("80%")).length).toBeGreaterThanOrEqual(
       1,

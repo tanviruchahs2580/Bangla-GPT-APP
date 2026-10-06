@@ -52,7 +52,7 @@ function renderPage() {
   );
 }
 
-describe("S1.8 history UI", () => {
+describe("history UI", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authMock.useAuth.mockReturnValue({ me, signOut: vi.fn() });

@@ -25,7 +25,7 @@ import { NotificationBell } from "./components/NotificationBell";
 import { BrandMark } from "./components/BrandMark";
 import { SearchBox } from "./components/SearchBox";
 import { getLang, onLangChange, setLang, t } from "./i18n";
-import { toggleTheme, currentTheme } from "./lib/theme";
+import { toggleTheme, currentTheme, onThemeChange } from "./lib/theme";
 import {
   canInstall,
   onInstallChange,
@@ -40,7 +40,7 @@ const STUDENT_NAV = [
   { to: "/student/me", end: false, label: "me", icon: User },
 ] as const;
 
-// WP-DR: teacher gets a full 5-item IA; other staff roles keep their
+// teacher gets a full 5-item IA; other staff roles keep their
 // existing dashboard-only sidebar untouched.
 const TEACHER_NAV = [
   { to: "/teacher", end: true, label: "tNavHome", icon: Home },
@@ -106,9 +106,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { me, signOut } = useAuth();
   const [, force] = useState(0);
   useEffect(() => onLangChange(() => force((n) => n + 1)), []);
+  useEffect(() => onThemeChange(() => force((n) => n + 1)), []);
   const navigate = useNavigate();
   const dark = currentTheme() === "dark";
-  // S1.14: show the install affordance only when Chromium offers it
+  // show the install affordance only when Chromium offers it
   const [installable, setInstallable] = useState(canInstall());
   useEffect(() => onInstallChange(() => setInstallable(canInstall())), []);
   const isStaff = !!me && me.role !== "student";
@@ -138,7 +139,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {t("appName")}
         </button>
         {me?.role === "student" && <SearchBox />}
-        <nav className="row-flex topbar-actions" aria-label="Settings">
+        <nav className="row-flex topbar-actions" aria-label={t("settings")}>
           {me && (
             <span className="muted muted-sm topbar-user">
               {me.name ?? me.email}
@@ -165,7 +166,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           )}
           <button
             className="icon-btn"
-            aria-label="Switch language"
+            aria-label={t("language")}
             onClick={() => {
               const next = getLang() === "bn" ? "en" : "bn";
               setLang(next);
@@ -178,7 +179,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
           <button
             className="icon-btn"
-            aria-label="Toggle theme"
+            aria-label={t("darkMode")}
             onClick={() => toggleTheme()}
           >
             {dark ? (

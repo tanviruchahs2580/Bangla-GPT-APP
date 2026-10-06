@@ -4,7 +4,7 @@ export interface SourceRef {
   section: string | null;
   page: number | null;
   score: number;
-  /** S1.6: sanitized textbook excerpt for the evidence modal. */
+  /** sanitized textbook excerpt for the evidence modal. */
   excerpt?: string | null;
 }
 
@@ -14,7 +14,7 @@ export interface AskResponse {
   sources: SourceRef[];
   refused_reason?: string | null;
   citation_verified?: boolean | null;
-  // Wave 2: numeric grounding confidence 0-1 (null = pre-wave answer)
+  // numeric grounding confidence 0-1 (null = pre-wave answer)
   confidence?: number | null;
 }
 
@@ -26,7 +26,7 @@ export interface ConversationOut {
   message_count: number;
 }
 
-/** S1.8: one history-search hit. */
+/** one history-search hit. */
 export interface MessageSearchHit {
   conversation_id: number;
   conversation_title: string | null;
@@ -36,7 +36,7 @@ export interface MessageSearchHit {
   created_at: string;
 }
 
-/** S1.9: one heatmap cell (date is ISO, Asia/Dhaka day). */
+/** one heatmap cell (date is ISO, Asia/Dhaka day). */
 export interface ActivityDay {
   date: string;
   questions: number;
@@ -44,14 +44,14 @@ export interface ActivityDay {
   minutes: number;
 }
 
-/** S1.9: streak + heatmap window for a student. */
+/** streak + heatmap window for a student. */
 export interface ActivitySummary {
   streak: number;
   today: string;
   days: ActivityDay[];
 }
 
-/** S1.10: one SM-2-lite revision item. */
+/** one SM-2-lite revision item. */
 export interface RevisionItemOut {
   id: number;
   question: string;
@@ -64,14 +64,14 @@ export interface RevisionItemOut {
   due_date: string;
 }
 
-/** S1.10: due-today revision list. */
+/** due-today revision list. */
 export interface RevisionDue {
   today: string;
   due_count: number;
   items: RevisionItemOut[];
 }
 
-/** S1.11: one global-search result row. */
+/** one global-search result row. */
 export interface SearchHit {
   kind: "subject" | "chapter" | "question";
   title: string;
@@ -80,7 +80,7 @@ export interface SearchHit {
   score: number;
 }
 
-/** S1.11: GET /search payload. */
+/** GET /search payload. */
 export interface SearchResponse {
   query: string;
   ask_action: boolean;
@@ -94,7 +94,7 @@ export interface ChatMessage {
   grounded?: boolean | null;
   refused_reason?: string | null;
   sources: SourceRef[];
-  // Wave 2: numeric confidence from the SSE done event
+  // numeric confidence from the SSE done event
   confidence?: number | null;
   rating?: number | null;
   created_at?: string;
@@ -111,7 +111,7 @@ export interface QuizQuestionPublic {
   options: string[];
 }
 
-// S4.5: KG-grounded re-teach card (prereq chapter excerpt, no AI text).
+// KG-grounded re-teach card (prereq chapter excerpt, no AI text).
 export interface ReteachCard {
   concept: string;
   prereq: string;
@@ -284,7 +284,7 @@ export interface ChapterProgressOut {
   updated_at: string | null;
 }
 
-// S2.2: classroom management + CSV import.
+// classroom management + CSV import.
 export interface ClassRoom {
   id: number;
   class_level: number;
@@ -315,7 +315,7 @@ export interface ImportResult {
   rows: ImportRow[];
 }
 
-// S2.4: question paper builder (AI draft -> teacher review -> FINAL).
+// question paper builder (AI draft -> teacher review -> FINAL).
 export interface QQuestion {
   ref: string;
   text: string;
@@ -344,7 +344,7 @@ export interface QPaper {
   created_at: string | null;
 }
 
-// S2.5: short tests -- one rule-based set assigned to a whole classroom.
+// short tests -- one rule-based set assigned to a whole classroom.
 export interface ShortTest {
   id: number;
   classroom_id: number;
@@ -372,7 +372,7 @@ export interface ShortTestMine {
   expired: boolean;
 }
 
-// S2.6: lesson plan copilot -- 8 AI-drafted sections, edited & printed in-app.
+// lesson plan copilot -- 8 AI-drafted sections, edited & printed in-app.
 export interface LessonPlan {
   sections: Record<string, string>;
   sources: SourceRef[];
@@ -383,7 +383,7 @@ export interface LessonPlan {
   level: string;
 }
 
-// S2.7: weakness heatmap + rule-based at-risk flags + 3-week support plans.
+// weakness heatmap + rule-based at-risk flags + 3-week support plans.
 export interface WeakCell {
   asked: number;
   correct: number;
@@ -398,7 +398,7 @@ export interface WeakStudent {
   attempts_graded: number;
   trend: "up" | "down" | "flat";
   at_risk: boolean;
-  /** S4.6 single-source weakness rollup (weakest first). */
+  /** single-source weakness rollup (weakest first). */
   weak_concepts?: string[];
   cells: Record<string, WeakCell>;
 }
@@ -427,7 +427,7 @@ export interface SupportPlanRow {
   created_at: string | null;
 }
 
-// S2.8: bulk assignment -- one shared quiz, per-student tracking vs a due date.
+// bulk assignment -- one shared quiz, per-student tracking vs a due date.
 export interface AssignmentRow {
   id: number;
   teacher_id: number;
@@ -460,7 +460,7 @@ export interface AssignmentMine {
   done: boolean;
 }
 
-// S3.2 school dashboard
+// school dashboard
 export interface SchoolAtRiskRow {
   student_id: number;
   name: string;
@@ -489,7 +489,7 @@ export interface SchoolHealth {
   at_risk: SchoolAtRiskRow[];
 }
 
-// S3.3: class x subject curriculum coverage grid.
+// class x subject curriculum coverage grid.
 export interface CoverageCellData {
   classroom_id: number;
   class_level: number;
@@ -507,7 +507,7 @@ export interface Coverage {
   cells: CoverageCellData[];
 }
 
-// S3.5: admin center v1.5 -- per-school stats, content versions, invite admin.
+// admin center v1.5 -- per-school stats, content versions, invite admin.
 export interface AdminSchoolStats {
   id: number;
   name: string;
@@ -539,7 +539,7 @@ export interface SchoolInviteAdmin {
   used_at: string | null;
 }
 
-// S5.10: feedback triage queue (admin view; reporter identity withheld by design).
+// feedback triage queue (admin view; reporter identity withheld by design).
 export interface FeedbackAdminRow {
   id: number;
   user_id: number;
@@ -562,7 +562,7 @@ export interface FeedbackQueuePage {
   offset: number;
 }
 
-// S5.10: public status page -- presence/booleans only, never usage counts.
+// public status page -- presence/booleans only, never usage counts.
 export interface StatusComponent {
   name: string;
   ok: boolean;
