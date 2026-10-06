@@ -76,7 +76,7 @@ export default function LoginPage() {
 
   if (pendingMe) {
     return (
-      <div className="splash auth-shell">
+      <div className="splash splash-login auth-shell">
         <Card className="auth-card">
           <h2>{t("forceChangeTitle")}</h2>
           <p className="muted">{t("forceChangeSub")}</p>
@@ -137,7 +137,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="splash auth-shell">
+    <div className="splash splash-login auth-shell">
       <section className="auth-brand">
         <div className="auth-brand-head">
           <span className="auth-brand-logo" aria-hidden>

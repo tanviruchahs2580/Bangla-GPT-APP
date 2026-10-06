@@ -1212,6 +1212,88 @@ p {
     var(--bg);
 }
 
+/* Login-only photo backdrop (.splash-login, set in LoginPage) — theme-
+   synced veil, same color-mix technique as .shell-student::before so the
+   artwork reads warm-paper in light mode and fades into ink in dark mode.
+   Desktop (≥900px): the 1920×1080 landscape artwork covers the full page —
+   a 16:9 screen is an exact fit, so the whole artwork shows uncut.
+   Mobile (≤899px): the portrait 1080×1920 artwork uses contain (never
+   cropped), top-anchored, over a pre-blurred ambient fill of the same
+   artwork so no letterbox bars show. Low-data drops every photo layer. */
+.splash-login {
+  --splash-bg-image: url("./assets/login-bg-desktop.jpg");
+  --splash-bg-veil: linear-gradient(
+    color-mix(in srgb, var(--bg-elev) 26%, transparent),
+    color-mix(in srgb, var(--bg-elev) 26%, transparent)
+  );
+  background-color: var(--bg);
+  background-image:
+    var(--splash-bg-veil),
+    var(--splash-bg-image),
+    radial-gradient(
+      900px 520px at 12% -8%,
+      color-mix(in srgb, var(--brand) 20%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      760px 460px at 96% 4%,
+      color-mix(in srgb, var(--ai) 10%, transparent),
+      transparent 55%
+    ),
+    radial-gradient(
+      880px 560px at 50% 115%,
+      color-mix(in srgb, var(--teal) 13%, transparent),
+      transparent 62%
+    );
+  background-position: 0 0, center;
+  background-size: auto, cover;
+  background-repeat: no-repeat;
+}
+
+/* Dark-mode veil sync — photo fades into ink */
+[data-theme="dark"] .splash-login {
+  --splash-bg-veil: linear-gradient(
+    color-mix(in srgb, var(--bg) 76%, transparent),
+    color-mix(in srgb, var(--bg) 76%, transparent)
+  );
+}
+
+/* Narrow viewports: portrait artwork, contain over blurred ambient fill */
+@media (max-width: 899px) {
+  .splash-login {
+    --splash-bg-image: url("./assets/login-bg-mobile.jpg");
+    --splash-bg-ambient: url("./assets/login-bg-blur.jpg");
+    background-image:
+      var(--splash-bg-veil),
+      var(--splash-bg-image),
+      var(--splash-bg-ambient),
+      radial-gradient(
+        900px 520px at 12% -8%,
+        color-mix(in srgb, var(--brand) 20%, transparent),
+        transparent 60%
+      ),
+      radial-gradient(
+        760px 460px at 96% 4%,
+        color-mix(in srgb, var(--ai) 10%, transparent),
+        transparent 55%
+      ),
+      radial-gradient(
+        880px 560px at 50% 115%,
+        color-mix(in srgb, var(--teal) 13%, transparent),
+        transparent 62%
+      );
+    background-position: 0 0, center top, center;
+    background-size: auto, contain, cover;
+  }
+}
+
+/* Low-data kill-switch — falls back to the pure gradient aurora */
+[data-lowdata="1"] .splash-login {
+  --splash-bg-image: none;
+  --splash-bg-ambient: none;
+  --splash-bg-veil: none;
+}
+
 /* WAVE-4: drifting aurora glow + shapla-petal light arc (decorative) */
 .splash::before,
 .splash::after {
