@@ -95,7 +95,10 @@ class CircuitBreaker:
                 self._failure_timestamps.popleft()
 
             consecutive_failures = len(self._failure_timestamps)
-            if consecutive_failures >= self._failure_threshold or self._state == CircuitState.HALF_OPEN:
+            if (
+                consecutive_failures >= self._failure_threshold
+                or self._state == CircuitState.HALF_OPEN
+            ):
                 probe_failed = self._state == CircuitState.HALF_OPEN
                 self._state = CircuitState.OPEN
                 self._half_open_probe = False
