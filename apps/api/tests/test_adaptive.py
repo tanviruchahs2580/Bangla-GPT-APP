@@ -1,7 +1,7 @@
-"""S4.5 Adaptive practice engine tests.
+"""Adaptive practice engine tests.
 
 Spec PASS: adaptation unit tests (correct -> harder, wrong -> easier + re-teach).
-Re-teach cards must be KG-driven (S4.4 gaps) and grounded in corpus text.
+Re-teach cards must be KG-driven (gaps) and grounded in corpus text.
 """
 
 import pytest

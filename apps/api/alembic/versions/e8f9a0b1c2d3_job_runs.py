@@ -1,4 +1,4 @@
-"""job_runs idempotency ledger (S5.4 background jobs)
+"""job_runs idempotency ledger (background jobs)
 
 Revision ID: e8f9a0b1c2d3
 Revises: c7d1e4f6a2b8

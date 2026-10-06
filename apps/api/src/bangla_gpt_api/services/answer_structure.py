@@ -10,5 +10,5 @@ SECTION_POINTS = "মূল বিষয়:"
 SECTION_CHECK = "তুমি বুঝেছ?"
 
 
-# S1.13: low-data mode asks the model for a 1-2 sentence answer.
+# low-data mode asks the model for a 1-2 sentence answer.
 SHORT_ANSWER_INSTRUCTION = "উত্তর সংক্ষেপে দাও: শুধু 'সহজ ব্যাখ্যা:' অংশের ১-২টি বাক্য লেখো।"

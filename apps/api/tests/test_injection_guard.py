@@ -1,4 +1,4 @@
-"""B2 — prompt-injection guard tests.
+"""prompt-injection guard tests.
 
 Corpus chunks are untrusted. The tutor must:
 1. wrap every evidence chunk in <evidence> delimiters,

@@ -15,7 +15,7 @@ def test_health_reports_app_identity(client: TestClient) -> None:
     res = client.get("/health")
     assert res.status_code == 200
     body = res.json()
-    # F-SEC-07: health is now minimal {"status":"ok"}; version/env moved to /admin/system/info
+    # health is now minimal {"status":"ok"}; version/env moved to /admin/system/info
     assert body["status"] == "ok"
     assert "version" not in body or body.get("version") is None
     # authenticated detail endpoint still carries version
@@ -104,7 +104,7 @@ def test_mock_provider_quotes_evidence_without_markup() -> None:
     out = asyncio.run(provider.generate(prompt, system="SYSTEM-PROMPT-TEXT"))
     assert "SYSTEM-PROMPT-TEXT" not in out
     assert "<evidence>" not in out and "<user_question>" not in out
-    # S1.4: the mock returns the evidence in sectioned layout; sentences are split
+    # the mock returns the evidence in sectioned layout; sentences are split
     # on the danda, so assert the clause text itself is quoted.
     assert "কোষ হলো ক্ষুদ্রতম একক" in out
     assert "সহজ ব্যাখ্যা:" in out and "মূল বিষয়:" in out

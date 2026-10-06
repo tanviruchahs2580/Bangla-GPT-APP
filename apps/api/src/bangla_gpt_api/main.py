@@ -1,18 +1,18 @@
 """Bangla GPT API — application bootstrap (slim entrypoint).
 
-All domain routes live in :mod:`bangla_gpt_api.routers` (ARCH-001 split);
+All domain routes live in:mod:`bangla_gpt_api.routers` (split);
 this module keeps only boot concerns: settings, observability, dependency
 construction, middleware, lifespan and the gunicorn ``app``.
 
 The monolithic ``main.py`` (previously ~7000 lines) has been refactored into:
 
-- ``initialize/observability``   : logging + Sentry bootstrap
-- ``initialize/middleware_stack`` : all middleware registration
-- ``initialize/dependencies``    : index/DB/admin construction (providers passed in)
-- ``initialize/lifespan``        : lifespan context with explicit params
-- ``initialize/schedulers``      : background scheduler loops with health monitoring
+- ``initialize/observability``: logging + Sentry bootstrap
+- ``initialize/middleware_stack``: all middleware registration
+- ``initialize/dependencies``: index/DB/admin construction (providers passed in)
+- ``initialize/lifespan``: lifespan context with explicit params
+- ``initialize/schedulers``: background scheduler loops with health monitoring
 
-All these modules are imported from :mod:`bangla_gpt_api.initialize`.
+All these modules are imported from:mod:`bangla_gpt_api.initialize`.
 """
 
 from __future__ import annotations
@@ -59,9 +59,9 @@ logger = logging.getLogger(__name__)
 
 
 def enforce_production_safety(settings: Settings) -> None:
-    """Refuse to boot in production with insecure configuration (B6).
+    """Refuse to boot in production with insecure configuration.
 
-    Each check is a standalone validator function (SRP).  When any check
+    Each check is a standalone validator function (SRP). When any check
     fails, the combined error is raised as a single RuntimeError.
     """
     if not settings.is_production:
@@ -93,7 +93,7 @@ def enforce_production_safety(settings: Settings) -> None:
 
 
 def _validate_smtp(settings: Settings) -> list[str]:
-    """SMTP must be configured in production, else email verification is bypassed (F-SEC-03)."""
+    """SMTP must be configured in production, else email verification is bypassed."""
     try:
         from bangla_gpt_api.services.mailer import smtp_configured
 
@@ -241,7 +241,7 @@ def create_app(settings: Settings | None = None) -> object:
     """Create the FastAPI application.
 
     Thin orchestrator that delegates to modular initializers.
-    No domain logic lives here — every concern is in :mod:`bangla_gpt_api.initialize`.
+    No domain logic lives here — every concern is in:mod:`bangla_gpt_api.initialize`.
     """
     settings = settings or get_settings()
 
@@ -251,21 +251,13 @@ def create_app(settings: Settings | None = None) -> object:
     # Phase 2: Production safety gate (fail-fast)
     enforce_production_safety(settings)
 
-    # Phase 3: Bare FastAPI app + CORS
+    # Phase 3: Bare FastAPI app. CORS lives exclusively in
+    # initialize.middleware_stack.build_middleware_stack (registered once,
+    # together with the rest of the middleware order).
     from fastapi import FastAPI
-    from fastapi.middleware.cors import CORSMiddleware
 
     app = FastAPI(title=settings.app_name, version=settings.version)
     app.state.settings = settings
-
-    if settings.cors_origins:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=settings.cors_origins,
-            allow_credentials=True,
-            allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            allow_headers=["Authorization", "Content-Type", "Accept", "X-Request-ID"],
-        )
 
     # Phase 4: Build providers (so tests that monkeypatch main.get_provider work)
     provider = _load_provider(settings)

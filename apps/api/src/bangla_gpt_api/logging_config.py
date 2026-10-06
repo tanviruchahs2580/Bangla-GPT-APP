@@ -5,7 +5,7 @@ import sys
 
 _VALID_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
 
-# RequestId propagated via contextvar for json_log inclusion (S0.6)
+# RequestId propagated via contextvar for json_log inclusion
 request_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "request_id", default=None
 )

@@ -1,4 +1,4 @@
-"""S1.5 — adaptive re-teach strategies for the 'আমি বুঝিনি' loop.
+"""adaptive re-teach strategies for the 'আমি বুঝিনি' loop.
 
 The conversation stores which explanation strategy was used last
 (Conversation.last_strategy). When a student says they did not understand,
@@ -48,7 +48,7 @@ def reteach_instruction(last: str | None) -> tuple[str, str]:
     return key, instruction
 
 
-# --- Wave 2: explicit student-chosen strategies ---------------------------------
+# --- explicit student-chosen strategies ---------------------------------
 # The set a student may force per turn (schemas.CHAT_STRATEGIES). Deliberately
 # independent from the reteach cycle above: 'book_language' and 'analogy' are
 # new, 'visual'/'story' are not offered. Each maps to ONE short teacher-level

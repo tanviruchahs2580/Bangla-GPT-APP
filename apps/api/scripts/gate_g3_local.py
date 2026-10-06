@@ -1,4 +1,4 @@
-"""GATE G3 code-local: seed 1 school + 2 classes + 80 students; verify school admin."""
+"""GATE code-local: seed 1 school + 2 classes + 80 students; verify school admin."""
 
 import sqlite3
 from datetime import UTC, datetime, timedelta

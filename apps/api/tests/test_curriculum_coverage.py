@@ -1,4 +1,4 @@
-"""S3.3 curriculum coverage grid endpoint (derivation unit tests: test_coverage.py)."""
+"""curriculum coverage grid endpoint (derivation unit tests: test_coverage.py)."""
 
 import sqlite3
 from datetime import UTC, datetime

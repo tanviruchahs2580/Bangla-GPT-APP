@@ -1,4 +1,4 @@
-"""S2.2: classroom CRUD + CSV bulk import creating invite-linked accounts."""
+"""classroom CRUD + CSV bulk import creating invite-linked accounts."""
 
 import pytest
 from fastapi.testclient import TestClient

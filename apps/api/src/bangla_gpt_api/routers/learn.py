@@ -1,7 +1,7 @@
-"""Learn Routes — split from the main.py god-module (ARCH-001).
+"""Learn Routes — split from the main.py god-module.
 
 Behavior-identical extraction: same paths, validation, status codes.
-Shared context/auth via :mod:`.deps`, shared helpers via :mod:`.common`.
+Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 """
 
 import logging
@@ -127,7 +127,7 @@ def learn_chapter_content(
     return content
 
 
-# --- Wave 2: school tenancy helpers -----------------------------------------
+# --- school tenancy helpers -----------------------------------------
 # Tenancy anchor is User.school_id. A student belongs to a school EXACTLY
 # when one of their ClassRoom memberships carries that school_id. A teacher
 # WITHOUT a school keeps the pre-Wave-2 behavior (no tenancy wall) so every
@@ -151,7 +151,7 @@ def start_quiz(
     db.flush()
 
     generator = ClozeQuizGenerator(app_ctx.index.chunks)
-    # S4.5: generate a wider pool, then hand the student the questions
+    # generate a wider pool, then hand the student the questions
     # whose rated difficulty sits nearest ability + 0.5 sigma.
     pool = generator.generate(
         class_level=class_level,
@@ -195,7 +195,7 @@ def start_quiz(
             QuizQuestionPublic(id=q.id, question_text=q.question_text, options=list(q.options))
             for q in questions
         ],
-        # S4.5: open KG gaps arrive as re-teach cards BEFORE the next Q.
+        # open KG gaps arrive as re-teach cards BEFORE the next Q.
         reteach=[
             ReteachCardOut(**card)
             for card in adaptive.open_reteach_cards(db, app_ctx.index.chunks, student.id)
@@ -271,17 +271,17 @@ def submit_quiz(
     attempt.score_pct = round(100.0 * correct / total, 2)
     db.commit()
     record_activity(db, attempt.student_id, quizzes=1, minutes=1)
-    # S1.10: quiz outcomes seed/refresh the spaced-revision queue.
+    # quiz outcomes seed/refresh the spaced-revision queue.
     revision.record_quiz_result(
         db, attempt.student_id, review, attempt.subject, attempt.class_level
     )
-    # S4.4: the same graded answers update per-concept mastery in the
+    # the same graded answers update per-concept mastery in the
     # knowledge graph (chapter roots seeded lazily from the curriculum).
     reteach_cards: list[ReteachCardOut] = []
     if app_ctx.index is not None:
         knowledge.ensure_concepts(db, app_ctx.index.chunks)
         knowledge.record_quiz_result(db, attempt.student_id, review, attempt.class_level)
-        # S4.5: Elo ratings follow the graded answers; every wrong answer
+        # Elo ratings follow the graded answers; every wrong answer
         # runs the KG gap check, and surfaced gaps become re-teach cards.
         adaptive.apply_review(
             db,
@@ -320,7 +320,7 @@ def submit_quiz(
 def get_progress(student_id: int, db: DbSession, user: CurrentUser) -> StudentProgress:
     student = authorize_student_access(db, student_id, user)
 
-    # F-PERF-02: SQL aggregates instead of full-history Python loops (shape preserved)
+    # SQL aggregates instead of full-history Python loops (shape preserved)
     graded_count, avg_score_raw = db.execute(
         select(func.count(), func.avg(QuizAttempt.score_pct)).where(
             QuizAttempt.student_id == student_id,
@@ -376,7 +376,7 @@ def get_activity(
     user: CurrentUser,
     days: Annotated[int, Query(ge=7, le=370)] = 91,
 ) -> ActivitySummary:
-    """S1.9: streak + GitHub-style daily heatmap (Asia/Dhaka days)."""
+    """streak + GitHub-style daily heatmap (Asia/Dhaka days)."""
     authorize_student_access(db, student_id, user)
     today = dhaka_date(datetime.now(UTC))
     rows = (
@@ -402,7 +402,7 @@ def get_activity(
 
 
 # ------------------------------------------------------------------
-# S1.10: spaced revision queue (SM-2-lite)
+# spaced revision queue (SM-2-lite)
 # ------------------------------------------------------------------
 
 
@@ -458,7 +458,7 @@ def review_revision_item(
 
 
 # ------------------------------------------------------------------
-# S4.4: knowledge graph — concept gaps from mastery + prerequisites
+# knowledge graph — concept gaps from mastery + prerequisites
 # ------------------------------------------------------------------
 
 
@@ -511,7 +511,7 @@ async def kg_rebuild(
 
 
 # ------------------------------------------------------------------
-# S1.11: global search over subjects + chapters + questions (BM25)
+# global search over subjects + chapters + questions (BM25)
 # ------------------------------------------------------------------
 
 
@@ -521,7 +521,7 @@ def global_search(
     user: CurrentUser,
     q: Annotated[str, Query(min_length=1, max_length=100)],
 ) -> SearchResponse:
-    """S1.11: one search box for the whole curriculum.
+    """one search box for the whole curriculum.
 
     Question-like queries set ``ask_action`` so the UI can offer the
     ask-in-Tutor action; chapter and question-section hits are deduped
@@ -606,7 +606,7 @@ def global_search(
 def dashboard_summary(
     app_ctx: Ctx, request: Request, db: DbSession, user: CurrentUser
 ) -> DashboardSummary:
-    """S5.3: per-user 60s cache over the S1.1 summary (shared Redis cache
+    """per-user 60s cache over the summary (shared Redis cache
     when RATE_LIMIT_BACKEND=redis + REDIS_URL, memory cache otherwise)."""
     today = datetime.now(UTC).date().isoformat()
     summary_cache = app_ctx.cache
@@ -732,7 +732,7 @@ def _build_dashboard_summary(app_ctx: Ctx, db: Session, user: User, today: str) 
 def get_learn_progress(
     db: DbSession, user: CurrentUser, subject: str | None = None, class_level: int | None = None
 ) -> list[ChapterProgressOut]:
-    """S1.2: List chapter progress for current student."""
+    """List chapter progress for current student."""
     if user.role != "student":
         return []
     student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one_or_none()
@@ -762,7 +762,7 @@ def get_learn_progress(
 def upsert_learn_progress(
     payload: ChapterProgressIn, db: DbSession, user: CurrentUser
 ) -> ChapterProgressOut:
-    """S1.2: Upsert progress/bookmark for a chapter."""
+    """Upsert progress/bookmark for a chapter."""
     if user.role != "student":
         raise HTTPException(status_code=403, detail="Only students")
     student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one_or_none()

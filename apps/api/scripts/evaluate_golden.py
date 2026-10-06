@@ -1,8 +1,8 @@
-"""B19 — golden dataset + retrieval benchmark harness.
+"""golden dataset + retrieval benchmark harness.
 
 Runs the curated golden question set against the sample corpus (default) or
 a built NCTB corpus (``--corpus-dir``). Produces:
-  hit@k            – expected chapter appears in top-k retrieved chunks
+  hit@k – expected chapter appears in top-k retrieved chunks
   grounded accuracy– TutorService grounding gate matches ``expected_grounded``
   hallucination proxy – grounded answers whose evidence coverage < gate
 Writes eval/golden_report.json and prints a summary. Exit code 1 when

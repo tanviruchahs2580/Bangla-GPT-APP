@@ -1,4 +1,4 @@
-"""S1.7 — quiz explain loop: context payload composition + /tutor/ask integration."""
+"""quiz explain loop: context payload composition + /tutor/ask integration."""
 
 import pytest
 from fastapi.testclient import TestClient

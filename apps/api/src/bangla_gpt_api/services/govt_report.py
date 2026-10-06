@@ -1,4 +1,4 @@
-"""S6.5: anonymized aggregate reporting for government/authority requests.
+"""anonymized aggregate reporting for government/authority requests.
 
 Implements the "aggregate export" contract: rows are per (class_level,
 subject) cells of cohort-level statistics only -- counts and averages,
@@ -9,7 +9,7 @@ never per-student values. Three layers keep it PII-free:
 2. k-anonymity suppression: cells with fewer than ``min_cell`` distinct
    students are dropped (and counted as suppressed) so small cohorts
    cannot be re-identified.
-3. ``pii_violations()`` is a belt-and-braces automated check run before
+3. ``pii_violations`` is a belt-and-braces automated check run before
    any export is returned; any hit fails the request closed. Tests seed
    canary PII and assert it never reaches the output.
 

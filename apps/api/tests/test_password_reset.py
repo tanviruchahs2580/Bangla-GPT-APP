@@ -1,4 +1,4 @@
-"""B3/B17 — password reset, change-password and forced rotation flows."""
+"""/password reset, change-password and forced rotation flows."""
 
 import json
 import logging
@@ -257,8 +257,8 @@ def test_production_boot_guard_refuses_insecure_settings(tmp_path) -> None:
             jwt_secret="x" * 40,
             admin_email="a@b.com",
             admin_password="longenoughpass1",
-            allowed_origins="https://app.example.com",  # CORS allowlist required in prod (S0.5)
-            pii_enc_key=Fernet.generate_key().decode(),  # PII encryption required in prod (S5.6)
+            allowed_origins="https://app.example.com",  # CORS allowlist required in prod
+            pii_enc_key=Fernet.generate_key().decode(),  # PII encryption required in prod
             smtp_enabled=True,
             smtp_host="smtp.example.com",
             smtp_from="noreply@example.com",

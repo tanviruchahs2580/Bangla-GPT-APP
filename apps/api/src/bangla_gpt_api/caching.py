@@ -1,12 +1,12 @@
-"""S5.3 shared caches: per-user dashboard summary + RAG query results.
+"""shared caches: per-user dashboard summary + RAG query results.
 
 Same infra switch as the rate limiter: ``RATE_LIMIT_BACKEND=redis`` +
 ``REDIS_URL`` puts the caches in Redis so every worker/pod shares them;
 without Redis the identical API runs on a bounded in-process memory cache.
 A cache must never take the site down, so every Redis failure degrades to
-a miss (logged as a count-free warning, R11: no payload in logs).
+a miss (logged as a count-free warning, no payload in logs).
 
-Key hygiene (R11): callers pass already-safe keys; the RAG wrapper hashes
+Key hygiene: callers pass already-safe keys; the RAG wrapper hashes
 the raw query with SHA-256 so learner questions never appear verbatim in
 Redis key-space. Cached VALUES are curriculum chunks / aggregate stats --
 never message content or PII.
@@ -30,7 +30,7 @@ from bangla_gpt_api.retrieval.bm25 import Hit
 
 logger = logging.getLogger(__name__)
 
-# S5.3 PASS-WHEN: cache-hit metrics visible (scrape /metrics).
+# PASS-WHEN: cache-hit metrics visible (scrape /metrics).
 CACHE_EVENTS_TOTAL = Counter(
     "bgpt_cache_events_total",
     "Cache lookups by logical cache and result.",
@@ -53,7 +53,7 @@ class Cache(Protocol):
     def clear(self) -> None: ...
 
     def ping(self) -> bool:
-        """Backend liveness (S5.10 /status); never raises."""
+        """Backend liveness (/status); never raises."""
         ...
 
 
@@ -120,7 +120,7 @@ class RedisCache:
             return None
         if raw is None:
             return None
-        # redis-py types get() as str | Awaitable[str] (pipeline mode); this
+        # redis-py types get as str | Awaitable[str] (pipeline mode); this
         # client is plain sync Redis, and anything non-string is treated as
         # the same unparsable miss as a malformed payload below.
         if not isinstance(raw, (str, bytes, bytearray)):
@@ -153,7 +153,7 @@ class RedisCache:
 
 
 def build_cache(settings: Any) -> Cache:
-    """One infra switch (S5.1): backend=redis + REDIS_URL -> shared caches."""
+    """One infra switch: backend=redis + REDIS_URL -> shared caches."""
     from bangla_gpt_api.config import Settings
 
     if not isinstance(settings, Settings):
@@ -166,13 +166,13 @@ def build_cache(settings: Any) -> Cache:
 
 
 class CachedRankingIndex:
-    """Transparent Cache decorator over any RankingIndex (S5.3).
+    """Transparent Cache decorator over any RankingIndex.
 
     Retrieval answers depend only on (query, class, subject, chapter, top_k,
     min_score) and the immutable boot-time corpus, so the whole result list
-    is cacheable. The query goes into the key as SHA-256 (R11). Class-scope
+    is cacheable. The query goes into the key as SHA-256. Class-scope
     isolation is preserved: class/subject are part of the key, so a class-8
-    hit list can never answer a class-10 query (S4.3 lesson).
+    hit list can never answer a class-10 query (lesson).
     """
 
     def __init__(self, inner: Any, cache: Cache, ttl: float = RAG_CACHE_TTL_SECONDS) -> None:

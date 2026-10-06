@@ -1,4 +1,4 @@
-"""S3.4 PASS-WHEN: weekly parent digest is summary-only; no raw messages leak."""
+"""PASS-WHEN: weekly parent digest is summary-only; no raw messages leak."""
 
 import sqlite3
 from datetime import UTC, datetime, timedelta
@@ -182,7 +182,7 @@ def test_digest_content_no_raw_messages(env) -> None:
     line = "Rahim (class 6): 2 study session(s), 1 graded attempt(s), average 60.0%"
     assert line + " -- on track." in body
     assert "Chapters to practise: Algebra" in body
-    # R11 hard rule: no message/title content, ever
+    # hard rule: no message/title content, ever
     assert SENTINEL not in body and SENTINEL not in sent[0]["subject"]
     assert "Algebra help" not in body
 

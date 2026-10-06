@@ -1,10 +1,10 @@
-"""S4.1 Education Context Engine: one context for every AI call, logged safely.
+"""Education Context Engine: one context for every AI call, logged safely.
 
 Covers the PASS-WHEN trio: (a) tutor ask/chat/stream and the three teacher
 generators are all context-driven, (b) every provider call carries the
 trusted [education-context] block, (c) the log line contains the context --
-counts and ids only, never message content (R11). System prompts must stay
-byte-identical (R5).
+counts and ids only, never message content. System prompts must stay
+byte-identical.
 """
 
 import json
@@ -173,7 +173,7 @@ def test_tutor_ask_prompt_carries_context_system_unchanged(monkeypatch, tmp_path
     assert "goal=question" in prompt
     assert "mastery_recent=none" in prompt  # student has no attempt history yet
     assert prompt.index("[education-context]") < prompt.index("<evidence>")
-    assert system == SYSTEM_PROMPT  # R5: byte-identical secrecy prompt untouched
+    assert system == SYSTEM_PROMPT  # byte-identical secrecy prompt untouched
 
 
 def test_ai_request_context_log_has_context_but_never_message_content(
@@ -206,7 +206,7 @@ def test_ai_request_context_log_has_context_but_never_message_content(
     assert line["ai_class_level"] == 6
     assert line["ai_subject"] == "science"
     assert line["ai_goal"] == "question"
-    assert SENTINEL not in "\n".join(handler.messages)  # R11: content never reaches logs
+    assert SENTINEL not in "\n".join(handler.messages)  # content never reaches logs
 
 
 def test_mastery_snapshot_reaches_prompt_from_attempt_history(monkeypatch, tmp_path) -> None:

@@ -1,22 +1,20 @@
-"""S4.6: weakness rollup -- the single source of truth for "what is this
+"""weakness rollup -- the single source of truth for "what is this
 student weak at".
 
-Spec (S4.6): nightly job -> per-concept mastery -> feeds Home recommendation
+Spec: nightly job -> per-concept mastery -> feeds Home recommendation
 + Teacher at-risk + Parent digest. PASS-WHEN is a consistency test: the same
 value must come out of all three endpoints. That is only true when NO consumer
-keeps its own copy of the weakness rule, so every consumer calls
-:func:`weak_concepts` / :func:`weak_names` and nothing else.
+keeps its own copy of the weakness rule, so every consumer calls:func:`weak_concepts` /:func:`weak_names` and nothing else.
 
 * Input: per-concept mastery cells computed from graded attempts only
-  (lifetime; aggregate counts only -- message content is never read here, R11).
+  (lifetime; aggregate counts only -- message content is never read here, ).
 * Rule: a concept is weak with ``total >= knowledge.MIN_ATTEMPTS`` and
-  ``pct < knowledge.WEAK_THRESHOLD_PCT`` -- the exact constants the S4.4
-  knowledge-graph gap resolver uses, so quiz history, KG gaps and every
+  ``pct < knowledge.WEAK_THRESHOLD_PCT`` -- the exact constants the knowledge-graph gap resolver uses, so quiz history, KG gaps and every
   consumer agree by construction. Chapter roots are canonicalized
   (:func:`knowledge.canonical`) so a colloquial alias merges into its concept.
 * Order: ascending accuracy, ties by name -- consumers slice the same list,
   so "weakest first" means the same thing everywhere.
-* :func:`refresh_mastery` is the nightly reconciliation: it recomputes the
+*:func:`refresh_mastery` is the nightly reconciliation: it recomputes the
   chapter-root rows of ConceptMastery straight from the graded answer log,
   creating any missing root concept, so the persisted per-concept mastery
   table can never drift from the history the rollup reads.
@@ -103,7 +101,7 @@ def weak_names(db: Session, student_id: int) -> list[str]:
 
 
 def weak_names_for(db: Session, student_ids: Iterable[int]) -> dict[int, list[str]]:
-    """Batched :func:`weak_names` (one query for a whole class roster)."""
+    """Batched:func:`weak_names` (one query for a whole class roster)."""
     all_raw = raw_cells(db, list(student_ids))
     return {sid: [w.concept for w in _rank(merged_cells(cells))] for sid, cells in all_raw.items()}
 
@@ -111,7 +109,7 @@ def weak_names_for(db: Session, student_ids: Iterable[int]) -> dict[int, list[st
 def nightly_due(now: datetime, last_day: str) -> tuple[bool, str]:
     """Pure scheduler rule: fire once per calendar day at/after the slot.
 
-    Mirrors :func:`parent_digest.digest_due`: ``(False, "")`` when the slot
+    Mirrors:func:`parent_digest.digest_due`: ``(False, "")`` when the slot
     has not arrived at all, ``(False, day)`` when today already ran.
     """
     if now.hour < NIGHTLY_HOUR_UTC:
@@ -126,7 +124,7 @@ def refresh_mastery(db: Session) -> tuple[int, int]:
     Idempotent: recomputes root-level correct/total straight from the answer
     log and creates any chapter-root concept seen in the log but missing from
     the registry. Returns ``(students_synced, rows_synced)`` -- counts only,
-    nothing student-identifying is logged (R11).
+    nothing student-identifying is logged.
     """
     rows = db.execute(
         select(

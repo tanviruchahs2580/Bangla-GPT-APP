@@ -1,4 +1,4 @@
-"""S1.7 — quiz explain loop: compose the tutor context block for a wrong quiz item."""
+"""quiz explain loop: compose the tutor context block for a wrong quiz item."""
 
 from __future__ import annotations
 

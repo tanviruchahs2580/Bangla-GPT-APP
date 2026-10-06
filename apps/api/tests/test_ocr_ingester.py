@@ -1,4 +1,4 @@
-"""B18 — OCR ingestion adapter tests (no real tesseract required)."""
+"""OCR ingestion adapter tests (no real tesseract required)."""
 
 import pytest
 

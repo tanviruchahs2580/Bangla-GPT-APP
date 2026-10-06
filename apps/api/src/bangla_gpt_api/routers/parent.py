@@ -1,7 +1,7 @@
-"""Parent Routes — split from the main.py god-module (ARCH-001).
+"""Parent Routes — split from the main.py god-module.
 
 Behavior-identical extraction: same paths, validation, status codes.
-Shared context/auth via :mod:`.deps`, shared helpers via :mod:`.common`.
+Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 """
 
 import logging
@@ -111,9 +111,9 @@ def parent_link(
     if existing is not None:
         raise HTTPException(status_code=409, detail="Already linked")
     db.add(ParentStudentLink(parent_id=parent_profile.id, student_id=student.id))
-    # Wave 1: both sides of a successful link are notified (the student
+    # both sides of a successful link are notified (the student
     # only when their profile is claimed by a user account).
-    # Wave 2: each side is pointed at the screen they can actually open.
+    # each side is pointed at the screen they can actually open.
     notify_user(
         db,
         parent.id,
@@ -176,7 +176,7 @@ def create_parent_invite(app_ctx: Ctx, db: DbSession, user: CurrentUser) -> dict
     return {"code": code, "expires_in_minutes": app_ctx.settings.invite_ttl_minutes}
 
 
-# --- Wave 2: student learning preferences + memory --------------------------
+# --- student learning preferences + memory --------------------------
 # learning_prefs is a WHITELISTED dict; unknown keys are a hard 422 so no
 # client can smuggle arbitrary state into the prompt path. The memory
 # endpoints only ever expose facts DERIVED from real rows -- nothing the
@@ -327,8 +327,8 @@ def link_via_invite(payload: ParentInviteLinkRequest, db: DbSession, parent: Par
     ).scalar_one_or_none()
     if existing is None:
         db.add(ParentStudentLink(parent_id=parent_profile.id, student_id=invite.student_id))
-        # Wave 1: a successful consented link notifies both sides.
-        # Wave 2: per-role landing links (parent view vs student profile).
+        # a successful consented link notifies both sides.
+        # per-role landing links (parent view vs student profile).
         linked_student = db.get(Student, invite.student_id)
         notify_user(
             db,
@@ -443,7 +443,7 @@ def parent_child_progress(student_id: int, db: DbSession, parent: ParentUser) ->
     )
 
 
-# --- Wave 2: guardian activity + period report ------------------------------
+# --- guardian activity + period report ------------------------------
 
 
 def _linked_child(db: Session, parent: User, student_id: int) -> Student:
@@ -473,7 +473,7 @@ def parent_child_activity(
     parent: ParentUser,
     days: Annotated[int, Query(ge=7, le=370)] = 91,
 ) -> ActivitySummary:
-    """Wave 2: the SAME activity summary the student sees on their own
+    """the SAME activity summary the student sees on their own
     /students/{id}/activity, for one linked child (streak + Dhaka heatmap)."""
     _linked_child(db, parent, student_id)
     today = dhaka_date(datetime.now(UTC))
@@ -500,7 +500,7 @@ def parent_child_activity(
 
 
 def _window_report(db: Session, student: Student, period: str) -> ParentReportOut:
-    """Wave 2: shared window-report math for parent + student views.
+    """shared window-report math for parent + student views.
 
     DATA + suggestion CODE only; clients render the sentence (i18n).
     Single-source weakness rollup keeps this identical to the digest."""
@@ -605,7 +605,7 @@ def parent_child_report(
     parent: ParentUser,
     period: Annotated[str, Query(pattern="^(weekly|monthly)$")] = "weekly",
 ) -> ParentReportOut:
-    """Wave 2: JSON window report for one linked child.
+    """JSON window report for one linked child.
 
     The server returns DATA + a suggestion CODE only; the final guardian-
     facing copy is rendered client-side (i18n). Weak chapters come from the
@@ -625,17 +625,17 @@ def student_self_report(
     user: CurrentUser,
     period: Annotated[str, Query(pattern="^(weekly|monthly)$")] = "weekly",
 ) -> ParentReportOut:
-    """Wave 2: same window report for the signed-in student (Me page)."""
+    """same window report for the signed-in student (Me page)."""
     if user.role != "student":
         raise HTTPException(status_code=403, detail="Students only")
     student = _student_profile(db, user)
     return _window_report(db, student, period)
 
 
-# S3.4: in-process weekly digest scheduler. Once per ISO week, Sunday
+# in-process weekly digest scheduler. Once per ISO week, Sunday
 # ~22:00 Dhaka (digest_due owns the rule). The job reads ONLY aggregates
 # (services.parent_digest); conversation content is never queried.
-# S5.4: the once-per-week guard moved from a per-process dict into the
+# the once-per-week guard moved from a per-process dict into the
 # job_runs ledger (jobs.claim_period), so N gunicorn workers can no
 # longer double-send; with JOBS_BACKEND=arq the ARQ worker owns the
 # schedule instead and these loops stay off.

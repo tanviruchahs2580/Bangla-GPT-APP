@@ -1,4 +1,4 @@
-"""Wave 1: POST /events persists a sanitized analytics row.
+"""POST /events persists a sanitized analytics row.
 
 PII-ish property keys are dropped, values are truncated, and the audit
 trail deliberately has no FK so it survives account deletion.

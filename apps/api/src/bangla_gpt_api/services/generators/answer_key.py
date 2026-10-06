@@ -1,4 +1,4 @@
-"""Wave 1 answer-key generator: per-question answer + solution + marking guide.
+"""answer-key generator: per-question answer + solution + marking guide.
 
 Input is a list of question texts (from a finalized/draft paper or inline).
 Textbook evidence is OPTIONAL here -- the questions themselves are the primary

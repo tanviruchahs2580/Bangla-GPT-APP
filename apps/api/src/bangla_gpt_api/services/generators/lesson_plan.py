@@ -1,4 +1,4 @@
-"""S2.6 lesson plan copilot: one grounded RAG call -> eight printable sections.
+"""lesson plan copilot: one grounded RAG call -> eight printable sections.
 
 The eight-section contract follows the master spec order exactly:
 Objective -> Previous Knowledge -> Introduction -> Main Explanation ->
@@ -112,10 +112,10 @@ async def generate_lesson_plan(
         raise ProviderError("no textbook evidence found for this chapter")
     prompt = build_lesson_prompt(class_level, subject, chapter, minutes, level, hits)
     if context is not None:
-        # S4.1: trusted education-context block, ahead of the evidence.
+        # trusted education-context block, ahead of the evidence.
         prompt = f"{context.render_block()}\n\n{prompt}"
         set_current_context(context)
-    # S4.2: teacher generation is always a TOOL route (main model + RAG).
+    # teacher generation is always a TOOL route (main model + RAG).
     set_current_route(Route.TOOL)
     raw = await provider.generate(prompt, system=LESSON_SYSTEM_PROMPT)
     plan = parse_lesson_payload(raw)

@@ -1,4 +1,4 @@
-"""S4.4 Knowledge Graph v1 -- concepts, prerequisite edges, per-concept mastery.
+"""Knowledge Graph v1 -- concepts, prerequisite edges, per-concept mastery.
 
 Three layers, kept deliberately boring and deterministic:
 
@@ -6,7 +6,7 @@ Three layers, kept deliberately boring and deterministic:
    active curriculum index), optionally enriched by LLM extraction
    (:func:`extract_chapter_concepts`). Extraction output is only trusted when
    the name occurs VERBATIM in the chapter text -- a corpus-verification
-   grounding guard (R12) so an LLM cannot invent graph nodes.
+   grounding guard so an LLM cannot invent graph nodes.
 2. Prerequisite edges are curated pedagogy, shipped as data
    (data/kg/prerequisites.json, corpus-verified). Aliases map colloquial
    spellings (Bijgonit -> Bijgonitiyo Rashi) onto canonical concept names.
@@ -235,7 +235,7 @@ def parse_concept_names(raw: str, *, chapter: str, text: str, limit: int = 6) ->
     """Parse + validate an extractor response (pure, deterministic).
 
     A candidate survives only if it is a string of sane length, differs from
-    the chapter title, and occurs VERBATIM in the chapter text (R12 grounding
+    the chapter title, and occurs VERBATIM in the chapter text (grounding
     guard: the model may select, never invent).
     """
     start, end = raw.find("["), raw.rfind("]")

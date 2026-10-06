@@ -1,4 +1,4 @@
-"""S2.9: question bank -- duplicate detection, storing reviewed questions, reuse.
+"""question bank -- duplicate detection, storing reviewed questions, reuse.
 
 PASS-WHEN coverage: duplicate-detection unit tests (pure + service level) and
 the reuse metric observed in logs (qp_draft bank fields, qp_replace
@@ -15,7 +15,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from bangla_gpt_api.config import Settings
-from bangla_gpt_api.db import models  # noqa: F401  -- registers tables on Base.metadata
+from bangla_gpt_api.db import models  # noqa: F401 -- registers tables on Base.metadata
 from bangla_gpt_api.db.base import Base
 from bangla_gpt_api.main import create_app
 from bangla_gpt_api.services.question_bank import (

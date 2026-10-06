@@ -1,4 +1,4 @@
-"""security -- S5.6 helpers.
+"""security -- helpers.
 
 Two small primitives that the hardening step needs:
 
@@ -6,10 +6,10 @@ Two small primitives that the hardening step needs:
   ``PII_ENC_KEY``. No key configured -> the plaintext value is passed
   through unchanged, so dev/test deployments without a key still work
   (and the test suite asserts the ciphertext round-trip when a key IS set).
-  The key value never appears in a log or an API response (R7).
+  The key value never appears in a log or an API response.
 * an append-only audit row writer for the five privileged event types
   (role_change, data_export, purge, qp_finalize, impersonation).
-  Rows store ids and outcome metadata only -- never message content (R11).
+  Rows store ids and outcome metadata only -- never message content.
 """
 
 import logging
@@ -35,7 +35,7 @@ def encrypt_pii(value: str | None, key: str | None) -> str | None:
 
 
 def decrypt_pii(stored: str | None, key: str | None) -> str | None:
-    """Inverse of :func:`encrypt_pii`. A stored value that was written with a
+    """Inverse of:func:`encrypt_pii`. A stored value that was written with a
     different key (rotation) decrypts to None rather than crashing -- callers
     treat that as "unavailable" and the admin re-enters it.
     """

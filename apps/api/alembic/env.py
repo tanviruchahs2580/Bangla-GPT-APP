@@ -6,7 +6,7 @@ from sqlalchemy import pool
 from alembic import context
 
 # this is the Alembic Config object, which provides
-# access to the values within the .ini file in use.
+# access to the values within the.ini file in use.
 config = context.config
 
 # Interpret the config file for Python logging.
@@ -16,14 +16,14 @@ if config.config_file_name is not None:
 
 from bangla_gpt_api.config import get_settings
 from bangla_gpt_api.db.base import Base
-import bangla_gpt_api.db.models  # noqa: F401  ensure tables are registered
+import bangla_gpt_api.db.models  # noqa: F401 ensure tables are registered
 
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
-# ... etc.
+#... etc.
 
 
 def run_migrations_offline() -> None:

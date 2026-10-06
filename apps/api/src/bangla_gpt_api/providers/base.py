@@ -25,7 +25,7 @@ class LLMProvider(Protocol):
 class ProviderSettings(Protocol):
     """Minimal settings surface consumed by provider builders.
 
-    Both the real :class:`Settings` and the lightweight fallback adapter
+    Both the real:class:`Settings` and the lightweight fallback adapter
     satisfy this structurally, so mypy can verify the fallback chain
     without coupling providers to the full application config.
     """

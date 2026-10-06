@@ -1,7 +1,7 @@
-"""Assessment Routes — split from the main.py god-module (ARCH-001).
+"""Assessment Routes — split from the main.py god-module.
 
 Behavior-identical extraction: same paths, validation, status codes.
-Shared context/auth via :mod:`.deps`, shared helpers via :mod:`.common`.
+Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 """
 
 import logging
@@ -151,7 +151,7 @@ def teacher_shorttest_create(
             },
         )
     dump = dump_quiz(questions)
-    # F-PERF-05: bulk insert (add_all + single flush) instead of per-student flush loop
+    # bulk insert (add_all + single flush) instead of per-student flush loop
     attempt_objs = [
         QuizAttempt(
             student_id=student.id,
@@ -178,7 +178,7 @@ def teacher_shorttest_create(
     )
     db.add(st)
     db.flush()
-    # Wave 1: every roster student with a user account gets a notification.
+    # every roster student with a user account gets a notification.
     for student in roster:
         notify_user(
             db,
@@ -186,7 +186,7 @@ def teacher_shorttest_create(
             "shorttest",
             "notif_shorttest_assigned",
             {"short_test_id": st.id, "subject": payload.subject, "chapter": payload.chapter},
-            # Wave 2: students open assigned work at the quiz hub.
+            # students open assigned work at the quiz hub.
             link="/student/quiz",
         )
     db.commit()
@@ -223,7 +223,7 @@ def teacher_shorttest_list(
         db.execute(
             q.order_by(ShortTest.created_at.desc(), ShortTest.id.desc())
             .offset(offset)
-            .limit(limit)  # S5.5: page the list (payload carries questions)
+            .limit(limit)  # page the list (payload carries questions)
         )
         .scalars()
         .all()
@@ -257,7 +257,7 @@ def shorttests_mine(
             select(ShortTest)
             .where(ShortTest.classroom_id.in_(room_ids))
             .order_by(ShortTest.created_at.desc(), ShortTest.id.desc())
-            .limit(limit)  # S5.5: cap per-request payload
+            .limit(limit)  # cap per-request payload
         )
         .scalars()
         .all()
@@ -285,7 +285,7 @@ def shorttests_mine(
     return out
 
 
-# --- S2.7: weak heatmap + at-risk detection + support plan ----------------
+# --- weak heatmap + at-risk detection + support plan ----------------
 
 
 def _read_chapters(db: Session, student_ids: list[int]) -> dict[int, set[str]]:
@@ -390,7 +390,7 @@ def teacher_weak_matrix(
 
 @router.get("/teacher/curriculum-coverage", response_model=CoverageOut)
 def teacher_curriculum_coverage(db: DbSession, teacher: TeacherOrAdminUser) -> CoverageOut:
-    """S3.3: class x subject grid -- taught / practiced / mastered (>=70%).
+    """class x subject grid -- taught / practiced / mastered (>=70%).
 
     Taught = chapter content exists for the grade-subject or a
     ClassTeacher row assigns it ('' covers all subjects); practiced =
@@ -492,7 +492,7 @@ def teacher_create_support_plan(
     student = db.get(Student, payload.student_id)
     if student is None:
         raise HTTPException(status_code=404, detail="student not found")
-    # Wave 2 tenancy: plans can only be opened for own-school students.
+    # tenancy: plans can only be opened for own-school students.
     _assert_student_in_school(db, teacher, student)
     cells = _answer_cells(db, [student.id]).get(student.id, {})
     scored = sorted(
@@ -516,7 +516,7 @@ def teacher_create_support_plan(
     )
     db.add(row)
     db.flush()
-    # Wave 1: tell the student's own account a support plan was created
+    # tell the student's own account a support plan was created
     # (skipped silently when the student profile has no login yet).
     notify_user(
         db,
@@ -524,7 +524,7 @@ def teacher_create_support_plan(
         "support_plan",
         "notif_support_plan",
         {"support_plan_id": row.id, "focus": len(plan["focus_concepts"])},
-        # Wave 2: revision lives behind the student quiz hub.
+        # revision lives behind the student quiz hub.
         link="/student/quiz",
     )
     db.commit()
@@ -553,7 +553,7 @@ def teacher_list_support_plans(
     return [_support_plan_out(r) for r in rows]
 
 
-# --- S2.8: bulk assignment + tracking (multi-student, one quiz, due date) --
+# --- bulk assignment + tracking (multi-student, one quiz, due date) --
 
 
 def _assignment_questions(a: Assignment) -> list[QuizQuestionPublic]:
@@ -603,7 +603,7 @@ def teacher_assignment_create(
                 status_code=404,
                 detail={"code": "unknown_student", "message": f"Student {sid} not found"},
             )
-        # Wave 2 tenancy: never open an attempt for a student outside the
+        # tenancy: never open an attempt for a student outside the
         # actor's school (IDOR guard; no-op for school-less teachers/admins).
         _assert_student_in_school(db, teacher, student)
         students.append(student)
@@ -659,7 +659,7 @@ def teacher_assignment_create(
     )
     db.add(assignment)
     db.flush()
-    # Wave 1: every assigned student with a user account gets a notification.
+    # every assigned student with a user account gets a notification.
     for student in students:
         notify_user(
             db,
@@ -672,7 +672,7 @@ def teacher_assignment_create(
                 "chapter": payload.chapter,
                 "count": payload.num_questions,
             },
-            # Wave 2: assigned quizzes open at the student quiz hub.
+            # assigned quizzes open at the student quiz hub.
             link="/student/quiz",
         )
     db.commit()
@@ -698,7 +698,7 @@ def teacher_assignment_list(
     limit: Annotated[int, Query(ge=1, le=200)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[AssignmentOut]:
-    # S5.5: newest-first page (was every row the teacher ever created).
+    # newest-first page (was every row the teacher ever created).
     q = select(Assignment)
     if teacher.role != "admin":
         q = q.where(Assignment.teacher_id == teacher.id)
@@ -779,7 +779,7 @@ def assignments_mine(
     """Assigned quizzes for the signed-in student. Due date is soft like
     short tests: ``overdue`` is advisory, submitting still grades the work.
 
-    S5.5: membership lives in the attempts JSON, so the candidate window is
+    membership lives in the attempts JSON, so the candidate window is
     the most recent `limit` assignments (was an unbounded full-table scan),
     and attempt rows are fetched in ONE batched query (was 1 per item).
     A membership link table is the proper long-term fix (documented).

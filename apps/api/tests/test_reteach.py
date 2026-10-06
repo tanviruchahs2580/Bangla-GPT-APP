@@ -1,4 +1,4 @@
-"""S1.5 — 'আমি বুঝিনি' adaptive re-teach: strategy cycle + injection."""
+"""'আমি বুঝিনি' adaptive re-teach: strategy cycle + injection."""
 
 import pytest
 from fastapi.testclient import TestClient

@@ -1,13 +1,13 @@
-"""Application initialization package (ARCH-001).
+"""Application initialization package.
 
 Split from ``main.py`` to eliminate the god-module anti-pattern. Each submodule
 owns one initialization concern:
 
-- ``observability``  : logging configuration, Sentry bootstrap
-- ``middleware_stack`` : all middleware registration (CORS, rate limit, security)
-- ``dependencies``   : provider/index/tutor/DB/admin construction → AppContext
-- ``lifespan``       : lifespan context with explicit params (no closure capture)
-- ``schedulers``     : background scheduler loops with health monitoring
+- ``observability``: logging configuration, Sentry bootstrap
+- ``middleware_stack``: all middleware registration (CORS, rate limit, security)
+- ``dependencies``: provider/index/tutor/DB/admin construction → AppContext
+- ``lifespan``: lifespan context with explicit params (no closure capture)
+- ``schedulers``: background scheduler loops with health monitoring
 """
 
 from bangla_gpt_api.initialize.dependencies import build_dependencies

@@ -1,4 +1,4 @@
-"""S4.3 RAG v2 -- reciprocal rank fusion over BM25 and vector rankings.
+"""RAG v2 -- reciprocal rank fusion over BM25 and vector rankings.
 
 RRF merges 1-based ranked id lists without needing comparable scores across
 lanes (BM25 magnitudes and cosine similarities are not comparable). Pure,

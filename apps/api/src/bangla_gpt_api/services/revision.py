@@ -1,4 +1,4 @@
-"""S1.10 — SM-2-lite spaced-revision queue (interval / ease / due_date).
+"""SM-2-lite spaced-revision queue (interval / ease / due_date).
 
 Simplified SM-2: successful recalls progress 1 -> 3 -> 7 days, then grow by
 interval * ease. A failed recall (quality < 3) resets the repetition count and

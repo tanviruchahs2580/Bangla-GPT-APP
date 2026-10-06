@@ -6,7 +6,7 @@ Contract verified against the OpenAI Chat Completions API documentation
 - POST https://api.openai.com/v1/chat/completions
 - authentication via Authorization: Bearer <key>
 - response text in choices[0].message.content
-- streaming via stream=true with SSE data: ... lines
+- streaming via stream=true with SSE data:... lines
 """
 
 import json
@@ -51,7 +51,7 @@ def _error_response(status: int, message: str) -> httpx.Response:
     )
 
 
-# ── generate() ──────────────────────────────────────────────────────────────
+# ── generate ──────────────────────────────────────────────────────────────
 
 
 async def test_generate_success_contract() -> None:
@@ -193,7 +193,7 @@ async def test_timeout_maps_to_provider_error(monkeypatch: pytest.MonkeyPatch) -
         await provider.generate("q")
 
 
-# ── stream() ────────────────────────────────────────────────────────────────
+# ── stream ────────────────────────────────────────────────────────────────
 
 
 async def test_stream_success() -> None:

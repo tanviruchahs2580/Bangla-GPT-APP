@@ -1,7 +1,7 @@
-"""Teacher Content Routes — split from the main.py god-module (ARCH-001).
+"""Teacher Content Routes — split from the main.py god-module.
 
 Behavior-identical extraction: same paths, validation, status codes.
-Shared context/auth via :mod:`.deps`, shared helpers via :mod:`.common`.
+Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 """
 
 import logging
@@ -127,7 +127,7 @@ def _content_out(row: ChapterContent, sources: list[SourceRef] | None = None) ->
 async def teacher_content_generate(
     app_ctx: Ctx, payload: ChapterContentKey, db: DbSession, teacher: TeacherOrAdminUser
 ) -> TeacherContentOut:
-    """S2.3: one retrieval + one AI call fills all seven sections."""
+    """one retrieval + one AI call fills all seven sections."""
     if app_ctx.tutor is None:
         raise HTTPException(status_code=503, detail="provider not configured")
     try:
@@ -226,7 +226,7 @@ def teacher_content_get(
 def teacher_content_edit(
     payload: ChapterContentEditIn, db: DbSession, teacher: TeacherOrAdminUser
 ) -> TeacherContentOut:
-    """S2.3: teacher edits append a new version (append-only chain)."""
+    """teacher edits append a new version (append-only chain)."""
     if _content_current(db, payload.subject, payload.class_level, payload.chapter) is None:
         raise HTTPException(status_code=404, detail="content not found")
     row = ChapterContent(
@@ -244,7 +244,7 @@ def teacher_content_edit(
     return _content_out(row)
 
 
-# --- S2.4: question papers (AI draft -> teacher review -> FINAL) --------
+# --- question papers (AI draft -> teacher review -> FINAL) --------
 
 
 def _qp_or_404(db: Session, qp_id: int, teacher: User) -> QuestionPaper:
@@ -323,7 +323,7 @@ async def teacher_qp_create(
         ),
     )
     elapsed_ms = int((time.perf_counter() - started) * 1000)
-    # S2.9 reuse metric: how much of the fresh draft is already banked?
+    # reuse metric: how much of the fresh draft is already banked?
     keys = bank_keys(db, class_level=payload.class_level)
     bank_matches = sum(1 for q in questions if dedupe_key(str(q["text"])) in keys)
     qp = QuestionPaper(
@@ -350,7 +350,7 @@ async def teacher_qp_create(
         teacher_id=teacher.id,
         question_count=len(questions),
         elapsed_ms=elapsed_ms,
-        # S2.9 reuse metric: drafted questions already reviewed & banked.
+        # reuse metric: drafted questions already reviewed & banked.
         bank_size=len(keys),
         bank_matches=bank_matches,
         reuse_pct=round(100 * bank_matches / len(questions)) if questions else 0,
@@ -365,7 +365,7 @@ def teacher_qp_list(
     limit: Annotated[int, Query(ge=1, le=200)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[QPOut]:
-    # S5.5: newest-first page; QPOut carries the full questions JSON, so
+    # newest-first page; QPOut carries the full questions JSON, so
     # unbounded was the largest payload-per-request risk here.
     rows = (
         db.execute(
@@ -472,7 +472,7 @@ def teacher_qp_review(
             if decision.answer_index is not None:
                 question["answer_index"] = decision.answer_index
         question["reviewed"] = True
-    # S2.9: every reviewed question enters the bank (deduped by content).
+    # every reviewed question enters the bank (deduped by content).
     bank_added = 0
     for question in questions:
         if not bool(question.get("reviewed")):
@@ -520,7 +520,7 @@ async def teacher_qp_replace(
     chapter = payload.chapter or str(target["chapter"])
     started = time.perf_counter()
     reuse_source = "ai"
-    # S2.9: reuse a reviewed bank question when one fits (MCQ-complete,
+    # reuse a reviewed bank question when one fits (MCQ-complete,
     # not already on the paper); the AI draft path stays the fallback.
     replacement: dict[str, object] | None = None
     for row in find_reusable(
@@ -617,7 +617,7 @@ def teacher_qp_finalize(qp_id: int, db: DbSession, teacher: TeacherOrAdminUser) 
         )
     qp.status = "final"
     qp.finalized_at = datetime.now(UTC).replace(tzinfo=None)
-    # S5.6 audit event 4/5: qp_finalize (exam-paper finalisation is
+    # audit event 4/5: qp_finalize (exam-paper finalisation is
     # irreversible for the teacher; ids only in the trail)
     write_audit(
         db,
@@ -659,16 +659,16 @@ def teacher_qp_pdf(
     )
 
 
-# --- S2.6: lesson plan copilot (8 sections, editable + printable) ---------
+# --- lesson plan copilot (8 sections, editable + printable) ---------
 
 
 @router.post("/teacher/lesson-plans", response_model=LessonPlanOut)
 async def teacher_lesson_plan(
     app_ctx: Ctx, payload: LessonPlanIn, db: DbSession, teacher: TeacherOrAdminUser
 ) -> LessonPlanOut:
-    """S2.6: one retrieval + one AI call drafts an eight-section plan.
+    """one retrieval + one AI call drafts an eight-section plan.
 
-    Wave 1: the plan is now ALSO persisted as a TeacherDocument
+    the plan is now ALSO persisted as a TeacherDocument
     (kind=lesson_plan) through the shared generator runner, and the
     response gains the additive ``document_id`` only -- every previously
     existing field keeps its exact shape.
@@ -713,7 +713,7 @@ async def teacher_lesson_plan(
     )
 
 
-# --- Wave 1: generic document generators + document library ---------------
+# --- generic document generators + document library ---------------
 
 
 def _document_or_404(db: Session, document_id: int, actor: User) -> TeacherDocument:
@@ -783,7 +783,7 @@ async def teacher_generate_document(
         kind=kind,
         elapsed_ms=int((time.perf_counter() - started) * 1000),
     )
-    # Wave 2: server-side product analytics (kind + id only, no PII).
+    # server-side product analytics (kind + id only, no PII).
     _record_analytics(
         db,
         teacher.id,
@@ -874,4 +874,4 @@ def teacher_document_pdf(document_id: int, db: DbSession, teacher: TeacherOrAdmi
     )
 
 
-# --- Wave 1: saved notes ----------------------------------------------------
+# --- saved notes ----------------------------------------------------

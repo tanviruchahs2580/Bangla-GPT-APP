@@ -1,4 +1,4 @@
-"""S2.9 question bank: normalize -> dedupe key -> store reviewed questions -> reuse.
+"""question bank: normalize -> dedupe key -> store reviewed questions -> reuse.
 
 The bank is a pure content store: the dedupe key is a sha256 over the
 NFKC-normalized, case-folded, whitespace-collapsed question text, so trivial
@@ -22,7 +22,7 @@ def normalize_text(text: str) -> str:
     """Canonical form used for duplicate detection.
 
     NFKC folds compatibility variants (important for Bengali composites),
-    casefold() makes Latin reuse insensitive to case, and splitting/joining
+    casefold makes Latin reuse insensitive to case, and splitting/joining
     collapses every whitespace run.
     """
     return " ".join(unicodedata.normalize("NFKC", text).casefold().split())

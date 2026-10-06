@@ -1,4 +1,4 @@
-"""B4 — self-service data export (GDPR-style portability)."""
+"""self-service data export (GDPR-style portability)."""
 
 import pytest
 from fastapi.testclient import TestClient

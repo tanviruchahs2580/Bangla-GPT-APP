@@ -1,4 +1,4 @@
-"""Wave 1: POST /teacher/lesson-plans now ALSO persists a TeacherDocument.
+"""POST /teacher/lesson-plans now ALSO persists a TeacherDocument.
 
 The pre-existing response contract (test_lesson_plan.py) must stay intact;
 this file only checks the additive persistence + document_id + PDF export.

@@ -1,4 +1,4 @@
-"""B5 — CORS configuration."""
+"""CORS configuration."""
 
 from fastapi.testclient import TestClient
 

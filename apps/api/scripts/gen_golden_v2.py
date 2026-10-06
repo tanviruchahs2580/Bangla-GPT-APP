@@ -1,7 +1,7 @@
-r"""S4.7 golden v2 generator -- DETERMINISTIC, run once, output committed.
+r"""golden v2 generator -- DETERMINISTIC, run once, output committed.
 
 Construction rules (documented so expected values come from construction,
-NOT from observing system results -- R12):
+NOT from observing system results -- ):
 
 * positive items ("lift-and-ask"): for each corpus SECTION, questions are
   built from the section's OWN vocabulary -- the cleaned section-heading term
@@ -39,7 +39,7 @@ from bangla_gpt_api.retrieval.bm25 import tokenize
 from bangla_gpt_api.retrieval.embedding import build_embedder
 from bangla_gpt_api.retrieval.hybrid import light_stem
 from bangla_gpt_api.retrieval.hybrid_index import HybridIndex
-from bangla_gpt_api.retrieval.vector import VectorIndex  # noqa: F401  (import guard)
+from bangla_gpt_api.retrieval.vector import VectorIndex  # noqa: F401 (import guard)
 
 # gloss question "X কী?" -- kept only when the section text covers it (gate rule)
 T_GLOSS = "{} \u0995\u09c0?"

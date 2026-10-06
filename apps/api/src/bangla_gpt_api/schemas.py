@@ -3,7 +3,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-# --- Wave 2: explicit explanation strategies -----------------------------------
+# --- explicit explanation strategies -----------------------------------
 
 # Set accepted by ChatSendRequest.strategy. Deliberately independent of the
 # reteach rotation cycle (services/teach_strategy.STRATEGIES): an explicit
@@ -19,7 +19,7 @@ ExplanationStyle = Literal["simple", "standard", "detailed"]
 
 
 class QuizExplainContext(BaseModel):
-    """S1.7: quiz review context handed to the tutor for a wrong item."""
+    """quiz review context handed to the tutor for a wrong item."""
 
     question: str = Field(min_length=3, max_length=500)
     options: list[str] = Field(min_length=2, max_length=8)
@@ -32,11 +32,11 @@ class AskRequest(BaseModel):
     question: str = Field(min_length=3, max_length=1000)
     class_level: int = Field(ge=1, le=12)
     subject: str | None = None
-    # S1.3: optional chapter context from the unified workspace "জিজ্ঞাসা" tab.
+    # optional chapter context from the unified workspace "জিজ্ঞাসা" tab.
     chapter: str | None = None
-    # S1.7: 'বুঝিয়ে দাও' — structured context of a wrong quiz answer.
+    # 'বুঝিয়ে দাও' — structured context of a wrong quiz answer.
     explain: QuizExplainContext | None = None
-    # S1.13: low-data mode — request a short answer to cut payload size.
+    # low-data mode — request a short answer to cut payload size.
     low_data: bool = False
 
 
@@ -46,7 +46,7 @@ class SourceRef(BaseModel):
     section: str | None = None
     page: int | None = None
     score: float
-    # S1.6: sanitized evidence excerpt shown in the source → evidence modal.
+    # sanitized evidence excerpt shown in the source → evidence modal.
     excerpt: str | None = None
 
 
@@ -58,7 +58,7 @@ class AskResponse(BaseModel):
     refused_reason: str | None = None
     # Soft post-generation signal that the answer leans on the cited evidence.
     citation_verified: bool | None = None
-    # Wave 2: honest numeric confidence (formula in services/safety).
+    # honest numeric confidence (formula in services/safety).
     confidence: float | None = None
 
 
@@ -67,13 +67,13 @@ class ConversationCreate(BaseModel):
 
 
 class ConversationUpdate(BaseModel):
-    """S1.8: rename a conversation."""
+    """rename a conversation."""
 
     title: str = Field(min_length=1, max_length=120)
 
 
 class MessageSearchHit(BaseModel):
-    """S1.8: one message matching the history search query."""
+    """one message matching the history search query."""
 
     conversation_id: int
     conversation_title: str | None
@@ -86,7 +86,7 @@ class MessageSearchHit(BaseModel):
 class ConversationOut(BaseModel):
     id: int
     title: str | None
-    # S1.5: last explanation strategy (drives the 'আমি বুঝিন' re-teach cycle).
+    # last explanation strategy (drives the 'আমি বুঝিন' re-teach cycle).
     last_strategy: str | None = None
     created_at: datetime
     message_count: int = 0
@@ -96,17 +96,17 @@ class ChatSendRequest(BaseModel):
     message: str = Field(min_length=3, max_length=1000)
     class_level: int | None = Field(default=None, ge=1, le=12)
     subject: str | None = None
-    # S1.3: optional chapter context chip.
+    # optional chapter context chip.
     chapter: str | None = None
-    # S1.5: 'আমি বুঝিন' — force the next re-teach strategy for this turn.
+    # 'আমি বুঝিন' — force the next re-teach strategy for this turn.
     reteach: bool = False
-    # S1.13: low-data mode — request a short answer to cut payload size.
+    # low-data mode — request a short answer to cut payload size.
     low_data: bool = False
-    # Wave 2: explicit strategy -- overrides the reteach rotation for this
+    # explicit strategy -- overrides the reteach rotation for this
     # turn and persists as Conversation.last_strategy. Literal typing makes
     # an invalid value a 422 without any route code.
     strategy: ChatStrategy | None = None
-    # Wave 2 vision contract: optional inline image (validated in route).
+    # vision contract: optional inline image (validated in route).
     image: "ChatImageIn | None" = None
 
 
@@ -119,7 +119,7 @@ class ChatMessageOut(BaseModel):
     sources: list[SourceRef] = []
     rating: int | None = None
     created_at: datetime
-    # Wave 2: honest numeric confidence (formula documented in
+    # honest numeric confidence (formula documented in
     # main._answer_confidence). None for user turns / pre-wave answers read
     # before this field existed is impossible -- it is always computed.
     confidence: float | None = None
@@ -150,7 +150,7 @@ class RegisterRequest(BaseModel):
     class_level: int | None = Field(default=None, ge=1, le=12)
     # Parental/guardian consent is mandatory for student accounts (minors).
     guardian_consent: bool = False
-    # S5.6: optional guardian phone (parent role); stored encrypted when
+    # optional guardian phone (parent role); stored encrypted when
     # PII_ENC_KEY is configured.
     phone: str | None = Field(default=None, max_length=32)
 
@@ -238,11 +238,11 @@ class MeResponse(BaseModel):
     profile_id: int | None
     name: str | None
     class_level: int | None
-    phone: str | None = None  # S5.6: decrypted guardian phone, owner only
+    phone: str | None = None  # decrypted guardian phone, owner only
 
 
 class ActivityDay(BaseModel):
-    """S1.9: one heatmap cell (date is ISO in Asia/Dhaka)."""
+    """one heatmap cell (date is ISO in Asia/Dhaka)."""
 
     date: str
     questions: int
@@ -251,7 +251,7 @@ class ActivityDay(BaseModel):
 
 
 class ActivitySummary(BaseModel):
-    """S1.9: streak + heatmap window for a student."""
+    """streak + heatmap window for a student."""
 
     streak: int
     today: str
@@ -266,7 +266,7 @@ class ChapterStat(BaseModel):
 
 
 class RevisionReviewIn(BaseModel):
-    """S1.10: one revision attempt; -1 means 'I did not answer'."""
+    """one revision attempt; -1 means 'I did not answer'."""
 
     chosen: int = Field(ge=-1, le=7)
 
@@ -290,7 +290,7 @@ class RevisionDueOut(BaseModel):
 
 
 class SearchHit(BaseModel):
-    """S1.11: one search result. kind drives the icon + landing route."""
+    """one search result. kind drives the icon + landing route."""
 
     kind: Literal["subject", "chapter", "question"]
     title: str
@@ -320,7 +320,7 @@ class StudentResponse(BaseModel):
 
 
 class ConsentStatusOut(BaseModel):
-    """S5.8 consent re-confirm flow (guardian consent for minors)."""
+    """consent re-confirm flow (guardian consent for minors)."""
 
     student_id: int
     current_version: str
@@ -353,7 +353,7 @@ class QuizStartRequest(BaseModel):
     student_id: int
     class_level: int | None = Field(default=None, ge=1, le=12)
     subject: str | None = None
-    # S1.3: chapter preselect for the workspace "অনুশীলন" tab.
+    # chapter preselect for the workspace "অনুশীলন" tab.
     chapter: str | None = None
     num_questions: int = Field(default=5, ge=1, le=10)
 
@@ -365,7 +365,7 @@ class QuizQuestionPublic(BaseModel):
 
 
 class ReteachCardOut(BaseModel):
-    """S4.5: grounded re-teach card -- a surfaced KG gap paired with the
+    """grounded re-teach card -- a surfaced KG gap paired with the
     first sentences of the prerequisite chapter itself (no AI text)."""
 
     concept: str
@@ -405,7 +405,7 @@ class QuizResult(BaseModel):
 
 
 class RoleUpdateRequest(BaseModel):
-    # S3.1: school_admin is a real role value now (plain string column, so
+    # school_admin is a real role value now (plain string column, so
     # the migration stays green -- value round-trip is covered by tests).
     role: Literal["student", "teacher", "parent", "admin", "school_admin"]
 
@@ -418,7 +418,7 @@ class UserPublic(BaseModel):
 
 
 class AuditRowOut(BaseModel):
-    """S5.6: one audit_log row as seen by admins. detail never contains
+    """one audit_log row as seen by admins. detail never contains
     message content or PII -- only ids and outcome metadata."""
 
     id: int
@@ -449,7 +449,7 @@ class ImpersonateOut(BaseModel):
 
 
 class TriageUpdate(BaseModel):
-    """S5.10 feedback triage queue transition (admin-only).
+    """feedback triage queue transition (admin-only).
 
     Note is free text written BY the admin, so its length is bounded and
     the endpoint records who set it; it never enters user-facing payloads.
@@ -461,7 +461,7 @@ class TriageUpdate(BaseModel):
 
 class FeedbackAdminRow(BaseModel):
     """One queue item. Deliberately omits the reporter's identity beyond the
-    id (R11: triage needs the complaint, not the child's email)."""
+    id (triage needs the complaint, not the child's email)."""
 
     id: int
     user_id: int
@@ -491,7 +491,7 @@ class StatusComponent(BaseModel):
 
 
 class StatusOut(BaseModel):
-    """Public service status page payload (S5.10).
+    """Public service status page payload.
 
     Counts and booleans only -- never user data, never error strings from
     dependencies (which could leak hostnames or SQL).
@@ -526,7 +526,7 @@ class AdminUsersPage(BaseModel):
 
 
 class RefusalAuditOut(BaseModel):
-    """S4.8 refusal audit: aggregate counts only, never message content (R11)."""
+    """refusal audit: aggregate counts only, never message content."""
 
     days: int
     total_refusals: int
@@ -584,7 +584,7 @@ class ChapterProgressOut(BaseModel):
 
 
 class ClassRoomOut(BaseModel):
-    """S2.2: one classroom the teacher can manage."""
+    """one classroom the teacher can manage."""
 
     id: int
     class_level: int
@@ -598,7 +598,7 @@ class ClassRoomCreateIn(BaseModel):
 
 
 class RosterEntryOut(BaseModel):
-    """S2.2: roster row; email/invite are present for CSV-created accounts."""
+    """roster row; email/invite are present for CSV-created accounts."""
 
     student_id: int
     name: str
@@ -610,7 +610,7 @@ class RosterEntryOut(BaseModel):
 
 
 class ClassImportIn(BaseModel):
-    """S2.2: pasted CSV text ('name,email' header) for bulk enrollment."""
+    """pasted CSV text ('name,email' header) for bulk enrollment."""
 
     csv_text: str = Field(min_length=1, max_length=20000)
 
@@ -629,7 +629,7 @@ class ClassImportOut(BaseModel):
 
 
 class ChapterSections(BaseModel):
-    """S2.3: the seven generated sections of one chapter."""
+    """the seven generated sections of one chapter."""
 
     summary: str = Field(min_length=1, max_length=4000)
     notes: str = Field(min_length=1, max_length=12000)
@@ -641,7 +641,7 @@ class ChapterSections(BaseModel):
 
 
 class ChapterContentKey(BaseModel):
-    """S2.3: identifies one chapter across the version chain."""
+    """identifies one chapter across the version chain."""
 
     class_level: int = Field(ge=1, le=12)
     subject: str = Field(min_length=1, max_length=60)
@@ -667,7 +667,7 @@ class ChapterContentVersionOut(ChapterContentKey):
 
 
 class DifficultySplit(BaseModel):
-    """S2.4: target share of easy/medium/hard questions; must sum to 100."""
+    """target share of easy/medium/hard questions; must sum to 100."""
 
     easy: int = Field(ge=0, le=100)
     medium: int = Field(ge=0, le=100)
@@ -681,7 +681,7 @@ class DifficultySplit(BaseModel):
 
 
 class QPDraftIn(BaseModel):
-    """S2.4: teacher request for a question-paper draft."""
+    """teacher request for a question-paper draft."""
 
     class_level: int = Field(ge=1, le=12)
     subject: str = Field(min_length=1, max_length=60)
@@ -744,7 +744,7 @@ class QPReplaceIn(BaseModel):
     difficulty: Literal["easy", "medium", "hard"] | None = None
 
 
-# --- S2.5: short tests (class + chapter ultra-fast classroom-wide test) -----
+# --- short tests (class + chapter ultra-fast classroom-wide test) -----
 
 
 class ShortTestIn(BaseModel):
@@ -782,7 +782,7 @@ class ShortTestMineOut(BaseModel):
     expired: bool = False
 
 
-# --- S2.6: lesson plan copilot (8-section editable/printable plan) -----------
+# --- lesson plan copilot (8-section editable/printable plan) -----------
 
 
 class LessonPlanIn(BaseModel):
@@ -801,12 +801,12 @@ class LessonPlanOut(BaseModel):
     chapter: str
     minutes: int
     level: str
-    # Wave 1 (additive): the plan is now also persisted as a TeacherDocument;
+    # (additive): the plan is now also persisted as a TeacherDocument;
     # the id is exposed here without changing any existing field.
     document_id: int | None = None
 
 
-# --- S2.7: weak heatmap + at-risk detection + support plan --------------------
+# --- weak heatmap + at-risk detection + support plan --------------------
 
 
 class WeakCell(BaseModel):
@@ -823,7 +823,7 @@ class WeakStudent(BaseModel):
     attempts_graded: int
     trend: str  # down | up | flat
     at_risk: bool
-    #: S4.6 single-source weakness rollup (weakest first); empty = no weak concept
+    #: single-source weakness rollup (weakest first); empty = no weak concept
     weak_concepts: list[str] = []
     cells: dict[str, WeakCell]
 
@@ -849,7 +849,7 @@ class SupportPlanOut(BaseModel):
 
 
 class AssignmentIn(BaseModel):
-    """S2.8: pick students (single class), one shared quiz, a due date."""
+    """pick students (single class), one shared quiz, a due date."""
 
     student_ids: list[int] = Field(min_length=1, max_length=200)
     subject: str = Field(min_length=1, max_length=60)
@@ -892,7 +892,7 @@ class AssignmentMineOut(BaseModel):
     done: bool
 
 
-# --- S3.1: school onboarding (admin -> school code -> staff invite) ---------
+# --- school onboarding (admin -> school code -> staff invite) ---------
 
 
 class SchoolCreateIn(BaseModel):
@@ -946,7 +946,7 @@ class SchoolOverviewOut(BaseModel):
 
 
 class SchoolAtRiskRow(BaseModel):
-    """Cross-class at-risk student (S3.2 school dashboard)."""
+    """Cross-class at-risk student (school dashboard)."""
 
     student_id: int
     name: str
@@ -975,13 +975,13 @@ class SchoolHealthOut(BaseModel):
     support_pct: float
     risk_pct: float
     at_risk: list[SchoolAtRiskRow]
-    # Wave 2: capacity info. The schools table has NO capacity column today,
+    # capacity info. The schools table has NO capacity column today,
     # so this is honestly None until one exists (no fabricated numbers).
     capacity: int | None = None
 
 
 class CoverageCell(BaseModel):
-    """One class-subject cell of the S3.3 curriculum coverage grid."""
+    """One class-subject cell of the curriculum coverage grid."""
 
     classroom_id: int
     class_level: int
@@ -1001,7 +1001,7 @@ class CoverageOut(BaseModel):
     cells: list[CoverageCell]
 
 
-# --- S3.5: admin center (per-school stats, content versions, invite admin) ---
+# --- admin center (per-school stats, content versions, invite admin) ---
 
 
 class AdminSchoolStatsOut(BaseModel):
@@ -1042,7 +1042,7 @@ class SchoolInviteAdminOut(BaseModel):
 
 
 class KgGapOut(BaseModel):
-    """S4.4: one surfaced learning gap (weak concept -> missing prereq)."""
+    """one surfaced learning gap (weak concept -> missing prereq)."""
 
     concept: str
     prereq: str
@@ -1063,7 +1063,7 @@ class KgRebuildOut(BaseModel):
     edges: int
 
 
-# --- Wave 1: teacher documents (generic generators) --------------------------
+# --- teacher documents (generic generators) --------------------------
 
 # Kinds accepted by POST /teacher/generate/{kind}. lesson_plan documents are
 # persisted by POST /teacher/lesson-plans and are NOT generatable here.
@@ -1122,7 +1122,7 @@ class GenerateDocumentOut(TeacherDocumentOut):
     sources: list[SourceRef] = []
 
 
-# --- Wave 1: saved notes ------------------------------------------------------
+# --- saved notes ------------------------------------------------------
 
 
 class SavedNoteIn(BaseModel):
@@ -1141,7 +1141,7 @@ class SavedNoteOut(BaseModel):
     created_at: datetime | None = None
 
 
-# --- Wave 1: notification feed -------------------------------------------------
+# --- notification feed -------------------------------------------------
 
 
 class NotificationOut(BaseModel):
@@ -1160,7 +1160,7 @@ class NotificationListOut(BaseModel):
     unread_count: int
 
 
-# --- Wave 1: async generation jobs (spec section 37) ---------------------------
+# --- async generation jobs (spec section 37) ---------------------------
 
 # All five generator kinds can run as a background job.
 AI_JOB_KINDS: tuple[str, ...] = ("worksheet", "answer_key", "homework", "rubric", "lesson_plan")
@@ -1186,7 +1186,7 @@ class AiJobOut(BaseModel):
     updated_at: datetime | None = None
 
 
-# --- Wave 1: teacher workload metric ------------------------------------------
+# --- teacher workload metric ------------------------------------------
 
 
 class WorkloadOut(BaseModel):
@@ -1200,7 +1200,7 @@ class WorkloadOut(BaseModel):
     methodology: str
 
 
-# --- Wave 2: vision contract ----------------------------------------------------
+# --- vision contract ----------------------------------------------------
 # (CHAT_STRATEGIES / ChatStrategy / EXPLANATION_STYLES live at the TOP of this
 # module because ChatSendRequest, defined much earlier, references them.)
 
@@ -1215,12 +1215,12 @@ class ChatImageIn(BaseModel):
     data_base64: str = Field(min_length=1)
 
 
-# --- Wave 2: school section (school_admin own school; admin platform-wide) ------
+# --- school section (school_admin own school; admin platform-wide) ------
 
 
 class SchoolStudentRow(BaseModel):
     """One roster row for the school-section list. Minimal PII: name only --
-    never email/phone (R11 child-data minimization)."""
+    never email/phone (child-data minimization)."""
 
     student_id: int
     name: str
@@ -1281,7 +1281,7 @@ class SchoolActiveDay(BaseModel):
 
 
 class SchoolAnalyticsOut(BaseModel):
-    """K-anonymity-safe aggregate counts only (R11): never per-student rows,
+    """K-anonymity-safe aggregate counts only: never per-student rows,
     never message content."""
 
     days: int
@@ -1293,7 +1293,7 @@ class SchoolAnalyticsOut(BaseModel):
     avg_quiz_score_pct: float | None = None
 
 
-# --- Wave 2: parent activity + period report ------------------------------------
+# --- parent activity + period report ------------------------------------
 
 
 class ParentReportOut(BaseModel):
@@ -1318,11 +1318,11 @@ class ParentReportOut(BaseModel):
     suggestion_params: dict[str, Any] = {}
 
 
-# --- Wave 2: admin AI quality -----------------------------------------------------
+# --- admin AI quality -----------------------------------------------------
 
 
 class AdminAiQualityOut(BaseModel):
-    """Counts only, never message content (R11)."""
+    """Counts only, never message content."""
 
     days: int
     answers_total: int
@@ -1341,7 +1341,7 @@ class AdminAiQualityOut(BaseModel):
     cost_usd_by_model: dict[str, float] = {}
 
 
-# --- Wave 2: student memory / learning preferences --------------------------------
+# --- student memory / learning preferences --------------------------------
 
 
 class StudentPrefsOut(BaseModel):

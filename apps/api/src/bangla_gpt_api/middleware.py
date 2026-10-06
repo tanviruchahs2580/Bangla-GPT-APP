@@ -26,7 +26,7 @@ from bangla_gpt_api.ratelimit import RateLimitBackendError, RateLimiter
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        # F-SEC-05: sanitize client-supplied X-Request-ID (≤64, [A-Za-z0-9._-]) else generate
+        # sanitize client-supplied X-Request-ID (≤64, [A-Za-z0-9._-]) else generate
         raw = request.headers.get("X-Request-ID")
         if raw and len(raw) <= 64 and re.fullmatch(r"[A-Za-z0-9._-]+", raw):
             request_id = raw
@@ -86,7 +86,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         client_ip = _client_ip(request, trust_proxy=self._settings.trust_proxy_headers)
-        # F-SEC-02: evaluate ALL matching rules (not first-match break) so
+        # evaluate ALL matching rules (not first-match break) so
         # per-user and IP ceiling both apply; a single request counts once per limiter
         for path_prefix, (limit, scope) in self.rules.items():
             if not request.url.path.startswith(path_prefix) or limit <= 0:
@@ -125,8 +125,8 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
         content_length = request.headers.get("content-length")
         if content_length and content_length.isdigit() and int(content_length) > self.max_bytes:
             return JSONResponse({"detail": "Request body too large"}, status_code=413)
-        # F-SEC-04: byte-counting safety net for chunked / absent Content-Length.
-        # request.body() buffers the full body; we already rejected oversized via
+        # byte-counting safety net for chunked / absent Content-Length.
+        # request.body buffers the full body; we already rejected oversized via
         # Content-Length above, so the fallback only catches chunked transfers.
         try:
             body = await request.body()
@@ -139,8 +139,10 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
                 return {"type": "http.request", "body": body, "more_body": False}
 
             request = Request(request.scope, receive=_replay_receive)
-        except Exception:
-            pass
+        except (OSError, MemoryError):
+            # The stream failed mid-read; forwarding a consumed receive would
+            # leave the endpoint hanging on an empty body — fail clean instead.
+            return JSONResponse({"detail": "Unable to read request body"}, status_code=400)
         return await call_next(request)
 
 
@@ -152,7 +154,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "no-referrer")
-        # S5.6: CSP with a per-response nonce. The API itself only returns
+        settings = getattr(request.app.state, "settings", None)
+        if settings is not None and settings.is_production:
+            response.headers.setdefault(
+                "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+            )
+        # CSP with a per-response nonce. The API itself only returns
         # JSON (the nonce is belt-and-braces for any future HTML response).
         # The SPA ships no inline script at all (apps/web/public/theme-boot.js
         # is a static file), so Caddy serves it a plain script-src 'self'

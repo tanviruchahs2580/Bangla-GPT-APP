@@ -1,4 +1,4 @@
-"""S1.9 — daily activity: Dhaka day boundary, streak math, heatmap, endpoint."""
+"""daily activity: Dhaka day boundary, streak math, heatmap, endpoint."""
 
 from datetime import UTC, datetime
 

@@ -4,7 +4,7 @@ Revision ID: b8c9d0e1f2a3
 Revises: a7b8c9d0e1f2
 Create Date: 2026-09-03
 
-S2.8: assignments stores one rule-based question set generated once per bulk
+assignments stores one rule-based question set generated once per bulk
 assignment plus the per-student quiz_attempts references; due_at drives the
 completion/overdue list. No backfill (new feature).
 """

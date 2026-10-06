@@ -1,4 +1,4 @@
-"""B8 — rate limiter backends."""
+"""rate limiter backends."""
 
 import time
 

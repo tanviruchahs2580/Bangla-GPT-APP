@@ -1,4 +1,4 @@
-"""S1.9 — daily activity, streaks and heatmap (Asia/Dhaka day boundaries)."""
+"""daily activity, streaks and heatmap (Asia/Dhaka day boundaries)."""
 
 from __future__ import annotations
 

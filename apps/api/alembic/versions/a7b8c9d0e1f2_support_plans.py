@@ -4,7 +4,7 @@ Revision ID: a7b8c9d0e1f2
 Revises: f6a7b8c9d0e1
 Create Date: 2026-09-03
 
-S2.7: support_plans stores the deterministic 3-week structure (concept ->
+support_plans stores the deterministic 3-week structure (concept ->
 practice -> assessment) generated from a student's weakest concepts. No
 backfill (new feature).
 """

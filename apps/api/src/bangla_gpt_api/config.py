@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 logger = logging.getLogger(__name__)
 
 PRODUCTION_ENVS = frozenset({"production", "prod", "staging"})
-# S5.1 staging/prod parity: staging runs the SAME strict boot guard and secret
+# staging/prod parity: staging runs the SAME strict boot guard and secret
 # suppression as production (no default JWT_SECRET, no raw reset-token logs);
 # only the data is non-authoritative. Enforced by tests/test_env_parity.py.
 DEFAULT_JWT_SECRET = "dev-insecure-change-me"
@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     # access legacy models like gemini-2.5-flash ("no longer available to new
     # users"). Override via GEMINI_MODEL if your account has broader access.
     gemini_model: str = "gemini-3.1-flash-lite"
-    # S4.2 model router: model serving SIMPLE routes. Empty -> the main
+    # model router: model serving SIMPLE routes. Empty -> the main
     # model serves every route (routes are still decided + logged).
     gemini_fast_model: str = ""
     # OpenAI-compatible provider settings
@@ -71,12 +71,12 @@ class Settings(BaseSettings):
     circuit_breaker_failure_threshold: int = 3  # failures before opening
     circuit_breaker_reset_timeout_seconds: float = 60.0  # seconds before half-open
 
-    # --- S4.3 RAG v2 retrieval ---
+    # --- RAG v2 retrieval ---
     # "hybrid" = lexical BM25 lane + vector lane fused by reciprocal rank
     # fusion, then lexically reranked (retrieval/hybrid_index.py).
     # "bm25" = lexical lane only (v1 baseline).
     retrieval_mode: str = "hybrid"
-    # Real multilingual embedding models are a staging human decision (R8).
+    # Real multilingual embedding models are a staging human decision.
     # Empty -> the deterministic local hash-ngram embedder serves the vector
     # lane; naming a model without the staging backend is a config error.
     embedding_model: str = ""
@@ -112,13 +112,13 @@ class Settings(BaseSettings):
     rate_limit_backend: str = "memory"  # memory | redis
     rate_limit_fail_open: bool = False
     redis_url: str | None = None
-    # S5.4: inline = scheduler loops inside the web process (default);
+    # inline = scheduler loops inside the web process (default);
     # arq = an external ARQ worker owns the schedule (job bodies live in jobs.py).
     jobs_backend: str = "inline"  # inline | arq
     # Enable ONLY behind a trusted reverse proxy (Caddy/nginx) that overwrites
     # X-Forwarded-For; otherwise clients can spoof their rate-limit identity.
     trust_proxy_headers: bool = False
-    # S5.6: Fernet key (PII_ENC_KEY) for encrypting guardian phone at rest.
+    # Fernet key (PII_ENC_KEY) for encrypting guardian phone at rest.
     # Without it values pass through unchanged (dev/test); production boot
     # refuses to start without a key (enforce_production_safety).
     pii_enc_key: str | None = None
@@ -142,15 +142,15 @@ class Settings(BaseSettings):
     smtp_password: str | None = None
     smtp_from: str | None = None
 
-    # --- parent weekly digest (S3.4) ---
+    # --- parent weekly digest ---
     # Sunday ~22:00 Dhaka, once per ISO week; summary aggregates only, never
     # conversation content. Check cadence for the in-process scheduler loop.
     parent_digest_enabled: bool = True
     parent_digest_check_minutes: int = 60
 
-    # --- S4.6 nightly weakness reconciliation ---
+    # --- nightly weakness reconciliation ---
     # Daily 03:00 Dhaka: recompute chapter-root ConceptMastery from the graded
-    # answer log (aggregate counts only, R11). Keeps the persisted per-concept
+    # answer log (aggregate counts only, ). Keeps the persisted per-concept
     # mastery in sync with the rollup that Home/Teacher/Parent read.
     weakness_refresh_enabled: bool = True
     weakness_refresh_check_minutes: int = 60
@@ -158,9 +158,10 @@ class Settings(BaseSettings):
     # --- data ---
     nctb_corpus_dir: str | None = None
 
-    # --- default rate limit rules (config-driven, replaces hardcoded dict in main.py) ---
+    # --- default rate limit rules (merged over per-field settings in middleware_stack) ---
     rate_limit_rules: dict[str, tuple[int, str]] = {
         "/auth/login": (10, "ip"),
+        "/auth/mfa/challenge": (5, "ip"),
         "/tutor/ask": (30, "user"),
         "/tutor/chat": (30, "user"),
         "/tutor": (60, "ip"),
@@ -175,7 +176,7 @@ class Settings(BaseSettings):
     sentry_env: str = "development"
 
     # --- hardening (Phase 4) ---
-    # F-SEC-06: protect /metrics in production — internal ingress or bearer token
+    # protect /metrics in production — internal ingress or bearer token
     metrics_require_auth: bool = False
     metrics_token: str | None = None
 
@@ -191,7 +192,7 @@ class Settings(BaseSettings):
 class SettingsRegistry:
     """Thread-safe settings cache with optional hot-reload capability.
 
-    By default it uses :func:`get_settings` (cached singleton) for simplicity.
+    By default it uses:func:`get_settings` (cached singleton) for simplicity.
     When ``force_reload=True`` is passed, a fresh ``Settings`` instance is
     constructed (useful for tests or config-reload scenarios).
     """

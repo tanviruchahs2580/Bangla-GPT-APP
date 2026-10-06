@@ -1,9 +1,9 @@
-"""S4.7 Evaluation v2 -- golden-set sanity, metric units, and the CI gate.
+"""Evaluation v2 -- golden-set sanity, metric units, and the CI gate.
 
 PASS-WHEN for step 4.7, in test form:
 * the committed golden set meets the spec's shape (>=300 questions, every
   class+subject pair, byte-stable ASCII);
-* the metric heuristics are pinned by units (R12: definition changes must
+* the metric heuristics are pinned by units (definition changes must
   break these tests, never drift silently);
 * the deliberately-seeded bad prompt demonstrably FAILS the 2pp gate and
   reverting the seed makes it green again (small hermetic subset -- the
@@ -95,7 +95,7 @@ def test_golden_negatives_absent_from_corpus() -> None:
         assert tok.casefold() not in corpus_words, f"negative token {tok!r} leaked into corpus"
 
 
-# --- metric heuristic units (R12: pinned definitions) -----------------------
+# --- metric heuristic units (pinned definitions) -----------------------
 
 
 def test_grammar_score_units() -> None:

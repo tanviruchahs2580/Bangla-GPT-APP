@@ -1,4 +1,4 @@
-"""S1.8 — chat history: rename, delete, and message search."""
+"""chat history: rename, delete, and message search."""
 
 import pytest
 from fastapi.testclient import TestClient

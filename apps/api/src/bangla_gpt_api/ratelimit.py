@@ -1,7 +1,7 @@
-"""Pluggable rate-limiting backends (B8).
+"""Pluggable rate-limiting backends.
 
-``memory``  – sliding window, per-process (default; dev/small deployments).
-``redis``   – fixed-window INCR/EXPIRE counters shared by all workers/pods,
+``memory`` – sliding window, per-process (default; dev/small deployments).
+``redis`` – fixed-window INCR/EXPIRE counters shared by all workers/pods,
               so limits survive horizontal scaling. If Redis is unreachable
               the limiter either fails open (allow) or closed (raise),
               controlled by ``RATE_LIMIT_FAIL_OPEN``.
@@ -44,7 +44,7 @@ class MemoryRateLimiter:
         for k in stale:
             del self._hits[k]
         # Make room for the key about to be inserted so len never exceeds
-        # max_keys after check() completes.
+        # max_keys after check completes.
         if len(self._hits) >= self._max_keys:
             overflow = sorted(self._hits.items(), key=lambda kv: kv[1][-1])
             for k, _ in overflow[: len(self._hits) - self._max_keys + 1]:
@@ -77,7 +77,7 @@ class RedisRateLimiter:
         window = int(time.time() // 60)
         name = f"rl:{key}:{window}"
         try:
-            # redis-py types incr() as int | Awaitable[int] (pipeline mode);
+            # redis-py types incr as int | Awaitable[int] (pipeline mode);
             # this client is plain sync Redis, so the value is always an int.
             count = int(cast(int, self._redis.incr(name)))
             if count == 1:
@@ -91,6 +91,12 @@ class RedisRateLimiter:
 
 
 def build_limiter(settings) -> RateLimiter:  # noqa: ANN001 (Settings import cycle)
+    """Build the counting backend only.
+
+    Rate-limit *rules* (which route, which limit) are owned by
+    ``initialize.middleware_stack.build_middleware_stack`` — the limiter
+    itself only answers "is this identity within its window".
+    """
     from bangla_gpt_api.config import Settings
 
     if not isinstance(settings, Settings):
@@ -99,18 +105,4 @@ def build_limiter(settings) -> RateLimiter:  # noqa: ANN001 (Settings import cyc
         if not settings.redis_url:
             raise ValueError("RATE_LIMIT_BACKEND=redis requires REDIS_URL")
         return RedisRateLimiter(settings.redis_url, fail_open=settings.rate_limit_fail_open)
-    # Merge per-route individual settings into the rules dict so test
-    # overrides of rate_limit_login_per_minute / rate_limit_tutor_per_minute
-    # / rate_limit_tutor_ip_per_minute take effect at runtime.
-    rules: dict[str, tuple[int, str]] = {
-        "/auth/login": (settings.rate_limit_login_per_minute, "ip"),
-        "/tutor/ask": (settings.rate_limit_tutor_per_minute, "user"),
-        "/tutor/chat": (settings.rate_limit_tutor_per_minute, "user"),
-        "/tutor": (settings.rate_limit_tutor_ip_per_minute, "ip"),
-        "/auth/forgot": (10, "ip"),
-        "/auth/reset": (10, "ip"),
-        "/events": (60, "ip"),
-    }
-    # Apply user-provided overrides on top (tests may pass custom rules)
-    rules.update(settings.rate_limit_rules)
     return MemoryRateLimiter()

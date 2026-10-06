@@ -1,4 +1,4 @@
-"""PRIV-001: pre-LLM PII redaction.
+"""pre-LLM PII redaction.
 
 Pasted phones/emails/NID-like digit runs must never reach an upstream model
 provider. The redactor runs at the prompt-build boundary (services/tutor.py);

@@ -1,4 +1,4 @@
-"""S2.7: at-risk rules (unit) + weak matrix + support plan endpoints."""
+"""at-risk rules (unit) + weak matrix + support plan endpoints."""
 
 import sqlite3
 

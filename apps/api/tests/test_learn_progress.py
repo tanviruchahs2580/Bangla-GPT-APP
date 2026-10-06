@@ -1,4 +1,4 @@
-"""S1.2 — chapter progress: upsert/get endpoints, badge inputs, authz."""
+"""chapter progress: upsert/get endpoints, badge inputs, authz."""
 
 from fastapi.testclient import TestClient
 

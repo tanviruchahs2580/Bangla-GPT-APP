@@ -4,7 +4,7 @@ Revision ID: d0e1f2a3b4c5
 Revises: c9d0e1f2a3b4
 Create Date: 2026-09-06
 
-S3.1: staff accounts join a school via one-time invite codes; school_admin is
+staff accounts join a school via one-time invite codes; school_admin is
 a new role VALUE (the column is a plain string, so no CHECK constraint had to
 change -- 'role migration green' is proven by value round-trip tests).
 Existing users keep school_id NULL and continue via the default school.

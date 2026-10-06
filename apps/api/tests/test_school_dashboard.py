@@ -1,4 +1,4 @@
-"""S3.2 school dashboard: /school/overview aggregates must match the DB."""
+"""school dashboard: /school/overview aggregates must match the DB."""
 
 import sqlite3
 from datetime import UTC, datetime, timedelta
@@ -140,7 +140,7 @@ def test_overview_aggregates_match_db(env) -> None:
     ]
     assert at[1]["class_level"] == 7
     assert at[0]["attempts_graded"] == 1 and at[0]["trend"] == "flat"
-    # R11: summary buckets only -- no message content fields ever appear
+    # summary buckets only -- no message content fields ever appear
     assert "messages" not in str(data).lower()
 
 

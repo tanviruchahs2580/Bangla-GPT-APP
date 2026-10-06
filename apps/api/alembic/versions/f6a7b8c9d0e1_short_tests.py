@@ -4,7 +4,7 @@ Revision ID: f6a7b8c9d0e1
 Revises: e5f6a7b8c9d0
 Create Date: 2026-09-03
 
-S2.5: short_tests stores one rule-based question set generated once per
+short_tests stores one rule-based question set generated once per
 assignment and handed to an entire classroom; grading reuses quiz_attempts
 rows referenced in the attempts JSON. No backfill (new feature).
 """

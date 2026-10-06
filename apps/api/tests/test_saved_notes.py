@@ -1,4 +1,4 @@
-"""Wave 1: saved notes -- private, per-user scratch pad."""
+"""saved notes -- private, per-user scratch pad."""
 
 import pytest
 from fastapi.testclient import TestClient

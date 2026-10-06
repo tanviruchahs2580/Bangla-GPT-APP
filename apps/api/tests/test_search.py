@@ -1,4 +1,4 @@
-"""S1.11 — global search: relevance, ask-action detection, routing sanity.
+"""global search: relevance, ask-action detection, routing sanity.
 
 Bengali fixtures are built from codepoints so this file stays ASCII-safe.
 """

@@ -1,4 +1,4 @@
-"""S1.6 — source → evidence modal payload: sanitized excerpts, never markup."""
+"""source → evidence modal payload: sanitized excerpts, never markup."""
 
 import pytest
 from fastapi.testclient import TestClient

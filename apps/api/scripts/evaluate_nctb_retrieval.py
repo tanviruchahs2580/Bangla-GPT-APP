@@ -1,9 +1,9 @@
 """Retrieval evaluation over the built NCTB corpus (no LLM required).
 
 Query families (all derived from actual ingested content — nothing invented):
-  A self-sentence : first words of a chunk must retrieve that chunk
-  B chapter-title : a real chapter name should surface its own chunks
-  C adversarial   : out-of-curriculum questions must score below the
+  A self-sentence: first words of a chunk must retrieve that chunk
+  B chapter-title: a real chapter name should surface its own chunks
+  C adversarial: out-of-curriculum questions must score below the
                     TutorService grounding gate (refusal = correct)
 
 Outputs data/nctb/retrieval_eval.json with Recall@K per family plus the

@@ -1,4 +1,4 @@
-"""S5.6: security hardening -- audit trail, PII encryption, CSP nonce, impersonation.
+"""security hardening -- audit trail, PII encryption, CSP nonce, impersonation.
 
 PASS-WHEN from the roadmap: "audit rows written for all five event types"
 (role_change, data_export, purge, qp_finalize, impersonation), plus the
@@ -174,7 +174,7 @@ def test_all_five_event_types_write_audit_rows(client: TestClient) -> None:
     assert [r["detail"]["phase"] for r in imp_rows] == ["stop", "start"]  # newest first
     assert imp_rows[1]["detail"]["reason"] == "support: stuck on login"  # the start row
     assert "reason" not in imp_rows[0]["detail"]  # stop row: no free-text echo
-    # qp_finalize points at the paper (ids only, R11)
+    # qp_finalize points at the paper (ids only, )
     fin_row = _audit_actions(client, action="qp_finalize")[0]
     assert fin_row["target"] == f"qp:{qp['id']}"
     assert fin_row["detail"] == {"class_level": 6, "subject": "science"}
@@ -300,7 +300,7 @@ def test_export_never_leaks_phone_and_logs_data_export(enc_client: TestClient) -
     _register(enc_client, "p@example.com", role="parent", phone=PHONE)
     res = enc_client.get("/users/me/export", headers=_headers(enc_client, "p@example.com"))
     assert res.status_code == 200
-    assert PHONE not in res.text  # export is PII-minimal by design (R11)
+    assert PHONE not in res.text  # export is PII-minimal by design
     rows = _audit_actions(enc_client, action="data_export")
     assert rows and rows[0]["detail"] == {"format": "json"}
 

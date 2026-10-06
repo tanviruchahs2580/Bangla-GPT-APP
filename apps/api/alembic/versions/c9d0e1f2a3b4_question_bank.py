@@ -4,7 +4,7 @@ Revision ID: c9d0e1f2a3b4
 Revises: b8c9d0e1f2a3
 Create Date: 2026-09-06
 
-S2.9: question_bank stores every teacher-reviewed question keyed by a
+question_bank stores every teacher-reviewed question keyed by a
 deterministic sha256 over the normalized question text (the dedupe field),
 plus a times_reused counter. No backfill (new feature); reviewed history
 re-enters the bank naturally as teachers review new drafts.

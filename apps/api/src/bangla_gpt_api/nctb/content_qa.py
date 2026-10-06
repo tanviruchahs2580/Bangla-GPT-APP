@@ -1,9 +1,9 @@
-"""S6.2 content QA: automatic quality report + seeded human-sampling flow.
+"""content QA: automatic quality report + seeded human-sampling flow.
 
 Sits on top of the extract -> bijoy -> normalize -> chunk pipeline. Where
-``normalize.looks_like_garbage()`` gives a coarse per-page verdict, this
+``normalize.looks_like_garbage`` gives a coarse per-page verdict, this
 module gives per-chunk verdicts for the specific contract violations that
-can survive ``normalize_bangla()`` and produce two artifacts:
+can survive ``normalize_bangla`` and produce two artifacts:
 
 1. An automatic quality report over a chunk JSONL file with a pass gate
    (fail = the corpus must not be indexed; a human investigates the
@@ -14,13 +14,13 @@ can survive ``normalize_bangla()`` and produce two artifacts:
    reject rate is an honest estimate over the sampled subset only.
 
 Issue codes:
-- ``not_nfc``:          text differs from its Unicode NFC normal form
-- ``zero_width``:       ZWJ/ZWNJ/ZWSP/BOM survived normalization
-- ``math_mojibake``:    UTF-8 math symbols misread as Latin-1 (double-encoded
+- ``not_nfc``: text differs from its Unicode NFC normal form
+- ``zero_width``: ZWJ/ZWNJ/ZWSP/BOM survived normalization
+- ``math_mojibake``: UTF-8 math symbols misread as Latin-1 (double-encoded
                         multiplication, square-root, inequality, ellipsis)
 - ``replacement_char``: U+FFFD present
-- ``pua_char``:         private-use-area glyphs (custom-font residue)
-- ``legacy_bijoy``:     unconverted Bijoy ASCII signatures present
+- ``pua_char``: private-use-area glyphs (custom-font residue)
+- ``legacy_bijoy``: unconverted Bijoy ASCII signatures present
 """
 
 from __future__ import annotations

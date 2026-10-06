@@ -1,4 +1,4 @@
-"""S5.4 PASS-WHEN: every scheduled period runs its side effects at most once.
+"""PASS-WHEN: every scheduled period runs its side effects at most once.
 
 The double-run hazards this guards: N gunicorn workers each running the loop,
 a web loop plus the ARQ cron at the same wall-clock moment, a process restart
@@ -22,7 +22,7 @@ from bangla_gpt_api.main import create_app
 
 PASSWORD = "supersecret1"
 
-# A Sunday at/after 16:00 UTC -> digest_due() is true (see test_parent_digest).
+# A Sunday at/after 16:00 UTC -> digest_due is true (see test_parent_digest).
 SUNDAY_DUE = datetime(2026, 9, 6, 16, 30)
 MONDAY_MORNING = datetime(2026, 9, 7, 10, 0)
 
@@ -240,7 +240,7 @@ def test_worker_settings_shape(tmp_path, monkeypatch) -> None:
     # arq names cron entries "cron:<function>"
     by_name = {c.name.removeprefix("cron:"): c for c in ws.cron_jobs}
     # schedule mirrors the services' rules: Sunday>=16 UTC (digest), daily
-    # retention sweep (S5.8) ~02:30 Dhaka, rollup 21 UTC daily
+    # retention sweep ~02:30 Dhaka, rollup 21 UTC daily
     assert set(by_name) == {
         "job_weekly_digest",
         "job_retention_sweep",

@@ -1,12 +1,12 @@
-"""Content QA CLI (S6.2): automatic quality report + human-sampling flow.
+"""Content QA CLI: automatic quality report + human-sampling flow.
 
 Usage (from apps/api, with the package venv active):
-    python scripts/content_qa.py report  normalized/<src>.chunks.jsonl
-    python scripts/content_qa.py report  normalized/<src>.chunks.jsonl \
+    python scripts/content_qa.py report normalized/<src>.chunks.jsonl
+    python scripts/content_qa.py report normalized/<src>.chunks.jsonl \
         --out qa_report.json --threshold 0.02
-    python scripts/content_qa.py sample  normalized/<src>.chunks.jsonl \
+    python scripts/content_qa.py sample normalized/<src>.chunks.jsonl \
         --seed 20260906 --out review_sheet.jsonl
-    python scripts/content_qa.py review  review_sheet.jsonl \
+    python scripts/content_qa.py review review_sheet.jsonl \
         --verdicts verdicts.jsonl --out review_summary.json
 
 Exit codes: 0 = pass / ok, 3 = QA gate failed (do NOT index this corpus),

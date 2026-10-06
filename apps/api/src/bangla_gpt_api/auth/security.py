@@ -45,8 +45,7 @@ def create_access_token(
 
     Unlike the legacy flow that only set ``jti`` for impersonation, this
     version embeds a ``jti`` (JWT ID) on *all* access tokens so every token
-    can be individually revoked before expiry via the shared token deny-list
-    (S5.10).
+    can be individually revoked before expiry via the shared token deny-list.
     """
     expires_delta = timedelta(minutes=settings.jwt_expire_minutes if minutes is None else minutes)
     payload: dict[str, object] = {

@@ -298,7 +298,7 @@ def test_email_verification_gate(monkeypatch, tmp_path) -> None:
         captured["body"] = body
         return True
 
-    # ARCH-001: send_mail is used (from-imported) by routers.auth now —
+    # send_mail is used (from-imported) by routers.auth now —
     # patch it where it is looked up, not where it is defined.
     monkeypatch.setattr("bangla_gpt_api.routers.auth.send_mail", fake_send_mail)
     settings = Settings(
@@ -444,7 +444,7 @@ def test_admin_maintenance_purge(admin_client: TestClient) -> None:
 
 
 # ---------------------------------------------------------------------------
-# B12: feedback & privacy-safe events
+# feedback & privacy-safe events
 # ---------------------------------------------------------------------------
 
 

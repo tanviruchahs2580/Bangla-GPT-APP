@@ -1,4 +1,4 @@
-"""S1.3 — Unified Learning Workspace: chapter context flows to quiz + tutor."""
+"""Unified Learning Workspace: chapter context flows to quiz + tutor."""
 
 import pytest
 from fastapi.testclient import TestClient

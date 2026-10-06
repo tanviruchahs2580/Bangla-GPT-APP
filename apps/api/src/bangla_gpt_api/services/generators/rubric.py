@@ -1,4 +1,4 @@
-"""Wave 1 rubric generator: criteria rows with three level descriptors.
+"""rubric generator: criteria rows with three level descriptors.
 
 Contract: one row per assessment criterion; every row names the criterion,
 carries positive max_marks and gives non-empty descriptors for excellent /

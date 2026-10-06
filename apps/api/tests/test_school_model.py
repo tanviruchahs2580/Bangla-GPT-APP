@@ -1,4 +1,4 @@
-"""S2.1: schools/classrooms tables, class_level backfill, migration reversibility."""
+"""schools/classrooms tables, class_level backfill, migration reversibility."""
 
 import os
 import sqlite3

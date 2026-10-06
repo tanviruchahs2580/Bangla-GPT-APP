@@ -1,4 +1,4 @@
-"""B9 — real-PostgreSQL smoke flows.
+"""real-PostgreSQL smoke flows.
 
 Skipped unless ``TEST_DATABASE_URL`` is set (e.g.
 ``postgresql+psycopg://postgres:postgres@localhost:5432/bgpt_test``).

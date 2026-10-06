@@ -1,4 +1,4 @@
-"""S4.4 Knowledge Graph v1: concepts, curated prerequisite edges, per-concept
+"""Knowledge Graph v1: concepts, curated prerequisite edges, per-concept
 mastery, and the gap resolver that implements the spec PASS rule:
 
     weak "বীজগণিত" surfaces the missing "ভগ্নাংশ" prerequisite.

@@ -1,4 +1,4 @@
-"""S3.3 PASS-WHEN: curriculum coverage status derivation unit tests (pure)."""
+"""PASS-WHEN: curriculum coverage status derivation unit tests (pure)."""
 
 from bangla_gpt_api.services import coverage
 

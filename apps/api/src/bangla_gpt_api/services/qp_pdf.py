@@ -1,10 +1,10 @@
-"""S2.4: PDF export for question papers (paper + answer key).
+"""PDF export for question papers (paper + answer key).
 
 Primary engine is WeasyPrint when the platform's Pango/GTK libraries are
 loadable (Linux containers). On hosts without them (e.g. Windows dev) this
 falls back to fpdf2 + uharfbuzz with the bundled Noto Sans Bengali TTF,
 which shapes Bengali conjuncts correctly. If neither engine is usable the
-API returns the HTML print view instead (documented S2.4 fallback).
+API returns the HTML print view instead (documented fallback).
 """
 
 from pathlib import Path
@@ -97,7 +97,7 @@ def _esc(text: str) -> str:
     )
 
 
-# ── Wave 1: printable PDFs for persisted teacher documents ────────────────
+# ── printable PDFs for persisted teacher documents ────────────────
 # Same engine + bundled font as render_qp_pdf above; one renderer per
 # printable kind (worksheet / answer_key / lesson_plan).
 

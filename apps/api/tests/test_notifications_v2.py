@@ -1,7 +1,7 @@
-"""Wave 1: in-app notification feed + the four event producers.
+"""in-app notification feed + the four event producers.
 
 Codes: notif_quiz_assigned, notif_shorttest_assigned, notif_support_plan,
-notif_parent_linked. Params carry ids/labels only (R11: no message copy).
+notif_parent_linked. Params carry ids/labels only (no message copy).
 """
 
 import pytest

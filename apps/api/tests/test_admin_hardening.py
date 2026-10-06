@@ -152,7 +152,7 @@ def test_normal_payload_passes_size_guard(client: TestClient) -> None:
 
 
 def test_production_safety_rejects_weak_config(tmp_path) -> None:
-    """S0.5: prod boot must fail on weak/missing secrets."""
+    """prod boot must fail on weak/missing secrets."""
     import pytest
 
     from bangla_gpt_api.main import enforce_production_safety

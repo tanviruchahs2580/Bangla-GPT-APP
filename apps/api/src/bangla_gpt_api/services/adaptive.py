@@ -1,7 +1,7 @@
-"""S4.5 Adaptive practice engine.
+"""Adaptive practice engine.
 
 Elo-style ratings on two axes:
-- practice_items.elo  -- per-item difficulty (cloze fingerprint = sha256 of
+- practice_items.elo -- per-item difficulty (cloze fingerprint = sha256 of
   chunk id + blanked term, stable across regenerations)
 - student_abilities.ability -- per-concept student ability
 
@@ -10,7 +10,7 @@ Selection rule (spec): next question difficulty targets
 correct streak keeps pushing and misses pull back (K-factor updates make
 "correct -> harder, wrong -> easier" fall out of the math, unit-tested).
 
-Wrong answers run a knowledge-graph gap check (S4.4 is the single source of
+Wrong answers run a knowledge-graph gap check (is the single source of
 gap truth): every surfaced gap becomes a re-teach card carrying a grounded
 excerpt from the prerequisite chapter itself -- no AI call, no invented text.
 """

@@ -1,4 +1,4 @@
-"""S4.8 Safety v2 -- injection filter, academic override, age rule, refusal audit.
+"""Safety v2 -- injection filter, academic override, age rule, refusal audit.
 
 All Bengali literals are Unicode-escape sequences only (repo rule: no raw
 non-ASCII string literals in source; avoids editor/transcript corruption of
@@ -78,7 +78,7 @@ def test_strip_injections_clean_text_is_byte_identical() -> None:
 
 
 def test_clean_corpus_survives_filter_byte_for_byte() -> None:
-    """R12/byte-stability: no existing sample-corpus chunk may be altered."""
+    """/byte-stability: no existing sample-corpus chunk may be altered."""
     for chunk in load_sample_corpus():
         clean, dropped = strip_injections(chunk.text)
         assert dropped == 0
@@ -109,7 +109,7 @@ def test_self_harm_still_refused_with_support_copy() -> None:
     assert refusal_for("sexual_content") == SAFETY_ANSWER
 
 
-# ── AGE_RULE_SENTENCE embedded byte-identical in all four prompts (R5) ────
+# ── AGE_RULE_SENTENCE embedded byte-identical in all four prompts ────
 def test_age_rule_clause_in_all_four_system_prompts() -> None:
     assert AGE_RULE_SENTENCE in SYSTEM_PROMPT
     assert "\u09ed. " + AGE_RULE_SENTENCE in SYSTEM_PROMPT  # numbered tutor item "7. "
@@ -249,7 +249,7 @@ def test_refusal_audit_counts_by_reason_and_class_without_content(client: TestCl
     assert body["by_class"].get("6", 0) >= 2
     assert body["by_class"].get("9", 0) >= 1
     assert body["last_refusal_at"] is not None
-    # R11: aggregate counts only -- the child's question text never appears.
+    # aggregate counts only -- the child's question text never appears.
     assert harm not in res.text
     assert sex not in res.text
 

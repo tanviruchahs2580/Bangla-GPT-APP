@@ -4,7 +4,7 @@ Revision ID: c1d2e3f4a5b6
 Revises: b9c0d1e2f3a4
 Create Date: 2026-09-06
 
-S2.3: chapter_contents stores append-only versions of generated chapter
+chapter_contents stores append-only versions of generated chapter
 study material. One AI call fills all seven section keys of the JSON
 payload; teacher edits append a new version instead of mutating rows.
 No backfill (new feature).

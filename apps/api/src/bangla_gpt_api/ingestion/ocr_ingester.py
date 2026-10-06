@@ -1,4 +1,4 @@
-"""B18 — textbook OCR ingestion adapter.
+"""textbook OCR ingestion adapter.
 
 NCTB পাঠ্যপুস্তক e-books are copyrighted. This adapter exists so that, once
 written permission (or an official licensed feed) is obtained, scanned

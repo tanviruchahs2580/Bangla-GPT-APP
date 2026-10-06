@@ -1,7 +1,7 @@
-"""School Routes — split from the main.py god-module (ARCH-001).
+"""School Routes — split from the main.py god-module.
 
 Behavior-identical extraction: same paths, validation, status codes.
-Shared context/auth via :mod:`.deps`, shared helpers via :mod:`.common`.
+Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 """
 
 import json
@@ -86,7 +86,7 @@ router = APIRouter()
 
 logger = logging.getLogger(__name__)
 
-SCHOOL_STRONG_AVG = 70.0  # percent; at-risk rule comes from S2.7 (atrisk.py)
+SCHOOL_STRONG_AVG = 70.0  # percent; at-risk rule comes from (atrisk.py)
 
 
 def _gen_school_code(db: Session, length: int = 8) -> str:
@@ -128,7 +128,7 @@ def admin_school_list(db: DbSession, admin: AdminUser) -> list[SchoolOut]:
 
 @router.get("/admin/schools/stats", response_model=list[AdminSchoolStatsOut])
 def admin_school_stats(db: DbSession, admin: AdminUser) -> list[AdminSchoolStatsOut]:
-    """S3.5: school list with per-school counts (aggregates only, R11)."""
+    """school list with per-school counts (aggregates only, )."""
     schools = db.execute(select(School).order_by(School.id)).scalars().all()
     since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=7)
     rows: list[AdminSchoolStatsOut] = []
@@ -183,7 +183,7 @@ def admin_school_stats(db: DbSession, admin: AdminUser) -> list[AdminSchoolStats
 def admin_school_invite_list(
     school_id: int, db: DbSession, admin: AdminUser
 ) -> list[SchoolInviteAdminOut]:
-    """S3.5: invite management list; plaintext codes/hashes are never returned (R7)."""
+    """invite management list; plaintext codes/hashes are never returned."""
     if db.get(School, school_id) is None:
         raise HTTPException(status_code=404, detail="school not found")
     invites = (
@@ -212,7 +212,7 @@ def admin_school_invite_list(
 def admin_school_invite_revoke(
     school_id: int, invite_id: int, db: DbSession, admin: AdminUser
 ) -> None:
-    """S3.5: revoke an unused staff invite (redeemed ones stay for audit)."""
+    """revoke an unused staff invite (redeemed ones stay for audit)."""
     invite = db.get(SchoolInvite, invite_id)
     if invite is None or invite.school_id != school_id:
         raise HTTPException(status_code=404, detail="invite not found")
@@ -234,7 +234,7 @@ def admin_school_invite_revoke(
 
 @router.get("/admin/content/versions", response_model=list[ContentVersionRowOut])
 def admin_content_versions(db: DbSession, admin: AdminUser) -> list[ContentVersionRowOut]:
-    """S3.5: current version per (subject, class, chapter) + chain length."""
+    """current version per (subject, class, chapter) + chain length."""
     contents = (
         db.execute(
             select(ChapterContent).order_by(
@@ -282,7 +282,7 @@ def admin_report_aggregate(
     since_days: int | None = Query(default=None, ge=1, le=3650),
     min_cell: int = Query(default=5, ge=3, le=50),
 ) -> Response:
-    """S6.5: anonymized aggregate export for government/authority
+    """anonymized aggregate export for government/authority
     requests. Cells below the k-anonymity threshold are suppressed, and
     the serialized payload is PII-scanned before it is handed out --
     any hit fails the request closed (never returns a partial export).
@@ -293,7 +293,7 @@ def admin_report_aggregate(
         json.dumps(payload, ensure_ascii=False) + "\n" + govt_report.to_csv(export)
     )
     if violations:
-        # R11: count only, never the offending content.
+        # count only, never the offending content.
         json_log(
             logger,
             logging.ERROR,
@@ -353,7 +353,7 @@ def school_invite_create(
 def auth_join_school(app_ctx: Ctx, payload: SchoolJoinIn, db: DbSession) -> TokenResponse:
     """Redeem a staff invite: create the account in the school and sign in.
 
-    Invite codes are single-use; only their SHA-256 hash is stored (R7).
+    Invite codes are single-use; only their SHA-256 hash is stored.
     """
     key = _hash_invite(payload.invite_code)
     invite = db.execute(
@@ -409,6 +409,14 @@ def school_my_overview(db: DbSession, user: SchoolStaffUser) -> SchoolOverviewOu
     """Own-school overview for staff; admin without a school sees the default."""
     school = db.get(School, user.school_id) if user.school_id else None
     if school is None:
+        # A school_admin without a school is a provisioning error — the
+        # sibling school-health endpoint 404s the same shape. Only a platform
+        # admin falls back to the default school.
+        if user.role == "school_admin":
+            raise HTTPException(
+                status_code=404,
+                detail={"code": "no_school", "message": "No school linked to this account"},
+            )
         school = _default_school(db)
     rooms = db.execute(select(ClassRoom).where(ClassRoom.school_id == school.id)).scalars().all()
     room_ids = [r.id for r in rooms]
@@ -484,7 +492,7 @@ def school_class_register(
     )
 
 
-# ── S3.2: school dashboard (aggregate learning health, no per-message data) ──
+# ── school dashboard (aggregate learning health, no per-message data) ──
 
 
 @router.get("/school/overview", response_model=SchoolHealthOut)
@@ -495,7 +503,7 @@ def school_health_overview(
 
     Aggregates only: buckets and averages over graded attempts; chat data
     contributes nothing beyond a count of sessions started in the last
-    7 days (R11: no message content ever leaves this endpoint).
+    7 days (no message content ever leaves this endpoint).
     """
     if user.role == "school_admin":
         if school_id is not None and school_id != user.school_id:
@@ -603,7 +611,7 @@ def school_health_overview(
     )
 
 
-# ── Wave 2: school section (school_admin own school, admin platform-wide) ──
+# ── school section (school_admin own school, admin platform-wide) ──
 
 
 def _actor_school(db: Session, user: User, school_id: int | None) -> School:
@@ -670,7 +678,7 @@ def school_students(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> SchoolStudentPage:
     """Paginated school roster: id, name, grade, section, approximate last
-    activity and quiz-attempt count. NO email/phone ever (R11).
+    activity and quiz-attempt count. NO email/phone ever.
 
     "last_active" is the best honest signal available server-side: the
     newer of the last tracked activity day and the last quiz attempt.
@@ -889,7 +897,7 @@ def school_analytics(
     days: Annotated[int, Query(ge=1, le=90)] = 30,
 ) -> SchoolAnalyticsOut:
     """K-anonymity-safe trend counts only: daily actives, questions asked
-    and quiz volume. No per-student row, no message content ever (R11)."""
+    and quiz volume. No per-student row, no message content ever."""
     school = _actor_school(db, user, school_id)
     rooms = _school_rooms(db, school.id)
     students, _room_of = _school_students_by_room(db, [r.id for r in rooms])

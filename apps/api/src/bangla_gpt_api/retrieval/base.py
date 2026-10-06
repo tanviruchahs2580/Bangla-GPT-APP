@@ -1,6 +1,6 @@
-"""Shared retrieval contracts (S4.3 RAG v2).
+"""Shared retrieval contracts (RAG v2).
 
-Both lanes -- :class:`BM25Index` (lexical) and :class:`HybridIndex`
+Both lanes --:class:`BM25Index` (lexical) and:class:`HybridIndex`
 (BM25+vector+RRF+rerank) -- satisfy this structural protocol, so services
 depend on the contract, not a concrete index.
 """

@@ -1,4 +1,4 @@
-"""S4.1 Education Context Engine.
+"""Education Context Engine.
 
 ONE central place builds the education context attached to every AI call:
 who is asking (role/class), what topic (subject/chapter), why (goal), how
@@ -7,10 +7,10 @@ about mastery (mastery_snapshot).
 
 Rules honoured here:
 - The context is TRUSTED APP TEXT injected into the USER prompt; system
-  prompts stay byte-identical so their secrecy/injection protections (R5)
+  prompts stay byte-identical so their secrecy/injection protections
   never move or change.
-- log_fields() is safe for observability: counts, ids, concepts -- never
-  message content or PII (R11, same discipline as product_event props).
+- log_fields is safe for observability: counts, ids, concepts -- never
+  message content or PII (, same discipline as product_event props).
 """
 
 from collections.abc import Mapping
@@ -22,16 +22,16 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class RequestContext:
-    """Everything the AI layer is allowed to know about one request (S4.1)."""
+    """Everything the AI layer is allowed to know about one request."""
 
     role: str
     class_level: int
     subject: str | None = None
     chapter_id: str | None = None
-    goal: str = "question"  # question | chat | reteach | quiz_explain | ...
+    goal: str = "question"  # question | chat | reteach | quiz_explain |...
     history_summary: str = "0 turns"  # counts/strategy only, never content
     mastery_snapshot: Mapping[str, float] = field(default_factory=dict)
-    # Wave 2: gated personalization line (weak-chapter facts + explanation
+    # gated personalization line (weak-chapter facts + explanation
     # style directive). Empty string -> NO personalization is rendered; the
     # caller leaves it empty when the student disabled their learning memory.
     memory_block: str = ""
@@ -59,7 +59,7 @@ class RequestContext:
             if self.mastery_snapshot
             else "none"
         )
-        # Wave 2: the personalization line renders ONLY when the caller put
+        # the personalization line renders ONLY when the caller put
         # content in memory_block (memory enabled). Byte-identical output
         # when empty -- existing consumers/tests are unaffected.
         memory_line = f"\nmemory: {self.memory_block}" if self.memory_block else ""

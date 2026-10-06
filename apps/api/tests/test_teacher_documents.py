@@ -1,4 +1,4 @@
-"""Wave 1: generic teacher document generators + document library.
+"""generic teacher document generators + document library.
 
 Chapter title 'kosh' (cell) from the sample NCTB class-6 science corpus;
 built from codepoints so the file stays pure ASCII on disk.

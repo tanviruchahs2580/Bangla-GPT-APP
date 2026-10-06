@@ -1,11 +1,11 @@
-"""S4.3 RAG v2 -- hybrid retrieval index: BM25 + vector -> RRF -> rerank.
+"""RAG v2 -- hybrid retrieval index: BM25 + vector -> RRF -> rerank.
 
 Pipeline (master spec 4.3): section chunking (TextIngester, chunk.meta.
 section) -> embedder (retrieval/embedding.py) -> vector lane
 (retrieval/vector.py) + lexical lane (BM25Index) -> reciprocal rank fusion
 (retrieval/fusion.py) -> reranker -> top_k.
 
-``search`` is signature-compatible with :meth:`BM25Index.search`, so the
+``search`` is signature-compatible with:meth:`BM25Index.search`, so the
 hybrid index is a drop-in for TutorService/the generation retrievers. The
 reranker is a deterministic lexical cross-check (stem coverage + char
 trigrams + fusion evidence); a model-based reranker can replace just the
@@ -103,7 +103,7 @@ class HybridIndex:
             top_k=candidate_k,
             min_score=0.0,
         )
-        # Grounding guard (R12): hashed-bucket collisions give a gibberish
+        # Grounding guard: hashed-bucket collisions give a gibberish
         # query a small positive cosine against unrelated text, so a vector-
         # only candidate (found by NO lexical lane) must share Bangla
         # characters with the query to count as a phonetic-variant hit.

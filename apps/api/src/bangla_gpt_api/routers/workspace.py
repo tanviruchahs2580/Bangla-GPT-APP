@@ -1,7 +1,7 @@
-"""Workspace Routes — split from the main.py god-module (ARCH-001).
+"""Workspace Routes — split from the main.py god-module.
 
 Behavior-identical extraction: same paths, validation, status codes.
-Shared context/auth via :mod:`.deps`, shared helpers via :mod:`.common`.
+Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 """
 
 import asyncio
@@ -49,7 +49,7 @@ from .deps import (
 router = APIRouter()
 
 
-# --- Wave 1: teacher workload metric ------------------------------------------
+# --- teacher workload metric ------------------------------------------
 # PLANNING ESTIMATES -- minutes a teacher typically spends producing each
 # artifact by hand, documented here so the workload endpoint stays auditable.
 # They are NOT measured; response always carries estimate=true.
@@ -121,7 +121,7 @@ def delete_note(note_id: int, db: DbSession, user: CurrentUser) -> Response:
     return Response(status_code=204)
 
 
-# --- Wave 1: in-app notification feed ----------------------------------------
+# --- in-app notification feed ----------------------------------------
 
 
 def _notification_out(row: Notification) -> NotificationOut:
@@ -171,13 +171,13 @@ def notification_mark_read(
     return _notification_out(row)
 
 
-# --- Wave 1: background generation jobs (AiJob) --------------------------------
+# --- background generation jobs (AiJob) --------------------------------
 
 
 async def _execute_ai_job(app_ctx: Ctx, job_id: str) -> None:
     """Run one AiJob to completion. Runs detached from the request, so it
     opens its OWN session (session_factory) and never touches the request
-    session -- the study of jobs.py: `db = session_factory(); finally close`."""
+    session -- the study of jobs.py: `db = session_factory; finally close`."""
     db = app_ctx.session_factory()
     try:
         job = db.get(AiJob, job_id)
@@ -207,7 +207,7 @@ async def _execute_ai_job(app_ctx: Ctx, job_id: str) -> None:
             job.status = "ready"
             job.result = {"document_id": doc.id}
             job.error = None
-            # Wave 2: job lifecycle as sanitized product analytics.
+            # job lifecycle as sanitized product analytics.
             _record_analytics(
                 db,
                 job.user_id,
@@ -222,12 +222,13 @@ async def _execute_ai_job(app_ctx: Ctx, job_id: str) -> None:
             fresh = db.get(AiJob, job_id)
             if fresh is not None:
                 fresh.status = "failed"
-                fresh.error = str(exc)[:300]
+                # Exception bodies can carry DB/URL fragments — persist the
+                # type name only; full tracebacks stay in server logs.
+                fresh.error = type(exc).__name__
                 _record_analytics(
                     db, fresh.user_id, actor.role, "ai_job_failed", {"kind": fresh.kind}
                 )
                 db.commit()
-            # Never leak exception bodies to logs beyond the type name.
             json_log(
                 logger,
                 logging.WARNING,
@@ -297,7 +298,7 @@ def teacher_job_get(job_id: str, db: DbSession, teacher: TeacherOrAdminUser) -> 
     return _job_out(job)
 
 
-# --- Wave 1: teacher workload metric -------------------------------------------
+# --- teacher workload metric -------------------------------------------
 
 
 @router.get("/teacher/workload", response_model=WorkloadOut)
@@ -339,4 +340,4 @@ def teacher_workload(db: DbSession, teacher: TeacherOrAdminUser) -> WorkloadOut:
     )
 
 
-# --- S2.5: short tests (class+chapter ultra-fast, whole classroom) ------
+# --- short tests (class+chapter ultra-fast, whole classroom) ------

@@ -1,4 +1,4 @@
-"""S2.3/S2.4/S2.6 content generators (chapter material, papers, lesson plans)
+"""//content generators (chapter material, papers, lesson plans)
 plus the wave-1 generic teacher generators (worksheet, answer key, homework,
 rubric)."""
 

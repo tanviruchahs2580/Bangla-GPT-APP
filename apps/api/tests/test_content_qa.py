@@ -1,4 +1,4 @@
-"""S6.2 content QA tests: check detection, gate behavior, sampling flow.
+"""content QA tests: check detection, gate behavior, sampling flow.
 
 Source is kept pure ASCII: Bengali strings are built from code-point
 escapes (glyph-corruption guard). The checks themselves are code-point

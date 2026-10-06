@@ -1,14 +1,14 @@
-"""S3.3: curriculum coverage status derivation (class x subject grid).
+"""curriculum coverage status derivation (class x subject grid).
 
 Pure functions so the PASS-WHEN "status derivation unit tests" hold
 without a DB. For one class-subject cell:
 
-* taught     -- the subject is assigned for that class: chapter content
+* taught -- the subject is assigned for that class: chapter content
                 exists for (class_level, subject) OR a teacher is assigned
                 (per-subject or all-subjects ClassTeacher row).
-* practiced   -- at least one quiz attempt exists for the cell.
-* mastered   -- practiced AND the mean graded score >= MASTERED_MIN_PCT.
-* uncovered  -- neither taught nor practiced.
+* practiced -- at least one quiz attempt exists for the cell.
+* mastered -- practiced AND the mean graded score >= MASTERED_MIN_PCT.
+* uncovered -- neither taught nor practiced.
 
 Precedence is mastered > practiced > taught > uncovered: practicing with
 a low average is still "practiced" (needs work), not downgraded to the

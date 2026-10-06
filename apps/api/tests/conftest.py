@@ -3,7 +3,7 @@
 Two layers of isolation:
 
 1. Module (import) time — applied *before* test collection. ``main.py`` builds
-   a module-level ``app = create_app()`` for gunicorn, and test modules import
+   a module-level ``app = create_app`` for gunicorn, and test modules import
    it during collection, before any fixture runs. Without the import-time patch
    here, that collection-time build would use the real default (a file SQLite
    store) and pollute the workspace; CI's later ``alembic upgrade head`` then
@@ -40,7 +40,7 @@ _HERMETIC_MODEL_CONFIG["env_file"] = None
 def _hermetic_init(self, *args, **kwargs):  # type: ignore[no-untyped-def]
     kwargs["_env_file"] = None
     # Explicit kwargs/env still win (pydantic-settings precedence); only the
-    # file-DB default is replaced, so tests never share ./bangla_gpt.db.
+    # file-DB default is replaced, so tests never share./bangla_gpt.db.
     if "database_url" not in kwargs and "DATABASE_URL" not in os.environ:
         kwargs["database_url"] = "sqlite://"
     return _ORIG_INIT(self, *args, **kwargs)

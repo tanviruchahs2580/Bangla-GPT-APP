@@ -4,7 +4,7 @@ Revision ID: f7a8b9c0d1e2
 Revises: e6f7a8b9c0d1
 Create Date: 2026-09-06
 
-S2.1: School, ClassRoom(school_id, class_level, section), ClassStudent,
+School, ClassRoom(school_id, class_level, section), ClassStudent,
 ClassTeacher. Backfill: a single default school is created when students
 exist, one classroom per distinct (class_level) with section 'GEN', and
 every existing student is enrolled into the classroom matching its own

@@ -1,4 +1,4 @@
-"""S2.4: question-paper generator -- gates, HIL review, FINAL, PDF export."""
+"""question-paper generator -- gates, HIL review, FINAL, PDF export."""
 
 import io
 import json

@@ -293,11 +293,11 @@ async def test_router_get_status() -> None:
 async def test_full_resilience_chain() -> None:
     """Simulate the full chain: router -> breaker -> provider.
 
-    Real flow in ask()/ask_stream():
+    Real flow in ask/ask_stream:
     1. Circuit times out → state becomes HALF_OPEN
-    2. select_provider() uses the one allowed probe, returns fallback
+    2. select_provider uses the one allowed probe, returns fallback
     3. Fallback generates answer successfully
-    4. router.record_result(True) calls cb.record_success()
+    4. router.record_result(True) calls cb.record_success
        → HALF_OPEN + success → CLOSED → router switches back
     """
     failing_primary = FailingProvider()

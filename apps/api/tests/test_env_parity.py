@@ -1,16 +1,16 @@
-"""S5.1: environment parity drift guard (dev/staging/prod).
+"""environment parity drift guard (dev/staging/prod).
 
-PASS-WHEN of 5.1 is a fresh staging bring-up (human/infra step, R8); what CAN
+PASS-WHEN of 5.1 is a fresh staging bring-up (human/infra step, ); what CAN
 be enforced in code is that the documented env surface and the settings model
 never drift apart:
 
-* every variable documented in .env.example (dev) is a real Settings field;
-* every variable in .env.production.example is either a real Settings field
+* every variable documented in.env.example (dev) is a real Settings field;
+* every variable in.env.production.example is either a real Settings field
   or a documented compose/build-only variable (INFRA_ONLY below) -- adding a
   new secret to the provisioning doc without wiring it into the app, or
   renaming a Settings field without updating the docs, fails this test;
 * every ${VAR} compose interpolates is either given a default in the compose
-  file or documented in .env.production.example (no undocumented deploy-time
+  file or documented in.env.production.example (no undocumented deploy-time
   surprises);
 * ENV supports exactly the three documented environments.
 """
@@ -33,12 +33,12 @@ INFRA_ONLY = {
     "BACKUP_KEEP_DAYS",  # backup sidecar retention
     "DOMAIN",  # Caddy site address
     "GRAFANA_ADMIN_PASSWORD",  # monitoring stack login
-    "PGBR_STANZA",  # pgBackRest stanza name (S5.7 backup sidecar)
+    "PGBR_STANZA",  # pgBackRest stanza name (backup sidecar)
     "POSTGRES_DB",  # postgres service bootstrap
     "POSTGRES_PASSWORD",  # postgres service bootstrap
     "POSTGRES_USER",  # postgres service bootstrap
-    "S3_BUCKET",  # corpus object-storage sync (scripts/s3_corpus_sync.py, S5.7)
-    "S3_PREFIX",  # corpus object-storage key prefix (S5.7)
+    "S3_BUCKET",  # corpus object-storage sync (scripts/s3_corpus_sync.py, )
+    "S3_PREFIX",  # corpus object-storage key prefix
     "VITE_API_BASE",  # web build-time API base URL
     "WEB_CONCURRENCY",  # uvicorn worker count (deploy command, not app setting)
 }
@@ -81,7 +81,7 @@ def test_settings_supports_the_three_documented_environments() -> None:
 
 
 def test_staging_shares_production_strictness() -> None:
-    # S5.1 parity: staging must run the production boot guard and secret
+    # parity: staging must run the production boot guard and secret
     # suppression; only dev/test are lenient.
     assert Settings(env="staging").is_production
     assert Settings(

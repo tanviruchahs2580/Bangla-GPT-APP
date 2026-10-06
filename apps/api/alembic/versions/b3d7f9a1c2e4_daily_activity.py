@@ -1,4 +1,4 @@
-"""daily_activity table for streak + heatmap (S1.9)
+"""daily_activity table for streak + heatmap 
 
 Revision ID: b3d7f9a1c2e4
 Revises: a2c5e7b9d1f3

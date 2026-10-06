@@ -1,7 +1,7 @@
 """Lifespan context builder.
 
 Extracted from the monolithic ``main.py`` with one critical change: **no
-closure capture** of outer variables.  Every dependency is passed explicitly
+closure capture** of outer variables. Every dependency is passed explicitly
 so the lifespan can be inspected, tested, and refactored independently.
 """
 

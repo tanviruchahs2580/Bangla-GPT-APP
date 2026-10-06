@@ -1,6 +1,6 @@
-"""B14 — .env.example is generated from Settings (single source of truth).
+""".env.example is generated from Settings (single source of truth).
 
-Every Settings field must appear in .env.example, either active (``VAR=``)
+Every Settings field must appear in.env.example, either active (``VAR=``)
 or documented-commented (``# VAR=``), so operators never discover
 parameters by reading source code.
 """

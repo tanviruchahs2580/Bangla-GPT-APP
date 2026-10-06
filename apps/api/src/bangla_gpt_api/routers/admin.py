@@ -1,7 +1,7 @@
-"""Admin Routes — split from the main.py god-module (ARCH-001).
+"""Admin Routes — split from the main.py god-module.
 
 Behavior-identical extraction: same paths, validation, status codes.
-Shared context/auth via :mod:`.deps`, shared helpers via :mod:`.common`.
+Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 """
 
 import logging
@@ -72,9 +72,12 @@ def admin_list_users(
     statement = select(User)
     count_stmt = select(func.count()).select_from(User)
     if q:
-        like = f"%{q.strip().lower()}%"
-        statement = statement.where(func.lower(User.email).like(like))
-        count_stmt = count_stmt.where(func.lower(User.email).like(like))
+        # Escape LIKE wildcards so "%"/"_" in the query are literals
+        # (same contract as the tutor message search).
+        escaped = q.strip().lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        like = f"%{escaped}%"
+        statement = statement.where(func.lower(User.email).like(like, escape="\\"))
+        count_stmt = count_stmt.where(func.lower(User.email).like(like, escape="\\"))
     if role:
         statement = statement.where(User.role == role)
         count_stmt = count_stmt.where(User.role == role)
@@ -103,7 +106,7 @@ def admin_update_role(
             raise HTTPException(status_code=409, detail="Cannot demote the last admin")
     old_role = target.role
     target.role = payload.role
-    # S5.6 audit event 1/5: role_change (ids + before/after only)
+    # audit event 1/5: role_change (ids + before/after only)
     write_audit(
         db,
         action="role_change",
@@ -119,10 +122,10 @@ def admin_update_role(
     )
 
 
-# --- S5.6: audited support impersonation (audit event 5/5) ---
+# --- audited support impersonation (audit event 5/5) ---
 # Short-lived token for the target user, minted only by an admin, with
 # start AND stop rows in the audit trail. Admin-role targets are refused:
-# support never needs admin powers. S5.10 added the missing piece: the
+# support never needs admin powers. added the missing piece: the
 # token carries a jti and POST /auth/impersonate/exit revokes it through
 # the shared cache, so a session no longer rides out its 15-minute ceiling.
 
@@ -147,12 +150,12 @@ def admin_impersonate(
         target,
         settings=app_ctx.settings,
         minutes=IMPERSONATION_MINUTES,
-        # jti makes this specific token revocable (S5.10 exit button /
+        # jti makes this specific token revocable (exit button /
         # admin revoke), which stateless JWT alone cannot do.
         jti=jti,
         extra_claims={"imp": True, "imp_by": admin.id},
     )
-    # F-SEC-01: index active JTIs per target so admin revoke can find them
+    # index active JTIs per target so admin revoke can find them
     try:
         existing = app_ctx.cache.get_json(f"imp_active:{target.id}") or []
         if not isinstance(existing, list):
@@ -185,7 +188,7 @@ def admin_impersonate_end(app_ctx: Ctx, user_id: int, db: DbSession, admin: Admi
     target = db.get(User, user_id)
     if target is None:
         raise HTTPException(status_code=404, detail="User not found")
-    # F-SEC-01: revoke all active impersonation JTIs for this target
+    # revoke all active impersonation JTIs for this target
     try:
         active = app_ctx.cache.get_json(f"imp_active:{target.id}") or []
         if isinstance(active, list):
@@ -209,7 +212,7 @@ def admin_impersonate_end(app_ctx: Ctx, user_id: int, db: DbSession, admin: Admi
 
 @router.post("/auth/impersonate/exit", status_code=204)
 def impersonate_exit(app_ctx: Ctx, request: Request, db: DbSession, user: CurrentUser) -> None:
-    """S5.10: the holder of an impersonation token ends the session NOW.
+    """the holder of an impersonation token ends the session NOW.
 
     The jti lands in the revocation cache with a TTL equal to the token's
     remaining life, so the token stops working at once and the cache entry
@@ -248,7 +251,7 @@ def admin_audit(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> AdminAuditPage:
-    """S5.6: the privileged-action trail (newest first), admin-only."""
+    """the privileged-action trail (newest first), admin-only."""
     stmt = select(AuditLog).order_by(AuditLog.id.desc())
     count_stmt = select(func.count()).select_from(AuditLog)
     if action:
@@ -277,7 +280,7 @@ def admin_audit(
 
 @router.get("/admin/analytics/overview", response_model=AdminOverview)
 def admin_overview(db: DbSession, admin: AdminUser) -> AdminOverview:
-    # F-PERF-04: SQL aggregates instead of full-history Python loops
+    # SQL aggregates instead of full-history Python loops
     users_total = db.execute(select(func.count()).select_from(User)).scalar_one()
     by_role_rows = db.execute(select(User.role, func.count()).group_by(User.role)).all()
     by_role = {r: int(c) for r, c in by_role_rows}
@@ -299,10 +302,10 @@ def admin_overview(db: DbSession, admin: AdminUser) -> AdminOverview:
 
 @router.get("/admin/safety/refusals", response_model=RefusalAuditOut)
 def admin_refusal_audit(db: DbSession, admin: AdminUser, days: int = 30) -> RefusalAuditOut:
-    """S4.8 refusal audit: why and where safety refusals happened.
+    """refusal audit: why and where safety refusals happened.
 
     Aggregates the refused_reason already persisted on ChatMessage --
-    counts only, never message content (R11 child-data minimization).
+    counts only, never message content (child-data minimization).
     """
     days = max(1, min(days, 365))
     cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)
@@ -336,7 +339,7 @@ def admin_ai_quality(
     admin: AdminUser,
     days: Annotated[int, Query(ge=1, le=365)] = 30,
 ) -> AdminAiQualityOut:
-    """Wave 2 AI-quality dashboard: last-N-days answer quality COUNTS only
+    """AI-quality dashboard: last-N-days answer quality COUNTS only
     -- refusals by reason, thumbs, grounding split and the share of
     low-confidence answers under the documented confidence formula.
 
@@ -401,7 +404,7 @@ def admin_ai_quality(
 def admin_purge_expired(
     app_ctx: Ctx, db: DbSession, admin: AdminUser, dry_run: bool = False
 ) -> dict:
-    """Retention sweep (D20, S5.8): expired tokens, stale invites, old chats.
+    """Retention sweep (D20, ): expired tokens, stale invites, old chats.
 
     Child-data minimization: conversations older than
     ``chat_retention_days`` are deleted with their messages. With
@@ -410,7 +413,7 @@ def admin_purge_expired(
     """
     report = run_retention_sweep(db, settings=app_ctx.settings, dry_run=dry_run)
     if not dry_run:
-        # S5.6 audit event 3/5: purge (counts only -- never deleted content)
+        # audit event 3/5: purge (counts only -- never deleted content)
         write_audit(
             db,
             action="purge",

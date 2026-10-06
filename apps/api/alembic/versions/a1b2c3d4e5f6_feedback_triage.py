@@ -1,20 +1,20 @@
-"""feedback triage queue columns (S5.10)
+"""feedback triage queue columns 
 
 Revision ID: a1b2c3d4e5f6
 Revises: f9a0b1c2d3e4
 Create Date: 2026-09-08
 
 Three additive columns on the existing ``feedback`` table so the support
-queue has somewhere to live (spec S5.10: "feedback triage queue (from
+queue has somewhere to live (spec "feedback triage queue (from
 existing /feedback)"). No table is created and nothing is dropped, so the
 migration is safe to apply in place and fully reversible:
 
-* ``triaged``    -- has an admin looked at and dispositioned this item?
+* ``triaged`` -- has an admin looked at and dispositioned this item?
   Indexed because the queue read filters on it.
 * ``triaged_at`` -- when it was dispositioned (NULL while open).
 * ``triage_note``-- short staff-facing note. The privacy rules are unchanged:
   the column holds staff triage text written by admins, never exported by
-  any user-facing route and never logged (R11).
+  any user-facing route and never logged.
 
 """
 

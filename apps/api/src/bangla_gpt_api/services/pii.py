@@ -1,7 +1,7 @@
-"""Pre-LLM PII redaction (PRIV-001).
+"""Pre-LLM PII redaction.
 
 Student-pasted identifiers (phone numbers, emails, NID-like digit runs) must
-never egress to an external model provider. :func:`redact_pii` replaces them
+never egress to an external model provider.:func:`redact_pii` replaces them
 with neutral placeholders and reports how many it removed, so callers can
 meter disclosures. Screening (safety refusal) still runs FIRST on the raw
 question — redaction only sanitises what is sent upstream, it never hides

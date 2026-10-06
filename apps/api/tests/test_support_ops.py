@@ -1,4 +1,4 @@
-"""S5.10 support-ops tests.
+"""support-ops tests.
 
 PASS-WHEN halves:
 * triage flow works -- user feedback lands in the admin queue oldest-first,
@@ -7,7 +7,7 @@ PASS-WHEN halves:
 * impersonation writes audit entries AND is now revocable -- the holder
   ends the session via POST /auth/impersonate/exit and the very same
   token is rejected immediately after (jti lands in the shared cache).
-Plus the public /status payload shape (booleans/presence only, R11).
+Plus the public /status payload shape (booleans/presence only, ).
 
 New file kept ASCII-only (repo rule for new files).
 """
@@ -149,7 +149,7 @@ def test_feedback_triage_flow_end_to_end(pair) -> None:
     assert first["role"] == "student"
     assert first["user_id"] == me["user_id"]
     assert first["triaged"] is False and first["note"] is None
-    assert "email" not in first and "name" not in first  # R11: complaint, not identity
+    assert "email" not in first and "name" not in first  # complaint, not identity
 
     triaged = client.patch(
         f"/admin/feedback/{first['id']}",

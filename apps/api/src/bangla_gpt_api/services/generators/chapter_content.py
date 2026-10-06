@@ -1,4 +1,4 @@
-"""S2.3 content engine: one grounded RAG call produces all chapter sections."""
+"""content engine: one grounded RAG call produces all chapter sections."""
 
 import json
 import re
@@ -111,10 +111,10 @@ async def generate_chapter_content(
         raise ProviderError("no textbook evidence found for this chapter")
     prompt = build_content_prompt(class_level, subject, chapter, hits)
     if context is not None:
-        # S4.1: trusted education-context block, ahead of the evidence.
+        # trusted education-context block, ahead of the evidence.
         prompt = f"{context.render_block()}\n\n{prompt}"
         set_current_context(context)
-    # S4.2: teacher generation is always a TOOL route (main model + RAG).
+    # teacher generation is always a TOOL route (main model + RAG).
     set_current_route(Route.TOOL)
     raw = await provider.generate(prompt, system=CONTENT_SYSTEM_PROMPT)
     return parse_content_payload(raw), _content_sources(hits)

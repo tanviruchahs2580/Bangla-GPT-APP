@@ -1,4 +1,4 @@
-"""S2.8: bulk assignment -- multi-student select, one quiz, due date, tracking."""
+"""bulk assignment -- multi-student select, one quiz, due date, tracking."""
 
 import logging
 import sqlite3
@@ -90,7 +90,7 @@ def _student_ids(db_path, emails: list[str]) -> list[int]:
 
 
 def _student_login(client: TestClient, email: str, code: str) -> dict[str, str]:
-    """Invite-code first login, personal password, fresh token (as in S2.5)."""
+    """Invite-code first login, personal password, fresh token (as in )."""
     login = client.post("/auth/login", json={"email": email, "password": code})
     tok = login.json()["access_token"]
     change = client.post(

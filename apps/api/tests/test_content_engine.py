@@ -1,4 +1,4 @@
-"""S2.3: content engine -- one AI call fills all seven sections; edits version up."""
+"""content engine -- one AI call fills all seven sections; edits version up."""
 
 import asyncio
 import json

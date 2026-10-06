@@ -1,4 +1,4 @@
-"""conversation last_strategy for adaptive re-teach (S1.5)
+"""conversation last_strategy for adaptive re-teach 
 
 Revision ID: a2c5e7b9d1f3
 Revises: f1a2b3c4d5e6

@@ -1,4 +1,4 @@
-"""S4.8 red-team set generator -- writes eval/redteam_v2.json.
+"""red-team set generator -- writes eval/redteam_v2.json.
 
 Adversarial questions a malicious student (or a poisoned document's author)
 would actually try against the tutor: instruction-override and
@@ -7,7 +7,7 @@ expect="refuse": the corpus contains none of the question's tokens, so the
 grounding gate must deny it -- and the answer must never leak the system
 prompt (asserted by the eval CLI's --redteam pass).
 
-Construction rule (R12 honesty): items are adversarial STRINGS, not derived
+Construction rule (honesty): items are adversarial STRINGS, not derived
 from expectations; the generator ASSERTS each question's tokens (len >= 2)
 appear nowhere in the sample corpus, so "refuse" is guaranteed by the system's
 own grounding rule rather than by wishful labels. Source is pure ASCII --

@@ -1,4 +1,4 @@
-"""S5.4: ARQ worker -- runs the SAME jobs.py functions on a redis cron.
+"""ARQ worker -- runs the SAME jobs.py functions on a redis cron.
 
     REDIS_URL=redis://redis:6379/0 JOBS_BACKEND=arq arq worker.WorkerSettings
 
@@ -27,9 +27,9 @@ from bangla_gpt_api.config import get_settings
 from bangla_gpt_api.db.session import make_engine, make_session_factory
 
 # Schedule mirrors the pure rules in services (single source of truth):
-#   parent digest  -- ISO weeks, Sunday (weekday=6) from 16:00 UTC (~22:00 Dhaka)
-#   retention      -- every day from 20:30 UTC (~02:30 Dhaka, S5.8)
-#   nightly rollup -- every day from 21:00 UTC (~03:00 Dhaka)
+# parent digest -- ISO weeks, Sunday (weekday=6) from 16:00 UTC (~22:00 Dhaka)
+# retention -- every day from 20:30 UTC (~02:30 Dhaka, )
+# nightly rollup -- every day from 21:00 UTC (~03:00 Dhaka)
 DIGEST_WEEKDAY = 6
 DIGEST_HOUR_UTC = 16
 RETENTION_HOUR_UTC = 20

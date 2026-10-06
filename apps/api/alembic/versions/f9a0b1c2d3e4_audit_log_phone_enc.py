@@ -1,10 +1,10 @@
-"""security: audit_log table + encrypted guardian phone column (S5.6)
+"""security: audit_log table + encrypted guardian phone column 
 
 Revision ID: f9a0b1c2d3e4
 Revises: e8f9a0b1c2d3
 Create Date: 2026-09-06
 
-Two additive changes for S5.6 security hardening:
+Two additive changes for security hardening:
 
 * ``audit_log`` -- append-only trail for the five sensitive admin/support
   events (role_change, data_export, purge, qp_finalize, impersonation).

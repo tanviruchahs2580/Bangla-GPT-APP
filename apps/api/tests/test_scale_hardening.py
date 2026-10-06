@@ -84,7 +84,7 @@ def test_events_log_props_keys_never_values(tmp_path) -> None:
             self.records.append(record)
 
     capture = _Capture()
-    # ARCH-001: routes log under bangla_gpt_api.routers.*; attach to the
+    # routes log under bangla_gpt_api.routers.*; attach to the
     # package root so every child logger's records propagate here.
     app_logger = logging.getLogger("bangla_gpt_api")
     old_level = app_logger.level
@@ -157,7 +157,7 @@ def test_stream_user_message_not_orphaned_on_llm_failure(tmp_path, monkeypatch) 
     assert "event: error" in body
 
     history = client.get(f"/tutor/conversations/{conv_id}/messages", headers=headers).json()
-    # F-PERF-06: stream now commits user turn before LLM call to release DB session;
+    # stream now commits user turn before LLM call to release DB session;
     # on failure the user message persists (previously rolled back)
     assert len(history) == 1 and history[0]["content"] == "কোষ কী?"
 
@@ -165,7 +165,7 @@ def test_stream_user_message_not_orphaned_on_llm_failure(tmp_path, monkeypatch) 
 def test_proxy_header_rate_limit_identity(tmp_path) -> None:
     client = TestClient(create_app(_settings(tmp_path, trust_proxy_headers=True)))
     spoofed = {"X-Forwarded-For": "203.0.113.7"}
-    # Login limiter: 10/min per IP. 10 attempts exhaust IP .7's budget.
+    # Login limiter: 10/min per IP. 10 attempts exhaust IP.7's budget.
     codes = {
         client.post(
             "/auth/login",

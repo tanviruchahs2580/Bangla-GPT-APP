@@ -1,4 +1,4 @@
-"""Wave 1: GET /teacher/workload -- counts x documented planning minutes."""
+"""GET /teacher/workload -- counts x documented planning minutes."""
 
 import pytest
 from fastapi.testclient import TestClient

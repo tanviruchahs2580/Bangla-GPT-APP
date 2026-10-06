@@ -1,4 +1,4 @@
-"""Wave 1 (BUG-4): delete_me must clean every new FK-bearing table.
+"""(BUG-4): delete_me must clean every new FK-bearing table.
 
 analytics_events has no FK by design (append-only, PII-free trail), so its
 rows intentionally survive account deletion; that is asserted too.

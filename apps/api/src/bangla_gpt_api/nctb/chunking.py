@@ -21,13 +21,13 @@ from bangla_gpt_api.nctb.normalize import normalize_bangla
 CHAPTER_PATTERNS = [
     re.compile(r"^\s*(?:উত্তর\s*)?অধ্যায়\s*[:：\-–]?\s*(.+)$"),
     re.compile(r"^\s*অধ্যায়ে?র?\s*নাম\s*[:：\-–]?\s*(.+)$"),
-    # Official curriculum format: "প্রথম অধ্যায় : বৈজ্ঞানিক প্রক্রিয়া এবং পরিমাপ"
+    # Official curriculum format: "প্রথম অধ্যায়: বৈজ্ঞানিক প্রক্রিয়া এবং পরিমাপ"
     re.compile(r"^\s*(\S+)\s*অধ্যায়\s*[:：\-–]\s*(.+)$"),
 ]
 SECTION_HINTS = ("অনুশীলনী", "অনুশীলন", "সংক্ষিপ্ত প্রশ্ন", "বহু নির্বাচনি", "পাঠ")
 
 # pypdf often emits a whole page as ONE physical line where the running
-# header glues onto the chapter heading ("… ২০১২ ৩৮ প্রথম অধ্যায় : …").
+# header glues onto the chapter heading ("… ২০১২ ৩৮ প্রথম অধ্যায়: …").
 # Re-break before heading-shaped fragments so the anchored patterns match.
 _HEADING_BREAK = re.compile(r"\s+(?=\S{1,12}\s*অধ্যায়\s*[:：])")
 _SECTION_BREAK = re.compile(r"\s+(?=(?:অনুশীলনী|অনুশীলন|বহু\s*নির্বাচনি|সংক্ষিপ্ত\s*প্রশ্ন)\s*[?:।]?)")

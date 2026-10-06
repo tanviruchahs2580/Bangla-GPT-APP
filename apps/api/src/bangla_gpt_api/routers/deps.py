@@ -1,6 +1,6 @@
 """Shared application context, database/auth dependencies and tenancy guards.
 
-Split from the main.py god-module (ARCH-001). Everything here is imported by
+Split from the main.py god-module. Everything here is imported by
 the domain routers; nothing in this package may import ``main`` or any router
 (one-way dependency: routers -> deps/common -> services).
 """
@@ -83,7 +83,7 @@ def _unauthorized(detail: str = "Not authenticated") -> HTTPException:
     )
 
 
-# S5.8: bumping this string makes every previously-consented student
+# bumping this string makes every previously-consented student
 # needs_reconfirm=true until they accept via POST /students/{id}/consent/reconfirm
 # (see tests/test_compliance_v2.py for the flow).
 CONSENT_VERSION = "2026-09-v2"
@@ -98,7 +98,6 @@ _FORCE_CHANGE_EXEMPT_PATHS = frozenset(
         "/auth/change-password",
         "/auth/login",
         "/users/me",
-        "/users/me/export",
     }
 )
 
@@ -116,7 +115,7 @@ def get_current_user(
         user_id = int(payload["sub"])
     except (pyjwt.PyJWTError, KeyError, TypeError, ValueError) as exc:
         raise _unauthorized("Invalid or expired token") from exc
-    # S5.10: impersonation tokens are revocable BEFORE their short expiry.
+    # impersonation tokens are revocable BEFORE their short expiry.
     # The jti lands in the shared cache (Redis when configured: revocation
     # then holds across workers/restarts; memory backend: per-worker) with
     # a TTL that matches the token's own remaining life.
@@ -158,14 +157,14 @@ SchoolStaffUser = Annotated[User, Depends(require_roles("school_admin", "admin")
 
 
 def _is_mock_provider(app_ctx: AppContext) -> bool:
-    """Wave 2: the chat routes refuse vision turns for the mock provider
+    """the chat routes refuse vision turns for the mock provider
     (it has no eyes); the honest refusal happens at the route, not inside
     the service, so the LLM pipeline never sees an unusable image."""
     tutor = app_ctx.tutor
     return tutor is not None and getattr(tutor.provider, "name", "") == "mock"
 
 
-# --- Wave 2: school tenancy helpers -------------------------------------------
+# --- school tenancy helpers -------------------------------------------
 # Tenancy anchor is User.school_id. A student belongs to a school EXACTLY
 # when one of their ClassRoom memberships carries that school_id. A teacher
 # WITHOUT a school keeps the pre-Wave-2 behavior (no tenancy wall) so every
@@ -222,12 +221,12 @@ def authorize_student_access(db: Session, student_id: int, user: User) -> Studen
     student = db.get(Student, student_id)
     if student is None:
         raise HTTPException(status_code=404, detail="Student not found")
-    # F-AUTH-01: school_admin gets school-scoped access (same as teacher), documented policy
+    # school_admin gets school-scoped access (same as teacher), documented policy
     if user.role in ("teacher", "admin", "school_admin"):
         return _assert_student_in_school(db, user, student)
     if user.role == "student" and student.user_id == user.id:
         return student
-    # F-AUTH-02: linked guardian allowed via ParentStudentLink
+    # linked guardian allowed via ParentStudentLink
     # This helper is intentionally broader — consent reconfirm checks link explicitly
     raise HTTPException(status_code=403, detail="Not allowed to access this student")
 
@@ -249,7 +248,7 @@ def _build_me_response(app_ctx: AppContext, db: Session, user: User) -> MeRespon
         parent = db.execute(select(Parent).where(Parent.user_id == user.id)).scalar_one_or_none()
         if parent is not None:
             profile_id, name = parent.id, parent.name
-            # owner-only view of the decrypted guardian phone (S5.6)
+            # owner-only view of the decrypted guardian phone
             phone = decrypt_pii(parent.phone_enc, app_ctx.settings.pii_enc_key)
     return MeResponse(
         user_id=user.id,

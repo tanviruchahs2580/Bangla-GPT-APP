@@ -1,7 +1,7 @@
-"""Teacher Routes — split from the main.py god-module (ARCH-001).
+"""Teacher Routes — split from the main.py god-module.
 
 Behavior-identical extraction: same paths, validation, status codes.
-Shared context/auth via :mod:`.deps`, shared helpers via :mod:`.common`.
+Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 """
 
 import csv
@@ -70,8 +70,8 @@ def teacher_roster(
     class_level: int | None = None,
     limit: Annotated[int, Query(ge=1, le=1000)] = 200,
 ) -> list[StudentBrief]:
-    # S5.5: capped (class_level omitted used to pull the whole student table).
-    # Wave 2 tenancy: school-bound teachers only ever see their own school.
+    # capped (class_level omitted used to pull the whole student table).
+    # tenancy: school-bound teachers only ever see their own school.
     students = _load_class_students(
         db, class_level, limit=limit, school_id=_tenant_school_id(teacher)
     )
@@ -130,7 +130,7 @@ def teacher_analytics(
     )
 
 
-# --- S2.2: classroom management + CSV bulk import -------------------------
+# --- classroom management + CSV bulk import -------------------------
 
 
 def _room_counts(db: Session) -> dict[int, int]:
@@ -148,9 +148,9 @@ def _room_counts(db: Session) -> dict[int, int]:
 
 @router.get("/teacher/classrooms", response_model=list[ClassRoomOut])
 def teacher_list_classrooms(db: DbSession, teacher: TeacherOrAdminUser) -> list[ClassRoomOut]:
-    """S2.2: all classrooms with enrollment counts.
+    """all classrooms with enrollment counts.
 
-    Wave 2 tenancy: a teacher attached to a school only sees that school's
+    tenancy: a teacher attached to a school only sees that school's
     rooms; school-less teachers and platform admins keep the old view.
     """
     statement = select(ClassRoom).order_by(ClassRoom.class_level, ClassRoom.section)
@@ -174,7 +174,7 @@ def teacher_list_classrooms(db: DbSession, teacher: TeacherOrAdminUser) -> list[
 def teacher_create_classroom(
     payload: ClassRoomCreateIn, db: DbSession, teacher: TeacherOrAdminUser
 ) -> ClassRoomOut:
-    # S3.1: teachers with a school create rooms inside it; legacy
+    # teachers with a school create rooms inside it; legacy
     # school-less teachers keep using the default school.
     school = db.get(School, teacher.school_id) if teacher.school_id else None
     if school is None:
@@ -255,7 +255,7 @@ def classroom_import(
     must_change_password=True forces setting a personal password on first
     login (existing /auth change-password flow). The plaintext code is
     returned exactly once -- only its SHA-256 hash is stored. The school
-    supplies guardian consent on behalf of imported minors (R11): consent
+    supplies guardian consent on behalf of imported minors: consent
     is recorded with version 'CSV-IMPORT-1'.
     """
     room = _assert_room_in_school(teacher, _classroom_or_404(db, room_id))
@@ -321,4 +321,4 @@ def classroom_import(
     return ClassImportOut(created=created, failed=len(rows_out) - created, rows=rows_out)
 
 
-# ── S3.1: school onboarding (admin -> school code -> staff invite) ────
+# ── school onboarding (admin -> school code -> staff invite) ────

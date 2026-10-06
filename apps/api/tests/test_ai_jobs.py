@@ -1,7 +1,7 @@
-"""Wave 1: AiJob background generation (queued -> generating -> ready|failed).
+"""AiJob background generation (queued -> generating -> ready|failed).
 
 The runner executes as an asyncio task inside the app's portal, so the tests
-MUST use TestClient as a context manager (`with ...`) to keep that event loop
+MUST use TestClient as a context manager (`with...`) to keep that event loop
 alive between requests, and poll the job until it settles.
 """
 

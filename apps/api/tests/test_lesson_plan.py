@@ -1,4 +1,4 @@
-"""S2.6: lesson plan copilot -- one AI call fills all eight sections.
+"""lesson plan copilot -- one AI call fills all eight sections.
 
 Chapter title 'kosh' (cell) from the sample NCTB class-6 science corpus;
 built from codepoints so transport/tooling never mutates the Bengali.

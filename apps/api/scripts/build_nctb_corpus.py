@@ -1,18 +1,18 @@
 """NCTB corpus build CLI.
 
 Usage (from apps/api, with the package venv active):
-    python scripts/build_nctb_corpus.py --data-dir ../../data/nctb \
+    python scripts/build_nctb_corpus.py --data-dir../../data/nctb \
         --subset ssc-science --delay 2.0
 
 Stages:
-    1. acquire   — respectful download of officially linked PDFs
-    2. process   — extract pages + QC + chunking + JSONL artifacts
-    3. classes   — derived class detection stamped onto chunk files
+    1. acquire — respectful download of officially linked PDFs
+    2. process — extract pages + QC + chunking + JSONL artifacts
+    3. classes — derived class detection stamped onto chunk files
 
 Subsets:
-    ssc-science : Secondary বাংলা/ইংরেজি/গণিত/বিজ্ঞান-শাখা/ICT
-    hsc-science : HSC পদার্থ/রসায়ন/জীববিজ্ঞান/উচ্চতর-গণিত
-    all         : every officially linked artifact (48)
+    ssc-science: Secondary বাংলা/ইংরেজি/গণিত/বিজ্ঞান-শাখা/ICT
+    hsc-science: HSC পদার্থ/রসায়ন/জীববিজ্ঞান/উচ্চতর-গণিত
+    all: every officially linked artifact (48)
 """
 
 from __future__ import annotations

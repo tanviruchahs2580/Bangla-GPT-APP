@@ -1,21 +1,21 @@
-"""S4.7 Evaluation v2 -- metric layer for the golden-set CI regression gate.
+"""Evaluation v2 -- metric layer for the golden-set CI regression gate.
 
 Four spec metrics, all deterministic under the mock provider so the gate is
-reproducible without any external model (R8: a real LLM-judge run is a human
-input once a provider is configured -- see :func:`faithfulness`):
+reproducible without any external model (a real LLM-judge run is a human
+input once a provider is configured -- see:func:`faithfulness`):
 
-* :func:`grammar_score` -- heuristic 0..1 for "clean Bengali prose": every
+*:func:`grammar_score` -- heuristic 0..1 for "clean Bengali prose": every
   sentence must carry Bengali letters and no Latin characters, and the answer
   must close with the Bengali full stop (danda). The heuristic definition is
-  pinned by unit tests (R12: never silently lowered).
-* :func:`faithfulness` -- with a configured provider the judge is an LLM
+  pinned by unit tests (never silently lowered).
+*:func:`faithfulness` -- with a configured provider the judge is an LLM
   asked to grade whether every answer claim is supported by the given
   evidence; without one it returns the deterministic evidence-overlap
   fraction and reports mode="local_overlap" so no run can fake an LLM score.
-* :func:`compare_gate` -- CI rule (spec: "fails build on >2% regression"):
+*:func:`compare_gate` -- CI rule (spec: "fails build on >2% regression"):
   any metric that dropped by more than GATE_PP absolute percentage points
   against the recorded baseline FAILS, with per-metric detail.
-* :func:`run_suite` -- executes the golden set through a TutorService and
+*:func:`run_suite` -- executes the golden set through a TutorService and
   aggregates all four metrics plus refusal precision/recall.
 """
 

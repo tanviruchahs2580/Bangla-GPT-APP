@@ -2,11 +2,11 @@
 
 Three recall boosters, all deterministic and dependency-free:
 
-1. ``light_stem``      — conservative Bangla inflection stripper so that
+1. ``light_stem`` — conservative Bangla inflection stripper so that
    ``ভগ্নাংশের`` matches ``ভগ্নাংশ`` without a heavy morphological analyzer.
-2. ``expand_query``    — curated synonym/paraphrase expansion for common
+2. ``expand_query`` — curated synonym/paraphrase expansion for common
    curriculum vocabulary (query side only; document text untouched).
-3. ``trigram_cosine``  — character 3-gram cosine similarity used as a soft
+3. ``trigram_cosine`` — character 3-gram cosine similarity used as a soft
    fallback signal when exact lexical overlap fails (spelling variants,
    loanword forms).
 

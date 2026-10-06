@@ -1,8 +1,8 @@
-"""S4.3 RAG v2 -- embedder abstraction with a deterministic local fallback.
+"""RAG v2 -- embedder abstraction with a deterministic local fallback.
 
 Contract (spec 4.3): "multilingual embeddings". Real multilingual embedding
-MODELS are a human/infra decision (R8): ``settings.embedding_model`` stays
-empty in local/dev and the deterministic :class:`HashingEmbedder` serves the
+MODELS are a human/infra decision: ``settings.embedding_model`` stays
+empty in local/dev and the deterministic:class:`HashingEmbedder` serves the
 vector lane. It is character n-gram hashing (no word tokenizer, so Bangla
 grapheme clusters work directly), fixed-dimension, L2-normalised and fully
 reproducible -- the same contract a real model must satisfy, so swapping in
@@ -19,7 +19,7 @@ from bangla_gpt_api.providers.base import ProviderNotConfigured
 
 # Letters+digits only: punctuation/hyphen n-grams are not semantic signal --
 # they let a Latin gibberish string share trigrams ('-no', 'ot-') with Bengali
-# curriculum text and score a fake vector hit (R12 grounding guard).
+# curriculum text and score a fake vector hit (grounding guard).
 _LETTERS_RE = re.compile(r"[^0-9A-Za-z\u0980-\u09FF]+")
 
 _EMBED_DIM = 384
@@ -97,7 +97,7 @@ class HashingEmbedder:
 def build_embedder(settings: object) -> Embedder:
     """Factory: local hashing embedder unless a real model is configured.
 
-    R8: choosing/running a real multilingual embedding model (and pgvector)
+    choosing/running a real multilingual embedding model (and pgvector)
     is staging human input. Until then ``EMBEDDING_MODEL`` stays empty and
     this returns the local embedder; naming one without the backend wired is
     a configuration error, not a silent downgrade.

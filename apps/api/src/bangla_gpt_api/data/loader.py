@@ -92,7 +92,7 @@ def load_sample_corpus() -> list[Chunk]:
         text = (SAMPLE_DIR / filename).read_text(encoding="utf-8")
         chunks.extend(ingester.ingest(text, meta))
     if ingester.dropped_injections:
-        # R11: counts only -- never the dropped text.
+        # counts only -- never the dropped text.
         json_log(
             logger,
             logging.WARNING,

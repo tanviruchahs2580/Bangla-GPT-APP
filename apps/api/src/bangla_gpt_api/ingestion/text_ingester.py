@@ -20,7 +20,7 @@ class TextIngester:
 
     def __init__(self, chunk_char_limit: int = 700) -> None:
         self.chunk_char_limit = chunk_char_limit
-        # S4.8: sentences removed by the ingest-time injection filter (count only).
+        # sentences removed by the ingest-time injection filter (count only).
         self.dropped_injections = 0
 
     def ingest(self, text: str, meta: CurriculumMeta) -> list[Chunk]:
@@ -34,7 +34,7 @@ class TextIngester:
             nonlocal seq
             raw = "\n".join(buffer).strip()
             buffer.clear()
-            # S4.8: untrusted corpus text first loses injection/leak sentences.
+            # untrusted corpus text first loses injection/leak sentences.
             paragraph, dropped = strip_injections(raw)
             self.dropped_injections += dropped
             if not paragraph:

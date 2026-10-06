@@ -1,8 +1,8 @@
-"""Wave 2 API contracts: strategy + inline-image chat, answer confidence,
+"""API contracts: strategy + inline-image chat, answer confidence,
 whitelisted student prefs, soft memory opt-out, window reports (parent +
 student self view) and the admin AI-quality panel shape.
 
-ASCII only (R11 house rule for new API tests). Mock provider only -- this
+ASCII only (house rule for new API tests). Mock provider only -- this
 file must never reach a real Gemini quota.
 """
 

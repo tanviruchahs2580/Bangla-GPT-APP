@@ -1,7 +1,7 @@
-"""Users Routes — split from the main.py god-module (ARCH-001).
+"""Users Routes — split from the main.py god-module.
 
 Behavior-identical extraction: same paths, validation, status codes.
-Shared context/auth via :mod:`.deps`, shared helpers via :mod:`.common`.
+Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 """
 
 import logging
@@ -60,6 +60,7 @@ from .deps import (
     Ctx,
     CurrentUser,
     DbSession,
+    _assert_student_in_school,
     _build_me_response,
     authorize_student_access,
 )
@@ -127,7 +128,7 @@ def delete_me(db: DbSession, user: CurrentUser) -> Response:
         db.execute(delete(QuizAttempt).where(QuizAttempt.student_id == student.id))
         db.execute(delete(ParentStudentLink).where(ParentStudentLink.student_id == student.id))
         db.execute(delete(ParentInvite).where(ParentInvite.student_id == student.id))
-        # S1.2/S1.9/S1.10 + S2/S4 children added after the original flow:
+        # //+ S2/S4 children added after the original flow:
         # skipping any of these breaks deletion under Postgres (BUG-4).
         db.execute(delete(ChapterProgress).where(ChapterProgress.student_id == student.id))
         db.execute(delete(DailyActivity).where(DailyActivity.student_id == student.id))
@@ -148,7 +149,7 @@ def delete_me(db: DbSession, user: CurrentUser) -> Response:
     db.execute(delete(Assignment).where(Assignment.teacher_id == user.id))
     db.execute(delete(QuestionBankEntry).where(QuestionBankEntry.teacher_id == user.id))
     db.execute(delete(SupportPlan).where(SupportPlan.teacher_id == user.id))
-    # Wave 1 FK-children: teacher_documents, saved_notes, notifications
+    # FK-children: teacher_documents, saved_notes, notifications
     # and ai_jobs must go before the users row (same BUG-4 rule).
     # analytics_events is deliberately NOT cleaned: it carries no FK to
     # users and the append-only product trail survives erasure.
@@ -228,7 +229,7 @@ def export_me(response: Response, db: DbSession, user: CurrentUser) -> DataExpor
         }
         for a in attempt_rows
     ]
-    # S5.6 audit event 2/5: data_export (self-service; only the fact is
+    # audit event 2/5: data_export (self-service; only the fact is
     # logged -- the payload itself never touches logs or audit rows).
     write_audit(
         db,
@@ -260,7 +261,7 @@ def get_student(student_id: int, db: DbSession, user: CurrentUser) -> StudentRes
 
 @router.get("/students/{student_id}/consent", response_model=ConsentStatusOut)
 def get_consent_status(student_id: int, db: DbSession, user: CurrentUser) -> ConsentStatusOut:
-    """S5.8: is the stored guardian consent current for this student?"""
+    """is the stored guardian consent current for this student?"""
     student = authorize_student_access(db, student_id, user)
     return ConsentStatusOut(
         student_id=student.id,
@@ -279,14 +280,14 @@ def post_consent_reconfirm(
     db: DbSession,
     user: CurrentUser,
 ) -> ConsentStatusOut:
-    """S5.8 re-confirm flow: student or linked guardian accepts the
+    """re-confirm flow: student or linked guardian accepts the
     CURRENT consent text; evidence trail (at/ip/version) is refreshed."""
     if not payload.accepted:
         raise HTTPException(
             status_code=400,
             detail={"code": "consent_not_accepted", "message": "acceptance required"},
         )
-    # F-AUTH-02: align implementation with policy "student or linked guardian"
+    # align implementation with policy "student or linked guardian"
     student = db.get(Student, student_id)
     if student is None:
         raise HTTPException(status_code=404, detail="Student not found")
@@ -305,7 +306,11 @@ def post_consent_reconfirm(
             if link is not None:
                 allowed = True
     elif user.role in ("admin", "teacher", "school_admin"):
-        # Broader access intentionally kept for admin/teacher support (documented deviation)
+        # Staff support path: teacher/school_admin stay behind the school
+        # tenancy wall (same gate as GET /students/{id}/consent); admin is
+        # platform-wide by design.
+        if user.role != "admin":
+            _assert_student_in_school(db, user, student)
         allowed = True
     if not allowed:
         raise HTTPException(status_code=403, detail="Not allowed to access this student")

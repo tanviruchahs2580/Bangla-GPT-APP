@@ -30,7 +30,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(512))
     role: Mapped[str] = mapped_column(String(16))
-    # S3.1: school tenancy for staff accounts. NULL keeps pre-school-layer
+    # school tenancy for staff accounts. NULL keeps pre-school-layer
     # accounts (and the shared default school) working unchanged.
     school_id: Mapped[int | None] = mapped_column(
         ForeignKey("schools.id"), nullable=True, index=True
@@ -70,9 +70,9 @@ class Student(Base):
     )
     name: Mapped[str] = mapped_column(String(120))
     class_level: Mapped[int] = mapped_column(Integer)
-    # Wave 1: per-student learning preferences and the memory opt-out flag.
+    # per-student learning preferences and the memory opt-out flag.
     # Both are additive; existing rows keep working via the server defaults.
-    # Wave 2: the JSON payload is a keyed dict (whitelisted keys:
+    # the JSON payload is a keyed dict (whitelisted keys:
     # explanation_style, subject_focus) -- annotation-only change of the
     # stale 'list' annotation; the column itself is untyped JSON, so NO
     # migration is needed.
@@ -93,7 +93,7 @@ class Teacher(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(120))
-    # Wave 1: free-form teacher UI/workflow preferences (dict, additive).
+    # free-form teacher UI/workflow preferences (dict, additive).
     prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
@@ -104,7 +104,7 @@ class Parent(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(120))
-    # S5.6: guardian phone, encrypted at rest (Fernet) whenever PII_ENC_KEY is
+    # guardian phone, encrypted at rest (Fernet) whenever PII_ENC_KEY is
     # configured; None when no phone was given. Never logged, never exported.
     phone_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
@@ -172,7 +172,7 @@ class Conversation(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
     title: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    # S1.5: last explanation strategy used in this conversation ('আমি বুঝিন' loop).
+    # last explanation strategy used in this conversation ('আমি বুঝিন' loop).
     last_strategy: Mapped[str | None] = mapped_column(String(24), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
@@ -211,7 +211,7 @@ class ParentInvite(Base):
 
 
 class Feedback(Base):
-    """Thumbs up/down product feedback on tutor answers (B12)."""
+    """Thumbs up/down product feedback on tutor answers."""
 
     __tablename__ = "feedback"
 
@@ -225,7 +225,7 @@ class Feedback(Base):
     )
     rating: Mapped[int] = mapped_column(Integer)  # -1 or +1
     comment: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    # S5.10 triage queue: admins work the queue oldest-first and mark rows
+    # triage queue: admins work the queue oldest-first and mark rows
     # handled; triage_note is staff-facing text, still never chat/message logs.
     triaged: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     triaged_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -234,7 +234,7 @@ class Feedback(Base):
 
 
 class ChapterProgress(Base):
-    """S1.2: Per-student chapter progress (read%, completed, bookmarked)."""
+    """Per-student chapter progress (read%, completed, bookmarked)."""
 
     __tablename__ = "chapter_progress"
     __table_args__ = (
@@ -255,7 +255,7 @@ class ChapterProgress(Base):
 
 
 class DailyActivity(Base):
-    """S1.9: per-day study activity in Asia/Dhaka (streak + heatmap source).
+    """per-day study activity in Asia/Dhaka (streak + heatmap source).
 
     'minutes' is a coarse estimate: each tutoring question or graded quiz counts
     as one minute of study; no client-side timing is trusted.
@@ -275,7 +275,7 @@ class DailyActivity(Base):
 
 
 class RevisionItem(Base):
-    """S1.10: SM-2-lite spaced-revision queue seeded from quiz results."""
+    """SM-2-lite spaced-revision queue seeded from quiz results."""
 
     __tablename__ = "revision_queue"
     __table_args__ = (
@@ -298,7 +298,7 @@ class RevisionItem(Base):
 
 
 class School(Base):
-    """S2.1: institution tenancy root; classrooms, teachers and students hang off it.
+    """institution tenancy root; classrooms, teachers and students hang off it.
 
     The 2.1 migration backfills a single default school so pre-school-layer
     accounts keep working; stage 3 introduces school_admin-managed schools.
@@ -314,7 +314,7 @@ class School(Base):
 
 
 class ClassRoom(Base):
-    """S2.1: a class (NCTB class_level + section) inside a school."""
+    """a class (NCTB class_level + section) inside a school."""
 
     __tablename__ = "classrooms"
     __table_args__ = (
@@ -331,7 +331,7 @@ class ClassRoom(Base):
 
 
 class ClassStudent(Base):
-    """S2.1: enrollment linking a student to exactly one classroom (v1 rule)."""
+    """enrollment linking a student to exactly one classroom (v1 rule)."""
 
     __tablename__ = "class_students"
     __table_args__ = (
@@ -346,7 +346,7 @@ class ClassStudent(Base):
 
 
 class ClassTeacher(Base):
-    """S2.1: teacher assignment to a classroom (optionally per subject)."""
+    """teacher assignment to a classroom (optionally per subject)."""
 
     __tablename__ = "class_teachers"
     __table_args__ = (
@@ -363,7 +363,7 @@ class ClassTeacher(Base):
 
 
 class StudentInvite(Base):
-    """S2.2: claim code for a student account created by class CSV import.
+    """claim code for a student account created by class CSV import.
 
     The code doubles as the initial password: the created user has
     must_change_password=True, so signing in with the code forces setting a
@@ -384,7 +384,7 @@ class StudentInvite(Base):
 
 
 class ChapterContent(Base):
-    """S2.3: versioned generated chapter study material (append-only versions).
+    """versioned generated chapter study material (append-only versions).
 
     ``payload`` holds the seven section keys produced by the content engine
     (summary, notes, key_points, examples, practice_qs, homework, exam_tips).
@@ -415,7 +415,7 @@ class ChapterContent(Base):
 
 
 class QuestionPaper(Base):
-    """S2.4: teacher-in-the-loop exam paper draft/final lifecycle.
+    """teacher-in-the-loop exam paper draft/final lifecycle.
 
     A draft is produced by ONE AI call plus validation (NCTB alignment,
     duplicate, difficulty). A paper can only be finalized after EVERY
@@ -442,7 +442,7 @@ class QuestionPaper(Base):
 
 
 class ShortTest(Base):
-    """S2.5: class+chapter ultra-fast test -- one rule-based question set
+    """class+chapter ultra-fast test -- one rule-based question set
     generated once and assigned to an entire classroom at once.
 
     Per-student grading reuses the existing quiz_attempts rows referenced in
@@ -465,7 +465,7 @@ class ShortTest(Base):
 
 
 class SupportPlan(Base):
-    """S2.7: three-week support plan for an at-risk student.
+    """three-week support plan for an at-risk student.
 
     Rule-generated (services/atrisk) from the student's weakest concepts:
     week 1 concept re-read, week 2 practice, week 3 assessment.
@@ -483,12 +483,12 @@ class SupportPlan(Base):
 
 
 class Assignment(Base):
-    """S2.8: bulk assignment -- one rule-based question set shared by an
+    """bulk assignment -- one rule-based question set shared by an
     explicitly selected group of students, tracked against a due date.
 
     Each selected student gets their own quiz_attempts row carrying the same
     dumped question set, so grading/AnswerLog/analytics all reuse the existing
-    quiz pipeline untouched (R10).
+    quiz pipeline untouched.
     """
 
     __tablename__ = "assignments"
@@ -505,7 +505,7 @@ class Assignment(Base):
 
 
 class QuestionBankEntry(Base):
-    """S2.9: question bank -- every teacher-reviewed question lands here.
+    """question bank -- every teacher-reviewed question lands here.
 
     ``dedupe_key`` is a sha256 over the NFKC/casefold/whitespace-collapsed
     question text, so re-reviewing the same question (or an AI draft that
@@ -530,7 +530,7 @@ class QuestionBankEntry(Base):
 
 
 class SchoolInvite(Base):
-    """S3.1: single-use staff invite code for a school.
+    """single-use staff invite code for a school.
 
     Only the SHA-256 of the (uppercased, stripped) code is stored; the
     plaintext is returned exactly once at creation. Redemption stamps
@@ -550,7 +550,7 @@ class SchoolInvite(Base):
 
 
 class Concept(Base):
-    """S4.4 KG v1: a curriculum concept node (chapter-derived or LLM-extracted)."""
+    """KG v1: a curriculum concept node (chapter-derived or LLM-extracted)."""
 
     __tablename__ = "concepts"
 
@@ -571,7 +571,7 @@ class Concept(Base):
 
 
 class ConceptPrerequisite(Base):
-    """S4.4 KG v1: directed edge concept -> prereq (a weak concept's gap hunt)."""
+    """KG v1: directed edge concept -> prereq (a weak concept's gap hunt)."""
 
     __tablename__ = "concept_prerequisites"
 
@@ -580,7 +580,7 @@ class ConceptPrerequisite(Base):
 
 
 class ConceptMastery(Base):
-    """S4.4 KG v1: per-student per-concept mastery counts (graded answers)."""
+    """KG v1: per-student per-concept mastery counts (graded answers)."""
 
     __tablename__ = "concept_mastery"
 
@@ -592,7 +592,7 @@ class ConceptMastery(Base):
 
 
 class PracticeItem(Base):
-    """S4.5: adaptive practice -- Elo rating per generated cloze item.
+    """adaptive practice -- Elo rating per generated cloze item.
 
     Identified by the generator's stable content fingerprint (question id =
     sha256 over chunk id + blanked term), so difficulty ratings accumulate
@@ -612,7 +612,7 @@ class PracticeItem(Base):
 
 
 class StudentAbility(Base):
-    """S4.5: per-concept Elo-style ability, updated with every graded answer.
+    """per-concept Elo-style ability, updated with every graded answer.
 
     Keyed by canonical concept name (chapter root) so abilities join the
     knowledge graph without an FK join on every graded answer.
@@ -629,7 +629,7 @@ class StudentAbility(Base):
 
 
 class JobRun(Base):
-    """S5.4: idempotency ledger for scheduled jobs.
+    """idempotency ledger for scheduled jobs.
 
     One row per (job, period_key) claimed, enforced by the composite primary
     key. Any number of web workers / ARQ workers can race the same schedule
@@ -648,10 +648,10 @@ class JobRun(Base):
 
 
 class AuditLog(Base):
-    """S5.6: append-only trail for the five privileged event types:
+    """append-only trail for the five privileged event types:
     role_change, data_export, purge, qp_finalize, impersonation.
 
-    Privacy (R11): only ids and outcome metadata live in ``detail`` --
+    Privacy: only ids and outcome metadata live in ``detail`` --
     never message content, never PII. Rows are never updated or deleted,
     with ONE documented exception: account erasure (DELETE /users/me)
     anonymises ``actor_user_id`` to NULL so the event survives the account
@@ -679,7 +679,7 @@ class AuditLog(Base):
 
 
 class TeacherDocument(Base):
-    """Wave 1: persisted artifacts from the generic teacher generators.
+    """persisted artifacts from the generic teacher generators.
 
     ``kind`` is one of lesson_plan | worksheet | answer_key | homework |
     rubric; ``payload`` holds the validated generator output so the document
@@ -700,7 +700,7 @@ class TeacherDocument(Base):
 
 
 class SavedNote(Base):
-    """Wave 1: user notes clipped from the tutor, a chapter or elsewhere."""
+    """user notes clipped from the tutor, a chapter or elsewhere."""
 
     __tablename__ = "saved_notes"
 
@@ -714,10 +714,10 @@ class SavedNote(Base):
 
 
 class Notification(Base):
-    """Wave 1: in-app notification feed entry.
+    """in-app notification feed entry.
 
     ``code`` is an i18n code resolved by the client (never final copy) and
-    ``params`` carries only ids/counts/safe labels (R11).
+    ``params`` carries only ids/counts/safe labels.
     """
 
     __tablename__ = "notifications"
@@ -733,7 +733,7 @@ class Notification(Base):
 
 
 class AnalyticsEventRow(Base):
-    """Wave 1: persisted product analytics events (sanitized scalars only).
+    """persisted product analytics events (sanitized scalars only).
 
     ``user_id`` deliberately has NO FK: the trail is append-only privacy
     history cleaned by the retention sweep, so it must never block (or be
@@ -752,7 +752,7 @@ class AnalyticsEventRow(Base):
 
 
 class AiJob(Base):
-    """Wave 1: async generation job (§37) with a linear status lifecycle.
+    """async generation job (§37) with a linear status lifecycle.
 
     queued -> generating -> validating -> ready | failed. The job row is the
     single source of truth; the inline runner opens its own session so the

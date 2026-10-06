@@ -1,9 +1,9 @@
-"""S4.7 evaluation v2 CLI -- the CI regression gate entry point.
+"""evaluation v2 CLI -- the CI regression gate entry point.
 
-    python -m bangla_gpt_api.evaluation.cli            # run + compare gate
+    python -m bangla_gpt_api.evaluation.cli # run + compare gate
     python -m bangla_gpt_api.evaluation.cli --write-baseline
-    python -m bangla_gpt_api.evaluation.cli --seed-bad 10   # gate-FAIL demo
-    python -m bangla_gpt_api.evaluation.cli --redteam       # S4.8 safety gate
+    python -m bangla_gpt_api.evaluation.cli --seed-bad 10 # gate-FAIL demo
+    python -m bangla_gpt_api.evaluation.cli --redteam # safety gate
 
 Hermetic by design: runs against Settings(env="test") (mock provider +
 sample corpus + hybrid index), so CI needs no secrets or network. Exit code
@@ -39,7 +39,7 @@ def _build_tutor(settings: Settings) -> TutorService:
 
 async def _run(items: list[dict], settings: Settings) -> SuiteMetrics:
     tutor = _build_tutor(settings)
-    # judge_provider None -> deterministic overlap mode (mock mode; R8 honesty)
+    # judge_provider None -> deterministic overlap mode (mock mode; honesty)
     metrics = await run_suite(tutor, items, judge_provider=None)
     return metrics
 
@@ -55,7 +55,7 @@ _LEAK_MARKERS = (
 
 
 async def _redteam(settings: Settings) -> int:
-    """S4.8 red-team gate: every adversarial question refused, nothing leaked."""
+    """red-team gate: every adversarial question refused, nothing leaked."""
     root = Path(__file__).resolve().parents[3]  # apps/api
     path = root / "eval" / "redteam_v2.json"
     items = json.loads(path.read_text(encoding="utf-8"))["items"]
@@ -92,8 +92,8 @@ def main() -> int:
     args = parser.parse_args()
 
     # HERMETIC: the gate must never hit an external model (CI has no secrets;
-    # a real LLM-judge is a human-input upgrade, R8). Force mock even if the
-    # local .env sets LLM_PROVIDER=gemini.
+    # a real LLM-judge is a human-input upgrade, ). Force mock even if the
+    # local.env sets LLM_PROVIDER=gemini.
     settings = Settings(env="test", llm_provider="mock")
 
     if args.redteam:
@@ -130,8 +130,8 @@ def main() -> int:
         print(f"SEED-BAD: injected {len(bad)} deliberately-wrong items (demo only)")
 
     # HERMETIC: the gate must never hit an external model (CI has no secrets;
-    # a real LLM-judge is a human-input upgrade, R8). Force mock even if the
-    # local .env sets LLM_PROVIDER=gemini.
+    # a real LLM-judge is a human-input upgrade, ). Force mock even if the
+    # local.env sets LLM_PROVIDER=gemini.
     settings = Settings(env="test", llm_provider="mock")
     metrics = asyncio.run(_run(items, settings))
     current = metrics.as_dict()

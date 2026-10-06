@@ -1,4 +1,4 @@
-"""S5.4: idempotent scheduled jobs -- one core, two schedulers.
+"""idempotent scheduled jobs -- one core, two schedulers.
 
 The same job functions run either from the inline loops in the web process
 (``JOBS_BACKEND=inline``, default) or from an ARQ worker's cron
@@ -62,7 +62,7 @@ def run_weekly_digest(
     now: datetime | None = None,
     sender: Callable[..., bool] | None = None,
 ) -> dict[str, Any]:
-    """Weekly parent digest, at most once per ISO week (R11: counts only)."""
+    """Weekly parent digest, at most once per ISO week (counts only)."""
     from bangla_gpt_api.services import parent_digest
 
     now = now or _utc_naive_now()
@@ -119,9 +119,9 @@ def run_retention_job(
     *,
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    """S5.8 retention sweep, at most once per calendar day. The deletes are
+    """retention sweep, at most once per calendar day. The deletes are
     idempotent (expired-only); the job_runs ledger keeps repeat triggers
-    cheap and the outcome auditable (counts in the outcome string, R11)."""
+    cheap and the outcome auditable (counts in the outcome string, )."""
     from bangla_gpt_api.services.retention import run_retention_sweep
 
     now = now or _utc_naive_now()

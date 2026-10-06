@@ -1,4 +1,4 @@
-"""S1.13: low-data mode asks the tutor for a measurably shorter payload."""
+"""low-data mode asks the tutor for a measurably shorter payload."""
 
 import json
 

@@ -1,4 +1,4 @@
-"""Wave 1: shared JSON-object extraction for the generic generator contracts."""
+"""shared JSON-object extraction for the generic generator contracts."""
 
 import json
 import re

@@ -1,10 +1,11 @@
-"""System Routes — split from the main.py god-module (ARCH-001).
+"""System Routes — split from the main.py god-module.
 
 Behavior-identical extraction: same paths, validation, status codes.
-Shared context/auth via :mod:`.deps`, shared helpers via :mod:`.common`.
+Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 """
 
 import logging
+import secrets
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -32,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 @router.get("/health")
 async def health() -> dict:
-    # F-SEC-07: public payload minimal — version/env moved to authenticated endpoint
+    # public payload minimal — version/env moved to authenticated endpoint
     return {"status": "ok"}
 
 
@@ -58,9 +59,9 @@ async def ready(app_ctx: Ctx, db: DbSession) -> dict:
 
 @router.get("/status", response_model=StatusOut)
 def status(app_ctx: Ctx, db: DbSession) -> StatusOut:
-    """S5.10 public status page payload: booleans and presence only --
+    """public status page payload: booleans and presence only --
     no counts of users, no version/env disclosure, nothing an attacker
-    or a curious child could profile (R11)."""
+    or a curious child could profile."""
     components: list[StatusComponent] = []
     try:
         db.execute(select(1))
@@ -96,19 +97,24 @@ def status(app_ctx: Ctx, db: DbSession) -> StatusOut:
 
 @router.get("/metrics", include_in_schema=False)
 async def metrics(app_ctx: Ctx, request: Request) -> Response:
-    # F-SEC-06: production gating — auth or internal ingress
+    # production gating — token required, via x-metrics-token or Bearer
     if app_ctx.settings.is_production and app_ctx.settings.metrics_require_auth:
+        expected = app_ctx.settings.metrics_token or ""
+        if not expected:
+            # boot guard (enforce_production_safety) refuses this config; the
+            # explicit deny keeps /metrics closed if the guard is ever bypassed.
+            raise HTTPException(status_code=403, detail="metrics access denied")
         auth = request.headers.get("authorization", "")
         token = request.headers.get("x-metrics-token", "")
-        expected = app_ctx.settings.metrics_token or ""
-        if expected and token != expected and not auth.lower().startswith("bearer "):
-            raise HTTPException(status_code=403, detail="metrics access denied")
-        if not expected and not auth:
+        supplied = [token]
+        if auth.lower().startswith("bearer "):
+            supplied.append(auth[7:].strip())
+        if not any(secrets.compare_digest(s, expected) for s in supplied):
             raise HTTPException(status_code=403, detail="metrics access denied")
     return Response(content=generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
 
-# F-SEC-07: authenticated internal endpoint with version/env detail (health is now minimal)
+# authenticated internal endpoint with version/env detail (health is now minimal)
 @router.get("/admin/system/info", response_model=dict)
 def system_info(app_ctx: Ctx, admin: AdminUser) -> dict:
     return {

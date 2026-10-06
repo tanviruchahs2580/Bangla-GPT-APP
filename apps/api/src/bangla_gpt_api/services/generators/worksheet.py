@@ -1,4 +1,4 @@
-"""Wave 1 worksheet generator: one grounded RAG call -> three-tier practice sheet.
+"""worksheet generator: one grounded RAG call -> three-tier practice sheet.
 
 Contract: tiers basic -> intermediate -> advanced, each a non-empty list of
 MCQ items, plus a printable answer sheet. The validation gate rejects any

@@ -120,7 +120,7 @@ def test_tutor_unavailable_when_provider_unconfigured() -> None:
 
 
 def test_mock_never_leaks_system_prompt(client: TestClient) -> None:
-    """S0.2: mock must never echo system tokens (AUD-01)."""
+    """mock must never echo system tokens (AUD-01)."""
     headers = _register_and_login(client, email="leakcheck@example.com")
     res = client.post(
         "/tutor/ask",

@@ -1,4 +1,4 @@
-"""S6.5: anonymized aggregate reporting -- k-anonymity suppression,
+"""anonymized aggregate reporting -- k-anonymity suppression,
 formula-safe CSV, and the automated zero-PII gate.
 
 The PASS-WHEN tests seed canary PII (distinctive emails/names) into the

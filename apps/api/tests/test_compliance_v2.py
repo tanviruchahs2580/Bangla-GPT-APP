@@ -1,8 +1,8 @@
-"""S5.8 compliance tests.
+"""compliance tests.
 
 Two PASS-WHEN halves:
 * retention sweep -- dry-run report counts without deleting (compliance
-  evidence), real sweep deletes only expired rows + writes the R11-safe
+  evidence), real sweep deletes only expired rows + writes the safe
   audit row, and the nightly arq job wrapper claims once per day;
 * consent re-confirm flow -- CONSENT_VERSION bump makes GET report
   needs_reconfirm=true, POST re-confirm refreshes the evidence trail.
@@ -33,7 +33,7 @@ from bangla_gpt_api.main import CONSENT_VERSION, create_app
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
-PREVIOUS_VERSION = "2026-08-v1"  # the version in force before the S5.8 bump
+PREVIOUS_VERSION = "2026-08-v1"  # the version in force before the bump
 COUNT_KEYS = {
     "conversations_deleted",
     "chat_messages_deleted",
@@ -209,7 +209,7 @@ def test_retention_real_sweep_deletes_expired_and_audits_counts_only(pair) -> No
         audit = db.execute(select(AuditLog).where(AuditLog.action == "purge")).scalar_one()
         assert audit.target == "retention_sweep"
         assert audit.actor_role == "admin"
-        # R11: counts in detail, never content; the dry_run flag is not data.
+        # counts in detail, never content; the dry_run flag is not data.
         assert COUNT_KEYS <= set(audit.detail)
         assert "dry_run" not in audit.detail
         assert all(isinstance(v, int) for v in audit.detail.values())
@@ -253,7 +253,7 @@ def test_nightly_retention_job_runs_once_per_day(pair) -> None:
 
 def test_consent_version_bumped_and_current_after_registration(pair) -> None:
     client, _, _ = pair
-    assert CONSENT_VERSION == "2026-09-v2"  # the S5.8 bump itself
+    assert CONSENT_VERSION == "2026-09-v2"  # the bump itself
     _register(client, "s58ok@example.com")
     headers = _login(client, "s58ok@example.com")
     sid = _student_id(client, headers)
@@ -305,7 +305,7 @@ def test_consent_bump_flow_requires_reconfirm_and_refreshes_evidence(pair) -> No
         student = db.get(Student, sid)
         assert student.consent_version == CONSENT_VERSION
         assert student.consent_at is not None
-        assert student.consent_ip  # legal evidence trail refreshed (justified S5.8 review)
+        assert student.consent_ip  # legal evidence trail refreshed (justified review)
     finally:
         db.close()
 

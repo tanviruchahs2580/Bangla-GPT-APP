@@ -1,4 +1,4 @@
-"""S2.7: at-risk detection + 3-week support plan rules.
+"""at-risk detection + 3-week support plan rules.
 
 Pure functions so the PASS-WHEN "rule unit tests" hold without a DB:
 * at-risk = average score < 40% OR a downward trend across graded attempts.

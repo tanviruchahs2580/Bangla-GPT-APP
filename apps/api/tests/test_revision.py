@@ -1,4 +1,4 @@
-"""S1.10 — SM-2-lite revision queue: interval math + due-count endpoint flow."""
+"""SM-2-lite revision queue: interval math + due-count endpoint flow."""
 
 from datetime import date, timedelta
 

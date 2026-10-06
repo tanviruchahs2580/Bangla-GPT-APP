@@ -1,8 +1,8 @@
 """Legacy Bijoy (ANSI/SutonnyMJ) → Unicode Bangla conversion stage.
 
 Verified against real NCTB extractions (2026-08-25):
-    "RvZxq wkÿvµg 2012"          → "জাতীয় ক্ষিক্ষাক্রম ২০১২"-class output
-    "evsjv‡`k‡K ... cÖavb Dcvq"   → "বাংলাদেশকে ... প্রধান উপায়"
+    "RvZxq wkÿvµg 2012" → "জাতীয় ক্ষিক্ষাক্রম ২০১২"-class output
+    "evsjv‡`k‡K... cÖavb Dcvq" → "বাংলাদেশকে... প্রধান উপায়"
 
 Known residual artifacts after conversion (documented, not hidden):
 - 'ÿ' maps to the ক্ষ conjunct in SutonnyMJ fonts; handled by a

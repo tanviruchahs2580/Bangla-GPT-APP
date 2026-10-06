@@ -1,4 +1,4 @@
-"""S4.3 RAG v2: embeddings + vector lane + RRF fusion + rerank + hit@5 eval.
+"""RAG v2: embeddings + vector lane + RRF fusion + rerank + hit@5 eval.
 
 PASS-WHEN: routing pipeline unit tests, and hit@5 on a replayed golden
 student-traffic set >= +20% relative over the BM25 baseline.

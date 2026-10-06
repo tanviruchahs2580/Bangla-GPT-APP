@@ -1,11 +1,11 @@
-"""S5.8 -- Retention policy job (shared core).
+"""Retention policy job (shared core).
 
 Single implementation used by BOTH:
 * POST /admin/maintenance/purge (admin-triggered; dry_run=true = report-only
   for compliance evidence, dry_run=false = sweep + audit), and
 * the nightly arq job (jobs.run_retention_sweep -> cron in worker.py).
 
-Everything is counts-only (R11): the report and the audit row may say HOW
+Everything is counts-only: the report and the audit row may say HOW
 MANY rows expired, never what they contained.
 """
 

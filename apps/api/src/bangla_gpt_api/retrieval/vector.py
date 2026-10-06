@@ -1,10 +1,10 @@
-"""S4.3 RAG v2 -- vector lane over embedder vectors (in-memory local backend).
+"""RAG v2 -- vector lane over embedder vectors (in-memory local backend).
 
-The public ``search`` signature mirrors :meth:`BM25Index.search` so the two
+The public ``search`` signature mirrors:meth:`BM25Index.search` so the two
 lanes are interchangeable ranking sources for the fusion index. Corpus sizes
 here (sample NCTB: hundreds of chunks) make brute-force cosine exact and
 cheap; the pgvector backend for the real NCTB corpus is infrastructure
-(🖐 human input, R8) and will implement the same contract server-side.
+(🖐 human input, ) and will implement the same contract server-side.
 """
 
 from bangla_gpt_api.curriculum.models import Chunk

@@ -1,4 +1,4 @@
-"""S5.7 backup/DR guards.
+"""backup/DR guards.
 
 Two honest slices:
 * scripts/s3_corpus_sync.sync_corpus is exercised against a stubbed S3

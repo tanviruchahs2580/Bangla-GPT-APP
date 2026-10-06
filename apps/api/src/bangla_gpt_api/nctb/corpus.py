@@ -1,9 +1,9 @@
 """End-to-end corpus construction: extract → QC → chunk → JSONL artifacts.
 
 Outputs (data/nctb/):
-    extracted/<source_id>.pages.json     per-page raw text
-    normalized/<source_id>.chunks.jsonl  retrieval chunks with provenance
-    quality_report.json                  per-source extraction QC metrics
+    extracted/<source_id>.pages.json per-page raw text
+    normalized/<source_id>.chunks.jsonl retrieval chunks with provenance
+    quality_report.json per-source extraction QC metrics
 
 Only pages whose text passes the corruption heuristics are chunked;
 everything is reported, nothing is silently dropped.

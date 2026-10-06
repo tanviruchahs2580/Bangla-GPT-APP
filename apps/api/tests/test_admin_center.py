@@ -1,4 +1,4 @@
-"""S3.5 admin center: per-school stats, invite management, content versions."""
+"""admin center: per-school stats, invite management, content versions."""
 
 import sqlite3
 from datetime import UTC, datetime, timedelta
@@ -103,7 +103,7 @@ def test_admin_invite_list_and_revoke(env) -> None:
     invites = client.get(f"/admin/schools/{sid}/invites", headers=root).json()
     assert len(invites) == 2
     assert {i["used"] for i in invites} == {True, False}
-    assert "code" not in invites[0] and "code_hash" not in invites[0]  # R7: never returned
+    assert "code" not in invites[0] and "code_hash" not in invites[0]  # never returned
     used_row = next(i for i in invites if i["used"])
     res = client.delete(f"/admin/schools/{sid}/invites/{used_row['id']}", headers=root)
     assert res.status_code == 409

@@ -1,4 +1,4 @@
-"""S4.6 PASS-WHEN: the weakness rollup is the SINGLE source of truth.
+"""PASS-WHEN: the weakness rollup is the SINGLE source of truth.
 
 "Same value from all three endpoints" is the spec gate: Home
 (/dashboard/summary), Teacher at-risk (/teacher/weak-matrix) and the Parent
@@ -21,7 +21,7 @@ from bangla_gpt_api.services.parent_digest import run_weekly_digest
 PASSWORD = "supersecret1"
 
 # alpha 0/4 (0%, weak) | beta 1/4 (25%, weak) | gamma 2/4 (50%, NOT < 50)
-# delta 0/2 (0% but < MIN_ATTEMPTS=3)  ->  expected rollup ["alpha", "beta"]
+# delta 0/2 (0% but < MIN_ATTEMPTS=3) -> expected rollup ["alpha", "beta"]
 CELLS: dict[str, tuple[int, int]] = {
     "alpha": (0, 4),
     "beta": (1, 4),

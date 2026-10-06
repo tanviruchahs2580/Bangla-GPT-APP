@@ -1,4 +1,4 @@
-"""S5.3: shared caches -- MemoryCache semantics, CachedRankingIndex transparency,
+"""shared caches -- MemoryCache semantics, CachedRankingIndex transparency,
 build_cache switching, fail-soft Redis behaviour, per-user summary caching,
 and (when REDIS_URL points at a real Redis) cross-instance consistency.
 """
@@ -110,7 +110,7 @@ def test_memory_cache_bounded_eviction():
 
 
 # --------------------------------------------------------------------------
-# build_cache switching (one infra switch, S5.1)
+# build_cache switching (one infra switch, )
 # --------------------------------------------------------------------------
 
 
@@ -198,7 +198,7 @@ def test_cached_index_query_never_in_key_plaintext(monkeypatch):
     monkeypatch.setattr(spy, "set_json", spy_set)
     idx = CachedRankingIndex(FakeIndex(), spy)
     idx.search("personal question about rahi", class_level=6)
-    assert seen and all("rahi" not in k for k in seen)  # R11: hashed keys
+    assert seen and all("rahi" not in k for k in seen)  # hashed keys
 
 
 # --------------------------------------------------------------------------
@@ -227,7 +227,7 @@ def _register_login(client, email):
 def test_dashboard_summary_cached_for_60s(tmp_path, monkeypatch):
     monkeypatch.setattr(bgpt_main.caching, "SUMMARY_CACHE_TTL_SECONDS", 60.0)
     calls = {"n": 0}
-    # ARCH-001: patch weak_names at its canonical home (services.weakness);
+    # patch weak_names at its canonical home (services.weakness);
     # routers call it via module attribute, so this covers every caller.
     from bangla_gpt_api.services import weakness as weakness_svc
 
@@ -263,7 +263,7 @@ def test_dashboard_summary_memory_cache_attached(tmp_path):
 
 
 def test_cache_hit_metrics_visible_on_metrics_endpoint(tmp_path):
-    """S5.3 PASS-WHEN: cache-hit metrics visible (scrape /metrics)."""
+    """PASS-WHEN: cache-hit metrics visible (scrape /metrics)."""
     c = TestClient(create_app(_settings(tmp_path)))
     h = _register_login(c, "metrics1@example.com")
     c.get("/dashboard/summary", headers=h)  # miss

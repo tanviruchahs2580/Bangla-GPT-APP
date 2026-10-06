@@ -1,7 +1,7 @@
-"""Auth Routes — split from the main.py god-module (ARCH-001).
+"""Auth Routes — split from the main.py god-module.
 
 Behavior-identical extraction: same paths, validation, status codes.
-Shared context/auth via :mod:`.deps`, shared helpers via :mod:`.common`.
+Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 """
 
 import hashlib
@@ -108,7 +108,7 @@ def register(
         profile = Parent(
             name=payload.name.strip(),
             user_id=user.id,
-            # S5.6: guardian phone encrypted at rest when PII_ENC_KEY is set.
+            # guardian phone encrypted at rest when PII_ENC_KEY is set.
             phone_enc=encrypt_pii(phone, app_ctx.settings.pii_enc_key),
         )
     else:
@@ -312,7 +312,7 @@ def change_password(
 
 
 # --- AUTH-001: TOTP multi-factor authentication -------------------------------
-# Enroll returns a fresh secret WITHOUT storing it; verify() proves possession
+# Enroll returns a fresh secret WITHOUT storing it; verify proves possession
 # and stores it (= enabled). Presence of users.totp_secret IS the enabled flag.
 
 

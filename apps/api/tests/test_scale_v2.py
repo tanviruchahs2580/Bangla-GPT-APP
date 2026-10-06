@@ -1,4 +1,4 @@
-"""S5.5 PASS-WHEN: pagination/N+1 audit fixes -- batched reads, capped lists.
+"""PASS-WHEN: pagination/N+1 audit fixes -- batched reads, capped lists.
 
 Every test here pins behaviour that the scale audit changed:
 * roster briefs come from ONE grouped query (statement-counted), not 1+N,

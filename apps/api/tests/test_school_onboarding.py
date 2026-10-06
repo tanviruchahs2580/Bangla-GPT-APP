@@ -1,4 +1,4 @@
-"""S3.1 school onboarding: admin -> school code -> staff invite -> scoping."""
+"""school onboarding: admin -> school code -> staff invite -> scoping."""
 
 import re
 import sqlite3
@@ -95,7 +95,7 @@ def test_invite_join_flow_single_use(env) -> None:
     school = _make_school(env, "Padma Academy")
     invite = _invite(env, school["id"], "teacher")
     assert invite["role"] == "teacher" and len(invite["code"]) == 10
-    # only the hash is stored, never the plaintext code (R7)
+    # only the hash is stored, never the plaintext code
     row = conn.execute(
         "SELECT code_hash, used_by FROM school_invites WHERE id=?", (invite["id"],)
     ).fetchone()

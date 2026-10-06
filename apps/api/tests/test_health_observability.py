@@ -18,7 +18,7 @@ def client(tmp_path) -> TestClient:
 def test_health_live_ready_and_request_id(client: TestClient) -> None:
     health = client.get("/health")
     assert health.status_code == 200
-    # F-SEC-07: health is minimal {"status":"ok"}; detail at /admin/system/info
+    # health is minimal {"status":"ok"}; detail at /admin/system/info
     assert health.json()["status"] == "ok"
     assert "X-Request-ID" in health.headers
     assert len(health.headers["X-Request-ID"]) >= 8
@@ -71,7 +71,7 @@ def test_metrics_exposes_prometheus_series(client: TestClient) -> None:
 
 
 def test_request_id_propagated_into_json_logs(caplog) -> None:
-    """S0.6: RequestId must appear in json_log when set."""
+    """RequestId must appear in json_log when set."""
     import logging
 
     from bangla_gpt_api.logging_config import json_log, request_id_var
@@ -91,7 +91,7 @@ def test_request_id_propagated_into_json_logs(caplog) -> None:
 
 
 def test_sentry_noop_when_dsn_absent(tmp_path) -> None:
-    """S0.6: Sentry init must not fail when DSN absent."""
+    """Sentry init must not fail when DSN absent."""
     from bangla_gpt_api.config import Settings
     from bangla_gpt_api.main import create_app
 

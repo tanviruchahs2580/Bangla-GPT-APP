@@ -4,7 +4,7 @@ Revision ID: e5f6a7b8c9d0
 Revises: c1d2e3f4a5b6
 Create Date: 2026-09-06
 
-S2.4: question_papers stores exam paper drafts and finals with their
+question_papers stores exam paper drafts and finals with their
 validated question sets and review timestamps. No backfill (new feature).
 """
 

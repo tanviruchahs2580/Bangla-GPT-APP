@@ -1,4 +1,4 @@
-"""revision_queue table for SM-2-lite spaced revision (S1.10)
+"""revision_queue table for SM-2-lite spaced revision 
 
 Revision ID: e6f7a8b9c0d1
 Revises: b3d7f9a1c2e4

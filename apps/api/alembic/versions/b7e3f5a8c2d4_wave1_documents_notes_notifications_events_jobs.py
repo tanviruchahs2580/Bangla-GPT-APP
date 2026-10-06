@@ -6,15 +6,15 @@ Create Date: 2026-09-08
 
 Five additive tables plus three additive columns, all fully reversible:
 
-* ``teacher_documents``  persisted outputs of the generic teacher generators
+* ``teacher_documents`` persisted outputs of the generic teacher generators
   (lesson_plan / worksheet / answer_key / homework / rubric).
-* ``saved_notes``        user notes clipped from tutor/chapter/other.
-* ``notifications``      i18n-code notification feed (never final copy).
-* ``analytics_events``   sanitized product-event trail. ``user_id`` is
+* ``saved_notes`` user notes clipped from tutor/chapter/other.
+* ``notifications`` i18n-code notification feed (never final copy).
+* ``analytics_events`` sanitized product-event trail. ``user_id`` is
   deliberately an INDEXED plain INT with NO FK: the trail is append-only
   privacy history removed by the retention sweep, so it must neither block
   nor be blocked by account deletion.
-* ``ai_jobs``            async generation jobs (queued -> generating ->
+* ``ai_jobs`` async generation jobs (queued -> generating ->
   validating -> ready | failed).
 
 * ``students.learning_prefs`` / ``students.memory_enabled`` and

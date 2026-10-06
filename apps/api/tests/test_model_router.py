@@ -1,4 +1,4 @@
-"""S4.2 AI Model Router: rules-first routing + provider selection + logs.
+"""AI Model Router: rules-first routing + provider selection + logs.
 
 PASS-WHEN: routing unit tests, and >=70% simple-route share on replayed
 sample traffic (replay = real chapter titles from the sample corpus shaped

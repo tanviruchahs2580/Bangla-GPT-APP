@@ -1,4 +1,4 @@
-"""S2.5: short tests -- class+chapter ultra-fast classroom-wide assignment."""
+"""short tests -- class+chapter ultra-fast classroom-wide assignment."""
 
 import json
 import logging

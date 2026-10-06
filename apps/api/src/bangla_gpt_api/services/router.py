@@ -1,7 +1,7 @@
-"""S4.2 AI Model Router -- rules-first, zero extra AI calls.
+"""AI Model Router -- rules-first, zero extra AI calls.
 
 Routing contract (master spec 4.2):
-- TOOL   -- teacher generation calls (content / lesson plan / question
+- TOOL -- teacher generation calls (content / lesson plan / question
             paper): always the MAIN model, and the call path already
             carries RAG evidence.
 - COMPLEX-- long, multi-part, analytical student questions: MAIN model.
@@ -11,9 +11,9 @@ Rules are deterministic and cheap (pure string checks -- never an LLM
 call), so classification adds no latency. The chosen route is propagated
 via a ContextVar so the provider log line carries route+latency+cost
 (chars as the cost proxy) for every request, same pattern as
-request_id_var and the S4.1 education context.
+request_id_var and the education context.
 
-Real fast-model selection on staging is a human decision (R8): with
+Real fast-model selection on staging is a human decision: with
 GEMINI_FAST_MODEL unset the router still decides+logs routes, but both
 routes serve the main provider.
 """
@@ -43,7 +43,7 @@ class Route(StrEnum):
 # Analytical markers (Bengali + English). Bengali written as codepoints to
 # survive ASCII-only tooling: তুলনা / ব্যাখ্যা / বিশ্লেষণ / প্রমাণ.
 _COMPLEX_MARKERS: tuple[str, ...] = (
-    "\u09a4\u09c1\u09b2\u09a8\u09be",  # tulna  (compare)
+    "\u09a4\u09c1\u09b2\u09a8\u09be",  # tulna (compare)
     "\u09ac\u09cd\u09af\u09be\u0996\u09cd\u09af\u09be",  # byakhya (explain/analysis)
     "\u09ac\u09bf\u09b6\u09cd\u09b2\u09c7\u09b7\u09a3",  # bishleshon (analyse)
     "\u09aa\u09cd\u09b0\u09ae\u09be\u09a3",  # proman (prove)
@@ -92,7 +92,7 @@ def fast_eligible(route: Route, fast_provider: object | None) -> bool:
 
 
 def route_distribution(items: Iterable[tuple[str, str | None]]) -> dict[str, int]:
-    """Classify replayed sample traffic: [(text, goal), ...] -> counts."""
+    """Classify replayed sample traffic: [(text, goal),...] -> counts."""
     counts = {route.value: 0 for route in Route}
     for text, goal in items:
         counts[classify(text, goal).value] += 1
@@ -104,7 +104,7 @@ def simple_share(counts: dict[str, int]) -> float:
     return counts.get(Route.SIMPLE.value, 0) / total if total else 0.0
 
 
-# --- request-scoped propagation (mirrors request_id_var / S4.1 context) -----
+# --- request-scoped propagation (mirrors request_id_var / context) -----
 
 _current_route: ContextVar[str | None] = ContextVar("ai_route", default=None)
 

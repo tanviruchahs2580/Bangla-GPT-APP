@@ -1,4 +1,4 @@
-"""S1.4 — Structured AI response: sectioned answer contract + no prompt leak."""
+"""Structured AI response: sectioned answer contract + no prompt leak."""
 
 import pytest
 from fastapi.testclient import TestClient

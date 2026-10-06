@@ -1,4 +1,4 @@
-"""Domain routers — ARCH-001 split of the main.py god-module.
+"""Domain routers — split of the main.py god-module.
 
 Registration order defines OpenAPI/route precedence; paths are unchanged.
 """

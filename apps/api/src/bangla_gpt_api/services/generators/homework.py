@@ -1,4 +1,4 @@
-"""Wave 1 homework generator: assignment brief with a parent-facing note.
+"""homework generator: assignment brief with a parent-facing note.
 
 Contract: items (non-empty), instructions, due_suggestion, a parent_note
 written in simple Bangla for guardians, and an estimated_minutes integer.
