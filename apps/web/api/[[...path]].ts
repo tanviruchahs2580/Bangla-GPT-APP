@@ -7,8 +7,8 @@
  * unconfigured) lives in src/lib/apiProxy.ts so it is unit-tested by
  * vitest like the rest of the frontend.
  *
- * Edge runtime keeps SSE (/tutor/conversations/*/messages/stream) flowing
- * as a real stream instead of buffering the whole answer.
+ * Edge runtime keeps SSE (/tutor/conversations/<id>/messages/stream)
+ * flowing as a real stream instead of buffering the whole answer.
  */
 import { handleApiProxy } from "../src/lib/apiProxy";
 
