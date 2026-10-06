@@ -386,7 +386,6 @@ class TutorService:
             provider_for_call = provider if cb_provider is self.provider else cb_provider
 
         # Attempt with circuit breaker, fall back to fallback provider if failed
-        answer: str | None = None
         fallback = self._fallback
         try:
             async with CircuitBreakerMiddleware(self._breaker) if self._breaker else _null_ctx():
@@ -424,13 +423,6 @@ class TutorService:
                 raise ProviderError(
                     f"AI provider unavailable (circuit OPEN for {provider_for_call.name}; no fallback configured)"
                 ) from None
-
-        if answer is None:
-            answer = await provider_for_call.generate(
-                context_blocks,
-                system=SYSTEM_PROMPT,
-                **({"image": image} if image is not None else {}),
-            )
 
         # Record result for circuit breaker
         if self._router is not None:
