@@ -5,6 +5,7 @@ the domain routers; nothing in this package may import ``main`` or any router
 (one-way dependency: routers -> deps/common -> services).
 """
 
+import calendar
 from collections.abc import Callable, Generator
 from typing import Annotated, Any
 
@@ -154,6 +155,22 @@ def get_current_user(
     user = db.get(User, user_id)
     if user is None:
         raise _unauthorized("Invalid or expired token")
+    # F-05 token epoch: a password change/reset refuses every token issued
+    # in an EARLIER second than the rotation. The rotation response token is
+    # minted naturally (PyJWT rejects future iat), so same-second mints
+    # share the epoch second and stay valid — a sub-second boundary is not
+    # expressible with integer iat; the residual window is <1s (previously
+    # the whole TTL). Tokens without any ``iat`` (legacy mints) fail closed.
+    invalidated = user.sessions_invalidated_at
+    if invalidated is not None:
+        inv_ts = (
+            calendar.timegm(invalidated.timetuple())
+            if invalidated.tzinfo is None
+            else int(invalidated.timestamp())
+        )
+        iat = payload.get("iat")
+        if not isinstance(iat, int) or iat < inv_ts:
+            raise _unauthorized("Session expired; please log in again")
     if user.must_change_password and request.url.path not in _FORCE_CHANGE_EXEMPT_PATHS:
         raise HTTPException(
             status_code=403,

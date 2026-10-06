@@ -2,6 +2,7 @@
 
 import json
 import logging
+import time
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -287,3 +288,139 @@ def test_rate_limit_backend_validation(tmp_path) -> None:
                 env="test", database_url=f"sqlite:///{tmp_path}/r.db", rate_limit_backend="redis"
             )
         )
+
+
+# --- F-05: password rotation revokes previously issued access tokens ---------
+
+
+def _bearer(client: TestClient, email: str, password: str = PASSWORD) -> dict:
+    res = client.post("/auth/login", json={"email": email, "password": password})
+    assert res.status_code == 200, res.text
+    return {"Authorization": f"Bearer {res.json()['access_token']}"}
+
+
+def _register_student(client: TestClient, email: str = "kid@example.com") -> dict:
+    res = client.post(
+        "/auth/register",
+        json={
+            "email": email,
+            "password": PASSWORD,
+            "name": "Kid",
+            "role": "student",
+            "guardian_consent": True,
+            "class_level": 6,
+        },
+    )
+    assert res.status_code == 201, res.text
+    return res.json()
+
+
+def test_change_password_revokes_older_tokens(client: TestClient) -> None:
+    _register_student(client)
+    old = _bearer(client, "kid@example.com")
+    assert client.get("/users/me", headers=old).status_code == 200
+    # second-precision epoch boundary: make sure the old token's iat second
+    # is strictly earlier than the rotation second
+    time.sleep(1.1)
+
+    res = client.post(
+        "/auth/change-password",
+        json={"current_password": PASSWORD, "new_password": "rotated-pass-11"},
+        headers=old,
+    )
+    assert res.status_code == 200, res.text
+    fresh = res.json()["access_token"]
+
+    # the pre-rotation token is dead immediately; the rotation token lives
+    assert client.get("/users/me", headers=old).status_code == 401
+    assert client.get("/users/me", headers={"Authorization": f"Bearer {fresh}"}).status_code == 200
+    # and only the new password unlocks the account now
+    assert (
+        client.post(
+            "/auth/login", json={"email": "kid@example.com", "password": PASSWORD}
+        ).status_code
+        == 401
+    )
+
+
+def test_password_reset_revokes_older_tokens(
+    client: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    _register_student(client, "kid2@example.com")
+    old = _bearer(client, "kid2@example.com")
+    # second-precision epoch boundary: the old token must be from an
+    # earlier second than the rotation
+    time.sleep(1.1)
+
+    token = _capture_reset_token(client, "kid2@example.com", caplog)
+    res = client.post("/auth/reset", json={"token": token, "new_password": "reset-pass-12"})
+    assert res.status_code == 200, res.text
+    fresh = res.json()["access_token"]
+
+    assert client.get("/users/me", headers=old).status_code == 401
+    assert client.get("/users/me", headers={"Authorization": f"Bearer {fresh}"}).status_code == 200
+
+
+def test_token_epoch_denies_stale_and_legacy_tokens(tmp_path) -> None:
+    from sqlalchemy import select as _select
+
+    from bangla_gpt_api.auth.security import create_access_token, decode_token
+    from bangla_gpt_api.db.models import User as UserModel
+    from bangla_gpt_api.db.session import make_engine, make_session_factory
+
+    settings = Settings(
+        env="test",
+        database_url=f"sqlite:///{tmp_path}/reset.db",
+        jwt_secret=SECRET,
+        admin_email="root@example.com",
+        admin_password=PASSWORD,
+        force_admin_password_change=False,
+    )
+    client = make_client(tmp_path)
+    _register_student(client, "kid3@example.com")
+
+    engine = make_engine(settings)
+    factory = make_session_factory(engine)
+    with factory() as db:
+        user = db.execute(
+            _select(UserModel).where(UserModel.email == "kid3@example.com")
+        ).scalar_one()
+        stale_epoch = int(datetime.now(UTC).timestamp()) - 5
+        user.sessions_invalidated_at = datetime.fromtimestamp(stale_epoch, UTC)
+        db.commit()
+        user_id = user.id
+
+    # token minted in an EARLIER second than the epoch is refused...
+    stale = create_access_token(
+        UserModel(id=user_id, role="student", email="kid3@example.com"),
+        settings=settings,
+        issued_at=stale_epoch - 1,
+    )
+    assert client.get("/users/me", headers={"Authorization": f"Bearer {stale}"}).status_code == 401
+    # ...a token minted after the epoch still works...
+    fresh = create_access_token(
+        UserModel(id=user_id, role="student", email="kid3@example.com"),
+        settings=settings,
+        issued_at=stale_epoch + 1,
+    )
+    assert client.get("/users/me", headers={"Authorization": f"Bearer {fresh}"}).status_code == 200
+
+    # a same-second mint shares the epoch second and stays valid
+    # (second-precision boundary; PyJWT rejects future iat)
+    same_second = create_access_token(
+        UserModel(id=user_id, role="student", email="kid3@example.com"),
+        settings=settings,
+        issued_at=stale_epoch,
+    )
+    assert (
+        client.get("/users/me", headers={"Authorization": f"Bearer {same_second}"}).status_code
+        == 200
+    )
+
+    # ...and a legacy token with NO iat claim fails closed too
+    legacy_payload = decode_token(stale, settings=settings)
+    legacy_payload.pop("iat")
+    import jwt as pyjwt
+
+    legacy = pyjwt.encode(legacy_payload, settings.jwt_secret, algorithm="HS256")
+    assert client.get("/users/me", headers={"Authorization": f"Bearer {legacy}"}).status_code == 401

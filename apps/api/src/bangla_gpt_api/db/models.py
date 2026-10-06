@@ -46,6 +46,10 @@ class User(Base):
     # AUTH-001: TOTP secret (base32). NULL = MFA disabled. The secret is only
     # stored after the user proves possession (verify step), never at enroll.
     totp_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # F-05 token epoch: set at password change/reset. Any access token whose
+    # ``iat`` is <= this moment is refused by get_current_user, so existing
+    # sessions cannot ride out a credential rotation.
+    sessions_invalidated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 

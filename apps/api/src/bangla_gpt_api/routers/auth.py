@@ -293,6 +293,11 @@ def reset_password(app_ctx: Ctx, payload: ResetPasswordRequest, db: DbSession) -
         raise HTTPException(status_code=400, detail="Invalid or expired reset token")
     user.password_hash = hash_password(payload.new_password)
     user.must_change_password = False
+    # F-05: rotate the token epoch — every access token issued in an
+    # earlier second becomes unusable immediately (get_current_user). The
+    # response token is minted naturally; same-second mints stay valid
+    # (PyJWT rejects future iat, so the boundary is second-precision).
+    user.sessions_invalidated_at = datetime.now(UTC).replace(tzinfo=None)
     db.commit()
     return TokenResponse(access_token=create_access_token(user, settings=app_ctx.settings))
 
@@ -307,6 +312,8 @@ def change_password(
         raise HTTPException(status_code=422, detail="New password must differ from the current one")
     user.password_hash = hash_password(payload.new_password)
     user.must_change_password = False
+    # F-05: rotate the token epoch (see /auth/reset for the full contract).
+    user.sessions_invalidated_at = datetime.now(UTC).replace(tzinfo=None)
     db.commit()
     return TokenResponse(access_token=create_access_token(user, settings=app_ctx.settings))
 
