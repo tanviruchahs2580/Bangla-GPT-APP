@@ -22,14 +22,14 @@ class MockLLMProvider:
     async def generate(
         self, prompt: str, *, system: str | None = None, image: dict | None = None
     ) -> str:
-        # Wave 2: `image` is accepted for protocol parity. The mock provider
+        # `image` is accepted for protocol parity. The mock provider
         # cannot see images; chat routes refuse vision turns for mock mode
         # BEFORE calling here (services/tutor.VISION_UNSUPPORTED_ANSWER), so
         # an image silently reaching this method never claims understanding.
         # AUD-01: never echo `system` (internal prompt) or raw markup back to users.
         # For grounded prompts, quote the retrieved textbook evidence cleanly in the
         # sectioned layout SYSTEM_PROMPT rule ৬ asks for (golden sample for tests).
-        # S2.3: the content-engine contract expects one JSON payload with the
+        # the content-engine contract expects one JSON payload with the
         # seven section keys; answer it deterministically from the evidence.
         from bangla_gpt_api.services.generators.answer_key import (
             ANSWER_KEY_JSON_MARKER,
@@ -53,7 +53,7 @@ class MockLLMProvider:
             return self._lesson_json(prompt)
         if QP_JSON_MARKER in prompt:
             return self._qp_json(prompt)
-        # Wave 1 generic teacher generators (existing replies stay untouched).
+        # generic teacher generators (existing replies stay untouched).
         if WORKSHEET_JSON_MARKER in prompt:
             return self._worksheet_json(prompt)
         if ANSWER_KEY_JSON_MARKER in prompt:
@@ -68,7 +68,7 @@ class MockLLMProvider:
             sentences = [s.strip() for b in blocks for s in _SENTENCE_RE.split(b) if s.strip()]
             simple = sentences[0]
             if SHORT_ANSWER_INSTRUCTION in prompt:
-                # S1.13 low-data mode: one short sentence only (measurable payload cut).
+                # low-data mode: one short sentence only (measurable payload cut).
                 return f"[mock] {SECTION_SIMPLE} {simple}"
             example = sentences[1] if len(sentences) > 1 else sentences[0]
             bullets = "\n".join(f"- {s}" for s in sentences[: min(4, len(sentences))])
@@ -76,12 +76,12 @@ class MockLLMProvider:
                 f"[mock] {SECTION_SIMPLE} {simple}\n"
                 f"{SECTION_EXAMPLE} {example}\n"
                 f"{SECTION_POINTS}\n{bullets}\n"
-                f"{SECTION_CHECK} এই অংশটা আরও সহজ ভাবো বলবো?"
+                f"{SECTION_CHECK} এই অংশটা আরও সহজ ভাষায় বলা যায়?"
             )
         return f"[mock] {prompt}"
 
     def _content_json(self, prompt: str) -> str:
-        """Deterministic seven-section payload for the S2.3 content contract."""
+        """Deterministic seven-section payload for the content contract."""
         evidences = _EVIDENCE_RE.findall(prompt)
         sentences = [s.strip() for e in evidences for s in _SENTENCE_RE.split(e) if s.strip()]
         if not sentences:
@@ -102,7 +102,7 @@ class MockLLMProvider:
         return json.dumps(payload, ensure_ascii=False)
 
     def _lesson_json(self, prompt: str) -> str:
-        """Deterministic eight-section plan for the S2.6 lesson contract."""
+        """Deterministic eight-section plan for the lesson contract."""
         evidences = _EVIDENCE_RE.findall(prompt)
         sentences = [s.strip() for e in evidences for s in _SENTENCE_RE.split(e) if s.strip()]
         if not sentences:
@@ -114,11 +114,11 @@ class MockLLMProvider:
         m = re.search(r"minutes=(\d+), level=(\w+)", prompt)
         minutes, level = (m.group(1), m.group(2)) if m else ("35", "average")
         payload = {
-            "objective": f"পাঠ্যবস্তু বুঝে বলা (level={level}): {pick(0)}",
+            "objective": f"পাঠ্যবিষয় বুঝে বলা (level={level}): {pick(0)}",
             "previous_knowledge": f"আগের পাঠ মনে করানো: {pick(1)}",
             "introduction": f"প্রশ্ন করে সূচনা: {pick(2)}?",
             "main_explanation": "\n".join(pick(i) for i in range(3)),
-            "activity": f"দলে করে কাজ: {pick(3)}",
+            "activity": f"দলগত কাজ: {pick(3)}",
             "questions": f"{pick(4)}?\n{pick(5)}?",
             "assessment": f"মৌখিক প্রশ্ন ও মিলানো ({minutes} মিনিটের পাঠ)",
             "homework": f"পাঠ্যবই থেকে অনুশীলন: {pick(6)}",
@@ -126,7 +126,7 @@ class MockLLMProvider:
         return json.dumps(payload, ensure_ascii=False)
 
     def _qp_json(self, prompt: str) -> str:
-        """Deterministic question set obeying the S2.4 SPEC line (mock provider)."""
+        """Deterministic question set obeying the SPEC line (mock provider)."""
         evidences = _EVIDENCE_RE.findall(prompt)
         sentences = [s.strip() for e in evidences for s in _SENTENCE_RE.split(e) if s.strip()]
         if not sentences:
@@ -158,7 +158,7 @@ class MockLLMProvider:
                 i += 1
         return json.dumps({"questions": questions}, ensure_ascii=False)
 
-    # ── Wave 1 generic teacher generators ────────────────────────────────
+    # ── generic teacher generators ────────────────────────────────
     # Every reply echoes the Target line's subject/class_level so the
     # generators' validation gate ("payload echoes the request") holds, and
     # every content string is derived from the <evidence> sentences the
@@ -174,7 +174,7 @@ class MockLLMProvider:
     def _target(prompt: str) -> tuple[int, str, str]:
         m = re.search(r"Target: class_level=(\d+), subject=([^,\n]+), chapter=([^\n]+)", prompt)
         if m is None:
-            return 6, "science", "নতুন অধয়ায়"
+            return 6, "science", "নতুন অধ্যায়"
         return int(m.group(1)), m.group(2).strip(), m.group(3).strip().rstrip(".")
 
     def _mcq(self, sentences: list[str], i: int, marks: int = 1) -> dict:
@@ -260,7 +260,7 @@ class MockLLMProvider:
                 "items": [f"অনুশীলন {i + 1}: {s[i % len(s)]}" for i in range(3)],
                 "instructions": "খাতা পরিষ্কার করে লিখে, নিজের ভাষায় উত্তর দাও।",
                 "due_suggestion": "পরের দিনের ক্লাসের আগে জমা দাও।",
-                "parent_note": "আজকের হোমওয়ার্কটি শিশু নিজে লিক্বে; আপনাব শুধু দেখবেন সে লিখেছ্যে কি না।",
+                "parent_note": "আজকের হোমওয়ার্কটি শিশুটি নিজে লিখবে; আপনি শুধু দেখবেন সে লিখেছে কি না।",
                 "estimated_minutes": 25,
             },
             ensure_ascii=False,

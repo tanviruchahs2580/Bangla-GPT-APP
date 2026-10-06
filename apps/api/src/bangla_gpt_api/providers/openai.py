@@ -10,7 +10,7 @@ Contract verified against the OpenAI Chat Completions API documentation
 - authentication via the ``Authorization: Bearer <key>`` header
 - request body ``{"model": "...", "messages": [...]}``
 - successful responses carry text in ``choices[0].message.content``
-- streaming via ``stream=true`` with SSE ``data: ...`` lines
+- streaming via ``stream=true`` with SSE ``data:...`` lines
 
 Live end-to-end behaviour requires a real ``OPENAI_API_KEY``; all request/
 response handling is covered by tests against an ``httpx.MockTransport``.
@@ -142,8 +142,9 @@ class OpenAIProvider(LLMProvider):
     ) -> AsyncIterator[str]:
         """Stream tokens via the Chat Completions streaming endpoint.
 
-        Falls back to the non-streaming answer when streaming fails after
-        retries (graceful degrade).
+        Retries transient HTTP failures with backoff; raises ``ProviderError``
+        when the stream cannot be served (no non-streaming fallback here —
+        the caller owns fallback routing).
         """
         url = f"{self._base_url}{_CHAT_ENDPOINT}"
         messages = _build_messages(prompt, system)

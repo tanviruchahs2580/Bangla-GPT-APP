@@ -1,17 +1,17 @@
-"""S3.4: parent weekly digest v1.5 -- summary-only aggregates (R11).
+"""parent weekly digest v1.5 -- summary-only aggregates.
 
 Hard privacy rule: the digest is assembled exclusively from aggregates
-(session counts, graded-attempt counts, score averages, the S2.7 at-risk
+(session counts, graded-attempt counts, score averages, the at-risk
 flag and chapter labels). Conversation titles and messages are NEVER
 read here; the PASS-WHEN test seeds a sentinel message and asserts it
 cannot appear in the digest.
 
 Bengali strings use \\u escapes so the source stays ASCII-safe byte-wise.
 
-* ``digest_due``        -- pure scheduler decision (Sunday 22:00 Dhaka, once
+* ``digest_due`` -- pure scheduler decision (Sunday 22:00 Dhaka, once
                            per ISO week; deduped by week key).
-* ``collect_digest``    -- DB -> WeeklyDigest aggregates for one parent.
-* ``build_body``        -- WeeklyDigest -> email text (pure, unit-testable).
+* ``collect_digest`` -- DB -> WeeklyDigest aggregates for one parent.
+* ``build_body`` -- WeeklyDigest -> email text (pure, unit-testable).
 * ``run_weekly_digest`` -- one pass over all linked parents; sends via the
                            mailer (or the injected sender in tests).
 """
@@ -35,17 +35,9 @@ from bangla_gpt_api.db.models import (
 from bangla_gpt_api.services import atrisk, mailer, weakness
 
 # "Saptahik Pita-Mata Digest" (Bengali) / Weekly parent digest
-DIGEST_SUBJECT = (
-    "\u09b8\u09be\u09aa\u09cd\u09a4\u09be\u09b9\u09bf\u0995 "  # saptahik
-    "\u09aa\u09bf\u09a4\u09be-\u09ae\u09be\u09a4\u09be "  # pita-mata
-    "\u09a1\u09be\u0988\u099c\u09c7\u09b8\u09cd\u099f / Weekly parent digest"  # digest
-)
-GREETING = "\u09aa\u09cd\u09b0\u09bf\u09df "  # priyo
-HEADER = (  # "Weekly summary"
-    "\u09aa\u09bf\u09a4\u09be-\u09ae\u09be\u09a4\u09be "  # pita-mata
-    "\u09b8\u09be\u09aa\u09cd\u09a4\u09be\u09b9\u09bf\u0995 "  # saptahik
-    "\u09b8\u09be\u09b0\u09b8\u0982\u0995\u09cd\u09b7\u09c7\u09aa"  # sar sangkep
-)
+DIGEST_SUBJECT = "সাপ্তাহিক পিতা-মাতা ডাইজেস্ট / Weekly parent digest"
+GREETING = "প্রিয় "
+HEADER = "পিতা-মাতা সাপ্তাহিক সারসংক্ষেপ"
 WEEK_SECONDS = 7 * 24 * 3600
 DIGEST_WEEKDAY = 6  # Sunday
 DIGEST_HOUR_UTC = 16  # 16:00 UTC = 22:00 Dhaka
@@ -162,7 +154,7 @@ def collect_digest(
         percents = [float(a.score_pct or 0.0) for a in graded]
         avg = atrisk.avg_pct(percents)
         trend = atrisk.score_trend(percents)
-        # S4.6: weakness comes from the single-source rollup (lifetime mastery,
+        # weakness comes from the single-source rollup (lifetime mastery,
         # knowledge.MIN_ATTEMPTS / WEAK_THRESHOLD_PCT) -- no private rule here,
         # so the digest line always matches Home and the teacher matrix.
         weak_chapters = [w.concept for w in weakness.weak_concepts(db, student_id)][

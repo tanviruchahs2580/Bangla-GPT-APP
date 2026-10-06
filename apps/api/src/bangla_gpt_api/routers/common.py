@@ -1,4 +1,4 @@
-"""Shared route helpers — split from the main.py god-module (ARCH-001)."""
+"""Shared route helpers — split from the main.py god-module."""
 
 import base64
 import hashlib
@@ -72,22 +72,22 @@ def canonical_subject(subject: str | None) -> str | None:
     return _SUBJECT_ALIASES.get(subject.strip().lower(), subject.strip().lower())
 
 
-# S1.11: interrogative Bangla words (written as escapes so the source stays
-# ASCII-safe). Used both for question-like queries (ask-in-Tutor action) and
-# for question-style textbook sections (trailing interrogative word).
+# Interrogative Bangla words. Used both for question-like queries
+# (ask-in-Tutor action) and for question-style textbook sections (trailing
+# interrogative word).
 _INTERROGATIVE_TOKENS = frozenset(
     {
-        "\u0995\u09bf",  # ki
-        "\u0995\u09c0",  # kii
-        "\u0995\u09c7\u09a8",  # keno
-        "\u0995\u0996\u09a8",  # kokhon
-        "\u0995\u09a4",  # kot
-        "\u0995\u09be\u09b0",  # kar
-        "\u0995\u09cb\u09a5\u09be\u09df",  # kothay
-        "\u0995\u09c7\u09ae\u09a8",  # kemon
-        "\u0995\u09cb\u09a8",  # kon
-        "\u0995\u09bf\u09ad\u09be\u09ac\u09c8",  # kibhabe
-        "\u0995\u09bf\u09ad\u09be\u09ac\u09c7",  # ki vabe
+        "কি",
+        "কী",
+        "কেন",
+        "কখন",
+        "কত",
+        "কার",
+        "কোথায়",
+        "কেমন",
+        "কোন",
+        "কিভাবে",
+        "কীভাবে",
     }
 )
 
@@ -101,7 +101,7 @@ def _is_question_like(text: str) -> bool:
     return any(token in _INTERROGATIVE_TOKENS for token in tokenize(stripped))
 
 
-# --- Wave 1: analytics event hygiene ------------------------------------------
+# --- analytics event hygiene ------------------------------------------
 # POST /events props are persisted; anything that could smuggle PII (keys
 # whose NAME hints at free text or identifiers) is dropped before it can ever
 # reach the database, values are primitive-only and strings are truncated.
@@ -153,7 +153,7 @@ def notify_user(
     )
 
 
-# --- Wave 2: server-side product analytics -------------------------------------
+# --- server-side product analytics -------------------------------------
 
 
 def _record_analytics(
@@ -178,16 +178,16 @@ def _record_analytics(
     )
 
 
-# --- Wave 2: answer confidence ---------------------------------------------------
+# --- answer confidence ---------------------------------------------------
 # Documented formula (0..1, computed at answer finalization, stored nowhere but
 # in the payload/schema field):
 #
-#   refused answer                      -> 0.0
-#   no grounding info at all            -> None (unknown, honest)
-#   otherwise: clamp01(
-#       0.5 * min(1.0, len(source_scores) / 2)        # retrieval breadth
-#       + 0.5 * mean(min(1.0, s) for s in scores)     # retrieval depth
-#   )
+# refused answer -> 0.0
+# no grounding info at all -> None (unknown, honest)
+# otherwise: clamp01(
+# 0.5 * min(1.0, len(source_scores) / 2) # retrieval breadth
+# + 0.5 * mean(min(1.0, s) for s in scores) # retrieval depth
+# )
 #
 # SourceRef.score is an unbounded BM25 value, so every raw score is capped at
 # 1.0 before averaging. When grounding is known but no sources survived, the
@@ -207,7 +207,7 @@ def source_scores(refs: Any) -> list[float]:
     return [float(getattr(r, "score", 0.0)) for r in refs]
 
 
-# --- Wave 2: chat image (vision) contract ---------------------------------------
+# --- chat image (vision) contract ---------------------------------------
 _IMAGE_MIME_ALLOWED = frozenset({"image/png", "image/jpeg", "image/webp"})
 
 # Decoded size ceiling (base64 inflates ~4/3, so ~2 MB of JSON on the wire).
@@ -216,7 +216,7 @@ _IMAGE_MAX_BYTES = 1_500_000
 
 def _validate_chat_image(image: ChatImageIn | None) -> dict[str, Any] | None:
     """Decode + validate an inline image, returning the provider payload dict
-    ``{"mime_type": ..., "data": <raw bytes>}`` or None for text-only turns.
+    ``{"mime_type":..., "data": <raw bytes>}`` or None for text-only turns.
 
     Every failure -- disallowed mime, undecodable base64, oversize payload --
     is a 422 with detail code ``image_invalid`` (never a partial accept).
@@ -241,15 +241,18 @@ def _validate_chat_image(image: ChatImageIn | None) -> dict[str, Any] | None:
             status_code=422,
             detail={"code": "image_invalid", "message": "Image is empty or exceeds size limit"},
         )
-    return {"mime_type": mime, "data": raw}
+    # The decode above is validation only. Providers embed this dict in JSON
+    # payloads (Gemini inline_data), so it must carry the base64 STRING —
+    # raw bytes would raise TypeError at request-encoding time.
+    return {"mime_type": mime, "data": base64.b64encode(raw).decode("ascii")}
 
 
-# --- Wave 2: minimal honest personalization --------------------------------------
+# --- minimal honest personalization --------------------------------------
 # The ONLY personalized blocks the tutor is allowed to receive: which chapters
 # the student is demonstrably weak in (from graded attempts) and the requested
 # explanation style. Both are gated on the per-student memory opt-out: when
 # memory_enabled is False the builder returns "" and the prompt stays exactly
-# as impersonal as it was before Wave 2.
+# as impersonal as it was before
 EXPLANATION_STYLE_DIRECTIVES: dict[str, str] = {
     "simple": "সবচাইতে সহজ শব্দে ছোট করে বল।",
     "standard": "স্বাভাবিক ধারাবাহিক বিবরণ দাও।",
@@ -317,13 +320,13 @@ def _request_context(
     history: list | None = None,
     strategy: str | None = None,
 ) -> RequestContext:
-    """S4.1: the ONE construction point of the education context that
+    """the ONE construction point of the education context that
     accompanies every AI call (tutor ask/stream + the three generators).
 
     Also logs it (event ``ai_request_context``) for eval/cost attribution:
-    log_fields carries counts and ids only -- never message content (R11).
+    log_fields carries counts and ids only -- never message content.
 
-    Wave 2 memory opt-out: with ``Student.memory_enabled`` false NEITHER
+    memory opt-out: with ``Student.memory_enabled`` false NEITHER
     the mastery snapshot nor the personalization line is computed, so the
     prompt carries nothing learned about this student (honest, not
     cosmetic -- the derivation itself is skipped).
@@ -333,7 +336,7 @@ def _request_context(
     student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one_or_none()
     memory_enabled = student is None or bool(student.memory_enabled)
     if student is not None and memory_enabled:
-        # F-PERF-01: DB-side GROUP BY instead of full scan + Python aggregation
+        # DB-side GROUP BY instead of full scan + Python aggregation
         # Intermediate step (O(1) rows instead of O(N)); snapshot projection DEFERRED per docs
         from sqlalchemy import Integer
         from sqlalchemy import cast as _cast
@@ -381,7 +384,7 @@ def _load_class_students(
     limit: int | None = None,
     school_id: int | None = None,
 ) -> list[Student]:
-    # Wave 2 tenancy: when the caller is bound to a school, only students
+    # tenancy: when the caller is bound to a school, only students
     # enrolled in a classroom of THAT school are visible. school_id=None
     # keeps the legacy platform-wide view (school-less teachers, admins).
     statement = select(Student).order_by(Student.id)
@@ -399,9 +402,9 @@ def _load_class_students(
 
 
 def _student_briefs(db: Session, students: list[Student]) -> list[StudentBrief]:
-    # S5.5: one grouped aggregate for the whole roster (was 1 query per
+    # one grouped aggregate for the whole roster (was 1 query per
     # student, each pulling every attempt row as a full ORM object).
-    # avg() ignores NULL score_pct, matching the previous Python average.
+    # avg ignores NULL score_pct, matching the previous Python average.
     stats: dict[int, tuple[int, float | None]] = {}
     ids = [s.id for s in students]
     for i in range(0, len(ids), 500):  # chunked: safe under SQLITE_MAX_VARIABLES
@@ -579,7 +582,7 @@ def _persist_document(
     payload: dict,
     commit: bool = True,
 ) -> TeacherDocument:
-    # F-DATA-01: caller controls commit boundary; commit once at route/service boundary
+    # caller controls commit boundary; commit once at route/service boundary
     doc = TeacherDocument(
         teacher_id=user_id,
         kind=kind[:20],

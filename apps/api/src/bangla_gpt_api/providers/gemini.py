@@ -5,8 +5,8 @@ Contract verified against the official Gemini API documentation
 
 - ``POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent``
 - authentication via the ``x-goog-api-key`` request header
-- request body ``{"contents": [{"parts": [{"text": ...}]}]}`` with the
-  optional ``"systemInstruction": {"parts": [{"text": ...}]}`` field
+- request body ``{"contents": [{"parts": [{"text":...}]}]}`` with the
+  optional ``"systemInstruction": {"parts": [{"text":...}]}`` field
 - successful responses carry text in ``candidates[0].content.parts[*].text``
 - failures return ``{"error": {"code", "message", "status"}}``
 
@@ -28,7 +28,7 @@ from bangla_gpt_api.services.context import get_current_context
 
 
 def _context_log_fields() -> dict[str, object]:
-    """S4.1/S4.2: attach the education context (counts/ids only, never
+    """/attach the education context (counts/ids only, never
     content) and the routing decision to provider logs so every AI call is
     attributable (route + latency + cost) for eval."""
     from bangla_gpt_api.services.router import get_current_route
@@ -118,7 +118,7 @@ def _error_message_text(body: bytes) -> str:
 
 def _build_payload(prompt: str, system: str | None, image: dict | None) -> dict:
     """One user message: the text prompt plus, when given, the validated
-    inline image part (Wave 2 vision contract: ``{"inline_data":
+    inline image part (vision contract: ``{"inline_data":
     {"mime_type", "data"}}`` next to the text part in the same contents)."""
     parts: list[dict] = [{"text": prompt}]
     if image:
@@ -165,8 +165,9 @@ class GeminiProvider:
     ) -> AsyncIterator[str]:
         """Stream tokens via ``streamGenerateContent`` SSE transport.
 
-        Falls back to a single chunk of the non-streaming answer when the
-        streaming endpoint is unavailable after retries (graceful degrade).
+        Retries transient HTTP failures with backoff; raises ``ProviderError``
+        when the stream cannot be served (no non-streaming fallback here —
+        the caller owns fallback routing).
         """
         url = f"{_API_BASE}/models/{self.model}:streamGenerateContent?alt=sse"
         headers = {"x-goog-api-key": self._api_key}
@@ -272,7 +273,7 @@ class GeminiProvider:
 
 
 def build_gemini_provider(settings: ProviderSettings, model: str | None = None) -> GeminiProvider:
-    """Build a Gemini client; ``model`` overrides GEMINI_MODEL (S4.2 fast lane)."""
+    """Build a Gemini client; ``model`` overrides GEMINI_MODEL (fast lane)."""
     from bangla_gpt_api.providers.base import ProviderNotConfigured
 
     if not settings.gemini_api_key:

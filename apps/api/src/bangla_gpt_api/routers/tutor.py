@@ -1,7 +1,7 @@
-"""Tutor Routes — split from the main.py god-module (ARCH-001).
+"""Tutor Routes — split from the main.py god-module.
 
 Behavior-identical extraction: same paths, validation, status codes.
-Shared context/auth via :mod:`.deps`, shared helpers via :mod:`.common`.
+Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 """
 
 import json
@@ -20,6 +20,7 @@ from bangla_gpt_api.db.models import (
     ChatMessage,
     Conversation,
     Feedback,
+    QuizAttempt,
     Student,
     User,
 )
@@ -85,8 +86,8 @@ async def ask(app_ctx: Ctx, payload: AskRequest, db: DbSession, user: CurrentUse
     check_ai_budget(db, user_id=user.id, settings=app_ctx.settings)
     try:
         explain_instruction = quiz_explain_instruction(payload.explain) if payload.explain else None
-        # S1.7: retrieve on the quiz topic itself — the generic
-        # 'explain this' phrasing carries no subject keywords. S4.5: the
+        # retrieve on the quiz topic itself — the generic
+        # 'explain this' phrasing carries no subject keywords. the
         # phrasing is dropped from the RETRIEVE/gate query entirely (it
         # diluted coverage below the grounding gate); it stays in the
         # prompt so the model still sees the student's own words.
@@ -95,7 +96,7 @@ async def ask(app_ctx: Ctx, payload: AskRequest, db: DbSession, user: CurrentUse
         if payload.explain:
             question = f"{payload.question}\n{payload.explain.question}"
             search_query = payload.explain.question
-        # S4.1: every AI call carries the central education context.
+        # every AI call carries the central education context.
         ctx = _request_context(
             db,
             user,
@@ -123,7 +124,7 @@ async def ask(app_ctx: Ctx, payload: AskRequest, db: DbSession, user: CurrentUse
             prompt_text=question,
             answer_text=response.answer,
         )
-        # S1.9: one tutoring question ≈ one minute of study for the daily
+        # one tutoring question ≈ one minute of study for the daily
         # counters (the chat routes already record; ask must not be a gap).
         if user.role == "student":
             record_activity(db, _student_profile(db, user).id, questions=1, minutes=1)
@@ -190,7 +191,7 @@ def list_conversations(db: DbSession, user: CurrentUser) -> list[ConversationOut
         .scalars()
         .all()
     )
-    # S5.5: one grouped COUNT for the whole page (was 1+N per conversation).
+    # one grouped COUNT for the whole page (was 1+N per conversation).
     counts = {
         int(cid): int(n)
         for cid, n in db.execute(
@@ -221,7 +222,7 @@ def conversation_messages(
     limit: Annotated[int, Query(ge=1, le=500)] = 200,
 ) -> list[ChatMessageOut]:
     _own_conversation(db, conversation_id, user)
-    # S5.5: cap the payload (was unbounded -- one row per message ever).
+    # cap the payload (was unbounded -- one row per message ever).
     # Newest N are fetched but returned chronological, so existing clients
     # see the same ordering.
     newest = (
@@ -248,7 +249,7 @@ def conversation_messages(
             grounded=m.grounded,
             refused_reason=m.refused_reason,
             sources=[SourceRef(**s) for s in (m.sources_json or [])],
-            # Wave 2: recomputed from the persisted evidence rows (the DB
+            # recomputed from the persisted evidence rows (the DB
             # stores no confidence column; the formula is pure).
             confidence=_answer_confidence(
                 m.grounded,
@@ -263,7 +264,7 @@ def conversation_messages(
 
 
 # ------------------------------------------------------------------
-# S1.8: history search + conversation rename/delete
+# history search + conversation rename/delete
 # ------------------------------------------------------------------
 
 
@@ -364,11 +365,11 @@ async def send_chat_message(
     student = _student_profile(db, user)
     class_level = payload.class_level or student.class_level or 6
     history = _chat_history(app_ctx, db, conv.id)
-    # Wave 2 vision contract: validated BEFORE anything is persisted.
+    # vision contract: validated BEFORE anything is persisted.
     image_payload = _validate_chat_image(payload.image)
 
-    # S1.5 'আমি বুঝিন': swap to the next explanation strategy and remember it.
-    # Wave 2: an explicit strategy request OVERRIDES the rotation and is
+    # 'আমি বুঝিন': swap to the next explanation strategy and remember it.
+    # an explicit strategy request OVERRIDES the rotation and is
     # persisted as last_strategy so the next turn keeps learning from it.
     extra_instruction: str | None = None
     goal = "chat"
@@ -445,7 +446,7 @@ async def send_chat_message(
             answer_text=result.answer,
         )
     db.commit()
-    # S1.9: one question ≈ one minute of study for the daily counters.
+    # one question ≈ one minute of study for the daily counters.
     record_activity(db, conv.student_id, questions=1, minutes=1)
     return ChatMessageOut(
         id=assistant_msg.id,
@@ -476,11 +477,11 @@ async def stream_chat_message(
     student = _student_profile(db, user)
     class_level = payload.class_level or student.class_level or 6
     history = _chat_history(app_ctx, db, conv.id)
-    # Wave 2 vision contract: validated BEFORE anything is persisted.
+    # vision contract: validated BEFORE anything is persisted.
     image_payload = _validate_chat_image(payload.image)
 
-    # S1.5 'আমি বুঝিন': swap to the next explanation strategy and remember it.
-    # Wave 2: explicit strategy OVERRIDES the rotation (persisted likewise).
+    # 'আমি বুঝিন': swap to the next explanation strategy and remember it.
+    # explicit strategy OVERRIDES the rotation (persisted likewise).
     extra_instruction: str | None = None
     goal = "chat"
     if payload.strategy:
@@ -493,12 +494,12 @@ async def stream_chat_message(
 
     user_msg = ChatMessage(conversation_id=conv.id, role="user", content=payload.message)
     db.add(user_msg)
-    # F-PERF-06: commit before streaming to release DB session/connection during LLM stream
+    # commit before streaming to release DB session/connection during LLM stream
     # (was flush-only, holding transaction for up to 30s). User turn is persisted alone;
     # assistant turn will be persisted in a short second transaction after stream.
     db.commit()
     db.refresh(user_msg)
-    # S4.1: build the context before streaming so the log line lands once.
+    # build the context before streaming so the log line lands once.
     ctx = _request_context(
         db,
         user,
@@ -543,7 +544,7 @@ async def stream_chat_message(
                     elif event.response is not None:
                         final_response = event.response
             if final_response is None:  # never leak a naked 500 under -O
-                # F-PERF-06: user_msg already committed before stream; no rollback needed
+                # user_msg already committed before stream; no rollback needed
                 yield (
                     "event: error\ndata: "
                     + json.dumps({"code": "llm_unavailable"}, ensure_ascii=False)
@@ -577,7 +578,7 @@ async def stream_chat_message(
                 "user_message_id": user_msg.id,
                 "message_id": assistant_msg.id,
                 **final_response.model_dump(),
-                # Wave 2: additive grounding-confidence in [0,1] (see
+                # additive grounding-confidence in [0,1] (see
                 # _answer_confidence for the documented formula).
                 "confidence": _answer_confidence(
                     final_response.grounded,
@@ -587,7 +588,7 @@ async def stream_chat_message(
             }
             yield ("event: done\ndata: " + json.dumps(done_payload, ensure_ascii=False) + "\n\n")
         except ProviderError:
-            # F-PERF-06: user turn already persisted; do not rollback
+            # user turn already persisted; do not rollback
             try:
                 db.rollback()
             except Exception:
@@ -602,7 +603,7 @@ async def stream_chat_message(
 
 
 # ------------------------------------------------------------------
-# Feedback & privacy-safe product analytics (B12)
+# Feedback & privacy-safe product analytics
 # ------------------------------------------------------------------
 
 
@@ -613,6 +614,39 @@ def submit_feedback(payload: FeedbackRequest, db: DbSession, user: CurrentUser) 
             status_code=422,
             detail={"code": "missing_target", "message": "message_id or attempt_id required"},
         )
+
+    def _target_owner_user_id() -> int | None:
+        """Resolve the account that owns the rated content (or None if gone)."""
+        if payload.message_id is not None:
+            conv_owner = db.scalar(
+                select(Conversation.student_id)
+                .join(ChatMessage, ChatMessage.conversation_id == Conversation.id)
+                .where(ChatMessage.id == payload.message_id)
+            )
+            if conv_owner is None:
+                return None
+            return db.scalar(select(Student.user_id).where(Student.id == conv_owner))
+        attempt_owner = db.scalar(
+            select(QuizAttempt.student_id).where(QuizAttempt.id == payload.attempt_id)
+        )
+        if attempt_owner is None:
+            return None
+        return db.scalar(select(Student.user_id).where(Student.id == attempt_owner))
+
+    owner_user_id = _target_owner_user_id()
+    # Feedback attaches a user-written comment to someone else's chat message
+    # or quiz attempt — restrict to the owner (admins may review anything).
+    if owner_user_id is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "target_not_found", "message": "Rated content not found"},
+        )
+    if owner_user_id != user.id and user.role != "admin":
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "not_owner", "message": "Not allowed to rate this content"},
+        )
+
     row = Feedback(
         user_id=user.id,
         message_id=payload.message_id,
@@ -620,10 +654,16 @@ def submit_feedback(payload: FeedbackRequest, db: DbSession, user: CurrentUser) 
         rating=payload.rating,
         comment=payload.comment,
     )
-    if payload.message_id is not None:
+    if payload.message_id is not None and payload.rating in (-1, 1):
         msg = db.get(ChatMessage, payload.message_id)
-        if msg is not None and payload.rating in (-1, 1):
-            msg.rating = payload.rating
+        if msg is not None:
+            # Owner-only message rating (ownership already verified above).
+            student_id = db.scalar(select(Student.id).where(Student.user_id == user.id))
+            conv_owner_id = db.scalar(
+                select(Conversation.student_id).where(Conversation.id == msg.conversation_id)
+            )
+            if student_id is not None and conv_owner_id == student_id:
+                msg.rating = payload.rating
     db.add(row)
     db.commit()
     return {"status": "recorded"}
@@ -637,9 +677,9 @@ def admin_feedback_queue(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> FeedbackQueuePage:
-    """S5.10 triage queue: oldest un-triaged feedback first. Rows carry
+    """triage queue: oldest un-triaged feedback first. Rows carry
     the complaint and nothing more -- reporter identity beyond the id is
-    deliberately withheld (R11)."""
+    deliberately withheld."""
     stmt = select(Feedback, User.role).join(User, User.id == Feedback.user_id)
     count_stmt = select(func.count()).select_from(Feedback)
     if status == "open":
@@ -721,7 +761,7 @@ def record_event(
         props_keys=sorted(payload.props.keys()),
         role=user.role,
     )
-    # Wave 1: persist the event server-side after sanitization (drop
+    # persist the event server-side after sanitization (drop
     # PII-flavoured keys, primitive values, 40-char strings). The trail
     # table has no FK by design: product analytics survive account
     # deletion as an aggregate-only record (user_id included).

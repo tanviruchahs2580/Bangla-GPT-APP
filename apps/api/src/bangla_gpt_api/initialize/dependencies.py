@@ -1,12 +1,12 @@
 """Application dependency construction.
 
-Extracted from the monolithic ``main.py``.  Builds every runtime dependency
+Extracted from the monolithic ``main.py``. Builds every runtime dependency
 (provider, index, tutor, database engine, admin bootstrap) and returns an
 ``AppContext`` plus all objects needed by the lifespan context — **no closure
 capture**, all passed explicitly.
 
 Returns a tuple so the caller can attach ``app.state.engine`` and pass
-provider/engine to ``build_lifespan()``.
+provider/engine to ``build_lifespan``.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ from bangla_gpt_api.services.tutor import TutorService
 if TYPE_CHECKING:  # typing-only: never executed, so no import cycles
     from sqlalchemy.engine import Engine
 
-    from bangla_gpt_api.caching import Cache, CachedRankingIndex
+    from bangla_gpt_api.caching import Cache
     from bangla_gpt_api.providers.base import LLMProvider
     from bangla_gpt_api.retrieval.base import RankingIndex
     from bangla_gpt_api.services.circuit_breaker import CircuitBreaker
@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 
 
 def validate_app_config(settings: Settings) -> None:
-    """Validate rate-limit / jobs backends.  Raises on any unsupported value."""
+    """Validate rate-limit / jobs backends. Raises on any unsupported value."""
     if settings.rate_limit_backend not in ("memory", "redis"):
         raise RuntimeError(
             f"RATE_LIMIT_BACKEND={settings.rate_limit_backend!r} is not supported; "
@@ -127,36 +127,9 @@ def _bootstrap_admin(session_factory: Callable[[], Session], settings: Settings)
 # Provider / Index / Tutor construction
 # ---------------------------------------------------------------------------
 # NOTE: provider / fast_provider / circuit_breaker / fallback_provider are
-# ACCEPTED AS PARAMETERS (not looked up here).  This avoids a circular
+# ACCEPTED AS PARAMETERS (not looked up here). This avoids a circular
 # import (main → initialize → providers → main) and lets callers that
 # monkeypatch ``main.get_provider`` retain control.
-
-
-def _build_index(
-    chunks: list[Chunk],
-    settings: Settings,
-    cache: Cache,
-    hybrid_index_cls: type[HybridIndex] | None = None,
-) -> CachedRankingIndex:
-    """Build a ranking index (hybrid or BM25) with RAG query-result cache."""
-    from bangla_gpt_api.caching import RAG_CACHE_TTL_SECONDS, CachedRankingIndex
-
-    if settings.retrieval_mode.strip().lower() == "hybrid":
-        from bangla_gpt_api.retrieval.embedding import build_embedder
-
-        # Use the passed-in class (for monkeypatch support) or the real one.
-        if hybrid_index_cls is None:
-            from bangla_gpt_api.retrieval.hybrid_index import HybridIndex as _real_hybrid
-
-            hybrid_index_cls = _real_hybrid
-
-        inner: RankingIndex = hybrid_index_cls(chunks, build_embedder(settings))  # type: ignore[arg-type]
-    else:
-        from bangla_gpt_api.retrieval.bm25 import BM25Index
-
-        inner = BM25Index(chunks)
-
-    return CachedRankingIndex(inner, cache, ttl=RAG_CACHE_TTL_SECONDS)
 
 
 def _build_tutor(
@@ -216,7 +189,7 @@ def build_dependencies(
 
     ``hybrid_index_cls`` and ``make_engine_fn`` are optional overrides that
     let callers that monkeypatch ``main.HybridIndex`` / ``main.make_engine``
-    inject their own implementations.  When *None* the function falls back
+    inject their own implementations. When *None* the function falls back
     to the real internal classes.
 
     Returns ``(ctx, provider, fast_provider, engine, session_factory)``.
