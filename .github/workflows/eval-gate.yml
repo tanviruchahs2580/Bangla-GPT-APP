@@ -5,8 +5,6 @@ name: Eval gate (S4.7 golden-set regression)
 # and compares every metric against eval/baseline_v2.json; any metric that
 # drops by more than 2 percentage points fails this job.
 #
-# NOTE (repo directive): this file is intentionally LOCAL ONLY -- never push
-# it; it becomes active when the no-commit directive is lifted.
 
 on:
   push:
