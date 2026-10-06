@@ -449,10 +449,22 @@ def test_admin_maintenance_purge(admin_client: TestClient) -> None:
 
 
 def test_feedback_and_events_endpoints(client: TestClient) -> None:
-    _register(client, "fb@example.com")
+    student = _register(client, "fb@example.com")
     headers = _login(client, "fb@example.com")
-    fb = client.post("/feedback", json={"rating": 1, "attempt_id": 1}, headers=headers)
+    # Feedback must target REAL owned content (audit F-09): take a quiz
+    # first so the attempt exists and belongs to the caller.
+    started = client.post(
+        "/quizzes",
+        json={"student_id": student["profile_id"], "num_questions": 2},
+        headers=headers,
+    )
+    assert started.status_code == 200, started.text
+    attempt_id = started.json()["attempt_id"]
+    fb = client.post("/feedback", json={"rating": 1, "attempt_id": attempt_id}, headers=headers)
     assert fb.status_code == 201
+    # a target that does not exist is now a 404, not a silently recorded row
+    ghost = client.post("/feedback", json={"rating": 1, "attempt_id": 99999}, headers=headers)
+    assert ghost.status_code == 404
     missing_target = client.post("/feedback", json={"rating": -1}, headers=headers)
     assert missing_target.status_code == 422
     ev = client.post("/events", json={"name": "quiz_started", "props": {"n": 5}}, headers=headers)

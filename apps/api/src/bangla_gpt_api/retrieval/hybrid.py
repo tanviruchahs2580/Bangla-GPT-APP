@@ -65,7 +65,8 @@ QUERY_EXPANSIONS: dict[str, frozenset[str]] = {
 
 
 def light_stem(term: str) -> str:
-    """Strip one common inflectional suffix; never shorten below 4 chars."""
+    """Strip one common inflectional suffix; never shorten a term below
+    ``_MIN_STEM_LEN`` (3) characters."""
     if not _BANGLA_RE.search(term):
         return term
     for suffix in _SUFFIXES:

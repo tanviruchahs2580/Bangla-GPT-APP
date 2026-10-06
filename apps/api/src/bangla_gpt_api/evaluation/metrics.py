@@ -102,10 +102,12 @@ async def faithfulness(answer: str, question: str, evidence: list[str], provider
         f"{_JUDGE_INSTRUCTION}QUESTION: {question}\nEVIDENCE:\n{joined}\nANSWER: {answer}\n\nScore:"
     )
     raw = await provider.generate(prompt)
-    match = re.search(r"0(?:\.\d+)?|1(?:\.0+)?", raw)
+    # Anchor to the reply tail: a mid-sentence "1" (e.g. "10 of 12 claims
+    # unsupported ... 0.17") must not score as a perfect 1.0.
+    match = re.search(r"(0(?:\.\d+)?|1(?:\.0+)?)\s*(?:/\s*1\.0)?\s*$", raw)
     if match is None:  # judge returned junk -> score of record is 0 (never silent)
         return {"mode": "llm_judge", "score": 0.0, "raw": raw[:80]}
-    return {"mode": "llm_judge", "score": min(1.0, float(match.group()))}
+    return {"mode": "llm_judge", "score": min(1.0, float(match.group(1)))}
 
 
 @dataclass

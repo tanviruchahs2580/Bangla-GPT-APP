@@ -18,11 +18,18 @@ SELF_HARM_ANSWER = (
 )
 
 # Category -> compiled regex over the normalized question text.
+# Teens on mobile keyboards frequently type romanized Bangla ("Banglish"),
+# so the self-harm category — the one with a helpline response — also
+# carries romanized/English variants. Keep the set conservative: these
+# regexes refuse real children's questions.
 _PATTERNS: tuple[tuple[str, str], ...] = (
     # Self-harm / suicide ideation or method-seeking
     (
         "self_harm",
-        r"আত্মহত্যা|আত্মঘাতী|নিজেকে\s*মার|গিলে\s*ফেল|বিষ\s*খাও|ফাঁসি\s*দেও|কাটা\s*যাবে",
+        r"আত্মহত্যা|আত্মঘাতী|নিজেকে\s*মার|গিলে\s*ফেল|বিষ\s*খাও|ফাঁসি\s*দেও|কাটা\s*যাবে"
+        # romanized Bangla + English variants (case handled by (?i) below)
+        r"|(?i:suicid\w*|kill\s+(?:myself|me)|mar\s*kh\w+b?o?\s*(?:bo|dibo)?"
+        r"|(?:gori|gola)\s*katbo|gila\s*felbo|bish\s*khabo|fashi\s*dibo)",
     ),
     # Weapons / explosives synthesis
     ("weapon_synthesis", r"বোমা|বিস্ফোরক|অগ্নিসংযোগ|অস্ত্র\s*(বানা|তৈরি)|গুলি\s*চালানোর?\s*(উপায়|ভাব)"),

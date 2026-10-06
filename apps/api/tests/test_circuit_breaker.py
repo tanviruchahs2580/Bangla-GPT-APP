@@ -293,12 +293,12 @@ async def test_router_get_status() -> None:
 async def test_full_resilience_chain() -> None:
     """Simulate the full chain: router -> breaker -> provider.
 
-    Real flow in ask/ask_stream:
+    Real flow in ask/ask_stream (post-A2 fix):
     1. Circuit times out → state becomes HALF_OPEN
-    2. select_provider uses the one allowed probe, returns fallback
-    3. Fallback generates answer successfully
-    4. router.record_result(True) calls cb.record_success
-       → HALF_OPEN + success → CLOSED → router switches back
+    2. select_provider routes back to the PRIMARY (peek is non-consuming)
+    3. The primary call itself takes the HALF_OPEN probe and succeeds
+    4. The success closes the breaker — recovery actually re-tests the
+       primary instead of closing it from fallback results.
     """
     failing_primary = FailingProvider()
     successful_fallback = SuccessfulProvider()
@@ -331,7 +331,12 @@ async def test_full_resilience_chain() -> None:
     await asyncio.sleep(0.15)  # timeout elapsed
     # Trigger state transition by reading cb.state (this is what the middleware does)
     assert cb.state == CircuitState.HALF_OPEN
-    # Now record_result triggers record_success which sees HALF_OPEN → CLOSED
+
+    # Phase 5: the next request routes back to the PRIMARY, whose call takes
+    # the HALF_OPEN probe and closes the breaker on success.
+    selected = await router.select_provider("q")
+    assert selected.name == "failing"
+    assert await selected.generate("q") == "ok"
     router.record_result(True)
     assert cb.state == CircuitState.CLOSED
     assert router.fallback_active is False
@@ -367,3 +372,53 @@ async def test_tutor_service_falls_back_after_breaker_opens() -> None:
     answer = await svc.ask("ভগ্নাংশ কী?", class_level=6, subject="mathematics")
     assert answer.answer == "ok"
     assert answer.grounded is True
+
+
+# ── 2026-10-06 audit remediations (A2) ──────────────────────────────────────
+
+
+async def test_fallback_success_does_not_pin_breaker_open() -> None:
+    """Fallback-served successes must not touch the primary breaker: the
+    previous behavior cleared the recovery timestamp on every fallback
+    success, pinning traffic to the fallback provider forever."""
+    cb = CircuitBreaker(failure_threshold=2, reset_timeout_seconds=0.05, name="p")
+    primary = SuccessfulProvider()
+    fallback = SuccessfulProvider()
+    router = ProviderFallbackRouter(primary, fallback, primary_breaker=cb)
+    cb.record_failure()
+    cb.record_failure()
+    assert cb.state == CircuitState.OPEN
+
+    # Router switches to the fallback and serves successfully — the primary
+    # breaker must stay untouched (still OPEN with its recovery clock).
+    assert await router.select_provider("q") is fallback
+    router.record_result(True)
+    assert router.fallback_active is True
+    metrics = cb.get_metrics()
+    assert metrics["last_failure_time"] is not None
+
+    # After the reset timeout the router routes back to the primary, whose
+    # successful probe closes the breaker.
+    await asyncio.sleep(0.1)
+    assert await router.select_provider("q") is primary
+    async with CircuitBreakerMiddleware(cb):
+        await primary.generate("q")
+    assert cb.state == CircuitState.CLOSED
+
+
+async def test_half_open_probe_failure_reopens_even_below_threshold() -> None:
+    """A failed HALF_OPEN probe must re-open immediately (Hystrix-style),
+    not leave the breaker stuck HALF_OPEN with the probe slot consumed."""
+    cb = CircuitBreaker(failure_threshold=5, reset_timeout_seconds=0.05, name="p")
+    for _ in range(5):
+        cb.record_failure()
+    assert cb.state == CircuitState.OPEN
+    await asyncio.sleep(0.1)
+    assert cb.state == CircuitState.HALF_OPEN
+    # Simulate the 60s sliding window expiring while OPEN/HALF_OPEN: without
+    # the immediate re-open, this probe failure (1 < threshold 5) would leave
+    # the breaker HALF_OPEN forever with the probe slot taken.
+    cb._failure_timestamps.clear()
+    cb.record_failure()
+    assert cb.state == CircuitState.OPEN
+    assert cb.allow_request() is False

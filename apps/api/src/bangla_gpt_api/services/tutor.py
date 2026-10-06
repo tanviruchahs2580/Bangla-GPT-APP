@@ -41,6 +41,17 @@ INSUFFICIENT_EVIDENCE_ANSWER = (
     "উত্তরটি পাঠ্যবইয়ের বিষয়বস্তুর ভিত্তিতে দেওয়া সম্ভব নয়। অনুগ্রহ করে পাঠ্যবইয়ের সংশ্লিষ্ট অধ্যায় থেকে প্রশ্ন করুন।"
 )
 
+# Canonical non-answer phrasing the SYSTEM_PROMPT (rule ৪) instructs the
+# model to use when the evidence does not contain the answer. Detecting it
+# keeps the ``grounded`` flag honest: a "not in the textbook" reply is a
+# refusal, not a grounded answer with citations attached.
+_MODEL_REFUSAL_MARKER = "পাঠ্যবইয়ে নেই"
+
+
+def _model_refused(answer: str) -> bool:
+    return _MODEL_REFUSAL_MARKER in answer
+
+
 # (vision contract): honest refusal for LLM_PROVIDER=mock, which cannot
 # see images. A NEW constant -- the four protected SYSTEM_PROMPT constants and
 # INSUFFICIENT_EVIDENCE_ANSWER above stay exactly as they are. The copy never
@@ -438,15 +449,17 @@ class TutorService:
 
         citation_ok = verify_citation(answer, " ".join(h.chunk.text for h in hits))
         refs = self._sources(hits)
+        refused = _model_refused(answer)
         return AskResponse(
             answer=answer,
-            grounded=True,
-            sources=refs,
-            citation_verified=citation_ok,
+            grounded=not refused,
+            sources=[] if refused else refs,
+            citation_verified=None if refused else citation_ok,
+            refused_reason="model_refused" if refused else None,
             confidence=answer_confidence(
-                True,
-                None,
-                [float(getattr(r, "score", 0.0)) for r in refs],
+                not refused,
+                "model_refused" if refused else None,
+                [] if refused else [float(getattr(r, "score", 0.0)) for r in refs],
             ),
         )
 
@@ -611,6 +624,11 @@ class TutorService:
         from bangla_gpt_api.services.safety import verify_citation
 
         citation_ok = verify_citation(answer, " ".join(h.chunk.text for h in hits))
+        # Same honesty downgrade as the non-stream path: a "not in the
+        # textbook" reply is a refusal, not a grounded answer.
+        model_refused = _model_refused(answer)
+        if answer_is_grounded and model_refused:
+            answer_is_grounded = False
         yield StreamEvent(
             type="final",
             response=AskResponse(
@@ -618,6 +636,7 @@ class TutorService:
                 grounded=answer_is_grounded,
                 sources=self._sources(hits) if answer_is_grounded else [],
                 citation_verified=citation_ok if answer_is_grounded else False,
+                refused_reason="model_refused" if model_refused else None,
             ),
         )
 

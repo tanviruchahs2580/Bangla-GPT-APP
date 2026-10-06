@@ -159,11 +159,13 @@ class Settings(BaseSettings):
     nctb_corpus_dir: str | None = None
 
     # --- default rate limit rules (merged over per-field settings in middleware_stack) ---
+    # NOTE: the chat LLM routes are /tutor/conversations/{id}/messages[/stream];
+    # a "/tutor/chat" key would match no real path.
     rate_limit_rules: dict[str, tuple[int, str]] = {
         "/auth/login": (10, "ip"),
         "/auth/mfa/challenge": (5, "ip"),
         "/tutor/ask": (30, "user"),
-        "/tutor/chat": (30, "user"),
+        "/tutor/conversations": (30, "user"),
         "/tutor": (60, "ip"),
         "/auth/forgot": (10, "ip"),
         "/auth/reset": (10, "ip"),

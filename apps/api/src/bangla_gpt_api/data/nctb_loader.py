@@ -12,9 +12,13 @@ skipped. This keeps class filtering honest instead of inventing metadata.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 from bangla_gpt_api.curriculum.models import Chunk, CurriculumMeta
+from bangla_gpt_api.services.safety import strip_injections
+
+logger = logging.getLogger(__name__)
 
 LEVEL_CLASS_RANGE = {
     "secondary": (6, 10),
@@ -68,6 +72,7 @@ def load_nctb_corpus(
         reports = json.loads(quality_report_path.read_text(encoding="utf-8"))
 
     chunks: list[Chunk] = []
+    injection_drops_total = 0
     for path in sorted(chunks_dir.glob("*.chunks.jsonl")):
         source_id = path.name.removesuffix(".chunks.jsonl")
         report = reports.get(source_id, {})
@@ -87,6 +92,14 @@ def load_nctb_corpus(
                     continue
                 data = json.loads(line)
                 text = data["text"]
+                if not text:
+                    continue
+                # Same ingest-time injection filter the sample corpus gets
+                # (services/safety.py documents it as the first of the two
+                # injection defenses) — without it the production corpus
+                # path would skip the filter entirely.
+                text, injection_drops = strip_injections(text)
+                injection_drops_total += injection_drops
                 if not text:
                     continue
                 meta_kwargs = dict(
@@ -117,6 +130,11 @@ def load_nctb_corpus(
                             meta=CurriculumMeta(class_level=class_level, **meta_kwargs),
                         )
                     )
+    if injection_drops_total:
+        logger.warning(
+            "nctb_loader: dropped %d prompt-injection sentences at load time",
+            injection_drops_total,
+        )
     return chunks
 
 

@@ -179,7 +179,10 @@ def test_force_change_blocks_other_endpoints_until_rotated(tmp_path) -> None:
 
     # exempt endpoints still work while the change is pending
     assert client.get("/users/me", headers=headers).status_code == 200
-    assert client.get("/users/me/export", headers=headers).status_code == 200
+    # /users/me/export is deliberately NOT exempt (audit F-11): a forced
+    # takeover session must not be able to pull a full data export before
+    # rotating the password.
+    assert client.get("/users/me/export", headers=headers).status_code == 403
 
     rotated = client.post(
         "/auth/change-password",
