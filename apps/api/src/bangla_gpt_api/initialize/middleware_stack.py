@@ -27,7 +27,9 @@ def _derive_default_rules(settings: Settings) -> dict[str, tuple[int, str]]:
         # without this rule the challenge endpoint is brute-forceable.
         "/auth/mfa/challenge": (5, "ip"),
         "/tutor/ask": (settings.rate_limit_tutor_per_minute, "user"),
-        "/tutor/chat": (settings.rate_limit_tutor_per_minute, "user"),
+        # The chat LLM routes are /tutor/conversations/{id}/messages[/stream];
+        # a "/tutor/chat" key matches no real path.
+        "/tutor/conversations": (settings.rate_limit_tutor_per_minute, "user"),
         "/tutor": (settings.rate_limit_tutor_ip_per_minute, "ip"),
         "/auth/forgot": (10, "ip"),
         "/auth/reset": (10, "ip"),
@@ -38,7 +40,7 @@ def _derive_default_rules(settings: Settings) -> dict[str, tuple[int, str]]:
 #: Routes whose limit is configurable through the dedicated per-field knobs
 #: (RATE_LIMIT_LOGIN_PER_MINUTE etc.). On these routes the knobs win over
 #: RATE_LIMIT_RULES; everywhere else RATE_LIMIT_RULES entries apply as given.
-_PER_FIELD_ROUTES = frozenset({"/auth/login", "/tutor/ask", "/tutor/chat", "/tutor"})
+_PER_FIELD_ROUTES = frozenset({"/auth/login", "/tutor/ask", "/tutor/conversations", "/tutor"})
 
 
 def _effective_rules(settings: Settings) -> dict[str, tuple[int, str]]:
