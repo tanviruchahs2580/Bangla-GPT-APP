@@ -11,10 +11,12 @@ and bn/en i18n with dark mode.
 **Current version: 0.9.2** (see `apps/api/pyproject.toml` / `apps/web/package.json`).
 
 - **Live web app:** https://bangla-gpt-app.vercel.app
-- **Known limitation:** the Vercel frontend proxies `/api/*` to the API running
-  behind a Cloudflare quick tunnel whose hostname rotates per session (see
-  `apps/web/vercel.json`). A stable production API origin (VM/PaaS + named
-  tunnel or direct domain) is the top infrastructure TODO —
+- **Production API origin (FE-01):** the Vercel frontend forwards `/api/*`
+  through an edge proxy (`apps/web/api/[[...path]].ts`) to the origin set in
+  the `API_ORIGIN` project environment variable — no tunnel URL is baked into
+  the repo anymore. Until `API_ORIGIN` is set in the Vercel project settings,
+  `/api/*` answers 503 `api_origin_unconfigured` by design. Point it at a
+  stable origin (VM/PaaS + named tunnel or direct domain) —
   [docs/operations/PRODUCTION_DEPLOYMENT.md](docs/operations/PRODUCTION_DEPLOYMENT.md).
 
 ## API surface (current)
