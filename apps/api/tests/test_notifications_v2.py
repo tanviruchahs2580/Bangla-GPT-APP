@@ -53,10 +53,57 @@ def _codes(client: TestClient, headers: dict) -> list:
     return [n["code"] for n in body["items"]]
 
 
-def test_quiz_assignment_notifies_each_student(client: TestClient) -> None:
+def _enroll_in_default_school(db_path: str, student_id: int, class_level: int = 6) -> None:
+    """Enroll a student into the shared default school (F-04 contract).
+
+    School-less staff are anchored to the default school, so teacher-surface
+    tests over self-registered students must first put those students inside
+    a default-school classroom — the workflow a real standalone teacher does
+    via classroom creation + import.
+    """
+    import sqlite3 as _sq
+    from datetime import UTC as _UTC
+    from datetime import datetime as _dt
+
+    conn = _sq.connect(db_path)
+    try:
+        now = _dt.now(_UTC).replace(tzinfo=None).isoformat(sep=" ")
+        row = conn.execute("SELECT id FROM schools WHERE code='BGPT-DEFAULT'").fetchone()
+        if row is None:
+            conn.execute(
+                "INSERT INTO schools (name, code, created_at) VALUES ('Default School', 'BGPT-DEFAULT', ?)",
+                (now,),
+            )
+        school_id = conn.execute("SELECT id FROM schools WHERE code='BGPT-DEFAULT'").fetchone()[0]
+        room = conn.execute(
+            "SELECT id FROM classrooms WHERE school_id=? AND class_level=? AND section='GEN'",
+            (school_id, class_level),
+        ).fetchone()
+        if room is None:
+            conn.execute(
+                "INSERT INTO classrooms (school_id, class_level, section, created_at) VALUES (?, ?, 'GEN', ?)",
+                (school_id, class_level, now),
+            )
+        room_id = conn.execute(
+            "SELECT id FROM classrooms WHERE school_id=? AND class_level=? AND section='GEN'",
+            (school_id, class_level),
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT OR IGNORE INTO class_students (classroom_id, student_id, created_at) VALUES (?, ?, ?)",
+            (room_id, student_id, now),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_quiz_assignment_notifies_each_student(client: TestClient, tmp_path) -> None:
     teach = _teacher(client)
     s1 = _register(client, "s1@example.com")
     s2 = _register(client, "s2@example.com")
+    # F-04: the teacher's assignment write is walled to the default school
+    for sid in (s1["profile_id"], s2["profile_id"]):
+        _enroll_in_default_school(str(tmp_path / "notif.db"), sid)
     res = client.post(
         "/teacher/assignments",
         json={
@@ -82,9 +129,10 @@ def test_quiz_assignment_notifies_each_student(client: TestClient) -> None:
         assert note["link"] == "/student/quiz"
 
 
-def test_support_plan_notifies_student_user(client: TestClient) -> None:
+def test_support_plan_notifies_student_user(client: TestClient, tmp_path) -> None:
     teach = _teacher(client)
     student = _register(client, "weak@example.com")
+    _enroll_in_default_school(str(tmp_path / "notif.db"), student["profile_id"])
     headers = _login(client, "weak@example.com")
     started = client.post(
         "/quizzes", json={"student_id": student["profile_id"], "num_questions": 2}, headers=headers
@@ -116,9 +164,12 @@ def test_parent_link_notifies_both_sides(client: TestClient) -> None:
     assert "notif_parent_linked" in _codes(client, kid)
 
 
-def test_feed_is_scoped_newest_first_and_read_state_idempotent(client: TestClient) -> None:
+def test_feed_is_scoped_newest_first_and_read_state_idempotent(
+    client: TestClient, tmp_path
+) -> None:
     teach = _teacher(client)
     s1 = _register(client, "only@example.com")
+    _enroll_in_default_school(str(tmp_path / "notif.db"), s1["profile_id"])
     _register(client, "other@example.com")
     for _ in range(2):
         res = client.post(

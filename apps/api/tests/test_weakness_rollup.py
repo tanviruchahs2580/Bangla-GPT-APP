@@ -167,10 +167,46 @@ def test_rollup_rule_thresholds_and_order(env) -> None:
 # ---------- the PASS-WHEN: same value, all three endpoints ----------
 
 
+
+
+def _enroll_in_default_school(conn: sqlite3.Connection, student_id: int, class_level: int = 6) -> None:
+    """Enroll a student into the shared default school (F-04 contract).
+
+    School-less staff reads are walled to the default school, so teacher
+    surfaces in these tests see only default-school classrooms' students.
+    """
+    row = conn.execute("SELECT id FROM schools WHERE code='BGPT-DEFAULT'").fetchone()
+    if row is None:
+        conn.execute(
+            "INSERT INTO schools (name, code, created_at) VALUES ('Default School', 'BGPT-DEFAULT', ?)",
+            (_ts(_now()),),
+        )
+    school_id = conn.execute("SELECT id FROM schools WHERE code='BGPT-DEFAULT'").fetchone()[0]
+    room = conn.execute(
+        "SELECT id FROM classrooms WHERE school_id=? AND class_level=? AND section='GEN'",
+        (school_id, class_level),
+    ).fetchone()
+    if room is None:
+        conn.execute(
+            "INSERT INTO classrooms (school_id, class_level, section, created_at) VALUES (?, ?, 'GEN', ?)",
+            (school_id, class_level, _ts(_now())),
+        )
+    room_id = conn.execute(
+        "SELECT id FROM classrooms WHERE school_id=? AND class_level=? AND section='GEN'",
+        (school_id, class_level),
+    ).fetchone()[0]
+    conn.execute(
+        "INSERT OR IGNORE INTO class_students (classroom_id, student_id, created_at) VALUES (?, ?, ?)",
+        (room_id, student_id, _ts(_now())),
+    )
+    conn.commit()
+
+
 def test_same_value_from_all_three_surfaces(env) -> None:
     client, conn, settings = env
     sid = _register(client, "kid@rollup.test", role="student")
     _seed_graded_answers(conn, sid, CELLS)
+    _enroll_in_default_school(conn, sid)
     student_h = _login(client, "kid@rollup.test")
     _register(client, "teach@rollup.test", role="teacher")
     teacher_h = _login(client, "teach@rollup.test")

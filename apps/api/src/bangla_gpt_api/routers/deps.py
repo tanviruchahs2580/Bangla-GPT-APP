@@ -18,7 +18,15 @@ from sqlalchemy.orm import Session
 from bangla_gpt_api.auth.security import decode_token
 from bangla_gpt_api.caching import CacheUnavailable
 from bangla_gpt_api.config import Settings
-from bangla_gpt_api.db.models import ClassRoom, ClassStudent, Parent, Student, Teacher, User
+from bangla_gpt_api.db.models import (
+    ClassRoom,
+    ClassStudent,
+    Parent,
+    School,
+    Student,
+    Teacher,
+    User,
+)
 from bangla_gpt_api.providers.base import LLMProvider
 from bangla_gpt_api.retrieval.base import RankingIndex
 from bangla_gpt_api.schemas import MeResponse
@@ -119,6 +127,9 @@ _FORCE_CHANGE_EXEMPT_PATHS = frozenset(
     }
 )
 
+# Shared sandbox school for standalone (school-less) staff accounts.
+_DEFAULT_SCHOOL_CODE = "BGPT-DEFAULT"
+
 
 def get_current_user(
     request: Request,
@@ -211,15 +222,42 @@ def _provider_lacks_vision(app_ctx: AppContext) -> bool:
 # --- school tenancy helpers -------------------------------------------
 # Tenancy anchor is User.school_id. A student belongs to a school EXACTLY
 # when one of their ClassRoom memberships carries that school_id. A teacher
-# WITHOUT a school keeps the pre-Wave-2 behavior (no tenancy wall) so every
-# standalone-teacher flow stays byte-compatible; once a teacher is attached
-# to a school, students and classrooms of OTHER schools become invisible
-# (403 other_school, same code the /school/* routes use).
-def _tenant_school_id(user: User) -> int | None:
+# WITHOUT a school is anchored to the SHARED DEFAULT SCHOOL (the pre-
+# school-layer home for standalone accounts — F-04): before this anchor
+# they had NO tenancy wall and could read roster/analytics data of every
+# real school platform-wide. Once a teacher is attached to a school,
+# students and classrooms of OTHER schools stay invisible (403 other_school,
+# same code the /school/* routes use).
+def _default_school_id(db: Session) -> int:
+    """Id of the shared default school, created lazily like common's
+    get-or-create helper (kept local to avoid a deps -> common import)."""
+    from sqlalchemy.exc import IntegrityError as _IntegrityError
+
+    school = db.execute(
+        select(School).where(School.code == _DEFAULT_SCHOOL_CODE)
+    ).scalar_one_or_none()
+    if school is None:
+        school = School(name="Default School", code=_DEFAULT_SCHOOL_CODE)
+        db.add(school)
+        try:
+            db.flush()
+        except _IntegrityError:  # concurrent creation
+            db.rollback()
+            school = db.execute(
+                select(School).where(School.code == _DEFAULT_SCHOOL_CODE)
+            ).scalar_one()
+    return int(school.id)
+
+
+def _tenant_school_id(db: Session, user: User) -> int | None:
     if user.role == "admin":
         return None
-    if user.role in ("teacher", "school_admin") and user.school_id is not None:
-        return user.school_id
+    if user.role in ("teacher", "school_admin"):
+        if user.school_id is not None:
+            return user.school_id
+        # F-04: standalone staff anchor to the shared default school so
+        # their reads can never cross into a real school again.
+        return _default_school_id(db)
     return None
 
 
@@ -238,7 +276,7 @@ def _school_student_id_set(db: Session, school_id: int) -> set[int]:
 
 def _assert_student_in_school(db: Session, user: User, student: Student) -> Student:
     """Tenancy gate for per-student reads/writes (closes cross-school IDOR)."""
-    school_id = _tenant_school_id(user)
+    school_id = _tenant_school_id(db, user)
     if school_id is None:
         return student
     if student.id not in _school_student_id_set(db, school_id):
@@ -249,8 +287,8 @@ def _assert_student_in_school(db: Session, user: User, student: Student) -> Stud
     return student
 
 
-def _assert_room_in_school(user: User, room: ClassRoom) -> ClassRoom:
-    school_id = _tenant_school_id(user)
+def _assert_room_in_school(db: Session, user: User, room: ClassRoom) -> ClassRoom:
+    school_id = _tenant_school_id(db, user)
     if school_id is None:
         return room
     if room.school_id != school_id:

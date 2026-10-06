@@ -95,6 +95,44 @@ def _seed_attempt(
 # --------------------------------------------------------------------------
 
 
+
+
+def _enroll_in_default_school(conn: sqlite3.Connection, student_id: int, class_level: int = 6) -> None:
+    """Enroll a seeded student into the shared default school (F-04).
+
+    The school-less-teacher wall anchors reads to the default school, so
+    tests that exercise teacher surfaces over seeded students must put the
+    students inside a default-school classroom — the same workflow a real
+    standalone teacher performs.
+    """
+    now = datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" ")
+    row = conn.execute("SELECT id FROM schools WHERE code='BGPT-DEFAULT'").fetchone()
+    if row is None:
+        conn.execute(
+            "INSERT INTO schools (name, code, created_at) VALUES ('Default School', 'BGPT-DEFAULT', ?)",
+            (now,),
+        )
+    school_id = conn.execute("SELECT id FROM schools WHERE code='BGPT-DEFAULT'").fetchone()[0]
+    room = conn.execute(
+        "SELECT id FROM classrooms WHERE school_id=? AND class_level=? AND section='GEN'",
+        (school_id, class_level),
+    ).fetchone()
+    if room is None:
+        conn.execute(
+            "INSERT INTO classrooms (school_id, class_level, section, created_at) VALUES (?, ?, 'GEN', ?)",
+            (school_id, class_level, now),
+        )
+    room_id = conn.execute(
+        "SELECT id FROM classrooms WHERE school_id=? AND class_level=? AND section='GEN'",
+        (school_id, class_level),
+    ).fetchone()[0]
+    conn.execute(
+        "INSERT OR IGNORE INTO class_students (classroom_id, student_id, created_at) VALUES (?, ?, ?)",
+        (room_id, student_id, now),
+    )
+    conn.commit()
+
+
 def test_roster_briefs_batched_and_identical(tmp_path, monkeypatch) -> None:
     settings = _settings(tmp_path)
     statements: list[str] = []
@@ -116,8 +154,12 @@ def test_roster_briefs_batched_and_identical(tmp_path, monkeypatch) -> None:
     now = datetime.now(UTC).replace(tzinfo=None)
     s1 = _seed_student(conn, "s1@scale.test")
     s2 = _seed_student(conn, "s2@scale.test")
-    _seed_student(conn, "s3@scale.test")  # zero attempts
+    s3 = _seed_student(conn, "s3@scale.test")  # zero attempts
     s4 = _seed_student(conn, "s4@scale.test")
+    # F-04: teacher surfaces are walled to the default school, so the
+    # seeded students must be enrolled in one of its classrooms
+    for sid in (s1, s2, s3, s4):
+        _enroll_in_default_school(conn, sid)
     _seed_attempt(conn, s1, 40.0, now - timedelta(hours=2))
     _seed_attempt(conn, s1, 80.0, now - timedelta(hours=1))
     _seed_attempt(conn, s2, 55.5, now)
@@ -148,7 +190,8 @@ def test_teacher_students_limit(tmp_path) -> None:
     client, conn, _ = env_of(tmp_path)
     teacher = _register(client, "teacher", "t2@scale.test")
     ids = [_seed_student(conn, f"k{i}@scale.test") for i in range(5)]
-    conn.commit()
+    for sid in ids:
+        _enroll_in_default_school(conn, sid)
     res = client.get("/teacher/students", headers=teacher, params={"limit": 3})
     assert res.status_code == 200
     assert [b["student_id"] for b in res.json()] == ids[:3]

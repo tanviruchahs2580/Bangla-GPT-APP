@@ -73,7 +73,7 @@ def teacher_roster(
     # capped (class_level omitted used to pull the whole student table).
     # tenancy: school-bound teachers only ever see their own school.
     students = _load_class_students(
-        db, class_level, limit=limit, school_id=_tenant_school_id(teacher)
+        db, class_level, limit=limit, school_id=_tenant_school_id(db, teacher)
     )
     return _student_briefs(db, students)
 
@@ -82,7 +82,7 @@ def teacher_roster(
 def teacher_analytics(
     class_level: int, db: DbSession, teacher: TeacherOrAdminUser
 ) -> ClassAnalytics:
-    students = _load_class_students(db, class_level, school_id=_tenant_school_id(teacher))
+    students = _load_class_students(db, class_level, school_id=_tenant_school_id(db, teacher))
     briefs = _student_briefs(db, students)
 
     stats: dict[str, list[int]] = defaultdict(lambda: [0, 0])
@@ -154,7 +154,7 @@ def teacher_list_classrooms(db: DbSession, teacher: TeacherOrAdminUser) -> list[
     rooms; school-less teachers and platform admins keep the old view.
     """
     statement = select(ClassRoom).order_by(ClassRoom.class_level, ClassRoom.section)
-    tenant = _tenant_school_id(teacher)
+    tenant = _tenant_school_id(db, teacher)
     if tenant is not None:
         statement = statement.where(ClassRoom.school_id == tenant)
     rooms = db.execute(statement).scalars().all()
@@ -197,7 +197,7 @@ def teacher_create_classroom(
 def classroom_roster(
     room_id: int, db: DbSession, teacher: TeacherOrAdminUser
 ) -> list[RosterEntryOut]:
-    room = _assert_room_in_school(teacher, _classroom_or_404(db, room_id))
+    room = _assert_room_in_school(db, teacher, _classroom_or_404(db, room_id))
     students = list(
         db.execute(
             select(Student)
@@ -258,7 +258,7 @@ def classroom_import(
     supplies guardian consent on behalf of imported minors: consent
     is recorded with version 'CSV-IMPORT-1'.
     """
-    room = _assert_room_in_school(teacher, _classroom_or_404(db, room_id))
+    room = _assert_room_in_school(db, teacher, _classroom_or_404(db, room_id))
     reader = csv.reader(payload.csv_text.splitlines())
     data_rows: list[list[str]] = []
     for i, row in enumerate(reader):

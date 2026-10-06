@@ -117,7 +117,7 @@ def teacher_shorttest_create(
             status_code=503,
             detail={"code": "index_unavailable", "message": "Curriculum index unavailable"},
         )
-    room = _assert_room_in_school(teacher, _classroom_or_404(db, payload.classroom_id))
+    room = _assert_room_in_school(db, teacher, _classroom_or_404(db, payload.classroom_id))
     roster = list(
         db.execute(
             select(Student)
@@ -384,8 +384,8 @@ def teacher_weak_matrix(
     legacy grade-wide view (all students of ``class_level``) is served.
     """
     if room_id is not None:
-        _assert_room_in_school(teacher, _classroom_or_404(db, room_id))
-    return _weak_matrix(db, class_level, school_id=_tenant_school_id(teacher), room_id=room_id)
+        _assert_room_in_school(db, teacher, _classroom_or_404(db, room_id))
+    return _weak_matrix(db, class_level, school_id=_tenant_school_id(db, teacher), room_id=room_id)
 
 
 @router.get("/teacher/curriculum-coverage", response_model=CoverageOut)

@@ -163,14 +163,19 @@ def test_cross_student_data_isolation_and_teacher_access(client: TestClient) -> 
     )
     assert bob_submit.status_code in (400, 403)
 
+    # F-04 contract change: a standalone (school-less) teacher no longer has
+    # platform-wide reach. Alice is a self-registered student with no
+    # classroom, so she is outside the teacher's (shared default) school and
+    # both the read and the generation are refused.
     _register(client, "teach@example.com", role="teacher")
     teacher_headers = _login_headers(client, "teach@example.com")
     teacher_view = client.get(f"/students/{a_id}/progress", headers=teacher_headers)
-    assert teacher_view.status_code == 200
+    assert teacher_view.status_code == 403
+    assert teacher_view.json()["detail"]["code"] == "other_school"
     teacher_generate = client.post(
         "/quizzes", json={"student_id": a_id, "num_questions": 2}, headers=teacher_headers
     )
-    assert teacher_generate.status_code == 200
+    assert teacher_generate.status_code == 403
 
 
 def test_teacher_roster_and_class_analytics(client: TestClient) -> None:
@@ -189,9 +194,43 @@ def test_teacher_roster_and_class_analytics(client: TestClient) -> None:
     _register(client, "classteach@example.com", role="teacher")
     teacher = _login_headers(client, "classteach@example.com")
 
-    roster = client.get("/teacher/students", params={"class_level": 6}, headers=teacher).json()
-    assert len(roster) == 2
-    assert all(entry["attempts_graded"] == 1 for entry in roster)
+    # F-04 contract change: the school-less teacher is walled to the shared
+    # default school. Self-registered students without any classroom are
+    # invisible to the roster (previously: platform-wide leak).
+    roster = client.get("/teacher/students", params={"class_level": 6}, headers=teacher)
+    assert roster.status_code == 200
+    assert roster.json() == []
+
+    # the standalone-teacher workflow still works INSIDE the wall: create a
+    # classroom (lands in the default school) and import students — those
+    # become the teacher's roster.
+    room = client.post(
+        "/teacher/classrooms", json={"class_level": 6, "section": "A"}, headers=teacher
+    )
+    assert room.status_code == 201, room.text
+    room_id = room.json()["id"]
+    imported = client.post(
+        f"/teacher/classrooms/{room_id}/import",
+        json={"csv_text": "name,email\nStudent One, s1@example.com\nStudent Two, s2@example.com\n"},
+        headers=teacher,
+    )
+    assert imported.status_code == 200, imported.text
+    assert imported.json()["created"] == 2
+    students = client.get("/teacher/students", params={"class_level": 6}, headers=teacher).json()
+    assert len(students) == 2
+    student_ids = [entry["student_id"] for entry in students]
+
+    # the teacher can act on students inside the wall (generate + grade)
+    for sid in student_ids:
+        started = client.post(
+            "/quizzes", json={"student_id": sid, "num_questions": 3}, headers=teacher
+        )
+        assert started.status_code == 200, started.text
+        client.post(
+            f"/quizzes/{started.json()['attempt_id']}/submit",
+            json={"answers": [3] * len(started.json()["questions"])},
+            headers=teacher,
+        )
 
     analytics = client.get("/teacher/classes/6/analytics", headers=teacher).json()
     assert analytics["class_level"] == 6
