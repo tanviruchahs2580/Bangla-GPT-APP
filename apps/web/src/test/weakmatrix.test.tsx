@@ -213,7 +213,7 @@ describe("weakness heatmap card", () => {
     expect(screen.getAllByText(/beta, alpha/).length).toBeGreaterThan(0);
   });
 
-  it("shows the S4.6 weakness rollup chips under each student that has them", async () => {
+  it("shows the weakness rollup chips under each student that has them", async () => {
     const withRollup = structuredClone(MATRIX);
     withRollup.students[1].weak_concepts = ["beta", "alpha"];
     apiMock.get.mockImplementation((path: string) => {

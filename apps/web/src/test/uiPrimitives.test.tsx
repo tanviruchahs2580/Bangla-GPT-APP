@@ -35,7 +35,7 @@ function ModalHarness({ onClose }: { onClose?: () => void }) {
   );
 }
 
-describe("RENO ui primitives", () => {
+describe("ui primitives", () => {
   it("Modal renders via portal with dialog semantics and closes on Escape", async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();

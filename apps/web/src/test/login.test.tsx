@@ -30,7 +30,7 @@ function renderLogin() {
   );
 }
 
-describe("LoginPage (B8 UX contract)", () => {
+describe("LoginPage UX contract", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     apiMock.fetchMe.mockResolvedValue(null);

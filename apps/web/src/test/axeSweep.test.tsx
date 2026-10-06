@@ -88,7 +88,7 @@ async function axeExpect(name: string, ui: React.ReactElement) {
   expect(blocking.map((v) => `${name}: ${v.id}: ${v.help}`)).toEqual([]);
 }
 
-describe("RENO accessibility sweep (student + teacher + primitives)", () => {
+describe("accessibility sweep (student + teacher + primitives)", () => {
   it("student surfaces are clean", async () => {
     authMock.useAuth.mockReturnValue({ me, signOut: vi.fn() });
     await axeExpect("home", <HomePage />);

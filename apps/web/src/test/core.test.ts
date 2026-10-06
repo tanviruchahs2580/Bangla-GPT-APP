@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { friendlyError } from "../errors";
 import { t } from "../i18n";
 
-describe("friendlyError (B8)", () => {
+describe("friendlyError", () => {
   it("maps machine codes to localized copy", () => {
     expect(
       friendlyError({ code: "email_unverified", message: "x" }).action,
@@ -23,7 +23,7 @@ describe("friendlyError (B8)", () => {
   });
 });
 
-describe("i18n (B9)", () => {
+describe("i18n", () => {
   it("defaults to Bengali with interpolation support", () => {
     const out = t("partialQuizNote", { got: 4, want: 5 });
     expect(out).toContain("4");

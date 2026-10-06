@@ -11,7 +11,7 @@ const GOLDEN = [
   `${SECTION.check} বুঝতে পারলি?`,
 ].join("\n");
 
-describe("parseStructuredAnswer (S1.4)", () => {
+describe("parseStructuredAnswer", () => {
   it("parses the golden sample into all four sections in order", () => {
     const r = parseStructuredAnswer(GOLDEN);
     expect(r.structured).toBe(true);
