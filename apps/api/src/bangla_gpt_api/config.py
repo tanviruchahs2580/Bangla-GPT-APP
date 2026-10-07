@@ -176,6 +176,10 @@ class Settings(BaseSettings):
         "/tutor": (60, "ip"),
         "/auth/forgot": (10, "ip"),
         "/auth/reset": (10, "ip"),
+        # Unauthenticated resend (login stuck at email_unverified) must be
+        # throttled like forgot/reset to avoid email-spam abuse.
+        "/auth/resend-verification": (10, "ip"),
+        "/auth/verify-email": (10, "ip"),
         "/events": (60, "ip"),
     }
 

@@ -195,6 +195,19 @@ class VerifyEmailRequest(BaseModel):
     token: str = Field(min_length=16, max_length=256)
 
 
+class ResendVerificationRequest(BaseModel):
+    """Unauthenticated resend for users stuck at login with email_unverified.
+
+    The login endpoint issues no token for unverified accounts, so the
+    previous authed-only resend was unreachable exactly when needed.
+    Email is optional so already-authed callers can omit it (server uses
+    their identity); unauthenticated callers must supply it. The endpoint
+    always answers 202 with a generic body to avoid account enumeration.
+    """
+
+    email: str | None = Field(default=None, min_length=5, max_length=255)
+
+
 class ChangePasswordRequest(BaseModel):
     current_password: str = Field(min_length=1, max_length=128)
     new_password: str = Field(min_length=8, max_length=128)

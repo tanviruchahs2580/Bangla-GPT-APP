@@ -8,7 +8,7 @@ import { t } from "./i18n";
 
 export type ErrorCopy = {
   text: string;
-  action?: "resend-verification" | "retry";
+  action?: "resend-verification" | "retry" | "mfa";
 };
 
 const KEY: Record<string, Parameters<typeof t>[0]> = {
@@ -26,13 +26,33 @@ const KEY: Record<string, Parameters<typeof t>[0]> = {
   not_allowed: "errNotAllowed",
   insufficient_role: "errNotAllowed",
   network: "errNetwork",
+  // Login-path failures that previously fell through to the generic copy:
+  // MFA step-up (backend 202 token_type=mfa), dead/stale API origins
+  // (Vercel edge 503 api_origin_unconfigured, Cloudflare 502 HTML pages),
+  // post-login session verification, and native APK misconfiguration.
+  mfa_required: "errMfaRequired",
+  bad_mfa_code: "errBadMfaCode",
+  bad_mfa_token: "errBadMfaToken",
+  api_origin_unconfigured: "errServiceUnavailable",
+  bad_gateway: "errServiceUnavailable",
+  service_unavailable: "errServiceUnavailable",
+  revocation_unavailable: "errServiceUnavailable",
+  verify_failed: "errVerifyFailed",
+  api_base_unconfigured: "errApiUnconfigured",
 };
 
 const ACTION: Record<string, ErrorCopy["action"]> = {
   email_unverified: "resend-verification",
+  mfa_required: "mfa",
+  bad_mfa_code: "mfa",
   llm_unavailable: "retry",
   tutor_unavailable: "retry",
   network: "retry",
+  bad_gateway: "retry",
+  service_unavailable: "retry",
+  api_origin_unconfigured: "retry",
+  revocation_unavailable: "retry",
+  verify_failed: "retry",
 };
 
 // Legacy string details the backend used to send verbatim (Bengali).

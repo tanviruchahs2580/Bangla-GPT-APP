@@ -33,6 +33,8 @@ def _derive_default_rules(settings: Settings) -> dict[str, tuple[int, str]]:
         "/tutor": (settings.rate_limit_tutor_ip_per_minute, "ip"),
         "/auth/forgot": (10, "ip"),
         "/auth/reset": (10, "ip"),
+        "/auth/resend-verification": (10, "ip"),
+        "/auth/verify-email": (10, "ip"),
         "/events": (60, "ip"),
     }
 

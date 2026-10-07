@@ -7,6 +7,7 @@ import { AuthProvider } from "../AuthContext";
 
 const apiMock = vi.hoisted(() => ({
   login: vi.fn(),
+  mfaChallenge: vi.fn(),
   fetchMe: vi.fn(),
   logout: vi.fn(),
   setUnauthorizedHandler: vi.fn(),
@@ -62,5 +63,21 @@ describe("LoginPage UX contract", () => {
     await user.click(screen.getByRole("button", { name: /লগইন|Log in/i }));
     expect(await screen.findByRole("alert")).toHaveTextContent("যাচাই");
     expect(apiMock.login).toHaveBeenCalledOnce();
+  });
+
+  it("shows the OTP step when login answers mfa_required", async () => {
+    apiMock.login.mockRejectedValue(
+      Object.assign(new Error("two-step verification required"), {
+        code: "mfa_required",
+        rawDetail: { mfa_token: "step-up-token" },
+      }),
+    );
+    const { userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    renderLogin();
+    await user.type(screen.getByLabelText("ইমেইল"), "a@b.com");
+    await user.type(screen.getByLabelText(/পাসওয়ার্ড/), "longpassword1");
+    await user.click(screen.getByRole("button", { name: /লগইন|Log in/i }));
+    expect(await screen.findByText(/দুই ধাপের যাচাই|Two-step/i)).toBeInTheDocument();
   });
 });

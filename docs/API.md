@@ -24,6 +24,8 @@ Every response carries `X-Request-ID` (echoed if supplied, otherwise generated).
 | POST | `/auth/login` | - | `{email, password}` → `{access_token, must_change_password}` (HS256 JWT: `sub`, `role`, `exp`). MFA-enabled accounts get HTTP 202 + `token_type: "mfa"` step-up token (5 min, rejected by normal routes) — complete with `/auth/mfa/challenge` |
 | POST | `/auth/forgot` | - | `{email}` → always `202 {"status":"accepted"}` (anti-enumeration). Emails a single-use reset token (30 min); token stored only as SHA-256 hash. Dev fallback logs the token to console when SMTP is off and ENV≠production |
 | POST | `/auth/reset` | - | `{token, new_password(min 8)}` → fresh `{access_token}`; single-use + expiry enforced |
+| POST | `/auth/verify-email` | - | `{token}` → marks the account verified, returns `{access_token}`. Single-use, 24 h expiry |
+| POST | `/auth/resend-verification` | — (optional Bearer) | `{email?}` → always `202 {"status":"accepted"}` (anti-enumeration). Works WITHOUT a session (login issues no token for unverified accounts); an attached session wins over the body email |
 | POST | `/auth/change-password` | Bearer | `{current_password, new_password}` → rotates password and clears the forced-change flag |
 | POST | `/auth/mfa/enroll` | Bearer | Returns unstored `{secret, otpauth_uri}` for the authenticator app; nothing is enabled yet |
 | POST | `/auth/mfa/verify` | Bearer | `{secret, code}` → proves possession and stores the secret (= MFA enabled). 409 if already enabled |
@@ -33,8 +35,9 @@ Every response carries `X-Request-ID` (echoed if supplied, otherwise generated).
 | GET | `/users/me/export` | any | GDPR-style data export: account, profile, quiz attempts, parent links (`Content-Disposition: attachment`) |
 | DELETE | `/users/me` | any | Self-service account deletion (GDPR-style). Removes profile, quiz attempts + answer logs, parent links. Last remaining admin is refused (409). Returns 204 |
 
-Rate limits (per client IP): `/auth/login`, `/auth/forgot`, `/auth/reset`
-10/min and `/tutor/ask` 30/min by default — configurable via
+Rate limits (per client IP): `/auth/login`, `/auth/forgot`, `/auth/reset`,
+`/auth/resend-verification`, `/auth/verify-email` 10/min, `/auth/mfa/challenge`
+5/min and `/tutor/ask` 30/min by default — configurable via
 `RATE_LIMIT_*_PER_MINUTE`. Backend is per-process memory or shared Redis
 (`RATE_LIMIT_BACKEND=redis`; answers 503 on protected routes when Redis is down
 and `RATE_LIMIT_FAIL_OPEN=false`).

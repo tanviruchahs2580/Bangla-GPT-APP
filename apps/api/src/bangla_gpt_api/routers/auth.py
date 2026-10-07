@@ -42,6 +42,7 @@ from bangla_gpt_api.schemas import (
     MfaVerifyIn,
     RegisterRequest,
     RegisterResponse,
+    ResendVerificationRequest,
     ResetPasswordRequest,
     TokenResponse,
     VerifyEmailRequest,
@@ -51,6 +52,7 @@ from bangla_gpt_api.services.mailer import send_mail, smtp_configured
 
 from .deps import (
     CONSENT_VERSION,
+    BearerCredentials,
     Ctx,
     CurrentUser,
     DbSession,
@@ -174,9 +176,34 @@ def verify_email(app_ctx: Ctx, payload: VerifyEmailRequest, db: DbSession) -> To
 
 
 @router.post("/auth/resend-verification", status_code=202)
-def resend_verification(app_ctx: Ctx, db: DbSession, user: CurrentUser) -> dict:
-    if smtp_configured(app_ctx.settings) and not user.email_verified:
-        _send_verification_email(db, app_ctx.settings, user)
+def resend_verification(
+    app_ctx: Ctx,
+    db: DbSession,
+    credentials: BearerCredentials,
+    payload: ResendVerificationRequest | None = None,
+) -> dict:
+    """Re-send the email-verification code.
+
+    Reachable both with and without a session: login issues no token
+    for unverified accounts, so an authed-only resend left users stuck
+    at ``email_unverified`` with a link that always 401'd. When a
+    session is present it wins; otherwise ``payload.email`` identifies
+    the account. Always answers 202 with a generic body so the endpoint
+    cannot be used to enumerate registered addresses.
+    """
+    target: User | None = None
+    if credentials is not None and credentials.scheme.lower() == "bearer":
+        try:
+            claims = decode_token(credentials.credentials, settings=app_ctx.settings)
+            if claims.get("mfa") is not True:
+                target = db.get(User, int(claims["sub"]))
+        except Exception:
+            target = None
+    if target is None and payload is not None and payload.email:
+        email = payload.email.strip().lower()
+        target = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
+    if target is not None and smtp_configured(app_ctx.settings) and not target.email_verified:
+        _send_verification_email(db, app_ctx.settings, target)
     return {"status": "accepted"}
 
 

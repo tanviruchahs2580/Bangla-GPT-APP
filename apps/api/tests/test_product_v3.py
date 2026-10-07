@@ -341,6 +341,56 @@ def test_email_verification_gate(monkeypatch, tmp_path) -> None:
     assert reuse.status_code == 400
 
 
+def test_resend_verification_reachable_without_session(monkeypatch, tmp_path) -> None:
+    """Login issues no token for unverified accounts, so resend must work
+    unauthenticated by email — otherwise users stuck at email_unverified
+    can never get a fresh code (the resend link 401'd). Always 202 with
+    a generic body (no account enumeration)."""
+    sent: list = []
+
+    def fake_send_mail(settings, *, to: str, subject: str, body: str) -> bool:
+        sent.append(to)
+        return True
+
+    monkeypatch.setattr("bangla_gpt_api.routers.auth.send_mail", fake_send_mail)
+    settings = Settings(
+        env="test",
+        database_url=f"sqlite:///{tmp_path}/resend.db",
+        jwt_secret=SECRET,
+        smtp_enabled=True,
+        smtp_host="smtp.example.edu.bd",
+        smtp_from="no-reply@example.edu.bd",
+    )
+    client = TestClient(create_app(settings))
+    reg = client.post(
+        "/auth/register",
+        json={
+            "email": "stuck@example.com",
+            "password": PASSWORD,
+            "name": "আটকে",
+            "role": "teacher",
+        },
+    )
+    assert reg.status_code == 201
+    assert sent == ["stuck@example.com"]
+
+    # Unauthenticated resend by email works (no session exists yet).
+    resend = client.post("/auth/resend-verification", json={"email": "stuck@example.com"})
+    assert resend.status_code == 202, resend.text
+    assert resend.json() == {"status": "accepted"}
+    assert sent == ["stuck@example.com", "stuck@example.com"]
+
+    # Unknown addresses get the same generic 202 (no enumeration).
+    unknown = client.post("/auth/resend-verification", json={"email": "nobody@example.com"})
+    assert unknown.status_code == 202
+    assert unknown.json() == {"status": "accepted"}
+    assert len(sent) == 2
+
+    # Empty body without a session is also a generic 202 (never 401/422).
+    bare = client.post("/auth/resend-verification", json={})
+    assert bare.status_code == 202
+
+
 def test_registration_autoverified_without_smtp(client: TestClient) -> None:
     _register(client, "auto@example.com", role="teacher")
     assert (

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { changePassword, login } from "../api";
+import { changePassword, login, mfaChallenge } from "../api";
 import { useAuth } from "../AuthContext";
 import { friendlyError, type ErrorCopy } from "../errors";
 import { t } from "../i18n";
@@ -13,6 +13,11 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<ErrorCopy | null>(null);
   const [busy, setBusy] = useState(false);
+  // MFA step-up: login answers 202 mfa_required with a purpose-bound token
+  // (NOT a session). The OTP form exchanges it for a real session; the
+  // step-up token is never stored as one.
+  const [mfaToken, setMfaToken] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState("");
   // Server flags a mandatory password change (provisioned accounts, temp
   // secrets). The API 403s every non-exempt route until it is done, so the
   // change form blocks the session here instead of the dashboard failing.
@@ -37,10 +42,64 @@ export default function LoginPage() {
         setMe(me);
       }
     } catch (err) {
-      const apiErr = err as { code?: unknown; message?: string };
+      const apiErr = err as {
+        code?: unknown;
+        message?: string;
+        rawDetail?: unknown;
+      };
+      const code = typeof apiErr.code === "string" ? apiErr.code : undefined;
+      // Second factor required: hold the step-up token and show the OTP
+      // form instead of an error dead-end.
+      if (code === "mfa_required") {
+        const detail = apiErr.rawDetail as
+          | { mfa_token?: string; mfaToken?: string }
+          | undefined;
+        const stepUp =
+          detail && typeof detail === "object"
+            ? (detail.mfa_token ?? detail.mfaToken)
+            : undefined;
+        if (typeof stepUp === "string" && stepUp) {
+          setMfaToken(stepUp);
+          setMfaCode("");
+          setError(null);
+          return;
+        }
+      }
       setError(
         friendlyError({
-          code: typeof apiErr.code === "string" ? apiErr.code : undefined,
+          code,
+          message: apiErr.message,
+        }),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitMfa(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy || !mfaToken) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const { me, mustChangePassword } = await mfaChallenge(
+        mfaToken,
+        mfaCode.trim(),
+      );
+      setMfaToken(null);
+      if (mustChangePassword) {
+        setPendingMe(me);
+      } else {
+        setMe(me);
+      }
+    } catch (err) {
+      const apiErr = err as { code?: unknown; message?: string };
+      const code = typeof apiErr.code === "string" ? apiErr.code : undefined;
+      // An expired step-up token cannot be retried — drop back to login.
+      if (code === "bad_mfa_token") setMfaToken(null);
+      setError(
+        friendlyError({
+          code,
           message: apiErr.message,
         }),
       );
@@ -72,6 +131,44 @@ export default function LoginPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (mfaToken) {
+    return (
+      <div className="splash splash-login auth-shell">
+        <Card className="auth-card">
+          <h2>{t("mfaTitle")}</h2>
+          <p className="muted">{t("mfaHint")}</p>
+          <form onSubmit={submitMfa}>
+            <div className="field">
+              <label htmlFor="mfa-code">{t("mfaCode")}</label>
+              <input
+                className="input"
+                id="mfa-code"
+                name="one-time-code"
+                autoComplete="one-time-code"
+                inputMode="numeric"
+                type="text"
+                value={mfaCode}
+                required
+                minLength={6}
+                maxLength={6}
+                pattern="[0-9]{6}"
+                onChange={(e) => setMfaCode(e.target.value)}
+              />
+            </div>
+            {error && (
+              <p className="error" role="alert">
+                {error.text}
+              </p>
+            )}
+            <Button variant="primary" block type="submit" disabled={busy}>
+              {t("mfaSubmit")}
+            </Button>
+          </form>
+        </Card>
+      </div>
+    );
   }
 
   if (pendingMe) {
@@ -205,9 +302,11 @@ export default function LoginPage() {
                     href="/forgot"
                     onClick={(e) => {
                       e.preventDefault();
+                      const typedEmail = email.trim() || undefined;
                       void import("../api").then(({ resendVerification }) =>
-                        resendVerification().then(() =>
-                          setError({ text: t("verifySent") }),
+                        resendVerification(typedEmail).then(
+                          () => setError({ text: t("verifySent") }),
+                          () => setError({ text: t("errGeneric") }),
                         ),
                       );
                     }}

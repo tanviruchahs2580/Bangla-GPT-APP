@@ -36,7 +36,13 @@ npx cap sync android          # copies dist into the native project
 
 Backend CORS: add the WebView origins — `capacitor://localhost` (iOS) and
 `https://localhost` (Android) — to `ALLOWED_ORIGINS` on the API before
-shipping the APK.
+shipping the APK. Without them the APK's login calls fail CORS preflight
+(the app now surfaces this as a dedicated configuration error instead of
+a generic network failure). The API must also be reachable at a STABLE
+origin: the current Cloudflare quick-tunnel hostname rotates and kills
+both web and APK logins when it dies — promote a named tunnel or a
+VM/PaaS domain and point both `API_ORIGIN` (Vercel) and `VITE_API_BASE`
+(APK build) at it.
 
 ### 🖐 Human build/signing steps (NOT possible in this environment)
 

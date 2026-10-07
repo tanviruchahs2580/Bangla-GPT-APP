@@ -12,6 +12,24 @@ describe("friendlyError", () => {
     ).toContain("মিনিট");
   });
 
+  it("maps login-infrastructure codes to retry/mfa copy (no generic dead-end)", () => {
+    expect(friendlyError({ code: "mfa_required" }).action).toBe("mfa");
+    expect(friendlyError({ code: "bad_mfa_code" }).action).toBe("mfa");
+    for (const code of [
+      "bad_gateway",
+      "service_unavailable",
+      "api_origin_unconfigured",
+      "verify_failed",
+    ]) {
+      const out = friendlyError({ code, message: code });
+      expect(out.action).toBe("retry");
+      expect(out.text.length).toBeGreaterThan(5);
+    }
+    expect(
+      friendlyError({ code: "api_base_unconfigured" }).text.length,
+    ).toBeGreaterThan(5);
+  });
+
   it("falls back to generic copy for unknown codes", () => {
     const out = friendlyError({ code: "zzz_unknown", message: "weird" });
     expect(out.text.length).toBeGreaterThan(5);

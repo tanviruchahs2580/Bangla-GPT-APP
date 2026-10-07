@@ -39,7 +39,45 @@ export function setUnauthorizedHandler(fn: () => void): void {
 
 // Auth endpoints where a 401 is part of the API contract (bad credentials / bad code).
 // Failing there must surface the inline friendly error, not force a page reload.
-const AUTH_401_PATHS = ["/auth/login", "/auth/verify-email", "/auth/reset"];
+const AUTH_401_PATHS = [
+  "/auth/login",
+  "/auth/verify-email",
+  "/auth/reset",
+  "/auth/mfa/challenge",
+  "/auth/resend-verification",
+];
+
+/** True inside the Capacitor WebView (capacitor://localhost origin). */
+function isNativeCapacitor(): boolean {
+  try {
+    const w = window as unknown as {
+      Capacitor?: { isNativePlatform?: () => boolean };
+    };
+    if (w.Capacitor?.isNativePlatform?.() === true) return true;
+    if (window.location?.protocol === "capacitor:") return true;
+  } catch {
+    /* non-browser (tests/SSR): never native */
+  }
+  return false;
+}
+
+/**
+ * The WebView origin (capacitor://localhost) has no same-origin `/api`
+ * to talk to — a relative VITE_API_BASE can never work there. Fail with
+ * a dedicated machine code (instead of an opaque "network error") so the
+ * UI can tell the user the APK was built without a server address.
+ * Release builds MUST set VITE_API_BASE to the absolute API URL, e.g.
+ * VITE_API_BASE=https://api.example.com/api (see docs/mobile_release.md).
+ */
+function assertApiBaseUsable(): void {
+  if (isNativeCapacitor() && API_BASE.startsWith("/")) {
+    throw new ApiError(
+      0,
+      "native API base unconfigured",
+      "api_base_unconfigured",
+    );
+  }
+}
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
@@ -112,8 +150,12 @@ export async function api<T>(
 
   let res: Response;
   try {
+    assertApiBaseUsable();
     res = await fetch(`${API_BASE}${path}`, { ...options, headers });
-  } catch {
+  } catch (e) {
+    // The native-misconfiguration guard above throws an ApiError already —
+    // let its machine code through instead of masking it as "network".
+    if (e instanceof ApiError) throw e;
     throw new ApiError(0, "network error", "network");
   }
   if (res.status === 204) return undefined as T;
@@ -121,10 +163,21 @@ export async function api<T>(
     let parsed: { message: string; code?: string } = {
       message: res.statusText,
     };
+    let jsonParseFailed = false;
     try {
       parsed = parseDetail(await res.json());
     } catch {
-      /* keep statusText */
+      jsonParseFailed = true;
+    }
+    if (!parsed.code) {
+      // Upstream HTML error pages (dead Cloudflare tunnel 502, proxy 503)
+      // carry no machine code — attach one so the UI shows a retry hint
+      // instead of the generic fallback.
+      if (res.status === 502) parsed = { message: parsed.message, code: "bad_gateway" };
+      else if (res.status === 503)
+        parsed = { message: parsed.message, code: "service_unavailable" };
+      else if (jsonParseFailed && res.status === 0)
+        parsed = { message: parsed.message, code: "network" };
     }
     if (
       res.status === 401 &&
@@ -168,6 +221,7 @@ export async function postStream<T>(
   const headers = new Headers({ "Content-Type": "application/json" });
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  assertApiBaseUsable();
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers,
@@ -202,6 +256,16 @@ export async function login(
   password: string,
 ): Promise<LoginResult> {
   const res = await post<TokenResponse>("/auth/login", { email, password });
+  // MFA-enabled accounts get HTTP 202 + token_type "mfa" (a 5-minute
+  // purpose-bound step-up token rejected by every normal route). It must
+  // NEVER be stored as a session: the old code saved it, then fetchMe()
+  // 401'd and wiped it, surfacing a confusing "verify_failed" instead of
+  // the OTP step — MFA users could never sign in.
+  if (res.token_type === "mfa") {
+    throw new ApiError(202, "two-step verification required", "mfa_required", {
+      mfa_token: res.access_token,
+    });
+  }
   localStorage.setItem(TOKEN_KEY, res.access_token);
   // Validate the session and refresh the authoritative profile from the
   // server. A null here (transient failure AFTER a successful login) must
@@ -249,8 +313,27 @@ export async function verifyEmail(token: string): Promise<void> {
   localStorage.setItem(TOKEN_KEY, res.access_token);
 }
 
-export async function resendVerification(): Promise<void> {
-  await post("/auth/resend-verification");
+export async function resendVerification(email?: string): Promise<void> {
+  // Unauthenticated resend (the login stuck-at-email_unverified case):
+  // the server accepts an optional email body and always answers 202.
+  await post("/auth/resend-verification", email ? { email } : {});
+}
+
+/** Complete the MFA step-up: exchange the 202 mfa_token + OTP code for a real session. */
+export async function mfaChallenge(
+  mfaToken: string,
+  code: string,
+): Promise<LoginResult> {
+  const res = await post<TokenResponse>("/auth/mfa/challenge", {
+    mfa_token: mfaToken,
+    code,
+  });
+  localStorage.setItem(TOKEN_KEY, res.access_token);
+  const me = await fetchMe();
+  if (!me) {
+    throw new ApiError(0, "session verification failed", "verify_failed");
+  }
+  return { me, mustChangePassword: res.must_change_password === true };
 }
 
 export async function changePassword(
@@ -483,6 +566,7 @@ export async function downloadTeacherDocumentPdf(
   const headers = new Headers();
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  assertApiBaseUsable();
   const res = await fetch(`${API_BASE}/teacher/documents/${doc.id}/pdf`, {
     headers,
   });
