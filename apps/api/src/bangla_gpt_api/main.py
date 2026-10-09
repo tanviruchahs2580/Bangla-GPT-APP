@@ -295,6 +295,75 @@ def _load_fallback_chain(
 # ---------------------------------------------------------------------------
 
 
+# Operations reachable without a session. Listed here, once, so the OpenAPI
+# document records a deliberate decision rather than leaving the reader to
+# guess. Without it the spec simply omits `security`, which makes an automated
+# authorization matrix unable to tell "deliberately public" apart from
+# "authentication forgotten" -- which is how a real bypass hides.
+#
+# Keep in step with tests/test_openapi_auth_matrix.py, which fails if an
+# operation here stops existing or if a new operation appears unlisted.
+PUBLIC_OPERATIONS: frozenset[tuple[str, str]] = frozenset(
+    {
+        # Account entry points: these are public by definition.
+        ("post", "/auth/login"),
+        ("post", "/auth/register"),
+        ("post", "/auth/forgot"),
+        ("post", "/auth/reset"),
+        ("post", "/auth/verify-email"),
+        ("post", "/auth/join-school"),
+        ("post", "/auth/mfa/challenge"),
+        # Optional auth: the route reads a bearer token when one is supplied
+        # and works without it, so FastAPI emits a security requirement that
+        # anonymous callers do not actually satisfy. Declared public here so the
+        # contract matches the behaviour; the handler still uses the token when
+        # present. Abuse of this endpoint is bounded by the per-IP rate limit.
+        ("post", "/auth/resend-verification"),
+        # Operational probes. /status is a deliberate public status page and
+        # returns booleans only (see routers/system.py).
+        ("get", "/health"),
+        ("get", "/live"),
+        ("get", "/ready"),
+        ("get", "/status"),
+    }
+)
+
+
+def _mark_public_operations(app: object) -> None:
+    """Stamp `security: []` on the known-public operations.
+
+    FastAPI omits `security` entirely when a route has no security dependency
+    and the document has no global `security`, so a deliberate decision is
+    invisible in the contract.
+    """
+    original = app.openapi  # type: ignore[attr-defined]
+
+    def openapi() -> dict:
+        spec = original()
+        for path, item in spec.get("paths", {}).items():
+            for method, op in item.items():
+                if (
+                    method.lower() in _HTTP_METHODS
+                    and (
+                        method.lower(),
+                        _normalise_path(path),
+                    )
+                    in PUBLIC_OPERATIONS
+                ):
+                    op["security"] = []
+        return spec
+
+    app.openapi = openapi  # type: ignore[method-assign, attr-defined]
+
+
+_HTTP_METHODS = frozenset({"get", "post", "put", "patch", "delete", "head", "options"})
+
+
+def _normalise_path(path: str) -> str:
+    """Collapse trailing slashes so /status/ and /status compare equal."""
+    return path.rstrip("/") or path
+
+
 def create_app(settings: Settings | None = None) -> object:
     """Create the FastAPI application.
 
@@ -329,6 +398,7 @@ def create_app(settings: Settings | None = None) -> object:
         redoc_url="/redoc" if serve_docs else None,
         openapi_url="/openapi.json" if serve_docs else None,
     )
+    _mark_public_operations(app)
     app.state.settings = settings
 
     # Phase 4: Build providers (so tests that monkeypatch main.get_provider work)
