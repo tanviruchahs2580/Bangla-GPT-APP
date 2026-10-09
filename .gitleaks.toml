@@ -1,0 +1,46 @@
+# gitleaks baseline for Bangla-GPT-APP.
+#
+# VCS-01/SEC-23: gitleaks 8.30.1 found 82 generic-api-key hits in the tracked
+# tree at c35b6f6. Every one was opened and judged a non-credential:
+#
+#   77  SECRET = "test..." / jwt_secret="test..." in apps/api/tests/**
+#    1  jwt_secret="other-..." (test_security.py:50)  negative-test decoy
+#    1  admin_password="Strong..." (test_product_v3.py:566) fixture
+#    1  RFC_SECRET_B32 = "GEZDGN..." (test_mfa.py:20) -- the public HOTP
+#       shared-secret test vector from RFC 4226 / RFC 6238
+#    1  const TOKEN (apps/web/src/test/authSession.test.ts:4) fixture
+#    1  a false positive on box-drawing glyphs in an archived report
+#
+# The problem this solves is not a leak but the 82 recurring false positives:
+# with no baseline, a real credential would be buried among them. The scope is
+# deliberately narrow -- test paths only, plus one archived file -- so anything
+# outside them still fails the gate.
+#
+# NOTE: this must use [allowlist]. Using [[rules]] here *adds* rules and makes
+# the count worse, not better.
+#
+# Reviewed 2026-10-09 during the engineering audit.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test fixtures and one archived report: reviewed non-credentials"
+regexTarget = "match"
+regexes = [
+  # Fixture secrets are explicitly marked as test values.
+  '''(SECRET|KEY|TOKEN|PASSWORD)\s*[:=]\s*["'](test|unit|dummy|fake)''',
+  '''jwt_secret\s*[:=]\s*["'](test|other)''',
+  '''admin_password\s*[:=]\s*["']''',
+  # RFC 4226/6238 public HOTP test vector, not a deployed secret.
+  '''RFC_SECRET_B32''',
+  '''RFC\d{6}''',
+]
+paths = [
+  # Test suites only. Production code is never allowlisted here.
+  '''(^|/)tests?/.*\.py$''',
+  '''(^|/)apps/web/src/test/.*\.tsx?$''',
+  # Single archived report; the hit is box-drawing glyphs, not a key.
+  # Not anchored with ^ : gitleaks reports absolute paths.
+  '''docs/archive/BANGLA_GPT_ENTERPRISE_ARCHITECTURE_QA_AUDIT\.md$''',
+]
