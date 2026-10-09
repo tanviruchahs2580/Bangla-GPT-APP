@@ -18,6 +18,10 @@ jobs:
   api:
     name: Lint & test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    # Size: pytest runs twice (plain + coverage) at ~8 min each on 3.12; the
+    # two matrix legs run in parallel. 30 min leaves headroom, and a hung job
+    # is otherwise billed for GitHub's 6-hour default.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -102,6 +106,7 @@ jobs:
   postgres:
     name: Postgres engine check (alembic + API flows)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: apps/api
@@ -164,6 +169,7 @@ jobs:
   golden-eval:
     name: Golden retrieval benchmark (sample corpus)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: apps/api
@@ -190,6 +196,7 @@ jobs:
   web:
     name: Web build & test (apps/web)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: apps/web
@@ -223,6 +230,7 @@ jobs:
   guardrails:
     name: Repository guardrails
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -283,6 +291,7 @@ jobs:
   docker:
     name: Docker build & container smoke
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:

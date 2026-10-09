@@ -28,6 +28,7 @@ jobs:
   build-push:
     name: Build & push images to GHCR
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     # packages:write is needed only to push to GHCR, so it is scoped to this
     # job rather than granted workflow-wide. The deploy job below runs SSH
     # commands on the host and has no reason to hold a registry token.
@@ -91,23 +92,30 @@ jobs:
     name: Deploy to production host (SSH)
     needs: build-push
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # Skips cleanly when deployment secrets are not configured yet.
     if: ${{ vars.DEPLOY_ENABLED == 'true' }}
     environment: production
     steps:
       - name: Deploy release over SSH
         uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        env:
+          # Passed as an environment variable, never interpolated into the
+          # script text: the tag comes from GITHUB_REF_NAME and expanding it
+          # inside the remote script is a template-injection path.
+          RELEASE_TAG: ${{ needs.build-push.outputs.tag }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: RELEASE_TAG
           script: |
             set -e
             cd /opt/bangla-gpt
             git fetch --tags --force origin
-            git checkout ${{ needs.build-push.outputs.tag }}
-            export API_TAG=${{ needs.build-push.outputs.tag }}
-            export WEB_TAG=${{ needs.build-push.outputs.tag }}
+            git checkout "$RELEASE_TAG"
+            export API_TAG="$RELEASE_TAG"
+            export WEB_TAG="$RELEASE_TAG"
 
             docker compose --profile core pull || true
 
@@ -125,7 +133,7 @@ jobs:
 
             for i in $(seq 1 30); do
               if curl -fsS http://127.0.0.1:8000/health | grep -q '"status":"ok"'; then
-                echo "Release ${{ needs.build-push.outputs.tag }} healthy"
+                echo "Release $RELEASE_TAG healthy"
                 exit 0
               fi
               sleep 2

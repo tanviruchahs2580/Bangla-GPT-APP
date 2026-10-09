@@ -20,6 +20,7 @@ jobs:
   eval-gate:
     name: Golden-set regression gate
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: apps/api
