@@ -534,11 +534,13 @@ class QuestionBankEntry(Base):
 
 
 class SchoolInvite(Base):
-    """single-use staff invite code for a school.
+    """single-use, time-limited staff invite code for a school.
 
     Only the SHA-256 of the (uppercased, stripped) code is stored; the
     plaintext is returned exactly once at creation. Redemption stamps
-    used_by/used_at and can never happen twice.
+    used_by/used_at, so a code can never be redeemed twice, and
+    ``expires_at`` bounds its usable lifetime. Rows whose ``expires_at`` is
+    NULL (pre-expiry schema) fail closed and are rejected as expired.
     """
 
     __tablename__ = "school_invites"
@@ -551,6 +553,7 @@ class SchoolInvite(Base):
     used_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class Concept(Base):

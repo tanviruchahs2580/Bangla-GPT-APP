@@ -204,6 +204,7 @@ def admin_school_invite_list(
             used=i.used_by is not None,
             created_at=i.created_at,
             used_at=i.used_at,
+            expires_at=i.expires_at,
         )
         for i in invites
     ]
@@ -324,18 +325,24 @@ def admin_report_aggregate(
 
 @router.post("/schools/{school_id}/invites", response_model=SchoolInviteOut, status_code=201)
 def school_invite_create(
-    school_id: int, payload: SchoolInviteIn, db: DbSession, user: SchoolStaffUser
+    school_id: int,
+    payload: SchoolInviteIn,
+    db: DbSession,
+    user: SchoolStaffUser,
+    app_ctx: Ctx,
 ) -> SchoolInviteOut:
     """Single-use staff invite; plaintext code is returned exactly once."""
     if db.get(School, school_id) is None:
         raise HTTPException(status_code=404, detail="school not found")
     _school_or_403(user, school_id)
     code = "".join(secrets.choice(SCHOOL_CODE_ALPHABET) for _ in range(10))
+    now = datetime.now(UTC).replace(tzinfo=None)
     invite = SchoolInvite(
         code_hash=_hash_invite(code),
         school_id=school_id,
         role=payload.role,
         created_by=user.id,
+        expires_at=now + timedelta(minutes=app_ctx.settings.invite_ttl_minutes),
     )
     db.add(invite)
     db.commit()
@@ -347,6 +354,7 @@ def school_invite_create(
         role=invite.role,
         code=code,
         created_at=invite.created_at,
+        expires_at=invite.expires_at,
     )
 
 
@@ -354,7 +362,8 @@ def school_invite_create(
 def auth_join_school(app_ctx: Ctx, payload: SchoolJoinIn, db: DbSession) -> TokenResponse:
     """Redeem a staff invite: create the account in the school and sign in.
 
-    Invite codes are single-use; only their SHA-256 hash is stored.
+    Invite codes are single-use and time-limited; only their SHA-256 hash is
+    stored, and redemption is atomic (AUD-0034).
     """
     key = _hash_invite(payload.invite_code)
     now = datetime.now(UTC).replace(tzinfo=None)
@@ -366,7 +375,7 @@ def auth_join_school(app_ctx: Ctx, payload: SchoolJoinIn, db: DbSession) -> Toke
         hash_column=SchoolInvite.code_hash,
         hash_value=key,
         now=now,
-        require_unexpired=False,  # SchoolInvite has no expires_at column
+        require_unexpired=True,
     ):
         existing = fetch_by_hash(
             db, SchoolInvite, hash_column=SchoolInvite.code_hash, hash_value=key
@@ -374,6 +383,14 @@ def auth_join_school(app_ctx: Ctx, payload: SchoolJoinIn, db: DbSession) -> Toke
         if existing is None:
             raise HTTPException(
                 status_code=404, detail={"code": "invalid_code", "message": "Invalid invite code"}
+            )
+        expired = (
+            existing.expires_at is None or existing.expires_at < now
+        ) and existing.used_at is None
+        if expired:
+            raise HTTPException(
+                status_code=410,
+                detail={"code": "invite_expired", "message": "Invite code has expired"},
             )
         raise HTTPException(
             status_code=409, detail={"code": "code_used", "message": "Invite already used"}

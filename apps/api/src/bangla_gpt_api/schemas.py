@@ -929,6 +929,7 @@ class SchoolInviteOut(BaseModel):
     role: str
     code: str  # plaintext, returned exactly once
     created_at: datetime
+    expires_at: datetime
 
 
 class SchoolJoinIn(BaseModel):
@@ -1052,6 +1053,7 @@ class SchoolInviteAdminOut(BaseModel):
     used: bool
     created_at: datetime
     used_at: datetime | None = None
+    expires_at: datetime | None = None
 
 
 class KgGapOut(BaseModel):

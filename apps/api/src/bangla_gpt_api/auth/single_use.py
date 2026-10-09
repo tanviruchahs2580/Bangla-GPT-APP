@@ -60,10 +60,13 @@ def claim_single_use(
     mapped attributes that no static protocol describes; the WHERE clause
     itself is what enforces correctness.
 
-    ``require_unexpired=False`` is for ``SchoolInvite``, which has no
-    ``expires_at`` column at all -- its codes are single-use but never
-    time-limited. Passing True there raises AttributeError, which is the
-    intended loud failure rather than a silently dropped expiry check.
+    ``require_unexpired=False`` is for callers that deliberately waive the
+    expiry check (none today; ``SchoolInvite`` gained an ``expires_at`` column
+    in the AUD-0046 fix and now enforces it). The default True must stay on
+    for every model that has an ``expires_at`` column; all do today. A NULL
+    ``expires_at`` under True evaluates NULL and fails the claim -- this is
+    the intended fail-closed behaviour for rows created before the expiry
+    column existed, rather than silently grandfathering them.
     """
     conditions = [hash_column == hash_value, model.used_at.is_(None)]
     if require_unexpired:
