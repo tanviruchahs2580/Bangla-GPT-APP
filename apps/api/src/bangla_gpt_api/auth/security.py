@@ -85,6 +85,8 @@ def create_access_token(
     payload: dict[str, object] = {
         "sub": str(user.id),
         "role": user.role,
+        "iss": settings.jwt_issuer,
+        "aud": settings.jwt_audience,
         "exp": datetime.now(UTC) + expires_delta,
         "iat": issued_at if issued_at is not None else int(time.time()),
         "jti": jti or uuid4().hex,  # unique id per token for revocation
@@ -95,5 +97,16 @@ def create_access_token(
 
 
 def decode_token(token: str, *, settings: Settings) -> dict:
-    """Raises jwt.PyJWTError subclasses on invalid/expired tokens."""
-    return jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
+    """Raises jwt.PyJWTError subclasses on invalid/expired tokens.
+
+    ``iss`` and ``aud`` are required: a token without them (including every
+    token minted before SEC-03) is refused, which forces a one-time re-login
+    rather than silently accepting unbound tokens.
+    """
+    return jwt.decode(
+        token,
+        settings.jwt_secret,
+        algorithms=["HS256"],
+        issuer=settings.jwt_issuer,
+        audience=settings.jwt_audience,
+    )

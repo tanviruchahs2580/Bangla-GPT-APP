@@ -94,6 +94,11 @@ class Settings(BaseSettings):
     # --- auth ---
     jwt_secret: str = DEFAULT_JWT_SECRET
     jwt_expire_minutes: int = 60
+    # SEC-03: tokens are stamped with and verified against these so a token
+    # minted for a different audience/issuer (e.g. a future service sharing the
+    # signing key) cannot be replayed here.
+    jwt_issuer: str = "bangla-gpt-api"
+    jwt_audience: str = "bangla-gpt-clients"
     password_reset_token_minutes: int = 30
 
     # --- admin bootstrap / lifecycle ---
