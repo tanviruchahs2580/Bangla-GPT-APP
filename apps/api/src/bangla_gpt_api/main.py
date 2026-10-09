@@ -256,7 +256,21 @@ def create_app(settings: Settings | None = None) -> object:
     # together with the rest of the middleware order).
     from fastapi import FastAPI
 
-    app = FastAPI(title=settings.app_name, version=settings.version)
+    # SEC-15: the interactive reference and the machine-readable schema are
+    # development surfaces. FastAPI enables all three by default, so without
+    # this they are served in production too -- verified: a production-config
+    # container answered /openapi.json with 158477 bytes of the full route
+    # schema. They are also the only paths exempt from the nonce CSP in
+    # middleware.SecurityHeadersMiddleware. Disabled in production, kept in
+    # development where they are the whole point.
+    serve_docs = not settings.is_production
+    app = FastAPI(
+        title=settings.app_name,
+        version=settings.version,
+        docs_url="/docs" if serve_docs else None,
+        redoc_url="/redoc" if serve_docs else None,
+        openapi_url="/openapi.json" if serve_docs else None,
+    )
     app.state.settings = settings
 
     # Phase 4: Build providers (so tests that monkeypatch main.get_provider work)
