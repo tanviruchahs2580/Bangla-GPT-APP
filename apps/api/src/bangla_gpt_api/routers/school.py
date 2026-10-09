@@ -361,7 +361,11 @@ def auth_join_school(app_ctx: Ctx, payload: SchoolJoinIn, db: DbSession) -> Toke
     # Claim the code before creating any user, so two racing redemptions
     # cannot both reach the insert. AUD-0034.
     if not claim_single_use(
-        db, SchoolInvite, hash_column=SchoolInvite.code_hash, hash_value=key, now=now,
+        db,
+        SchoolInvite,
+        hash_column=SchoolInvite.code_hash,
+        hash_value=key,
+        now=now,
         require_unexpired=False,  # SchoolInvite has no expires_at column
     ):
         existing = fetch_by_hash(
