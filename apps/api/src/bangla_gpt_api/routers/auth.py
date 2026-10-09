@@ -20,6 +20,7 @@ from bangla_gpt_api.auth.security import (
     create_access_token,
     decode_token,
     hash_password,
+    needs_rehash,
     verify_password,
 )
 from bangla_gpt_api.auth.single_use import claim_single_use, fetch_by_hash
@@ -251,6 +252,13 @@ def login(app_ctx: Ctx, response: Response, payload: LoginRequest, db: DbSession
             user, settings=app_ctx.settings, minutes=5, extra_claims={"mfa": True}
         )
         return TokenResponse(access_token=mfa_token, token_type="mfa")
+    # SEC-02: transparently upgrade the stored hash on a successful login. This
+    # is where legacy pbkdf2_sha256 hashes (and Argon2id hashes made with older
+    # parameters) become Argon2id at the current policy, so no bulk reset is
+    # needed. The plaintext is known to be correct here.
+    if needs_rehash(user.password_hash):
+        user.password_hash = hash_password(payload.password)
+        db.commit()
     token = create_access_token(user, settings=app_ctx.settings)
     return TokenResponse(access_token=token, must_change_password=user.must_change_password)
 

@@ -24,6 +24,8 @@ dependencies = [
     "uharfbuzz>=0.40",
     # S5.6: Fernet encryption for guardian phone at rest (security.py).
     "cryptography>=42",
+    # SEC-02: Argon2id password hashing (OWASP-recommended parameters).
+    "argon2-cffi>=23.1",
 ]
 
 [project.optional-dependencies]
