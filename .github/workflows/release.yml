@@ -10,6 +10,14 @@ on:
       - "v*.*.*"
   workflow_dispatch:
 
+# Queue releases per ref instead of racing them. Two `v*` pushes in quick
+# succession previously ran build-push and deploy concurrently against the same
+# production host with no ordering guarantee. cancel-in-progress is false on
+# purpose: a half-finished deploy must finish, not be replaced mid-flight.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
   packages: write
