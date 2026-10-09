@@ -7,6 +7,7 @@ supporting guarantees each mechanism needs to be real: ciphertext at rest
 audit view, and the impersonation guards.
 """
 
+import os
 import sqlite3
 import time
 
@@ -321,6 +322,10 @@ def _dump_db(path) -> str:
 
 
 def _prod_settings(**overrides) -> Settings:
+    # AUD-0025/0026/0027: this fixture is deliberately single-process and
+    # uses the mock provider, both of which production now refuses.
+    os.environ["ALLOW_MOCK_LLM_IN_PRODUCTION"] = "1"
+    os.environ["WEB_CONCURRENCY"] = "1"
     base = {
         "env": "production",
         "database_url": "sqlite:////data/app.db",

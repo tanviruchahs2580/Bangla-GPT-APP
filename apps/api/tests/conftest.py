@@ -52,6 +52,24 @@ Settings.__init__ = _hermetic_init  # type: ignore[method-assign]
 
 
 @pytest.fixture(autouse=True)
+def _isolate_production_opt_ins():
+    """Stop production-guard opt-ins leaking between tests.
+
+    Some tests build a production Settings object to exercise other production
+    behaviour (metrics gating, the PII key guard, docs exposure) while using
+    the mock provider and an in-process SQLite database. They declare that with
+    ALLOW_MOCK_LLM_IN_PRODUCTION and WEB_CONCURRENCY, which the 2026-10-09
+    guards otherwise refuse. Without this cleanup those variables persist for
+    the rest of the session and silently disable the guards under test.
+
+    This only isolates tests. It does not weaken enforce_production_safety.
+    """
+    yield
+    os.environ.pop("ALLOW_MOCK_LLM_IN_PRODUCTION", None)
+    os.environ.pop("WEB_CONCURRENCY", None)
+
+
+@pytest.fixture(autouse=True)
 def _no_dotenv(monkeypatch: pytest.MonkeyPatch) -> None:
     # Layer 2: re-assert the patch for the duration of each test and scrub
     # process environment so no config value leaks in from the runner.

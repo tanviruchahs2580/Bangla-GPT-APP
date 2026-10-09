@@ -15,6 +15,8 @@ silently testing a different app.
 
 from __future__ import annotations
 
+import os
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -26,6 +28,9 @@ DEV_DOC_PATHS = ("/docs", "/redoc", "/openapi.json")
 
 def _production_settings(tmp_path, **overrides) -> Settings:
     """Settings that pass enforce_production_safety unchanged."""
+    # AUD-0025/0026/0027: deliberately single-process, mock provider.
+    os.environ["ALLOW_MOCK_LLM_IN_PRODUCTION"] = "1"
+    os.environ["WEB_CONCURRENCY"] = "1"
     base = {
         "env": "production",
         "jwt_secret": "0" * 48,

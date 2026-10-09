@@ -8,6 +8,8 @@ Covers the confirmed defects fixed in this pass:
 - F-07: RATE_LIMIT_RULES setting was silently ignored
 """
 
+import os
+
 from fastapi.testclient import TestClient
 
 from bangla_gpt_api.config import Settings
@@ -32,6 +34,10 @@ def _settings(tmp_path, **over) -> Settings:
 
 
 def _prod_settings(tmp_path, **over) -> Settings:
+    # AUD-0025/0026/0027: this fixture is deliberately single-process and
+    # uses the mock provider, both of which production now refuses.
+    os.environ["ALLOW_MOCK_LLM_IN_PRODUCTION"] = "1"
+    os.environ["WEB_CONCURRENCY"] = "1"
     base = dict(
         env="production",
         database_url=f"sqlite:///{tmp_path}/prod.db",

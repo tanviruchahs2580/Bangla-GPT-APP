@@ -18,6 +18,7 @@ All these modules are imported from:mod:`bangla_gpt_api.initialize`.
 from __future__ import annotations
 
 import logging
+import os
 from typing import TYPE_CHECKING
 
 from bangla_gpt_api import caching, initialize
@@ -144,7 +145,34 @@ def _validate_database(settings: Settings) -> list[str]:
             "DATABASE_URL must be a persistent store in production "
             "(e.g. sqlite:////data/app.db or PostgreSQL)"
         ]
+    # A file-backed SQLite database is accepted above, but it is not safe
+    # behind multiple workers: SQLite serialises writers, so two gunicorn
+    # workers contend on the write lock and concurrent writes fail or block.
+    # compose defaults ENV=production with sqlite:////data/app.db, so this
+    # combination was reachable by simply running the documented stack.
+    if url.startswith("sqlite") and _worker_count(settings) > 1:
+        return [
+            "DATABASE_URL is SQLite while WEB_CONCURRENCY="
+            f"{_worker_count(settings)}; SQLite serialises writers and is not safe "
+            "with multiple workers. Use PostgreSQL, or run a single worker."
+        ]
     return []
+
+
+def _worker_count(settings: Settings) -> int:
+    """Worker count gunicorn would start (mirrors the container CMD).
+
+    Fails safe: anything that is not a positive integer -- unset, empty,
+    unparseable, zero or negative -- is reported as the container default of 2.
+    Clamping to 1 instead would silently switch the SQLite and rate-limit
+    guards OFF, which is the opposite of what an invalid value should do.
+    """
+    raw = os.environ.get("WEB_CONCURRENCY", "").strip()
+    try:
+        n = int(raw)
+    except ValueError:
+        return 2
+    return n if n >= 1 else 2
 
 
 def _validate_pii(settings: Settings) -> list[str]:
@@ -167,17 +195,47 @@ def _validate_metrics(settings: Settings) -> list[str]:
 
 
 def _validate_rate_limit_redis(settings: Settings) -> list[str]:
-    """Redis rate-limit backend requires REDIS_URL."""
-    if settings.rate_limit_backend == "redis" and not settings.redis_url:
+    """Rate limiting must work across workers, so memory is not enough."""
+    backend = settings.rate_limit_backend.strip().lower()
+    if backend == "redis" and not settings.redis_url:
         return ["RATE_LIMIT_BACKEND=redis requires REDIS_URL"]
+    # With multiple workers each process keeps its own counters, so the
+    # configured limit is effectively multiplied by the worker count: the
+    # default 10/minute login limit becomes 20/minute behind two workers.
+    if backend == "memory" and _worker_count(settings) > 1:
+        return [
+            "RATE_LIMIT_BACKEND=memory is per-process and therefore per-worker; "
+            f"with WEB_CONCURRENCY={_worker_count(settings)} the effective limit is "
+            "multiplied by the worker count. Use RATE_LIMIT_BACKEND=redis with "
+            "REDIS_URL in production."
+        ]
     return []
 
 
 def _validate_llm_provider(settings: Settings) -> list[str]:
-    """Gemini provider requires GEMINI_API_KEY in production."""
-    if settings.llm_provider.strip().lower() == "gemini" and not settings.gemini_api_key:
+    """The mock provider must never serve production traffic."""
+    provider = settings.llm_provider.strip().lower()
+    if provider == "gemini" and not settings.gemini_api_key:
         return ["LLM_PROVIDER=gemini requires GEMINI_API_KEY in production"]
+    # compose defaults ENV=production and LLM_PROVIDER=mock, so the documented
+    # stack booted in production mode serving fabricated tutor answers with no
+    # error. LLM-01 requires the mock provider to be impossible in production.
+    if provider == "mock" and not _mock_allowed(settings):
+        return [
+            "LLM_PROVIDER=mock must not be used in production: it serves "
+            "fabricated answers with no error. Set LLM_PROVIDER=gemini with "
+            "GEMINI_API_KEY, or set ALLOW_MOCK_LLM_IN_PRODUCTION=true for a "
+            "deliberate offline demo."
+        ]
     return []
+
+
+def _mock_allowed(settings: Settings) -> bool:
+    return os.environ.get("ALLOW_MOCK_LLM_IN_PRODUCTION", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
 
 
 # ---------------------------------------------------------------------------
