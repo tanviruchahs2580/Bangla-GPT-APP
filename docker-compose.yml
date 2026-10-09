@@ -1,13 +1,13 @@
-﻿name: bangla-gpt-app
+name: bangla-gpt-app
 
 # Profiles:
-#   core        Ã¢â‚¬â€œ api + redis            (docker compose --profile core up -d)
-#   worker      Ã¢â‚¬â€œ ARQ cron worker        (add --profile worker; set JOBS_BACKEND=arq)
-#   web         Ã¢â‚¬â€œ static dashboard       (add --profile web)
-#   tls         Ã¢â‚¬â€œ Caddy auto-HTTPS proxy (add --profile tls; requires DOMAIN/ACME_EMAIL)
-#   postgres    Ã¢â‚¬â€œ Postgres service       (add --profile postgres)
-#   monitoring  Ã¢â‚¬â€œ Prometheus + Grafana   (add --profile monitoring)
-#   backup      Ã¢â‚¬â€œ scheduled DB backups   (add --profile backup)
+#   core        — api + redis            (docker compose --profile core up -d)
+#   worker      — ARQ cron worker        (add --profile worker; set JOBS_BACKEND=arq)
+#   web         — static dashboard       (add --profile web)
+#   tls         — Caddy auto-HTTPS proxy (add --profile tls; requires DOMAIN/ACME_EMAIL)
+#   postgres    — Postgres service       (add --profile postgres)
+#   monitoring  — Prometheus + Grafana   (add --profile monitoring)
+#   backup      — scheduled DB backups   (add --profile backup)
 
 x-api-common: &api-common
   restart: unless-stopped

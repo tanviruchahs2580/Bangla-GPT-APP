@@ -1,0 +1,38 @@
+# Normalise line endings in the repository.
+#
+# Every text file is stored LF in the index at c35b6f6 (490 files verified with
+# `git ls-files --eol`: 490 lf, 53 -text, 9 none, 0 crlf, 0 mixed). Without
+# this file that state depends on each developer's core.autocrlf: a Windows
+# checkout with autocrlf=true rewrote 130 tracked files to CRLF in the worktree.
+* text=auto eol=lf
+
+# Keep shell scripts LF so the shebang cannot pick up a stray CR.
+*.sh text eol=lf
+*.bash text eol=lf
+*.ps1 text eol=crlf
+
+# Binary assets - never diffed, never line-ending normalised.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.eot binary
+*.mp4 binary
+*.zip binary
+*.apk binary
+
+# Bundled / vendored trees that are not ours to normalise.
+apps/web/android/** binary
+apps/web/android/** -text
+
+# Generated corpora and local artefacts.
+data/nctb/raw/** -text
+data/nctb/extracted/** -text
+data/nctb/normalized/** -text
