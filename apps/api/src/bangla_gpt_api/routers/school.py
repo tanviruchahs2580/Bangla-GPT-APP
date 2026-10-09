@@ -20,6 +20,7 @@ from bangla_gpt_api.auth.security import (
     create_access_token,
     hash_password,
 )
+from bangla_gpt_api.auth.single_use import claim_single_use, fetch_by_hash
 from bangla_gpt_api.db.models import (
     ChapterContent,
     ChapterProgress,
@@ -356,16 +357,27 @@ def auth_join_school(app_ctx: Ctx, payload: SchoolJoinIn, db: DbSession) -> Toke
     Invite codes are single-use; only their SHA-256 hash is stored.
     """
     key = _hash_invite(payload.invite_code)
-    invite = db.execute(
-        select(SchoolInvite).where(SchoolInvite.code_hash == key)
-    ).scalar_one_or_none()
+    now = datetime.now(UTC).replace(tzinfo=None)
+    # Claim the code before creating any user, so two racing redemptions
+    # cannot both reach the insert. AUD-0034.
+    if not claim_single_use(
+        db, SchoolInvite, hash_column=SchoolInvite.code_hash, hash_value=key, now=now,
+        require_unexpired=False,  # SchoolInvite has no expires_at column
+    ):
+        existing = fetch_by_hash(
+            db, SchoolInvite, hash_column=SchoolInvite.code_hash, hash_value=key
+        )
+        if existing is None:
+            raise HTTPException(
+                status_code=404, detail={"code": "invalid_code", "message": "Invalid invite code"}
+            )
+        raise HTTPException(
+            status_code=409, detail={"code": "code_used", "message": "Invite already used"}
+        )
+    invite = fetch_by_hash(db, SchoolInvite, hash_column=SchoolInvite.code_hash, hash_value=key)
     if invite is None:
         raise HTTPException(
             status_code=404, detail={"code": "invalid_code", "message": "Invalid invite code"}
-        )
-    if invite.used_by is not None:
-        raise HTTPException(
-            status_code=409, detail={"code": "code_used", "message": "Invite already used"}
         )
     email = payload.email.strip().lower()
     if db.execute(select(User).where(User.email == email)).scalar_one_or_none() is not None:
@@ -392,7 +404,7 @@ def auth_join_school(app_ctx: Ctx, payload: SchoolJoinIn, db: DbSession) -> Toke
     profile = Teacher(name=payload.name.strip(), user_id=user.id)
     db.add(profile)
     invite.used_by = user.id
-    invite.used_at = datetime.now(UTC).replace(tzinfo=None)
+    # used_at was already stamped atomically by claim_single_use above.
     db.commit()
     json_log(
         logger,

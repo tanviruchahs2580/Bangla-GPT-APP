@@ -22,6 +22,7 @@ from bangla_gpt_api.auth.security import (
     hash_password,
     verify_password,
 )
+from bangla_gpt_api.auth.single_use import claim_single_use, fetch_by_hash
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.models import (
     EmailVerification,
@@ -152,18 +153,30 @@ def verify_email(app_ctx: Ctx, payload: VerifyEmailRequest, db: DbSession) -> To
     On success the account is marked verified and a session is issued.
     """
     now = datetime.now(UTC).replace(tzinfo=None)
-    row = db.execute(
-        select(EmailVerification).where(
-            EmailVerification.token_hash == hashlib.sha256(payload.token.encode()).hexdigest(),
-            EmailVerification.used_at.is_(None),
-        )
-    ).scalar_one_or_none()
-    if row is None or row.expires_at < now:
+    # Compare-and-set, not check-then-act: two concurrent requests carrying one
+    # verification code must not both redeem it. AUD-0034.
+    if not claim_single_use(
+        db,
+        EmailVerification,
+        hash_column=EmailVerification.token_hash,
+        hash_value=hashlib.sha256(payload.token.encode()).hexdigest(),
+        now=now,
+    ):
         raise HTTPException(
             status_code=400,
             detail={"code": "invalid_token", "message": "Invalid or expired verification code"},
         )
-    row.used_at = now
+    row = fetch_by_hash(
+        db,
+        EmailVerification,
+        hash_column=EmailVerification.token_hash,
+        hash_value=hashlib.sha256(payload.token.encode()).hexdigest(),
+    )
+    if row is None:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "invalid_token", "message": "Invalid or expired verification code"},
+        )
     user = db.get(User, row.user_id)
     if user is None:
         raise HTTPException(
@@ -306,15 +319,19 @@ def forgot_password(app_ctx: Ctx, payload: ForgotPasswordRequest, db: DbSession)
 @router.post("/auth/reset", response_model=TokenResponse)
 def reset_password(app_ctx: Ctx, payload: ResetPasswordRequest, db: DbSession) -> TokenResponse:
     now = datetime.now(UTC).replace(tzinfo=None)
-    row = db.execute(
-        select(PasswordReset).where(
-            PasswordReset.token_hash == _hash_reset_token(payload.token),
-            PasswordReset.used_at.is_(None),
-        )
-    ).scalar_one_or_none()
-    if row is None or row.expires_at < now:
+    # Compare-and-set so a reset token cannot be redeemed twice under
+    # concurrency: both a second password write and a token-epoch rotation
+    # would otherwise run off the same redeemed token. AUD-0034.
+    token_hash = _hash_reset_token(payload.token)
+    if not claim_single_use(
+        db, PasswordReset, hash_column=PasswordReset.token_hash, hash_value=token_hash, now=now
+    ):
         raise HTTPException(status_code=400, detail="Invalid or expired reset token")
-    row.used_at = now
+    row = fetch_by_hash(
+        db, PasswordReset, hash_column=PasswordReset.token_hash, hash_value=token_hash
+    )
+    if row is None:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
     user = db.get(User, row.user_id)
     if user is None:
         raise HTTPException(status_code=400, detail="Invalid or expired reset token")
