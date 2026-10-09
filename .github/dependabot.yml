@@ -1,0 +1,95 @@
+# Dependency updates for every ecosystem actually present in the tree.
+#
+# Verified against the manifests at c35b6f6:
+#   pip             apps/api/pyproject.toml
+#   npm             apps/web/package.json  (+ package-lock.json)
+#   docker          Dockerfile, apps/web/Dockerfile, deploy/postgres/Dockerfile
+#   github-actions  .github/workflows/*.yml (now pinned to commit SHAs)
+#
+# Grouped per ecosystem so a routine bump produces one reviewable PR instead of
+# a dozen. Actions are pinned by SHA, so Dependabot updates the SHA and the
+# version comment together.
+
+version: 2
+
+updates:
+  - package-ecosystem: pip
+    directory: /apps/api
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Dhaka
+    open-pull-requests-limit: 5
+    groups:
+      python-dependencies:
+        patterns: ["*"]
+    labels: [dependencies, python]
+    commit-message:
+      prefix: "build(python)"
+
+  - package-ecosystem: npm
+    directory: /apps/web
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Dhaka
+    open-pull-requests-limit: 5
+    groups:
+      web-dependencies:
+        patterns: ["*"]
+    labels: [dependencies, web]
+    commit-message:
+      prefix: "build(web)"
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Dhaka
+    open-pull-requests-limit: 3
+    labels: [dependencies, docker]
+    commit-message:
+      prefix: "build(docker)"
+
+  - package-ecosystem: docker
+    directory: /apps/web
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Dhaka
+    open-pull-requests-limit: 3
+    labels: [dependencies, docker]
+    commit-message:
+      prefix: "build(docker)"
+
+  - package-ecosystem: docker
+    directory: /deploy/postgres
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Dhaka
+    open-pull-requests-limit: 3
+    labels: [dependencies, docker]
+    commit-message:
+      prefix: "build(docker)"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Dhaka
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns: ["*"]
+    labels: [dependencies, ci]
+    commit-message:
+      prefix: "build(ci)"
