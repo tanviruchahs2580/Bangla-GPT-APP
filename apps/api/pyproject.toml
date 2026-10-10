@@ -52,8 +52,15 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 # The wheel must ship every data file the runtime loads by path: sample corpus,
-# the S5 knowledge graph, and the Bengali TTF embedded in generated PDFs.
-bangla_gpt_api = ["data/sample_nctb/*.md", "data/kg/*.json", "data/fonts/*.ttf"]
+# the S5 knowledge graph, and the Bengali TTF embedded in generated PDFs. The
+# font's SIL OFL licence travels with it (OFL-1.1 requires the licence to
+# accompany every copy).
+bangla_gpt_api = [
+    "data/sample_nctb/*.md",
+    "data/kg/*.json",
+    "data/fonts/*.ttf",
+    "data/fonts/OFL.txt",
+]
 
 [tool.ruff]
 line-length = 100

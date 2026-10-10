@@ -118,3 +118,11 @@ Environment variables are documented in `.env.example`. Default
 ## License
 
 [MIT](LICENSE)
+
+Bundled third-party material keeps its own licence — see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch, commit, CI and merge
+conventions.
