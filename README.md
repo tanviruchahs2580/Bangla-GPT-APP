@@ -179,6 +179,18 @@ Environment variables are documented in `.env.example`. Default
 Bundled third-party material keeps its own licence — see
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
+## Changelog
+
+[CHANGELOG.md](CHANGELOG.md) records what changed in each release. It is
+generated from the git history, so it cannot claim a release that did not
+happen:
+
+```bash
+python apps/api/scripts/gen_changelog.py    # regenerate after landing work
+```
+
+CI fails if a commit is missing from it or a version has no matching tag.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch, commit, CI and merge

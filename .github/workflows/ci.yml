@@ -273,6 +273,12 @@ jobs:
         # instead of quietly misleading someone at 3am.
         run: python3 apps/api/scripts/check_readme_contract.py
 
+      - name: CHANGELOG covers every commit
+        # VCS-08: the changelog is generated from git history, so it cannot
+        # claim anything that did not happen. This fails if a released or
+        # unreleased commit is missing from it.
+        run: python3 apps/api/scripts/check_changelog.py
+
       - name: Secret scan (gitleaks, full history)
         # Secret scanning is disabled on the GitHub repository, so nothing
         # watches the history. The 82 hits this flags on main are all test
