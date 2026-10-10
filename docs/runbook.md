@@ -66,8 +66,49 @@ docker run -d --name bgpt -p 8080:8000 \
 curl -fsS http://127.0.0.1:8080/health && curl -fsS http://127.0.0.1:8080/ready
 ```
 
-Image is python:3.12-slim, runs as non-root `appuser`, HEALTHCHECK on `/health`,
-and serves gunicorn+uvicorn workers (`WEB_CONCURRENCY`, default 2).
+Image is python:3.12-slim (pinned by digest), runs as non-root `appuser`
+(uid/gid 10001), HEALTHCHECK on `/health`, and serves gunicorn+uvicorn workers
+(`WEB_CONCURRENCY`, default 2).
+
+### Deploying a release (tag push) and the secrets it needs
+
+Pushing `vX.Y.Z` builds and pushes both images, creates a GitHub Release, and
+deploys over SSH when `vars.DEPLOY_ENABLED == 'true'`. Four secrets are
+required; without them the deploy job skips cleanly.
+
+| Secret | Purpose |
+| --- | --- |
+| `DEPLOY_HOST` | SSH host or IP of the deploy target |
+| `DEPLOY_USER` | SSH user on that host |
+| `DEPLOY_SSH_KEY` | Private key for that user (add the public key to `~/.ssh/authorized_keys`) |
+| `DEPLOY_HOST_FINGERPRINT` | `SHA256:...` fingerprint of the host's SSH key |
+
+**The host fingerprint is mandatory, not optional.** Without it the SSH client
+accepts whatever key the host presents, so anyone able to intercept the
+connection could impersonate the deploy host and receive the commands that
+carry out a release. The release workflow refuses to deploy when the secret is
+missing or malformed rather than silently skipping verification.
+
+Obtain it from the host, and record where you got it from:
+
+```bash
+# run ON the deploy host, or against it from a trusted network:
+ssh-keyscan -p 22 deploy.example.com 2>/dev/null | ssh-keygen -lf -
+# e.g. 3072 SHA256:0ZC1x0KQ3dEXAMPLEkeymaterial... deploy.example.com (ED25519)
+
+# verify it out-of-band before trusting it: compare with the fingerprint the
+# host itself reports, e.g. `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`
+```
+
+Store the `SHA256:...` string (and nothing else) as the repository secret
+`DEPLOY_HOST_FINGERPRINT`, then confirm the deploy job's summary shows
+`Deploy-host fingerprint present`.
+
+**Rotating the host key.** If the fingerprint in the secret does not match,
+the deploy fails closed — that is the intended behaviour, not a bug. Confirm
+the new key through a second channel, update the secret, and re-run the tag.
+
+### Scheduled background jobs: inline vs ARQ
 
 End-to-end stack smoke (executed inside the api container):
 
@@ -198,8 +239,11 @@ Quarterly rotation procedure:
    (response issues a fresh JWT automatically).
 2. If the password is lost: set a new `ADMIN_PASSWORD` env value only after
    deleting that user row from the DB (bootstrap re-creates it at next boot).
-3. TOTP/MFA is NOT yet implemented — tracked as future hardening; until then,
-   restrict `/admin/*` access at the reverse proxy or VPN layer.
+3. TOTP/MFA **is** implemented: `POST /auth/mfa/enroll` then
+   `POST /auth/mfa/verify` to enable it; `POST /auth/mfa/challenge` then
+   `POST /auth/mfa/verify` to satisfy it at login; `POST /auth/mfa/disable` to
+   turn it off. Until MFA is enabled for an account, restrict `/admin/*` at
+   the reverse proxy or VPN layer.
 
 ## 7. Rollback
 

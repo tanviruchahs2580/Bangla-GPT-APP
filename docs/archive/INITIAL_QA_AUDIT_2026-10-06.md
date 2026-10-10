@@ -1,3 +1,7 @@
+> **Archived - superseded.** This document is kept for history only and is
+> not a statement of current state. The current QA record is
+> [`docs/qa-audit-2026-10-06.md`](../qa-audit-2026-10-06.md).
+>
 # Initial QA & Engineering Audit — Bangla GPT APP
 
 > **Date:** 2026-10-06 · **Version audited:** 0.9.2 (working tree at `ea59e72` + 261 uncommitted files) · **Mode:** Pre-remediation baseline (Phase A–C of the master audit directive). No code has been changed by this audit.

@@ -266,6 +266,13 @@ jobs:
             exit 1
           fi
 
+      - name: Docs agree with the code
+        # "Docs-as-tests" (DOC-02): the README's endpoint table and install
+        # commands are assertions about the app. This re-derives the facts they
+        # depend on, so a README that drifts from the code fails the build
+        # instead of quietly misleading someone at 3am.
+        run: python3 apps/api/scripts/check_readme_contract.py
+
       - name: Secret scan (gitleaks, full history)
         # Secret scanning is disabled on the GitHub repository, so nothing
         # watches the history. The 82 hits this flags on main are all test

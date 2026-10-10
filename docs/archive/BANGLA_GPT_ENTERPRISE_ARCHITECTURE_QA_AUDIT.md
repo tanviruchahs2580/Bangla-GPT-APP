@@ -1,4 +1,4 @@
-﻿# Bangla GPT — Enterprise Architecture & Full QA Audit
+# Bangla GPT — Enterprise Architecture & Full QA Audit
 
 > ## REMEDIATION RECORD — 2026-09-11 (post-audit engineering)
 >
@@ -278,7 +278,7 @@ Executed 2026-09-11 via `fastapi.testclient.TestClient(create_app())` (mock prov
 | Check | Result |
 |---|---|
 | Unicode/tokenizer | BM25 `tokenize` preserves U+0980–U+09FF vowel signs; Bijoy→Unicode (`bijoy2unicode`) + NFC in `nctb/` pipeline; sample eval passes — `VERIFIED` code-level |
-| Fonts/rendering | `Noto Sans Bengali` 400/700 + `Hind Siliguri` 400/600 via `@fontsource`; `styles.css: line-height 1.65`, font stack verified; v0.6.1 fixed 56 Assamese `ৰ/ৱ` glyphs (README) — `VERIFIED` static |
+| Fonts/rendering | `Noto Sans Bengali` 400/700 + `Hind Siliguri` 400/600 via `@fontsource`; `styles.css: line-height 1.65`, font stack verified; v0.6.1 fixed 56 Assamese `U+09F0/U+09F1` glyphs (README) — `VERIFIED` static |
 | i18n | `i18n.ts` 856 lines, ~410 bn-first keys, `{var}` interpolation, `bgpt_lang` persist, `<html lang="bn">`, `og:locale bn_BD`, `errors.ts` bn code→copy — `VERIFIED` |
 | Grounding honesty (Bangla) | In-corpus Bangla Qs grounded; out-of-domain refused (no hallucinated Bangla observed in 10 probes + golden 0.9333) — `VERIFIED` (mock) |
 | Mixed Bangla/English, numerals, dates, ZWJ/ZWNJ, voice, mobile keyboard, TTS quality, colloquial/Banglish robustness | `UNVERIFIED` — no dedicated test corpus or live native-speaker eval in this audit; `VoiceButton` + `voice.ts` exist but browser speech `NOT TESTED`; `safeMarkdown`+KaTeX render `NOT TESTED` visually |

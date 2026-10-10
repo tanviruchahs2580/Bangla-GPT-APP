@@ -4,7 +4,7 @@
 **Engineer:** Muse Spark (live test run + code review)
 **Scope:** Full stack — `apps/api` (FastAPI) + `apps/web` (React/Vite) + data/corpus + Docker + CI/CD + live API verification
 
-> এই রিপোর্ট বানানোর আগে আমি নিজে অ্যাপটা চালিয়ে দেখেছি: Live API (`:8000`) এ register → login → Learn → Tutor → Quiz → admin সবগুলো endpoint হাতে কল করেছি, backend/frontend build+tests+Docker সবগুলো gate নিজের মেশিনে রান করেছি। PowerShell-এ Bangla display mojibake হলেও Python-UTF8 দিয়ে verify করেছি — ডেটা সঠিক।
+> এই রিপোর্ট বানানোর আগে আমি নিজে অ্যাপটা চালিয়ে দেখেছি: Live API (`:8000`) এ register → login → Learn → Tutor → Quiz → admin সবগুলো endpoint হাতে কল করেছি, backend/frontend build+tests+Docker সবগুলো gate নিজের মেশিনে রান করেছি। PowerShell-এ Bangla display mojibake হলেও Python-UTF8 দিয়ে verify করেছি — ডেটা সঠিক।
 
 ---
 
@@ -16,7 +16,7 @@
 |---|---|
 | Backend | ✅ Strong — well-architected, well-tested |
 | Frontend | ✅ Good — P0 UI/UX upgrade complete (M1-M6 + Me), build/tests green |
-| Data / RAG | ✅ Grounded — corpus থেকে সরাসরি পড়ানো, hallucination নেই |
+| Data / RAG | ✅ Grounded — corpus থেকে সরাসরি পড়ানো, hallucination নেই |
 | Live functional | ✅ Verified — register→learn→tutor→quiz সব কাজ করে |
 | Security | ✅ Good — PBKDF2, JWT, rate-limit, headers (1 minor gap) |
 | CI/CD / Docker | ✅ Active — 5-pipeline CI + GHCR deploy ready |
@@ -47,11 +47,11 @@
 | Alembic | `alembic current / heads` | ✅ head `d4e5f6a7b8c9` (chat/invites) |
 | Docker | `docker build -t bangla-gpt-api:ci .` | ✅ 334 MB image built |
 
-> PowerShell-এ Bangla `book` field mojibake দেখালেও Python (`PYTHONIOENCODING=utf-8`) দিয়ে verify করলে `বিজ্ঞান`, `গণিত`, `বাংলা ব্যাকরণ` সঠিক — এটা শুধু Windows console `cp1252` display bug.
+> PowerShell-এ Bangla `book` field mojibake দেখালেও Python (`PYTHONIOENCODING=utf-8`) দিয়ে verify করলে `বিজ্ঞান`, `গণিত`, `বাংলা ব্যাকরণ` সঠিক — এটা শুধু Windows console `cp1252` display bug.
 
 ---
 
-## 2. Current Condition — App কী অবস্থায় আছে
+## 2. Current Condition — App কী অবস্থায় আছে
 
 ### 2.1 Project shape
 ```
@@ -64,7 +64,7 @@ Bangla GPT APP/
  ├─ Dockerfile   python:3.12-slim + gunicorn/uvicorn, non-root appuser, HEALTHCHECK
  └─ .github/workflows/  ci.yml + release.yml + repository-sanity.yml
 ```
-- Git: 80 uncommitted changes (feature branch work) — backup আছে, push হয়নি
+- Git: 80 uncommitted changes (feature branch work) — backup আছে, push হয়নি
 - Version: API `0.3.1` (config.py:19), Web `0.1.0` (package.json)
 
 ### 2.2 Live state (2026-08-30 19:19)
@@ -219,11 +219,11 @@ Locally verified: `docker build -t bangla-gpt-api:ci .` 334 MB ✅, container `/
 
 ---
 
-## 8. Preview Issue — কেন `localhost refused` হয়েছিল
+## 8. Preview Issue — কেন `localhost refused` হয়েছিল
 
 **Root cause: ভুল directory.**
 
-`package.json` এ `scripts.dev = "vite"` আছে **শুধু** `apps/web/`-এ। আপনি `C:\Users\DST>` (বা repo root) থেকে `npm run dev` দিয়েছিলেন, তাই `Missing script: "dev"`।
+`package.json` এ `scripts.dev = "vite"` আছে **শুধু** `apps/web/`-এ। আপনি `C:\Users\DST>` (বা repo root) থেকে `npm run dev` দিয়েছিলেন, তাই `Missing script: "dev"`।
 
 **PowerShell-এ সঠিক command:**
 ```powershell
@@ -234,7 +234,7 @@ npm run build
 npm run preview  # → http://localhost:4173
 ```
 
-> Sandbox limitation: এই environment-এ background web server টিকে না — তাই persistent hosted preview link এখানে দেওয়া সম্ভব নয়। Preview আপনার মেশিনে চালাতে হবে।
+> Sandbox limitation: এই environment-এ background web server টিকে না — তাই persistent hosted preview link এখানে দেওয়া সম্ভব নয়। Preview আপনার মেশিনে চালাতে হবে।
 
 Demo login: `admin@demo.com` / `Demo@12345`. Student bottom nav: **Home · Learn · AI Tutor · Quiz · Me**.
 

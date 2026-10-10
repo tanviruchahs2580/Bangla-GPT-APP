@@ -1,3 +1,7 @@
+> **Archived - superseded.** This document is kept for history only and is
+> not a statement of current state. The current QA record is
+> [`docs/qa-audit-2026-10-06.md`](../qa-audit-2026-10-06.md).
+>
 # Bangla GPT — Final Engineering, QA, Security, UX & Repository Certification Report
 
 > **Date:** 2026-10-06 · **Head at certification:** `ecca3ef` · **Certification state: B — READY WITH KNOWN RISKS**

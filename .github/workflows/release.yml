@@ -178,6 +178,32 @@ jobs:
     if: ${{ vars.DEPLOY_ENABLED == 'true' }}
     environment: production
     steps:
+      # Host-key verification is only real if the fingerprint is present.
+      # drone-ssh skips verification when `fingerprint` is empty, so an unset
+      # secret would silently turn the control off rather than fail loudly --
+      # this step refuses to deploy in that case (CI-21).
+      - name: Require a pinned deploy-host key
+        env:
+          DEPLOY_HOST_FINGERPRINT: ${{ secrets.DEPLOY_HOST_FINGERPRINT }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DEPLOY_HOST_FINGERPRINT:-}" ]; then
+            echo "::error::DEPLOY_HOST_FINGERPRINT is not set. Without it the deploy"
+            echo "::error::would skip SSH host-key verification. See docs/runbook.md"
+            echo "::error::('Deploying a release') for how to obtain and store it."
+            exit 1
+          fi
+          # A fingerprint is "SHA256:<base64>"; anything else means the secret
+          # holds the wrong thing and verification would never match.
+          case "$DEPLOY_HOST_FINGERPRINT" in
+            SHA256:*) ;;
+            *)
+              echo "::error::DEPLOY_HOST_FINGERPRINT must look like SHA256:xxxx (got '${DEPLOY_HOST_FINGERPRINT}')"
+              exit 1
+              ;;
+          esac
+          echo "Deploy-host fingerprint present; host-key verification enabled."
+
       - name: Deploy release over SSH
         uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
         env:
@@ -189,6 +215,9 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          # Pinned host public key. drone-ssh compares the server's key against
+          # this value and refuses the connection on mismatch or change.
+          fingerprint: ${{ secrets.DEPLOY_HOST_FINGERPRINT }}
           envs: RELEASE_TAG
           script: |
             set -e
