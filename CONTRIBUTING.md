@@ -34,6 +34,7 @@ CI must be green on your branch. That means, at minimum:
 | --- | --- | --- |
 | API lint + format | `ruff check .` and `ruff format --check .` | `ruff format .` then re-check |
 | API tests | `pytest` | Add tests for behaviour you change |
+| Dependencies | `pip-compile --generate-hashes --allow-unsafe --extra dev --strip-extras` | Regenerate `constraints.txt` — CI fails if it is stale |
 | Migrations | `alembic check` | Schema and models must not drift |
 | Web tests | `npm test` | vitest |
 | Web build | `npm run build` | `tsc && vite build` — typecheck included |
@@ -41,6 +42,42 @@ CI must be green on your branch. That means, at minimum:
 
 An ESLint config is not committed yet (tracked as AUD-0009), so the web checks
 above are what CI can actually run today.
+
+### Dependency changes
+
+The API's dependencies are declared in `apps/api/pyproject.toml`, but what actually gets
+installed is pinned in `apps/api/constraints.txt`, which carries a hash per
+artifact. CI and the Dockerfile both install from it, so a given commit always
+builds the same dependency set.
+
+When you change `pyproject.toml`, regenerate the lock in the same pull request:
+
+```
+pip install pip-tools
+cd apps/api
+pip-compile --generate-hashes --allow-unsafe --extra dev --strip-extras
+```
+
+The `guardrails` job re-runs `pip-compile` and fails if the result differs from
+what is committed, so a stale lock cannot slip through.
+
+Because the lock carries hashes, pip runs in hash-checking mode; the project
+itself is therefore installed separately with `--no-deps` (a local directory has
+no single artifact to hash). Keep that two-step shape if you change the install
+commands.
+
+### Base image updates
+
+The `Dockerfile` pins `python:3.12-slim` to a digest, and the two explicitly
+installed Debian packages to the versions that digest resolves to. To move the
+base, re-resolve both and change them together:
+
+```
+docker run --rm --entrypoint sh python:3.12-slim@sha256:<digest> \
+  -c "apt-get update -qq && apt-cache policy openssl libssl3t64"
+```
+
+Never replace the digest with the tag.
 
 If you change `apps/api/src/bangla_gpt_api/db/models.py`, add a migration in
 the same pull request. CI runs `alembic check`, which fails when the models and
