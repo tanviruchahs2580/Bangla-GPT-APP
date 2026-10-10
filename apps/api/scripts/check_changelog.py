@@ -35,6 +35,13 @@ listed = {line[2:].strip() for line in text.splitlines() if line.startswith("- "
 
 # Every non-merge commit reachable from HEAD must be represented.
 subjects = [s for s in git("log", "--no-merges", "--format=%s").splitlines() if s.strip()]
+
+# The commit that regenerates this file cannot appear inside it: the file is
+# written before the commit carrying it exists. Skip the changelog-only commits
+# so the check does not fail on its own output.
+_REGEN = "docs: regenerate CHANGELOG"
+subjects = [s for s in subjects if not s.startswith(_REGEN)]
+
 missing = [s for s in subjects if s not in listed]
 
 
