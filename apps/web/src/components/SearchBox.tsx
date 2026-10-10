@@ -93,7 +93,7 @@ export function SearchBox() {
               className="search-item search-ask"
               onClick={() => {
                 setOpen(false);
-                navigate("/student/tutor", { state: { ask: debounced } });
+                void navigate("/student/tutor", { state: { ask: debounced } });
               }}
             >
               <span className="search-kind">{t("searchAskTutor")}</span>
@@ -109,7 +109,7 @@ export function SearchBox() {
               className="search-item"
               onClick={() => {
                 setOpen(false);
-                navigate(h.href);
+                void navigate(h.href);
               }}
             >
               <span className="search-kind">

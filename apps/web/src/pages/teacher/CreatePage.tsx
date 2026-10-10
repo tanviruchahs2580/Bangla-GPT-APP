@@ -616,27 +616,28 @@ export default function CreatePage() {
 
       <div className="create-grid" role="list" aria-label={t("cGridTitle")}>
         {ENTRIES.map(({ kind, label, sub, icon: Icon }) => (
-          <button
-            key={kind}
-            role="listitem"
-            className={`create-tile${active === kind ? " active" : ""}`}
-            aria-pressed={active === kind}
-            onClick={() => setParams({ kind })}
-          >
-            <span className="quick-icon" aria-hidden>
-              <Icon size={22} />
-            </span>
-            <span className="create-tile-body">
-              <span className="quick-title quick-title-block">
-                {t(label as Parameters<typeof t>[0])}
+          <div role="listitem">
+            <button
+              key={kind}
+              className={`create-tile${active === kind ? " active" : ""}`}
+              aria-pressed={active === kind}
+              onClick={() => setParams({ kind })}
+            >
+              <span className="quick-icon" aria-hidden>
+                <Icon size={22} />
               </span>
-              {sub && (
-                <span className="quick-sub">
-                  {t(sub as Parameters<typeof t>[0])}
+              <span className="create-tile-body">
+                <span className="quick-title quick-title-block">
+                  {t(label as Parameters<typeof t>[0])}
                 </span>
-              )}
-            </span>
-          </button>
+                {sub && (
+                  <span className="quick-sub">
+                    {t(sub as Parameters<typeof t>[0])}
+                  </span>
+                )}
+              </span>
+            </button>
+          </div>
         ))}
       </div>
 

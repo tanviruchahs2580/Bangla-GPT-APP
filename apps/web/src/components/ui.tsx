@@ -265,6 +265,14 @@ export function Modal({
   return createPortal(
     <div
       className="modal-backdrop"
+      role="button"
+      tabIndex={0}
+      aria-label="Close dialog"
+      onKeyDown={(e) => {
+        // The backdrop dismisses on click, so it must be reachable and
+        // dismissible by keyboard too.
+        if (e.key === "Escape" || e.key === "Enter" || e.key === " ") onClose();
+      }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}

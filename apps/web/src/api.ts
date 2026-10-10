@@ -1,3 +1,5 @@
+import { asText } from "./lib/text";
+
 const API_BASE: string = import.meta.env.VITE_API_BASE ?? "/api";
 
 /** Absolute API base for direct navigation links (downloads etc.). */
@@ -93,11 +95,11 @@ function parseDetail(body: unknown): { message: string; code?: string } {
     if (detail && typeof detail === "object") {
       const d = detail as Record<string, unknown>;
       return {
-        message: String(d.message ?? JSON.stringify(d)),
-        code: d.code ? String(d.code) : undefined,
+        message: asText(d.message) || asText(d),
+        code: d.code ? asText(d.code) : undefined,
       };
     }
-    return { message: String(detail) };
+    return { message: asText(detail) };
   }
   if (typeof body === "string" && body) return { message: body };
   return { message: "Request failed" };
@@ -123,8 +125,12 @@ async function parseSse(
       if (line.startsWith("event:")) currentEvent = line.slice(6).trim();
       else if (line.startsWith("data:") && currentEvent) {
         try {
-          const data = JSON.parse(line.slice(5).trim());
-          if (currentEvent === "token") onToken(String(data.text ?? ""));
+          // JSON.parse returns `any`; narrow to a record before reading it.
+          const data = JSON.parse(line.slice(5).trim()) as Record<
+            string,
+            unknown
+          >;
+          if (currentEvent === "token") onToken(asText(data.text ?? ""));
           else if (currentEvent === "done") done = data;
           else if (currentEvent === "error") done = { __error: true, ...data };
         } catch {
@@ -173,7 +179,8 @@ export async function api<T>(
       // Upstream HTML error pages (dead Cloudflare tunnel 502, proxy 503)
       // carry no machine code — attach one so the UI shows a retry hint
       // instead of the generic fallback.
-      if (res.status === 502) parsed = { message: parsed.message, code: "bad_gateway" };
+      if (res.status === 502)
+        parsed = { message: parsed.message, code: "bad_gateway" };
       else if (res.status === 503)
         parsed = { message: parsed.message, code: "service_unavailable" };
       else if (jsonParseFailed && res.status === 0)
@@ -530,8 +537,13 @@ export const deleteNote = (id: number) => del(`/notes/${id}`);
 
 export interface TeacherDocument {
   id: number;
-  kind:
-    "worksheet" | "answer_key" | "homework" | "rubric" | "lesson_plan" | string;
+  /**
+   * Known values today: worksheet, answer_key, homework, rubric, lesson_plan.
+   * Typed as `string` rather than a closed union because the API can add kinds
+   * and a client that breaks on an unknown one is worse than one that displays
+   * it; the list is kept here as the documentation it was pretending to be.
+   */
+  kind: string;
   class_level: number;
   subject: string;
   chapter: string | null;
@@ -589,7 +601,9 @@ export async function downloadTeacherDocumentPdf(
 export interface AiJob {
   id: string;
   kind: string;
-  status: "queued" | "generating" | "validating" | "ready" | "failed" | string;
+  /** Known values today: queued, generating, validating, ready, failed.
+   *  Open string for the same reason as TeacherDocument.kind. */
+  status: string;
   payload: Record<string, unknown>;
   result: { document_id?: number } | null;
   error: string | null;

@@ -58,20 +58,39 @@ export default function HomePage() {
 
   const askTutor = () => {
     const q = prompt.trim();
-    navigate("/student/tutor", q ? { state: { ask: q } } : undefined);
+    void navigate("/student/tutor", q ? { state: { ask: q } } : undefined);
   };
 
   const cont = dashboard?.continue_learning;
-  // Fallback to localStorage lastChapter (set by LearnChapterPage)
-  let lastLocal: {
+  type LastChapter = {
     subject: string;
     chapter: string;
     class_level: number;
-  } | null = null;
+  };
+  // Fallback to localStorage lastChapter (set by LearnChapterPage)
+  let lastLocal: LastChapter | null = null;
   try {
     const raw = localStorage.getItem("lastChapter");
-    if (raw) lastLocal = JSON.parse(raw);
-  } catch {}
+    if (raw) {
+      // localStorage is untrusted input: validate the shape instead of
+      // casting it, so a stale or hand-edited value cannot render as junk.
+      const parsed: unknown = JSON.parse(raw);
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        typeof (parsed as LastChapter).subject === "string" &&
+        typeof (parsed as LastChapter).chapter === "string"
+      ) {
+        lastLocal = {
+          subject: (parsed as LastChapter).subject,
+          chapter: (parsed as LastChapter).chapter,
+          class_level: Number((parsed as LastChapter).class_level ?? 0),
+        };
+      }
+    }
+  } catch {
+    /* best-effort: a parse failure must not block startup */
+  }
   const showCont = cont?.chapter
     ? cont
     : lastLocal
@@ -125,7 +144,7 @@ export default function HomePage() {
               const subj = encodeURIComponent(showCont.subject ?? "science");
               const chap = encodeURIComponent(showCont.chapter ?? "");
               const cls = showCont.class_level ?? me?.class_level ?? 6;
-              navigate(`/student/learn/${subj}/${chap}?class=${cls}`);
+              void navigate(`/student/learn/${subj}/${chap}?class=${cls}`);
             }}
           >
             <Play size={18} aria-hidden /> {t("continueLearning")}

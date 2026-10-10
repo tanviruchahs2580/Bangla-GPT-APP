@@ -26,10 +26,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchMe().then((result) => {
-      setMe(result);
-      setLoading(false);
-    });
+    fetchMe()
+      .then((result) => {
+        setMe(result);
+        setLoading(false);
+      })
+      .catch(() => {
+        // A failed session probe leaves the user signed out rather than
+        // stuck on the loading screen forever.
+        setLoading(false);
+      });
     setUnauthorizedHandler(() => {
       logout();
       window.location.href = "/login";

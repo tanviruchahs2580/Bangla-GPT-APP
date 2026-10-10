@@ -86,8 +86,7 @@ describe("data export button (BUG-2 regression)", () => {
 
   it("surfaces a friendly error when the export call fails", async () => {
     apiMock.get.mockImplementation((path: string) => {
-      if (path === "/users/me/export")
-        return Promise.reject({ rawDetail: "nope" });
+      if (path === "/users/me/export") return Promise.reject(new Error("nope"));
       return Promise.resolve(null);
     });
     renderPage();

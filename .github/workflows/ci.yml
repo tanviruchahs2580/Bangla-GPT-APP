@@ -233,6 +233,11 @@ jobs:
       - name: Unit tests (vitest)
         run: npx vitest run --no-file-parallelism
 
+      # FEQ-02: the web app had no linter at all. Type-aware ESLint with
+      # --max-warnings 0, so a warning fails the build rather than scrolling by.
+      - name: Lint (eslint, type-aware, zero warnings)
+        run: npm run lint
+
       - name: Build (tsc + vite)
         run: npm run build
 

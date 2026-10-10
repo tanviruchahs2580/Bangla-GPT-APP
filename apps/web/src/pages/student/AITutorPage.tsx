@@ -1,3 +1,4 @@
+import { asText } from "../../lib/text";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -248,7 +249,7 @@ export default function AITutorPage() {
     quizContextRef.current = true;
     if (st.backToResult) setBackToResult(true);
     void send(explainMessage(st.explain));
-    navigate(location.pathname, { replace: true, state: null });
+    void navigate(location.pathname, { replace: true, state: null });
   }, [location, navigate, send]);
 
   // the search box's "ask in Tutor" action hands the question over via
@@ -259,7 +260,7 @@ export default function AITutorPage() {
     if (!st?.ask || askSentRef.current) return;
     askSentRef.current = true;
     void send(st.ask);
-    navigate(location.pathname, { replace: true, state: null });
+    void navigate(location.pathname, { replace: true, state: null });
   }, [location, navigate, send]);
 
   const rate = async (messageId: number, rating: 1 | -1) => {
@@ -303,7 +304,7 @@ export default function AITutorPage() {
     }
     const rd = new FileReader();
     rd.onload = () => {
-      const res = String(rd.result ?? "");
+      const res = asText(rd.result ?? "");
       const b64 = res.slice(res.indexOf(",") + 1);
       if (!b64) return;
       setImage({ mime_type: f.type, data_base64: b64 });
@@ -439,7 +440,6 @@ export default function AITutorPage() {
               <input
                 key={c.id}
                 className="input conv-rename-input"
-                autoFocus
                 value={renameValue}
                 aria-label={t("rename")}
                 onChange={(e) => setRenameValue(e.target.value)}
@@ -687,7 +687,7 @@ export default function AITutorPage() {
                                 const q = [...messages.slice(0, i)]
                                   .reverse()
                                   .find((x) => x.role === "user")?.content;
-                                if (q) send(q, { reteach: true });
+                                if (q) void send(q, { reteach: true });
                               }}
                             >
                               {t("reteach")}
@@ -711,7 +711,7 @@ export default function AITutorPage() {
                                 const q = [...messages.slice(0, i)]
                                   .reverse()
                                   .find((x) => x.role === "user")?.content;
-                                if (q) send(q);
+                                if (q) void send(q);
                               }}
                             >
                               <RefreshCcw size={13} aria-hidden />{" "}
@@ -913,14 +913,26 @@ function EvidenceModal({
     .filter(Boolean)
     .join(" › ");
   return (
-    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+    <div
+      className="modal-backdrop"
+      role="button"
+      tabIndex={0}
+      aria-label={t("close")}
+      onKeyDown={(e) => {
+        // Click closes the overlay; Escape must do the same for keyboard use.
+        if (e.key === "Escape") onClose();
+      }}
+      onClick={(e) => {
+        // Only a click on the backdrop itself closes; clicks inside bubble up.
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div
         ref={modalRef}
         className="modal"
         role="dialog"
         aria-modal="true"
         aria-label={t("evidenceTitle")}
-        onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-head">
           <h3 className="modal-title">{t("evidenceTitle")}</h3>
