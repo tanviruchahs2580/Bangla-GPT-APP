@@ -86,8 +86,10 @@ def _safe_init_db(engine: Engine, settings: Settings) -> None:
         s = settings or _get_s()
         if s.is_production and s.database_url.strip().startswith("postgresql"):
             return
-    except Exception:
-        pass
+    except Exception as exc:
+        # Unresolvable settings must not stop table creation; the schema that
+        # results is valid either way, so record why the check was skipped.
+        logging.getLogger(__name__).debug("settings check skipped: %s", exc)
     try:
         init_db(engine)
     except Exception as exc:

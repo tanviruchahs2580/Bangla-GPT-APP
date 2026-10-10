@@ -12,4 +12,4 @@ from bangla_gpt_api.nctb.sources import (
     SOURCE_PAGES,
 )
 
-__all__ = ["SOURCE_PAGES", "SECONDARY_ARTIFACTS", "HSC_ARTIFACTS", "ALL_ARTIFACTS"]
+__all__ = ["ALL_ARTIFACTS", "HSC_ARTIFACTS", "SECONDARY_ARTIFACTS", "SOURCE_PAGES"]

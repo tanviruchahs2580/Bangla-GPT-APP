@@ -3,6 +3,7 @@
 import json
 from dataclasses import asdict, replace
 from pathlib import Path
+from typing import ClassVar
 
 from bangla_gpt_api.curriculum.models import Chunk
 from bangla_gpt_api.data.nctb_loader import LEVEL_CLASS_RANGE, load_nctb_corpus
@@ -300,7 +301,7 @@ class TestBijoyConversion:
                 return self._text
 
         class FakeReader:
-            pages = [
+            pages: ClassVar[list] = [
                 FakePage(self.REAL_BIJOY_HEADER),
                 FakePage("জাতীয় শিক্ষাক্রম সরাসরি ইউনিকোড"),
                 FakePage(""),

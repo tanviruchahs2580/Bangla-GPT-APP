@@ -8,6 +8,7 @@ so the lifespan can be inspected, tested, and refactored independently.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
@@ -79,10 +80,8 @@ def build_lifespan(
             task = getattr(app.state, attr, None)
             if task is not None:
                 task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await task
-                except asyncio.CancelledError:
-                    pass
                 json_log(logger, logging.INFO, f"{label}_task_cancelled")
 
         # 2. Close provider HTTP clients
@@ -91,8 +90,13 @@ def build_lifespan(
             if closer is not None:
                 try:
                     await closer()
-                except Exception:
-                    pass
+                except Exception as exc:  # shutdown must continue regardless
+                    json_log(
+                        logger,
+                        logging.WARNING,
+                        "provider_close_failed",
+                        error=type(exc).__name__,
+                    )
 
         # 3. Dispose DB connection pool
         if engine is not None:
@@ -100,7 +104,12 @@ def build_lifespan(
             if dispose is not None:
                 try:
                     dispose()
-                except Exception:
-                    pass
+                except Exception as exc:  # shutdown must continue regardless
+                    json_log(
+                        logger,
+                        logging.WARNING,
+                        "engine_dispose_failed",
+                        error=type(exc).__name__,
+                    )
 
     return _lifespan

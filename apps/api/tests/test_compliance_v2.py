@@ -170,7 +170,7 @@ def test_retention_dry_run_reports_counts_without_deleting(pair) -> None:
     assert res.status_code == 200
     body = res.json()
     assert body["dry_run"] is True
-    assert COUNT_KEYS <= set(body)
+    assert set(body) >= COUNT_KEYS
     assert body["conversations_deleted"] == 1
     assert body["chat_messages_deleted"] == 1
     assert body["password_resets_deleted"] == 1
@@ -210,7 +210,7 @@ def test_retention_real_sweep_deletes_expired_and_audits_counts_only(pair) -> No
         assert audit.target == "retention_sweep"
         assert audit.actor_role == "admin"
         # counts in detail, never content; the dry_run flag is not data.
-        assert COUNT_KEYS <= set(audit.detail)
+        assert set(audit.detail) >= COUNT_KEYS
         assert "dry_run" not in audit.detail
         assert all(isinstance(v, int) for v in audit.detail.values())
     finally:

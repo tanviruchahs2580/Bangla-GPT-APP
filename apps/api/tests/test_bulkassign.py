@@ -212,7 +212,7 @@ def test_validation_errors_and_scoping(client: TestClient, teacher_headers, db_p
     ids = _student_ids(db_path, ["stu0@school.edu", "stu1@school.edu"])
 
     # unknown student
-    res = _assign(client, teacher_headers, ids + [99999])
+    res = _assign(client, teacher_headers, [*ids, 99999])
     assert res.status_code == 404
     assert res.json()["detail"]["code"] == "unknown_student"
 

@@ -221,7 +221,7 @@ def test_mastery_snapshot_reaches_prompt_from_attempt_history(monkeypatch, tmp_p
         (student_id,),
     )
     # KOISH weak (1/4 -> 25%), ALGEBRA strong (2/2 -> 100%).
-    rows = [(0, False), (1, False), (2, False), (3, True)] + [(4, True), (5, True)]
+    rows = [(0, False), (1, False), (2, False), (3, True), (4, True), (5, True)]
     for seq, ok in rows:
         chapter = KOISH if seq < 4 else ALGEBRA
         conn.execute(

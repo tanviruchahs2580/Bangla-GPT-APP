@@ -11,7 +11,7 @@ PRODUCTION_ENVS = frozenset({"production", "prod", "staging"})
 # staging/prod parity: staging runs the SAME strict boot guard and secret
 # suppression as production (no default JWT_SECRET, no raw reset-token logs);
 # only the data is non-authoritative. Enforced by tests/test_env_parity.py.
-DEFAULT_JWT_SECRET = "dev-insecure-change-me"
+DEFAULT_JWT_SECRET = "dev-insecure-change-me"  # noqa: S105 - an obvious placeholder or a fixture name, not a credential
 
 
 def _get_version() -> str:

@@ -69,9 +69,107 @@ target-version = "py311"
 exclude = ["alembic"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
-ignore = ["E501"]
-per-file-ignores = { "tests/test_phase1_exploits.py" = ["B011"] }
+# Families added in CQ-01, each with the violations it surfaces either fixed
+# at the call site or justified below. C90 (complexity) is deliberately NOT
+# here yet: it is the subject of the CQ-03 refactor, and enabling it before
+# that refactor would only red the build. It lands with a ratcheted max.
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # import sorting
+    "UP",   # pyupgrade
+    "B",    # bugbear
+    "S",    # bandit - security-relevant, worth the false positives
+    "DTZ",  # naive datetime hazards
+    "T20",  # stray print()
+    "ERA",  # commented-out code
+    "SIM",  # simplifications
+    "RUF",  # ruff-specific correctness
+    "PERF", # obvious performance traps
+    "ASYNC",# async footguns
+    "N",    # pep8-naming
+    "W",    # pycodestyle warnings
+]
+# Every entry is a deliberate decision, not a backlog:
+#   E501            - line length is enforced by `ruff format`, which does not
+#                     produce unreadable wrapping; duplicating it as a lint
+#                     rule only creates conflicts with the formatter.
+#   RUF001/002/003  - "ambiguous" unicode. Bengali legitimately uses these
+#                     code points (Bengali digits, the U+09DC/U+09DD nukta
+#                     forms); flagging them would force the product's own
+#                     script to be escaped. The Bangla hygiene scanner
+#                     (scripts/bn_scan.py) is the check that matters here.
+#   N818            - exception naming. The codebase has established
+#                     `CacheUnavailable`, `OcrUnavailable`,
+#                     `ProviderNotConfigured`; renaming them would churn
+#                     every call site and test to satisfy a style rule.
+#   N813            - the one camelcase import is a deliberate alias for a
+#                     lazily imported class, so the local name is lowercase.
+#   T201 (cli)     - `src/bangla_gpt_api/evaluation/cli.py` is a command-line
+#                     tool; printing is its entire output contract.
+#   B011 (tests)    - test_phase1_exploits.py asserts that `assert False` and
+#                     friends are caught by static analysis. Removing the
+#                     literals would delete the test's subject matter.
+ignore = [
+    "E501",
+    "RUF001",
+    "RUF002",
+    "RUF003",
+    "N818",
+    "N813",
+    # DTZ001/DTZ901 want tz-aware datetimes. This project stores naive UTC on
+    # purpose - SQLite has no timezone type and the schema reads naive - so
+    # "fixing" these would mix aware and naive values and raise TypeError at
+    # comparison time. The rest of DTZ stays on (DTZ005, DTZ011, DTZ007 ...).
+    "DTZ001",
+    "DTZ901",
+    # RUF100 reports noqa comments that ARE load-bearing: a suppression placed
+    # on a name inside a parenthesised `from x import (...)` block is reported
+    # by F401 against that name's column, and RUF100 fails to map it back.
+    # Verified by stripping the suppressions: F401 then fires. Enabling RUF100
+    # would delete working suppressions, so it stays off.
+    "RUF100",
+    # ERA001 reads this codebase's formula and pseudo-code comments (how a
+    # confidence score is computed, what a lifespan step does) as commented-out
+    # code. All five hits are documentation, not dead code.
+    "ERA001",
+    # PERF401 rewrites `for ..: out.append(f(x))` into a comprehension. That is
+    # a style preference with no measurable effect at this scale, and it would
+    # mean rewriting twelve working code paths for no behavioural gain. The
+    # rest of PERF stays on (PERF403 and friends do catch real waste).
+    "PERF401",
+]
+# TOML has no comments inside an inline table, so the rationale lives here and
+# the table itself stays bare.
+#
+#   evaluation/cli.py  it is a CLI; printing is its output contract
+#   scripts/*         command-line tooling: printing is the output contract,
+#                     the gate scripts assert their own preconditions, and the
+#                     eval harness uses subprocesses and random sampling
+#   tests/test_phase1_exploits.py
+#                     asserting that static analysis catches `assert False`
+#                     requires writing it
+#   tests/*           `assert` IS the mechanism in a test, and fixture
+#                     credentials, literal SQL, subprocess calls, prints in
+#                     diagnostics and unused unpacked fixtures are how tests
+#                     are written
+[tool.ruff.lint.per-file-ignores]
+"src/bangla_gpt_api/evaluation/cli.py" = ["T201"]
+"scripts/*" = ["T201", "S101", "S603", "S311", "S607", "S404"]
+"tests/test_phase1_exploits.py" = ["B011"]
+"tests/*" = [
+    "S101",    # assert used
+    "S105",    # hardcoded password (fixture strings)
+    "S106",    # hardcoded password argument (fixture strings)
+    "S311",    # random (shuffling fixtures)
+    "S608",    # SQL string construction (asserted against injection)
+    "S603",    # subprocess call (test tooling)
+    "T201",    # print() in test diagnostics
+    "T203",    # pdb
+    "ASYNC240",
+    "RUF059",  # unused unpacked variable in fixtures
+    "SIM117",  # nested with statements in fixtures
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

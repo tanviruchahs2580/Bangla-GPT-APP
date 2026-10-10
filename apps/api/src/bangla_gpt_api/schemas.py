@@ -190,7 +190,7 @@ class LoginRequest(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
-    token_type: str = "bearer"
+    token_type: str = "bearer"  # noqa: S105 - an obvious placeholder or a fixture name, not a credential
     must_change_password: bool = False
 
 

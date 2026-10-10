@@ -141,7 +141,7 @@ def teacher_shorttest_create(
         subject=canonical_subject(payload.subject),
         chapter=payload.chapter,
         num=payload.num_questions,
-        seed=random.randrange(1_000_000_000),
+        seed=random.randrange(1_000_000_000),  # noqa: S311 - shuffling/selecting, not a security-relevant random choice
     )
     if not questions:
         raise HTTPException(
@@ -411,12 +411,14 @@ def teacher_curriculum_coverage(db: DbSession, teacher: TeacherOrAdminUser) -> C
     # v1 rule: one classroom per student, so this map is unambiguous.
     room_of: dict[int, int] = {}
     if room_ids:
-        for cid, sid in db.execute(
-            select(ClassStudent.classroom_id, ClassStudent.student_id).where(
-                ClassStudent.classroom_id.in_(room_ids)
-            )
-        ).all():
-            room_of[sid] = cid
+        room_of = {
+            sid: cid
+            for cid, sid in db.execute(
+                select(ClassStudent.classroom_id, ClassStudent.student_id).where(
+                    ClassStudent.classroom_id.in_(room_ids)
+                )
+            ).all()
+        }
 
     # quiz activity aggregated per (classroom, subject)
     attempts: dict[tuple[int, str], int] = defaultdict(int)
@@ -627,7 +629,7 @@ def teacher_assignment_create(
         subject=canonical_subject(payload.subject),
         chapter=payload.chapter,
         num=payload.num_questions,
-        seed=random.randrange(1_000_000_000),
+        seed=random.randrange(1_000_000_000),  # noqa: S311 - shuffling/selecting, not a security-relevant random choice
     )
     if not questions:
         raise HTTPException(

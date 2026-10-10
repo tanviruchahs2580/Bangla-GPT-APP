@@ -279,7 +279,7 @@ def login(app_ctx: Ctx, response: Response, payload: LoginRequest, db: DbSession
         mfa_token = create_access_token(
             user, settings=app_ctx.settings, minutes=5, extra_claims={"mfa": True}
         )
-        return TokenResponse(access_token=mfa_token, token_type="mfa")
+        return TokenResponse(access_token=mfa_token, token_type="mfa")  # noqa: S106 - a token type string, not a credential
     # SEC-02: transparently upgrade the stored hash on a successful login. This
     # is where legacy pbkdf2_sha256 hashes (and Argon2id hashes made with older
     # parameters) become Argon2id at the current policy, so no bulk reset is

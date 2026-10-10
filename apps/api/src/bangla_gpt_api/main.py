@@ -467,7 +467,7 @@ if __name__ == "__main__":
 
     uvicorn.run(
         "bangla_gpt_api.main:app",
-        host="0.0.0.0",
+        host="0.0.0.0",  # noqa: S104 - a container listens on all interfaces by design; the proxy is the boundary
         port=8000,
         reload=True,
         log_level="debug",

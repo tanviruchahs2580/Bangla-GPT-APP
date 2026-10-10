@@ -7,7 +7,7 @@ Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 import logging
 import secrets
 from collections import defaultdict
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -499,10 +499,8 @@ def parent_child_activity(
         .all()
     )
     window = heatmap_days(list(rows), today, days)
-    date_axis = [
-        (datetime.strptime(today, "%Y-%m-%d") - timedelta(days=i)).date().isoformat()
-        for i in range(days - 1, -1, -1)
-    ]
+    anchor = date.fromisoformat(today)
+    date_axis = [(anchor - timedelta(days=i)).isoformat() for i in range(days - 1, -1, -1)]
     active = {r.date for r in rows if (r.questions or r.quizzes or r.minutes)}
     return ActivitySummary(
         streak=streak_days(active, today),

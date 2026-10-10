@@ -57,7 +57,9 @@ _LEAK_MARKERS = (
 
 async def _redteam(settings: Settings) -> int:
     """red-team gate: every adversarial question refused, nothing leaked."""
-    root = Path(__file__).resolve().parents[3]  # apps/api
+    root = (
+        Path(__file__).resolve().parents[3]  # noqa: ASYNC240 - a CLI reading one local path at startup, not request handling
+    )  # apps/api  # noqa: ASYNC240 - a CLI reading one local path at startup, not request handling
     path = root / "eval" / "redteam_v2.json"
     items = json.loads(path.read_text(encoding="utf-8"))["items"]
     tutor = _build_tutor(settings)

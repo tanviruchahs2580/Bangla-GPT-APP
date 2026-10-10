@@ -203,10 +203,10 @@ def test_default_rule_tables_stay_in_parity() -> None:
     middleware's per-field derived rules — guards against the tables
     drifting apart again (the defect that hid /auth/mfa/challenge from
     rate limiting)."""
-    from bangla_gpt_api.config import Settings as S
+    from bangla_gpt_api.config import Settings as SettingsCls
     from bangla_gpt_api.initialize.middleware_stack import _derive_default_rules
 
-    derived = _derive_default_rules(S(env="test", jwt_secret=JWT))
-    defaults = S().rate_limit_rules
+    derived = _derive_default_rules(SettingsCls(env="test", jwt_secret=JWT))
+    defaults = SettingsCls().rate_limit_rules
     for route, rule in derived.items():
         assert defaults.get(route) == rule, route

@@ -119,9 +119,7 @@ def _sanitize_event_props(props: dict[str, Any]) -> dict[str, Any]:
     for key, value in props.items():
         if _EVENT_DROP_KEY_RE.search(str(key)):
             continue
-        if isinstance(value, bool) or isinstance(value, int):
-            clean[str(key)[:_EVENT_PROP_MAX_LEN]] = value
-        elif isinstance(value, float):
+        if isinstance(value, (bool, int, float)):
             clean[str(key)[:_EVENT_PROP_MAX_LEN]] = value
         elif isinstance(value, str):
             clean[str(key)[:_EVENT_PROP_MAX_LEN]] = value[:_EVENT_PROP_MAX_LEN]

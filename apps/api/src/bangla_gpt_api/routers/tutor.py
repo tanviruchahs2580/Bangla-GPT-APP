@@ -4,6 +4,7 @@ Behavior-identical extraction: same paths, validation, status codes.
 Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 """
 
+import contextlib
 import json
 import logging
 from collections.abc import AsyncIterator
@@ -599,10 +600,8 @@ async def stream_chat_message(
             yield ("event: done\ndata: " + json.dumps(done_payload, ensure_ascii=False) + "\n\n")
         except ProviderError:
             # user turn already persisted; do not rollback
-            try:
+            with contextlib.suppress(Exception):  # rollback is best-effort here
                 db.rollback()
-            except Exception:
-                pass
             yield (
                 "event: error\ndata: "
                 + json.dumps({"code": "llm_unavailable"}, ensure_ascii=False)

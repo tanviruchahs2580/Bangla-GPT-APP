@@ -6,7 +6,7 @@ Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 
 import logging
 from collections import defaultdict
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any, cast
 from urllib.parse import quote
 
@@ -390,10 +390,8 @@ def get_activity(
         .all()
     )
     window = heatmap_days(list(rows), today, days)
-    date_axis = [
-        (datetime.strptime(today, "%Y-%m-%d") - timedelta(days=i)).date().isoformat()
-        for i in range(days - 1, -1, -1)
-    ]
+    anchor = date.fromisoformat(today)
+    date_axis = [(anchor - timedelta(days=i)).isoformat() for i in range(days - 1, -1, -1)]
     active = {r.date for r in rows if (r.questions or r.quizzes or r.minutes)}
     return ActivitySummary(
         streak=streak_days(active, today),
@@ -691,7 +689,12 @@ def _build_dashboard_summary(app_ctx: Ctx, db: Session, user: User, today: str) 
     # Continue: last graded attempt's first question chapter
     continue_learning = None
     if graded:
-        last = sorted(graded, key=lambda a: a.created_at or datetime.min, reverse=True)[0]
+        # Attempts with no created_at sort last. The sentinel is naive on
+        # purpose: created_at is stored as naive UTC throughout this codebase
+        # (SQLite has no timezone type), so an aware sentinel would raise
+        # TypeError on comparison instead of sorting.
+        never = datetime.min
+        last = sorted(graded, key=lambda a: a.created_at or never, reverse=True)[0]
         if last.quiz_json:
             first = (
                 last.quiz_json[0] if isinstance(last.quiz_json, list) and last.quiz_json else None

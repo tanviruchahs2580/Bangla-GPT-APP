@@ -19,11 +19,11 @@ def test_health_reports_app_identity(client: TestClient) -> None:
     assert body["status"] == "ok"
     assert "version" not in body or body.get("version") is None
     # authenticated detail endpoint still carries version
-    from fastapi.testclient import TestClient as _TC
+    from fastapi.testclient import TestClient as Tc
 
     from bangla_gpt_api.main import create_app as _ca
 
-    c2 = _TC(
+    c2 = Tc(
         _ca(
             Settings(
                 env="test",
