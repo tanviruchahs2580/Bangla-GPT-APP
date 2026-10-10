@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - fix(api): P4 cleanup batch — chunk-id content hash, lesson echo gate, proportional Latin penalty, corpus-scoped RAG keys, history char cap (A20-A25)
 - fix(api): align the served OpenAPI contract with runtime behaviour
+- fix(api): drop an unused variable the new RUF059 rule caught
 - fix(api): gate evals on hybrid retrieval, de-tautologize golden set, precompute BM25 trigrams, single-pass redteam (A13, A8, A18)
 - fix(api): impersonation revocation fails closed when cache is down (F-08)
 - fix(api): record an explicit auth decision on every public operation
@@ -59,12 +60,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - security(school): bound staff invite codes to a lifetime
 
+### Changed
+
+- refactor(api): bring TutorService.ask/ask_stream down from grade E
+
 ### Build and dependencies
 
 - build(api): turn on mypy strictness per flag, with a written plan to the rest
 - build(api): widen the ruff rule set from 5 families to 15, fixing what it found
 - build(ci): add guardrails for coverage, migration drift, secrets and Bangla
 - build(deps): add Dependabot config for all four ecosystems
+- build(web): add type-aware ESLint and fix the 175 findings it found
 - build: lock the dependency set, pin the base image, and attest what ships
 
 ### CI/CD
@@ -77,6 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Documentation
 
 - docs: add 2026-10-06 QA audit and final certification reports
+- docs: add a CHANGELOG generated from git history, and a check that keeps it honest
 - docs: add final QA report for 2026-10-07 UAT completion
 - docs: phase-2 CI/CD pipeline execution record (v0.9.2 shipped through full pipeline)
 - docs: pin the deploy host key, make the quick starts real, and repair script hygiene
@@ -87,6 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Tests
 
+- test(school): cover the aggregation routes TST-04 flagged as unexercised
 - test(tenancy): cover school dashboard routes across two tenants
 - test(web): drop remaining plan-tracker tags from suite titles
 
@@ -99,6 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Style
 
+- style(api): format the new tutor seam tests
 - style(api): reformat SchoolInvite claim call
 - style(api): ruff format four test files (format-gate drift)
 - style(api): ruff format mock provider and lesson plan prompt
