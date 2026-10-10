@@ -36,7 +36,8 @@ _MAX_BACKOFF_SECONDS = 3600  # 1 hour cap
 
 def _exponential_backoff(consecutive_failures: int) -> int:
     """Exponential backoff with cap: base * 2^n, capped at _MAX_BACKOFF."""
-    return min(_BASE_BACKOFF_SECONDS * (2**consecutive_failures), _MAX_BACKOFF_SECONDS)
+    growth: int = 2**consecutive_failures
+    return min(_BASE_BACKOFF_SECONDS * growth, _MAX_BACKOFF_SECONDS)
 
 
 # ---------------------------------------------------------------------------

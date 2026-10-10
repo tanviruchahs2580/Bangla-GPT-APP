@@ -48,7 +48,8 @@ RETEACH_EXCERPT_CHARS = 280
 
 def expected_score(ability: float, elo: float) -> float:
     """Standard Elo expectation for the ability side."""
-    return 1.0 / (1.0 + 10.0 ** ((elo - ability) / 400.0))
+    power: float = 10.0 ** ((elo - ability) / 400.0)
+    return 1.0 / (1.0 + power)
 
 
 def update_pair(ability: float, elo: float, correct: bool) -> tuple[float, float]:

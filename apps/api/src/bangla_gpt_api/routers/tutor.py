@@ -538,7 +538,7 @@ async def stream_chat_message(
                 token_payload = json.dumps({"text": VISION_UNSUPPORTED_ANSWER}, ensure_ascii=False)
                 yield f"event: token\ndata: {token_payload}\n\n"
             else:
-                async for event in tutor.ask_stream(  # type: ignore[union-attr]
+                async for event in tutor.ask_stream(
                     payload.message,
                     class_level,
                     canonical_subject(payload.subject),

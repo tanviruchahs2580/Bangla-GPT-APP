@@ -207,6 +207,30 @@ python_version = "3.11"
 ignore_missing_imports = true
 exclude = ["alembic"]
 
+# CQ-02: strictness is turned on per-flag, not all at once, because a single
+# `--strict` jump would have required rewriting 161 annotations and 24
+# signatures in one commit. Every flag below is on because the codebase
+# already satisfies it; the measured path to full `--strict` is written down in
+# docs/type-checking-plan.md, including which flags are still off and why.
+warn_unused_configs = true      # a [[overrides]] block that matches nothing
+warn_redundant_casts = true     # a cast that changes nothing
+warn_unused_ignores = true      # dead suppressions (AUD-0018's failure mode)
+warn_return_any = true          # a function whose `Any` return hides the contract
+no_implicit_optional = true     # `x: int = None` is not an int
+strict_equality = true          # silent True/1 equality across types
+check_untyped_defs = true       # bodies of untyped functions are still checked
+warn_unreachable = true         # dead code after a terminating branch
+no_implicit_reexport = true     # `import x` must say `from x import y as y`
+strict_bytes = true
+
+# Still off, deliberately, with the measured cost on 2026-10-10:
+#   disallow_any_generics    161 - bare `dict`/`list` annotations that need a
+#                                   per-site decision about key/value types
+#   disallow_untyped_defs     24 - untyped public functions
+#   disallow_untyped_decorators, disallow_any_decorated, no_partialtypes,
+#   disallow_subclassing_any, extra_checks - no measurable benefit today
+# Removing any of the above from this list is a deliberate act: see the plan.
+
 # bijoy2unicode ships no stubs/py.typed (import-untyped at the lazy import in
 # nctb/bijoy.py); silence that code at the single import site.
 [[tool.mypy.overrides]]

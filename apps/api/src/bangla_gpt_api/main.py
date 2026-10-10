@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from bangla_gpt_api import caching, initialize
 from bangla_gpt_api.config import DEFAULT_JWT_SECRET, Settings, get_settings
@@ -339,8 +339,8 @@ def _mark_public_operations(app: object) -> None:
     """
     original = app.openapi  # type: ignore[attr-defined]
 
-    def openapi() -> dict:
-        spec = original()
+    def openapi() -> dict[str, Any]:
+        spec: dict[str, Any] = original()
         for path, item in spec.get("paths", {}).items():
             for method, op in item.items():
                 if (
@@ -354,7 +354,9 @@ def _mark_public_operations(app: object) -> None:
                     op["security"] = []
         return spec
 
-    app.openapi = openapi  # type: ignore[method-assign, attr-defined]
+    # Replacing the attribute on the FastAPI instance is the documented way to
+    # customise the schema; mypy types `app` as a bare object here.
+    app.openapi = openapi  # type: ignore[attr-defined]
 
 
 _HTTP_METHODS = frozenset({"get", "post", "put", "patch", "delete", "head", "options"})

@@ -338,12 +338,17 @@ def school_invite_create(
     _school_or_403(user, school_id)
     code = "".join(secrets.choice(SCHOOL_CODE_ALPHABET) for _ in range(10))
     now = datetime.now(UTC).replace(tzinfo=None)
+    # Computed once and used for both the row and the response. The column is
+    # nullable only because pre-AUD-0046 rows have no expiry; a row this
+    # function just created always does, so returning the local value is exact
+    # rather than a guess (and it keeps SchoolInviteOut.expires_at required).
+    expires_at = now + timedelta(minutes=app_ctx.settings.invite_ttl_minutes)
     invite = SchoolInvite(
         code_hash=_hash_invite(code),
         school_id=school_id,
         role=payload.role,
         created_by=user.id,
-        expires_at=now + timedelta(minutes=app_ctx.settings.invite_ttl_minutes),
+        expires_at=expires_at,
     )
     db.add(invite)
     db.commit()
@@ -355,7 +360,7 @@ def school_invite_create(
         role=invite.role,
         code=code,
         created_at=invite.created_at,
-        expires_at=invite.expires_at,
+        expires_at=expires_at,
     )
 
 
@@ -746,7 +751,10 @@ def school_students(
             .group_by(QuizAttempt.student_id)
         ).all():
             if ts is None:
-                continue
+                # Unreachable per the model (created_at is NOT NULL), but
+                # legacy SQLite rows may predate that constraint; skipping is
+                # the safe response if one appears.
+                continue  # type: ignore[unreachable]
             iso = str(ts)[:10]
             if sid not in last_day or iso > last_day[sid]:
                 last_day[sid] = iso

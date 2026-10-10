@@ -219,7 +219,7 @@ def build_dependencies(
                 _hi_cls = _real_hybrid
             # _hi_cls is resolved at runtime (mockable index in tests, real one in
             # production), so its constructor signature is not statically known.
-            inner: RankingIndex = _hi_cls(chunks, build_embedder(settings))  # type: ignore[arg-type]
+            inner: RankingIndex = _hi_cls(chunks, build_embedder(settings))
         else:
             from bangla_gpt_api.retrieval.bm25 import BM25Index
 

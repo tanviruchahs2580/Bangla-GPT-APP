@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from pydantic import (
     BaseModel,
@@ -1176,10 +1176,8 @@ class NoteSourceRef(BaseModel):
         Keeps the previous wire shape (echo back exactly the reference that was
         stored) instead of padding it with nulls.
         """
-        data = handler(self)
-        if isinstance(data, dict):
-            return {k: v for k, v in data.items() if v is not None}
-        return data.model_dump(exclude_none=True)
+        data = cast("dict[str, Any]", handler(self))
+        return {k: v for k, v in data.items() if v is not None}
 
 
 class SavedNoteIn(BaseModel):
