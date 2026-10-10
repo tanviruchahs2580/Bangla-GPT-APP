@@ -28,6 +28,7 @@ from bangla_gpt_api.db.models import (
     Student,
     User,
 )
+from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES
 from bangla_gpt_api.schemas import (
     AdminAiQualityOut,
     AdminAuditPage,
@@ -54,7 +55,7 @@ from .deps import (
     revocation_store_unavailable,
 )
 
-router = APIRouter()
+router = APIRouter(responses=AUTH_GUARD_RESPONSES)
 
 logger = logging.getLogger(__name__)
 

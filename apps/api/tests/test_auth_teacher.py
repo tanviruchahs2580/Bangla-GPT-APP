@@ -67,22 +67,39 @@ def test_duplicate_email_rejected(client: TestClient) -> None:
 
 
 @pytest.mark.parametrize(
-    "payload",
+    "payload,expected",
     [
-        {"email": "a@b.com", "password": PASSWORD, "name": "à¦•à§‡à¦‰", "role": "student"},
-        {"email": "not-an-email", "password": PASSWORD, "name": "à¦•à§‡à¦‰", "role": "student"},
-        {
-            "email": "b@c.com",
-            "password": "short",
-            "name": "à¦•à§‡à¦‰",
-            "role": "student",
-            "guardian_consent": True,
-            "class_level": 6,
-        },
+        # STUDENT-2: "class_level/guardian_consent required for role=student" is a
+        # business rule the schema cannot express, so the API returns a documented
+        # 409 (AUD-0053), not FastAPI's validation 422.
+        (
+            {
+                "email": "a@b.com",
+                "password": PASSWORD,
+                "name": "শিক্ষার্থী",
+                "role": "student",
+            },
+            409,
+        ),
+        (
+            {"email": "not-an-email", "password": PASSWORD, "name": "শিক্ষার্থী", "role": "student"},
+            422,
+        ),
+        (
+            {
+                "email": "b@c.com",
+                "password": "short",
+                "name": "শিক্ষার্থী",
+                "role": "student",
+                "guardian_consent": True,
+                "class_level": 6,
+            },
+            422,
+        ),
     ],
 )
-def test_registration_validation_failures(client: TestClient, payload: dict) -> None:
-    assert client.post("/auth/register", json=payload).status_code == 422
+def test_registration_validation_failures(client: TestClient, payload: dict, expected: int) -> None:
+    assert client.post("/auth/register", json=payload).status_code == expected
 
 
 def test_login_failure_cases(client: TestClient) -> None:

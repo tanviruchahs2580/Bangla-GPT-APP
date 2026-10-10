@@ -46,6 +46,7 @@ from bangla_gpt_api.db.models import (
     TeacherDocument,
     User,
 )
+from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded, message
 from bangla_gpt_api.schemas import (
     ConsentReconfirmIn,
     ConsentStatusOut,
@@ -65,7 +66,7 @@ from .deps import (
     authorize_student_access,
 )
 
-router = APIRouter()
+router = APIRouter(responses=AUTH_GUARD_RESPONSES)
 
 logger = logging.getLogger(__name__)
 
@@ -272,7 +273,11 @@ def get_consent_status(student_id: int, db: DbSession, user: CurrentUser) -> Con
     )
 
 
-@router.post("/students/{student_id}/consent/reconfirm", response_model=ConsentStatusOut)
+@router.post(
+    "/students/{student_id}/consent/reconfirm",
+    response_model=ConsentStatusOut,
+    responses={**coded(400), **message(403, 404)},
+)
 def post_consent_reconfirm(
     student_id: int,
     payload: ConsentReconfirmIn,

@@ -23,9 +23,11 @@ from bangla_gpt_api.db.models import (
     User,
 )
 from bangla_gpt_api.logging_config import json_log
+from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES
 from bangla_gpt_api.schemas import (
     AiJobIn,
     AiJobOut,
+    NoteSourceRef,
     NotificationListOut,
     NotificationOut,
     SavedNoteIn,
@@ -46,7 +48,7 @@ from .deps import (
     TeacherOrAdminUser,
 )
 
-router = APIRouter()
+router = APIRouter(responses=AUTH_GUARD_RESPONSES)
 
 
 # --- teacher workload metric ------------------------------------------
@@ -68,12 +70,18 @@ logger = logging.getLogger(__name__)
 
 
 def _note_out(note: SavedNote) -> SavedNoteOut:
+    # Rows written before NoteSourceRef existed may carry unknown keys; project
+    # onto the known fields so reading them cannot break the response contract.
+    ref = None
+    if note.source_ref:
+        known = {k: v for k, v in note.source_ref.items() if k in NoteSourceRef.model_fields}
+        ref = NoteSourceRef.model_validate(known)
     return SavedNoteOut(
         id=note.id,
         title=note.title,
         body=note.body,
         source=note.source,
-        source_ref=dict(note.source_ref) if note.source_ref is not None else None,
+        source_ref=ref,
         created_at=note.created_at,
     )
 
@@ -86,7 +94,7 @@ def create_note(payload: SavedNoteIn, db: DbSession, user: CurrentUser) -> Saved
         title=title,
         body=payload.body,
         source=payload.source,
-        source_ref=payload.source_ref,
+        source_ref=payload.source_ref.model_dump(exclude_none=True) if payload.source_ref else None,
     )
     db.add(note)
     db.commit()

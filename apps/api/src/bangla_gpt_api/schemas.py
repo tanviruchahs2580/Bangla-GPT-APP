@@ -1,7 +1,14 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    model_serializer,
+    model_validator,
+)
 
 # --- explicit explanation strategies -----------------------------------
 
@@ -37,7 +44,9 @@ class AskRequest(BaseModel):
     # 'বুঝিয়ে দাও' — structured context of a wrong quiz answer.
     explain: QuizExplainContext | None = None
     # low-data mode — request a short answer to cut payload size.
-    low_data: bool = False
+    # StrictBool: the served contract declares a JSON boolean, while
+    # Pydantic's lax bool would also accept 0/1 (API-02 drift).
+    low_data: StrictBool = False
 
 
 class SourceRef(BaseModel):
@@ -101,7 +110,9 @@ class ChatSendRequest(BaseModel):
     # 'আমি বুঝিন' — force the next re-teach strategy for this turn.
     reteach: bool = False
     # low-data mode — request a short answer to cut payload size.
-    low_data: bool = False
+    # StrictBool: the served contract declares a JSON boolean, while
+    # Pydantic's lax bool would also accept 0/1 (API-02 drift).
+    low_data: StrictBool = False
     # explicit strategy -- overrides the reteach rotation for this
     # turn and persists as Conversation.last_strategy. Literal typing makes
     # an invalid value a 422 without any route code.
@@ -132,6 +143,13 @@ class FeedbackRequest(BaseModel):
     comment: str | None = Field(default=None, max_length=500)
 
 
+class FeedbackOut(BaseModel):
+    """Explicit success body for POST /feedback (AUD-0052: served contract
+    must match behaviour; the handler used to return an untyped dict)."""
+
+    status: Literal["recorded"]
+
+
 class AnalyticsEvent(BaseModel):
     """Privacy-safe product event; logged as structured JSON, never PII."""
 
@@ -149,18 +167,14 @@ class RegisterRequest(BaseModel):
     role: Literal["student", "teacher", "parent"]
     class_level: int | None = Field(default=None, ge=1, le=12)
     # Parental/guardian consent is mandatory for student accounts (minors).
+    # Both this and class_level are REQUIRED for role="student", but the
+    # coupling cannot be expressed in the OpenAPI schema; the route enforces
+    # it as a documented 409 (AUD-0053 / API-02) instead of a model-validator
+    # ValueError, which surfaced as an undocumented 422.
     guardian_consent: bool = False
     # optional guardian phone (parent role); stored encrypted when
     # PII_ENC_KEY is configured.
     phone: str | None = Field(default=None, max_length=32)
-
-    @model_validator(mode="after")
-    def _require_class_level_for_students(self) -> "RegisterRequest":
-        if self.role == "student" and self.class_level is None:
-            raise ValueError("class_level is required when role is 'student'")
-        if self.role == "student" and not self.guardian_consent:
-            raise ValueError("guardian_consent is required when role is 'student'")
-        return self
 
 
 class RegisterResponse(BaseModel):
@@ -1140,11 +1154,39 @@ class GenerateDocumentOut(TeacherDocumentOut):
 # --- saved notes ------------------------------------------------------
 
 
+class NoteSourceRef(BaseModel):
+    """Bounded pointer to what a saved note came from.
+
+    Replaces an unbounded ``dict[str, Any]`` so a client cannot persist
+    arbitrary JSON through the notes API (AUD-0052 / API-01). Only the
+    known reference keys are accepted.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    subject: str | None = Field(default=None, max_length=64)
+    chapter: str | None = Field(default=None, max_length=64)
+    class_level: int | None = Field(default=None, ge=1, le=12)
+    message_id: int | None = Field(default=None, ge=1)
+
+    @model_serializer(mode="wrap")
+    def _drop_unset(self, handler: Any) -> dict:
+        """Serialize only the keys the client actually set.
+
+        Keeps the previous wire shape (echo back exactly the reference that was
+        stored) instead of padding it with nulls.
+        """
+        data = handler(self)
+        if isinstance(data, dict):
+            return {k: v for k, v in data.items() if v is not None}
+        return data.model_dump(exclude_none=True)
+
+
 class SavedNoteIn(BaseModel):
     title: str | None = Field(default=None, max_length=200)
     body: str = Field(min_length=1, max_length=20000)
     source: Literal["tutor", "chapter", "other"] = "other"
-    source_ref: dict[str, Any] | None = None
+    source_ref: NoteSourceRef | None = None
 
 
 class SavedNoteOut(BaseModel):
@@ -1152,7 +1194,7 @@ class SavedNoteOut(BaseModel):
     title: str
     body: str
     source: str
-    source_ref: dict[str, Any] | None = None
+    source_ref: NoteSourceRef | None = None
     created_at: datetime | None = None
 
 

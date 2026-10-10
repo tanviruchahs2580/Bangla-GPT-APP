@@ -25,6 +25,7 @@ from bangla_gpt_api.db.models import (
     Student,
     User,
 )
+from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded, message
 from bangla_gpt_api.schemas import (
     ActivityDay,
     ActivitySummary,
@@ -89,7 +90,7 @@ from .deps import (
     authorize_student_access,
 )
 
-router = APIRouter()
+router = APIRouter(responses=AUTH_GUARD_RESPONSES)
 
 logger = logging.getLogger(__name__)
 
@@ -203,7 +204,7 @@ def start_quiz(
     )
 
 
-@router.post("/quizzes/{attempt_id}/submit", response_model=QuizResult)
+@router.post("/quizzes/{attempt_id}/submit", response_model=QuizResult, responses=message(404))
 def submit_quiz(
     app_ctx: Ctx, attempt_id: int, payload: QuizSubmitRequest, db: DbSession, user: CurrentUser
 ) -> QuizResult:
@@ -420,7 +421,7 @@ def _revision_out(row: RevisionItem) -> RevisionItemOut:
     )
 
 
-@router.get("/revision/due", response_model=RevisionDueOut)
+@router.get("/revision/due", response_model=RevisionDueOut, responses=coded(404))
 def get_revision_due(
     db: DbSession, user: CurrentUser, limit: Annotated[int, Query(ge=1, le=50)] = 20
 ) -> RevisionDueOut:
@@ -462,7 +463,7 @@ def review_revision_item(
 # ------------------------------------------------------------------
 
 
-@router.get("/kg/gaps", response_model=KgGapsOut)
+@router.get("/kg/gaps", response_model=KgGapsOut, responses=coded(404))
 def kg_gaps(app_ctx: Ctx, db: DbSession, user: CurrentUser) -> KgGapsOut:
     """Weak-concept gaps: missing/weak prerequisites of concepts this
     student has practiced (transitive, depth-ordered)."""

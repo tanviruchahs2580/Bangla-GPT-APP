@@ -48,9 +48,7 @@ def _root(client: TestClient) -> dict:
 def _create_invite(client: TestClient, role: str = "teacher") -> dict:
     root = _root(client)
     school = client.post("/admin/schools", json={"name": "Expiry School"}, headers=root).json()
-    res = client.post(
-        f"/schools/{school['id']}/invites", json={"role": role}, headers=root
-    )
+    res = client.post(f"/schools/{school['id']}/invites", json={"role": role}, headers=root)
     assert res.status_code == 201, res.text
     return {**res.json(), "school_id": school["id"]}
 
@@ -132,8 +130,9 @@ def test_expiry_is_strictly_after_bound(env):
     conn.execute(
         "UPDATE school_invites SET expires_at = ? WHERE id = ?",
         (
-            (datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=1))
-            .strftime("%Y-%m-%d %H:%M:%S.%f"),
+            (datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=1)).strftime(
+                "%Y-%m-%d %H:%M:%S.%f"
+            ),
             invite["id"],
         ),
     )

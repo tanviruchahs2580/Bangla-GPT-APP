@@ -46,6 +46,7 @@ from bangla_gpt_api.providers import (
 from bangla_gpt_api.ratelimit import build_limiter  # noqa: F401 (re-exported for tests)
 from bangla_gpt_api.retrieval.hybrid_index import HybridIndex  # noqa: F401 (re-exported for tests)
 from bangla_gpt_api.routers import register_routers
+from bangla_gpt_api.routers._error_contract import CodedDetail, MessageDetail
 from bangla_gpt_api.routers.deps import CONSENT_VERSION
 from bangla_gpt_api.services.circuit_breaker import CircuitBreaker  # noqa: F401
 from bangla_gpt_api.services.tutor import TutorService  # noqa: F401 (re-exported for tests)
@@ -397,6 +398,13 @@ def create_app(settings: Settings | None = None) -> object:
         docs_url="/docs" if serve_docs else None,
         redoc_url="/redoc" if serve_docs else None,
         openapi_url="/openapi.json" if serve_docs else None,
+        # The rate-limit and body-size guards are global middleware, so every
+        # operation can answer 429/503. Declaring them on the app documents
+        # them once instead of on each route (AUD-0055).
+        responses={
+            429: {"model": CodedDetail, "description": "Rate limit exceeded"},
+            503: {"model": MessageDetail, "description": "Rate limiter backend unavailable"},
+        },
     )
     _mark_public_operations(app)
     app.state.settings = settings

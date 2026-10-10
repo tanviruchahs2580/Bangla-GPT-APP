@@ -516,7 +516,7 @@ def test_feedback_and_events_endpoints(client: TestClient) -> None:
     ghost = client.post("/feedback", json={"rating": 1, "attempt_id": 99999}, headers=headers)
     assert ghost.status_code == 404
     missing_target = client.post("/feedback", json={"rating": -1}, headers=headers)
-    assert missing_target.status_code == 422
+    assert missing_target.status_code == 400  # documented business rule (AUD-0053)
     ev = client.post("/events", json={"name": "quiz_started", "props": {"n": 5}}, headers=headers)
     assert ev.status_code == 202
 

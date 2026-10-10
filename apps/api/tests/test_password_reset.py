@@ -146,7 +146,7 @@ def test_change_password_requires_current_and_rotates(client: TestClient) -> Non
         json={"current_password": PASSWORD, "new_password": PASSWORD},
         headers=headers,
     )
-    assert same.status_code == 422
+    assert same.status_code == 409  # documented business conflict (AUD-0053)
 
     changed = client.post(
         "/auth/change-password",

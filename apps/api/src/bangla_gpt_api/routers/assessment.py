@@ -29,6 +29,7 @@ from bangla_gpt_api.db.models import (
     SupportPlan,
 )
 from bangla_gpt_api.logging_config import json_log
+from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES
 from bangla_gpt_api.schemas import (
     AssignmentIn,
     AssignmentMineOut,
@@ -72,7 +73,7 @@ from .deps import (
     _tenant_school_id,
 )
 
-router = APIRouter()
+router = APIRouter(responses=AUTH_GUARD_RESPONSES)
 
 logger = logging.getLogger(__name__)
 

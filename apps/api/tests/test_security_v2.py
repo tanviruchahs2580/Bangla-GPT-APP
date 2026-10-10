@@ -264,7 +264,13 @@ def test_impersonated_token_is_short_lived_and_attributable(client: TestClient) 
     )
     body = res.json()
     assert body["expires_in_min"] == 15 and body["user_id"] == student["user_id"]
-    claims = pyjwt.decode(body["access_token"], SECRET, algorithms=["HS256"])
+    claims = pyjwt.decode(
+        body["access_token"],
+        SECRET,
+        algorithms=["HS256"],
+        audience="bangla-gpt-clients",
+        issuer="bangla-gpt-api",
+    )
     assert claims["sub"] == str(student["user_id"]) and claims["role"] == "student"
     assert claims["imp"] is True and claims["imp_by"] == admin_id
     ttl_min = (claims["exp"] - time.time()) / 60  # exp ~15 min from now (no iat claim)

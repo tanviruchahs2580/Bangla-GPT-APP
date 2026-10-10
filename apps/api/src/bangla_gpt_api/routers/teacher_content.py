@@ -27,6 +27,7 @@ from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.providers import (
     ProviderError,
 )
+from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES
 from bangla_gpt_api.schemas import (
     TEACHER_DOCUMENT_KINDS,
     TEACHER_DOCUMENT_PDF_KINDS,
@@ -80,7 +81,7 @@ from .deps import (
     TeacherOrAdminUser,
 )
 
-router = APIRouter()
+router = APIRouter(responses=AUTH_GUARD_RESPONSES)
 
 logger = logging.getLogger(__name__)
 

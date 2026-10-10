@@ -38,6 +38,7 @@ from bangla_gpt_api.db.models import (
     User,
 )
 from bangla_gpt_api.logging_config import json_log
+from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded
 from bangla_gpt_api.schemas import (
     AdminSchoolStatsOut,
     ClassRoomCreateIn,
@@ -83,7 +84,7 @@ from .deps import (
     SchoolStaffUser,
 )
 
-router = APIRouter()
+router = APIRouter(responses=AUTH_GUARD_RESPONSES)
 
 logger = logging.getLogger(__name__)
 
@@ -358,7 +359,12 @@ def school_invite_create(
     )
 
 
-@router.post("/auth/join-school", response_model=TokenResponse, status_code=201)
+@router.post(
+    "/auth/join-school",
+    response_model=TokenResponse,
+    status_code=201,
+    responses=coded(404, 409, 410),
+)
 def auth_join_school(app_ctx: Ctx, payload: SchoolJoinIn, db: DbSession) -> TokenResponse:
     """Redeem a staff invite: create the account in the school and sign in.
 

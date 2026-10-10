@@ -29,6 +29,7 @@ from bangla_gpt_api.db.models import (
     Student,
     User,
 )
+from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded, message
 from bangla_gpt_api.schemas import (
     EXPLANATION_STYLES,
     ActivityDay,
@@ -70,12 +71,12 @@ from .deps import (
     ParentUser,
 )
 
-router = APIRouter()
+router = APIRouter(responses=AUTH_GUARD_RESPONSES)
 
 logger = logging.getLogger(__name__)
 
 
-@router.post("/parents/link", status_code=201)
+@router.post("/parents/link", status_code=201, responses={**message(404, 409), **coded(410)})
 def parent_link(
     app_ctx: Ctx, payload: ParentLinkRequest, db: DbSession, parent: ParentUser
 ) -> dict:
@@ -302,7 +303,7 @@ def disable_my_memory(db: DbSession, user: CurrentUser) -> MemoryFactsOut:
     )
 
 
-@router.post("/parents/link/invite", status_code=201)
+@router.post("/parents/link/invite", status_code=201, responses={**coded(400), **message(404, 409)})
 def link_via_invite(payload: ParentInviteLinkRequest, db: DbSession, parent: ParentUser) -> dict:
     now = datetime.now(UTC).replace(tzinfo=None)
     # One code, one link: claim atomically so two parents racing the same code
