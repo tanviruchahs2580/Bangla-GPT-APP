@@ -616,7 +616,9 @@ class TutorService:
         set_current_context(context)
         route = classify(question, goal=context.goal if context is not None else None)
         set_current_route(route)
-        provider, provider_for_stream = await self._select_provider(
+        # Only the effective provider matters on this path; the route-based
+        # choice is reported by _select_provider's caller in ask().
+        _, provider_for_stream = await self._select_provider(
             context_blocks, image=image, route=route
         )
         chunks: list[str] = []
