@@ -42,19 +42,29 @@ _SPEC_RE = re.compile(r"SPEC: easy=(\d+) medium=(\d+) hard=(\d+) chapters=([^\n]
 
 
 def plan_counts(marks: int, easy_pct: int, medium_pct: int, hard_pct: int) -> dict[str, int]:
+    """Split a paper into per-difficulty question counts.
+
+    ``easy_pct`` and ``medium_pct`` are honoured directly and ``hard`` absorbs
+    the remainder, so the three always sum to ``total`` exactly (rounding
+    three independent percentages otherwise drifts by a question or two). If
+    the mix leaves a bucket empty, the largest bucket lends it one question so
+    every requested difficulty is represented - the previous version only
+    rescued ``medium`` and could return a paper with zero ``hard`` questions.
+    """
     total = max(5, min(20, marks // 2))
-    easy = round(total * easy_pct / 100)
-    hard = round(total * hard_pct / 100)
-    medium = total - easy - hard
-    if medium < 1:
-        # guarantee at least one question per requested difficulty
-        while medium < 1 and (easy > 1 or hard > 1):
-            if easy >= hard:
-                easy -= 1
-            else:
-                hard -= 1
-            medium += 1
-    return {"easy": easy, "medium": medium, "hard": hard}
+    counts = {
+        "easy": round(total * easy_pct / 100),
+        "medium": round(total * medium_pct / 100),
+    }
+    counts["hard"] = total - counts["easy"] - counts["medium"]
+    while min(counts.values()) < 1:
+        donor = max(counts, key=lambda name: counts[name])
+        if counts[donor] <= 1:
+            break
+        starved = next(name for name, value in counts.items() if value < 1)
+        counts[donor] -= 1
+        counts[starved] += 1
+    return counts
 
 
 def build_qp_prompt(

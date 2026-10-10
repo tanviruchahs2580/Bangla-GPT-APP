@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, timedelta, timezone, tzinfo
 from typing import Protocol
 
+from sqlalchemy.orm import Session
+
 try:  # preferred: real IANA zone when tzdata is available
     from zoneinfo import ZoneInfo
 
@@ -61,7 +63,7 @@ def heatmap_days(rows: list[_ActivityRow], today_iso: str, days: int) -> list[di
 
 
 def record_activity(
-    db: object,
+    db: Session,
     student_id: int,
     *,
     questions: int = 0,
@@ -76,7 +78,7 @@ def record_activity(
 
     iso = dhaka_date(when or datetime.now(UTC))
     row = (
-        db.execute(  # type: ignore[attr-defined]
+        db.execute(
             select(DailyActivity).where(
                 DailyActivity.student_id == student_id, DailyActivity.date == iso
             )
@@ -86,8 +88,8 @@ def record_activity(
     )
     if row is None:
         row = DailyActivity(student_id=student_id, date=iso, questions=0, quizzes=0, minutes=0)
-        db.add(row)  # type: ignore[attr-defined]
+        db.add(row)
     row.questions += questions
     row.quizzes += quizzes
     row.minutes += minutes
-    db.commit()  # type: ignore[attr-defined]
+    db.commit()

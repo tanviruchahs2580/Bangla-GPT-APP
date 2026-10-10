@@ -78,7 +78,7 @@ def validate_database_url(settings: Settings) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _safe_init_db(engine: object, settings: Settings) -> None:
+def _safe_init_db(engine: Engine, settings: Settings) -> None:
     """create_all tolerant of concurrent multi-worker boot (gunicorn -w N)."""
     try:
         from bangla_gpt_api.config import get_settings as _get_s
@@ -89,7 +89,7 @@ def _safe_init_db(engine: object, settings: Settings) -> None:
     except Exception:
         pass
     try:
-        init_db(engine)  # type: ignore[arg-type]
+        init_db(engine)
     except Exception as exc:
         if "already exists" not in str(exc):
             raise
@@ -215,6 +215,8 @@ def build_dependencies(
                 from bangla_gpt_api.retrieval.hybrid_index import HybridIndex as _real_hybrid
 
                 _hi_cls = _real_hybrid
+            # _hi_cls is resolved at runtime (mockable index in tests, real one in
+            # production), so its constructor signature is not statically known.
             inner: RankingIndex = _hi_cls(chunks, build_embedder(settings))  # type: ignore[arg-type]
         else:
             from bangla_gpt_api.retrieval.bm25 import BM25Index

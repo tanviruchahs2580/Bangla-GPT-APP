@@ -8,6 +8,10 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "gunicorn>=23.0",
     "uvicorn-worker>=0.2",
+    # SCS-06: pydantic and starlette are imported directly across the codebase,
+    # so they are declared rather than relied on transitively via fastapi.
+    "pydantic>=2.7",
+    "starlette>=0.37",
     "pydantic-settings>=2.4",
     "sqlalchemy>=2.0",
     "pyjwt>=2.9",
