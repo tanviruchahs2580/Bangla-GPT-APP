@@ -5,6 +5,7 @@ import unicodedata
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from typing import Any
 
 from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.metrics import PII_REDACTED_TOTAL
@@ -29,6 +30,7 @@ from bangla_gpt_api.services.circuit_breaker import (
 from bangla_gpt_api.services.context import RequestContext, set_current_context
 from bangla_gpt_api.services.pii import redact_pii
 from bangla_gpt_api.services.router import (
+    Route,
     classify,
     fast_eligible,
     set_current_route,
@@ -46,6 +48,12 @@ INSUFFICIENT_EVIDENCE_ANSWER = (
 # keeps the ``grounded`` flag honest: a "not in the textbook" reply is a
 # refusal, not a grounded answer with citations attached.
 _MODEL_REFUSAL_MARKER = "পাঠ্যবইয়ে নেই"
+
+
+# Sentinel yielded by _stream_with_fallback when no provider can serve the
+# stream. A real delta is always a non-empty str, so identity comparison is
+# safe and the value can never collide with provider output.
+_OUTAGE = object()
 
 
 def _model_refused(answer: str) -> bool:
@@ -298,6 +306,196 @@ class TutorService:
             for hit in hits
         ]
 
+    async def _stream_with_fallback(
+        self,
+        context_blocks: str,
+        *,
+        provider: LLMProvider,
+        image: dict | None,
+        fallback: LLMProvider | None,
+    ) -> AsyncIterator[Any]:
+        """Yield provider deltas, switching to the fallback if the primary fails.
+
+        Yields ``_OUTAGE`` (a sentinel, never a real delta) when the circuit is
+        open and no fallback exists, so the caller can emit the outage notice
+        once. Partial primary output is discarded before a fallback restart:
+        concatenating a truncated half-answer with the restart reads as garbled
+        text to the student.
+        """
+        image_kwargs = {"image": image} if image is not None else {}
+        try:
+            async with CircuitBreakerMiddleware(self._breaker) if self._breaker else _null_ctx():
+                async for delta in provider.stream(
+                    context_blocks, system=SYSTEM_PROMPT, **image_kwargs
+                ):
+                    yield delta
+            return
+        except ProviderError:
+            if self._router is None or fallback is None or not self._router.fallback_active:
+                raise
+            logger.warning(
+                "tutor_stream: primary provider failed during stream, switching to fallback",
+                exc_info=True,
+            )
+        except CircuitOpenError:
+            if fallback is None:
+                logger.warning("tutor_stream: circuit breaker OPEN during stream, no fallback")
+                yield _OUTAGE
+                return
+            logger.warning(
+                "tutor_stream: circuit breaker OPEN during stream, using fallback provider"
+            )
+
+        async for delta in fallback.stream(context_blocks, system=SYSTEM_PROMPT, **image_kwargs):
+            yield delta
+
+    async def _select_provider(
+        self,
+        context_blocks: str,
+        *,
+        image: dict | None,
+        route: Route,
+    ) -> tuple[LLMProvider, LLMProvider]:
+        """Pick the provider for a call and let the circuit-breaker router
+        override it only when the primary is unhealthy.
+
+        Returns ``(route_based, effective)``: the route-based choice is what the
+        ai_call log line reports, the effective one is what actually runs.
+        """
+        fast = self.fast_provider
+        base: LLMProvider = (
+            fast
+            if fast is not None and fast_eligible(route, fast) and image is None
+            else self.provider
+        )
+        if self._router is None:
+            return base, base
+        chosen = await self._router.select_provider(
+            context_blocks, system=SYSTEM_PROMPT, image=image
+        )
+        # Preserve the route-based fast/main choice unless the router says the
+        # primary is unhealthy.
+        return base, (base if chosen is self.provider else chosen)
+
+    def _prompt_blocks(
+        self,
+        hits: list,
+        question: str,
+        history: list[dict[str, str]] | None,
+        *,
+        extra_instruction: str | None,
+        context: RequestContext | None,
+        low_data: bool,
+    ) -> str:
+        """Build the evidence prompt with the trusted app text prepended.
+
+        Order matters: extra instruction, then education context, then the
+        untrusted evidence block. Both ask() and ask_stream() must use exactly
+        this, so it lives in one place.
+        """
+        blocks = build_evidence_prompt(hits, question, history)
+        if low_data:
+            extra_instruction = (
+                f"{extra_instruction}\n{SHORT_ANSWER_INSTRUCTION}"
+                if extra_instruction
+                else SHORT_ANSWER_INSTRUCTION
+            )
+        if extra_instruction:
+            # app-level teaching instruction (re-teach strategy swap) —
+            # trusted app text, prepended ahead of the untrusted evidence block.
+            blocks = f"{extra_instruction}\n\n{blocks}"
+        if context is not None:
+            # education context (trusted app text, same placement rule).
+            blocks = f"{context.render_block()}\n\n{blocks}"
+        return blocks
+
+    @staticmethod
+    def _refusal(answer: str, reason: str) -> AskResponse:
+        """A refusal response, with its confidence derived the same way
+        everywhere. Every refusal path (safety screen, coverage gate, model
+        refusal) funnels through here so they cannot drift apart."""
+        from bangla_gpt_api.services.safety import answer_confidence
+
+        return AskResponse(
+            answer=answer,
+            grounded=False,
+            refused_reason=reason,
+            confidence=answer_confidence(False, reason, []),
+        )
+
+    async def _generate(
+        self,
+        context_blocks: str,
+        *,
+        image: dict | None,
+        provider: LLMProvider,
+    ) -> str:
+        """Run the provider, applying the circuit breaker and the fallback
+        chain. Raises ProviderError when nothing can serve the request."""
+        fallback = self._fallback
+        image_kwargs = {"image": image} if image is not None else {}
+        try:
+            async with CircuitBreakerMiddleware(self._breaker) if self._breaker else _null_ctx():
+                return await provider.generate(context_blocks, system=SYSTEM_PROMPT, **image_kwargs)
+        except ProviderError:
+            # Circuit breaker opened or provider error
+            if self._router is not None and fallback is not None and self._router.fallback_active:
+                logger.warning("tutor: primary provider failed, using fallback", exc_info=True)
+                return await fallback.generate(context_blocks, system=SYSTEM_PROMPT, **image_kwargs)
+            raise
+        except CircuitOpenError:
+            # Circuit is open — try fallback
+            if fallback is not None:
+                logger.warning("tutor: circuit breaker OPEN, using fallback provider")
+                return await fallback.generate(context_blocks, system=SYSTEM_PROMPT, **image_kwargs)
+            raise ProviderError(
+                f"AI provider unavailable (circuit OPEN for {provider.name}; no fallback configured)"
+            ) from None
+
+    def _assemble(
+        self,
+        answer: str,
+        hits: list,
+        *,
+        route: str,
+        provider: LLMProvider,
+        context_blocks: str,
+        started: float,
+    ) -> AskResponse:
+        """Verify the citation, attach sources, and derive confidence.
+
+        A model refusal is handled here rather than at each call site so the
+        grounded/sources/confidence triple is always internally consistent."""
+        from bangla_gpt_api.services.safety import answer_confidence, verify_citation
+
+        if self._router is not None:
+            self._router.record_result(True)
+        json_log(
+            logger,
+            logging.INFO,
+            "ai_call",
+            route=getattr(route, "value", route),
+            model=getattr(provider, "name", "unknown"),
+            latency_ms=int((time.perf_counter() - started) * 1000),
+            prompt_chars=len(context_blocks),
+            answer_chars=len(answer),
+        )
+        citation_ok = verify_citation(answer, " ".join(h.chunk.text for h in hits))
+        refs = self._sources(hits)
+        refused = _model_refused(answer)
+        return AskResponse(
+            answer=answer,
+            grounded=not refused,
+            sources=[] if refused else refs,
+            citation_verified=None if refused else citation_ok,
+            refused_reason="model_refused" if refused else None,
+            confidence=answer_confidence(
+                not refused,
+                "model_refused" if refused else None,
+                [] if refused else [float(getattr(r, "score", 0.0)) for r in refs],
+            ),
+        )
+
     async def ask(
         self,
         question: str,
@@ -329,130 +527,36 @@ class TutorService:
         unsafe = _screen_safety(question)
         if unsafe:
             refusal_copy, reason = unsafe
-            from bangla_gpt_api.services.safety import answer_confidence
-
-            return AskResponse(
-                answer=refusal_copy,
-                grounded=False,
-                refused_reason=reason,
-                confidence=answer_confidence(False, reason, []),
-            )
+            return self._refusal(refusal_copy, reason)
 
         retrieval_query = search_query or question
         hits = self._retrieve(retrieval_query, class_level, subject, chapter)
         if not self._gate(retrieval_query, hits):
-            from bangla_gpt_api.services.safety import answer_confidence
-
-            return AskResponse(
-                answer=INSUFFICIENT_EVIDENCE_ANSWER,
-                grounded=False,
-                refused_reason="insufficient_evidence",
-                confidence=answer_confidence(False, "insufficient_evidence", []),
-            )
-        context_blocks = build_evidence_prompt(hits, question, history)
-        if low_data:
-            # low-data mode asks for a short (1-2 sentence) answer.
-            extra_instruction = (
-                f"{extra_instruction}\n{SHORT_ANSWER_INSTRUCTION}"
-                if extra_instruction
-                else SHORT_ANSWER_INSTRUCTION
-            )
-        if extra_instruction:
-            # app-level teaching instruction (re-teach strategy swap) —
-            # trusted app text, prepended ahead of the untrusted evidence block.
-            context_blocks = f"{extra_instruction}\n\n{context_blocks}"
-        if context is not None:
-            # education context (trusted app text, same placement rule).
-            context_blocks = f"{context.render_block()}\n\n{context_blocks}"
+            return self._refusal(INSUFFICIENT_EVIDENCE_ANSWER, "insufficient_evidence")
+        context_blocks = self._prompt_blocks(
+            hits,
+            question,
+            history,
+            extra_instruction=extra_instruction,
+            context=context,
+            low_data=low_data,
+        )
         set_current_context(context)
         route = classify(question, goal=context.goal if context is not None else None)
         set_current_route(route)
-        fast = self.fast_provider
-        provider: LLMProvider = (
-            fast
-            if fast is not None and fast_eligible(route, fast) and image is None
-            else self.provider
+        provider, provider_for_call = await self._select_provider(
+            context_blocks, image=image, route=route
         )
         started = time.perf_counter()
-        # Select provider (with fallback if circuit is open)
-        # Start from the route-based selection (fast for SIMPLE, main otherwise)
-        provider_for_call: LLMProvider = provider
-        if self._router is not None:
-            # Circuit breaker router only overrides when primary is unhealthy;
-            # otherwise preserves the route-based fast/main selection.
-            cb_provider = await self._router.select_provider(
-                context_blocks, system=SYSTEM_PROMPT, image=image
-            )
-            provider_for_call = provider if cb_provider is self.provider else cb_provider
 
-        # Attempt with circuit breaker, fall back to fallback provider if failed
-        fallback = self._fallback
-        try:
-            async with CircuitBreakerMiddleware(self._breaker) if self._breaker else _null_ctx():
-                answer = await provider_for_call.generate(
-                    context_blocks,
-                    system=SYSTEM_PROMPT,
-                    **({"image": image} if image is not None else {}),
-                )
-        except ProviderError:
-            # Circuit breaker opened or provider error
-            if self._router is not None and fallback is not None and self._router.fallback_active:
-                logger.warning(
-                    "tutor: primary provider failed, using fallback",
-                    exc_info=True,
-                )
-                answer = await fallback.generate(
-                    context_blocks,
-                    system=SYSTEM_PROMPT,
-                    **({"image": image} if image is not None else {}),
-                )
-            else:
-                raise
-        except CircuitOpenError:
-            # Circuit is open — try fallback
-            if self._fallback is not None:
-                logger.warning(
-                    "tutor: circuit breaker OPEN, using fallback provider",
-                )
-                answer = await self._fallback.generate(
-                    context_blocks,
-                    system=SYSTEM_PROMPT,
-                    **({"image": image} if image is not None else {}),
-                )
-            else:
-                raise ProviderError(
-                    f"AI provider unavailable (circuit OPEN for {provider_for_call.name}; no fallback configured)"
-                ) from None
-
-        # Record result for circuit breaker
-        if self._router is not None:
-            self._router.record_result(True)
-        json_log(
-            logger,
-            logging.INFO,
-            "ai_call",
-            route=route.value,
-            model=getattr(provider, "name", "unknown"),
-            latency_ms=int((time.perf_counter() - started) * 1000),
-            prompt_chars=len(context_blocks),
-            answer_chars=len(answer),
-        )
-        from bangla_gpt_api.services.safety import answer_confidence, verify_citation
-
-        citation_ok = verify_citation(answer, " ".join(h.chunk.text for h in hits))
-        refs = self._sources(hits)
-        refused = _model_refused(answer)
-        return AskResponse(
-            answer=answer,
-            grounded=not refused,
-            sources=[] if refused else refs,
-            citation_verified=None if refused else citation_ok,
-            refused_reason="model_refused" if refused else None,
-            confidence=answer_confidence(
-                not refused,
-                "model_refused" if refused else None,
-                [] if refused else [float(getattr(r, "score", 0.0)) for r in refs],
-            ),
+        answer = await self._generate(context_blocks, image=image, provider=provider_for_call)
+        return self._assemble(
+            answer,
+            hits,
+            route=route,
+            provider=provider,
+            context_blocks=context_blocks,
+            started=started,
         )
 
     async def ask_stream(
@@ -501,97 +605,44 @@ class TutorService:
             )
             return
 
-        context_blocks = build_evidence_prompt(hits, question, history)
-        if low_data:
-            # low-data mode asks for a short (1-2 sentence) answer.
-            extra_instruction = (
-                f"{extra_instruction}\n{SHORT_ANSWER_INSTRUCTION}"
-                if extra_instruction
-                else SHORT_ANSWER_INSTRUCTION
-            )
-        if extra_instruction:
-            # re-teach strategy swap (see:meth:`ask`).
-            context_blocks = f"{extra_instruction}\n\n{context_blocks}"
-        if context is not None:
-            # education context header (see:meth:`ask`).
-            context_blocks = f"{context.render_block()}\n\n{context_blocks}"
+        context_blocks = self._prompt_blocks(
+            hits,
+            question,
+            history,
+            extra_instruction=extra_instruction,
+            context=context,
+            low_data=low_data,
+        )
         set_current_context(context)
         route = classify(question, goal=context.goal if context is not None else None)
         set_current_route(route)
-        fast = self.fast_provider
-        provider: LLMProvider = (
-            fast
-            if fast is not None and fast_eligible(route, fast) and image is None
-            else self.provider
+        provider, provider_for_stream = await self._select_provider(
+            context_blocks, image=image, route=route
         )
         chunks: list[str] = []
         answer_is_grounded = True
         started = time.perf_counter()
-
-        # Select provider (with fallback if circuit is open)
-        # Start from the route-based selection (fast for SIMPLE, main otherwise)
-        provider_for_stream: LLMProvider = provider
         fallback_stream = self._fallback
-        if self._router is not None:
-            cb_provider = await self._router.select_provider(
-                context_blocks, system=SYSTEM_PROMPT, image=image
-            )
-            provider_for_stream = provider if cb_provider is self.provider else cb_provider
 
-        try:
-            async with CircuitBreakerMiddleware(self._breaker) if self._breaker else _null_ctx():
-                async for delta in provider_for_stream.stream(
-                    context_blocks,
-                    system=SYSTEM_PROMPT,
-                    **({"image": image} if image is not None else {}),
-                ):
-                    chunks.append(delta)
-                    yield StreamEvent(type="token", text=delta)
-        except ProviderError:
-            # Circuit breaker opened or provider error — try fallback
-            if (
-                self._router is not None
-                and fallback_stream is not None
-                and self._router.fallback_active
-            ):
-                logger.warning(
-                    "tutor_stream: primary provider failed during stream, switching to fallback",
-                    exc_info=True,
-                )
-                # Drop the partial primary output — concatenating a truncated
-                # half-answer with the fallback restart would read as garbled
-                # text to the student.
-                chunks = []
-                async for delta in fallback_stream.stream(
-                    context_blocks,
-                    system=SYSTEM_PROMPT,
-                    **({"image": image} if image is not None else {}),
-                ):
-                    chunks.append(delta)
-                    yield StreamEvent(type="token", text=delta)
-            else:
-                raise
-        except CircuitOpenError:
-            # Circuit is open — stream from fallback
-            if self._fallback is not None:
-                logger.warning(
-                    "tutor_stream: circuit breaker OPEN during stream, using fallback provider",
-                )
-                chunks = []
-                async for delta in self._fallback.stream(
-                    context_blocks,
-                    system=SYSTEM_PROMPT,
-                    **({"image": image} if image is not None else {}),
-                ):
-                    chunks.append(delta)
-                    yield StreamEvent(type="token", text=delta)
-            else:
-                # Record the outage text once: yield the token AND seed
-                # ``chunks`` so the empty-chunks guard below does not emit
-                # the same notice twice.
-                chunks = [_UNAVAILABLE_ANSWER]
-                answer_is_grounded = False
-                yield StreamEvent(type="token", text=_UNAVAILABLE_ANSWER)
+        outage = False
+        async for delta in self._stream_with_fallback(
+            context_blocks,
+            provider=provider_for_stream,
+            image=image,
+            fallback=fallback_stream,
+        ):
+            if delta is _OUTAGE:
+                # No fallback could serve the stream; the caller emits the
+                # outage notice exactly once.
+                outage = True
+                break
+            chunks.append(delta)
+            yield StreamEvent(type="token", text=delta)
+
+        if outage:
+            answer_is_grounded = False
+            chunks = [_UNAVAILABLE_ANSWER]
+            yield StreamEvent(type="token", text=_UNAVAILABLE_ANSWER)
 
         if not chunks:
             # No chunks were yielded at all — provide a fallback response
