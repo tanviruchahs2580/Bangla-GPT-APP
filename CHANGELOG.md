@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(auth): hash passwords with Argon2id and upgrade legacy hashes on login
 - fix(auth): redeem single-use codes with a compare-and-set, not a read-then-write
 - fix(auth): unblock login on web and APK (MFA step-up, unauth resend, proxy/APK errors)
+- fix(ci): exempt changelog-regenerating commits by changed paths, not subject text
 - fix(ci): pin every action to a commit SHA and scope registry permission
 - fix(ci): serialise release and deploy runs per git ref
 - fix(db): reconcile ORM/migration drift so alembic check passes
@@ -96,6 +97,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Tests
 
+- test(api): cover school admin fallbacks and tenant guards
 - test(school): cover the aggregation routes TST-04 flagged as unexercised
 - test(tenancy): cover school dashboard routes across two tenants
 - test(web): drop remaining plan-tracker tags from suite titles
