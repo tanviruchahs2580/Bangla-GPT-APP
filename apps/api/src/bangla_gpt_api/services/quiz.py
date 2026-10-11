@@ -97,7 +97,7 @@ class ClozeQuizGenerator:
         num: int = 5,
         seed: int = 0,
     ) -> list[GeneratedQuestion]:
-        rng = random.Random(seed)
+        rng = random.Random(seed)  # noqa: S311 - shuffling/selecting, not a security-relevant random choice
         doc_indices = [
             i
             for i, chunk in enumerate(self.chunks)
@@ -147,7 +147,7 @@ class ClozeQuizGenerator:
     ) -> GeneratedQuestion:
         chunk = self.chunks[doc_index]
         options = [term, *distractors]
-        random.Random(f"{chunk.id}|{term}").shuffle(options)
+        random.Random(f"{chunk.id}|{term}").shuffle(options)  # noqa: S311 - shuffling/selecting, not a security-relevant random choice
         return GeneratedQuestion(
             id=hashlib.sha256(f"{chunk.id}|{term}".encode(), usedforsecurity=False).hexdigest()[
                 :10
@@ -225,7 +225,10 @@ class ClozeQuizGenerator:
             if self.chunks[j].meta.chapter == chapter:
                 same_chapter |= terms
         lo, hi = max(3, len(term) - 4), len(term) + 4
-        length_matched = lambda pool: {t for t in pool if lo <= len(t) <= hi}  # noqa: E731
+
+        def length_matched(pool: set[str]) -> set[str]:
+            return {t for t in pool if lo <= len(t) <= hi}
+
         candidates = (
             length_matched(same_chapter) or same_chapter or length_matched(all_terms) or all_terms
         )

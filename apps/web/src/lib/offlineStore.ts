@@ -38,7 +38,12 @@ function openDb(): Promise<IDBDatabase> {
       }
     };
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onerror = () =>
+      reject(
+        req.error instanceof Error
+          ? req.error
+          : new Error(`IndexedDB request failed: ${String(req.error)}`),
+      );
   });
 }
 
@@ -55,7 +60,11 @@ async function tx<T>(
       db.close();
     };
     req.onerror = () => {
-      reject(req.error);
+      reject(
+        req.error instanceof Error
+          ? req.error
+          : new Error(`IndexedDB transaction failed: ${String(req.error)}`),
+      );
       db.close();
     };
   });

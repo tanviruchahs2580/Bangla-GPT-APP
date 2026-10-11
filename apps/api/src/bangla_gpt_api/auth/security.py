@@ -1,27 +1,53 @@
 import hashlib
 import hmac
-import secrets
 import time
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import jwt
+from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHashError, VerificationError
 
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.models import User
 
-_PBKDF2_ITERATIONS = 200_000
+# OWASP Password Storage Cheat Sheet (fetched 2026-10-09): "Argon2id with a
+# minimum configuration of 19 MiB of memory, an iteration count of 2, and 1
+# degree of parallelism." PBKDF2-HMAC-SHA256, which this codebase used before,
+# is only the fallback recommendation at 600,000 iterations; the older 200,000
+# iterations were below even that floor.
+_ARGON2 = PasswordHasher(time_cost=2, memory_cost=19 * 1024, parallelism=1)
 
 
 def hash_password(password: str) -> str:
-    salt = secrets.token_hex(16)
-    digest = hashlib.pbkdf2_hmac(
-        "sha256", password.encode(), bytes.fromhex(salt), _PBKDF2_ITERATIONS
-    ).hex()
-    return f"pbkdf2_sha256${_PBKDF2_ITERATIONS}${salt}${digest}"
+    """Hash a password with Argon2id at the OWASP parameters."""
+    return _ARGON2.hash(password)
 
 
 def verify_password(password: str, stored: str) -> bool:
+    """Verify a password against an Argon2id or legacy pbkdf2_sha256 hash."""
+    if stored.startswith("$argon2"):
+        try:
+            _ARGON2.verify(stored, password)
+        except (VerificationError, InvalidHashError):
+            return False
+        return True
+    return _verify_legacy_pbkdf2(password, stored)
+
+
+def needs_rehash(stored: str) -> bool:
+    """True when a *successfully verified* hash should be upgraded in place.
+
+    Any legacy hash needs upgrading; an Argon2id hash needs it when it was
+    produced with weaker parameters than the current policy. Callers must only
+    invoke this after ``verify_password`` returned True.
+    """
+    if not stored.startswith("$argon2"):
+        return True
+    return _ARGON2.check_needs_rehash(stored)
+
+
+def _verify_legacy_pbkdf2(password: str, stored: str) -> bool:
     try:
         algorithm, iterations, salt, expected = stored.split("$")
     except ValueError:
@@ -59,6 +85,8 @@ def create_access_token(
     payload: dict[str, object] = {
         "sub": str(user.id),
         "role": user.role,
+        "iss": settings.jwt_issuer,
+        "aud": settings.jwt_audience,
         "exp": datetime.now(UTC) + expires_delta,
         "iat": issued_at if issued_at is not None else int(time.time()),
         "jti": jti or uuid4().hex,  # unique id per token for revocation
@@ -69,5 +97,16 @@ def create_access_token(
 
 
 def decode_token(token: str, *, settings: Settings) -> dict:
-    """Raises jwt.PyJWTError subclasses on invalid/expired tokens."""
-    return jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
+    """Raises jwt.PyJWTError subclasses on invalid/expired tokens.
+
+    ``iss`` and ``aud`` are required: a token without them (including every
+    token minted before SEC-03) is refused, which forces a one-time re-login
+    rather than silently accepting unbound tokens.
+    """
+    return jwt.decode(
+        token,
+        settings.jwt_secret,
+        algorithms=["HS256"],
+        issuer=settings.jwt_issuer,
+        audience=settings.jwt_audience,
+    )

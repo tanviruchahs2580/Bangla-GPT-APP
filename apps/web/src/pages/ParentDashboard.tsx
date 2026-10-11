@@ -1,3 +1,4 @@
+import { asText } from "../lib/text";
 import { useCallback, useEffect, useState } from "react";
 import { get, getParentReport, post } from "../api";
 import type { ParentReport } from "../api";
@@ -11,7 +12,7 @@ function suggestionSentence(report: ParentReport): string {
   const key = report.suggestion_code as Parameters<typeof t>[0];
   const vars: Record<string, string | number> = {};
   for (const [k, v] of Object.entries(report.suggestion_params ?? {})) {
-    vars[k] = Array.isArray(v) ? v.join(", ") : String(v ?? "");
+    vars[k] = Array.isArray(v) ? v.join(", ") : asText(v);
   }
   try {
     const text = t(key, vars);

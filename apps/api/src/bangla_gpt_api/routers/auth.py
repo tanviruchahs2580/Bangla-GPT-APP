@@ -20,8 +20,10 @@ from bangla_gpt_api.auth.security import (
     create_access_token,
     decode_token,
     hash_password,
+    needs_rehash,
     verify_password,
 )
+from bangla_gpt_api.auth.single_use import claim_single_use, fetch_by_hash
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.models import (
     EmailVerification,
@@ -32,6 +34,11 @@ from bangla_gpt_api.db.models import (
     User,
 )
 from bangla_gpt_api.logging_config import json_log
+from bangla_gpt_api.routers._error_contract import (
+    AUTH_GUARD_RESPONSES,
+    coded,
+    message,
+)
 from bangla_gpt_api.schemas import (
     ChangePasswordRequest,
     ForgotPasswordRequest,
@@ -63,10 +70,33 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.post("/auth/register", response_model=RegisterResponse, status_code=201)
+@router.post(
+    "/auth/register", response_model=RegisterResponse, status_code=201, responses=coded(409)
+)
 def register(
     app_ctx: Ctx, request: Request, payload: RegisterRequest, db: DbSession
 ) -> RegisterResponse:
+    # Student accounts need a class level and recorded guardian consent. The
+    # schema cannot express "required only when role is student", so the rule
+    # lives here as a documented 409 (conflict with the account's required
+    # state) rather than an undocumented 422 from a model validator (AUD-0053).
+    if payload.role == "student":
+        if payload.class_level is None:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "class_level_required",
+                    "message": "class_level is required when role is 'student'",
+                },
+            )
+        if not payload.guardian_consent:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "guardian_consent_required",
+                    "message": "guardian_consent is required when role is 'student'",
+                },
+            )
     email = payload.email.strip().lower()
     existing = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if existing is not None:
@@ -152,18 +182,30 @@ def verify_email(app_ctx: Ctx, payload: VerifyEmailRequest, db: DbSession) -> To
     On success the account is marked verified and a session is issued.
     """
     now = datetime.now(UTC).replace(tzinfo=None)
-    row = db.execute(
-        select(EmailVerification).where(
-            EmailVerification.token_hash == hashlib.sha256(payload.token.encode()).hexdigest(),
-            EmailVerification.used_at.is_(None),
-        )
-    ).scalar_one_or_none()
-    if row is None or row.expires_at < now:
+    # Compare-and-set, not check-then-act: two concurrent requests carrying one
+    # verification code must not both redeem it. AUD-0034.
+    if not claim_single_use(
+        db,
+        EmailVerification,
+        hash_column=EmailVerification.token_hash,
+        hash_value=hashlib.sha256(payload.token.encode()).hexdigest(),
+        now=now,
+    ):
         raise HTTPException(
             status_code=400,
             detail={"code": "invalid_token", "message": "Invalid or expired verification code"},
         )
-    row.used_at = now
+    row = fetch_by_hash(
+        db,
+        EmailVerification,
+        hash_column=EmailVerification.token_hash,
+        hash_value=hashlib.sha256(payload.token.encode()).hexdigest(),
+    )
+    if row is None:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "invalid_token", "message": "Invalid or expired verification code"},
+        )
     user = db.get(User, row.user_id)
     if user is None:
         raise HTTPException(
@@ -237,7 +279,14 @@ def login(app_ctx: Ctx, response: Response, payload: LoginRequest, db: DbSession
         mfa_token = create_access_token(
             user, settings=app_ctx.settings, minutes=5, extra_claims={"mfa": True}
         )
-        return TokenResponse(access_token=mfa_token, token_type="mfa")
+        return TokenResponse(access_token=mfa_token, token_type="mfa")  # noqa: S106 - a token type string, not a credential
+    # SEC-02: transparently upgrade the stored hash on a successful login. This
+    # is where legacy pbkdf2_sha256 hashes (and Argon2id hashes made with older
+    # parameters) become Argon2id at the current policy, so no bulk reset is
+    # needed. The plaintext is known to be correct here.
+    if needs_rehash(user.password_hash):
+        user.password_hash = hash_password(payload.password)
+        db.commit()
     token = create_access_token(user, settings=app_ctx.settings)
     return TokenResponse(access_token=token, must_change_password=user.must_change_password)
 
@@ -306,15 +355,19 @@ def forgot_password(app_ctx: Ctx, payload: ForgotPasswordRequest, db: DbSession)
 @router.post("/auth/reset", response_model=TokenResponse)
 def reset_password(app_ctx: Ctx, payload: ResetPasswordRequest, db: DbSession) -> TokenResponse:
     now = datetime.now(UTC).replace(tzinfo=None)
-    row = db.execute(
-        select(PasswordReset).where(
-            PasswordReset.token_hash == _hash_reset_token(payload.token),
-            PasswordReset.used_at.is_(None),
-        )
-    ).scalar_one_or_none()
-    if row is None or row.expires_at < now:
+    # Compare-and-set so a reset token cannot be redeemed twice under
+    # concurrency: both a second password write and a token-epoch rotation
+    # would otherwise run off the same redeemed token. AUD-0034.
+    token_hash = _hash_reset_token(payload.token)
+    if not claim_single_use(
+        db, PasswordReset, hash_column=PasswordReset.token_hash, hash_value=token_hash, now=now
+    ):
         raise HTTPException(status_code=400, detail="Invalid or expired reset token")
-    row.used_at = now
+    row = fetch_by_hash(
+        db, PasswordReset, hash_column=PasswordReset.token_hash, hash_value=token_hash
+    )
+    if row is None:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
     user = db.get(User, row.user_id)
     if user is None:
         raise HTTPException(status_code=400, detail="Invalid or expired reset token")
@@ -329,14 +382,24 @@ def reset_password(app_ctx: Ctx, payload: ResetPasswordRequest, db: DbSession) -
     return TokenResponse(access_token=create_access_token(user, settings=app_ctx.settings))
 
 
-@router.post("/auth/change-password", response_model=TokenResponse)
+@router.post(
+    "/auth/change-password",
+    response_model=TokenResponse,
+    responses={**AUTH_GUARD_RESPONSES, **message(400), **coded(409)},
+)
 def change_password(
     app_ctx: Ctx, payload: ChangePasswordRequest, db: DbSession, user: CurrentUser
 ) -> TokenResponse:
     if not verify_password(payload.current_password, user.password_hash):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     if payload.current_password == payload.new_password:
-        raise HTTPException(status_code=422, detail="New password must differ from the current one")
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "password_unchanged",
+                "message": "New password must differ from the current one",
+            },
+        )
     user.password_hash = hash_password(payload.new_password)
     user.must_change_password = False
     # F-05: rotate the token epoch (see /auth/reset for the full contract).
@@ -350,13 +413,13 @@ def change_password(
 # and stores it (= enabled). Presence of users.totp_secret IS the enabled flag.
 
 
-@router.post("/auth/mfa/enroll", response_model=MfaEnrollOut)
+@router.post("/auth/mfa/enroll", response_model=MfaEnrollOut, responses=AUTH_GUARD_RESPONSES)
 def mfa_enroll(app_ctx: Ctx, user: CurrentUser) -> MfaEnrollOut:
     secret = new_secret()
     return MfaEnrollOut(secret=secret, otpauth_uri=otpauth_uri(secret, user.email))
 
 
-@router.post("/auth/mfa/verify", response_model=dict)
+@router.post("/auth/mfa/verify", response_model=dict, responses=AUTH_GUARD_RESPONSES)
 def mfa_verify(app_ctx: Ctx, payload: MfaVerifyIn, db: DbSession, user: CurrentUser) -> dict:
     if user.totp_secret:
         raise HTTPException(status_code=409, detail="MFA is already enabled")
@@ -370,7 +433,11 @@ def mfa_verify(app_ctx: Ctx, payload: MfaVerifyIn, db: DbSession, user: CurrentU
     return {"enabled": True}
 
 
-@router.post("/auth/mfa/disable", response_model=dict)
+@router.post(
+    "/auth/mfa/disable",
+    response_model=dict,
+    responses={**AUTH_GUARD_RESPONSES, **message(409)},
+)
 def mfa_disable(app_ctx: Ctx, payload: MfaDisableIn, db: DbSession, user: CurrentUser) -> dict:
     if not user.totp_secret:
         raise HTTPException(status_code=409, detail="MFA is not enabled")

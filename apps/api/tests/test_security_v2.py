@@ -7,6 +7,7 @@ supporting guarantees each mechanism needs to be real: ciphertext at rest
 audit view, and the impersonation guards.
 """
 
+import os
 import sqlite3
 import time
 
@@ -263,7 +264,13 @@ def test_impersonated_token_is_short_lived_and_attributable(client: TestClient) 
     )
     body = res.json()
     assert body["expires_in_min"] == 15 and body["user_id"] == student["user_id"]
-    claims = pyjwt.decode(body["access_token"], SECRET, algorithms=["HS256"])
+    claims = pyjwt.decode(
+        body["access_token"],
+        SECRET,
+        algorithms=["HS256"],
+        audience="bangla-gpt-clients",
+        issuer="bangla-gpt-api",
+    )
     assert claims["sub"] == str(student["user_id"]) and claims["role"] == "student"
     assert claims["imp"] is True and claims["imp_by"] == admin_id
     ttl_min = (claims["exp"] - time.time()) / 60  # exp ~15 min from now (no iat claim)
@@ -321,6 +328,10 @@ def _dump_db(path) -> str:
 
 
 def _prod_settings(**overrides) -> Settings:
+    # AUD-0025/0026/0027: this fixture is deliberately single-process and
+    # uses the mock provider, both of which production now refuses.
+    os.environ["ALLOW_MOCK_LLM_IN_PRODUCTION"] = "1"
+    os.environ["WEB_CONCURRENCY"] = "1"
     base = {
         "env": "production",
         "database_url": "sqlite:////data/app.db",

@@ -17,7 +17,7 @@ module, so the API image does not need the worker extras.
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, ClassVar
 
 from arq import cron
 from arq.connections import RedisSettings
@@ -59,8 +59,10 @@ async def job_retention_sweep(ctx: dict[str, Any]) -> dict[str, Any]:
 class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
     on_startup = staticmethod(startup)
-    functions = [job_weekly_digest, job_nightly_rollup, job_retention_sweep]
-    cron_jobs = [
+    # ClassVar: arq reads these as class attributes; annotating them keeps the
+    # mutable defaults from being treated as instance state (RUF012).
+    functions: ClassVar[list] = [job_weekly_digest, job_nightly_rollup, job_retention_sweep]
+    cron_jobs: ClassVar[list] = [
         cron(job_weekly_digest, weekday=DIGEST_WEEKDAY, hour=DIGEST_HOUR_UTC, minute=5),
         cron(job_retention_sweep, hour=RETENTION_HOUR_UTC, minute=30),
         cron(job_nightly_rollup, hour=NIGHTLY_HOUR_UTC, minute=10),

@@ -126,12 +126,13 @@ def _seed_family(conn: sqlite3.Connection, parent_id: int) -> None:
         0
     ]
     seq = 0
-    for chapter, ok in (("Algebra", 0), ("Algebra", 0), ("Algebra", 1), ("Geometry", 1)):
-        seq += 1
+    for question_seq, (chapter, ok) in enumerate(
+        (("Algebra", 0), ("Algebra", 0), ("Algebra", 1), ("Geometry", 1)), start=seq + 1
+    ):
         conn.execute(
             "INSERT INTO answer_log (attempt_id, seq, question_text, chosen, correct_index,"
             " is_correct, chapter, book) VALUES (?, ?, 'q', 0, 0, ?, ?, 'b')",
-            (att, seq, int(ok), chapter),
+            (att, question_seq, int(ok), chapter),
         )
     # old graded attempt OUTSIDE the week -- must not be counted
     conn.execute(

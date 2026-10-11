@@ -29,7 +29,7 @@ def configure_sentry(settings: object) -> None:
     if not dsn:
         return
     try:
-        import sentry_sdk  # type: ignore[import-untyped]
+        import sentry_sdk
 
         sentry_sdk.init(
             dsn=dsn,

@@ -15,6 +15,7 @@ from sqlalchemy import select
 from bangla_gpt_api.metrics import (
     REGISTRY,
 )
+from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES
 from bangla_gpt_api.schemas import (
     StatusComponent,
     StatusOut,
@@ -115,7 +116,7 @@ async def metrics(app_ctx: Ctx, request: Request) -> Response:
 
 
 # authenticated internal endpoint with version/env detail (health is now minimal)
-@router.get("/admin/system/info", response_model=dict)
+@router.get("/admin/system/info", responses=AUTH_GUARD_RESPONSES, response_model=dict)
 def system_info(app_ctx: Ctx, admin: AdminUser) -> dict:
     return {
         "status": "ok",

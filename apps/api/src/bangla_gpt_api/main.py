@@ -18,7 +18,8 @@ All these modules are imported from:mod:`bangla_gpt_api.initialize`.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+import os
+from typing import TYPE_CHECKING, Any
 
 from bangla_gpt_api import caching, initialize
 from bangla_gpt_api.config import DEFAULT_JWT_SECRET, Settings, get_settings
@@ -45,6 +46,7 @@ from bangla_gpt_api.providers import (
 from bangla_gpt_api.ratelimit import build_limiter  # noqa: F401 (re-exported for tests)
 from bangla_gpt_api.retrieval.hybrid_index import HybridIndex  # noqa: F401 (re-exported for tests)
 from bangla_gpt_api.routers import register_routers
+from bangla_gpt_api.routers._error_contract import CodedDetail, MessageDetail
 from bangla_gpt_api.routers.deps import CONSENT_VERSION
 from bangla_gpt_api.services.circuit_breaker import CircuitBreaker  # noqa: F401
 from bangla_gpt_api.services.tutor import TutorService  # noqa: F401 (re-exported for tests)
@@ -144,7 +146,34 @@ def _validate_database(settings: Settings) -> list[str]:
             "DATABASE_URL must be a persistent store in production "
             "(e.g. sqlite:////data/app.db or PostgreSQL)"
         ]
+    # A file-backed SQLite database is accepted above, but it is not safe
+    # behind multiple workers: SQLite serialises writers, so two gunicorn
+    # workers contend on the write lock and concurrent writes fail or block.
+    # compose defaults ENV=production with sqlite:////data/app.db, so this
+    # combination was reachable by simply running the documented stack.
+    if url.startswith("sqlite") and _worker_count(settings) > 1:
+        return [
+            "DATABASE_URL is SQLite while WEB_CONCURRENCY="
+            f"{_worker_count(settings)}; SQLite serialises writers and is not safe "
+            "with multiple workers. Use PostgreSQL, or run a single worker."
+        ]
     return []
+
+
+def _worker_count(settings: Settings) -> int:
+    """Worker count gunicorn would start (mirrors the container CMD).
+
+    Fails safe: anything that is not a positive integer -- unset, empty,
+    unparseable, zero or negative -- is reported as the container default of 2.
+    Clamping to 1 instead would silently switch the SQLite and rate-limit
+    guards OFF, which is the opposite of what an invalid value should do.
+    """
+    raw = os.environ.get("WEB_CONCURRENCY", "").strip()
+    try:
+        n = int(raw)
+    except ValueError:
+        return 2
+    return n if n >= 1 else 2
 
 
 def _validate_pii(settings: Settings) -> list[str]:
@@ -167,17 +196,47 @@ def _validate_metrics(settings: Settings) -> list[str]:
 
 
 def _validate_rate_limit_redis(settings: Settings) -> list[str]:
-    """Redis rate-limit backend requires REDIS_URL."""
-    if settings.rate_limit_backend == "redis" and not settings.redis_url:
+    """Rate limiting must work across workers, so memory is not enough."""
+    backend = settings.rate_limit_backend.strip().lower()
+    if backend == "redis" and not settings.redis_url:
         return ["RATE_LIMIT_BACKEND=redis requires REDIS_URL"]
+    # With multiple workers each process keeps its own counters, so the
+    # configured limit is effectively multiplied by the worker count: the
+    # default 10/minute login limit becomes 20/minute behind two workers.
+    if backend == "memory" and _worker_count(settings) > 1:
+        return [
+            "RATE_LIMIT_BACKEND=memory is per-process and therefore per-worker; "
+            f"with WEB_CONCURRENCY={_worker_count(settings)} the effective limit is "
+            "multiplied by the worker count. Use RATE_LIMIT_BACKEND=redis with "
+            "REDIS_URL in production."
+        ]
     return []
 
 
 def _validate_llm_provider(settings: Settings) -> list[str]:
-    """Gemini provider requires GEMINI_API_KEY in production."""
-    if settings.llm_provider.strip().lower() == "gemini" and not settings.gemini_api_key:
+    """The mock provider must never serve production traffic."""
+    provider = settings.llm_provider.strip().lower()
+    if provider == "gemini" and not settings.gemini_api_key:
         return ["LLM_PROVIDER=gemini requires GEMINI_API_KEY in production"]
+    # compose defaults ENV=production and LLM_PROVIDER=mock, so the documented
+    # stack booted in production mode serving fabricated tutor answers with no
+    # error. LLM-01 requires the mock provider to be impossible in production.
+    if provider == "mock" and not _mock_allowed(settings):
+        return [
+            "LLM_PROVIDER=mock must not be used in production: it serves "
+            "fabricated answers with no error. Set LLM_PROVIDER=gemini with "
+            "GEMINI_API_KEY, or set ALLOW_MOCK_LLM_IN_PRODUCTION=true for a "
+            "deliberate offline demo."
+        ]
     return []
+
+
+def _mock_allowed(settings: Settings) -> bool:
+    return os.environ.get("ALLOW_MOCK_LLM_IN_PRODUCTION", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -237,6 +296,77 @@ def _load_fallback_chain(
 # ---------------------------------------------------------------------------
 
 
+# Operations reachable without a session. Listed here, once, so the OpenAPI
+# document records a deliberate decision rather than leaving the reader to
+# guess. Without it the spec simply omits `security`, which makes an automated
+# authorization matrix unable to tell "deliberately public" apart from
+# "authentication forgotten" -- which is how a real bypass hides.
+#
+# Keep in step with tests/test_openapi_auth_matrix.py, which fails if an
+# operation here stops existing or if a new operation appears unlisted.
+PUBLIC_OPERATIONS: frozenset[tuple[str, str]] = frozenset(
+    {
+        # Account entry points: these are public by definition.
+        ("post", "/auth/login"),
+        ("post", "/auth/register"),
+        ("post", "/auth/forgot"),
+        ("post", "/auth/reset"),
+        ("post", "/auth/verify-email"),
+        ("post", "/auth/join-school"),
+        ("post", "/auth/mfa/challenge"),
+        # Optional auth: the route reads a bearer token when one is supplied
+        # and works without it, so FastAPI emits a security requirement that
+        # anonymous callers do not actually satisfy. Declared public here so the
+        # contract matches the behaviour; the handler still uses the token when
+        # present. Abuse of this endpoint is bounded by the per-IP rate limit.
+        ("post", "/auth/resend-verification"),
+        # Operational probes. /status is a deliberate public status page and
+        # returns booleans only (see routers/system.py).
+        ("get", "/health"),
+        ("get", "/live"),
+        ("get", "/ready"),
+        ("get", "/status"),
+    }
+)
+
+
+def _mark_public_operations(app: object) -> None:
+    """Stamp `security: []` on the known-public operations.
+
+    FastAPI omits `security` entirely when a route has no security dependency
+    and the document has no global `security`, so a deliberate decision is
+    invisible in the contract.
+    """
+    original = app.openapi  # type: ignore[attr-defined]
+
+    def openapi() -> dict[str, Any]:
+        spec: dict[str, Any] = original()
+        for path, item in spec.get("paths", {}).items():
+            for method, op in item.items():
+                if (
+                    method.lower() in _HTTP_METHODS
+                    and (
+                        method.lower(),
+                        _normalise_path(path),
+                    )
+                    in PUBLIC_OPERATIONS
+                ):
+                    op["security"] = []
+        return spec
+
+    # Replacing the attribute on the FastAPI instance is the documented way to
+    # customise the schema; mypy types `app` as a bare object here.
+    app.openapi = openapi  # type: ignore[attr-defined]
+
+
+_HTTP_METHODS = frozenset({"get", "post", "put", "patch", "delete", "head", "options"})
+
+
+def _normalise_path(path: str) -> str:
+    """Collapse trailing slashes so /status/ and /status compare equal."""
+    return path.rstrip("/") or path
+
+
 def create_app(settings: Settings | None = None) -> object:
     """Create the FastAPI application.
 
@@ -256,7 +386,29 @@ def create_app(settings: Settings | None = None) -> object:
     # together with the rest of the middleware order).
     from fastapi import FastAPI
 
-    app = FastAPI(title=settings.app_name, version=settings.version)
+    # SEC-15: the interactive reference and the machine-readable schema are
+    # development surfaces. FastAPI enables all three by default, so without
+    # this they are served in production too -- verified: a production-config
+    # container answered /openapi.json with 158477 bytes of the full route
+    # schema. They are also the only paths exempt from the nonce CSP in
+    # middleware.SecurityHeadersMiddleware. Disabled in production, kept in
+    # development where they are the whole point.
+    serve_docs = not settings.is_production
+    app = FastAPI(
+        title=settings.app_name,
+        version=settings.version,
+        docs_url="/docs" if serve_docs else None,
+        redoc_url="/redoc" if serve_docs else None,
+        openapi_url="/openapi.json" if serve_docs else None,
+        # The rate-limit and body-size guards are global middleware, so every
+        # operation can answer 429/503. Declaring them on the app documents
+        # them once instead of on each route (AUD-0055).
+        responses={
+            429: {"model": CodedDetail, "description": "Rate limit exceeded"},
+            503: {"model": MessageDetail, "description": "Rate limiter backend unavailable"},
+        },
+    )
+    _mark_public_operations(app)
     app.state.settings = settings
 
     # Phase 4: Build providers (so tests that monkeypatch main.get_provider work)
@@ -317,7 +469,7 @@ if __name__ == "__main__":
 
     uvicorn.run(
         "bangla_gpt_api.main:app",
-        host="0.0.0.0",
+        host="0.0.0.0",  # noqa: S104 - a container listens on all interfaces by design; the proxy is the boundary
         port=8000,
         reload=True,
         log_level="debug",

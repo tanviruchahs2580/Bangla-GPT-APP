@@ -11,9 +11,9 @@ __all__ = [
     "LLMProvider",
     "ProviderError",
     "ProviderNotConfigured",
-    "get_provider",
-    "get_fast_provider",
     "get_fallback_provider",
+    "get_fast_provider",
+    "get_provider",
 ]
 
 

@@ -10,9 +10,16 @@ on:
       - "v*.*.*"
   workflow_dispatch:
 
+# Queue releases per ref instead of racing them. Two `v*` pushes in quick
+# succession previously ran build-push and deploy concurrently against the same
+# production host with no ordering guarantee. cancel-in-progress is false on
+# purpose: a half-finished deploy must finish, not be replaced mid-flight.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
-  packages: write
 
 env:
   REGISTRY: ghcr.io
@@ -21,12 +28,27 @@ jobs:
   build-push:
     name: Build & push images to GHCR
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # packages:write is needed only to push to GHCR, so it is scoped to this
+    # job rather than granted workflow-wide. The deploy job below runs SSH
+    # commands on the host and has no reason to hold a registry token.
+    # contents:write is for creating the GitHub Release; attestations/id-token
+    # are for the build provenance and SBOM that buildx attaches (SCS-10).
+    permissions:
+      contents: write
+      packages: write
+      attestations: write
+      id-token: write
     outputs:
       tag: ${{ steps.meta.outputs.version }}
       api_image: ${{ steps.images.outputs.api }}
       web_image: ${{ steps.images.outputs.web }}
+      api_digest: ${{ steps.api.outputs.digest }}
+      web_digest: ${{ steps.web.outputs.digest }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Compute image names (GHCR requires lowercase)
         id: images
@@ -35,10 +57,10 @@ jobs:
           echo "web=ghcr.io/${GITHUB_REPOSITORY,,}/web" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -48,51 +70,162 @@ jobs:
         id: meta
         run: echo "version=${GITHUB_REF_NAME:-manual-$(date +%s)}" >> "$GITHUB_OUTPUT"
 
+      # No `:latest` tag. The deploy job and docker-compose both address images
+      # by the release tag (${API_TAG}/${WEB_TAG}), so a floating tag bought
+      # nothing and cost reproducibility: two releases could silently overwrite
+      # what "latest" points at, and a rollback would not move it. Version tags
+      # are immutable, and the digest is recorded below and in the job summary.
+      #
+      # `sbom: true` attaches an SBOM to the image and `provenance: mode=max`
+      # records how it was built; both need the attestations/id-token
+      # permissions granted above.
       - name: Build & push API image
-        uses: docker/build-push-action@v6
+        id: api
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           push: true
-          tags: |
-            ${{ steps.images.outputs.api }}:${{ steps.meta.outputs.version }}
-            ${{ steps.images.outputs.api }}:latest
+          tags: ${{ steps.images.outputs.api }}:${{ steps.meta.outputs.version }}
           cache-from: type=gha,scope=api
           cache-to: type=gha,scope=api,mode=max
+          sbom: true
+          provenance: mode=max
 
       - name: Build & push Web image
-        uses: docker/build-push-action@v6
+        id: web
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: ./apps/web
           build-args: |
             VITE_API_BASE=/api
           push: true
-          tags: |
-            ${{ steps.images.outputs.web }}:${{ steps.meta.outputs.version }}
-            ${{ steps.images.outputs.web }}:latest
+          tags: ${{ steps.images.outputs.web }}:${{ steps.meta.outputs.version }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,scope=web,mode=max
+          sbom: true
+          provenance: mode=max
+
+      # The pushed digest is the only stable identity of what shipped; record it
+      # in the job summary so an operator running a host months later can map
+      # the running image back to this release.
+      - name: Record image digests
+        env:
+          API_IMAGE: ${{ steps.images.outputs.api }}
+          WEB_IMAGE: ${{ steps.images.outputs.web }}
+          API_DIGEST: ${{ steps.api.outputs.digest }}
+          WEB_DIGEST: ${{ steps.web.outputs.digest }}
+        run: |
+          {
+            echo "### Published digests"
+            echo
+            echo "| Image | Digest |"
+            echo "| --- | --- |"
+            echo "| $API_IMAGE | \`$API_DIGEST\` |"
+            echo "| $WEB_IMAGE | \`$WEB_DIGEST\` |"
+            echo
+            echo "SBOM and build provenance are attached to both images."
+            echo "Verify with: \`gh attestation verify oci://$API_IMAGE@$API_DIGEST --repo \${{ github.repository }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create GitHub Release
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.meta.outputs.version }}
+          API_IMAGE: ${{ steps.images.outputs.api }}
+          WEB_IMAGE: ${{ steps.images.outputs.web }}
+          API_DIGEST: ${{ steps.api.outputs.digest }}
+          WEB_DIGEST: ${{ steps.web.outputs.digest }}
+        run: |
+          set -euo pipefail
+          # Re-running a tag build should be a no-op for the release record,
+          # not an outage: never overwrite an existing release.
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists; leaving it untouched."
+            exit 0
+          fi
+
+          body="$(mktemp)"
+          # Generated notes first; if the API cannot produce them (first release
+          # has no previous tag), fall back to a minimal body rather than failing.
+          if gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+               -f tag_name="$RELEASE_TAG" --jq .body > "$body" 2>/dev/null; then
+            :
+          else
+            echo "See commit history for $RELEASE_TAG." > "$body"
+          fi
+
+          {
+            echo
+            echo "### Image digests"
+            echo
+            echo '```'
+            echo "$API_IMAGE@$API_DIGEST"
+            echo "$WEB_IMAGE@$WEB_DIGEST"
+            echo '```'
+            echo
+            echo "Each image carries an SBOM and build provenance attestation."
+          } >> "$body"
+
+          gh release create "$RELEASE_TAG" --title "$RELEASE_TAG" --notes-file "$body"
 
   deploy:
     name: Deploy to production host (SSH)
     needs: build-push
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # Skips cleanly when deployment secrets are not configured yet.
     if: ${{ vars.DEPLOY_ENABLED == 'true' }}
     environment: production
     steps:
+      # Host-key verification is only real if the fingerprint is present.
+      # drone-ssh skips verification when `fingerprint` is empty, so an unset
+      # secret would silently turn the control off rather than fail loudly --
+      # this step refuses to deploy in that case (CI-21).
+      - name: Require a pinned deploy-host key
+        env:
+          DEPLOY_HOST_FINGERPRINT: ${{ secrets.DEPLOY_HOST_FINGERPRINT }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DEPLOY_HOST_FINGERPRINT:-}" ]; then
+            echo "::error::DEPLOY_HOST_FINGERPRINT is not set. Without it the deploy"
+            echo "::error::would skip SSH host-key verification. See docs/runbook.md"
+            echo "::error::('Deploying a release') for how to obtain and store it."
+            exit 1
+          fi
+          # A fingerprint is "SHA256:<base64>"; anything else means the secret
+          # holds the wrong thing and verification would never match.
+          case "$DEPLOY_HOST_FINGERPRINT" in
+            SHA256:*) ;;
+            *)
+              echo "::error::DEPLOY_HOST_FINGERPRINT must look like SHA256:xxxx (got '${DEPLOY_HOST_FINGERPRINT}')"
+              exit 1
+              ;;
+          esac
+          echo "Deploy-host fingerprint present; host-key verification enabled."
+
       - name: Deploy release over SSH
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        env:
+          # Passed as an environment variable, never interpolated into the
+          # script text: the tag comes from GITHUB_REF_NAME and expanding it
+          # inside the remote script is a template-injection path.
+          RELEASE_TAG: ${{ needs.build-push.outputs.tag }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          # Pinned host public key. drone-ssh compares the server's key against
+          # this value and refuses the connection on mismatch or change.
+          fingerprint: ${{ secrets.DEPLOY_HOST_FINGERPRINT }}
+          envs: RELEASE_TAG
           script: |
             set -e
             cd /opt/bangla-gpt
             git fetch --tags --force origin
-            git checkout ${{ needs.build-push.outputs.tag }}
-            export API_TAG=${{ needs.build-push.outputs.tag }}
-            export WEB_TAG=${{ needs.build-push.outputs.tag }}
+            git checkout "$RELEASE_TAG"
+            export API_TAG="$RELEASE_TAG"
+            export WEB_TAG="$RELEASE_TAG"
 
             docker compose --profile core pull || true
 
@@ -110,7 +243,7 @@ jobs:
 
             for i in $(seq 1 30); do
               if curl -fsS http://127.0.0.1:8000/health | grep -q '"status":"ok"'; then
-                echo "Release ${{ needs.build-push.outputs.tag }} healthy"
+                echo "Release $RELEASE_TAG healthy"
                 exit 0
               fi
               sleep 2

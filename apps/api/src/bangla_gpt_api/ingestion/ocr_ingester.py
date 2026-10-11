@@ -68,7 +68,7 @@ def ocr_image_to_text(
             psm,
         ]
         if runner is None:
-            subprocess.run(command, check=True, capture_output=True)
+            subprocess.run(command, check=True, capture_output=True)  # noqa: S603 - fixed argv with no shell, binary path is a module constant
         else:
             # Test seam: materialise the expected output file.
             out_base.with_suffix(".txt").write_text("[fixture]", encoding="utf-8")

@@ -11,6 +11,8 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, timedelta
 from typing import TYPE_CHECKING
 
+from sqlalchemy.orm import Session
+
 from bangla_gpt_api.services.activity import dhaka_date
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -51,7 +53,7 @@ def add_days(iso: str, days: int) -> str:
 
 
 def record_quiz_result(
-    db: object,
+    db: Session,
     student_id: int,
     review: list[ReviewItem],
     subject: str | None,
@@ -72,7 +74,7 @@ def record_quiz_result(
     for item in review:
         quality = 5 if item.is_correct else 1
         row = (
-            db.execute(  # type: ignore[attr-defined]
+            db.execute(
                 select(RevisionItem).where(
                     RevisionItem.student_id == student_id,
                     RevisionItem.question == item.question_text,
@@ -95,7 +97,7 @@ def record_quiz_result(
                 ease_factor=DEFAULT_EASE,
                 due_date=today,
             )
-            db.add(row)  # type: ignore[attr-defined]
+            db.add(row)
         else:
             row.options_json = list(item.options)
             row.correct_index = item.correct_index
@@ -103,17 +105,17 @@ def record_quiz_result(
         reps, interval, ease = next_schedule(row.reps, row.interval_days, row.ease_factor, quality)
         row.reps, row.interval_days, row.ease_factor = reps, interval, ease
         row.due_date = today if quality < 3 else add_days(today, interval)
-    db.commit()  # type: ignore[attr-defined]
+    db.commit()
 
 
-def due_items(db: object, student_id: int, today: str, limit: int = 20) -> list:
+def due_items(db: Session, student_id: int, today: str, limit: int = 20) -> list:
     """Due-today revision items, oldest due first."""
     from sqlalchemy import select
 
     from bangla_gpt_api.db.models import RevisionItem
 
     return list(
-        db.execute(  # type: ignore[attr-defined]
+        db.execute(
             select(RevisionItem)
             .where(RevisionItem.student_id == student_id, RevisionItem.due_date <= today)
             .order_by(RevisionItem.due_date, RevisionItem.id)
@@ -124,13 +126,13 @@ def due_items(db: object, student_id: int, today: str, limit: int = 20) -> list:
     )
 
 
-def due_count(db: object, student_id: int, today: str) -> int:
+def due_count(db: Session, student_id: int, today: str) -> int:
     from sqlalchemy import func, select
 
     from bangla_gpt_api.db.models import RevisionItem
 
     return int(
-        db.execute(  # type: ignore[attr-defined]
+        db.execute(
             select(func.count())
             .select_from(RevisionItem)
             .where(RevisionItem.student_id == student_id, RevisionItem.due_date <= today)

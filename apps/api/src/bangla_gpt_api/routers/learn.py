@@ -6,7 +6,7 @@ Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 
 import logging
 from collections import defaultdict
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any, cast
 from urllib.parse import quote
 
@@ -25,6 +25,7 @@ from bangla_gpt_api.db.models import (
     Student,
     User,
 )
+from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded, message
 from bangla_gpt_api.schemas import (
     ActivityDay,
     ActivitySummary,
@@ -89,7 +90,7 @@ from .deps import (
     authorize_student_access,
 )
 
-router = APIRouter()
+router = APIRouter(responses=AUTH_GUARD_RESPONSES)
 
 logger = logging.getLogger(__name__)
 
@@ -203,7 +204,7 @@ def start_quiz(
     )
 
 
-@router.post("/quizzes/{attempt_id}/submit", response_model=QuizResult)
+@router.post("/quizzes/{attempt_id}/submit", response_model=QuizResult, responses=message(404))
 def submit_quiz(
     app_ctx: Ctx, attempt_id: int, payload: QuizSubmitRequest, db: DbSession, user: CurrentUser
 ) -> QuizResult:
@@ -389,10 +390,8 @@ def get_activity(
         .all()
     )
     window = heatmap_days(list(rows), today, days)
-    date_axis = [
-        (datetime.strptime(today, "%Y-%m-%d") - timedelta(days=i)).date().isoformat()
-        for i in range(days - 1, -1, -1)
-    ]
+    anchor = date.fromisoformat(today)
+    date_axis = [(anchor - timedelta(days=i)).isoformat() for i in range(days - 1, -1, -1)]
     active = {r.date for r in rows if (r.questions or r.quizzes or r.minutes)}
     return ActivitySummary(
         streak=streak_days(active, today),
@@ -420,7 +419,7 @@ def _revision_out(row: RevisionItem) -> RevisionItemOut:
     )
 
 
-@router.get("/revision/due", response_model=RevisionDueOut)
+@router.get("/revision/due", response_model=RevisionDueOut, responses=coded(404))
 def get_revision_due(
     db: DbSession, user: CurrentUser, limit: Annotated[int, Query(ge=1, le=50)] = 20
 ) -> RevisionDueOut:
@@ -462,7 +461,7 @@ def review_revision_item(
 # ------------------------------------------------------------------
 
 
-@router.get("/kg/gaps", response_model=KgGapsOut)
+@router.get("/kg/gaps", response_model=KgGapsOut, responses=coded(404))
 def kg_gaps(app_ctx: Ctx, db: DbSession, user: CurrentUser) -> KgGapsOut:
     """Weak-concept gaps: missing/weak prerequisites of concepts this
     student has practiced (transitive, depth-ordered)."""
@@ -690,7 +689,12 @@ def _build_dashboard_summary(app_ctx: Ctx, db: Session, user: User, today: str) 
     # Continue: last graded attempt's first question chapter
     continue_learning = None
     if graded:
-        last = sorted(graded, key=lambda a: a.created_at or datetime.min, reverse=True)[0]
+        # Attempts with no created_at sort last. The sentinel is naive on
+        # purpose: created_at is stored as naive UTC throughout this codebase
+        # (SQLite has no timezone type), so an aware sentinel would raise
+        # TypeError on comparison instead of sorting.
+        never = datetime.min
+        last = sorted(graded, key=lambda a: a.created_at or never, reverse=True)[0]
         if last.quiz_json:
             first = (
                 last.quiz_json[0] if isinstance(last.quiz_json, list) and last.quiz_json else None

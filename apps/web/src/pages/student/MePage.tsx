@@ -1,3 +1,4 @@
+import { asText } from "../../lib/text";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -60,8 +61,8 @@ function memoryFactRows(
     if (Array.isArray(v) && v.length === 0) continue;
     const label = MEMORY_FACT_LABEL[k] ?? k;
     const value = Array.isArray(v)
-      ? v.map((item) => tSubject(String(item))).join(", ")
-      : String(v);
+      ? v.map((item) => tSubject(asText(item))).join(", ")
+      : asText(v);
     rows.push({ key: t(label), value });
   }
   return rows;
@@ -113,8 +114,8 @@ export default function MePage() {
 
   useEffect(() => {
     if (!prefs) return;
-    setStyle(String(prefs.learning_prefs.explanation_style ?? "standard"));
-    setFocus(String(prefs.learning_prefs.subject_focus ?? ""));
+    setStyle(asText(prefs.learning_prefs.explanation_style ?? "standard"));
+    setFocus(asText(prefs.learning_prefs.subject_focus ?? ""));
     setMemory(prefs.memory_enabled);
   }, [prefs]);
 
@@ -202,7 +203,7 @@ export default function MePage() {
     try {
       await del("/users/me");
       signOut();
-      navigate("/login");
+      void navigate("/login");
     } catch (e) {
       setError(
         friendlyError((e as { rawDetail?: unknown }).rawDetail)?.text ??

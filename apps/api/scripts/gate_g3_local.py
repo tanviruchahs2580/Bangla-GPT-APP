@@ -164,7 +164,7 @@ def main():
     assert len(risk_names) == 16
     assert "G3 S01" in risk_names and "G3 S16" in risk_names
     assert ov["at_risk"][0]["avg_score_pct"] == 35.0  # weakest first
-    down = [r for r in ov["at_risk"] if r["name"] == "G3 S13"][0]
+    down = next(r for r in ov["at_risk"] if r["name"] == "G3 S13")
     assert down["trend"] == "down" and down["attempts_graded"] == 4
     # school admin sees their own school only (no school_id param needed)
     assert ov["school_id"] == school["id"]

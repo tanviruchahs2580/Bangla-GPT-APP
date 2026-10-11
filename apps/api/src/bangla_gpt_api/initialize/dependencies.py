@@ -78,7 +78,7 @@ def validate_database_url(settings: Settings) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _safe_init_db(engine: object, settings: Settings) -> None:
+def _safe_init_db(engine: Engine, settings: Settings) -> None:
     """create_all tolerant of concurrent multi-worker boot (gunicorn -w N)."""
     try:
         from bangla_gpt_api.config import get_settings as _get_s
@@ -86,10 +86,12 @@ def _safe_init_db(engine: object, settings: Settings) -> None:
         s = settings or _get_s()
         if s.is_production and s.database_url.strip().startswith("postgresql"):
             return
-    except Exception:
-        pass
+    except Exception as exc:
+        # Unresolvable settings must not stop table creation; the schema that
+        # results is valid either way, so record why the check was skipped.
+        logging.getLogger(__name__).debug("settings check skipped: %s", exc)
     try:
-        init_db(engine)  # type: ignore[arg-type]
+        init_db(engine)
     except Exception as exc:
         if "already exists" not in str(exc):
             raise
@@ -215,7 +217,9 @@ def build_dependencies(
                 from bangla_gpt_api.retrieval.hybrid_index import HybridIndex as _real_hybrid
 
                 _hi_cls = _real_hybrid
-            inner: RankingIndex = _hi_cls(chunks, build_embedder(settings))  # type: ignore[arg-type]
+            # _hi_cls is resolved at runtime (mockable index in tests, real one in
+            # production), so its constructor signature is not statically known.
+            inner: RankingIndex = _hi_cls(chunks, build_embedder(settings))
         else:
             from bangla_gpt_api.retrieval.bm25 import BM25Index
 

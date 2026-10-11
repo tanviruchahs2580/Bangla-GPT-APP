@@ -101,7 +101,7 @@ def test_status_reports_degraded_when_cache_fails(pair) -> None:
     app.state.cache.ping = lambda: False
     body = client.get("/status").json()
     assert body["status"] == "degraded"
-    cache = [c for c in body["components"] if c["name"] == "cache"][0]
+    cache = next(c for c in body["components"] if c["name"] == "cache")
     assert cache["ok"] is False
 
 

@@ -516,7 +516,7 @@ def test_feedback_and_events_endpoints(client: TestClient) -> None:
     ghost = client.post("/feedback", json={"rating": 1, "attempt_id": 99999}, headers=headers)
     assert ghost.status_code == 404
     missing_target = client.post("/feedback", json={"rating": -1}, headers=headers)
-    assert missing_target.status_code == 422
+    assert missing_target.status_code == 400  # documented business rule (AUD-0053)
     ev = client.post("/events", json={"name": "quiz_started", "props": {"n": 5}}, headers=headers)
     assert ev.status_code == 202
 
@@ -554,11 +554,9 @@ def test_production_boot_rejects_inmemory_database(tmp_path) -> None:
     """V8 regression: ENV=production + sqlite:// must refuse to start."""
     import pytest as _pytest
 
-    from bangla_gpt_api.config import Settings as _S
-
     with _pytest.raises(RuntimeError, match="persistent"):
         create_app(
-            _S(
+            Settings(
                 env="production",
                 database_url="sqlite://",
                 jwt_secret="x" * 40,

@@ -130,21 +130,22 @@ export default function TeacherHomePage() {
       <Card title={t("thQuickCreate")}>
         <div className="create-grid create-grid-compact" role="list">
           {QUICK.map(({ kind, label, icon: Icon }) => (
-            <button
-              key={kind}
-              role="listitem"
-              className="create-tile"
-              onClick={() => navigate(`/teacher/create?kind=${kind}`)}
-            >
-              <span className="quick-icon" aria-hidden>
-                <Icon size={20} />
-              </span>
-              <span className="create-tile-body">
-                <span className="quick-title quick-title-block">
-                  {t(label as Parameters<typeof t>[0])}
+            <div role="listitem">
+              <button
+                key={kind}
+                className="create-tile"
+                onClick={() => navigate(`/teacher/create?kind=${kind}`)}
+              >
+                <span className="quick-icon" aria-hidden>
+                  <Icon size={20} />
                 </span>
-              </span>
-            </button>
+                <span className="create-tile-body">
+                  <span className="quick-title quick-title-block">
+                    {t(label as Parameters<typeof t>[0])}
+                  </span>
+                </span>
+              </button>
+            </div>
           ))}
         </div>
       </Card>

@@ -29,6 +29,7 @@ from bangla_gpt_api.db.models import (
     SupportPlan,
 )
 from bangla_gpt_api.logging_config import json_log
+from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES
 from bangla_gpt_api.schemas import (
     AssignmentIn,
     AssignmentMineOut,
@@ -72,7 +73,7 @@ from .deps import (
     _tenant_school_id,
 )
 
-router = APIRouter()
+router = APIRouter(responses=AUTH_GUARD_RESPONSES)
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +141,7 @@ def teacher_shorttest_create(
         subject=canonical_subject(payload.subject),
         chapter=payload.chapter,
         num=payload.num_questions,
-        seed=random.randrange(1_000_000_000),
+        seed=random.randrange(1_000_000_000),  # noqa: S311 - shuffling/selecting, not a security-relevant random choice
     )
     if not questions:
         raise HTTPException(
@@ -410,12 +411,14 @@ def teacher_curriculum_coverage(db: DbSession, teacher: TeacherOrAdminUser) -> C
     # v1 rule: one classroom per student, so this map is unambiguous.
     room_of: dict[int, int] = {}
     if room_ids:
-        for cid, sid in db.execute(
-            select(ClassStudent.classroom_id, ClassStudent.student_id).where(
-                ClassStudent.classroom_id.in_(room_ids)
-            )
-        ).all():
-            room_of[sid] = cid
+        room_of = {
+            sid: cid
+            for cid, sid in db.execute(
+                select(ClassStudent.classroom_id, ClassStudent.student_id).where(
+                    ClassStudent.classroom_id.in_(room_ids)
+                )
+            ).all()
+        }
 
     # quiz activity aggregated per (classroom, subject)
     attempts: dict[tuple[int, str], int] = defaultdict(int)
@@ -626,7 +629,7 @@ def teacher_assignment_create(
         subject=canonical_subject(payload.subject),
         chapter=payload.chapter,
         num=payload.num_questions,
-        seed=random.randrange(1_000_000_000),
+        seed=random.randrange(1_000_000_000),  # noqa: S311 - shuffling/selecting, not a security-relevant random choice
     )
     if not questions:
         raise HTTPException(

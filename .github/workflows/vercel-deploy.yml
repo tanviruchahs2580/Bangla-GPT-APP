@@ -24,21 +24,33 @@ concurrency:
 jobs:
   deploy:
     name: Deploy web to Vercel (production)
-    # CI must be green (workflow_run path); manual dispatch always allowed.
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    # workflow_run executes with this repository's secrets, so the trigger is
+    # only trusted when the completed run is unambiguously a successful push
+    # to main in THIS repository. Without these four checks the workflow could
+    # be induced to check out and deploy an arbitrary commit while holding the
+    # production Vercel token; the branch filter alone does not prove the run
+    # came from the base repository. Manual dispatch always allowed.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
 
@@ -49,7 +61,9 @@ jobs:
             "$VERCEL_PROJECT_ID" "$VERCEL_ORG_ID" > .vercel/project.json
 
       - name: Deploy (production)
-        run: npx vercel --prod --yes --token="$VERCEL_TOKEN"
+        # Version-pinned: the previous `npx vercel` resolved whatever was
+        # latest at run time and executed it with a production token.
+        run: npx --yes vercel@63.1.0 --prod --yes --token="$VERCEL_TOKEN"
 
       - name: Post-deploy smoke check (production alias, /login)
         run: |

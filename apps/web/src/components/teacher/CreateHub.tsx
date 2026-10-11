@@ -1,3 +1,4 @@
+import { asText } from "../../lib/text";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { del, downloadTeacherDocumentPdf, get, post } from "../../api";
 import type {
@@ -59,12 +60,10 @@ function PayloadView({ payload }: { payload: Record<string, unknown> }) {
             const item = q as Record<string, unknown>;
             return (
               <li key={i}>
-                <span>
-                  {String(item.question ?? item.text ?? JSON.stringify(item))}
-                </span>
+                <span>{asText(item.question ?? item.text ?? item)}</span>
                 {item.answer != null && (
                   <span className="muted text-sm block">
-                    {String(item.answer)}
+                    {asText(item.answer)}
                   </span>
                 )}
               </li>

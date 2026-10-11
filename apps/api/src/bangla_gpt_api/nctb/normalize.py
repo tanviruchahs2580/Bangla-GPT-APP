@@ -44,9 +44,7 @@ def looks_like_garbage(text: str) -> bool:
     printable_letters = sum(1 for c in text if c.isalpha())
     if total and bad / total > 0.05:
         return True
-    if printable_letters == 0 and any(c.isprintable() for c in text):
-        return True
-    return False
+    return bool(printable_letters == 0 and any(c.isprintable() for c in text))
 
 
 BENGALI_CLASS_WORDS = {

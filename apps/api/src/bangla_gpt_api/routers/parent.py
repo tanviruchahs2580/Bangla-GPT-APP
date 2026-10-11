@@ -7,7 +7,7 @@ Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 import logging
 import secrets
 from collections import defaultdict
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -15,6 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from bangla_gpt_api.auth.single_use import claim_single_use, fetch_by_hash
 from bangla_gpt_api.db.models import (
     AnswerLog,
     ChapterProgress,
@@ -28,6 +29,7 @@ from bangla_gpt_api.db.models import (
     Student,
     User,
 )
+from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded, message
 from bangla_gpt_api.schemas import (
     EXPLANATION_STYLES,
     ActivityDay,
@@ -69,12 +71,12 @@ from .deps import (
     ParentUser,
 )
 
-router = APIRouter()
+router = APIRouter(responses=AUTH_GUARD_RESPONSES)
 
 logger = logging.getLogger(__name__)
 
 
-@router.post("/parents/link", status_code=201)
+@router.post("/parents/link", status_code=201, responses={**message(404, 409), **coded(410)})
 def parent_link(
     app_ctx: Ctx, payload: ParentLinkRequest, db: DbSession, parent: ParentUser
 ) -> dict:
@@ -301,13 +303,23 @@ def disable_my_memory(db: DbSession, user: CurrentUser) -> MemoryFactsOut:
     )
 
 
-@router.post("/parents/link/invite", status_code=201)
+@router.post("/parents/link/invite", status_code=201, responses={**coded(400), **message(404, 409)})
 def link_via_invite(payload: ParentInviteLinkRequest, db: DbSession, parent: ParentUser) -> dict:
     now = datetime.now(UTC).replace(tzinfo=None)
-    invite = db.execute(
-        select(ParentInvite).where(ParentInvite.code_hash == _hash_invite(payload.code))
-    ).scalar_one_or_none()
-    if invite is None or invite.used_at is not None or invite.expires_at < now:
+    # One code, one link: claim atomically so two parents racing the same code
+    # cannot both attach themselves to the student. AUD-0034.
+    code_hash = _hash_invite(payload.code)
+    if not claim_single_use(
+        db, ParentInvite, hash_column=ParentInvite.code_hash, hash_value=code_hash, now=now
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "invalid_invite", "message": "Invalid or expired invite code"},
+        )
+    invite = fetch_by_hash(
+        db, ParentInvite, hash_column=ParentInvite.code_hash, hash_value=code_hash
+    )
+    if invite is None:
         raise HTTPException(
             status_code=400,
             detail={"code": "invalid_invite", "message": "Invalid or expired invite code"},
@@ -487,10 +499,8 @@ def parent_child_activity(
         .all()
     )
     window = heatmap_days(list(rows), today, days)
-    date_axis = [
-        (datetime.strptime(today, "%Y-%m-%d") - timedelta(days=i)).date().isoformat()
-        for i in range(days - 1, -1, -1)
-    ]
+    anchor = date.fromisoformat(today)
+    date_axis = [(anchor - timedelta(days=i)).isoformat() for i in range(days - 1, -1, -1)]
     active = {r.date for r in rows if (r.questions or r.quizzes or r.minutes)}
     return ActivitySummary(
         streak=streak_days(active, today),

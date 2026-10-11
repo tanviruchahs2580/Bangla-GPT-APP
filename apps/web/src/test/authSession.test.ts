@@ -1,3 +1,4 @@
+import { asText } from "../lib/text";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchMe, getToken, login, mfaChallenge } from "../api";
 
@@ -70,8 +71,9 @@ describe("auth session resilience (instant-logout fix)", () => {
   });
 
   it("login surfaces mfa_required (never a phantom session) for MFA accounts", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(
-      (input: unknown) => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation((input: unknown) => {
         const url = String(input);
         if (url.endsWith("/auth/login")) {
           return Promise.resolve(
@@ -81,8 +83,7 @@ describe("auth session resilience (instant-logout fix)", () => {
         return Promise.resolve(
           jsonResponse({ user_id: 1, email: "a@b.com", role: "student" }),
         );
-      },
-    );
+      });
     await expect(login("a@b.com", "longpassword1")).rejects.toMatchObject({
       code: "mfa_required",
       status: 202,
@@ -91,7 +92,9 @@ describe("auth session resilience (instant-logout fix)", () => {
     // never be called with it (the server 401s mfa tokens).
     expect(getToken()).toBeNull();
     expect(
-      fetchSpy.mock.calls.some(([input]) => String(input).endsWith("/users/me")),
+      fetchSpy.mock.calls.some(([input]) =>
+        asText(input).endsWith("/users/me"),
+      ),
     ).toBe(false);
   });
 
@@ -105,7 +108,9 @@ describe("auth session resilience (instant-logout fix)", () => {
         jsonResponse({ user_id: 1, email: "a@b.com", role: "student" }),
       );
     });
-    await expect(mfaChallenge("step-up-token", "123456")).resolves.toMatchObject({
+    await expect(
+      mfaChallenge("step-up-token", "123456"),
+    ).resolves.toMatchObject({
       me: { user_id: 1, role: "student" },
       mustChangePassword: false,
     });

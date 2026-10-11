@@ -253,19 +253,21 @@ class CachedRankingIndex:
             f"{query}|{class_level}|{subject}|{chapter}|{top_k}|{min_score}".encode()
         ).hexdigest()
         key = f"rag:{self._corpus_fp}:{digest}"
-        cached = self._cache.get_json(key)
-        if cached is not None:
+        raw = self._cache.get_json(key)
+        if raw is not None:
             try:
-                hits = [
-                    Hit(chunk=Chunk(**row["chunk"]), score=float(row["score"])) for row in cached
+                # `raw` is decoded JSON (Any); name the parsed shape so the
+                # declared return type is not silently Any.
+                parsed: list[Hit] = [
+                    Hit(chunk=Chunk(**row["chunk"]), score=float(row["score"])) for row in raw
                 ]
             except (KeyError, TypeError, ValueError):
                 logger.warning("cache_value_unparsable", extra={"op": "rag"})
             else:
                 CACHE_EVENTS_TOTAL.labels(cache="rag", result="hit").inc()
-                return hits
+                return parsed
         CACHE_EVENTS_TOTAL.labels(cache="rag", result="miss").inc()
-        hits = self.inner.search(
+        hits: list[Hit] = self.inner.search(
             query,
             class_level=class_level,
             subject=subject,

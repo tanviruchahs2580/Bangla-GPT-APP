@@ -141,7 +141,7 @@ def test_import_fourty_row_batch(client: TestClient, teacher_headers) -> None:
     roster = client.get(f"/teacher/classrooms/{rid}/roster", headers=teacher_headers).json()
     assert len(roster) == 40
     rooms = client.get("/teacher/classrooms", headers=teacher_headers).json()
-    assert [r for r in rooms if r["id"] == rid][0]["student_count"] == 40
+    assert next(r for r in rooms if r["id"] == rid)["student_count"] == 40
     # one of the codes can actually sign in
     code = res["rows"][9]["invite_code"]
     login = client.post("/auth/login", json={"email": "s9@school.edu", "password": code})

@@ -13,8 +13,10 @@ from bangla_gpt_api.config import Settings
 
 
 def test_password_hash_roundtrip() -> None:
+    # AUD-0023: hashing moved from pbkdf2_sha256 to Argon2id (OWASP params), so
+    # the expected prefix changed deliberately from "pbkdf2_sha256$".
     stored = hash_password("correct-horse-battery")
-    assert stored.startswith("pbkdf2_sha256$")
+    assert stored.startswith("$argon2id$")
     assert verify_password("correct-horse-battery", stored)
     assert not verify_password("wrong-password", stored)
 

@@ -54,7 +54,7 @@ def extract_pdf(path: Path, *, max_pages: int | None = None) -> ExtractionResult
         for index in range(limit):
             try:
                 raw = reader.pages[index].extract_text() or ""
-            except Exception:  # noqa: BLE001 - per-page robustness
+            except Exception:  # a single unreadable page must not kill the book
                 raw = ""
             encoding = "unusable"
             if raw.strip():
@@ -62,12 +62,12 @@ def extract_pdf(path: Path, *, max_pages: int | None = None) -> ExtractionResult
                     try:
                         raw = convert_bijoy_text(raw)
                         encoding = "bijoy-converted"
-                    except Exception:  # noqa: BLE001 - one bad page never kills a book
+                    except Exception:  # one bad page never kills a book
                         encoding = "unusable"
                 elif bangla_char_ratio(raw) > 0.2:
                     encoding = "unicode"
             result.pages.append(PageText(page_number=index + 1, text=raw, encoding=encoding))
-    except Exception as exc:  # noqa: BLE001 - corrupt PDF must not crash pipeline
+    except Exception as exc:  # corrupt PDF must not crash the pipeline
         result.error = f"{type(exc).__name__}: {exc}"
     return result
 

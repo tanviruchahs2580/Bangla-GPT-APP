@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 import time
 from datetime import UTC, datetime, timedelta
 
@@ -145,7 +146,7 @@ def test_change_password_requires_current_and_rotates(client: TestClient) -> Non
         json={"current_password": PASSWORD, "new_password": PASSWORD},
         headers=headers,
     )
-    assert same.status_code == 422
+    assert same.status_code == 409  # documented business conflict (AUD-0053)
 
     changed = client.post(
         "/auth/change-password",
@@ -220,6 +221,22 @@ def test_force_change_flag_follows_setting(tmp_path) -> None:
     client = TestClient(create_app(settings))
     login = client.post("/auth/login", json={"email": "root@example.com", "password": PASSWORD})
     assert login.json()["must_change_password"] is False
+
+
+@pytest.fixture(autouse=True)
+def _prod_guard_opt_ins():
+    """Let this module's production-guard assertions isolate what they test.
+
+    test_production_boot_guard_refuses_insecure_settings walks the production
+    validators one at a time with `match=` on the message. Since AUD-0025,
+    AUD-0026 and AUD-0027, production also refuses the mock provider, SQLite
+    behind multiple workers and a per-process rate limiter, so every case in
+    that test trips all three as well and the specific guard under test is no
+    longer distinguishable by substring.
+    """
+    os.environ["ALLOW_MOCK_LLM_IN_PRODUCTION"] = "1"
+    os.environ["WEB_CONCURRENCY"] = "1"
+    yield
 
 
 def test_production_boot_guard_refuses_insecure_settings(tmp_path) -> None:

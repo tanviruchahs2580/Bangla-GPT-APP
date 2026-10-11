@@ -49,9 +49,9 @@ def fetch_url(url: str, *, timeout: float = 60.0) -> tuple[bytes, str]:
     backoff = INITIAL_BACKOFF
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+            request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})  # noqa: S310 - a fixed https URL from configuration, never user input
             # Scheme allowlisted above; official-source downloads only.
-            with urllib.request.urlopen(request, timeout=timeout) as response:  # nosec
+            with urllib.request.urlopen(request, timeout=timeout) as response:  # nosec  # noqa: S310 - a fixed https URL from configuration, never user input
                 body = response.read()
                 content_type = response.headers.get("Content-Type", "")
             return body, content_type

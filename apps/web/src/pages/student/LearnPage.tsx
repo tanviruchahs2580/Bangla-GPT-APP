@@ -44,6 +44,8 @@ const SUBJECT_TONE: Record<string, string> = {
   bangla: "",
 };
 
+const EMPTY_SUBJECTS: SubjectOut[] = [];
+
 export function LearnPage() {
   const { me } = useAuth();
   const navigate = useNavigate();
@@ -66,7 +68,9 @@ export function LearnPage() {
     queryKey: ["learnProgressAll", selected],
     queryFn: () => getLearnProgress(undefined, selected),
   });
-  const subjects = subjectsQuery.data ?? [];
+  // A shared constant, not `?? []`: a fresh array identity on every render makes
+  // every effect that depends on `subjects` re-run forever.
+  const subjects = subjectsQuery.data ?? EMPTY_SUBJECTS;
 
   // Chapter totals per subject (for the ring denominator), from the same
   // existing chapters endpoint the list view already uses.
@@ -264,7 +268,7 @@ export function LearnPage() {
                           subject: activeSubject,
                           chapter: ch.chapter,
                         });
-                        navigate(
+                        void navigate(
                           `/student/learn/${encodeURIComponent(activeSubject)}/${encodeURIComponent(ch.chapter)}?class=${selected}`,
                         );
                       }}
@@ -347,7 +351,9 @@ export function LearnChapterPage() {
           JSON.stringify({ subject, chapter, class_level: classLevel }),
         );
         localStorage.setItem("fontScale", String(fontScale));
-      } catch {}
+      } catch {
+        /* best-effort: a parse failure must not block startup */
+      }
     }
   }, [subject, chapter, classLevel, fontScale]);
 
@@ -399,7 +405,9 @@ export function LearnChapterPage() {
         class_level: classLevel,
         bookmarked: next,
       });
-    } catch {}
+    } catch {
+      /* best-effort: a parse failure must not block startup */
+    }
   };
 
   const speak = () => {

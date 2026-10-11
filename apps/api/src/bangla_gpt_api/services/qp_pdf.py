@@ -2,9 +2,15 @@
 
 Primary engine is WeasyPrint when the platform's Pango/GTK libraries are
 loadable (Linux containers). On hosts without them (e.g. Windows dev) this
-falls back to fpdf2 + uharfbuzz with the bundled Noto Sans Bengali TTF,
-which shapes Bengali conjuncts correctly. If neither engine is usable the
-API returns the HTML print view instead (documented fallback).
+falls back to fpdf2 with the bundled Noto Sans Bengali TTF. If neither engine
+is usable the API returns the HTML print view instead (documented fallback).
+
+fpdf2 does NOT shape complex scripts unless told to: text shaping is opt-in,
+so every fpdf2 document MUST call ``set_text_shaping(True)`` after
+``add_font``. Without it the PDF has a correct text layer but renders each
+conjunct decomposed with detached vowel signs (ক্ষ -> কয়, জ্ঞান -> জুন্ঞেন),
+which no text-extraction test can detect. Both renderers below enable it, and
+tests/test_qp_pdf_shaping.py pins the behaviour.
 """
 
 from pathlib import Path
@@ -26,6 +32,10 @@ def render_qp_pdf(paper: dict, kind: str = "paper") -> bytes:
     pdf.set_margins(15, 15, 15)
     pdf.add_page()
     pdf.add_font("nbg", style="", fname=str(_FONT))
+    # Complex-script shaping is opt-in in fpdf2. Leaving it off emits the raw
+    # code points, so Bengali conjuncts render decomposed with floating vowel
+    # signs even though the extracted text still looks correct. AUD-0045.
+    pdf.set_text_shaping(True)
     pdf.set_font("nbg", size=15)
     title = f"{paper['exam_type']} ({paper['class_level']}) - {paper['subject']}"
     pdf.cell(w=0, h=9, text=title, new_x="LMARGIN", new_y="NEXT")
@@ -115,6 +125,7 @@ def render_document_pdf(doc: dict) -> bytes:
     pdf.set_margins(15, 15, 15)
     pdf.add_page()
     pdf.add_font("nbg", style="", fname=str(_FONT))
+    pdf.set_text_shaping(True)  # AUD-0045 - see module docstring
     pdf.set_font("nbg", size=15)
     pdf.cell(
         w=0,

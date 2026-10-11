@@ -52,7 +52,7 @@ export function QPaperStepper({ qp }: { qp: QPaper }) {
 
 /** Validation checklist rendered from the backend's own gates (qp.meta). */
 export function QPaperValidation({ qp }: { qp: QPaper }) {
-  const meta = (qp.meta ?? {}) as Record<string, unknown>;
+  const meta = qp.meta ?? {};
   const hasChecks =
     meta.alignment_min != null || meta.difficulty_actual != null;
   if (!hasChecks) {

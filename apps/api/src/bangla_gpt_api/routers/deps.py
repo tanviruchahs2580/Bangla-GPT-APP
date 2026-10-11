@@ -64,8 +64,13 @@ class AppContext:
 
 
 def get_ctx(request: Request) -> AppContext:
-    """FastAPI dependency exposing the application context."""
-    return request.app.state.ctx
+    """FastAPI dependency exposing the application context.
+
+    ``app.state`` is an untyped attribute bag, so the value is cast here
+    rather than leaking ``Any`` into every caller.
+    """
+    ctx: AppContext = request.app.state.ctx
+    return ctx
 
 
 Ctx = Annotated[AppContext, Depends(get_ctx)]

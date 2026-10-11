@@ -8,6 +8,8 @@ Covers the confirmed defects fixed in this pass:
 - F-07: RATE_LIMIT_RULES setting was silently ignored
 """
 
+import os
+
 from fastapi.testclient import TestClient
 
 from bangla_gpt_api.config import Settings
@@ -32,6 +34,10 @@ def _settings(tmp_path, **over) -> Settings:
 
 
 def _prod_settings(tmp_path, **over) -> Settings:
+    # AUD-0025/0026/0027: this fixture is deliberately single-process and
+    # uses the mock provider, both of which production now refuses.
+    os.environ["ALLOW_MOCK_LLM_IN_PRODUCTION"] = "1"
+    os.environ["WEB_CONCURRENCY"] = "1"
     base = dict(
         env="production",
         database_url=f"sqlite:///{tmp_path}/prod.db",
@@ -197,10 +203,10 @@ def test_default_rule_tables_stay_in_parity() -> None:
     middleware's per-field derived rules — guards against the tables
     drifting apart again (the defect that hid /auth/mfa/challenge from
     rate limiting)."""
-    from bangla_gpt_api.config import Settings as S
+    from bangla_gpt_api.config import Settings as SettingsCls
     from bangla_gpt_api.initialize.middleware_stack import _derive_default_rules
 
-    derived = _derive_default_rules(S(env="test", jwt_secret=JWT))
-    defaults = S().rate_limit_rules
+    derived = _derive_default_rules(SettingsCls(env="test", jwt_secret=JWT))
+    defaults = SettingsCls().rate_limit_rules
     for route, rule in derived.items():
         assert defaults.get(route) == rule, route

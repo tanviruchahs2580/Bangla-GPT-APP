@@ -1,4 +1,14 @@
-FROM python:3.12-slim AS runtime
+# Pinned to a digest, not a floating tag: "3.12-slim" moves under us, so two
+# builds from the same commit produced different base layers and a rebuild
+# could silently change what ships (AUD-0029).
+#
+#   sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1
+#     = python:3.12-slim, resolved 2026-10-10 via the registry API.
+#
+# To move the base: docker pull python:3.12-slim, read the digest from
+# `docker image inspect --format '{{index .RepoDigests 0}}'`, update this line,
+# and re-run the trivy scan. Never replace the digest with the tag.
+FROM python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1 AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -12,21 +22,51 @@ WORKDIR /app
 # Full `upgrade` (not just targeted installs): the trivy gate fails on ANY
 # fixable HIGH/CRITICAL, and new Debian advisories (sqlite/perl/...) appear
 # continuously — targeted installs are whack-a-mole that reds the pipeline.
+#
+# The two explicitly installed packages are version-pinned (hadolint DL3008).
+# Pinning them is safe only because the base image is digest-pinned: the
+# candidate version below is the one that digest resolves to, so the pin is
+# deterministic. `apt-get upgrade` still floats every OTHER package, which is
+# the deliberate trade-off documented above — it is why two builds of this
+# image are content-identical but not byte-identical.
+#
+# To refresh: re-resolve the candidate in the pinned base
+#   docker run --rm --entrypoint sh python:3.12-slim@sha256:<digest> \
+#     -c "apt-get update -qq && apt-cache policy openssl libssl3t64"
+# and update both the digest and the versions here together.
+ARG OPENSSL_VERSION=3.5.7-1~deb13u3
 RUN apt-get update \
     && apt-get upgrade -y \
-    && apt-get install -y --no-install-recommends openssl libssl3t64 \
+    && apt-get install -y --no-install-recommends \
+        "openssl=${OPENSSL_VERSION}" \
+        "libssl3t64=${OPENSSL_VERSION}" \
     && rm -rf /var/lib/apt/lists/*
 
+COPY apps/api/constraints.txt ./apps/api/constraints.txt
 COPY apps/api/pyproject.toml ./apps/api/
 COPY apps/api/worker.py ./apps/api/worker.py
 COPY apps/api/src ./apps/api/src
 COPY apps/api/alembic ./apps/api/alembic
 COPY apps/api/alembic.ini ./apps/api/alembic.ini
-RUN pip install --no-cache-dir ./apps/api "gunicorn>=23.0" "uvicorn-worker>=0.2"
 
-RUN useradd --create-home --shell /usr/sbin/nologin appuser \
-    && mkdir -p /data /backups && chown -R appuser:appuser /app /data /backups
-USER appuser
+# Two steps, deliberately. constraints.txt pins exact versions AND carries
+# hashes, which switches pip into hash-checking mode; a local directory has no
+# single artifact to hash, so the project itself is installed --no-deps after
+# every third-party package has been verified against its hash (AUD-0010).
+# gunicorn and uvicorn-worker come from the lock too, so nothing in this image
+# is resolved at build time.
+RUN pip install --no-cache-dir --require-hashes -r ./apps/api/constraints.txt \
+    && pip install --no-cache-dir --no-deps ./apps/api
+
+# Fixed numeric uid/gid (hadolint DL3066): a named user resolves to a
+# different id on different base images, which silently breaks bind-mounted
+# volume ownership. 10001 is inside the unprivileged range on Debian.
+ARG APP_UID=10001
+ARG APP_GID=10001
+RUN groupadd --gid "${APP_GID}" appuser \
+    && useradd --uid "${APP_UID}" --gid "${APP_GID}" --create-home --shell /usr/sbin/nologin appuser \
+    && mkdir -p /data /backups && chown -R "${APP_UID}:${APP_GID}" /app /data /backups
+USER ${APP_UID}:${APP_GID}
 
 # Number of Uvicorn worker processes; scale horizontally via this env var.
 ENV WEB_CONCURRENCY=2

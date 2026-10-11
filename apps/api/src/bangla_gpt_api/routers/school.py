@@ -20,6 +20,7 @@ from bangla_gpt_api.auth.security import (
     create_access_token,
     hash_password,
 )
+from bangla_gpt_api.auth.single_use import claim_single_use, fetch_by_hash
 from bangla_gpt_api.db.models import (
     ChapterContent,
     ChapterProgress,
@@ -37,6 +38,7 @@ from bangla_gpt_api.db.models import (
     User,
 )
 from bangla_gpt_api.logging_config import json_log
+from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded
 from bangla_gpt_api.schemas import (
     AdminSchoolStatsOut,
     ClassRoomCreateIn,
@@ -82,7 +84,7 @@ from .deps import (
     SchoolStaffUser,
 )
 
-router = APIRouter()
+router = APIRouter(responses=AUTH_GUARD_RESPONSES)
 
 logger = logging.getLogger(__name__)
 
@@ -203,6 +205,7 @@ def admin_school_invite_list(
             used=i.used_by is not None,
             created_at=i.created_at,
             used_at=i.used_at,
+            expires_at=i.expires_at,
         )
         for i in invites
     ]
@@ -323,18 +326,29 @@ def admin_report_aggregate(
 
 @router.post("/schools/{school_id}/invites", response_model=SchoolInviteOut, status_code=201)
 def school_invite_create(
-    school_id: int, payload: SchoolInviteIn, db: DbSession, user: SchoolStaffUser
+    school_id: int,
+    payload: SchoolInviteIn,
+    db: DbSession,
+    user: SchoolStaffUser,
+    app_ctx: Ctx,
 ) -> SchoolInviteOut:
     """Single-use staff invite; plaintext code is returned exactly once."""
     if db.get(School, school_id) is None:
         raise HTTPException(status_code=404, detail="school not found")
     _school_or_403(user, school_id)
     code = "".join(secrets.choice(SCHOOL_CODE_ALPHABET) for _ in range(10))
+    now = datetime.now(UTC).replace(tzinfo=None)
+    # Computed once and used for both the row and the response. The column is
+    # nullable only because pre-AUD-0046 rows have no expiry; a row this
+    # function just created always does, so returning the local value is exact
+    # rather than a guess (and it keeps SchoolInviteOut.expires_at required).
+    expires_at = now + timedelta(minutes=app_ctx.settings.invite_ttl_minutes)
     invite = SchoolInvite(
         code_hash=_hash_invite(code),
         school_id=school_id,
         role=payload.role,
         created_by=user.id,
+        expires_at=expires_at,
     )
     db.add(invite)
     db.commit()
@@ -346,26 +360,56 @@ def school_invite_create(
         role=invite.role,
         code=code,
         created_at=invite.created_at,
+        expires_at=expires_at,
     )
 
 
-@router.post("/auth/join-school", response_model=TokenResponse, status_code=201)
+@router.post(
+    "/auth/join-school",
+    response_model=TokenResponse,
+    status_code=201,
+    responses=coded(404, 409, 410),
+)
 def auth_join_school(app_ctx: Ctx, payload: SchoolJoinIn, db: DbSession) -> TokenResponse:
     """Redeem a staff invite: create the account in the school and sign in.
 
-    Invite codes are single-use; only their SHA-256 hash is stored.
+    Invite codes are single-use and time-limited; only their SHA-256 hash is
+    stored, and redemption is atomic (AUD-0034).
     """
     key = _hash_invite(payload.invite_code)
-    invite = db.execute(
-        select(SchoolInvite).where(SchoolInvite.code_hash == key)
-    ).scalar_one_or_none()
+    now = datetime.now(UTC).replace(tzinfo=None)
+    # Claim the code before creating any user, so two racing redemptions
+    # cannot both reach the insert. AUD-0034.
+    if not claim_single_use(
+        db,
+        SchoolInvite,
+        hash_column=SchoolInvite.code_hash,
+        hash_value=key,
+        now=now,
+        require_unexpired=True,
+    ):
+        existing = fetch_by_hash(
+            db, SchoolInvite, hash_column=SchoolInvite.code_hash, hash_value=key
+        )
+        if existing is None:
+            raise HTTPException(
+                status_code=404, detail={"code": "invalid_code", "message": "Invalid invite code"}
+            )
+        expired = (
+            existing.expires_at is None or existing.expires_at < now
+        ) and existing.used_at is None
+        if expired:
+            raise HTTPException(
+                status_code=410,
+                detail={"code": "invite_expired", "message": "Invite code has expired"},
+            )
+        raise HTTPException(
+            status_code=409, detail={"code": "code_used", "message": "Invite already used"}
+        )
+    invite = fetch_by_hash(db, SchoolInvite, hash_column=SchoolInvite.code_hash, hash_value=key)
     if invite is None:
         raise HTTPException(
             status_code=404, detail={"code": "invalid_code", "message": "Invalid invite code"}
-        )
-    if invite.used_by is not None:
-        raise HTTPException(
-            status_code=409, detail={"code": "code_used", "message": "Invite already used"}
         )
     email = payload.email.strip().lower()
     if db.execute(select(User).where(User.email == email)).scalar_one_or_none() is not None:
@@ -392,7 +436,7 @@ def auth_join_school(app_ctx: Ctx, payload: SchoolJoinIn, db: DbSession) -> Toke
     profile = Teacher(name=payload.name.strip(), user_id=user.id)
     db.add(profile)
     invite.used_by = user.id
-    invite.used_at = datetime.now(UTC).replace(tzinfo=None)
+    # used_at was already stamped atomically by claim_single_use above.
     db.commit()
     json_log(
         logger,
@@ -707,7 +751,10 @@ def school_students(
             .group_by(QuizAttempt.student_id)
         ).all():
             if ts is None:
-                continue
+                # Unreachable per the model (created_at is NOT NULL), but
+                # legacy SQLite rows may predate that constraint; skipping is
+                # the safe response if one appears.
+                continue  # type: ignore[unreachable]
             iso = str(ts)[:10]
             if sid not in last_day or iso > last_day[sid]:
                 last_day[sid] = iso

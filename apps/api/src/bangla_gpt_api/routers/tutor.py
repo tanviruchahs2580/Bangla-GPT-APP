@@ -4,6 +4,7 @@ Behavior-identical extraction: same paths, validation, status codes.
 Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 """
 
+import contextlib
 import json
 import logging
 from collections.abc import AsyncIterator
@@ -28,6 +29,7 @@ from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.providers import (
     ProviderError,
 )
+from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded
 from bangla_gpt_api.schemas import (
     AnalyticsEvent,
     AskRequest,
@@ -38,6 +40,7 @@ from bangla_gpt_api.schemas import (
     ConversationOut,
     ConversationUpdate,
     FeedbackAdminRow,
+    FeedbackOut,
     FeedbackQueuePage,
     FeedbackRequest,
     MessageSearchHit,
@@ -69,7 +72,7 @@ from .deps import (
     _provider_lacks_vision,
 )
 
-router = APIRouter()
+router = APIRouter(responses=AUTH_GUARD_RESPONSES)
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +166,12 @@ def _own_conversation(db: Session, conversation_id: int, user: User) -> Conversa
     return conv
 
 
-@router.post("/tutor/conversations", response_model=ConversationOut, status_code=201)
+@router.post(
+    "/tutor/conversations",
+    response_model=ConversationOut,
+    status_code=201,
+    responses=coded(404),
+)
 def create_conversation(payload: ConversationCreate, db: DbSession, user: CurrentUser):
     student = _student_profile(db, user)
     conv = Conversation(student_id=student.id, title=payload.title)
@@ -178,7 +186,7 @@ def create_conversation(payload: ConversationCreate, db: DbSession, user: Curren
     )
 
 
-@router.get("/tutor/conversations", response_model=list[ConversationOut])
+@router.get("/tutor/conversations", response_model=list[ConversationOut], responses=coded(404))
 def list_conversations(db: DbSession, user: CurrentUser) -> list[ConversationOut]:
     student = _student_profile(db, user)
     rows = (
@@ -530,7 +538,7 @@ async def stream_chat_message(
                 token_payload = json.dumps({"text": VISION_UNSUPPORTED_ANSWER}, ensure_ascii=False)
                 yield f"event: token\ndata: {token_payload}\n\n"
             else:
-                async for event in tutor.ask_stream(  # type: ignore[union-attr]
+                async for event in tutor.ask_stream(
                     payload.message,
                     class_level,
                     canonical_subject(payload.subject),
@@ -592,10 +600,8 @@ async def stream_chat_message(
             yield ("event: done\ndata: " + json.dumps(done_payload, ensure_ascii=False) + "\n\n")
         except ProviderError:
             # user turn already persisted; do not rollback
-            try:
+            with contextlib.suppress(Exception):  # rollback is best-effort here
                 db.rollback()
-            except Exception:
-                pass
             yield (
                 "event: error\ndata: "
                 + json.dumps({"code": "llm_unavailable"}, ensure_ascii=False)
@@ -610,11 +616,19 @@ async def stream_chat_message(
 # ------------------------------------------------------------------
 
 
-@router.post("/feedback", status_code=201)
-def submit_feedback(payload: FeedbackRequest, db: DbSession, user: CurrentUser) -> dict:
+@router.post(
+    "/feedback",
+    response_model=FeedbackOut,
+    status_code=201,
+    responses=coded(400, 403, 404),
+)
+def submit_feedback(payload: FeedbackRequest, db: DbSession, user: CurrentUser) -> FeedbackOut:
+    # The "no target" case is a business rule, not a validation failure, so it
+    # is a 400: 422 is reserved by FastAPI for request-model validation and its
+    # documented body is an array of errors (AUD-0053 / API-02).
     if payload.message_id is None and payload.attempt_id is None:
         raise HTTPException(
-            status_code=422,
+            status_code=400,
             detail={"code": "missing_target", "message": "message_id or attempt_id required"},
         )
 
@@ -669,7 +683,7 @@ def submit_feedback(payload: FeedbackRequest, db: DbSession, user: CurrentUser) 
                 msg.rating = payload.rating
     db.add(row)
     db.commit()
-    return {"status": "recorded"}
+    return FeedbackOut(status="recorded")
 
 
 @router.get("/admin/feedback", response_model=FeedbackQueuePage)

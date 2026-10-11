@@ -416,16 +416,20 @@ const bn = {
   finishQuiz: "শেষ করুন",
   notStarted: "এখনো কোনো কুইজ দেওয়া হয়নি।",
   continueTutor: "চ্যাট চালিয়ে যান",
-  // refusal audit (admin safety view). Unicode escapes only: typed
-  // Bengali through tool layers has corrupted combining marks before.
+  // refusal audit (admin safety view). These are literal Bengali
+  // characters, not Unicode escapes. They are verified NFC-normalised by
+  // the Appendix C scanner; if a tool ever rewrites this file, re-run it --
+  // typing Bengali through some tool layers has corrupted combining marks
+  // before.
   admSafety: "নিরাপত্তা পরীক্ষা",
   admRefusals: "অস্বীকৃত প্রশ্ন",
   admRefusalReason: "কারণ",
   admRefusalClass: "শ্রেণি",
   admLastRefusal: "শেষ অস্বীকার",
   admNoRefusals: "কোনো অস্বীকৃত প্রশ্ন নেই",
-  // support-ops strings: admin/support tooling only, kept
-  // English in both dicts (a dedicated Bengali pass is follow-up).
+  // support-ops strings: admin/support tooling only, intentionally kept
+  // English in both dicts. Tracked as AUD-0047 (Bengali pass for the
+  // support-ops surface); do not translate piecemeal here.
   statusPage: "System status",
   statusAllOk: "All systems operational",
   statusDegraded: "Some systems are degraded",

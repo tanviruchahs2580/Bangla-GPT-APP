@@ -75,7 +75,7 @@ export function NotificationBell() {
       }
     }
     const to = targetOf(n);
-    if (to) navigate(to);
+    if (to) void navigate(to);
   };
 
   return (

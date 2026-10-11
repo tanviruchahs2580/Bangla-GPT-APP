@@ -24,7 +24,7 @@ and bn/en i18n with dark mode.
 | Endpoint | Auth | Purpose |
 |---|---|---|
 | `GET /health` `/live` `/ready` | — (`ready` checks DB) | Service health |
-| `GET /metrics` | — | Prometheus metrics |
+| `GET /metrics` | env-dependent (see note) | Prometheus metrics |
 | `POST /auth/register` `/auth/login` | — | Accounts; tokens (`email_unverified` code when SMTP on) |
 | `POST /auth/forgot` `/auth/reset` | — | Password reset (single-use hashed tokens) |
 | `POST /auth/verify-email` `/auth/resend-verification` | mixed | Email verification flow |
@@ -43,6 +43,12 @@ and bn/en i18n with dark mode.
 | `POST /admin/maintenance/purge` | admin | Retention sweep (chats/tokens/invites) |
 | `POST /parents/link` · `POST /parents/link/invite` · `GET /parents/me/children...` | parent | Linking (legacy ID + invite-code flows) |
 
+¹ `/metrics` is unauthenticated only outside production. In production the
+app refuses to start unless `METRICS_REQUIRE_AUTH=true` and `METRICS_TOKEN` is
+set, and `/metrics` then requires `Authorization: Bearer $METRICS_TOKEN`
+(`main.py::_validate_metrics`). A developer running `uvicorn` locally sees the
+open endpoint; that is not what a deployed instance does.
+
 This table covers the core surface only — the API now exposes ~135 routes
 (short tests, bulk assignments, question papers, schools, notifications, KG
 re-teach, admin center, status page). Generated baseline:
@@ -58,7 +64,8 @@ Current QA record: [docs/qa-audit-2026-10-06.md](docs/qa-audit-2026-10-06.md).
 ```powershell
 cd apps/api
 python -m venv .venv
-.venv\Scripts\python -m pip install -e ".[dev]"
+.venv\Scripts\python -m pip install --require-hashes -r constraints.txt
+.venv\Scripts\python -m pip install --no-deps -e ".[dev]"
 # optional: build + serve the real NCTB curriculum corpus
 .venv\Scripts\python scripts\build_nctb_corpus.py --data-dir ..\..\data\nctb --subset ssc-science
 $env:NCTB_CORPUS_DIR = "..\..\data\nctb"
@@ -70,11 +77,61 @@ Web dashboard:
 
 ```powershell
 cd apps/web
-npm install
+npm ci
 npm run dev      # http://localhost:5173 (proxies /api to :8000)
 npm run build    # type-checked production build → dist/
 npx vitest run   # frontend test suite
 ```
+
+### Linux / macOS
+
+```bash
+cd apps/api
+python3 -m venv .venv
+.venv/bin/pip install --require-hashes -r constraints.txt
+.venv/bin/pip install --no-deps -e ".[dev]"
+# optional: build + serve the real NCTB curriculum corpus
+.venv/bin/python scripts/build_nctb_corpus.py --data-dir ../../data/nctb --subset ssc-science
+export NCTB_CORPUS_DIR="../../data/nctb"
+.venv/bin/python -m uvicorn bangla_gpt_api.main:app --reload
+# http://127.0.0.1:8000/health  /live  /ready  /docs
+```
+
+Web dashboard:
+
+```bash
+cd apps/web
+npm ci
+npm run dev      # http://localhost:5173 (proxies /api to :8000)
+npm run build    # type-checked production build -> dist/
+npm test         # frontend test suite
+```
+
+`constraints.txt` pins exact versions with hashes, so a commit always installs
+the same dependency set. Regenerate it with `pip-compile` when you change
+`pyproject.toml` - see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+### Docker
+
+```bash
+# The API image exactly as it ships in production:
+docker build -t bangla-gpt-api:local .
+
+# Whole stack (API + web + postgres + redis + proxy).
+#
+# ENV defaults to "production", and the app refuses to boot in production
+# without a real JWT_SECRET and admin credentials - that gate is deliberate.
+# For a local stack, run as test. API_HOST_PORT publishes the API on the host;
+# leave it unset and traffic must enter through the proxy (production posture).
+ENV=test API_HOST_PORT=8000 docker compose --profile core up -d --wait
+curl -fsS http://127.0.0.1:8000/health        # {"status":"ok"}
+
+docker compose --profile core logs -f api
+docker compose --profile core down
+```
+
+The image pins its base by digest and installs from `apps/api/constraints.txt`
+with hash checking, so the same commit builds the same dependency set.
 
 Backend checks (from `apps/api`): `ruff check .`, `ruff format --check .`,
 `mypy src`, `pytest -q`.
@@ -118,3 +175,23 @@ Environment variables are documented in `.env.example`. Default
 ## License
 
 [MIT](LICENSE)
+
+Bundled third-party material keeps its own licence — see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Changelog
+
+[CHANGELOG.md](CHANGELOG.md) records what changed in each release. It is
+generated from the git history, so it cannot claim a release that did not
+happen:
+
+```bash
+python apps/api/scripts/gen_changelog.py    # regenerate after landing work
+```
+
+CI fails if a commit is missing from it or a version has no matching tag.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch, commit, CI and merge
+conventions.

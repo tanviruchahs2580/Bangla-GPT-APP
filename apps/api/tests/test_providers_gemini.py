@@ -154,7 +154,7 @@ async def test_blocked_candidate_raises() -> None:
         max_retries=0,
         transport=httpx.MockTransport(handler),
     )
-    with pytest.raises(ProviderError, match="no text|no candidates"):
+    with pytest.raises(ProviderError, match=r"no text|no candidates"):
         await provider.generate("q")
 
 

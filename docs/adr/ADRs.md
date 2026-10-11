@@ -251,7 +251,7 @@ Student accounts must be secure. Password reset tokens must be revocable if comp
 
 ## Status
 
-Accepted — Implemented in `auth/security.py`.
+Accepted — implemented in `auth/security.py`; the password-hashing clause is superseded by ADR-0010.
 
 ---
 
@@ -283,3 +283,78 @@ Use Fernet symmetric encryption (from `cryptography` library):
 ## Status
 
 Accepted — Implemented in `security.py`.
+
+---
+
+# ADR-0010: Argon2id Password Hashing, JWT Issuer/Audience Binding, and Session-Epoch Design
+
+## Context
+
+Two security findings during the engineering audit (2026-10-09):
+
+1. **Password hashing** (AUD-0023): ADR-0008 chose PBKDF2-HMAC-SHA256 at
+   200,000 iterations. The OWASP Password Storage Cheat Sheet (fetched
+   2026-10-09) recommends Argon2id (19 MiB, t=2, p=1) first and PBKDF2 at
+   600,000 iterations only as a fallback, so the chosen configuration was
+   below even the fallback floor.
+2. **JWT binding** (AUD-0028): access tokens carried `sub`, `role`, `exp`,
+   `iat` and `jti` but no `iss` or `aud`, so anything else signed with the
+   same key (a future service sharing the secret, a differently-scoped token)
+   would be accepted. The codebase also has no refresh-token rotation with
+   reuse detection; it relies on a 60-minute access token, a per-token `jti`
+   deny-list and the F-05 second-precision token epoch.
+
+## Decision
+
+- **Passwords**: hash new passwords with Argon2id at `time_cost=2`,
+  `memory_cost=19*1024` KiB (19 MiB), `parallelism=1`. `verify_password`
+  keeps reading `pbkdf2_sha256` hashes so no account is locked out, and
+  `needs_rehash` + login re-hash migrate each legacy hash to Argon2id in place
+  the first time that user signs in. No bulk reset and no forced change.
+- **JWT**: `create_access_token` stamps `iss = "bangla-gpt-api"` and
+  `aud = "bangla-gpt-clients"` (settings-configurable); `decode_token`
+  verifies both, which also refuses every token minted before the change (a
+  one-time forced re-login, accepted because the session-epoch design already
+  bounds impact to 60 minutes).
+- **Refresh-rotation decision**: no refresh token is introduced. The design
+  that substitutes for it is the session epoch: `users.sessions_invalidated_at`
+  is set on password change/reset, and `get_current_user` refuses every access
+  token whose `iat` is at or before that moment. Combined with a short (60
+  minute) access-token lifetime and per-token `jti` revocation, the material
+  refresh-rotation benefits — bounded credential compromise window and "old
+  sessions die when the password changes" — are already delivered without the
+  additional server-side state, rotation endpoints and reuse-detection bookkeeping
+  a refresh-token scheme would add to this stateless-JWT codebase.
+
+## Alternatives Considered
+
+1. **Argon2i/Argon2d** — Argon2id is the OWASP recommendation precisely
+   because it resists both GPU side-channel (Argon2d strength) and TMTO
+   (Argon2i strength) attacks.
+2. **scrypt (N=2^17, r=8, p=1)** — OWASP's second choice; Argon2id is
+   preferred and equally verbatim-specified.
+3. **Fresh refresh tokens with rotation and reuse detection** — strictly
+   stronger on paper, but the session-epoch + 60-minute lifetime + `jti`
+   revocation already covers the threat model; the added state contradicts the
+   stateless-JWT architecture of ADR-0008.
+
+## Consequences
+
+- **+** Password hashes now meet the primary OWASP recommendation.
+- **+** Tokens are bound to this service's issuer and audience.
+- **+** Legacy hashes upgrade persistently without ops work.
+- **+** Existing deployments keep working: legacy hashes verify, and users are
+  upgraded silently on their next login.
+- **-** All sessions are invalidated once at deploy time (pre-SEC-03 tokens
+  lack `iss`/`aud` and are refused); each client re-authenticates.
+- **-** Argon2id is heavier than PBKDF2 per hash (~30-60 ms at these
+  parameters); negligible for a login path but measurable in
+  test-suite wall-time.
+- **-** A future service that needs the same signing key must now be minted
+  with its own `iss`/`aud` (by design).
+
+## Status
+
+Accepted — implemented in `auth/security.py` (AUD-0023, AUD-0028). Supersedes
+the password-hashing clause of ADR-0008; its `jti` revocation clause is
+unchanged.

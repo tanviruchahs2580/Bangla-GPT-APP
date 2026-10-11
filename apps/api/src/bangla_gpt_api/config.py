@@ -11,7 +11,7 @@ PRODUCTION_ENVS = frozenset({"production", "prod", "staging"})
 # staging/prod parity: staging runs the SAME strict boot guard and secret
 # suppression as production (no default JWT_SECRET, no raw reset-token logs);
 # only the data is non-authoritative. Enforced by tests/test_env_parity.py.
-DEFAULT_JWT_SECRET = "dev-insecure-change-me"
+DEFAULT_JWT_SECRET = "dev-insecure-change-me"  # noqa: S105 - an obvious placeholder or a fixture name, not a credential
 
 
 def _get_version() -> str:
@@ -94,6 +94,11 @@ class Settings(BaseSettings):
     # --- auth ---
     jwt_secret: str = DEFAULT_JWT_SECRET
     jwt_expire_minutes: int = 60
+    # SEC-03: tokens are stamped with and verified against these so a token
+    # minted for a different audience/issuer (e.g. a future service sharing the
+    # signing key) cannot be replayed here.
+    jwt_issuer: str = "bangla-gpt-api"
+    jwt_audience: str = "bangla-gpt-clients"
     password_reset_token_minutes: int = 30
 
     # --- admin bootstrap / lifecycle ---
