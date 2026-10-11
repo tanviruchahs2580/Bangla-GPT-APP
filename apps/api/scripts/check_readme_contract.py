@@ -97,7 +97,11 @@ for match in re.finditer(r"\]\(([^)#][^)]*)\)", text):
     link = match.group(1).split("#", 1)[0]
     if link.startswith(("http://", "https://", "mailto:")):
         continue
-    target = REPO / link.replace("/", "\\")
+    # Path separators in the README are always "/". On Windows that string also
+    # works as a separator, but on POSIX a backslash is an ordinary character,
+    # so a "docs\file.md" target never resolved and every link looked dead.
+    # Joining the POSIX-style segments lets pathlib use the native separator.
+    target = REPO.joinpath(*link.split("/"))
     if not target.exists():
         problems.append(f"README links to a path that does not exist: {link}")
 

@@ -40,8 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(auth): redeem single-use codes with a compare-and-set, not a read-then-write
 - fix(auth): unblock login on web and APK (MFA step-up, unauth resend, proxy/APK errors)
 - fix(ci): exempt changelog-regenerating commits by changed paths, not subject text
+- fix(ci): make the lockfile guardrail deterministic
 - fix(ci): pin every action to a commit SHA and scope registry permission
 - fix(ci): serialise release and deploy runs per git ref
+- fix(ci): upgrade setuptools before pip-audit; refresh lock to current resolution
 - fix(db): reconcile ORM/migration drift so alembic check passes
 - fix(encoding): add .gitattributes and repair three encoding defects
 - fix(pdf): enable Bengali complex-script shaping in PDF renderers
@@ -92,6 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: purge session-report accumulation, rewrite README, add docs index
 - docs: record Vercel sync verification + fix git-push auto-deploy (root dir apps/web)
 - docs: record final v0.9.2 live sync (tunnel host amd-reproduction-clips-cricket)
+- docs: regenerate CHANGELOG
 - docs: regenerate CHANGELOG for the current batch
 - docs: ship the bundled font's licence, third-party notices, contributing guide
 
