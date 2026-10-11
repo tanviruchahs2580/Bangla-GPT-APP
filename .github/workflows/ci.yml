@@ -85,7 +85,17 @@ jobs:
       - name: Dependency audit (pip-audit, fail on vulnerable)
         # pip-audit exits non-zero when any vulnerability is found, so the
         # bare command already fails the gate (there is no --fail-on flag).
-        run: python -m pip_audit
+        #
+        # setuptools is a build backend (build-system.requires), never a shipped
+        # runtime dependency, but pip-audit scans the whole environment and so
+        # picks up whatever setuptools the runner image happens to ship. The
+        # Python 3.11 image carried 79.0.1, which PYSEC-2026-3447 flags
+        # (fixed in 83.0.0), failing a leg over tooling we do not ship. Upgrade
+        # to the fixed release before auditing so the gate reports real,
+        # application-relevant vulnerabilities instead of runner drift.
+        run: |
+          python -m pip install --quiet --upgrade "setuptools>=83.0.0"
+          python -m pip_audit
 
       - name: Alembic migration check
         # Dedicated throwaway DB (step isolation): a genuine up/down/up cycle
