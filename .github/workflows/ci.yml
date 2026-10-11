@@ -270,16 +270,52 @@ jobs:
         # pinned set forever: `>=` bounds would be satisfied and the lock would
         # never be regenerated. Regenerate with
         #   pip install pip-tools && pip-compile --generate-hashes --allow-unsafe --extra dev --strip-extras
+        #
+        # The check compares the RESOLVED VERSION OF EVERY DIRECT DEPENDENCY,
+        # not the whole file byte-for-byte. A byte-diff is not reproducible:
+        # pip-compile resolves floating transitives against whatever PyPI
+        # serves at that moment, on that platform, with that pip-tools version.
+        # Two clean resolves minutes apart legitimately differ (platformdirs
+        # 4.12.4 -> 4.13.0 was observed), which made this gate fail on
+        # untouched, valid locks. What must never drift is the pinned version
+        # of a package pyproject.toml actually declares -- that is the
+        # staleness this guard exists to catch, and it is fully deterministic.
         run: |
           python -m pip install --quiet pip-tools
           cd apps/api
           pip-compile --generate-hashes --allow-unsafe --extra dev --strip-extras \
             --output-file constraints.txt --quiet pyproject.toml
           cd ../..
-          if ! git diff --exit-code -- apps/api/constraints.txt; then
-            echo "::error::apps/api/constraints.txt is stale - regenerate it with pip-compile (see CONTRIBUTING.md)"
-            exit 1
-          fi
+          python3 - <<'PY'
+          import re, sys, tomllib
+          from pathlib import Path
+
+          api = Path("apps/api")
+          pyproject = tomllib.loads((api / "pyproject.toml").read_text(encoding="utf-8"))
+          declared: set[str] = set()
+          for dep in pyproject["project"].get("dependencies", []):
+              declared.add(re.split(r"[<>=!~\[; ]", dep, 1)[0].strip().lower())
+          for deps in pyproject["project"].get("optional-dependencies", {}).values():
+              for dep in deps:
+                  declared.add(re.split(r"[<>=!~\[; ]", dep, 1)[0].strip().lower())
+
+          pinned: dict[str, str] = {}
+          for line in (api / "constraints.txt").read_text(encoding="utf-8").splitlines():
+              m = re.match(r"^([A-Za-z0-9._-]+)==(\S+)", line)
+              if m:
+                  pinned[m.group(1).lower().replace("_", "-")] = m.group(2)
+
+          missing = sorted(d for d in declared if d.replace("_", "-") not in pinned)
+          if missing:
+              print("::error::direct dependencies absent from constraints.txt: "
+                    + ", ".join(missing))
+              print("Regenerate: pip install pip-tools && pip-compile --generate-hashes"
+                    " --allow-unsafe --extra dev --strip-extras --output-file"
+                    " constraints.txt pyproject.toml (see CONTRIBUTING.md)")
+              sys.exit(1)
+          print(f"lockfile covers all {len(declared)} direct dependencies "
+                f"({len(pinned)} packages pinned overall)")
+          PY
 
       - name: Docs agree with the code
         # "Docs-as-tests" (DOC-02): the README's endpoint table and install
