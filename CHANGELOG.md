@@ -69,6 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - build(api): turn on mypy strictness per flag, with a written plan to the rest
 - build(api): widen the ruff rule set from 5 families to 15, fixing what it found
 - build(ci): add guardrails for coverage, migration drift, secrets and Bangla
+- build(ci): let the changelog check tolerate its own regeneration commit
 - build(deps): add Dependabot config for all four ecosystems
 - build(web): add type-aware ESLint and fix the 175 findings it found
 - build: lock the dependency set, pin the base image, and attest what ships
@@ -90,6 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: purge session-report accumulation, rewrite README, add docs index
 - docs: record Vercel sync verification + fix git-push auto-deploy (root dir apps/web)
 - docs: record final v0.9.2 live sync (tunnel host amd-reproduction-clips-cricket)
+- docs: regenerate CHANGELOG for the current batch
 - docs: ship the bundled font's licence, third-party notices, contributing guide
 
 ### Tests

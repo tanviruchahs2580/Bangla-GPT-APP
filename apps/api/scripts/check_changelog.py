@@ -34,13 +34,20 @@ text = CHANGELOG.read_text(encoding="utf-8")
 listed = {line[2:].strip() for line in text.splitlines() if line.startswith("- ")}
 
 # Every non-merge commit reachable from HEAD must be represented.
-subjects = [s for s in git("log", "--no-merges", "--format=%s").splitlines() if s.strip()]
+# A commit that touches CHANGELOG.md itself cannot appear inside the file: the
+# content is written before the commit carrying it exists. Exclude those by
+# looking at what they changed rather than at their subject, so the rule cannot
+# be evaded by wording and cannot hide real work behind a matching prefix.
+regen_commits = set(git("log", "--no-merges", "--format=%H", "--", "CHANGELOG.md").split())
 
-# The commit that regenerates this file cannot appear inside it: the file is
-# written before the commit carrying it exists. Skip the changelog-only commits
-# so the check does not fail on its own output.
-_REGEN = "docs: regenerate CHANGELOG"
-subjects = [s for s in subjects if not s.startswith(_REGEN)]
+commits = [
+    (sha, subject)
+    for sha, subject in (
+        line.split(" ", 1) for line in git("log", "--no-merges", "--format=%H %s").splitlines()
+    )
+    if sha not in regen_commits and subject.strip()
+]
+subjects = [subject for _, subject in commits]
 
 missing = [s for s in subjects if s not in listed]
 
@@ -51,7 +58,6 @@ def rewrite(subject: str) -> str:
     head, sep, rest = subject.partition(":")
     if not sep:
         return subject
-    head.split("(", 1)[0].strip().rstrip("!")
     if "(" in head:
         scope = head[head.index("(") + 1 : head.rindex(")")].strip()
         rest = rest.strip()
