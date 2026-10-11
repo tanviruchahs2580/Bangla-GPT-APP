@@ -5,7 +5,7 @@
 # Docker Desktop bind mounts silently yield missing files for host paths
 # with spaces, and config drift between image and host is avoided anyway --
 # this file lives in the repo and every change is a rebuild.
-FROM postgres:16
+FROM postgres:18
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends pgbackrest \
