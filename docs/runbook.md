@@ -301,6 +301,36 @@ Quarterly rotation procedure:
   one live `/tutor/ask`. Old key must be revoked in AI Studio.
 - SMTP credentials: rotate in `.env`; test via `/auth/forgot`.
 
+### Vercel deployment token
+
+`VERCEL_TOKEN` is a repository secret consumed by `.github/workflows/vercel-deploy.yml`.
+It has been the single point of failure for production web deploys: on 2026-10-11 the
+token that last succeeded on 2026-10-06 was rejected, every deploy since has failed at
+the `Deploy (production)` step, and the post-deploy smoke check never ran.
+
+A rejection is Vercel-side, not GitHub-side. GitHub reported no change to the secret
+after 2026-10-06T19:36Z, and the deploys at 19:39 and 20:07 that same day succeeded with
+it. So when this happens, the token was revoked or expired in Vercel; re-saving the same
+value in GitHub will not fix it.
+
+To rotate:
+
+1. Mint a new token: Vercel dashboard → account Settings → Tokens → Create. Scope it to
+   the team that owns `bangla-gpt-app` and grant only what `vercel deploy --prod` needs.
+2. Revoke the old token in the same screen. Do this second, after the new one is
+   confirmed working, so a bad mint does not leave the project with neither.
+3. Update the repository secret:
+   `gh secret set VERCEL_TOKEN --repo tanviruchahs2580/Bangla-GPT-APP`
+4. Re-run the deploy. The workflow's `Preflight: deployment credentials` step calls
+   `vercel whoami` before doing any work, so a bad token now fails in seconds with a
+   named cause instead of after a full `npx` download.
+5. Verify the alias: `curl -s -o /dev/null -w '%{http_code}\n' https://bangla-gpt-app.vercel.app/login`
+   must return 200.
+
+Note that this token deploys with whatever `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` point
+at. Those are also repository secrets and neither has been rotated; if the Vercel project
+was ever recreated under a new team, rotate all three together rather than one at a time.
+
 ### Capacity plan & load testing
 - Baseline: 2 uvicorn workers handle ~120 concurrent quiz journeys at
   p95<300 ms (DB-bound). The LLM path is upstream-bound: budget ~2-8 s p95

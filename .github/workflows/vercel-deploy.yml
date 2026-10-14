@@ -60,6 +60,25 @@ jobs:
           printf '{"projectId":"%s","orgId":"%s","projectName":"bangla-gpt-app"}\n' \
             "$VERCEL_PROJECT_ID" "$VERCEL_ORG_ID" > .vercel/project.json
 
+      - name: "Preflight: deployment credentials"
+        # Vercel rejects a revoked or expired token with one line of CLI output
+        # ("The token provided via `--token` argument is not valid") that arrives
+        # after the whole CLI has downloaded and run. On 2026-10-11 that left
+        # production web deploys broken for five days with nothing in the log
+        # naming the cause. `vercel whoami` is a single authenticated request, so
+        # it distinguishes "the secret is absent" from "Vercel rejected it" in
+        # seconds and before any deploy work happens.
+        run: |
+          set -euo pipefail
+          if [ -z "${VERCEL_TOKEN:-}" ] || [ -z "${VERCEL_ORG_ID:-}" ] || [ -z "${VERCEL_PROJECT_ID:-}" ]; then
+            echo "::error title=Missing secret::VERCEL_TOKEN, VERCEL_ORG_ID or VERCEL_PROJECT_ID is not set. Repository secrets cannot be read from a fork."
+            exit 1
+          fi
+          if ! npx --yes vercel@63.1.0 whoami --token="$VERCEL_TOKEN" 2>&1; then
+            echo "::error title=Rejected credential::Vercel refused VERCEL_TOKEN. It was revoked or expired on the Vercel side; re-saving the same value in GitHub will not fix it. Mint a new token and follow docs/runbook.md 'Vercel deployment token'."
+            exit 1
+          fi
+
       - name: Deploy (production)
         # Version-pinned: the previous `npx vercel` resolved whatever was
         # latest at run time and executed it with a production token.
