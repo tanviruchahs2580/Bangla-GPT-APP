@@ -55,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): clear footer from bottom nav + cut a round-trip from login
 - fix(web): close-JSDoc sequence inside edge-proxy comment broke Vercel TS build
 - fix(web): configurable production API origin via edge proxy (FE-01)
+- fix(web): fail honestly when the API origin is unreachable
 - fix(web): guarantee minimum gap between stacked page sections
 - fix(web): localize consent/invite copy, theme icon sync, error states, icon cleanup
 - fix(web): notification panel no longer clipped off the left edge
@@ -99,6 +100,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: record final v0.9.2 live sync (tunnel host amd-reproduction-clips-cricket)
 - docs: regenerate CHANGELOG
 - docs: regenerate CHANGELOG for the current batch
+- docs: regenerate CHANGELOG for the two CI fixes
 - docs: ship the bundled font's licence, third-party notices, contributing guide
 
 ### Tests
