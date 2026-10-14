@@ -7,23 +7,11 @@ work without regenerating it.
 """
 
 import re
-import subprocess
 import sys
-from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[3]
+from _changelog_common import COMMIT_FORMAT, REPO, git, is_bot, parse_commit
+
 CHANGELOG = REPO / "CHANGELOG.md"
-
-
-def git(*args: str) -> str:
-    return subprocess.run(
-        ["git", *args],
-        cwd=REPO,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=True,
-    ).stdout
 
 
 if not CHANGELOG.is_file():
@@ -40,14 +28,18 @@ listed = {line[2:].strip() for line in text.splitlines() if line.startswith("- "
 # be evaded by wording and cannot hide real work behind a matching prefix.
 regen_commits = set(git("log", "--no-merges", "--format=%H", "--", "CHANGELOG.md").split())
 
-commits = [
-    (sha, subject)
-    for sha, subject in (
-        line.split(" ", 1) for line in git("log", "--no-merges", "--format=%H %s").splitlines()
-    )
-    if sha not in regen_commits and subject.strip()
-]
-subjects = [subject for _, subject in commits]
+commits = []
+excluded_bots = 0
+for line in git("log", "--no-merges", f"--format={COMMIT_FORMAT}").splitlines():
+    sha, _author, email, subject = parse_commit(line)
+    if sha in regen_commits or not subject.strip():
+        continue
+    if is_bot(email):
+        # Recorded on the bot's own pull request instead; see _changelog_common.
+        excluded_bots += 1
+        continue
+    commits.append(subject)
+subjects = commits
 
 missing = [s for s in subjects if s not in listed]
 
@@ -91,4 +83,5 @@ if tag_versions - actual_tags:
 print(
     f"CHANGELOG.md accounts for all {len(subjects)} commits across"
     f" {len(tag_versions)} released versions."
+    + (f" {excluded_bots} bot commit(s) exempt." if excluded_bots else "")
 )
