@@ -432,6 +432,20 @@ def test_register_and_mfa_are_rate_limited() -> None:
     assert "/auth/mfa" in rules, rules.keys()
     assert rules["/auth/register"][0] > 0
 
+    # F-076: ``RATE_LIMIT_RULES`` REPLACES the whole default map, so an operator
+    # who overrides a single route must not silently unbind the account-creating
+    # and secret-consuming routes. The derived defaults in
+    # ``_derive_default_rules`` are the safety net for exactly that case, and
+    # this is the path that makes them load-bearing: with the config map reduced
+    # to one entry, register/mfa/challenge can only come from the derivation.
+    # (/auth/forgot is used rather than /auth/login: login is one of the four
+    # per-field routes, where the dedicated knob deliberately wins.)
+    partial = _effective_rules(_settings_standalone(rate_limit_rules={"/auth/forgot": (3, "ip")}))
+    assert partial["/auth/forgot"] == (3, "ip")
+    for route in ("/auth/register", "/auth/mfa", "/auth/mfa/challenge"):
+        assert route in partial, (route, partial.keys())
+        assert partial[route][0] > 0
+
 
 def test_register_eventually_returns_429(client) -> None:
     """Not vacuous: the limit must actually bite."""
