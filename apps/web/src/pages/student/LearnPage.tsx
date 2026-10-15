@@ -475,7 +475,10 @@ export function LearnChapterPage() {
         <Card>
           <div className="center muted" role="alert">
             {t("loadFailed")}{" "}
-            <button className="btn btn-sm btn-ghost" onClick={() => query.refetch()}>
+            <button
+              className="btn btn-sm btn-ghost"
+              onClick={() => query.refetch()}
+            >
               {t("retry")}
             </button>
           </div>

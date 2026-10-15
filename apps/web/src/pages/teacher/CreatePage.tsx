@@ -366,7 +366,11 @@ export function ShortTestFlow() {
               onChange={(e) => setChapter(e.target.value)}
             />
           </Field>
-          <Field label={t("classrooms")} htmlFor="strom" className="field-inline">
+          <Field
+            label={t("classrooms")}
+            htmlFor="strom"
+            className="field-inline"
+          >
             <select
               id="strom"
               className="select"

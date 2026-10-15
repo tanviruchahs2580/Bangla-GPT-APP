@@ -25,7 +25,13 @@ import type {
 // Every value RoleUpdateRequest accepts. school_admin was missing here, so the
 // table rendered a school_admin row with the first option ("student") selected
 // and offered no way back — saving any other edit on that row would demote them.
-const ROLES = ["student", "teacher", "parent", "school_admin", "admin"] as const;
+const ROLES = [
+  "student",
+  "teacher",
+  "parent",
+  "school_admin",
+  "admin",
+] as const;
 const INVITE_ROLES = ["teacher", "school_admin"] as const;
 
 function errOf(err: unknown): string {

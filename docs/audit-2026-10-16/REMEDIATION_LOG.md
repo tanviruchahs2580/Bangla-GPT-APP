@@ -15,7 +15,7 @@ reformatted. Each change is the smallest one that resolves the root cause.
 | | |
 |---|---|
 | Files | `README.md:60` |
-| Root cause | The owner's staged rename of the QA record moved `docs/qa-audit-2026-10-06.md` into `docs/archive/`, but the root README still linked the old path, so `apps/api/scripts/check_readme_contract.py` failed and the CI guardrails job would be red. |
+| Root cause | The owner's staged rename of the QA record moved `docs/archive/qa-audit-2026-10-06.md` out of `docs/`, but the root README still linked the old path, so `apps/api/scripts/check_readme_contract.py` failed and the CI guardrails job would be red. |
 | Change | The "Current QA record" line now points at `docs/qa-audit-2026-10-14.md` (matching `docs/README.md`'s "exactly one current record" rule) and links the archived record separately. |
 | Evidence | Before: `::error::README links to a path that does not exist: docs/qa-audit-2026-10-06.md`, `EXIT=1`. After: "README endpoint table agrees with the metrics gate and CI install command.", `EXIT=0`. |
 

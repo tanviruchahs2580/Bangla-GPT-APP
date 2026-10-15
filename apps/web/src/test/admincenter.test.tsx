@@ -1,6 +1,12 @@
 /** admin center renders school stats, version rows, invite create/revoke. */
 
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import AdminDashboard from "../pages/AdminDashboard";
 import { t } from "../i18n";
@@ -168,8 +174,7 @@ describe("admin center", () => {
 
   it("offers school_admin as a role and shows a school_admin row as itself", async () => {
     const original = apiMock.get.getMockImplementation() as
-      | ((path: string) => Promise<unknown>)
-      | undefined;
+      ((path: string) => Promise<unknown>) | undefined;
     apiMock.get.mockImplementation((path: string) => {
       if (path.startsWith("/admin/users")) {
         return Promise.resolve({
@@ -203,7 +208,13 @@ describe("admin center", () => {
   it("shows a retryable error when the feedback queue fails instead of loading forever", async () => {
     apiMock.getFeedbackQueue
       .mockRejectedValueOnce(new Error("boom"))
-      .mockResolvedValueOnce({ rows: [], total: 0, open_count: 0, limit: 20, offset: 0 });
+      .mockResolvedValueOnce({
+        rows: [],
+        total: 0,
+        open_count: 0,
+        limit: 20,
+        offset: 0,
+      });
 
     render(<AdminDashboard />);
     await screen.findByText("Adm School");
@@ -215,7 +226,9 @@ describe("admin center", () => {
     expect(alert.textContent).toContain(t("errGeneric"));
 
     fireEvent.click(screen.getByRole("button", { name: t("retry") }));
-    await waitFor(() => expect(apiMock.getFeedbackQueue).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(apiMock.getFeedbackQueue).toHaveBeenCalledTimes(2),
+    );
     await waitFor(() =>
       expect(screen.getByText(t("admNoFeedback"))).toBeInTheDocument(),
     );

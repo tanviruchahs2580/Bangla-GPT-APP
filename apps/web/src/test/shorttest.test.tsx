@@ -135,8 +135,7 @@ describe("short test assignment card", () => {
     // Two rooms: the form used to post to whichever room loaded first, with no
     // way to see or change the target.
     const original = apiMock.get.getMockImplementation() as
-      | ((path: string) => Promise<unknown>)
-      | undefined;
+      ((path: string) => Promise<unknown>) | undefined;
     apiMock.get.mockImplementation((path: string) => {
       if (path === "/teacher/classrooms")
         return Promise.resolve([

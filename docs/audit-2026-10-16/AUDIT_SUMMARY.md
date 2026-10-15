@@ -164,7 +164,8 @@ teacher generation flow end to end in the browser.
 
 - Audit dev servers stopped (ports 8010 and 5273, plus the second SPA server on
   5173); the pre-existing dev server on port 8000 was **not touched**.
-- Temporary artifacts removed: `apps/web/vite.audit.config.ts`,
+- Temporary artifacts removed: the throwaway Vite config the live pass used
+  (a temporary file, since deleted),
   `apps/api/.audit-dev.db`, the drift-check SQLite file, the temporary audit DB
   directory.
 - No temporary file, generated artifact or secret was left in the tracked tree.

@@ -118,13 +118,16 @@ describe("me-page report suggestion", () => {
 
   it("falls back to the raw code when the server sends an unknown one", () => {
     expect(
-      suggestionSentence({ suggestion_code: "sugg_from_the_future", suggestion_params: {} }),
+      suggestionSentence({
+        suggestion_code: "sugg_from_the_future",
+        suggestion_params: {},
+      }),
     ).toBe("sugg_from_the_future");
   });
 
   it("does not print a placeholder when params are missing", () => {
-    expect(suggestionSentence({ suggestion_code: "sugg_general_support" })).toBe(
-      t("sugg_general_support"),
-    );
+    expect(
+      suggestionSentence({ suggestion_code: "sugg_general_support" }),
+    ).toBe(t("sugg_general_support"));
   });
 });

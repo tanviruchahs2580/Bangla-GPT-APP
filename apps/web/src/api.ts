@@ -295,7 +295,11 @@ export async function postStream<T>(
     // No terminal frame: a proxy timeout, or the server died mid-answer.
     // Resolving null handed callers an object they dereference, so a truncated
     // answer looked like a successful empty one (BUG-005).
-    throw new ApiError(502, "stream ended before completion", "llm_unavailable");
+    throw new ApiError(
+      502,
+      "stream ended before completion",
+      "llm_unavailable",
+    );
   }
   return done as T;
 }

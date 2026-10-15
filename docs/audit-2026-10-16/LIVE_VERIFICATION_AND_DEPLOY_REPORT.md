@@ -21,7 +21,8 @@ credentials were needed to observe them):
 - The same job failed at 11:40Z the same day, so this is persistent, not a blip.
 - The repository **does** have `VERCEL_TOKEN`, `VERCEL_ORG_ID` and
   `VERCEL_PROJECT_ID` secrets configured, and the project link
-  (`apps/web/.vercel/project.json`) is intact: `rootDirectory: apps/web`,
+  (the project link kept under `apps/web/.vercel/`) is intact:
+  `rootDirectory: apps/web`,
   framework `vite`, build `npm run build`, output `dist`.
 - **Not resolvable from here:** the local Vercel CLI is logged out and no token
   exists on disk (only an expired `VERCEL_OIDC_TOKEN`). Minting a replacement
@@ -129,16 +130,51 @@ files restored byte-identically.
 
 ## 4. Pipeline execution
 
-| Step | Result |
-|---|---|
-| Suites before the pipeline | API **828 passed / 6 skipped**; web **165 passed / 48 files**; ruff, mypy, eslint, tsc, vite build, README/changelog/i18n guardrails all green |
-| Branch | `audit/2026-10-16-live-verification` (SOP: no direct pushes to `main`) |
-| Commits | (1) Android release assets + QA record, (2) verified remediation, (3) this audit package |
-| Required checks on `main` | 7 contexts: Lint & test (3.11), Lint & test (3.12), Postgres engine check, Golden retrieval benchmark, Web build & test, Repository guardrails, Docker build & container smoke |
-| Branch protection | 1 approving review required, `dismiss_stale_reviews`, `require_last_push_approval`, `strict`; admins can bypass (`enforce_admins: false`) |
-| Deploy path | merge to `main` → CI + eval gate → `vercel-deploy.yml` (`workflow_run` on a successful main push) → `vercel --prod` |
+SOP followed: branch → commits → pull request → required checks → merge →
+deploy. Nothing was pushed to `main` directly.
 
-Local execution limits (stated, not hidden): Docker's daemon is not running on
-this machine, so the Postgres migration cycle and the container smoke test are
-**NOT RUN locally** — they run in the GitHub job instead. The golden eval CLI was
-likewise left to CI.
+### 4.1 First attempt failed on a stale clone (recorded, not hidden)
+The branch was first cut from `bbac954`, the commit the working tree had been
+based on. `origin/main` had already advanced to `42ae3f9` (PRs #9, #10, #14),
+which the local clone's remote-tracking ref did not show until an explicit
+`git fetch`. The PR therefore conflicted, and GitHub never created a
+`pull_request`-triggered workflow run — the failure looked like "CI is not
+starting" but was a mergeability problem. Lesson recorded for the process:
+fetch before declaring a baseline.
+
+### 4.2 Rebase and re-verification
+Rather than replay diffs, every carried change was re-checked against
+`42ae3f9` and only the still-needed ones were re-applied (disposition table in
+`AUDIT_FINDINGS.md` §Addendum). Two carried items had been implemented upstream
+by PR #10 and were dropped in favour of upstream's code, keeping only their
+regression tests. Two others turned out never to have reached `main` and were
+re-applied, each proven necessary by a carried test failing without them
+(teacher AI budget: 6 failures; teacher rate-limit rules: 9 failures).
+
+Verification on the rebased tree:
+
+| Gate | Result |
+|---|---|
+| `pytest -q` (apps/api) | **950 passed, 6 skipped, 1 failed** |
+| the one failure | `test_chat_history_crud.py::test_message_search_finds_own_history` — passes in isolation (`6 passed`); a per-process 60s rate-limit window shared by the whole suite makes it speed-dependent (recorded as `F-41`) |
+| `vitest run` (apps/web, after a clean `npm ci`) | **183 passed / 49 files** |
+| ruff, ruff format, mypy | exit 0 |
+| eslint, tsc, vite build, prettier | exit 0 (after the CI-found fix below) |
+| Guardrails (README, changelog, i18n) | exit 0 |
+| All-roles E2E over real HTTP | **154 / 154 checks pass** |
+
+### 4.3 What CI caught that local runs did not
+The first hosted run failed two required checks — both real, both fixed:
+
+1. **Repository guardrails** — `check_changelog.py` requires every commit to be
+   represented in `CHANGELOG.md`, and a commit is only exempt if it touches
+   that file itself. The branch commits were not. Fixed by regenerating the
+   changelog and amending it into the commit that carries it.
+2. **Web build & test** — `main` added `npm run format:check` to the web job
+   after this branch's baseline, and seven of the files this branch touched
+   were unformatted. Fixed with `prettier --write` on exactly those files
+   (formatting only; lint, 183 tests and the build still pass).
+
+Hosted results for the remaining checks on the corrected branch: Postgres
+engine check **pass**, Docker build & smoke **pass**, golden retrieval benchmark
+**pass**, eval gate **pass**, Web build & test **pass**.
