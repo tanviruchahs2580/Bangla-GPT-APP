@@ -81,12 +81,15 @@ def test_cell_at_threshold_included_with_counts(session: Session) -> None:
     for s in students:
         _attempt(session, s, score_pct=70.0)
     _attempt(session, students[0], score_pct=90.0)  # second attempt, same student
-    session.add(Conversation(student_id=students[1].id, title="t"))
-    session.add(Conversation(student_id=students[3].id, title="t"))
+    # F-062: active_tutor_students is itself a cohort count and is now
+    # suppressed below min_cell like every other count. Five students at
+    # class 6, two of whom used the tutor, is exactly the small cell that
+    # release would re-identify -- the previous code published it verbatim.
+    for s in students[:2]:
+        session.add(Conversation(student_id=s.id, title="t"))
     session.commit()
 
     export = aggregate(session)
-    assert export.meta.suppressed_cells == 0
     assert len(export.rows) == 1
     row = export.rows[0]
     assert row == {
@@ -95,30 +98,72 @@ def test_cell_at_threshold_included_with_counts(session: Session) -> None:
         "students": 5,  # distinct students, not attempts
         "quiz_attempts": 6,
         "avg_score_pct": 73.33,
-        "active_tutor_students": 2,
+        "active_tutor_students": "",  # suppressed: 2 < min_cell 5
     }
     assert export.meta.total_students_included == 5
+    # The suppression is counted, not silently zeroed, so a reader can tell
+    # "withheld" from "genuinely zero".
+    assert export.meta.suppressed_cells == 1
+
+
+def test_active_tutor_count_is_released_once_it_reaches_the_threshold(session: Session) -> None:
+    """Non-vacuity: the fix must not suppress everything."""
+    students = [_student(session, i) for i in range(5)]
+    for s in students:
+        _attempt(session, s, score_pct=70.0)
+    for s in students:
+        session.add(Conversation(student_id=s.id, title="t"))
+    session.commit()
+
+    export = aggregate(session)
+    assert export.rows[0]["active_tutor_students"] == 5
+    assert export.meta.suppressed_cells == 0
+
+
+def test_min_cell_cannot_be_dialed_below_the_floor(session: Session) -> None:
+    """F-062: ``?min_cell=3`` used to release a 4-child cohort.
+
+    The route accepted ge=3, so the k-anonymity guarantee was whatever the
+    requester asked for. The floor is now enforced in the service, so a
+    second caller cannot bypass the HTTP-level constraint either.
+    """
+    from bangla_gpt_api.services.govt_report import MIN_CELL_FLOOR, effective_min_cell
+
+    assert effective_min_cell(1) == MIN_CELL_FLOOR
+    assert effective_min_cell(3) == MIN_CELL_FLOOR
+    assert effective_min_cell(MIN_CELL_FLOOR) == MIN_CELL_FLOOR
+    assert effective_min_cell(12) == 12  # raising is still allowed
+    assert effective_min_cell(None) == 5
+
+    for i in range(4):
+        _attempt(session, _student(session, i))
+    assert aggregate(session, min_cell=1).rows == []
 
 
 def test_since_days_window_excludes_old_attempts(session: Session) -> None:
     from datetime import UTC, datetime, timedelta
 
-    s = _student(session, 1)
-    old = _attempt(session, s)
+    # Five students so the cell clears the k-anonymity floor. The window is
+    # the only thing under test here, so the cohort must not be the variable.
+    students = [_student(session, i) for i in range(5)]
+    for s in students:
+        _attempt(session, s)
+    old = _attempt(session, students[0])
     old.created_at = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=100)
-    _attempt(session, s)
     session.commit()
 
-    assert aggregate(session, min_cell=1).rows[0]["quiz_attempts"] == 2
-    assert aggregate(session, since_days=30, min_cell=1).rows[0]["quiz_attempts"] == 1
+    assert aggregate(session, since_days=3650, min_cell=5).rows[0]["quiz_attempts"] == 6
+    assert aggregate(session, since_days=30, min_cell=5).rows[0]["quiz_attempts"] == 5
 
 
 def test_csv_escapes_formula_injection(session: Session) -> None:
     import csv as csv_mod
     import io
 
-    _attempt(session, _student(session, 1))
-    export = aggregate(session, district='=HYPERLINK("http://evil")', min_cell=1)
+    for i in range(5):
+        _attempt(session, _student(session, i))
+    session.commit()
+    export = aggregate(session, district='=HYPERLINK("http://evil")', min_cell=5)
     rows = list(csv_mod.reader(io.StringIO(to_csv(export))))
     assert rows[0][0] == "district"
     assert rows[1][0].startswith("'=")  # leading apostrophe neutralizes the formula

@@ -261,6 +261,54 @@ def export_me(response: Response, db: DbSession, user: CurrentUser) -> DataExpor
         }
         for a in attempt_rows
     ]
+    # F-063: a student's export stopped at quiz scores. The conversations and
+    # chat messages -- the largest body of personal data this product holds
+    # about a child -- were not exported at all, so the "download everything
+    # we hold about you" endpoint answered with a fraction of the truth.
+    conversations: list[dict] = []
+    chat_messages: list[dict] = []
+    learning_activity: list[dict] = []
+    if student is not None:
+        conv_rows = list(
+            db.execute(select(Conversation).where(Conversation.student_id == student.id)).scalars()
+        )
+        conv_ids = [c.id for c in conv_rows]
+        conversations = [
+            {
+                "id": c.id,
+                "title": c.title,
+                "created_at": c.created_at.isoformat() if c.created_at else None,
+            }
+            for c in conv_rows
+        ]
+        if conv_ids:
+            for m in (
+                db.execute(select(ChatMessage).where(ChatMessage.conversation_id.in_(conv_ids)))
+                .scalars()
+                .all()
+            ):
+                chat_messages.append(
+                    {
+                        "conversation_id": m.conversation_id,
+                        "role": m.role,
+                        "content": m.content,
+                        "created_at": m.created_at.isoformat() if m.created_at else None,
+                    }
+                )
+        learning_activity = [
+            {
+                "date": row.date,
+                "questions": row.questions,
+                "quizzes": row.quizzes,
+                "minutes": row.minutes,
+            }
+            for row in (
+                db.execute(select(DailyActivity).where(DailyActivity.student_id == student.id))
+                .scalars()
+                .all()
+            )
+        ]
+
     # audit event 2/5: data_export (self-service; only the fact is
     # logged -- the payload itself never touches logs or audit rows).
     write_audit(
@@ -282,6 +330,9 @@ def export_me(response: Response, db: DbSession, user: CurrentUser) -> DataExpor
         profile=profile,
         quiz_attempts=attempts,
         parent_links=links,
+        conversations=conversations,
+        chat_messages=chat_messages,
+        learning_activity=learning_activity,
     )
 
 

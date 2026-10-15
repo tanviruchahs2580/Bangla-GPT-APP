@@ -283,7 +283,17 @@ def admin_report_aggregate(
     format: str = Query(default="json", pattern="^(json|csv|pdf)$"),
     district: str = Query(default="", max_length=60),
     since_days: int | None = Query(default=None, ge=1, le=3650),
-    min_cell: int = Query(default=5, ge=3, le=50),
+    min_cell: int = Query(
+        default=govt_report.DEFAULT_MIN_CELL,
+        ge=govt_report.MIN_CELL_FLOOR,
+        le=50,
+        description=(
+            "k-anonymity threshold. Raising it suppresses more cells; values "
+            f"below {govt_report.MIN_CELL_FLOOR} are refused rather than "
+            "clamped, because the guarantee must not be the requester's to "
+            "lower."
+        ),
+    ),
 ) -> Response:
     """anonymized aggregate export for government/authority
     requests. Cells below the k-anonymity threshold are suppressed, and
