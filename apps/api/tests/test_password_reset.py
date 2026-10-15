@@ -250,12 +250,17 @@ def test_production_boot_guard_refuses_insecure_settings(tmp_path) -> None:
             )
         )
     with pytest.raises(RuntimeError, match="ADMIN_EMAIL"):
-        create_app(Settings(env="production", jwt_secret="x" * 40))
+        create_app(
+            Settings(
+                env="production",
+                jwt_secret="Zk7Qp2XvN8mR4tYcW1bH6jL3sD9fG5aE0uI2oP7xV4qM8nC6rT1wY3zB5",
+            )
+        )
     with pytest.raises(RuntimeError, match="ADMIN_PASSWORD"):
         create_app(
             Settings(
                 env="production",
-                jwt_secret="x" * 40,
+                jwt_secret="Zk7Qp2XvN8mR4tYcW1bH6jL3sD9fG5aE0uI2oP7xV4qM8nC6rT1wY3zB5",
                 admin_email="a@b.com",
                 admin_password="short12",
             )
@@ -265,7 +270,7 @@ def test_production_boot_guard_refuses_insecure_settings(tmp_path) -> None:
             Settings(
                 env="production",
                 database_url=f"sqlite:///{tmp_path}/prod-guard-nokey.db",
-                jwt_secret="x" * 40,
+                jwt_secret="Zk7Qp2XvN8mR4tYcW1bH6jL3sD9fG5aE0uI2oP7xV4qM8nC6rT1wY3zB5",
                 admin_email="a@b.com",
                 admin_password="longenoughpass1",
                 allowed_origins="https://app.example.com",
@@ -275,7 +280,7 @@ def test_production_boot_guard_refuses_insecure_settings(tmp_path) -> None:
         Settings(
             env="production",
             database_url=f"sqlite:///{tmp_path}/prod-guard.db",  # persistent (V8)
-            jwt_secret="x" * 40,
+            jwt_secret="Zk7Qp2XvN8mR4tYcW1bH6jL3sD9fG5aE0uI2oP7xV4qM8nC6rT1wY3zB5",
             admin_email="a@b.com",
             admin_password="longenoughpass1",
             allowed_origins="https://app.example.com",  # CORS allowlist required in prod

@@ -28,7 +28,7 @@ def _prod_settings(**over):
         admin_email="a@b.com",
         admin_password="longenoughpass1",
         allowed_origins="https://app.example.com",
-        pii_enc_key="k" * 32,
+        pii_enc_key="LjDorcxuiR0OrEApp_g6hwfAbKKwimZQOPIvEz1pRhk=",  # must be a real Fernet key (F-068)
         smtp_enabled=True,
         smtp_host="smtp.example.com",
         smtp_from="noreply@example.com",

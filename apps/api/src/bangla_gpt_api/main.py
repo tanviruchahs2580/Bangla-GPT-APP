@@ -21,6 +21,8 @@ import logging
 import os
 from typing import TYPE_CHECKING, Any
 
+from cryptography.fernet import Fernet
+
 from bangla_gpt_api import caching, initialize
 from bangla_gpt_api.config import DEFAULT_JWT_SECRET, Settings, get_settings
 
@@ -121,10 +123,53 @@ def _validate_smtp(settings: Settings) -> list[str]:
 
 
 def _validate_jwt(settings: Settings) -> list[str]:
-    """JWT_SECRET must be overridden in production with at least 32 random characters."""
+    """JWT_SECRET must be overridden in production and must have entropy.
+
+    The old check was length-only. ``JWT_SECRET='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'``
+    is 32 characters, satisfied every constraint in the previous validator,
+    and signs every token in the deployment. Length is necessary; it has never
+    been sufficient.
+    """
     if settings.jwt_secret == DEFAULT_JWT_SECRET or len(settings.jwt_secret) < 32:
         return ["JWT_SECRET must be overridden in production with at least 32 random characters"]
+    weak = _weak_secret_reason(settings.jwt_secret)
+    if weak:
+        return [f"JWT_SECRET is too predictable: {weak}"]
     return []
+
+
+def _weak_secret_reason(secret: str) -> str | None:
+    """Why this secret would fall to a trivial guessing attack, or None."""
+    if len(set(secret)) <= 4:
+        return (
+            f"it uses only {len(set(secret))} distinct characters "
+            "(32 of the same character passes a length check)"
+        )
+    lowered = secret.lower()
+    if lowered in _WEAK_SECRETS:
+        return "it is a well-known placeholder value"
+    # A single repeated unit, e.g. "abcabcabc..." or "123456123456...".
+    for unit in (3, 4, 6, 8, 12, 16):
+        if len(secret) % unit == 0 and secret[:unit] * (len(secret) // unit) == secret:
+            return f"it is a single {unit}-character block repeated"
+    # A pure ascending/descending run (checked arithmetically: chr() on a
+    # 64-byte urlsafe token walks off the end of the code point range).
+    deltas = {ord(secret[i + 1]) - ord(secret[i]) for i in range(len(secret) - 1)}
+    if len(deltas) == 1 and deltas.pop() in (1, -1):
+        return "it is a sequential character run"
+    return None
+
+
+#: Placeholder secrets that ship in templates, compose files and blog posts.
+_WEAK_SECRETS = frozenset(
+    {
+        "change-me-change-me-change-me",
+        "changemechangemechangeme",
+        "replace-me-with-a-real-secret",
+        "your-secret-key-goes-here!",
+        "please-change-this-secret",
+    }
+)
 
 
 def _validate_admin(settings: Settings) -> list[str]:
@@ -185,9 +230,24 @@ def _worker_count(settings: Settings) -> int:
 
 
 def _validate_pii(settings: Settings) -> list[str]:
-    """PII_ENC_KEY must be set in production (guardian phone encryption)."""
+    """PII_ENC_KEY must be a real Fernet key in production.
+
+    The old check was ``if not settings.pii_enc_key``. A value that is present
+    but malformed -- "not-a-fernet-key" -- passed the boot gate and then raised
+    ``ValueError`` on the first guardian phone that needed encrypting, i.e.
+    the guard failed at the worst possible moment rather than at startup.
+    """
     if not settings.pii_enc_key:
         return ["PII_ENC_KEY must be set in production (guardian phone encryption)"]
+    try:
+        Fernet(settings.pii_enc_key.encode())
+    except (ValueError, TypeError) as exc:
+        return [
+            "PII_ENC_KEY is not a valid Fernet key "
+            f"({type(exc).__name__}); generate one with "
+            '`python -c "from cryptography.fernet import Fernet;'
+            'print(Fernet.generate_key().decode())"`'
+        ]
     return []
 
 

@@ -183,6 +183,15 @@ class Settings(BaseSettings):
     rate_limit_rules: dict[str, tuple[int, str]] = {
         "/auth/login": (10, "ip"),
         "/auth/mfa/challenge": (5, "ip"),
+        # F-076: registration was unlimited -- each call runs Argon2id and
+        # sends a verification mail, so an unbounded caller was an unbounded
+        # CPU and mail pump from one address.
+        "/auth/register": (10, "ip"),
+        # The authenticated MFA legs (enroll/verify/disable). Scoped per user,
+        # not per IP, because a school NAT puts a whole class behind one
+        # address; the genuine brute-force surface is /auth/mfa/challenge
+        # above, which stays the tighter 5/minute bound.
+        "/auth/mfa": (20, "user"),
         "/tutor/ask": (30, "user"),
         "/tutor/conversations": (30, "user"),
         "/tutor": (60, "ip"),

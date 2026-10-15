@@ -26,6 +26,15 @@ def _derive_default_rules(settings: Settings) -> dict[str, tuple[int, str]]:
         # TOTP second factor: 6-digit space with a ±1 step window —
         # without this rule the challenge endpoint is brute-forceable.
         "/auth/mfa/challenge": (5, "ip"),
+        # F-076: two more account-creating / secret-consuming surfaces with no
+        # limit at all. Registration is unauthenticated and each call runs
+        # Argon2id plus a verification email, so an unbounded caller is an
+        # unbounded mail pump and CPU burner. The authenticated MFA legs are
+        # scoped per user rather than per IP, because a school NAT puts a
+        # whole class behind one address; the genuine brute-force surface is
+        # /auth/mfa/challenge above, which keeps the tighter bound.
+        "/auth/register": (10, "ip"),
+        "/auth/mfa": (20, "user"),
         "/tutor/ask": (settings.rate_limit_tutor_per_minute, "user"),
         # The chat LLM routes are /tutor/conversations/{id}/messages[/stream];
         # a "/tutor/chat" key matches no real path.

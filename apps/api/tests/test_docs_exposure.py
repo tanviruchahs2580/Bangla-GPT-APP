@@ -33,14 +33,14 @@ def _production_settings(tmp_path, **overrides) -> Settings:
     os.environ["WEB_CONCURRENCY"] = "1"
     base = {
         "env": "production",
-        "jwt_secret": "0" * 48,
+        "jwt_secret": "Zk7Qp2XvN8mR4tYcW1bH6jL3sD9fG5aE0uI2oP7xV4qM8nC6rT1wY3zB5",
         "database_url": f"sqlite:///{(tmp_path / 'prod.db').as_posix()}",
         "allowed_origins": "https://app.example.test",
         "admin_email": "admin@example.test",
         "admin_password": "Str0ngAdminPassw0rd!",
         "metrics_require_auth": True,
         "metrics_token": "metric" + "0" * 32,
-        "pii_enc_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "pii_enc_key": "LjDorcxuiR0OrEApp_g6hwfAbKKwimZQOPIvEz1pRhk=",
         "smtp_enabled": True,
         "smtp_host": "smtp.example.test",
         "smtp_from": "noreply@example.test",

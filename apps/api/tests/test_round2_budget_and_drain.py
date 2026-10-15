@@ -62,7 +62,7 @@ def test_production_settings_pass_the_budget_guard() -> None:
     settings = Settings(
         env="test",
         database_url="sqlite://",
-        jwt_secret="0" * 48,
+        jwt_secret="Zk7Qp2XvN8mR4tYcW1bH6jL3sD9fG5aE0uI2oP7xV4qM8nC6rT1wY3zB5",  # must survive the production entropy guard (F-067)
         llm_timeout_seconds=SHIPPED_TIMEOUT,
         llm_max_retries=SHIPPED_RETRIES,
     )
@@ -78,7 +78,7 @@ def test_production_settings_fail_the_budget_guard_when_it_cannot_fit() -> None:
     settings = Settings(
         env="test",
         database_url="sqlite://",
-        jwt_secret="0" * 48,
+        jwt_secret="Zk7Qp2XvN8mR4tYcW1bH6jL3sD9fG5aE0uI2oP7xV4qM8nC6rT1wY3zB5",  # must survive the production entropy guard (F-067)
         llm_timeout_seconds=600.0,
         llm_max_retries=0,
     )
@@ -135,7 +135,7 @@ def test_shutdown_drains_in_flight_ai_jobs(tmp_path) -> None:
     settings = Settings(
         env="test",
         database_url=f"sqlite:///{(tmp_path / 'drain.db').as_posix()}",
-        jwt_secret="0" * 48,
+        jwt_secret="Zk7Qp2XvN8mR4tYcW1bH6jL3sD9fG5aE0uI2oP7xV4qM8nC6rT1wY3zB5",  # must survive the production entropy guard (F-067)
         parent_digest_enabled=False,
         weakness_refresh_enabled=False,
     )
@@ -166,7 +166,7 @@ def test_shutdown_cancels_a_job_that_will_not_finish(tmp_path) -> None:
     settings = Settings(
         env="test",
         database_url=f"sqlite:///{(tmp_path / 'hung.db').as_posix()}",
-        jwt_secret="0" * 48,
+        jwt_secret="Zk7Qp2XvN8mR4tYcW1bH6jL3sD9fG5aE0uI2oP7xV4qM8nC6rT1wY3zB5",  # must survive the production entropy guard (F-067)
         parent_digest_enabled=False,
         weakness_refresh_enabled=False,
     )
@@ -194,7 +194,7 @@ def test_drain_is_a_no_op_when_there_are_no_jobs(tmp_path) -> None:
     settings = Settings(
         env="test",
         database_url=f"sqlite:///{(tmp_path / 'empty.db').as_posix()}",
-        jwt_secret="0" * 48,
+        jwt_secret="Zk7Qp2XvN8mR4tYcW1bH6jL3sD9fG5aE0uI2oP7xV4qM8nC6rT1wY3zB5",  # must survive the production entropy guard (F-067)
         parent_digest_enabled=False,
         weakness_refresh_enabled=False,
     )
