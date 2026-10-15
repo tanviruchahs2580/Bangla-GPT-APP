@@ -135,6 +135,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Other
 
 - Full engineering audit + remediation: 47 findings fixed, 0 open (#1)
+- ﻿fix(api): the PEP 621 readme path broke every Python CI job
 
 ## v0.9.2 - 2026-09-15
 

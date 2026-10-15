@@ -49,6 +49,13 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "sentry-sdk>=2.0",
     "fpdf2>=2.8.3",
+    # fpdf2 declares uharfbuzz only as a *test* extra, but it is a RUNTIME
+    # requirement for this project: services/qp_pdf.py calls
+    # set_text_shaping(True) at two sites, and that is what turns Bengali
+    # conjuncts into shaped glyphs instead of decomposed sequences with
+    # detached vowel signs. Without it fpdf raises FPDFException at the
+    # first PDF. Declared here deliberately; do not remove.
+    "uharfbuzz>=0.40",
     # S5.6: Fernet encryption for guardian phone at rest (security.py).
     "cryptography>=42",
     # SEC-02: Argon2id password hashing (OWASP-recommended parameters).
