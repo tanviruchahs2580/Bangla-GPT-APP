@@ -98,6 +98,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: add 2026-10-06 QA audit and final certification reports
 - docs: add a CHANGELOG generated from git history, and a check that keeps it honest
 - docs: add final QA report for 2026-10-07 UAT completion
+- docs: add the deployment guide, and close 8 broken doc paths it exposed
 - docs: pass the FV-07 cold-read slop gate
 - docs: phase-2 CI/CD pipeline execution record (v0.9.2 shipped through full pipeline)
 - docs: pin the deploy host key, make the quick starts real, and repair script hygiene
