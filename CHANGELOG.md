@@ -50,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(ci): pin every action to a commit SHA and scope registry permission
 - fix(ci): resolve README links portably so the docs guard works on Linux
 - fix(ci): serialise release and deploy runs per git ref
+- fix(ci): unblock Dependabot PRs and name the Vercel credential failure (#9)
 - fix(ci): upgrade setuptools before pip-audit; refresh lock to current resolution
 - fix(db): reconcile ORM/migration drift so alembic check passes
 - fix(encoding): add .gitattributes and repair three encoding defects
@@ -116,6 +117,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Tests
 
 - test(api): cover school admin fallbacks and tenant guards
+- test(api): make the F-076 rate-limit assertion actually load-bearing
 - test(school): cover the aggregation routes TST-04 flagged as unexercised
 - test(tenancy): cover school dashboard routes across two tenants
 - test(web): drop remaining plan-tracker tags from suite titles
@@ -138,6 +140,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Other
 
 - Full engineering audit + remediation: 47 findings fixed, 0 open (#1)
+- Merge remote-tracking branch 'github/main' into qa/fix-round2
 - revert(api): uharfbuzz is required, not unused -- F-042 was wrong
 
 ## v0.9.2 - 2026-09-15
