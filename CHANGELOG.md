@@ -20,10 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- fix(api): Bengali log lines were being dropped on Windows (F-131)
 - fix(api): P4 cleanup batch — chunk-id content hash, lesson echo gate, proportional Latin penalty, corpus-scoped RAG keys, history char cap (A20-A25)
 - fix(api): align the served OpenAPI contract with runtime behaviour
-- fix(api): bound the body limit, trace 500s, redact logs, fit the LLM budget
 - fix(api): drop an unused variable the new RUF059 rule caught
 - fix(api): gate evals on hybrid retrieval, de-tautologize golden set, precompute BM25 trigrams, single-pass redteam (A13, A8, A18)
 - fix(api): impersonation revocation fails closed when cache is down (F-08)
@@ -34,18 +32,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): rotate token epoch on password change/reset — sessions revoke (F-05)
 - fix(api): ruff format circuit_breaker
 - fix(api): ruff format middleware_stack
-- fix(api): the PEP 621 readme path broke every Python CI job
 - fix(api): vision-honest refusal for openai, max_output_tokens cap, transport retries (A10, A9, A16)
 - fix(api): wall school-less staff into the shared default school (F-04)
 - fix(api,web): audit remediations — breaker recovery, MFA/chat rate limits, CORS PATCH, model-refusal honesty, test runner
 - fix(auth): bind JWTs to an issuer and audience
-- fix(auth): close the enumeration, claim-override and secret-policy holes
 - fix(auth): hash passwords with Argon2id and upgrade legacy hashes on login
 - fix(auth): redeem single-use codes with a compare-and-set, not a read-then-write
 - fix(auth): unblock login on web and APK (MFA step-up, unauth resend, proxy/APK errors)
 - fix(ci): exempt changelog-regenerating commits by changed paths, not subject text
-- fix(ci): fail the Vercel deploy on a bad credential with a named cause
-- fix(ci): make the changelog gate usable from any checkout
 - fix(ci): make the lockfile guardrail deterministic
 - fix(ci): pin every action to a commit SHA and scope registry permission
 - fix(ci): resolve README links portably so the docs guard works on Linux
@@ -55,19 +49,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(db): reconcile ORM/migration drift so alembic check passes
 - fix(encoding): add .gitattributes and repair three encoding defects
 - fix(pdf): enable Bengali complex-script shaping in PDF renderers
-- fix(privacy): k-anonymity floor, complete export, budget on every generator
-- fix(privacy): make account erasure actually work, and sweep the analytics trail
 - fix(sec): refuse unsafe production defaults at boot
 - fix(sec): stop serving the OpenAPI reference in production
 - fix(web): clear footer from bottom nav + cut a round-trip from login
 - fix(web): close-JSDoc sequence inside edge-proxy comment broke Vercel TS build
 - fix(web): configurable production API origin via edge proxy (FE-01)
-- fix(web): fail honestly when the API origin is unreachable
 - fix(web): guarantee minimum gap between stacked page sections
 - fix(web): localize consent/invite copy, theme icon sync, error states, icon cleanup
 - fix(web): notification panel no longer clipped off the left edge
+- fix(web): report a dead API origin accurately, not as a busy server
 - fix(web): route /api/* explicitly to the edge proxy function
-- fix(web): stop an outage looking like a closed account, and fence model links
 - fix: complete admin password-change flow, tutor typo gate, roster-scoped stats, quiz distractors, i18n
 - fix: resolve mypy 2.4.0 type errors in teacher/school/common/weakness
 
@@ -94,7 +85,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - ci: add CI-gated Vercel production deploy workflow
 - ci: add concurrency to api CI, fix eval-gate header, retire sanity workflow
 - ci: bound job runtimes and harden release/deploy workflows
-- ci: fetch-depth belongs on the checkout, not on the gitleaks action
 - ci: hermetic import-time settings patch + step-isolated migration DBs
 
 ### Documentation
@@ -102,8 +92,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: add 2026-10-06 QA audit and final certification reports
 - docs: add a CHANGELOG generated from git history, and a check that keeps it honest
 - docs: add final QA report for 2026-10-07 UAT completion
-- docs: add the deployment guide, and close 8 broken doc paths it exposed
-- docs: pass the FV-07 cold-read slop gate
 - docs: phase-2 CI/CD pipeline execution record (v0.9.2 shipped through full pipeline)
 - docs: pin the deploy host key, make the quick starts real, and repair script hygiene
 - docs: purge session-report accumulation, rewrite README, add docs index
@@ -111,13 +99,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: record final v0.9.2 live sync (tunnel host amd-reproduction-clips-cricket)
 - docs: regenerate CHANGELOG
 - docs: regenerate CHANGELOG for the current batch
-- docs: regenerate CHANGELOG for the two CI fixes
 - docs: ship the bundled font's licence, third-party notices, contributing guide
 
 ### Tests
 
 - test(api): cover school admin fallbacks and tenant guards
-- test(api): make the F-076 rate-limit assertion actually load-bearing
 - test(school): cover the aggregation routes TST-04 flagged as unexercised
 - test(tenancy): cover school dashboard routes across two tenants
 - test(web): drop remaining plan-tracker tags from suite titles
@@ -126,7 +112,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - chore(api): remove unresolvable plan-tracker tags from comments
 - chore(web): repoint /api proxy to current tunnel host (quick-tunnel rotation)
-- chore: close the repository-hygiene findings
 - chore: code honesty - unused args, un-typed db params, inert suppressions, stale comments
 - fmt: ruff format teacher.py _room_counts
 
@@ -139,9 +124,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Other
 
+- Audit remediation, round 2: 38 findings closed across backend, privacy, auth and UX (#10)
 - Full engineering audit + remediation: 47 findings fixed, 0 open (#1)
-- Merge remote-tracking branch 'github/main' into qa/fix-round2
-- revert(api): uharfbuzz is required, not unused -- F-042 was wrong
 
 ## v0.9.2 - 2026-09-15
 

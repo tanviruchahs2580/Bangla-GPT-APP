@@ -33,7 +33,10 @@ const KEY: Record<string, Parameters<typeof t>[0]> = {
   mfa_required: "errMfaRequired",
   bad_mfa_code: "errBadMfaCode",
   bad_mfa_token: "errBadMfaToken",
-  api_origin_unconfigured: "errServiceUnavailable",
+  // A dead or unconfigured API origin is NOT a busy server: it will not
+  // recover on its own, so it gets its own copy instead of "busy, try again".
+  api_origin_unconfigured: "errApiOriginDown",
+  api_origin_unreachable: "errApiOriginDown",
   bad_gateway: "errServiceUnavailable",
   service_unavailable: "errServiceUnavailable",
   revocation_unavailable: "errServiceUnavailable",
@@ -51,6 +54,7 @@ const ACTION: Record<string, ErrorCopy["action"]> = {
   bad_gateway: "retry",
   service_unavailable: "retry",
   api_origin_unconfigured: "retry",
+  api_origin_unreachable: "retry",
   revocation_unavailable: "retry",
   verify_failed: "retry",
 };

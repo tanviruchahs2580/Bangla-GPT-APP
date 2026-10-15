@@ -8,6 +8,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { SafeMarkdown } from "../lib/safeMarkdown";
+import { friendlyError } from "../errors";
+import { t } from "../i18n";
 
 describe("F-128 model-authored links cannot impersonate a citation", () => {
   it("marks an allowed external link so it cannot pass as a citation", () => {
@@ -205,5 +207,85 @@ describe("F-107 the unreachable screen is rendered, not a redirect", () => {
       expect(screen.getByText("Cannot reach the server")).toBeDefined(),
     );
     vi.unstubAllGlobals();
+  });
+});
+
+/* -------------------------------------------------------------------------
+ * The /api proxy's error envelope is FLAT {code,message}
+ * (src/lib/apiProxy.ts), not FastAPI's {detail:{...}}. parseDetail used to
+ * read only `detail`, so a dead API origin lost its machine code and fell to
+ * the generic 502 -> bad_gateway path: the UI told users the server was
+ * "busy — try again shortly" for an outage that does not resolve on its own.
+ * ---------------------------------------------------------------------- */
+
+describe("a dead API origin is reported as 'not connected', not 'server busy'", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.resetModules();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  async function apiErrorFor(body: unknown, status: number) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(JSON.stringify(body), {
+            status,
+            headers: { "content-type": "application/json" },
+          }),
+        ),
+      ),
+    );
+    const api = await import("../api");
+    try {
+      await api.get<unknown>("/users/me");
+      return null;
+    } catch (e) {
+      return e as { code?: string; message?: string };
+    }
+  }
+
+  it("keeps the proxy's api_origin_unreachable code, not an invented bad_gateway", async () => {
+    // Exactly the body src/lib/apiProxy.ts returns when the origin is dead.
+    const err = await apiErrorFor(
+      {
+        code: "api_origin_unreachable",
+        message:
+          "The API origin is configured but did not respond. This is an upstream outage, not a client error.",
+      },
+      502,
+    );
+    expect(err?.code).toBe("api_origin_unreachable");
+    expect(err?.code).not.toBe("bad_gateway");
+    // The proxy's honest upstream message must survive instead of being lost.
+    expect(err?.message).toContain("upstream outage");
+    const copy = friendlyError({ code: err?.code, message: err?.message });
+    expect(copy.text).not.toBe(t("errServiceUnavailable"));
+    expect(copy.text).toBe(t("errApiOriginDown"));
+    expect(copy.action).toBe("retry");
+  });
+
+  it("keeps the proxy's api_origin_unconfigured code on a 503", async () => {
+    const err = await apiErrorFor(
+      {
+        code: "api_origin_unconfigured",
+        message:
+          "API_ORIGIN is not set for this deployment; the API origin is configured in the hosting project settings.",
+      },
+      503,
+    );
+    expect(err?.code).toBe("api_origin_unconfigured");
+    expect(friendlyError({ code: err?.code }).text).toBe(t("errApiOriginDown"));
+  });
+
+  it("still reports a bare 502 without the envelope as a retryable busy server", async () => {
+    const err = await apiErrorFor({ detail: "upstream error" }, 502);
+    expect(err?.code).toBe("bad_gateway");
+    expect(friendlyError({ code: err?.code }).text).toBe(
+      t("errServiceUnavailable"),
+    );
   });
 });

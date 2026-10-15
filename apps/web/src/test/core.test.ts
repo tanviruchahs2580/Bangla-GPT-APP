@@ -30,6 +30,18 @@ describe("friendlyError", () => {
     ).toBeGreaterThan(5);
   });
 
+  it("reports a dead/unconfigured API origin as not-connected, not as a busy server", () => {
+    const busy = t("errServiceUnavailable");
+    for (const code of ["api_origin_unreachable", "api_origin_unconfigured"]) {
+      const out = friendlyError({ code, message: code });
+      // A dead origin does not recover on its own; "busy, try again shortly"
+      // would promise something that cannot happen.
+      expect(out.text).not.toBe(busy);
+      expect(out.text).toBe(t("errApiOriginDown"));
+      expect(out.action).toBe("retry");
+    }
+  });
+
   it("falls back to generic copy for unknown codes", () => {
     const out = friendlyError({ code: "zzz_unknown", message: "weird" });
     expect(out.text.length).toBeGreaterThan(5);
