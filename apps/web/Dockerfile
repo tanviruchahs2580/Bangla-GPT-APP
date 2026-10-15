@@ -9,7 +9,7 @@ ARG VITE_API_BASE=/api
 ENV VITE_API_BASE=$VITE_API_BASE
 RUN npm run build
 
-FROM nginx:1.27-alpine
+FROM nginx:1.29-alpine
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /src/dist /usr/share/nginx/html
 
