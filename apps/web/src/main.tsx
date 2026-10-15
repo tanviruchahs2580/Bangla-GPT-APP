@@ -80,7 +80,7 @@ function RequireAuth({
   role?: string;
   children: React.ReactNode;
 }) {
-  const { me, loading } = useAuth();
+  const { me, loading, apiUnreachable, retrySession } = useAuth();
   if (!getToken()) return <Navigate to="/login" replace />;
   if (loading)
     return (
@@ -92,12 +92,37 @@ function RequireAuth({
         </div>
       </main>
     );
-  // Token present but profile unloadable (e.g. expired token, offline):
-  // never trap the user on a skeleton — send them to re-login.
+  // F-107: the server is down, not the session. Say so, keep the token, and
+  // offer a retry. Redirecting to /login here is what made a total outage
+  // look to a child like their account had been closed.
+  if (apiUnreachable) return <ApiUnreachable onRetry={retrySession} />;
+  // Token present but the profile was genuinely refused (401/403): the
+  // session really is over, so send them to log in.
   if (me === null) return <Navigate to="/login" replace />;
   if (role && me.role !== role)
     return <Navigate to={ROLE_HOME[me.role] ?? "/login"} replace />;
   return <AppShell>{children}</AppShell>;
+}
+
+/**
+ * F-107 / F-099: the one screen that says what is actually wrong. Before
+ * this, a hung or dead backend produced either a silent redirect to /login
+ * or, worse, a dashboard full of confident zeros.
+ */
+function ApiUnreachable({ onRetry }: { onRetry: () => void }) {
+  return (
+    <main className="container" aria-live="assertive">
+      <div className="card stack">
+        <h1>{t("apiUnreachableTitle")}</h1>
+        <p className="muted">{t("apiUnreachableBody")}</p>
+        <div className="stack">
+          <button type="button" className="btn" onClick={onRetry}>
+            {t("retry")}
+          </button>
+        </div>
+      </div>
+    </main>
+  );
 }
 
 function Loading() {

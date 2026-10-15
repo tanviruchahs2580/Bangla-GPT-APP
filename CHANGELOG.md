@@ -118,6 +118,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - chore(api): remove unresolvable plan-tracker tags from comments
 - chore(web): repoint /api proxy to current tunnel host (quick-tunnel rotation)
+- chore: close the repository-hygiene findings
 - chore: code honesty - unused args, un-typed db params, inert suppressions, stale comments
 - fmt: ruff format teacher.py _room_counts
 
