@@ -46,15 +46,17 @@ nctb.gov.bd official pages
 
 | Master component | Status | Justification |
 |---|---|---|
-| Dense retrieval | pending | requires embedding-model benchmark infra (§19); no model serving available locally yet |
-| Hybrid merge | pending | depends on dense leg |
-| Reranker | pending | benchmark first (§28); lexical-only baseline measured before adding complexity per §76 |
+| Dense retrieval | partial | the vector lane ships with a deterministic, model-free embedder (`retrieval/embedding.py`: char 2-4-grams, dim 384); a real embedding model is still pending (§19) — `embedding_model` stays empty and naming one raises `ProviderNotConfigured` |
+| Hybrid merge | shipped | BM25 + vector lanes fused with reciprocal rank fusion (k=60) then lexically reranked (`retrieval/hybrid_index.py`); `retrieval_mode` defaults to `"hybrid"` |
+| Reranker | partial | deterministic lexical rerank ships (BM25-lane base + RRF + term coverage + char trigrams); a model-based reranker benchmark is still pending (§28) |
 | Graph retrieval | pending | no verified prerequisite graph source yet (§15: never hallucinate relations) |
 | Query understanding/expansion/router | partial | class/subject hard filters via API contract; intent classification deferred until golden dataset exists |
 
-Per master §76 (no overengineering): the simplest architecture that meets
-currently verifiable quality targets is lexical-only; it is measured and
-documented rather than padded with unbenchmarked stages.
+Per master §76 (no overengineering): what ships is hybrid retrieval by
+default — a deterministic, model-free embedder fused with BM25 and lexically
+reranked, measured and documented rather than padded with unbenchmarked
+model-based stages; model-based dense retrieval and a model-based reranker
+remain pending.
 
 ## Measured baseline (real corpus, 2026-08-25)
 

@@ -57,7 +57,8 @@ Full reference: [docs/API.md](docs/API.md). Operations: [docs/runbook.md](docs/r
 Launch gates for the owner: [docs/LAUNCH_READINESS_CHECKLIST.md](docs/LAUNCH_READINESS_CHECKLIST.md).
 RAG design: [docs/RAG_ARCHITECTURE.md](docs/RAG_ARCHITECTURE.md).
 NCTB pipeline: [docs/NCTB_DATA_PIPELINE.md](docs/NCTB_DATA_PIPELINE.md).
-Current QA record: [docs/qa-audit-2026-10-06.md](docs/qa-audit-2026-10-06.md).
+Current QA record: [docs/qa-audit-2026-10-14.md](docs/qa-audit-2026-10-14.md)
+(superseded record archived: [docs/archive/qa-audit-2026-10-06.md](docs/archive/qa-audit-2026-10-06.md)).
 
 ## Quick start
 

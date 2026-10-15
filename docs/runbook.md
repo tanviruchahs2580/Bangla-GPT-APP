@@ -7,7 +7,7 @@ Every command below has been executed and verified on this codebase.
 
 ```powershell
 cd apps/api
-python -m venv.venv
+python -m venv .venv
 .venv\Scripts\python -m pip install -e ".[dev]"
 # optional persistent DB:
 #   set DATABASE_URL=sqlite:///./bangla_gpt.db
@@ -26,7 +26,7 @@ curl http://127.0.0.1:8000/ready
 > `JWT_SECRET`; the pytest suite already uses 39-char test secrets, so its
 > warnings come only from the shortest-lived dev-default cases.
 
-Web dashboard (dev): `cd apps/web && npm install && npm run dev` → http://localhost:5173
+Web dashboard (dev): `cd apps/web && npm ci && npm run dev` → http://localhost:5173
 (dev server proxies `/api/*` to `http://127.0.0.1:8000`). Production build: `npm run build`.
 
 ## 2. Staging / production deployment (docker compose)
@@ -34,7 +34,7 @@ Web dashboard (dev): `cd apps/web && npm install && npm run dev` → http://loca
 Full topology lives in `docker-compose.yml` with profiles:
 
 ```bash
-cp.env.production.example.env    # fill every required value first!
+cp .env.production.example .env    # fill every required value first!
 docker compose --profile core up -d --wait          # api + redis (shared Redis limiter)
 docker compose --profile core --profile web --profile tls up -d --wait   # + nginx dashboard + Caddy auto-HTTPS
 docker compose --profile monitoring up -d           # Prometheus (+ Grafana)

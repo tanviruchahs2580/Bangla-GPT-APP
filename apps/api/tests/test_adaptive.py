@@ -187,6 +187,8 @@ def test_apply_review_repeated_concept_in_one_review(tmp_path) -> None:
         # same chapter + item three times in ONE review, all correct
         graded = [(pool[0].id, pool[0].chapter, True)] * 3
         adaptive.apply_review(db, student_id=42, class_level=7, graded=graded)
+        # apply_review is add-only (BUG-003); the caller owns the commit.
+        db.commit()
         rows = db.query(StudentAbility).filter_by(student_id=42).all()
         assert len(rows) == 1  # one row, not three duplicates
         assert rows[0].attempts == 3

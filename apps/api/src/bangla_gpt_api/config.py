@@ -201,6 +201,19 @@ class Settings(BaseSettings):
         # throttled like forgot/reset to avoid email-spam abuse.
         "/auth/resend-verification": (10, "ip"),
         "/auth/verify-email": (10, "ip"),
+        # The invite code is 64 bits, but an unthrottled redeem is still a free
+        # oracle for guessing one.
+        "/parents/link/invite": (10, "ip"),
+        # The costly teacher AI paths: each spends provider tokens on a
+        # teacher's behalf, so without a per-user bound one token can loop at
+        # full network speed and the bill lands on the account (SEC-002).
+        "/teacher/content": (20, "user"),
+        "/teacher/qpapers": (20, "user"),
+        "/teacher/lesson-plans": (20, "user"),
+        "/teacher/generate": (20, "user"),
+        "/teacher/jobs": (20, "user"),
+        # Roster import runs one Argon2id hash per created student.
+        "/teacher/classrooms": (30, "user"),
         "/events": (60, "ip"),
     }
 

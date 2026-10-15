@@ -14,8 +14,8 @@ never quoted as current state. There is exactly one current QA record
 | [architecture/DATABASE_ARCHITECTURE.md](architecture/DATABASE_ARCHITECTURE.md) | Data model |
 | [adr/ADRs.md](adr/ADRs.md) | Architecture decision records |
 | [runbook.md](runbook.md) | Operations runbook |
-| [route_baseline.md](route_baseline.md) | Generated route inventory (regenerate after route changes) |
-| [qa-audit-2026-10-06.md](qa-audit-2026-10-06.md) | Current critical QA record |
+| [route_baseline.md](route_baseline.md) | Hand-maintained route inventory — re-verify against the routers when routes change |
+| [qa-audit-2026-10-14.md](qa-audit-2026-10-14.md) | Current critical QA record |
 
 ## AI / data
 

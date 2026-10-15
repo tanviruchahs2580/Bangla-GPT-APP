@@ -213,7 +213,9 @@ export default function HomePage() {
           </p>
           <button
             className="btn btn-soft"
-            onClick={() => navigate(`/student/quiz`)}
+            // The label promises a 3-question mini quiz; QuizPage reads `count`
+            // so the tile keeps that promise instead of starting 5.
+            onClick={() => navigate(`/student/quiz?count=3`)}
           >
             <GraduationCap size={18} aria-hidden /> {t("miniQuiz")}
           </button>

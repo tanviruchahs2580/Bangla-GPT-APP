@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { LearnChapterPage } from "../pages/student/LearnPage";
+import { t } from "../i18n";
 
 const apiMock = vi.hoisted(() => ({
   get: vi.fn(),
@@ -115,6 +116,28 @@ describe("unified workspace tabs", () => {
 
   it("read tab shows chapter content (default)", async () => {
     renderChapter();
+    expect(await screen.findByText("কোষ কী")).toBeTruthy();
+  });
+
+  it("read tab reports a failed fetch as an error, not as an empty subject", async () => {
+    apiMock.getChapterContent
+      .mockRejectedValueOnce(new Error("boom"))
+      .mockResolvedValueOnce({
+        subject: "science",
+        chapter: "কোষ",
+        book: "বিজ্ঞান",
+        class_level: 6,
+        sections: [{ section: "কোষ কী", text: "জীবদেহের একক।" }],
+      });
+
+    renderChapter();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain(t("loadFailed"));
+    // "No chapters found for this subject" would be a lie about the corpus.
+    expect(screen.queryByText(t("noChapters"))).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: t("retry") }));
     expect(await screen.findByText("কোষ কী")).toBeTruthy();
   });
 });

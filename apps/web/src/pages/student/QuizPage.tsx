@@ -70,7 +70,10 @@ export default function QuizPage() {
   const { me } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [number, setNumber] = useState<string>("5");
+  const [number, setNumber] = useState<string>(
+    // ?count=3 from the home page's "mini quiz" tile; otherwise the 5 default.
+    searchParams.get("count") ?? "5",
+  );
   // the tutor's quiz chip preselects the subject via ?subject=.
   const [subject, setSubject] = useState<string>(
     searchParams.get("subject") ?? subjectOptions()[0].value,

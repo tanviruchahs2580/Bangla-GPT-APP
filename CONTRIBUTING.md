@@ -33,6 +33,7 @@ CI must be green on your branch. That means, at minimum:
 | Check | Command | Notes |
 | --- | --- | --- |
 | API lint + format | `ruff check .` and `ruff format --check .` | `ruff format .` then re-check |
+| API type check | `mypy src` | From `apps/api` — matches the CI step |
 | API tests | `pytest` | Add tests for behaviour you change |
 | Dependencies | `pip-compile --generate-hashes --allow-unsafe --extra dev --strip-extras` | Regenerate `constraints.txt` — CI fails if it is stale |
 | Migrations | `alembic check` | Schema and models must not drift |

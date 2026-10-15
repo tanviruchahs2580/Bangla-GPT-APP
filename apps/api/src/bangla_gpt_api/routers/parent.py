@@ -166,7 +166,11 @@ def create_parent_invite(app_ctx: Ctx, db: DbSession, user: CurrentUser) -> dict
     active = [i for i in active if i.expires_at > now]
     for stale in active[2:]:  # keep at most 3 live codes per student
         db.delete(stale)
-    code = "BGPT-" + secrets.token_hex(4).upper()
+    # SEC-007: 8 bytes (64 bits). The code is the only secret between a
+    # stranger and a link onto a child's record, so it must not be guessable
+    # inside its TTL. Redemption looks codes up by hash, so codes issued in the
+    # old 4-byte format stay redeemable.
+    code = "BGPT-" + secrets.token_hex(8).upper()
     db.add(
         ParentInvite(
             code_hash=_hash_invite(code),

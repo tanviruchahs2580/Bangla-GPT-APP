@@ -1,0 +1,52 @@
+check_id,section,requirement,status,evidence,findings,tests,final_state
+A1,Product behavior,Implemented features match UI/routes/docs,PARTIAL,live pass over 12 screens + route/API inventories (FEATURE_REGRESSION_MATRIX.md); 2 UI defect classes found and fixed,"F-05,F-06,F-25,F-26",admincenter.test.tsx; workspace.test.tsx; meReport.test.tsx,VERIFIED_LOCAL
+A2,Product behavior,Loading/empty/error/unauthorized/rate-limited states,FAIL,429/413 were unreadable cross-origin; admin triage and chapter fetch showed misleading states; grade-1 catalogue shows nothing,"F-02,F-03,F-05,F-06,F-26",test_cors.py (3 new),FIXED_EXCEPT_OPEN_ITEMS
+A3,Product behavior,Bengali Unicode/fonts/wrapping/mixed text,PASS,"live pass at 390px and 1366px: no broken conjuncts, correct wrapping, no horizontal overflow",,axe suites + live pass,VERIFIED_LOCAL
+B1,Architecture,Module boundaries and layering,PASS,routers/services/retrieval/providers separation respected; no business logic in route handlers beyond orchestration,,,VERIFIED_SOURCE
+B2,Architecture,Dead code / duplication / misleading comments,FAIL,unused Modal component; 4x duplicated errText helpers; 2 stale comments (1 fixed); stale middleware docstring (fixed),"F-07,F-08",manual review,OPEN_ITEMS_REMAIN
+B3,Architecture,State management / race conditions,PASS,react-query used consistently; optimistic updates confined to bookmark/prefs; no stale-closure defects found,,,VERIFIED_SOURCE
+C1,Frontend,Rendered behavior on real viewports,PASS,37 screenshots at 1366x768 and 390x844,"F-26,F-29,F-30",live pass,VERIFIED_LOCAL
+C2,Frontend,XSS-safe rendering / markdown / sanitisation,PASS,react-markdown + rehype-katex without raw HTML injection; evidence excerpts sanitised server-side,,test_evidence_modal.py,VERIFIED_SOURCE
+C3,Frontend,Interactive controls do real work,PASS,every control clicked did real work; no dead CTA found in reviewed pages; 1 PROBABLE inert control remains,"F-14,F-32",live pass,PARTIAL
+D1,Anti-slop,Fake/inert controls and misleading states,FAIL,{chapters} placeholder fixed; endless loading fixed; empty-vs-error conflation fixed,"F-05,F-06,F-25,F-26,F-28",3 new UI tests,FIXED_EXCEPT_OPEN_ITEMS
+D2,Anti-slop,Unsubstantiated metrics/placeholder content,FAIL,"10-100% Bangla claim, zero-data savings estimate, US-format status timestamp","F-17,F-31,F-33",landingStats.test.ts (partial),OPEN
+D3,Anti-slop,No unexplained suppressions/any/casts,PASS,1 hooks-deps disable in ClassesPage; no any/@ts-ignore in app source; eslint max-warnings=0 gate,F-16,npm run lint,VERIFIED_LOCAL
+E1,Backend,API contract vs docs and frontend,PARTIAL,docs/API.md corrected; 135 app operations inventoried; contract tests present,,test_openapi_contract.py; test_openapi_auth_matrix.py,VERIFIED_LOCAL
+E2,Backend,Server-side validation and authz at object boundaries,PASS,ownership/tenancy checks on every object route; atomic single-use invite claim,,test_school_tenancy_isolation.py etc.,VERIFIED_SOURCE
+E3,Backend,"Rate limits, body limits, CORS, security headers",PASS,CORS order fixed; 429/413 now readable; preflights exempt; fail-closed 503 on limiter backend error,"F-02,F-03",test_cors.py; test_ratelimit_backends.py,FIXED
+E4,Backend,Errors do not leak internals,PASS,"uniform {detail:{code,message}} contract; provider errors mapped to 502/503; no stack traces in responses",,test_tutor_api.py; _error_contract.py,VERIFIED_SOURCE
+F1,Security,Authn/session/token lifecycle,PASS,"Argon2id, TOTP, epoch invalidation, fail-closed revocation, MFA step-up rejected as API cred",,test_mfa.py; test_jwt_claims.py; test_phase1_exploits.py,VERIFIED_LOCAL
+F2,Security,RBAC/tenancy/default-deny,PASS,allowlist matrix test + per-route dependency; cross-tenant student data isolated,,test_openapi_auth_matrix.py,VERIFIED_LOCAL
+F3,Security,Secrets and exposure,PASS,no secrets in tree; only examples tracked; docs/openapi disabled in prod; /metrics token-gated in prod,,gitleaks (CI); test_docs_exposure.py,VERIFIED_LOCAL
+F4,Security,Dependencies / supply chain,PARTIAL,"SHA-pinned actions, hash-pinned installs, dependabot; compose images uncovered; eval-gate install unpinned",F-21,dependabot.yml review,OPEN_ITEM
+F5,Security,Privacy of student data / consent / deletion,PASS,"guardian consent enforced (live-verified), phone encrypted at rest, export+delete tested, aggregate-only digests",F-11,test_account_deletion.py; test_data_export.py,VERIFIED_LOCAL
+F6,Security,Cross-tenant content exposure,FAIL,ChapterContent readable across schools by any teacher,F-09,none,OPEN_NEEDS_PRODUCT_DECISION
+F7,Security,Invite/token entropy,FAIL,parent invite was 32 bits (fixed to 64); school invite 50 bits remains,"F-04,F-19",test_product_v3.py::test_parent_invite_code_carries_enough_entropy,FIXED_EXCEPT_OPEN_ITEMS
+G1,Database,Migrations reproduce and match models,PASS,fresh-DB upgrade head + alembic check => no new operations; CI runs up/down/up on Postgres,,test_migrations_match_models.py,VERIFIED_LOCAL
+G2,Database,Constraints/indexes/uniqueness,PASS,single-use hashes unique; attempt indexes; alembic check clean,,test_evaluation_alembic.py,VERIFIED_SOURCE
+G3,Database,Transactions for multi-step writes,PARTIAL,owner's in-progress change consolidates quiz grading into one commit; verified by suite but not by concurrent-load testing,,test_learn_progress.py,VERIFIED_LOCAL
+H1,AI,Provider routing/fallback/no fabrication,PASS,"502/503 on failure, mock refused in prod, breaker with single probe, no silent demo data",,test_tutor_api.py; test_circuit_breaker.py; test_production_guards.py,VERIFIED_LOCAL
+H2,AI,Prompt-injection resistance and trusted/untrusted separation,PASS,"delimiters escaped, evidence wrapped, ingestion-time stripping, redteam refusal tests",,test_injection_guard.py; test_safety_v2.py,VERIFIED_LOCAL
+H3,AI,Citations grounded in indexed metadata,PASS,"citations built from chunk metadata, never model-generated; duplicate chip is a UI defect only",F-27,test_rag_v2.py; test_evidence_modal.py,PARTIAL_UI
+H4,AI,Evaluation harness and regression gate,PARTIAL,634-case golden set + 2pp gate is real; fails open if baseline missing,F-20,test_eval_v2.py,OPEN_ITEM
+H5,AI,Cost/quota/abuse controls,PASS,per-user ledger + 429 at cap; per-route limits; provider breaker,,test_ai_costs.py; test_teacher_ai_budget.py,VERIFIED_LOCAL
+H6,AI,Provider retention/training disclosure,NOT VERIFIED,no access to the provider account settings or contract,,none,NOT_VERIFIED
+I1,Testing,Suite breadth and non-vacuity,FAIL,strong auth/AI coverage; error-path CORS had no coverage (now added); several UI states untested,F-14,3+1+4 new tests,FIXED_EXCEPT_OPEN_ITEMS
+I2,Testing,No gate weakened,PASS,no test deleted/skipped/loosened; suite grew 824->828 and 156->162,,diff review,VERIFIED_LOCAL
+J1,Performance,Baseline measurements before optimisation,PASS,no optimisation attempted; only bounded inefficiency reported,F-15,none,NO_CHANGE
+J2,Performance,Load/soak behaviour,NOT VERIFIED,no controlled load test run,,scripts/load (not executed),NOT_VERIFIED
+K1,Accessibility,WCAG 2.2 AA on critical flows,FAIL,no skip link/h1; aria-live on whole thread; unlabelled inputs; ARIA menu/tab patterns incomplete; focus under fixed bar,"F-13,F-30",axe suites (automated only),OPEN
+K2,Accessibility,Bangla script and input-method behaviour,PASS,Bangla renders correctly; IME/composition guard missing on Enter handlers,F-14,live pass + source,PARTIAL
+L1,Documentation,Setup/commands match the repository,FAIL,3 runbook commands failed verbatim; CONTRIBUTING described a CI check that does not run; API.md contradicted code,"F-08,F-01,F-18",check_readme_contract.py; manual verification,FIXED
+L2,Documentation,Architecture/RAG docs match the code,FAIL,retrieval and containerisation described as pending; body-size figure wrong,F-08,source cross-check,FIXED
+M1,Dependencies,Build reproducibility and lockfiles,PASS,constraints.txt hash-pinned and CI-enforced; npm ci with lockfile; Docker base digest-pinned,,ci.yml lockfile guard,VERIFIED_SOURCE
+N1,Git,Working tree scope and hygiene,PASS,owner's work preserved; no unrelated edits; no generated files or secrets added,,git diff review,VERIFIED_LOCAL
+N2,Git,Branch protection / required checks,NOT VERIFIED,no GitHub provider access,,none,NOT_VERIFIED
+O1,CI/CD,Workflow security posture,PASS,"all actions SHA-pinned, least-privilege tokens, no expression injection, fork-safe workflow_run guards","F-22,F-23",workflow source review,VERIFIED_SOURCE
+O2,CI/CD,Gates actually gate,PARTIAL,gates are real; release tags bypass CI and deploy by mutable tag; prod deploy ignores eval gate,"F-10,F-24",workflow source review,OPEN
+O3,CI/CD,Remote runs observed,NOT VERIFIED,no CI run logs or provider access,,none,NOT_VERIFIED
+P1,Observability,Structured logs/correlation/redaction,PASS,"request-id middleware, structured JSON logs, no prompts/tokens in logs",,test_health_observability.py,VERIFIED_SOURCE
+P2,Observability,Alerting/incident readiness,NOT VERIFIED,no access to production monitoring,,docs/runbook.md (unverified),NOT_VERIFIED
+Q1,Legal/content,Policy/licensing/educational claims,PARTIAL,disclaimer gap for NCTB-derived sample text (AUD-0031/0032) and unverifiable stats remain,"F-17,F-33",archive audit findings,OPEN
+R1,Mobile/Capacitor,Installability/release artifacts,FAIL,APK not buildable from a clean clone (assets untracked),F-12,androidManifest.test.ts (manifest only),BLOCKED_OWNER_ACTION
+R2,Mobile/Capacitor,Cache/offline privacy,PASS,offline store scoped to IndexedDB; manifest disallows backup and excludes all domains from transfer,,androidManifest.test.ts; lowData/offlineStore tests,VERIFIED_LOCAL

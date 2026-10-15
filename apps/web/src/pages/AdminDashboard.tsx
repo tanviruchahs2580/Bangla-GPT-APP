@@ -22,7 +22,10 @@ import type {
   UserPublic,
 } from "../types";
 
-const ROLES = ["student", "teacher", "parent", "admin"] as const;
+// Every value RoleUpdateRequest accepts. school_admin was missing here, so the
+// table rendered a school_admin row with the first option ("student") selected
+// and offered no way back — saving any other edit on that row would demote them.
+const ROLES = ["student", "teacher", "parent", "school_admin", "admin"] as const;
 const INVITE_ROLES = ["teacher", "school_admin"] as const;
 
 function errOf(err: unknown): string {
@@ -57,13 +60,22 @@ export default function AdminDashboard() {
   // feedback triage queue + audited impersonation launch.
   const [triageStatus, setTriageStatus] = useState<"open" | "all">("open");
   const [queue, setQueue] = useState<FeedbackQueuePage | null>(null);
+  const [triageErr, setTriageErr] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [triageMsg, setTriageMsg] = useState<string | null>(null);
 
   const loadTriage = useCallback(() => {
     getFeedbackQueue(triageStatus)
-      .then(setQueue)
-      .catch(() => setQueue(null));
+      .then((page) => {
+        setQueue(page);
+        setTriageErr(null);
+      })
+      .catch((err: unknown) => {
+        // Show the failure: leaving `queue` null renders "loading" forever,
+        // which reads as a slow network and hides a broken triage queue.
+        setQueue(null);
+        setTriageErr(errOf(err));
+      });
   }, [triageStatus]);
 
   useEffect(() => {
@@ -338,7 +350,14 @@ export default function AdminDashboard() {
             {triageMsg}
           </p>
         )}
-        {queue === null ? (
+        {triageErr ? (
+          <p className="error" role="alert">
+            {triageErr}{" "}
+            <button className="btn btn-sm btn-ghost" onClick={loadTriage}>
+              {t("retry")}
+            </button>
+          </p>
+        ) : queue === null ? (
           <p className="muted" role="status">
             {t("loading")}
           </p>
