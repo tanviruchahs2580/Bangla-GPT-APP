@@ -66,6 +66,24 @@ venv/
 *.sqlite
 *.sqlite3
 *.db
+# F-011: `*.db` does not match a copy whose name carries a suffix, and SQLite
+# writes three sidecar files that do not end in `.db` at all. That gap is how
+# a 1.30 MiB database with 129 user rows and 376 chat rows reached history
+# (F-012) -- it was committed as `dev.db.bak-wave2`, a path nothing ignored.
+# Verified with `git check-ignore` before and after.
+*.db-*
+*.db.*
+*.db.bak-*
+*.db-wal
+*.db-shm
+*.db-journal
+# Same three sidecars for the other SQLite spellings.
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+*.sqlite3-wal
+*.sqlite3-shm
+*.sqlite3-journal
 models/
 *.onnx
 *.gguf

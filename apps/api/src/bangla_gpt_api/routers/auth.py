@@ -17,13 +17,16 @@ from sqlalchemy.orm import Session
 
 from bangla_gpt_api.auth.mfa import new_secret, otpauth_uri, verify_code
 from bangla_gpt_api.auth.security import (
+    _burn_password_check,
     create_access_token,
     decode_token,
     hash_password,
+    is_common_password,
     needs_rehash,
     verify_password,
 )
 from bangla_gpt_api.auth.single_use import claim_single_use, fetch_by_hash
+from bangla_gpt_api.caching import CacheUnavailable
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.models import (
     EmailVerification,
@@ -33,12 +36,13 @@ from bangla_gpt_api.db.models import (
     Teacher,
     User,
 )
-from bangla_gpt_api.logging_config import json_log
+from bangla_gpt_api.logging_config import json_log, json_log_secret
 from bangla_gpt_api.routers._error_contract import (
     AUTH_GUARD_RESPONSES,
     coded,
     message,
 )
+from bangla_gpt_api.routers.deps import AppContext
 from bangla_gpt_api.schemas import (
     ChangePasswordRequest,
     ForgotPasswordRequest,
@@ -97,6 +101,7 @@ def register(
                     "message": "guardian_consent is required when role is 'student'",
                 },
             )
+    _reject_common_password(payload.password)
     email = payload.email.strip().lower()
     existing = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if existing is not None:
@@ -253,23 +258,49 @@ def resend_verification(
 def login(app_ctx: Ctx, response: Response, payload: LoginRequest, db: DbSession) -> TokenResponse:
     email = payload.email.strip().lower()
     user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
-    if (
-        user is None
-        or not verify_password(payload.password, user.password_hash)
-        or not user.email_verified
-    ):
-        # Unverified accounts get the same generic 401 as bad credentials,
-        # but with a machine-readable code so the UI can offer "resend".
-        unverified = user is not None and not user.email_verified
-        if unverified:
-            raise HTTPException(
-                status_code=403,
-                detail={"code": "email_unverified", "message": "Email verification required"},
-            )
+
+    # F-057, oracle 1 (status code). The old chain short-circuited on
+    # `user is None`, so an unknown address and a known-but-unverified one
+    # took different branches: 401 vs 403 `email_unverified`. Anyone who
+    # guessed ANY password could tell registered addresses apart from
+    # unregistered ones and build a list to target with credential stuffing.
+    # The unverified hint is now only given once the password is CORRECT --
+    # at which point the caller already proves they hold the credential, so
+    # the hint discloses nothing they did not already know.
+    password_ok = verify_password(payload.password, user.password_hash) if user else False
+
+    # F-057, oracle 2 (timing). Argon2id at 19 MiB / t=2 takes tens of
+    # milliseconds. The old code never ran it for an unknown address, so the
+    # "no such user" path answered ~5x faster -- an equally reliable oracle
+    # that survives any amount of response-body tidying. Do the work either
+    # way, against a fixed decoy hash.
+    if user is None:
+        _burn_password_check(payload.password)
         raise HTTPException(
             status_code=401,
             detail={"code": "bad_credentials", "message": "Incorrect email or password"},
         )
+
+    if not password_ok:
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "bad_credentials", "message": "Incorrect email or password"},
+        )
+
+    if not user.email_verified:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "email_unverified", "message": "Email verification required"},
+        )
+
+    # SEC-02: transparently upgrade the stored hash on a successful login.
+    # This runs BEFORE the MFA branch: the old order returned the step-up
+    # token first, so a legacy pbkdf2_sha256 hash was never upgraded for any
+    # MFA-enabled account, however many times it logged in (F-071).
+    if needs_rehash(user.password_hash):
+        user.password_hash = hash_password(payload.password)
+        db.commit()
+
     # AUTH-001: MFA-enabled accounts get a purpose-bound step-up token
     # (token_type "mfa", 5 minutes). It is rejected by every normal route;
     # only POST /auth/mfa/challenge accepts it. HTTP 202 signals "accepted,
@@ -280,19 +311,59 @@ def login(app_ctx: Ctx, response: Response, payload: LoginRequest, db: DbSession
             user, settings=app_ctx.settings, minutes=5, extra_claims={"mfa": True}
         )
         return TokenResponse(access_token=mfa_token, token_type="mfa")  # noqa: S106 - a token type string, not a credential
-    # SEC-02: transparently upgrade the stored hash on a successful login. This
-    # is where legacy pbkdf2_sha256 hashes (and Argon2id hashes made with older
-    # parameters) become Argon2id at the current policy, so no bulk reset is
-    # needed. The plaintext is known to be correct here.
-    if needs_rehash(user.password_hash):
-        user.password_hash = hash_password(payload.password)
-        db.commit()
     token = create_access_token(user, settings=app_ctx.settings)
     return TokenResponse(access_token=token, must_change_password=user.must_change_password)
 
 
 def _hash_reset_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+#: Cache key prefix for a consumed MFA step-up token.
+_MFA_USED_PREFIX = "mfa_used:"
+
+
+def _mfa_token_already_used(app_ctx: AppContext, jti: str) -> bool:
+    """True when this step-up token has already completed an MFA challenge."""
+    try:
+        return bool(app_ctx.cache.get_json_strict(f"{_MFA_USED_PREFIX}{jti}"))
+    except CacheUnavailable:
+        # A cache outage must not turn into a replay. Fail CLOSED, the same
+        # rule the impersonation-revocation path uses: an uncheckable
+        # credential must not pass.
+        return True
+    except Exception:
+        return True
+
+
+def _burn_mfa_token(app_ctx: AppContext, jti: str, claims: dict) -> None:
+    """Mark a step-up token consumed, for the remainder of its own life."""
+    try:
+        ttl = float(int(claims.get("exp", 0)) - int(datetime.now(UTC).timestamp()))
+    except (TypeError, ValueError):
+        ttl = 0.0
+    ttl = max(1.0, float(min(ttl, 600.0)))
+    try:
+        app_ctx.cache.set_json_strict(f"{_MFA_USED_PREFIX}{jti}", 1, ttl)
+    except Exception as exc:  # pragma: no cover - defensive
+        json_log(logger, logging.WARNING, "mfa_token_burn_failed", error=type(exc).__name__)
+
+
+def _reject_common_password(password: str) -> None:
+    """Refuse a well-known guess with the one coded 400 (F-072).
+
+    Applied at registration, at reset and at change-password. A blocklist on
+    registration alone is bypassed the moment a user resets to "12345678",
+    which is exactly what a forced-reset flow pushes people toward.
+    """
+    if is_common_password(password):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "password_too_common",
+                "message": "That password is too common. Choose something harder to guess.",
+            },
+        )
 
 
 @router.post("/auth/forgot", status_code=202)
@@ -348,7 +419,7 @@ def forgot_password(app_ctx: Ctx, payload: ForgotPasswordRequest, db: DbSession)
         else:
             # Non-production convenience: the only place the raw token is
             # ever logged; never emitted when ENV=production.
-            json_log(logger, logging.INFO, "password_reset_token_console", token=token)
+            json_log_secret(logger, logging.INFO, "password_reset_token_console", token=token)
     return {"status": "accepted"}
 
 
@@ -371,6 +442,7 @@ def reset_password(app_ctx: Ctx, payload: ResetPasswordRequest, db: DbSession) -
     user = db.get(User, row.user_id)
     if user is None:
         raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+    _reject_common_password(payload.new_password)
     user.password_hash = hash_password(payload.new_password)
     user.must_change_password = False
     # F-05: rotate the token epoch — every access token issued in an
@@ -400,6 +472,7 @@ def change_password(
                 "message": "New password must differ from the current one",
             },
         )
+    _reject_common_password(payload.new_password)
     user.password_hash = hash_password(payload.new_password)
     user.must_change_password = False
     # F-05: rotate the token epoch (see /auth/reset for the full contract).
@@ -463,6 +536,20 @@ def mfa_challenge(app_ctx: Ctx, payload: MfaChallengeIn, db: DbSession) -> Token
             status_code=401,
             detail={"code": "bad_mfa_token", "message": "Not an MFA step-up token"},
         )
+    # F-066/F-070: the step-up token was a bearer credential for 5 minutes and
+    # could be presented repeatedly. Whoever intercepted one — a proxy log, a
+    # shared machine, a shoulder-surfeded phone — got a full login every time
+    # they asked, for as long as the authenticator app still showed the same
+    # 30-second code. Burn the jti on first successful use.
+    jti = claims.get("jti")
+    if isinstance(jti, str) and _mfa_token_already_used(app_ctx, jti):
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "code": "bad_mfa_token",
+                "message": "MFA step-up already completed; log in again",
+            },
+        )
     user = db.get(User, user_id)
     if user is None or not user.totp_secret:
         raise HTTPException(
@@ -474,5 +561,9 @@ def mfa_challenge(app_ctx: Ctx, payload: MfaChallengeIn, db: DbSession) -> Token
             status_code=401,
             detail={"code": "bad_mfa_code", "message": "Invalid authenticator code"},
         )
+    # Burn the step-up token only AFTER the second factor checks out, so a
+    # mistyped code does not cost the user their login.
+    if isinstance(jti, str):
+        _burn_mfa_token(app_ctx, jti, claims)
     token = create_access_token(user, settings=app_ctx.settings)
     return TokenResponse(access_token=token, must_change_password=user.must_change_password)

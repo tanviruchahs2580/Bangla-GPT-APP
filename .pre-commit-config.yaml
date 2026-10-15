@@ -1,0 +1,48 @@
+# Pre-commit hooks -- F-018
+#
+# There was no pre-commit gate of any kind: every one of these checks ran
+# only in CI, so the feedback arrived after the commit, after the push and
+# often after a review. `pre-commit install` puts them in front of
+# `git commit`.
+#
+# The hook ids are pinned, and the hook set is deliberately a SUBSET of what
+# CI runs -- CI stays the authority. A hook that fails in a way the developer
+# cannot fix locally gets removed rather than left to annoy everyone:
+# check_readme_contract.py and check_i18n.py need the full apps/web tree and
+# so stay in CI only.
+
+default_install_hook_types: [pre-commit]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+        args: [--maxkb=512]
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: end-of-file-fixer
+        exclude: ^apps/api/eval/
+      - id: mixed-line-ending
+        args: [--fix=lf]
+        exclude: ^apps/api/eval/
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+        exclude: ^apps/api/eval/
+      - id: detect-private-key
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.0
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        files: ^(apps/api/(src|tests|scripts)/|scripts/)
+      - id: ruff-format
+        files: ^apps/api/(src|tests|scripts)/
+
+exclude: |
+  (?x)^(
+    data/nctb/(raw|extracted|normalized)/|
+    apps/api/eval/|
+    docs/archive/
+  )$

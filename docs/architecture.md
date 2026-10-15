@@ -14,11 +14,11 @@ master plan (REQ-001..REQ-035+).
 
 | Toolchain | Present | Decision |
 |---|---|---|
-| Python 3.12.10 | ✅ | Backend language |
-| Node 24 / npm 11 | ✅ | Reserved for web dashboard phase |
-| Docker | ❌ | Containerization deferred |
-| Flutter SDK | ❌ | Mobile deferred (cannot verify locally) |
-| LLM API keys | ❌ not provided | Provider abstraction + deterministic mock |
+| Python 3.12.10 | yes | Backend language |
+| Node 24 / npm 11 | yes | Reserved for web dashboard phase |
+| Docker | no | Containerization deferred |
+| Flutter SDK | no | Mobile deferred (cannot verify locally) |
+| LLM API keys | no | Not provided; provider abstraction + deterministic mock |
 
 ## Stack decisions (Phase 1)
 
@@ -220,7 +220,7 @@ BanglaGptApp/
 - **Grounding gate**: query-term coverage ≥ 0.5 replaces absolute score
   floors that measurably fail to transfer between corpus scales;
   adversarial refusal 4/4 on the real corpus.
-- **Evaluation harness**: `scripts/evaluate_nctb_retrieval.py` measures
+- **Evaluation harness**: `apps/api/scripts/evaluate_nctb_retrieval.py` measures
   Recall@K over self-sentence and chapter-title families plus adversarial
   refusal, writing `data/nctb/retrieval_eval.json`.
 

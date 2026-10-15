@@ -21,6 +21,8 @@ import logging
 import os
 from typing import TYPE_CHECKING, Any
 
+from cryptography.fernet import Fernet
+
 from bangla_gpt_api import caching, initialize
 from bangla_gpt_api.config import DEFAULT_JWT_SECRET, Settings, get_settings
 
@@ -38,10 +40,17 @@ from bangla_gpt_api.initialize.middleware_stack import build_middleware_stack
 from bangla_gpt_api.initialize.observability import (
     configure_observability_with_sentry,
 )
+from bangla_gpt_api.logging_config import set_secret_logging_allowed
+from bangla_gpt_api.middleware import unhandled_exception_response
 from bangla_gpt_api.providers import (
     ProviderNotConfigured,  # noqa: F401 (re-exported for tests)
     get_fast_provider,  # noqa: F401 (re-exported for tests)
     get_provider,  # noqa: F401 (re-exported for tests)
+)
+from bangla_gpt_api.providers.base import (
+    WORKER_TIMEOUT_SECONDS,
+    fit_timeout,
+    worst_case_seconds,
 )
 from bangla_gpt_api.ratelimit import build_limiter  # noqa: F401 (re-exported for tests)
 from bangla_gpt_api.retrieval.hybrid_index import HybridIndex  # noqa: F401 (re-exported for tests)
@@ -81,6 +90,7 @@ def enforce_production_safety(settings: Settings) -> None:
         _validate_metrics,
         _validate_rate_limit_redis,
         _validate_llm_provider,
+        _validate_llm_budget,
     ):
         try:
             problems.extend(validator(settings))
@@ -113,10 +123,53 @@ def _validate_smtp(settings: Settings) -> list[str]:
 
 
 def _validate_jwt(settings: Settings) -> list[str]:
-    """JWT_SECRET must be overridden in production with at least 32 random characters."""
+    """JWT_SECRET must be overridden in production and must have entropy.
+
+    The old check was length-only. ``JWT_SECRET='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'``
+    is 32 characters, satisfied every constraint in the previous validator,
+    and signs every token in the deployment. Length is necessary; it has never
+    been sufficient.
+    """
     if settings.jwt_secret == DEFAULT_JWT_SECRET or len(settings.jwt_secret) < 32:
         return ["JWT_SECRET must be overridden in production with at least 32 random characters"]
+    weak = _weak_secret_reason(settings.jwt_secret)
+    if weak:
+        return [f"JWT_SECRET is too predictable: {weak}"]
     return []
+
+
+def _weak_secret_reason(secret: str) -> str | None:
+    """Why this secret would fall to a trivial guessing attack, or None."""
+    if len(set(secret)) <= 4:
+        return (
+            f"it uses only {len(set(secret))} distinct characters "
+            "(32 of the same character passes a length check)"
+        )
+    lowered = secret.lower()
+    if lowered in _WEAK_SECRETS:
+        return "it is a well-known placeholder value"
+    # A single repeated unit, e.g. "abcabcabc..." or "123456123456...".
+    for unit in (3, 4, 6, 8, 12, 16):
+        if len(secret) % unit == 0 and secret[:unit] * (len(secret) // unit) == secret:
+            return f"it is a single {unit}-character block repeated"
+    # A pure ascending/descending run (checked arithmetically: chr() on a
+    # 64-byte urlsafe token walks off the end of the code point range).
+    deltas = {ord(secret[i + 1]) - ord(secret[i]) for i in range(len(secret) - 1)}
+    if len(deltas) == 1 and deltas.pop() in (1, -1):
+        return "it is a sequential character run"
+    return None
+
+
+#: Placeholder secrets that ship in templates, compose files and blog posts.
+_WEAK_SECRETS = frozenset(
+    {
+        "change-me-change-me-change-me",
+        "changemechangemechangeme",
+        "replace-me-with-a-real-secret",
+        "your-secret-key-goes-here!",
+        "please-change-this-secret",
+    }
+)
 
 
 def _validate_admin(settings: Settings) -> list[str]:
@@ -177,9 +230,24 @@ def _worker_count(settings: Settings) -> int:
 
 
 def _validate_pii(settings: Settings) -> list[str]:
-    """PII_ENC_KEY must be set in production (guardian phone encryption)."""
+    """PII_ENC_KEY must be a real Fernet key in production.
+
+    The old check was ``if not settings.pii_enc_key``. A value that is present
+    but malformed -- "not-a-fernet-key" -- passed the boot gate and then raised
+    ``ValueError`` on the first guardian phone that needed encrypting, i.e.
+    the guard failed at the worst possible moment rather than at startup.
+    """
     if not settings.pii_enc_key:
         return ["PII_ENC_KEY must be set in production (guardian phone encryption)"]
+    try:
+        Fernet(settings.pii_enc_key.encode())
+    except (ValueError, TypeError) as exc:
+        return [
+            "PII_ENC_KEY is not a valid Fernet key "
+            f"({type(exc).__name__}); generate one with "
+            '`python -c "from cryptography.fernet import Fernet;'
+            'print(Fernet.generate_key().decode())"`'
+        ]
     return []
 
 
@@ -237,6 +305,31 @@ def _mock_allowed(settings: Settings) -> bool:
         "true",
         "yes",
     )
+
+
+def _validate_llm_budget(settings: Settings) -> list[str]:
+    """The retry chain must finish before the worker is killed.
+
+    Providers clamp their per-attempt timeout to fit
+    ``LLM_TOTAL_BUDGET_SECONDS`` (see ``providers.base.fit_timeout``), so this
+    is an assertion rather than the control: it fires if the clamp is ever
+    bypassed or the budget is raised past the worker timeout, which would turn
+    a slow upstream into a SIGKILL that drops every concurrent request on the
+    worker.
+    """
+    worst = worst_case_seconds(
+        fit_timeout(settings.llm_timeout_seconds, settings.llm_max_retries),
+        settings.llm_max_retries,
+    )
+    if worst >= WORKER_TIMEOUT_SECONDS:
+        return [
+            "LLM timeout/retry budget "
+            f"({settings.llm_timeout_seconds}s x {settings.llm_max_retries} retries"
+            f" -> {worst:.1f}s) can exceed the gunicorn worker timeout"
+            f" ({WORKER_TIMEOUT_SECONDS:.0f}s). Lower LLM_TIMEOUT_SECONDS or "
+            "LLM_MAX_RETRIES, or raise --timeout in the container CMD."
+        ]
+    return []
 
 
 # ---------------------------------------------------------------------------
@@ -378,6 +471,12 @@ def create_app(settings: Settings | None = None) -> object:
     # Phase 1: Observability (logging + Sentry)
     configure_observability_with_sentry(settings)
 
+    # The reset flow can print a single-use token to the console when SMTP is
+    # absent, which is a development affordance and never a production one.
+    # Decided here, centrally, so the guarantee does not rest on an `if` at
+    # each call site (F-082).
+    set_secret_logging_allowed(not settings.is_production)
+
     # Phase 2: Production safety gate (fail-fast)
     enforce_production_safety(settings)
 
@@ -444,6 +543,12 @@ def create_app(settings: Settings | None = None) -> object:
 
     # Phase 7: Register routers
     register_routers(app)
+
+    # Phase 7b: Last-resort handler for an exception no route claimed. Without
+    # it the 500 is produced by ServerErrorMiddleware, the OUTERMOST layer, so
+    # it bypasses RequestIdMiddleware and SecurityHeadersMiddleware and ships
+    # with no X-Request-ID and no hardening headers (F-083).
+    app.add_exception_handler(Exception, unhandled_exception_response)
 
     # Phase 8: Build lifespan (explicit params — no closure capture)
     app.router.lifespan_context = initialize.build_lifespan(

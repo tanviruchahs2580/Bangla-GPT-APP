@@ -112,12 +112,22 @@ def test_delete_me_cleans_all_new_tables(client: TestClient, db_path) -> None:
     assert _count(db_path, "SELECT COUNT(*) FROM ai_jobs WHERE user_id = ?", (uid,)) == 0
     assert _count(db_path, "SELECT COUNT(*) FROM notifications WHERE user_id = ?", (uid,)) == 0
     assert _count(db_path, "SELECT COUNT(*) FROM teachers WHERE user_id = ?", (uid,)) == 0
-    # analytics_events deliberately has no FK: the trail survives deletion
+    # analytics_events deliberately has no FK to users, so it cannot block the
+    # delete — but the row must not keep pointing at an account that no longer
+    # exists (F-058). The event survives; the attribution does not. This
+    # assertion used to require user_id to still be set.
     assert (
         _count(
             db_path,
             "SELECT COUNT(*) FROM analytics_events WHERE user_id = ? AND name = 'wave1_seed'",
             (uid,),
+        )
+        == 0
+    )
+    assert (
+        _count(
+            db_path,
+            "SELECT COUNT(*) FROM analytics_events WHERE name = 'wave1_seed' AND user_id IS NULL",
         )
         == 1
     )

@@ -250,12 +250,23 @@ class MfaChallengeIn(BaseModel):
 
 
 class DataExportResponse(BaseModel):
-    """Self-service GDPR-style export of everything we store about the user."""
+    """Self-service GDPR-style export of everything we store about the user.
+
+    F-063: this used to carry the profile, the quiz attempts and the guardian
+    links and nothing else. For a student that omitted every conversation and
+    every chat message -- the single largest body of personal data the product
+    holds about a child, and the data most likely to be subject to a subject
+    access request or a parental request. A portability response that silently
+    stops at quiz scores is not a portability response.
+    """
 
     user: dict
     profile: dict | None
     quiz_attempts: list[dict]
     parent_links: list[dict]
+    conversations: list[dict] = []
+    chat_messages: list[dict] = []
+    learning_activity: list[dict] = []
 
 
 class MeResponse(BaseModel):

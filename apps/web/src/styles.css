@@ -2178,9 +2178,21 @@ form .btn[type="submit"] {
   width: 160px;
 }
 
+/* F-110: measured 12x12 px, and axe independently failed it as WCAG 2.5.8
+   target-size. This is the control that DELETES a child's chat history, so
+   it is the last thing that should be hard to hit accurately. */
 .conv-icon-action {
   margin-left: 6px;
   display: inline-flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+}
+
+.conv-icon-action:hover {
+  background: var(--danger-soft, rgba(220, 38, 38, 0.1));
 }
 
 .search-hit-btn {
@@ -2194,9 +2206,10 @@ form .btn[type="submit"] {
   margin-top: 6px;
 }
 
+/* F-110: measured 32x32 px. Raised to the 44 px bar used by .icon-btn. */
 .rate-btn {
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
 }
 
 .attach-preview {
@@ -3492,7 +3505,7 @@ button.small {
 }
 
 /* ============================================================
-   RENO — world-class polish pass additions. Token-only: every
+   RENO — visual pass additions. Token-only: every
    rule resolves design tokens, so dark mode picks it up
    automatically; no hardcoded colors.
    ============================================================ */
@@ -3742,7 +3755,7 @@ button.small {
   margin-right: var(--space-2);
 }
 /* ╔══════════════════════════════════════════════════════════════╗
-   ║  WAVE-3 VISUAL RENOVATION — world-class polish layer          ║
+   ║  WAVE-3 VISUAL RENOVATION — polish layer                     ║
    ║  Pure CSS on existing class names. Zero DOM/behavior change.  ║
    ║  Order matters: this section intentionally overrides v3 base. ║
    ╚══════════════════════════════════════════════════════════════╝ */
@@ -4907,7 +4920,19 @@ button.small {
 
 /* Staff navigation on phones/tablets: the desktop sidebar is hidden
    <1024px; turn the same links into a horizontal chip strip so every
-   staff page stays reachable. */
+   staff page stays reachable.
+
+   F-109: at 360 px this strip measured scrollWidth 670 against clientWidth
+   360, with the scrollbar hidden by scrollbar-width: none. Three of the
+   six destinations -- Assessments, Analytics and System status -- sat
+   off-screen with no visual affordance, so a teacher could not reach them
+   without discovering an invisible swipe. The document itself does not
+   scroll, so there was nothing else to hint at it.
+
+   Below 480 px the strip becomes a two-column grid instead: every
+   destination is visible at rest, which is the only honest option for a
+   nav bar an adult has to find quickly. Between 481 and 1023 px the strip
+   stays, but the scrollbar is now visible. */
 @media (max-width: 1023px) {
   .sidebar {
     display: flex;
@@ -4919,11 +4944,16 @@ button.small {
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
     border-bottom: 1px solid var(--line);
-    scrollbar-width: none;
+    scrollbar-width: thin;
   }
 
   .sidebar::-webkit-scrollbar {
-    display: none;
+    height: 4px;
+  }
+
+  .sidebar::-webkit-scrollbar-thumb {
+    background: var(--line);
+    border-radius: var(--radius-full);
   }
 
   .side-link {
@@ -4995,4 +5025,77 @@ button.small {
 }
 .health-dot.dot-risk {
   background: var(--danger);
+}
+
+/* ---------------------------------------------------------------------------
+   F-110: tap-target floor for a product used on cheap Android phones by
+   children. WCAG 2.5.8 asks for 24 px; 44 px is the figure platform
+   guidelines use for touch, and the audience makes the difference. These
+   rules raise the measured offenders without changing layout: where a
+   control must stay visually small (a checkbox beside its label) the hit
+   area grows around it rather than the glyph.
+   --------------------------------------------------------------------------- */
+
+@media (pointer: coarse) {
+  .switch,
+  input[type="checkbox"] {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Keep the visual box small but the target large. */
+  input[type="checkbox"].consent-check {
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+    min-height: 22px;
+    margin: -11px;
+  }
+
+  select,
+  .rate-btn,
+  .conv-icon-action {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .side-link {
+    min-height: 44px;
+  }
+}
+
+/* F-109 (cont.): every staff destination visible without a hidden swipe. */
+@media (max-width: 480px) {
+  .sidebar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow-x: visible;
+    gap: 8px;
+  }
+
+  .sidebar .side-link {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+/* F-128: a link the model produced that was not allowed is shown as text,
+   visibly, rather than as a citation that looks trustworthy. */
+.blocked-link {
+  color: var(--muted);
+  text-decoration: line-through;
+  cursor: not-allowed;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

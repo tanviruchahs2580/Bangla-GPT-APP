@@ -199,6 +199,9 @@ export default function ClassesPage() {
           ? h === "support"
           : h === "risk";
     });
+    // The roster is derived state, recomputed whenever its inputs change.
+    // detailId is deliberately absent: including it would rebuild the
+    // map on every detail open/close, and the map is only read from.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roster, search, filter, wm]);
 

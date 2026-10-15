@@ -281,11 +281,19 @@ export async function login(
   // The verified profile is returned so callers can seed auth state
   // directly — re-fetching /users/me after login doubled the post-login
   // latency (one extra tunnel round-trip per login).
-  const me = await fetchMe();
-  if (!me) {
+  const probe = await fetchMe();
+  if (probe.status === "unreachable") {
+    // The token was just issued; the profile call is what failed, and it is
+    // a connectivity problem, not an authentication one (F-107).
+    throw new ApiError(0, "session verification failed", "verify_unreachable");
+  }
+  if (probe.status !== "ok") {
     throw new ApiError(0, "session verification failed", "verify_failed");
   }
-  return { me, mustChangePassword: res.must_change_password === true };
+  return {
+    me: probe.me,
+    mustChangePassword: res.must_change_password === true,
+  };
 }
 
 export async function register(input: {
@@ -336,11 +344,19 @@ export async function mfaChallenge(
     code,
   });
   localStorage.setItem(TOKEN_KEY, res.access_token);
-  const me = await fetchMe();
-  if (!me) {
+  const probe = await fetchMe();
+  if (probe.status === "unreachable") {
+    // The token was just issued; the profile call is what failed, and it is
+    // a connectivity problem, not an authentication one (F-107).
+    throw new ApiError(0, "session verification failed", "verify_unreachable");
+  }
+  if (probe.status !== "ok") {
     throw new ApiError(0, "session verification failed", "verify_failed");
   }
-  return { me, mustChangePassword: res.must_change_password === true };
+  return {
+    me: probe.me,
+    mustChangePassword: res.must_change_password === true,
+  };
 }
 
 export async function changePassword(
@@ -362,12 +378,31 @@ export async function generateInviteCode(): Promise<{
   return post("/students/me/invite-code");
 }
 
-export async function fetchMe(): Promise<MeResponse | null> {
+/**
+ * Outcome of the session probe.
+ *
+ * F-107: this used to return `MeResponse | null`, collapsing three different
+ * situations into one. The worst is "the API could not be reached at all",
+ * which is what a total outage looks like: `fetchMe` returned null, the
+ * provider treated the user as signed out, and every authenticated route
+ * redirected to /login with no banner, no offline notice and no explanation.
+ * A child whose session cannot be verified because the server is down was
+ * given the same dead end as a child whose password was wrong.
+ *
+ * `unreachable` is kept distinct so the UI can say so and offer a retry,
+ * and so the stored token is NOT wiped by an outage.
+ */
+export type SessionProbe =
+  | { status: "ok"; me: MeResponse }
+  | { status: "unauthenticated" }
+  | { status: "unreachable" };
+
+export async function fetchMe(): Promise<SessionProbe> {
   if (!getToken()) {
-    return null;
+    return { status: "unauthenticated" };
   }
   try {
-    return await get<MeResponse>("/users/me");
+    return { status: "ok", me: await get<MeResponse>("/users/me") };
   } catch (e) {
     // Only a 401 proves the token is dead. Transient failures (network
     // blips, tunnel reconnects, non-JSON error pages) must NOT wipe a
@@ -375,8 +410,16 @@ export async function fetchMe(): Promise<MeResponse | null> {
     // logout" right after login.
     if (e instanceof ApiError && e.status === 401) {
       logout();
+      return { status: "unauthenticated" };
     }
-    return null;
+    // 403 is a real answer ("your session is no longer permitted"), not an
+    // outage, so it ends the session. Anything else — a network error, a 5xx,
+    // a 502 from the proxy, a non-JSON body — means we do not know.
+    if (e instanceof ApiError && e.status >= 400 && e.status < 500) {
+      logout();
+      return { status: "unauthenticated" };
+    }
+    return { status: "unreachable" };
   }
 }
 

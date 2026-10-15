@@ -30,14 +30,14 @@ PG = "postgresql+psycopg://u:p@localhost:5432/db"
 def prod(**overrides) -> Settings:
     base = {
         "env": "production",
-        "jwt_secret": "0" * 48,
+        "jwt_secret": "Zk7Qp2XvN8mR4tYcW1bH6jL3sD9fG5aE0uI2oP7xV4qM8nC6rT1wY3zB5",
         "database_url": PG,
         "allowed_origins": "https://app.example.test",
         "admin_email": "admin@example.test",
         "admin_password": "Str0ngAdminPassw0rd!",
         "metrics_require_auth": True,
         "metrics_token": "m" + "0" * 32,
-        "pii_enc_key": "AAAA=",
+        "pii_enc_key": "LjDorcxuiR0OrEApp_g6hwfAbKKwimZQOPIvEz1pRhk=",
         "smtp_enabled": True,
         "smtp_host": "smtp.example.test",
         "smtp_from": "noreply@example.test",

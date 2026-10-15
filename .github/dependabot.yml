@@ -9,6 +9,22 @@
 # Grouped per ecosystem so a routine bump produces one reviewable PR instead of
 # a dozen. Actions are pinned by SHA, so Dependabot updates the SHA and the
 # version comment together.
+#
+# LABELS (F-029): `dependencies`, `python`, `web`, `docker` and `ci` are
+# requested below. None of them existed in the repository's label set, so
+# Dependabot was creating PRs that could not be triaged or filtered -- an
+# unfiltered dependency queue is how the changelog gate blocked seven of the
+# last eight CI runs without anyone noticing (F-027). Create them once:
+#
+#   gh label create dependencies --color 1D76DB --description "..."
+#   gh label create python        --color 1D76DB --description "..."
+#   gh label create web           --color 5319E7 --description "..."
+#   gh label create docker        --color 2496ED --description "..."
+#   gh label create ci            --color BFDADC --description "..."
+#
+# A severity taxonomy (security / patch / minor / major) is the more
+# valuable follow-up: without one, a critical CVE and a typo fix arrive in
+# the same queue with the same urgency.
 
 version: 2
 

@@ -13,6 +13,7 @@ from sqlalchemy import delete, func, select, update
 from bangla_gpt_api.db.models import (
     AiJob,
     AiUsage,
+    AnalyticsEventRow,
     AnswerLog,
     Assignment,
     AuditLog,
@@ -124,8 +125,30 @@ def delete_me(db: DbSession, user: CurrentUser) -> Response:
             .all()
         )
         if conv_ids:
+            # F-093: feedback.message_id is a nullable FK into chat_messages.
+            # Feedback written by ANY user against this student's answers
+            # survived the delete below, so PostgreSQL raised
+            # ForeignKeyViolation on feedback_message_id_fkey and the whole
+            # erasure rolled back with a 500 — the data subject could not
+            # exercise the right that exists precisely so they can leave.
+            db.execute(
+                update(Feedback)
+                .where(
+                    Feedback.message_id.in_(
+                        select(ChatMessage.id).where(ChatMessage.conversation_id.in_(conv_ids))
+                    )
+                )
+                .values(message_id=None)
+            )
             db.execute(delete(ChatMessage).where(ChatMessage.conversation_id.in_(conv_ids)))
         db.execute(delete(Conversation).where(Conversation.student_id == student.id))
+        db.execute(
+            # Same FK hazard on the attempt side: feedback on this student's
+            # quiz attempts outlives the attempt row.
+            update(Feedback)
+            .where(Feedback.attempt_id.in_(attempt_ids or [-1]))
+            .values(attempt_id=None)
+        )
         db.execute(delete(QuizAttempt).where(QuizAttempt.student_id == student.id))
         db.execute(delete(ParentStudentLink).where(ParentStudentLink.student_id == student.id))
         db.execute(delete(ParentInvite).where(ParentInvite.student_id == student.id))
@@ -152,14 +175,22 @@ def delete_me(db: DbSession, user: CurrentUser) -> Response:
     db.execute(delete(SupportPlan).where(SupportPlan.teacher_id == user.id))
     # FK-children: teacher_documents, saved_notes, notifications
     # and ai_jobs must go before the users row (same BUG-4 rule).
-    # analytics_events is deliberately NOT cleaned: it carries no FK to
-    # users and the append-only product trail survives erasure.
+    # analytics_events keeps its rows (append-only product trail) but loses
+    # the attribution; see the update below.
     db.execute(delete(TeacherDocument).where(TeacherDocument.teacher_id == user.id))
     db.execute(delete(SavedNote).where(SavedNote.user_id == user.id))
     db.execute(delete(Notification).where(Notification.user_id == user.id))
     db.execute(delete(AiJob).where(AiJob.user_id == user.id))
     # AI-002 ledger rows go with the account (same BUG-4 rule).
     db.execute(delete(AiUsage).where(AiUsage.user_id == user.id))
+    # F-058: the analytics trail has no FK to users by design ("it must never
+    # block account deletion"), but nothing ever dropped the attribution
+    # either, so after a successful erasure the row still carried user_id and
+    # role for an account that no longer exists. Same policy as AuditLog: the
+    # event survives, the pointer to the person does not.
+    db.execute(
+        update(AnalyticsEventRow).where(AnalyticsEventRow.user_id == user.id).values(user_id=None)
+    )
     # Invites this account created go with it (redeemed staff links are
     # kept as evidence in the User row itself); redemption pointers to this
     # account are nulled.
@@ -230,6 +261,54 @@ def export_me(response: Response, db: DbSession, user: CurrentUser) -> DataExpor
         }
         for a in attempt_rows
     ]
+    # F-063: a student's export stopped at quiz scores. The conversations and
+    # chat messages -- the largest body of personal data this product holds
+    # about a child -- were not exported at all, so the "download everything
+    # we hold about you" endpoint answered with a fraction of the truth.
+    conversations: list[dict] = []
+    chat_messages: list[dict] = []
+    learning_activity: list[dict] = []
+    if student is not None:
+        conv_rows = list(
+            db.execute(select(Conversation).where(Conversation.student_id == student.id)).scalars()
+        )
+        conv_ids = [c.id for c in conv_rows]
+        conversations = [
+            {
+                "id": c.id,
+                "title": c.title,
+                "created_at": c.created_at.isoformat() if c.created_at else None,
+            }
+            for c in conv_rows
+        ]
+        if conv_ids:
+            for m in (
+                db.execute(select(ChatMessage).where(ChatMessage.conversation_id.in_(conv_ids)))
+                .scalars()
+                .all()
+            ):
+                chat_messages.append(
+                    {
+                        "conversation_id": m.conversation_id,
+                        "role": m.role,
+                        "content": m.content,
+                        "created_at": m.created_at.isoformat() if m.created_at else None,
+                    }
+                )
+        learning_activity = [
+            {
+                "date": row.date,
+                "questions": row.questions,
+                "quizzes": row.quizzes,
+                "minutes": row.minutes,
+            }
+            for row in (
+                db.execute(select(DailyActivity).where(DailyActivity.student_id == student.id))
+                .scalars()
+                .all()
+            )
+        ]
+
     # audit event 2/5: data_export (self-service; only the fact is
     # logged -- the payload itself never touches logs or audit rows).
     write_audit(
@@ -251,6 +330,9 @@ def export_me(response: Response, db: DbSession, user: CurrentUser) -> DataExpor
         profile=profile,
         quiz_attempts=attempts,
         parent_links=links,
+        conversations=conversations,
+        chat_messages=chat_messages,
+        learning_activity=learning_activity,
     )
 
 

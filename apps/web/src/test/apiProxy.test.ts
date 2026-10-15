@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { apiTargetUrl, handleApiProxy, resolveApiOrigin } from "../lib/apiProxy";
+import {
+  apiTargetUrl,
+  handleApiProxy,
+  resolveApiOrigin,
+} from "../lib/apiProxy";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -22,9 +26,12 @@ describe("resolveApiOrigin", () => {
 
 describe("apiTargetUrl", () => {
   it("strips the /api prefix and keeps the query string", () => {
-    expect(apiTargetUrl("https://spa.vercel.app/api/health", "https://api.example.com")).toBe(
-      "https://api.example.com/health",
-    );
+    expect(
+      apiTargetUrl(
+        "https://spa.vercel.app/api/health",
+        "https://api.example.com",
+      ),
+    ).toBe("https://api.example.com/health");
     expect(
       apiTargetUrl(
         "https://spa.vercel.app/api/tutor/conversations/3/messages?limit=8",
@@ -54,21 +61,31 @@ describe("handleApiProxy", () => {
 
     const request = new Request("https://spa.vercel.app/api/auth/login", {
       method: "POST",
-      headers: { "content-type": "application/json", authorization: "Bearer tok" },
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer tok",
+      },
       body: JSON.stringify({ email: "a@b.c", password: "x" }),
     });
-    const res = await handleApiProxy(request, { API_ORIGIN: "https://api.example.com" });
+    const res = await handleApiProxy(request, {
+      API_ORIGIN: "https://api.example.com",
+    });
 
     expect(res.status).toBe(200);
     expect((await res.json()) as { status: string }).toEqual({ status: "ok" });
 
-    const [target, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const [target, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
     expect(target).toBe("https://api.example.com/auth/login");
     expect(init.method).toBe("POST");
     const headers = new Headers(init.headers);
     expect(headers.get("authorization")).toBe("Bearer tok");
     expect(headers.get("host")).toBeNull();
-    expect(new TextDecoder().decode(init.body as ArrayBuffer)).toContain("a@b.c");
+    expect(new TextDecoder().decode(init.body as ArrayBuffer)).toContain(
+      "a@b.c",
+    );
   });
 
   it("never forwards hop-by-hop headers upstream or back", async () => {
@@ -83,7 +100,9 @@ describe("handleApiProxy", () => {
     const request = new Request("https://spa.vercel.app/api/health", {
       headers: { connection: "keep-alive" },
     });
-    const res = await handleApiProxy(request, { API_ORIGIN: "https://api.example.com" });
+    const res = await handleApiProxy(request, {
+      API_ORIGIN: "https://api.example.com",
+    });
 
     const upstreamHeaders = new Headers(
       (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].headers,
@@ -96,7 +115,10 @@ describe("handleApiProxy", () => {
   it("relays upstream error statuses untouched", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response(JSON.stringify({ detail: "nope" }), { status: 401 })),
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ detail: "nope" }), { status: 401 }),
+      ),
     );
     const res = await handleApiProxy(
       new Request("https://spa.vercel.app/api/users/me"),
@@ -116,9 +138,12 @@ describe("handleApiProxy", () => {
         throw new TypeError("fetch failed");
       }),
     );
-    const res = await handleApiProxy(new Request("https://spa.vercel.app/api/health"), {
-      API_ORIGIN: "https://api.example.com",
-    });
+    const res = await handleApiProxy(
+      new Request("https://spa.vercel.app/api/health"),
+      {
+        API_ORIGIN: "https://api.example.com",
+      },
+    );
     expect(res.status).toBe(502);
     const body = (await res.json()) as { code: string };
     expect(body.code).toBe("api_origin_unreachable");
@@ -131,27 +156,38 @@ describe("handleApiProxy", () => {
         throw new TypeError("fetch failed");
       }),
     );
-    const res = await handleApiProxy(new Request("https://spa.vercel.app/api/health"), {
-      API_ORIGIN: "https://internal-tunnel.trycloudflare.com",
-    });
+    const res = await handleApiProxy(
+      new Request("https://spa.vercel.app/api/health"),
+      {
+        API_ORIGIN: "https://internal-tunnel.trycloudflare.com",
+      },
+    );
     const text = await res.text();
     expect(text).not.toContain("trycloudflare.com");
     expect(text).not.toContain("api.example.com");
   });
 
   it("records the failing origin in the server log, where operators can see it", async () => {
-    const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const errorLog = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => {
         throw new TypeError("fetch failed");
       }),
     );
-    await handleApiProxy(new Request("https://spa.vercel.app/api/tutor/ask", { method: "POST" }), {
-      API_ORIGIN: "https://internal-tunnel.trycloudflare.com",
-    });
+    await handleApiProxy(
+      new Request("https://spa.vercel.app/api/tutor/ask", { method: "POST" }),
+      {
+        API_ORIGIN: "https://internal-tunnel.trycloudflare.com",
+      },
+    );
     expect(errorLog).toHaveBeenCalledTimes(1);
-    const logged = JSON.parse(String(errorLog.mock.calls[0][0])) as Record<string, unknown>;
+    const logged = JSON.parse(String(errorLog.mock.calls[0][0])) as Record<
+      string,
+      unknown
+    >;
     expect(logged.event).toBe("api_origin_unreachable");
     expect(logged.origin).toBe("https://internal-tunnel.trycloudflare.com");
     expect(logged.method).toBe("POST");

@@ -220,7 +220,9 @@ The API cannot run on Vercel serverless (ephemeral filesystem, no long-running w
 
 ## Status
 
-Accepted — Live deployment documented in `docs/VERCEL_DEPLOY_RECORD_2026-09-13.md`.
+Accepted — Live deployment documented in
+`docs/archive/VERCEL_DEPLOY_RECORD_2026-09-13.md` (archived: the record is
+kept for history, not maintained).
 
 ---
 

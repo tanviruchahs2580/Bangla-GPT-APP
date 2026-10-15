@@ -1,0 +1,49 @@
+# EditorConfig -- F-013
+#
+# Editors disagreed on this tree: one wrote CRLF, another trailing
+# whitespace, another 4-space indents in Python and 2 in TypeScript. Git
+# normalises line endings via .gitattributes, but nothing normalised the
+# rest, so a "no-op" save could produce a whole-file diff.
+#
+# Run `pre-commit install` (.pre-commit-config.yaml) and this stops being
+# something anyone has to remember.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# Documentation. Two-space lists and tables are common in Markdown and
+# re-indenting them churns diffs for no gain.
+[*.md]
+trim_trailing_whitespace = false
+indent_size = 2
+
+[Makefile]
+indent_style = tab
+
+# The generated evaluation report is machine-written.
+[apps/api/eval/*.json]
+insert_final_newline = false
+trim_trailing_whitespace = false
+
+[*.{yml,yaml,toml,json,jsonc}]
+indent_size = 2
+
+[*.{ts,tsx,js,jsx,mjs,cjs,css,scss,html}]
+indent_size = 2
+
+[*.{sh,bash}]
+indent_size = 2
+
+[*.py]
+indent_size = 4
+max_line_length = 100
+
+[*.{bat,ps1}]
+end_of_line = crlf

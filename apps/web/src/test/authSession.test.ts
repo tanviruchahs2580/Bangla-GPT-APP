@@ -26,8 +26,10 @@ describe("auth session resilience (instant-logout fix)", () => {
       }
       return Promise.reject(new TypeError("network down"));
     });
+    // F-107: a connectivity failure now has its own code, so the UI can say
+    // "the server is unreachable" rather than the generic failure.
     await expect(login("a@b.com", "longpassword1")).rejects.toMatchObject({
-      code: "verify_failed",
+      code: "verify_unreachable",
     });
     // Transient failure must NOT wipe the freshly stored token.
     expect(getToken()).toBe(TOKEN);
@@ -40,14 +42,17 @@ describe("auth session resilience (instant-logout fix)", () => {
     fetchSpy.mockImplementation(() =>
       Promise.resolve(jsonResponse({ detail: "bad" }, 401)),
     );
-    expect(await fetchMe()).toBeNull();
+    // F-107: the outcome is now a three-way discriminated result rather
+    // than `MeResponse | null`, so "outage" cannot be mistaken for
+    // "signed out" by the caller.
+    expect(await fetchMe()).toEqual({ status: "unauthenticated" });
     expect(getToken()).toBeNull();
 
     localStorage.setItem("bgpt_token", TOKEN);
     fetchSpy.mockImplementation(() =>
       Promise.reject(new TypeError("network down")),
     );
-    expect(await fetchMe()).toBeNull();
+    expect(await fetchMe()).toEqual({ status: "unreachable" });
     expect(getToken()).toBe(TOKEN);
   });
 

@@ -15,6 +15,13 @@ import {
 interface AuthState {
   me: MeResponse | null;
   loading: boolean;
+  /**
+   * A token is held but the API could not be reached (F-107). Distinct from
+   * "signed out": the session is intact, the server is not, and saying so is
+   * the difference between a retry button and a dead end at the login page.
+   */
+  apiUnreachable: boolean;
+  retrySession: () => void;
   setMe: (me: MeResponse | null) => void;
   signOut: () => void;
 }
@@ -24,33 +31,56 @@ const AuthContext = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [apiUnreachable, setApiUnreachable] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
     fetchMe()
       .then((result) => {
-        setMe(result);
+        if (cancelled) return;
+        if (result.status === "ok") {
+          setMe(result.me);
+          setApiUnreachable(false);
+        } else if (result.status === "unreachable") {
+          // Keep whatever profile we already have and keep the token: the
+          // outage is not the user's fault and must not end their session.
+          setApiUnreachable(true);
+        } else {
+          setMe(null);
+          setApiUnreachable(false);
+        }
         setLoading(false);
       })
       .catch(() => {
         // A failed session probe leaves the user signed out rather than
         // stuck on the loading screen forever.
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       });
     setUnauthorizedHandler(() => {
       logout();
       window.location.href = "/login";
     });
-    return () => setUnauthorizedHandler(() => {});
-  }, []);
+    return () => {
+      cancelled = true;
+      setUnauthorizedHandler(() => {});
+    };
+  }, [attempt]);
+
+  const retrySession = () => setAttempt((n) => n + 1);
 
   const signOut = () => {
     logout();
     setMe(null);
+    setApiUnreachable(false);
     window.location.href = "/login";
   };
 
   return (
-    <AuthContext.Provider value={{ me, loading, setMe, signOut }}>
+    <AuthContext.Provider
+      value={{ me, loading, apiUnreachable, retrySession, setMe, signOut }}
+    >
       {children}
     </AuthContext.Provider>
   );

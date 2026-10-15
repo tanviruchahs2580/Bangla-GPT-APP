@@ -38,10 +38,17 @@ CI must be green on your branch. That means, at minimum:
 | Migrations | `alembic check` | Schema and models must not drift |
 | Web tests | `npm test` | vitest |
 | Web build | `npm run build` | `tsc && vite build` — typecheck included |
-| Web format | `npm run format:check` | prettier |
+| Web lint | `npm run lint` | ESLint, type-aware, `--max-warnings 0` |
+| Web format | `npm run format:check` | prettier — run `npm run format` to fix |
 
-An ESLint config is not committed yet (tracked as AUD-0009), so the web checks
-above are what CI can actually run today.
+Both web checks run in the `Web build & test (apps/web)` CI job.
+
+The prettier row used to be a trap: `npm run format:check` failed on six
+files, nothing in CI ran it, and this table is the stated definition of
+done. The files are now formatted and the check is wired into CI, so the
+claim is true. ESLint is likewise committed and enforced — an earlier
+version of this document said the config "is not committed yet", which
+stopped being true in 2026-10 and was not corrected.
 
 ### Dependency changes
 
@@ -94,13 +101,22 @@ the migration history disagree.
 
 ## Merge policy
 
-The repository currently allows all three merge methods (squash, merge,
-rebase) and does not auto-delete branches. Recommended practice until the
-maintainers tighten it:
+Check the repository settings before relying on this section: merge methods
+and branch protection are configured on the server, not in the repository,
+and this file can drift from them.
 
-- **Squash merge** for feature branches, so `main`'s history stays readable.
-- Keep the branch name meaningful; it is deleted after merge.
-- Only maintainers merge to `main`.
+The intended policy, and what CI enforces by review rather than by
+configuration:
+
+- **Squash merge** for feature branches, so `main`'s history stays readable
+  and each merge has one Conventional-Commits subject.
+- Delete the branch after merge.
+- Only maintainers merge to `main`, and production deploys only after the
+  full gate is green on `main`.
+
+What is actually configured today is in `.github/` and in the repository
+settings, not here; see `docs/LAUNCH_READINESS_CHECKLIST.md` for the items
+that still need a maintainer with admin scope.
 
 Pull-request review is required for changes under `apps/api/src` and anything
 that touches authentication, PII handling, migrations, or CI configuration.
@@ -113,8 +129,10 @@ unexplained `# noqa` or `# type: ignore` will be asked about in review.
 
 ## Security issues
 
-Do not open a public issue for a vulnerability. Contact the maintainers
-privately; see the repository's security policy if one is published.
+Do not open a public issue for a vulnerability — this project holds personal
+data about children. Report it privately through
+[SECURITY.md](SECURITY.md), which documents the reporting channel, the
+response targets and the scope.
 
 ## Licence
 

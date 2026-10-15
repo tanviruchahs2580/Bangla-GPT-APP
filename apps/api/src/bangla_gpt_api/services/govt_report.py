@@ -32,6 +32,27 @@ from sqlalchemy.orm import Session
 from bangla_gpt_api.db.models import Conversation, QuizAttempt, Student
 
 DEFAULT_MIN_CELL = 5
+
+#: F-062: the floor the caller could not go below. The route accepted
+#: ``?min_cell=3``, so the k-anonymity guarantee was whatever the requester
+#: asked for — one query parameter away from a 4-child cohort being released.
+#: Raising the threshold is a legitimate reporting preference; lowering it
+#: below this is a privacy decision no requester gets to make.
+MIN_CELL_FLOOR = 5
+
+
+def effective_min_cell(requested: int | None) -> int:
+    """Clamp a caller-supplied threshold up to the floor.
+
+    Kept as a function rather than a Query constraint so the service is safe
+    for every caller, not just the one HTTP route: a second caller reaching
+    ``aggregate()`` directly would otherwise bypass a route-level ``ge=``.
+    """
+    if requested is None:
+        return DEFAULT_MIN_CELL
+    return max(MIN_CELL_FLOOR, int(requested))
+
+
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 PHONEISH_RE = re.compile(r"[+\d][\d\s-]{9,}")
 # Values a spreadsheet would execute; Bangla text never starts with these.
@@ -81,6 +102,7 @@ def aggregate(
     min_cell: int = DEFAULT_MIN_CELL,
 ) -> AggregateExport:
     """Build anonymized per-(class_level, subject) cells."""
+    min_cell = effective_min_cell(min_cell)
     cutoff = None
     if since_days:
         cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=since_days)
@@ -121,15 +143,31 @@ def aggregate(
         .group_by(Student.class_level)
     )
     chat_by_class = {int(cl): int(n) for cl, n in db.execute(chat_q) if cl is not None}
+    # F-062: active_tutor_students was attached to every surviving cell with
+    # NO threshold of its own. The k-anonymity check on line 103 applies to
+    # the cell's own (class_level, subject) cohort, which says nothing about
+    # how many students used the tutor at that class level. In a school with
+    # one student per class the report released exactly how many of them used
+    # the tutor -- a single identifiable child, labelled by class.
+    #
+    # It is now suppressed below the same threshold, and the suppression is
+    # counted rather than silently zeroed, so a reader can tell "suppressed"
+    # from "genuinely zero".
+    suppressed_tutor = 0
     for row in rows:
-        row["active_tutor_students"] = chat_by_class.get(row["class_level"], 0)
+        active = chat_by_class.get(row["class_level"], 0)
+        if active < min_cell:
+            row["active_tutor_students"] = ""
+            suppressed_tutor += 1
+        else:
+            row["active_tutor_students"] = active
 
     meta = AggregateMeta(
         generated_at=datetime.now(UTC).isoformat(timespec="seconds"),
         district_tag=_csv_cell(district)[:60] if district else "",
         since_days=since_days,
         min_cell=min_cell,
-        suppressed_cells=suppressed,
+        suppressed_cells=suppressed + suppressed_tutor,
         total_students_included=students_included,
     )
     return AggregateExport(meta=meta, rows=rows)

@@ -213,6 +213,30 @@ AdminUser = Annotated[User, Depends(require_roles("admin"))]
 SchoolStaffUser = Annotated[User, Depends(require_roles("school_admin", "admin"))]
 
 
+def require_ai_budget(request: Request, db: DbSession, user: TeacherOrAdminUser) -> User:
+    """Role check plus the monthly LLM spending cap.
+
+    F-060: ``check_ai_budget`` was wired only into the three /tutor routes.
+    Every teacher generation endpoint -- question papers, worksheets, lesson
+    plans, answer keys -- calls the same provider and none of them consulted
+    the budget, so a single teacher account could spend without limit by
+    driving /teacher/qpapers instead of the tutor. The cap is a per-user
+    policy; it does not belong to one family of routes.
+    """
+    # Imported here rather than at module scope: deps -> services is allowed
+    # by the layering contract, but a top-level import would pull the whole
+    # cost/service graph into every router import.
+    from bangla_gpt_api.services.costs import check_ai_budget
+
+    settings = getattr(request.app.state, "settings", None)
+    check_ai_budget(db, user_id=user.id, settings=settings)
+    return user
+
+
+#: Dependency for any route that calls an LLM provider.
+AIGenerationUser = Annotated[User, Depends(require_ai_budget)]
+
+
 def _provider_lacks_vision(app_ctx: AppContext) -> bool:
     """the chat routes refuse vision turns for providers without eyes
     (mock, and openai-compatible text-only providers — A10); the honest

@@ -51,11 +51,29 @@ Taken from each project's PyPI metadata on 2026-10-10. Regenerate with
 | `sentry-sdk` | MIT | error reporting |
 | `prometheus-client` | Apache-2.0 AND BSD-2-Clause | metrics |
 | `pypdf` | BSD-3-Clause | PDF reading |
-| `uharfbuzz` | Apache-2.0 | Bengali text shaping |
 | `bijoy2unicode` | MIT | legacy Bijoy encoding conversion |
 | `fpdf2` | **LGPL-3.0-only** | PDF generation |
+| `uharfbuzz` | Apache-2.0 | complex-script shaping for `fpdf2`'s `set_text_shaping(True)` |
 | `python-multipart` | Apache-2.0 | form parsing |
 | `email-validator` | Unlicense | email syntax validation |
+
+### Why `uharfbuzz` is declared here rather than left to `fpdf2`
+
+`fpdf2` lists `uharfbuzz` only under its **`test` extra**, not as a runtime
+requirement — so a reader of `fpdf2`'s own metadata would reasonably conclude
+it is not needed in production.
+
+It is. `services/qp_pdf.py` calls `pdf.set_text_shaping(True)` at two sites
+(lines 38 and 128), and that call is what makes Bengali conjuncts render as
+shaped glyphs. Without it, `fpdf` raises
+`FPDFException: The uharfbuzz package could not be imported, but is required
+for text shaping` on the first PDF, and with shaping merely *disabled* the
+output has a correct text layer while rendering each conjunct decomposed with
+detached vowel signs (ক্ষ → কয়, জ্ঞান → জুন্ঞেন) — a failure no
+text-extraction test can detect.
+
+So the dependency is real, load-bearing, and declared here on purpose.
+`tests/test_qp_pdf_shaping.py` pins the behaviour.
 
 The two LGPL-3.0-only dependencies (`fpdf2`, `psycopg`) are used as ordinary
 libraries from a MIT-licensed application; distributing a container image that

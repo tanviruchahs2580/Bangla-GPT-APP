@@ -76,6 +76,7 @@ from .common import (
     _request_context,
 )
 from .deps import (
+    AIGenerationUser,
     Ctx,
     DbSession,
     TeacherOrAdminUser,
@@ -126,7 +127,7 @@ def _content_out(row: ChapterContent, sources: list[SourceRef] | None = None) ->
 
 @router.post("/teacher/content/generate", response_model=TeacherContentOut)
 async def teacher_content_generate(
-    app_ctx: Ctx, payload: ChapterContentKey, db: DbSession, teacher: TeacherOrAdminUser
+    app_ctx: Ctx, payload: ChapterContentKey, db: DbSession, teacher: AIGenerationUser
 ) -> TeacherContentOut:
     """one retrieval + one AI call fills all seven sections."""
     if app_ctx.tutor is None:
@@ -302,7 +303,7 @@ async def _qp_fresh_draft(
 
 @router.post("/teacher/qpapers", response_model=QPOut, status_code=201)
 async def teacher_qp_create(
-    app_ctx: Ctx, payload: QPDraftIn, db: DbSession, teacher: TeacherOrAdminUser
+    app_ctx: Ctx, payload: QPDraftIn, db: DbSession, teacher: AIGenerationUser
 ) -> QPOut:
     """Draft = one retrieval + one AI call behind three validation gates."""
     difficulty = payload.difficulty.model_dump()
@@ -394,7 +395,7 @@ def _qp_editable(qp: QuestionPaper) -> None:
 
 @router.post("/teacher/qpapers/{qp_id}/regenerate", response_model=QPOut)
 async def teacher_qp_regenerate(
-    app_ctx: Ctx, qp_id: int, db: DbSession, teacher: TeacherOrAdminUser
+    app_ctx: Ctx, qp_id: int, db: DbSession, teacher: AIGenerationUser
 ) -> QPOut:
     """New AI draft under the same spec; review flags reset."""
     qp = _qp_or_404(db, qp_id, teacher)
@@ -508,7 +509,7 @@ def teacher_qp_review(
 
 @router.post("/teacher/qpapers/{qp_id}/replace", response_model=QPOut)
 async def teacher_qp_replace(
-    app_ctx: Ctx, qp_id: int, payload: QPReplaceIn, db: DbSession, teacher: TeacherOrAdminUser
+    app_ctx: Ctx, qp_id: int, payload: QPReplaceIn, db: DbSession, teacher: AIGenerationUser
 ) -> QPOut:
     """Swap ONE question for a freshly generated one; still needs review."""
     qp = _qp_or_404(db, qp_id, teacher)
@@ -665,7 +666,7 @@ def teacher_qp_pdf(
 
 @router.post("/teacher/lesson-plans", response_model=LessonPlanOut)
 async def teacher_lesson_plan(
-    app_ctx: Ctx, payload: LessonPlanIn, db: DbSession, teacher: TeacherOrAdminUser
+    app_ctx: Ctx, payload: LessonPlanIn, db: DbSession, teacher: AIGenerationUser
 ) -> LessonPlanOut:
     """one retrieval + one AI call drafts an eight-section plan.
 
@@ -739,7 +740,7 @@ def _document_out(doc: TeacherDocument) -> TeacherDocumentOut:
 
 @router.post("/teacher/generate/{kind}", response_model=GenerateDocumentOut, status_code=201)
 async def teacher_generate_document(
-    app_ctx: Ctx, kind: str, body: dict, db: DbSession, teacher: TeacherOrAdminUser
+    app_ctx: Ctx, kind: str, body: dict, db: DbSession, teacher: AIGenerationUser
 ) -> GenerateDocumentOut:
     """One endpoint, four generators: worksheet | answer_key | homework |
     rubric. The persisted TeacherDocument is returned with the cited

@@ -137,6 +137,10 @@ const bn = {
   logout: "লগআউট",
   register: "নিবন্ধন",
   loading: "লোড হচ্ছে…",
+  // F-107: shown when a token is held but the API cannot be reached.
+  apiUnreachableTitle: "সার্ভারের সাথে সংযোগ দেখা যাচ্ছে না",
+  apiUnreachableBody:
+    "আপনার অ্যাকাউন্ট ঠিক আছে। সার্ভারটি এখন সাড়া দিচ্ছে না, তার তথ্য দেখা যাচ্ছে না। একতু পরে আবার চেষ্টা করুন। আপনার কাজ নষ্ট হয়েনি।",
   send: "পাঠান",
   tabRead: "পড়া",
   tabPractice: "অনুশীলন",
@@ -757,6 +761,10 @@ const en: Dict = {
   logout: "Log out",
   register: "Register",
   loading: "Loading…",
+  // F-107: shown when a token is held but the API cannot be reached.
+  apiUnreachableTitle: "Cannot reach the server",
+  apiUnreachableBody:
+    "Your account is fine. The server is not responding right now, so there is nothing to show. Try again in a moment \u2014 nothing you did was lost.",
   send: "Send",
   tabRead: "Read",
   tabPractice: "Practice",
@@ -1221,7 +1229,8 @@ const en: Dict = {
   errNotAllowed: "You don't have permission to do that.",
   errNetwork: "Check your internet connection.",
   errGeneric: "Something went wrong. Please try again later.",
-  errMfaRequired: "Two-step verification required — enter your authenticator code.",
+  errMfaRequired:
+    "Two-step verification required — enter your authenticator code.",
   errBadMfaCode: "That code is wrong — check and try again.",
   errBadMfaToken: "Verification expired — please log in again.",
   errServiceUnavailable: "The server is busy right now — try again shortly.",

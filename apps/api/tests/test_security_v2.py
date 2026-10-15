@@ -335,7 +335,7 @@ def _prod_settings(**overrides) -> Settings:
     base = {
         "env": "production",
         "database_url": "sqlite:////data/app.db",
-        "jwt_secret": "a" * 32,
+        "jwt_secret": "Zk7Qp2XvN8mR4tYcW1bH6jL3sD9fG5aE0uI2oP7xV4qM8nC6rT1wY3zB5",
         "admin_email": "a@b.com",
         "admin_password": "longenough123",
         "allowed_origins": "https://tutor.example.com",
@@ -346,6 +346,7 @@ def _prod_settings(**overrides) -> Settings:
         # SEC-001: /metrics is never public in production.
         "metrics_require_auth": True,
         "metrics_token": "m" * 32,
+        "pii_enc_key": "LjDorcxuiR0OrEApp_g6hwfAbKKwimZQOPIvEz1pRhk=",
     }
     base.update(overrides)
     return Settings(**base)

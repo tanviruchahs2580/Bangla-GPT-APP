@@ -248,6 +248,14 @@ jobs:
       - name: Lint (eslint, type-aware, zero warnings)
         run: npm run lint
 
+      # F-005: CONTRIBUTING listed `npm run format:check` in the definition
+      # of done while nothing in CI ran it, and it failed on six files — a
+      # stated requirement that was both unenforced and unsatisfiable. The
+      # files are formatted and the check is now part of the gate, so the
+      # document and the build agree.
+      - name: Format check (prettier)
+        run: npm run format:check
+
       - name: Build (tsc + vite)
         run: npm run build
 
@@ -324,6 +332,16 @@ jobs:
         # instead of quietly misleading someone at 3am.
         run: python3 apps/api/scripts/check_readme_contract.py
 
+      - name: Every repo path a document names exists
+        # A guide that tells an operator to run `scripts/pg_backup.py` when the
+        # file is `pg_backup.sh` costs real time during an incident. The
+        # deployment guide added in this round made exactly that mistake on its
+        # first draft and 7 more existed in living docs. Scope is deliberately
+        # narrow -- repo-relative paths only -- because a broader heuristic was
+        # tried first and produced 463 false hits, which is how a guard gets
+        # deleted.
+        run: python3 apps/api/scripts/check_doc_paths.py
+
       - name: CHANGELOG covers every commit
         # VCS-08: the changelog is generated from git history, so it cannot
         # claim anything that did not happen. This fails if a released or
@@ -331,9 +349,19 @@ jobs:
         run: python3 apps/api/scripts/check_changelog.py
 
       - name: Secret scan (gitleaks, full history)
-        # Secret scanning is disabled on the GitHub repository, so nothing
-        # watches the history. The 82 hits this flags on main are all test
-        # fixtures and are baselined in .gitleaks.toml.
+        # F-019: gitleaks-action v2 scans the commits present in the local
+        # clone, and the default fetch-depth of 1 means that is the pushed
+        # delta only. The step was named "full history" and its comment
+        # repeated a claim ("82 hits on main") that a full-history run does
+        # not reproduce: it finds 2, both in files deleted before the
+        # baseline and both judged non-credentials. The claim is now made
+        # true -- see the fetch-depth: 0 on this job's checkout, which is
+        # the clone the action reads.
+        #
+        # fetch-depth is an input to the CHECKOUT, not to this action.
+        # Passing it here is rejected with "Unexpected input(s)
+        # 'fetch-depth', valid inputs are ['']" and the step fails, which
+        # is what the first attempt did.
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
