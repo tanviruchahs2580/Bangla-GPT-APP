@@ -25,14 +25,21 @@ from collections.abc import AsyncIterator
 import httpx
 
 from bangla_gpt_api.logging_config import json_log
-from bangla_gpt_api.providers.base import LLMProvider, ProviderError, ProviderSettings
+from bangla_gpt_api.providers.base import (
+    MAX_BACKOFF_SECONDS as _MAX_BACKOFF_SECONDS,
+)
+from bangla_gpt_api.providers.base import (
+    LLMProvider,
+    ProviderError,
+    ProviderSettings,
+    fit_timeout,
+)
 
 logger = logging.getLogger(__name__)
 
 _API_BASE = "https://api.openai.com/v1"
 _CHAT_ENDPOINT = "/chat/completions"
 _RETRYABLE_STATUS = frozenset({408, 429, 500, 502, 503, 504})
-_MAX_BACKOFF_SECONDS = 4.0
 
 
 def _extract_text(payload: dict) -> str:
@@ -124,8 +131,12 @@ class OpenAIProvider(LLMProvider):
         self._api_key = api_key
         self.model = model
         self._base_url = (base_url or _API_BASE).rstrip("/")
-        self._timeout_seconds = timeout_seconds
         self._max_retries = max(0, max_retries)
+        # Per-attempt timeout is derived, not taken verbatim: the naive
+        # timeout x (retries + 1) exceeded the gunicorn worker timeout, so a
+        # hung provider was SIGKILLed along with every other request on the
+        # worker (F-080).
+        self._timeout_seconds = fit_timeout(timeout_seconds, self._max_retries)
         # A9: completion ceiling (OpenAI ``max_tokens``); None/0 omits the key.
         self._max_output_tokens = max_output_tokens
         self._transport = transport

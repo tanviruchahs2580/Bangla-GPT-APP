@@ -33,7 +33,7 @@ from bangla_gpt_api.db.models import (
     Teacher,
     User,
 )
-from bangla_gpt_api.logging_config import json_log
+from bangla_gpt_api.logging_config import json_log, json_log_secret
 from bangla_gpt_api.routers._error_contract import (
     AUTH_GUARD_RESPONSES,
     coded,
@@ -348,7 +348,7 @@ def forgot_password(app_ctx: Ctx, payload: ForgotPasswordRequest, db: DbSession)
         else:
             # Non-production convenience: the only place the raw token is
             # ever logged; never emitted when ENV=production.
-            json_log(logger, logging.INFO, "password_reset_token_console", token=token)
+            json_log_secret(logger, logging.INFO, "password_reset_token_console", token=token)
     return {"status": "accepted"}
 
 

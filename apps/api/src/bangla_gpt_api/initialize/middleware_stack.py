@@ -68,15 +68,46 @@ def build_middleware_stack(
 ) -> None:
     """Register all middleware on ``app`` in deterministic order.
 
-    Order matters:
-    1. CORS — must run before request processing so preflight responses are clean
-    2. Rate limiting — gate traffic before body parsing
-    3. Body size — reject oversized payloads early
-    4. Request ID — trace every request
-    5. Security headers — every outgoing response
-    6. Prometheus — observe every request (including 4xx)
+    **Starlette builds the stack in reverse**: ``add_middleware`` *prepends*,
+    so the LAST middleware registered here is the OUTERMOST one, i.e. the
+    first to see a request and the last to see a response.
+
+    Desired request order, outermost first::
+
+        1. Prometheus   - observe every request and every failure
+        2. SecurityHeaders - headers on every response, including error responses
+        3. RequestId    - a request id exists for every log line and 500 body
+        4. CORS         - answer preflight before it costs a rate-limit token
+        5. RateLimit    - throttle BEFORE the body is read from the socket
+        6. BodySize     - last gate before the body reaches a handler
+
+    That means registration order is the exact reverse of the list above. The
+    previous version registered CORS, RateLimit, BodySize, RequestId,
+    SecurityHeaders, Prometheus and documented them as if registration order
+    were execution order. The real order was Prometheus → SecurityHeaders →
+    RequestId → BodySize → RateLimit, so the body-size middleware streamed the
+    whole request into memory *before* the rate limiter ever counted it.
     """
-    # CORS (before everything else so preflight responses are clean)
+    # Explicit ``RATE_LIMIT_RULES`` entries apply to every route except the
+    # four with dedicated per-field knobs (see _effective_rules). Previously
+    # the config-driven dict was computed and then discarded.
+    rl_rules = rules if rules is not None else _effective_rules(settings)
+
+    # Innermost first: reverse of the desired execution order.
+    #
+    # Body size (rejects oversized payloads before a handler is reached)
+    app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes)
+
+    # Rate limiting. Registered after BodySize so it wraps it: a throttled
+    # request must never have had its body read.
+    app.add_middleware(
+        RateLimitMiddleware,
+        rules=rl_rules,
+        limiter=limiter,
+        settings=settings,
+    )
+
+    # CORS (outside the throttle so preflight responses stay clean)
     if settings.cors_origins:
         app.add_middleware(
             CORSMiddleware,
@@ -88,27 +119,11 @@ def build_middleware_stack(
             allow_headers=["Authorization", "Content-Type", "Accept", "X-Request-ID"],
         )
 
-    # Explicit ``RATE_LIMIT_RULES`` entries apply to every route except the
-    # four with dedicated per-field knobs (see _effective_rules). Previously
-    # the config-driven dict was computed and then discarded.
-    rl_rules = rules if rules is not None else _effective_rules(settings)
-
-    # Rate limiting (before body parsing so we reject before expensive work)
-    app.add_middleware(
-        RateLimitMiddleware,
-        rules=rl_rules,
-        limiter=limiter,
-        settings=settings,
-    )
-
-    # Body size limit (before downstream middleware)
-    app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes)
-
     # Request ID tracing
     app.add_middleware(RequestIdMiddleware)
 
     # Security headers on every response
     app.add_middleware(SecurityHeadersMiddleware)
 
-    # Prometheus metrics (observe every request)
+    # Prometheus metrics (observe every request) — outermost
     app.add_middleware(PrometheusMetricsMiddleware)
