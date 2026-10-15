@@ -92,6 +92,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - ci: add CI-gated Vercel production deploy workflow
 - ci: add concurrency to api CI, fix eval-gate header, retire sanity workflow
 - ci: bound job runtimes and harden release/deploy workflows
+- ci: fetch-depth belongs on the checkout, not on the gitleaks action
 - ci: hermetic import-time settings patch + step-isolated migration DBs
 
 ### Documentation

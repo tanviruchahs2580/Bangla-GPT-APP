@@ -1,3 +1,4 @@
+import contextlib
 import contextvars
 import json
 import logging
@@ -133,8 +134,60 @@ class RedactionFilter(logging.Filter):
         return True
 
 
+class _EncodingSafeStream:
+    """A text stream that degrades to escapes instead of losing the line.
+
+    F-131. The handler wrote to ``sys.stdout`` as-is. On Windows that stream
+    is cp1252, and this product logs Bengali -- chapter titles, student
+    questions, safety refusals. Every such line raised
+    ``UnicodeEncodeError`` inside ``StreamHandler.emit``.
+
+    The logging module *swallows* that and writes a "Logging error" traceback
+    to stderr, so the record is gone and what an operator sees is a stack
+    trace. In a product whose entire purpose is Bengali text, the Bengali log
+    lines are precisely the ones that disappear.
+
+    Two layers, because neither alone is enough:
+
+    * ``_utf8_stream`` reconfigures the stream to UTF-8, which is the real
+      fix and makes the bytes correct.
+    * This wrapper catches what is left -- a stream that cannot be
+      reconfigured (a supervisor's pipe, a test ``StringIO``, a Windows
+      console) -- and rewrites the line to an ASCII-escaped form that the
+      existing encoding can write. The information survives; only the
+      human-readable Bengali is lost, and it is recoverable from the escapes.
+    """
+
+    def __init__(self, inner) -> None:
+        self._inner = inner
+
+    def write(self, text: str):
+        try:
+            return self._inner.write(text)
+        except (UnicodeEncodeError, ValueError):
+            return self._inner.write(text.encode("unicode_escape").decode("ascii"))
+
+    def flush(self) -> None:
+        flush = getattr(self._inner, "flush", None)
+        if flush is not None:
+            flush()
+
+    def __getattr__(self, name):  # delegate everything else to the real stream
+        return getattr(self._inner, name)
+
+
+def _utf8_stream(stream):
+    """Return ``stream`` reconfigured for UTF-8, if it supports it."""
+    reconfigure = getattr(stream, "reconfigure", None)
+    if reconfigure is None:
+        return stream
+    with contextlib.suppress(ValueError, OSError):  # not reconfigurable
+        reconfigure(encoding="utf-8", errors="replace")
+    return stream
+
+
 def configure_logging(level: str = "INFO") -> None:
-    handler = logging.StreamHandler(sys.stdout)
+    handler = logging.StreamHandler(_EncodingSafeStream(_utf8_stream(sys.stdout)))
     handler.setFormatter(logging.Formatter("%(message)s"))
     handler.addFilter(RedactionFilter())
     root = logging.getLogger()
