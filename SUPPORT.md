@@ -26,6 +26,7 @@ thread where the next person will not find it.
 
 - Deployment of the reference stack to a third-party host.
 - Data recovery from a lost or corrupt database; take the nightly backups
-  (`scripts/pg_backup.py`, `scripts/backup_loop.py`) seriously.
+  (`scripts/pg_backup.sh` for a one-shot, `scripts/backup_loop.py` to
+schedule it) seriously.
 - Requests to export or look up another person's data. Data access goes
   through [SECURITY.md](SECURITY.md), not support.

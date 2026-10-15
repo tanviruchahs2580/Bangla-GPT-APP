@@ -23,7 +23,7 @@ data gap; no third-party copies were substituted.
 
 ## 2. Acquisition (idempotent, respectful)
 
-`nctb/acquisition.py` + `scripts/build_nctb_corpus.py`
+`nctb/acquisition.py` + `apps/api/scripts/build_nctb_corpus.py`
 
 - politeness delay between requests (default 2 s), identifying User-Agent
 - retries with exponential backoff; content-type must be `application/pdf`
@@ -81,7 +81,7 @@ usable text, page-encoding histogram, chunk count. Verified run:
 | উচ্চতর গণিত | 52/52 | 0.73 | 84 |
 
 Indexing gate: any source below **0.5 Bangla ratio on usable text** never
-reaches the tutor index (`data/nctb_loader.py`) — this is what keeps
+reaches the tutor index (`nctb/corpus.py`) — this is what keeps
 un- or mis-converted content out of student answers.
 
 ## 5. Chunking & class metadata

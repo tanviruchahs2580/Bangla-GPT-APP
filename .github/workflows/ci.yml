@@ -332,6 +332,16 @@ jobs:
         # instead of quietly misleading someone at 3am.
         run: python3 apps/api/scripts/check_readme_contract.py
 
+      - name: Every repo path a document names exists
+        # A guide that tells an operator to run `scripts/pg_backup.py` when the
+        # file is `pg_backup.sh` costs real time during an incident. The
+        # deployment guide added in this round made exactly that mistake on its
+        # first draft and 7 more existed in living docs. Scope is deliberately
+        # narrow -- repo-relative paths only -- because a broader heuristic was
+        # tried first and produced 463 false hits, which is how a guard gets
+        # deleted.
+        run: python3 apps/api/scripts/check_doc_paths.py
+
       - name: CHANGELOG covers every commit
         # VCS-08: the changelog is generated from git history, so it cannot
         # claim anything that did not happen. This fails if a released or

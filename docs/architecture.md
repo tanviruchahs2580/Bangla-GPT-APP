@@ -220,7 +220,7 @@ BanglaGptApp/
 - **Grounding gate**: query-term coverage ≥ 0.5 replaces absolute score
   floors that measurably fail to transfer between corpus scales;
   adversarial refusal 4/4 on the real corpus.
-- **Evaluation harness**: `scripts/evaluate_nctb_retrieval.py` measures
+- **Evaluation harness**: `apps/api/scripts/evaluate_nctb_retrieval.py` measures
   Recall@K over self-sentence and chapter-title families plus adversarial
   refusal, writing `data/nctb/retrieval_eval.json`.
 

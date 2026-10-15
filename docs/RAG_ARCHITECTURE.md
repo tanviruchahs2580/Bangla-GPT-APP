@@ -67,4 +67,4 @@ documented rather than padded with unbenchmarked stages.
 | Chapter-title Recall@1 / @5 (n=80) | 0.225 / 0.525 |
 | Adversarial refusal rate | 4/4 = 1.00 |
 
-Full numbers regenerate via `scripts/evaluate_nctb_retrieval.py`.
+Full numbers regenerate via `apps/api/scripts/evaluate_nctb_retrieval.py`.
