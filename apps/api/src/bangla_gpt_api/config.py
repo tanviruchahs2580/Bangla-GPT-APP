@@ -139,6 +139,13 @@ class Settings(BaseSettings):
     chat_history_message_char_limit: int = 2000
     chat_retention_days: int = 180
 
+    # Product analytics trail (analytics_events). The model docstring claims
+    # "cleaned by the retention sweep" and no sweep touched the table at all,
+    # so the trail grew without bound and survived account erasure still
+    # carrying user_id (F-058). Same window as chat by default; the trail is
+    # coarser data than the conversation itself.
+    analytics_retention_days: int = 180
+
     # --- parent invites ---
     invite_ttl_minutes: int = 1440
     # Legacy bare-ID parent linking is DISABLED by default: any parent could

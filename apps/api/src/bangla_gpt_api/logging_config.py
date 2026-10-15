@@ -37,6 +37,14 @@ _SENSITIVE_KEY_RE = re.compile(
     r")(?:$|_)"
 )
 
+#: Keys whose value is an opaque identifier, not a credential. These are the
+#: only fields exempt from the value-shape rules, and only when the value does
+#: not look like a credential. Redacting them would make the job/request
+#: correlation lines useless, which is the whole point of logging them.
+_IDENTIFIER_KEY_RE = re.compile(
+    r"(?i)(?:^|_)(?:job_id|request_id|trace_id|correlation_id|span_id|event_id)(?:$|_)"
+)
+
 # Values that are unmistakably credentials regardless of the key they sit under.
 _SENSITIVE_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\$argon2[id]?\$"),  # argon2 PHC string
@@ -45,7 +53,6 @@ _SENSITIVE_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}"),  # GitHub token
     re.compile(r"\b(?:sk|ghp|glpat|xox[abps])-[A-Za-z0-9_-]{16,}"),  # vendor tokens
     re.compile(r"\bBearer\s+[A-Za-z0-9._~+/-]{12,}=*"),  # Authorization header
-    re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b"),  # UUID
     re.compile(r"\+?[0-9]{10,15}"),  # phone numbers (guardian PII)
     re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.]{2,}\b"),  # email addresses
 )
@@ -59,29 +66,37 @@ def is_sensitive_key(key: str) -> bool:
     return bool(_SENSITIVE_KEY_RE.search(key) or _OPAQUE_KEY_RE.search(key))
 
 
-def redact_value(value: Any, *, _depth: int = 0) -> Any:
+def redact_value(value: Any, *, _depth: int = 0, _is_identifier: bool = False) -> Any:
     """Recursively redact a value destined for the log sink.
 
     Dicts and lists are walked so nested structures (e.g. ``extra={"body":
     {"password": ...}}``) are covered. Anything else is checked against the
-    value patterns and replaced whole if it matches.
+    value patterns and replaced whole if it matches. ``_is_identifier`` marks a
+    field whose key says "opaque id", which exempts only the identifier shapes.
     """
     if _depth > 6:  # pathological self-referential structure guard
         return REDACTED
     if isinstance(value, dict):
         out: dict[str, Any] = {}
         for k, v in value.items():
-            out[k] = (
-                REDACTED
-                if isinstance(k, str) and is_sensitive_key(k)
-                else redact_value(v, _depth=_depth + 1)
-            )
+            if isinstance(k, str) and is_sensitive_key(k):
+                out[k] = REDACTED
+            else:
+                out[k] = redact_value(
+                    v,
+                    _depth=_depth + 1,
+                    _is_identifier=isinstance(k, str) and bool(_IDENTIFIER_KEY_RE.search(k)),
+                )
         return out
     if isinstance(value, (list, tuple)):
         return [redact_value(v, _depth=_depth + 1) for v in value]
     if value is None or isinstance(value, bool):
         return value
     if isinstance(value, str):
+        # An identifier field is exempt from the value-shape rules, but never
+        # from a rule that says "this is definitely a credential".
+        if _is_identifier and not any(p.search(value) for p in _SENSITIVE_VALUE_PATTERNS):
+            return value
         for pattern in _SENSITIVE_VALUE_PATTERNS:
             if pattern.search(value):
                 return REDACTED
