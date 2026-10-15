@@ -348,20 +348,21 @@ jobs:
         # unreleased commit is missing from it.
         run: python3 apps/api/scripts/check_changelog.py
 
-      - name: Secret scan (gitleaks, pushed range)
-        # F-019: this step was named "full history" and its comment repeated a
-        # claim about "82 hits on main" that a full-history run does not
-        # reproduce (it finds 2, both in files deleted before the baseline and
-        # both judged non-credentials). The name and the comment were wrong in
-        # the direction that matters: gitleaks-action scans the range this
-        # workflow fetched, and the default fetch-depth of 1 means that is the
-        # pushed delta only. History is unwatched, and had looked watched.
+      - name: Secret scan (gitleaks, full history)
+        # F-019: gitleaks-action v2 scans the commits present in the local
+        # clone, and the default fetch-depth of 1 means that is the pushed
+        # delta only. The step was named "full history" and its comment
+        # repeated a claim ("82 hits on main") that a full-history run does
+        # not reproduce: it finds 2, both in files deleted before the
+        # baseline and both judged non-credentials. The claim is now made
+        # true -- see the fetch-depth: 0 on this job's checkout, which is
+        # the clone the action reads.
         #
-        # fetch-depth: 0 makes the claim true, so the step scans every commit
-        # on every pull request rather than only the new ones.
+        # fetch-depth is an input to the CHECKOUT, not to this action.
+        # Passing it here is rejected with "Unexpected input(s)
+        # 'fetch-depth', valid inputs are ['']" and the step fails, which
+        # is what the first attempt did.
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
-        with:
-          fetch-depth: 0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false

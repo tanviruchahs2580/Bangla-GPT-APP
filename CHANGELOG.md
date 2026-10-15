@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): rotate token epoch on password change/reset — sessions revoke (F-05)
 - fix(api): ruff format circuit_breaker
 - fix(api): ruff format middleware_stack
+- fix(api): the PEP 621 readme path broke every Python CI job
 - fix(api): vision-honest refusal for openai, max_output_tokens cap, transport retries (A10, A9, A16)
 - fix(api): wall school-less staff into the shared default school (F-04)
 - fix(api,web): audit remediations — breaker recovery, MFA/chat rate limits, CORS PATCH, model-refusal honesty, test runner
@@ -135,7 +136,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Other
 
 - Full engineering audit + remediation: 47 findings fixed, 0 open (#1)
-- ﻿fix(api): the PEP 621 readme path broke every Python CI job
+- revert(api): uharfbuzz is required, not unused -- F-042 was wrong
 
 ## v0.9.2 - 2026-09-15
 
