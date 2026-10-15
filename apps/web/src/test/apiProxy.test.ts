@@ -104,4 +104,57 @@ describe("handleApiProxy", () => {
     );
     expect(res.status).toBe(401);
   });
+
+  // A dead API_ORIGIN -- stopped container, expired tunnel, DNS failure --
+  // used to reject out of the handler and surface as a bare 500 that named
+  // neither the cause nor the host. That is exactly how production looked
+  // healthy while every API call was failing.
+  it("answers 502 api_origin_unreachable when the origin refuses the connection", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("fetch failed");
+      }),
+    );
+    const res = await handleApiProxy(new Request("https://spa.vercel.app/api/health"), {
+      API_ORIGIN: "https://api.example.com",
+    });
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as { code: string };
+    expect(body.code).toBe("api_origin_unreachable");
+  });
+
+  it("does not disclose the origin host to the client", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("fetch failed");
+      }),
+    );
+    const res = await handleApiProxy(new Request("https://spa.vercel.app/api/health"), {
+      API_ORIGIN: "https://internal-tunnel.trycloudflare.com",
+    });
+    const text = await res.text();
+    expect(text).not.toContain("trycloudflare.com");
+    expect(text).not.toContain("api.example.com");
+  });
+
+  it("records the failing origin in the server log, where operators can see it", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new TypeError("fetch failed");
+      }),
+    );
+    await handleApiProxy(new Request("https://spa.vercel.app/api/tutor/ask", { method: "POST" }), {
+      API_ORIGIN: "https://internal-tunnel.trycloudflare.com",
+    });
+    expect(errorLog).toHaveBeenCalledTimes(1);
+    const logged = JSON.parse(String(errorLog.mock.calls[0][0])) as Record<string, unknown>;
+    expect(logged.event).toBe("api_origin_unreachable");
+    expect(logged.origin).toBe("https://internal-tunnel.trycloudflare.com");
+    expect(logged.method).toBe("POST");
+    expect(logged.path).toBe("/api/tutor/ask");
+  });
 });

@@ -40,8 +40,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(auth): redeem single-use codes with a compare-and-set, not a read-then-write
 - fix(auth): unblock login on web and APK (MFA step-up, unauth resend, proxy/APK errors)
 - fix(ci): exempt changelog-regenerating commits by changed paths, not subject text
+- fix(ci): fail the Vercel deploy on a bad credential with a named cause
+- fix(ci): make the changelog gate usable from any checkout
 - fix(ci): make the lockfile guardrail deterministic
 - fix(ci): pin every action to a commit SHA and scope registry permission
+- fix(ci): resolve README links portably so the docs guard works on Linux
 - fix(ci): serialise release and deploy runs per git ref
 - fix(ci): upgrade setuptools before pip-audit; refresh lock to current resolution
 - fix(db): reconcile ORM/migration drift so alembic check passes
@@ -52,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): clear footer from bottom nav + cut a round-trip from login
 - fix(web): close-JSDoc sequence inside edge-proxy comment broke Vercel TS build
 - fix(web): configurable production API origin via edge proxy (FE-01)
+- fix(web): fail honestly when the API origin is unreachable
 - fix(web): guarantee minimum gap between stacked page sections
 - fix(web): localize consent/invite copy, theme icon sync, error states, icon cleanup
 - fix(web): notification panel no longer clipped off the left edge
@@ -96,6 +100,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: record final v0.9.2 live sync (tunnel host amd-reproduction-clips-cricket)
 - docs: regenerate CHANGELOG
 - docs: regenerate CHANGELOG for the current batch
+- docs: regenerate CHANGELOG for the two CI fixes
 - docs: ship the bundled font's licence, third-party notices, contributing guide
 
 ### Tests
@@ -118,6 +123,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - style(api): reformat SchoolInvite claim call
 - style(api): ruff format four test files (format-gate drift)
 - style(api): ruff format mock provider and lesson plan prompt
+
+### Other
+
+- Full engineering audit + remediation: 47 findings fixed, 0 open (#1)
 
 ## v0.9.2 - 2026-09-15
 

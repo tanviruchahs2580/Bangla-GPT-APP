@@ -7,11 +7,10 @@ fabricating historical release notes, so the generator refuses to write a
 version whose commits it cannot read.
 """
 
-import subprocess
 from collections import OrderedDict
-from pathlib import Path
 
-REPO = Path(r"C:\Users\DST\projects\Bangla GPT APP")
+from _changelog_common import COMMIT_FORMAT, REPO, git, is_bot, parse_commit
+
 OUT = REPO / "CHANGELOG.md"
 
 CATEGORIES = OrderedDict(
@@ -33,10 +32,20 @@ CATEGORIES = OrderedDict(
 )
 
 
-def git(*args: str) -> str:
-    return subprocess.run(
-        ["git", *args], cwd=REPO, capture_output=True, text=True, encoding="utf-8", check=True
-    ).stdout
+def subjects_in(span: str) -> list[str]:
+    """Commit subjects in `span`, excluding bot-authored commits.
+
+    Bot bumps are recorded on their own pull request. Listing them here as well
+    would put a line in the changelog that no release note reader can act on,
+    and check_changelog.py would then have to be told to ignore a line the
+    generator had just written.
+    """
+    out = []
+    for line in git("log", f"--format={COMMIT_FORMAT}", span).splitlines():
+        _, _, email, subject = parse_commit(line)
+        if subject.strip() and not is_bot(email):
+            out.append(subject)
+    return out
 
 
 def classify(subject: str) -> tuple[str, str]:
@@ -58,7 +67,7 @@ sections = []
 previous = None
 for tag in tags:
     span = f"{previous}..{tag}" if previous else tag
-    subjects = git("log", "--format=%s", span).splitlines()
+    subjects = subjects_in(span)
     if not subjects:
         previous = tag
         continue
@@ -90,10 +99,7 @@ lines = [
 # Commits after the newest tag are genuinely unreleased and must be listed,
 # not summarised as "nothing yet".
 unreleased = []
-if tags:
-    unreleased = git("log", "--format=%s", f"{tags[-1]}..HEAD").splitlines()
-else:
-    unreleased = git("log", "--format=%s").splitlines()
+unreleased = subjects_in(f"{tags[-1]}..HEAD") if tags else subjects_in("HEAD")
 
 if unreleased:
     grouped_unreleased: dict[str, list[str]] = {}

@@ -74,12 +74,38 @@ export async function handleApiProxy(request: Request, env: ProxyEnv): Promise<R
   const body =
     request.method === "GET" || request.method === "HEAD" ? undefined : await request.arrayBuffer();
 
-  const upstream = await fetch(target, {
-    method: request.method,
-    headers: forwardHeaders(request.headers),
-    body,
-    redirect: "manual",
-  });
+  let upstream: Response;
+  try {
+    upstream = await fetch(target, {
+      method: request.method,
+      headers: forwardHeaders(request.headers),
+      body,
+      redirect: "manual",
+    });
+  } catch (cause) {
+    // The configured origin is unreachable: a stopped container, an expired
+    // tunnel, a DNS failure. Without this the rejection escapes the handler
+    // and Vercel answers with a bare 500 that names neither the cause nor the
+    // host, so a total API outage looks identical to a bug in the app. The
+    // unconfigured case above already fails honestly; this is the same
+    // treatment for the case that actually happens in production.
+    console.error(
+      JSON.stringify({
+        event: "api_origin_unreachable",
+        origin,
+        path: new URL(request.url).pathname,
+        method: request.method,
+        cause: cause instanceof Error ? cause.message : String(cause),
+      }),
+    );
+    return new Response(
+      JSON.stringify({
+        code: "api_origin_unreachable",
+        message: "The API origin is configured but did not respond. This is an upstream outage, not a client error.",
+      }),
+      { status: 502, headers: { "content-type": "application/json" } },
+    );
+  }
 
   const responseHeaders = forwardHeaders(upstream.headers);
   // The body is surfaced through a fresh Response (and possibly decoded by
