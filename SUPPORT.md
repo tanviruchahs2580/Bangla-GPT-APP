@@ -18,8 +18,9 @@ Not a public issue. See [SECURITY.md](SECURITY.md).
 
 ## A question
 
-Open a discussion or an issue. If the answer is generally useful, it
-probably belongs in the documentation rather than in a thread.
+Open a discussion or an issue. If the answer is generally useful, add it
+to the documentation in the same pull request rather than leaving it in a
+thread where the next person will not find it.
 
 ## What support will not cover
 

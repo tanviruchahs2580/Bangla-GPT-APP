@@ -64,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): localize consent/invite copy, theme icon sync, error states, icon cleanup
 - fix(web): notification panel no longer clipped off the left edge
 - fix(web): route /api/* explicitly to the edge proxy function
+- fix(web): stop an outage looking like a closed account, and fence model links
 - fix: complete admin password-change flow, tutor typo gate, roster-scoped stats, quiz distractors, i18n
 - fix: resolve mypy 2.4.0 type errors in teacher/school/common/weakness
 

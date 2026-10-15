@@ -3505,7 +3505,7 @@ button.small {
 }
 
 /* ============================================================
-   RENO — world-class polish pass additions. Token-only: every
+   RENO — visual pass additions. Token-only: every
    rule resolves design tokens, so dark mode picks it up
    automatically; no hardcoded colors.
    ============================================================ */
@@ -3755,7 +3755,7 @@ button.small {
   margin-right: var(--space-2);
 }
 /* ╔══════════════════════════════════════════════════════════════╗
-   ║  WAVE-3 VISUAL RENOVATION — world-class polish layer          ║
+   ║  WAVE-3 VISUAL RENOVATION — polish layer                     ║
    ║  Pure CSS on existing class names. Zero DOM/behavior change.  ║
    ║  Order matters: this section intentionally overrides v3 base. ║
    ╚══════════════════════════════════════════════════════════════╝ */
