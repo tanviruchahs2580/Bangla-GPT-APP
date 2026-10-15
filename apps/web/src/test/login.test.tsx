@@ -78,6 +78,8 @@ describe("LoginPage UX contract", () => {
     await user.type(screen.getByLabelText("ইমেইল"), "a@b.com");
     await user.type(screen.getByLabelText(/পাসওয়ার্ড/), "longpassword1");
     await user.click(screen.getByRole("button", { name: /লগইন|Log in/i }));
-    expect(await screen.findByText(/দুই ধাপের যাচাই|Two-step/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/দুই ধাপের যাচাই|Two-step/i),
+    ).toBeInTheDocument();
   });
 });

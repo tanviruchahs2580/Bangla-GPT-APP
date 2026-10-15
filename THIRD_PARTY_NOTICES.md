@@ -51,11 +51,18 @@ Taken from each project's PyPI metadata on 2026-10-10. Regenerate with
 | `sentry-sdk` | MIT | error reporting |
 | `prometheus-client` | Apache-2.0 AND BSD-2-Clause | metrics |
 | `pypdf` | BSD-3-Clause | PDF reading |
-| `uharfbuzz` | Apache-2.0 | Bengali text shaping |
 | `bijoy2unicode` | MIT | legacy Bijoy encoding conversion |
 | `fpdf2` | **LGPL-3.0-only** | PDF generation |
 | `python-multipart` | Apache-2.0 | form parsing |
 | `email-validator` | Unlicense | email syntax validation |
+
+`uharfbuzz` was previously listed here as being used for "Bengali text
+shaping". It was never imported anywhere in the codebase: `qp_pdf.py` imports
+only `pathlib` and `fpdf`, and Bengali is embedded through the bundled Noto
+Sans Bengali TTF. It was a declared runtime dependency, installed into the
+production image and shipped in the wheel, for a function it does not
+perform. It has been removed from `pyproject.toml` and `constraints.txt`
+(F-042); `fpdf2` does the glyph work.
 
 The two LGPL-3.0-only dependencies (`fpdf2`, `psycopg`) are used as ordinary
 libraries from a MIT-licensed application; distributing a container image that

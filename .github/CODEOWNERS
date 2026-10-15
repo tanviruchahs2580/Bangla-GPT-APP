@@ -1,0 +1,13 @@
+# Default owners for everything, so a review request is never empty.
+# The audit token has no admin scope, so these are the only handle the
+# repository can carry in-tree; adjust the handles to the real maintainers.
+*                       @tanviruchahs2580
+
+# Areas where a change needs domain knowledge, not just a green build.
+/apps/api/src/bangla_gpt_api/routers/   @tanviruchahs2580
+/apps/api/src/bangla_gpt_api/auth/       @tanviruchahs2580
+/apps/api/src/bangla_gpt_api/security.py @tanviruchahs2580
+/apps/api/alembic/                       @tanviruchahs2580
+/apps/web/src/                           @tanviruchahs2580
+/deploy/                                 @tanviruchahs2580
+/.github/                                @tanviruchahs2580

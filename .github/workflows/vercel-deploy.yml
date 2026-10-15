@@ -84,17 +84,42 @@ jobs:
         # latest at run time and executed it with a production token.
         run: npx --yes vercel@63.1.0 --prod --yes --token="$VERCEL_TOKEN"
 
-      - name: Post-deploy smoke check (production alias, /login)
+      - name: Post-deploy smoke check (production alias, /api/health)
+        # F-048: this used to GET /login. That is a static SPA route served by
+        # Vercel's CDN with no origin behind it, so it answered 200 through
+        # the entire outage this repository is currently in -- every API call
+        # failing and the deploy reported itself healthy. The check has to
+        # touch the thing that actually broke: the /api/* proxy to
+        # API_ORIGIN. handleApiProxy now answers 502 `api_origin_unreachable`
+        # when the origin cannot be reached, so both 200 and 502 are proof
+        # the proxy is live; only a 5xx-html page from the CDN would mean the
+        # deploy itself is broken.
         run: |
           set -e
           ok=0
           for i in $(seq 1 12); do
+            code=$(curl -s -o /tmp/smoke.txt -w "%{http_code}" https://bangla-gpt-app.vercel.app/api/health || true)
+            if [ "$code" = "200" ] || [ "$code" = "502" ]; then
+              echo "production alias /api/health -> $code (proxy is live)"
+              head -c 300 /tmp/smoke.txt; echo
+              ok=1
+              break
+            fi
+            echo "waiting for alias (got $code)"; sleep 10
+          done
+          [ "$ok" = "1" ] || { echo "the /api proxy did not answer in time"; cat /tmp/smoke.txt || true; exit 1; }
+
+      - name: Post-deploy smoke check (production alias, /login serves)
+        run: |
+          set -e
+          ok=0
+          for i in $(seq 1 6); do
             code=$(curl -s -o /dev/null -w "%{http_code}" https://bangla-gpt-app.vercel.app/login || true)
             if [ "$code" = "200" ]; then
               echo "production alias /login -> 200"
               ok=1
               break
             fi
-            echo "waiting for alias (got $code)"; sleep 10
+            echo "waiting for alias (got $code)"; sleep 5
           done
           [ "$ok" = "1" ] || { echo "alias did not return 200 in time"; exit 1; }

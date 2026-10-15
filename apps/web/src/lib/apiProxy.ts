@@ -58,13 +58,17 @@ function forwardHeaders(headers: Headers): Headers {
   return out;
 }
 
-export async function handleApiProxy(request: Request, env: ProxyEnv): Promise<Response> {
+export async function handleApiProxy(
+  request: Request,
+  env: ProxyEnv,
+): Promise<Response> {
   const origin = resolveApiOrigin(env);
   if (origin === null) {
     return new Response(
       JSON.stringify({
         code: "api_origin_unconfigured",
-        message: "API_ORIGIN is not set for this deployment; the API origin is configured in the hosting project settings.",
+        message:
+          "API_ORIGIN is not set for this deployment; the API origin is configured in the hosting project settings.",
       }),
       { status: 503, headers: { "content-type": "application/json" } },
     );
@@ -72,7 +76,9 @@ export async function handleApiProxy(request: Request, env: ProxyEnv): Promise<R
 
   const target = apiTargetUrl(request.url, origin);
   const body =
-    request.method === "GET" || request.method === "HEAD" ? undefined : await request.arrayBuffer();
+    request.method === "GET" || request.method === "HEAD"
+      ? undefined
+      : await request.arrayBuffer();
 
   let upstream: Response;
   try {
@@ -101,7 +107,8 @@ export async function handleApiProxy(request: Request, env: ProxyEnv): Promise<R
     return new Response(
       JSON.stringify({
         code: "api_origin_unreachable",
-        message: "The API origin is configured but did not respond. This is an upstream outage, not a client error.",
+        message:
+          "The API origin is configured but did not respond. This is an upstream outage, not a client error.",
       }),
       { status: 502, headers: { "content-type": "application/json" } },
     );

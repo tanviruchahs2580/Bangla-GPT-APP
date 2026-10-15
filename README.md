@@ -117,7 +117,13 @@ the same dependency set. Regenerate it with `pip-compile` when you change
 # The API image exactly as it ships in production:
 docker build -t bangla-gpt-api:local .
 
-# Whole stack (API + web + postgres + redis + proxy).
+# API + redis. That is ALL the "core" profile starts: no web, no postgres,
+# no proxy. This caption used to read "Whole stack (API + web + postgres +
+# redis + proxy)", which was false -- and the README is a docs-as-test, so a
+# reader following it waited for containers that never started. The profiles
+# that exist are: core (api, redis), web, postgres, tls (caddy), worker,
+# monitoring (prometheus, grafana), backup. Add the ones you need, e.g.
+#   docker compose --profile core --profile web --profile postgres --profile tls up -d --wait
 #
 # ENV defaults to "production", and the app refuses to boot in production
 # without a real JWT_SECRET and admin credentials - that gate is deliberate.

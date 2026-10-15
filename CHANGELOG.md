@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - fix(api): P4 cleanup batch — chunk-id content hash, lesson echo gate, proportional Latin penalty, corpus-scoped RAG keys, history char cap (A20-A25)
 - fix(api): align the served OpenAPI contract with runtime behaviour
+- fix(api): bound the body limit, trace 500s, redact logs, fit the LLM budget
 - fix(api): drop an unused variable the new RUF059 rule caught
 - fix(api): gate evals on hybrid retrieval, de-tautologize golden set, precompute BM25 trigrams, single-pass redteam (A13, A8, A18)
 - fix(api): impersonation revocation fails closed when cache is down (F-08)
@@ -36,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): wall school-less staff into the shared default school (F-04)
 - fix(api,web): audit remediations — breaker recovery, MFA/chat rate limits, CORS PATCH, model-refusal honesty, test runner
 - fix(auth): bind JWTs to an issuer and audience
+- fix(auth): close the enumeration, claim-override and secret-policy holes
 - fix(auth): hash passwords with Argon2id and upgrade legacy hashes on login
 - fix(auth): redeem single-use codes with a compare-and-set, not a read-then-write
 - fix(auth): unblock login on web and APK (MFA step-up, unauth resend, proxy/APK errors)
@@ -50,6 +52,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(db): reconcile ORM/migration drift so alembic check passes
 - fix(encoding): add .gitattributes and repair three encoding defects
 - fix(pdf): enable Bengali complex-script shaping in PDF renderers
+- fix(privacy): k-anonymity floor, complete export, budget on every generator
+- fix(privacy): make account erasure actually work, and sweep the analytics trail
 - fix(sec): refuse unsafe production defaults at boot
 - fix(sec): stop serving the OpenAPI reference in production
 - fix(web): clear footer from bottom nav + cut a round-trip from login

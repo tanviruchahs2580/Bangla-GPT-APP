@@ -1,0 +1,58 @@
+name: Bug
+description: Something behaves differently from what it claims to do
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This project handles children's personal data. **Redact real student
+        names, emails, phone numbers and conversation content** from anything
+        you paste here — issues are public.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you observed, including the exact error text.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: Commands, requests or clicks. A curl pair beats prose.
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: commit
+    attributes:
+      label: Commit or version
+      placeholder: git rev-parse HEAD, or the release tag
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log lines
+      render: shell
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmations
+      options:
+        - label: I searched existing issues for this.
+          required: true
+        - label: This is not a security report (those go to SECURITY.md).
+          required: true
+        - label: I have redacted any real children's data above.
+          required: true

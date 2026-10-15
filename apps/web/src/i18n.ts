@@ -1221,7 +1221,8 @@ const en: Dict = {
   errNotAllowed: "You don't have permission to do that.",
   errNetwork: "Check your internet connection.",
   errGeneric: "Something went wrong. Please try again later.",
-  errMfaRequired: "Two-step verification required — enter your authenticator code.",
+  errMfaRequired:
+    "Two-step verification required — enter your authenticator code.",
   errBadMfaCode: "That code is wrong — check and try again.",
   errBadMfaToken: "Verification expired — please log in again.",
   errServiceUnavailable: "The server is busy right now — try again shortly.",

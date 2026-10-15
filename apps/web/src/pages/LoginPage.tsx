@@ -52,8 +52,7 @@ export default function LoginPage() {
       // form instead of an error dead-end.
       if (code === "mfa_required") {
         const detail = apiErr.rawDetail as
-          | { mfa_token?: string; mfaToken?: string }
-          | undefined;
+          { mfa_token?: string; mfaToken?: string } | undefined;
         const stepUp =
           detail && typeof detail === "object"
             ? (detail.mfa_token ?? detail.mfaToken)
