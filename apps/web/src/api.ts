@@ -86,20 +86,31 @@ export function getToken(): string | null {
 }
 
 function parseDetail(body: unknown): { message: string; code?: string } {
-  if (
-    body &&
-    typeof body === "object" &&
-    "detail" in (body as Record<string, unknown>)
-  ) {
-    const detail = (body as Record<string, unknown>).detail;
-    if (detail && typeof detail === "object") {
-      const d = detail as Record<string, unknown>;
+  if (body && typeof body === "object") {
+    const rec = body as Record<string, unknown>;
+    if ("detail" in rec) {
+      const detail = rec.detail;
+      if (detail && typeof detail === "object") {
+        const d = detail as Record<string, unknown>;
+        return {
+          message: asText(d.message) || asText(d),
+          code: d.code ? asText(d.code) : undefined,
+        };
+      }
+      return { message: asText(detail) };
+    }
+    // The Vercel /api proxy (src/lib/apiProxy.ts) answers with a FLAT
+    // { code, message } envelope, not FastAPI's { detail }. Reading only
+    // `detail` silently dropped that machine code, so a dead API origin fell
+    // through to the generic 502 -> bad_gateway fallback and the UI told the
+    // user the server was "busy — try again shortly" for an outage that will
+    // not resolve on its own. Surface the envelope's own code and message.
+    if ("code" in rec || "message" in rec) {
       return {
-        message: asText(d.message) || asText(d),
-        code: d.code ? asText(d.code) : undefined,
+        message: asText(rec.message) || "Request failed",
+        code: rec.code ? asText(rec.code) : undefined,
       };
     }
-    return { message: asText(detail) };
   }
   if (typeof body === "string" && body) return { message: body };
   return { message: "Request failed" };
