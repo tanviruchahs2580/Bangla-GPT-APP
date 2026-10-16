@@ -118,6 +118,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(audit): record the merge and live-production outcome
 - docs(qa): publish the 2026-10-16 audit report; refresh the lockfile within its ranges
 - docs(qa): record the CI-found defects and the exit-gate assessment in the report
+- docs(qa): record the registration-backdrop change and its deployment
 - docs(qa): record the role-based acceptance run and the live deployment
 - docs: add 2026-10-06 QA audit and final certification reports
 - docs: add a CHANGELOG generated from git history, and a check that keeps it honest
@@ -172,6 +173,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #15 from tanviruchahs2580/audit/2026-10-16-live-verification
 - Merge pull request #16 from tanviruchahs2580/docs/2026-10-16-live-outcome
 - Merge pull request #17 from tanviruchahs2580/docs/2026-10-16-live-enablement
+- Merge pull request #18 from tanviruchahs2580/qa/full-audit-hardening
 
 ## v0.9.2 - 2026-09-15
 
