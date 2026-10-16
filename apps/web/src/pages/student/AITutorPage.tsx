@@ -74,7 +74,14 @@ export default function AITutorPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
+  // A whole turn is in flight (conversation POST + answer stream). Distinct
+  // from `streaming`, which is only true once tokens can arrive — but it must
+  // cover the POST too, so Stop can abort the whole turn (F-012).
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Screen readers get ONE polite announcement per completed answer instead
+  // of a per-token stream from the transcript (F-016/F-064).
+  const [announcement, setAnnouncement] = useState("");
   const [thanks, setThanks] = useState<number | null>(null);
   const [savedId, setSavedId] = useState<number | null>(null);
   // explicit explanation strategy + image attachment.
@@ -93,6 +100,10 @@ export default function AITutorPage() {
   const [renameValue, setRenameValue] = useState("");
   const viewportRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // Synchronous send guard (F-012). State (`streaming`) is only updated after
+  // renders, so it cannot gate a second send fired while the conversation
+  // POST is still in flight; a ref can.
+  const sendingRef = useRef(false);
 
   const { data: conversations, refetch: refetchConvs } = useQuery({
     queryKey: ["conversations"],
@@ -136,104 +147,127 @@ export default function AITutorPage() {
   const send = useCallback(
     async (preset?: string, opts?: { reteach?: boolean }) => {
       const text = (preset ?? input).trim();
-      if (!text || streaming) return;
+      // F-012: the guard is the ref, set synchronously before the first await.
+      // Previously only `streaming` guarded, and it was set AFTER the
+      // conversation POST resolved — so a second send (double-tapped chip,
+      // Enter + chip) during that round-trip opened a second conversation and
+      // started a second stream, and Stop could only kill the newer one.
+      if (!text || sendingRef.current) return;
+      sendingRef.current = true;
+      setSending(true);
+      setAnnouncement("");
       setInput("");
       setError(null);
       track("tutor_question_sent", {
         reteach: opts?.reteach === true,
         subject_present: subject != null,
       });
-      let id = conversationId;
-      if (!id) {
-        try {
-          const res = await post<ConversationOut>("/tutor/conversations", {});
-          id = res.id;
-          setConversationId(id);
-          await refetchConvs();
-        } catch {
-          setError(t("newChatFailed"));
-          return;
-        }
-      }
-      setMessages((m) => [
-        ...m,
-        { id: 0, role: "user", content: text, grounded: null, sources: [] },
-      ]);
-      setStreaming(true);
-      if (image) setImage(null);
-      const acc = { text: "" };
+      // One controller for the WHOLE turn: Stop aborts the conversation POST
+      // and the stream, and a second send can never overwrite it (F-012).
       const controller = new AbortController();
       abortRef.current = controller;
       try {
-        const undone = await postStream<ChatDoneEvent>(
-          `/tutor/conversations/${id}/messages/stream`,
-          {
-            message: text,
-            subject,
-            low_data: getLowData(),
-            ...(opts?.reteach ? { reteach: true } : {}),
-            ...(strategy ? { strategy } : {}),
-            ...(image ? { image } : {}),
-          },
-          (tok) => {
-            acc.text += tok;
-            // live-update the trailing assistant bubble
-            setMessages((m) => {
-              const copy = [...m];
-              const last = copy[copy.length - 1];
-              if (last.role === "assistant") last.content = acc.text;
-              else
-                copy.push({
-                  id: 0,
-                  role: "assistant",
-                  content: acc.text,
-                  grounded: null,
-                  sources: [],
-                });
-              return copy;
-            });
-          },
-          { signal: controller.signal },
-        );
-        setMessages((m) => {
-          const copy = [...m];
-          let li = copy.findIndex((x) => x.id === undone.message_id);
-          if (li < 0) {
-            // The live-stream placeholder bubble carries id 0, so the real
-            // message_id never matches it — merge into that trailing bubble
-            // instead of pushing a second identical answer.
-            for (let i = copy.length - 1; i >= 0; i--) {
-              if (copy[i].role === "assistant" && copy[i].id === 0) {
-                li = i;
-                break;
+        let id = conversationId;
+        if (!id) {
+          try {
+            const res = await post<ConversationOut>(
+              "/tutor/conversations",
+              {},
+              { signal: controller.signal },
+            );
+            id = res.id;
+            setConversationId(id);
+            await refetchConvs();
+          } catch (e) {
+            // Stop pressed while the conversation POST was in flight.
+            if ((e as { name?: string })?.name === "AbortError") return;
+            setError(t("newChatFailed"));
+            return;
+          }
+        }
+        setMessages((m) => [
+          ...m,
+          { id: 0, role: "user", content: text, grounded: null, sources: [] },
+        ]);
+        setStreaming(true);
+        if (image) setImage(null);
+        const acc = { text: "" };
+        try {
+          const undone = await postStream<ChatDoneEvent>(
+            `/tutor/conversations/${id}/messages/stream`,
+            {
+              message: text,
+              subject,
+              low_data: getLowData(),
+              ...(opts?.reteach ? { reteach: true } : {}),
+              ...(strategy ? { strategy } : {}),
+              ...(image ? { image } : {}),
+            },
+            (tok) => {
+              acc.text += tok;
+              // live-update the trailing assistant bubble
+              setMessages((m) => {
+                const copy = [...m];
+                const last = copy[copy.length - 1];
+                if (last.role === "assistant") last.content = acc.text;
+                else
+                  copy.push({
+                    id: 0,
+                    role: "assistant",
+                    content: acc.text,
+                    grounded: null,
+                    sources: [],
+                  });
+                return copy;
+              });
+            },
+            { signal: controller.signal },
+          );
+          setMessages((m) => {
+            const copy = [...m];
+            let li = copy.findIndex((x) => x.id === undone.message_id);
+            if (li < 0) {
+              // The live-stream placeholder bubble carries id 0, so the real
+              // message_id never matches it — merge into that trailing bubble
+              // instead of pushing a second identical answer.
+              for (let i = copy.length - 1; i >= 0; i--) {
+                if (copy[i].role === "assistant" && copy[i].id === 0) {
+                  li = i;
+                  break;
+                }
               }
             }
-          }
-          const final = {
-            id: undone.message_id,
-            role: "assistant" as const,
-            content: acc.text,
-            grounded: undone.grounded,
-            refused_reason: undone.refused_reason,
-            sources: undone.sources ?? [],
-            confidence: undone.confidence ?? null,
-          };
-          if (li >= 0) copy[li] = { ...copy[li], ...final };
-          else copy.push(final);
-          return copy;
-        });
-      } catch (e) {
-        if ((e as { name?: string })?.name === "AbortError") return;
-        setError(
-          friendlyError((e as { rawDetail?: unknown }).rawDetail)?.text ??
-            t("errorGeneric"),
-        );
+            const final = {
+              id: undone.message_id,
+              role: "assistant" as const,
+              content: acc.text,
+              grounded: undone.grounded,
+              refused_reason: undone.refused_reason,
+              sources: undone.sources ?? [],
+              confidence: undone.confidence ?? null,
+            };
+            if (li >= 0) copy[li] = { ...copy[li], ...final };
+            else copy.push(final);
+            return copy;
+          });
+          // The answer is complete: announce it once, politely. The transcript
+          // itself is no longer a live region, so tokens are not read aloud.
+          setAnnouncement(acc.text);
+        } catch (e) {
+          if ((e as { name?: string })?.name === "AbortError") return;
+          setError(
+            friendlyError((e as { rawDetail?: unknown }).rawDetail)?.text ??
+              t("errorGeneric"),
+          );
+        }
       } finally {
+        sendingRef.current = false;
+        setSending(false);
         setStreaming(false);
         if (abortRef.current === controller) abortRef.current = null;
       }
     },
-    [input, streaming, conversationId, subject, refetchConvs, strategy, image],
+    [input, conversationId, subject, refetchConvs, strategy, image],
   );
 
   // a wrong quiz item can arrive here as `location.state.explain` —
@@ -494,11 +528,18 @@ export default function AITutorPage() {
       )}
 
       <Card className="chat-card">
+        {/* One polite announcement when an answer completes (F-016/F-064):
+            the transcript used to be the live region itself, so every
+            streamed token was announced as it arrived. */}
         <div
-          ref={viewportRef}
-          className="chat-thread chat-viewport"
+          className="visually-hidden"
+          role="status"
           aria-live="polite"
+          data-testid="tutor-announcer"
         >
+          {announcement}
+        </div>
+        <div ref={viewportRef} className="chat-thread chat-viewport">
           {messages.length === 0 && !streaming && (
             <div className="center empty-state">
               <div className="empty-mark" aria-hidden>
@@ -837,7 +878,7 @@ export default function AITutorPage() {
               setInput((cur) => (cur ? cur + " " + text : text))
             }
           />
-          {streaming ? (
+          {sending ? (
             <Button
               variant="soft"
               onClick={() => abortRef.current?.abort()}
