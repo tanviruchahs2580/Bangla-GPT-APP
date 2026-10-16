@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   del,
   get,
@@ -11,6 +12,7 @@ import {
 import { friendlyError } from "../errors";
 import { AiQualityCard } from "../components/admin/AiQualityCard";
 import { t } from "../i18n";
+import { useDebounced } from "../lib/useDebounced";
 import type {
   AdminOverview,
   AdminSchoolStats,
@@ -42,8 +44,7 @@ function errOf(err: unknown): string {
 }
 
 export default function AdminDashboard() {
-  const [page, setPage] = useState<AdminUsersPage>({ total: 0, items: [] });
-  const [overview, setOverview] = useState<AdminOverview | null>(null);
+  const queryClient = useQueryClient();
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [offset, setOffset] = useState(0);
@@ -52,16 +53,12 @@ export default function AdminDashboard() {
   const LIMIT = 20;
 
   // admin center -- schools + stats, invite management, content versions.
-  const [schools, setSchools] = useState<AdminSchoolStats[]>([]);
-  const [versions, setVersions] = useState<ContentVersionRow[]>([]);
   const [invites, setInvites] = useState<SchoolInviteAdmin[]>([]);
   const [selSchool, setSelSchool] = useState<number | null>(null);
   const [schoolName, setSchoolName] = useState("");
   const [inviteRoles, setInviteRoles] = useState<Record<number, string>>({});
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [admMsg, setAdmMsg] = useState<string | null>(null);
-  // refusal audit -- aggregate safety-refusal counts only.
-  const [refusals, setRefusals] = useState<RefusalAudit | null>(null);
 
   // feedback triage queue + audited impersonation launch.
   const [triageStatus, setTriageStatus] = useState<"open" | "all">("open");
@@ -69,6 +66,71 @@ export default function AdminDashboard() {
   const [triageErr, setTriageErr] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [triageMsg, setTriageMsg] = useState<string | null>(null);
+
+  // F-023: the search box keys a DEBOUNCED query, so a typed burst fires one
+  // request instead of five authenticated calls per keystroke (and a
+  // superseded query string cannot settle late into the table).
+  const debouncedQuery = useDebounced(query.trim(), 300);
+
+  const usersQuery = useQuery({
+    queryKey: ["admin-users", debouncedQuery, roleFilter, offset],
+    queryFn: () => {
+      const params: Record<string, string | number> = { limit: LIMIT, offset };
+      if (debouncedQuery) params.q = debouncedQuery;
+      if (roleFilter) params.role = roleFilter;
+      const qs = new URLSearchParams(
+        Object.entries(params).map(([k, v]) => [k, String(v)]),
+      );
+      return get<AdminUsersPage>(`/admin/users?${qs}`);
+    },
+  });
+  const overviewQuery = useQuery({
+    queryKey: ["admin-overview"],
+    queryFn: () => get<AdminOverview>("/admin/analytics/overview"),
+  });
+  // center cards ride the same refresh; auxiliary on failure.
+  const schoolsQuery = useQuery({
+    queryKey: ["admin-schools"],
+    queryFn: () =>
+      get<AdminSchoolStats[]>("/admin/schools/stats").catch(() => []),
+  });
+  const versionsQuery = useQuery({
+    queryKey: ["admin-versions"],
+    queryFn: () =>
+      get<ContentVersionRow[]>("/admin/content/versions").catch(() => []),
+  });
+  // The refusal card treats "no data yet" as loading (F-027, out of scope
+  // here): preserve the swallow-to-null so a failure keeps that state.
+  const refusalsQuery = useQuery({
+    queryKey: ["admin-refusals"],
+    queryFn: () =>
+      get<RefusalAudit>("/admin/safety/refusals").catch(() => null),
+  });
+
+  const page = usersQuery.data ?? { total: 0, items: [] };
+  const overview = overviewQuery.data ?? null;
+  const schools = schoolsQuery.data ?? [];
+  const versions = versionsQuery.data ?? [];
+  const refusals = refusalsQuery.data ?? null;
+  // A failed primary fetch must be visible, exactly as the old Promise.all
+  // catch showed it.
+  const loadError =
+    usersQuery.isError || overviewQuery.isError
+      ? errOf(usersQuery.error ?? overviewQuery.error)
+      : null;
+
+  /** Refresh the same set of queries the old load() re-fetched. */
+  const refresh = useCallback(() => {
+    for (const key of [
+      "admin-users",
+      "admin-overview",
+      "admin-schools",
+      "admin-versions",
+      "admin-refusals",
+    ]) {
+      void queryClient.invalidateQueries({ queryKey: [key] });
+    }
+  }, [queryClient]);
 
   const loadTriage = useCallback(() => {
     getFeedbackQueue(triageStatus)
@@ -112,36 +174,6 @@ export default function AdminDashboard() {
     }
   }
 
-  const load = useCallback(() => {
-    setError(null);
-    const params: Record<string, string | number> = { limit: LIMIT, offset };
-    if (query.trim()) params.q = query.trim();
-    if (roleFilter) params.role = roleFilter;
-    const qs = new URLSearchParams(
-      Object.entries(params).map(([k, v]) => [k, String(v)]),
-    );
-    Promise.all([
-      get<AdminUsersPage>(`/admin/users?${qs}`),
-      get<AdminOverview>("/admin/analytics/overview"),
-      // center cards ride the same refresh; auxiliary on failure.
-      get<AdminSchoolStats[]>("/admin/schools/stats").catch(() => []),
-      get<ContentVersionRow[]>("/admin/content/versions").catch(() => []),
-      get<RefusalAudit>("/admin/safety/refusals").catch(() => null),
-    ])
-      .then(([u, o, sh, v, ra]) => {
-        setPage(u);
-        setOverview(o);
-        setSchools(sh ?? []);
-        setVersions(v ?? []);
-        setRefusals(ra);
-      })
-      .catch((err: unknown) => setError(errOf(err)));
-  }, [offset, query, roleFilter]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
   const loadInvites = useCallback(() => {
     if (selSchool === null) {
       setInvites([]);
@@ -161,7 +193,7 @@ export default function AdminDashboard() {
     setError(null);
     try {
       await patch(`/admin/users/${user.id}/role`, { role });
-      load();
+      refresh();
     } catch (err) {
       setError(errOf(err));
     }
@@ -186,7 +218,7 @@ export default function AdminDashboard() {
     try {
       await post("/admin/schools", { name: schoolName.trim() });
       setSchoolName("");
-      load();
+      refresh();
     } catch (err) {
       setError(errOf(err));
     }
@@ -238,9 +270,9 @@ export default function AdminDashboard() {
 
       <div className="card">
         <h2>{t("adminDashboard")}</h2>
-        {error && (
+        {(error ?? loadError) && (
           <p className="error" role="alert">
-            {error}
+            {error ?? loadError}
           </p>
         )}
         {overview && (
@@ -606,7 +638,7 @@ export default function AdminDashboard() {
           onSubmit={(e) => {
             e.preventDefault();
             setOffset(0);
-            load();
+            refresh();
           }}
         >
           <label htmlFor="q">{t("searchEmail")}</label>
