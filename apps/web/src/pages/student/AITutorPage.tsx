@@ -8,14 +8,12 @@ import {
   Check,
   MessageSquarePlus,
   Paperclip,
-  Pencil,
   RefreshCcw,
   Search,
   Send,
   Square,
   ThumbsUp,
   ThumbsDown,
-  Trash2,
   X,
 } from "lucide-react";
 import { createNote, del, get, patch, post, postStream } from "../../api";
@@ -28,6 +26,7 @@ import type {
 } from "../../types";
 import { useAuth } from "../../AuthContext";
 import { Badge, Button, Card } from "../../components/ui";
+import { ConversationChip } from "../../components/ConversationChip";
 import { AiSparkle, BrandMark } from "../../components/BrandMark";
 import { VoiceButton } from "../../components/VoiceButton";
 import { friendlyError } from "../../errors";
@@ -484,44 +483,17 @@ export default function AITutorPage() {
                 onBlur={() => void commitRename(c.id)}
               />
             ) : (
-              <button
+              <ConversationChip
                 key={c.id}
-                className={conversationId === c.id ? "chip active" : "chip"}
-                onClick={() => loadConversation(c.id)}
-              >
-                {c.title ?? `#${c.id}`}
-                {conversationId === c.id && (
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    aria-label={t("rename")}
-                    className="conv-icon-action"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setRenamingId(c.id);
-                      setRenameValue(c.title ?? "");
-                    }}
-                    onKeyDown={(e) => e.key === "Enter" && setRenamingId(c.id)}
-                  >
-                    <Pencil size={12} aria-hidden />
-                  </span>
-                )}
-                <span
-                  role="button"
-                  tabIndex={0}
-                  aria-label={t("deleteChat")}
-                  className="conv-icon-action"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void removeConversation(c.id);
-                  }}
-                  onKeyDown={(e) =>
-                    e.key === "Enter" && void removeConversation(c.id)
-                  }
-                >
-                  <Trash2 size={12} aria-hidden />
-                </span>
-              </button>
+                title={c.title ?? `#${c.id}`}
+                active={conversationId === c.id}
+                onOpen={() => loadConversation(c.id)}
+                onRename={() => {
+                  setRenamingId(c.id);
+                  setRenameValue(c.title ?? "");
+                }}
+                onDelete={() => void removeConversation(c.id)}
+              />
             ),
           )}
         </div>

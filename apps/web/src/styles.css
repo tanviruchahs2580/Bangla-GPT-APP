@@ -46,7 +46,7 @@
   --danger-soft: #fde8ec;
   --warn: #b45309;
   --warn-soft: #fdf0dc;
-  --ok: #15803d;
+  --ok: #166534; /* A11Y-04: #15803d on --ok-soft measured 4.45:1; this is 6.32:1 */
   --ok-soft: #e3f6e9;
 
   /* Surfaces — warm paper background */
@@ -2191,6 +2191,32 @@ form .btn[type="submit"] {
 /* F-110: measured 12x12 px, and axe independently failed it as WCAG 2.5.8
    target-size. This is the control that DELETES a child's chat history, so
    it is the last thing that should be hard to hit accurately. */
+/* A conversation chip is a container, not a control: the title opens the
+   conversation and the rename/delete controls are its siblings. They used to
+   be spans with role="button" nested inside the chip's own button, which axe
+   reports as nested-interactive and which a screen reader announces as a
+   button inside a button. */
+.conv-chip {
+  padding: 0 8px;
+}
+
+.conv-chip .conv-open {
+  padding: 8px 6px;
+  min-height: 44px;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.conv-chip .conv-icon-action {
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+}
 .conv-icon-action {
   margin-left: 6px;
   display: inline-flex;
