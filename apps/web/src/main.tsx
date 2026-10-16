@@ -24,6 +24,7 @@ import {
   AppErrorBoundary,
   RouteErrorBoundary,
 } from "./components/AppErrorBoundary";
+import { PublicLanguageToggle } from "./components/PublicLanguageToggle";
 import { onLangChange, t } from "./i18n";
 import { initInstallPrompt } from "./lib/installPrompt";
 import { initLowData } from "./lib/lowData";
@@ -157,201 +158,206 @@ function RoutesSwitch() {
   if (loading) return <Loading />;
 
   return (
-    <Routes>
-      <Route path="/" element={<Navigate to={home} replace />} />
-      <Route
-        path="/welcome"
-        element={
-          me ? (
-            <Navigate to={ROLE_HOME[me.role] ?? "/login"} replace />
-          ) : (
+    <>
+      {/* I18N-12: an anonymous visitor sees these pages without AppShell, so
+          the language switch has to be rendered here or not at all. */}
+      {!me && <PublicLanguageToggle />}
+      <Routes>
+        <Route path="/" element={<Navigate to={home} replace />} />
+        <Route
+          path="/welcome"
+          element={
+            me ? (
+              <Navigate to={ROLE_HOME[me.role] ?? "/login"} replace />
+            ) : (
+              <RouteErrorBoundary>
+                <WelcomePage />
+              </RouteErrorBoundary>
+            )
+          }
+        />
+        <Route
+          path="/login"
+          element={
+            me ? (
+              <Navigate to={home} replace />
+            ) : (
+              <RouteErrorBoundary>
+                <LoginPage />
+              </RouteErrorBoundary>
+            )
+          }
+        />
+        <Route
+          path="/register"
+          element={
+            me ? (
+              <Navigate to={home} replace />
+            ) : (
+              <RouteErrorBoundary>
+                <RegisterPage />
+              </RouteErrorBoundary>
+            )
+          }
+        />
+        <Route
+          path="/forgot"
+          element={
             <RouteErrorBoundary>
-              <WelcomePage />
+              <ForgotResetPage />
             </RouteErrorBoundary>
-          )
-        }
-      />
-      <Route
-        path="/login"
-        element={
-          me ? (
-            <Navigate to={home} replace />
-          ) : (
+          }
+        />
+        <Route
+          path="/privacy"
+          element={
             <RouteErrorBoundary>
-              <LoginPage />
+              <LegalPage kind="privacy" />
             </RouteErrorBoundary>
-          )
-        }
-      />
-      <Route
-        path="/register"
-        element={
-          me ? (
-            <Navigate to={home} replace />
-          ) : (
+          }
+        />
+        <Route
+          path="/terms"
+          element={
             <RouteErrorBoundary>
-              <RegisterPage />
+              <LegalPage kind="terms" />
             </RouteErrorBoundary>
-          )
-        }
-      />
-      <Route
-        path="/forgot"
-        element={
-          <RouteErrorBoundary>
-            <ForgotResetPage />
-          </RouteErrorBoundary>
-        }
-      />
-      <Route
-        path="/privacy"
-        element={
-          <RouteErrorBoundary>
-            <LegalPage kind="privacy" />
-          </RouteErrorBoundary>
-        }
-      />
-      <Route
-        path="/terms"
-        element={
-          <RouteErrorBoundary>
-            <LegalPage kind="terms" />
-          </RouteErrorBoundary>
-        }
-      />
-      <Route
-        path="/status"
-        element={
-          <RouteErrorBoundary>
-            <StatusPage />
-          </RouteErrorBoundary>
-        }
-      />
+          }
+        />
+        <Route
+          path="/status"
+          element={
+            <RouteErrorBoundary>
+              <StatusPage />
+            </RouteErrorBoundary>
+          }
+        />
 
-      <Route
-        path="/student"
-        element={
-          <RequireAuth role="student">
-            <HomePage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/student/learn"
-        element={
-          <RequireAuth role="student">
-            <LearnPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/student/learn/:subject/:chapter"
-        element={
-          <RequireAuth role="student">
-            <LearnChapterPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/student/tutor"
-        element={
-          <RequireAuth role="student">
-            <AITutorPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/student/quiz"
-        element={
-          <RequireAuth role="student">
-            <QuizPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/student/me"
-        element={
-          <RequireAuth role="student">
-            <MePage />
-          </RequireAuth>
-        }
-      />
+        <Route
+          path="/student"
+          element={
+            <RequireAuth role="student">
+              <HomePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/student/learn"
+          element={
+            <RequireAuth role="student">
+              <LearnPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/student/learn/:subject/:chapter"
+          element={
+            <RequireAuth role="student">
+              <LearnChapterPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/student/tutor"
+          element={
+            <RequireAuth role="student">
+              <AITutorPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/student/quiz"
+          element={
+            <RequireAuth role="student">
+              <QuizPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/student/me"
+          element={
+            <RequireAuth role="student">
+              <MePage />
+            </RequireAuth>
+          }
+        />
 
-      <Route
-        path="/teacher"
-        element={
-          <RequireAuth role="teacher">
-            <TeacherHomePage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/teacher/create"
-        element={
-          <RequireAuth role="teacher">
-            <CreatePage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/teacher/classes"
-        element={
-          <RequireAuth role="teacher">
-            <ClassesPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/teacher/assessments"
-        element={
-          <RequireAuth role="teacher">
-            <AssessmentsPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/teacher/analytics"
-        element={
-          <RequireAuth role="teacher">
-            <AnalyticsPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/teacher/profile"
-        element={
-          <RequireAuth role="teacher">
-            <TeacherProfilePage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/parent"
-        element={
-          <RequireAuth role="parent">
-            <ParentDashboard />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/admin"
-        element={
-          <RequireAuth role="admin">
-            <AdminDashboard />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/school"
-        element={
-          <RequireAuth role="school_admin">
-            <SchoolDashboard />
-          </RequireAuth>
-        }
-      />
+        <Route
+          path="/teacher"
+          element={
+            <RequireAuth role="teacher">
+              <TeacherHomePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/teacher/create"
+          element={
+            <RequireAuth role="teacher">
+              <CreatePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/teacher/classes"
+          element={
+            <RequireAuth role="teacher">
+              <ClassesPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/teacher/assessments"
+          element={
+            <RequireAuth role="teacher">
+              <AssessmentsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/teacher/analytics"
+          element={
+            <RequireAuth role="teacher">
+              <AnalyticsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/teacher/profile"
+          element={
+            <RequireAuth role="teacher">
+              <TeacherProfilePage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/parent"
+          element={
+            <RequireAuth role="parent">
+              <ParentDashboard />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <RequireAuth role="admin">
+              <AdminDashboard />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/school"
+          element={
+            <RequireAuth role="school_admin">
+              <SchoolDashboard />
+            </RequireAuth>
+          }
+        />
 
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }
 

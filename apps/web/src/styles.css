@@ -843,6 +843,16 @@ p {
   width: 100%;
 }
 
+/* I18N-12: the language switch must be reachable from the pages an
+   anonymous visitor sees, where AppShell (and its toggle) is absent.
+   Fixed to the top-right corner, clear of the safe areas on a phone. */
+.public-lang-toggle {
+  position: fixed;
+  top: calc(0.75rem + env(safe-area-inset-top, 0px));
+  right: calc(0.75rem + env(safe-area-inset-right, 0px));
+  z-index: 40;
+}
+
 .icon-btn {
   display: inline-grid;
   place-items: center;
