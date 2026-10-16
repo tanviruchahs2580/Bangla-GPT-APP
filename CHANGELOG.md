@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - fix(api): P4 cleanup batch — chunk-id content hash, lesson echo gate, proportional Latin penalty, corpus-scoped RAG keys, history char cap (A20-A25)
 - fix(api): align the served OpenAPI contract with runtime behaviour
+- fix(api): close two moderation false negatives and cover the chat routes
 - fix(api): drop an unused variable the new RUF059 rule caught
 - fix(api): gate evals on hybrid retrieval, de-tautologize golden set, precompute BM25 trigrams, single-pass redteam (A13, A8, A18)
 - fix(api): harden authentication, session end and abuse limits
@@ -57,14 +58,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(ci): upgrade setuptools before pip-audit; refresh lock to current resolution
 - fix(db): reconcile ORM/migration drift so alembic check passes
 - fix(encoding): add .gitattributes and repair three encoding defects
+- fix(i18n): put the parent digest and the printed papers in Bangla, and correct five copy defects
 - fix(pdf): enable Bengali complex-script shaping in PDF renderers
 - fix(sec): refuse unsafe production defaults at boot
 - fix(sec): stop serving the OpenAPI reference in production
 - fix(web): clear footer from bottom nav + cut a round-trip from login
+- fix(web): clear the two WCAG AA failures axe found on the tutor screen
 - fix(web): close-JSDoc sequence inside edge-proxy comment broke Vercel TS build
 - fix(web): configurable production API origin via edge proxy (FE-01)
 - fix(web): guarantee minimum gap between stacked page sections
 - fix(web): guard the tutor turn, bound stalled requests and clear data on sign-out
+- fix(web): let an anonymous visitor change the interface language
 - fix(web): localize consent/invite copy, theme icon sync, error states, icon cleanup
 - fix(web): notification panel no longer clipped off the left edge
 - fix(web): recover from page errors, report load failures, and never show another child's data
@@ -108,6 +112,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Documentation
 
 - docs(audit): record the merge and live-production outcome
+- docs(qa): publish the 2026-10-16 audit report; refresh the lockfile within its ranges
 - docs: add 2026-10-06 QA audit and final certification reports
 - docs: add a CHANGELOG generated from git history, and a check that keeps it honest
 - docs: add final QA report for 2026-10-07 UAT completion
@@ -121,6 +126,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate CHANGELOG
 - docs: regenerate CHANGELOG for the branch commit
 - docs: regenerate CHANGELOG for the current batch
+- docs: regenerate the CHANGELOG for this branch's commits
 - docs: ship the bundled font's licence, third-party notices, contributing guide
 
 ### Tests
