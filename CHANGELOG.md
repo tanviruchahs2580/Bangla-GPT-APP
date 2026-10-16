@@ -126,6 +126,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate CHANGELOG
 - docs: regenerate CHANGELOG for the branch commit
 - docs: regenerate CHANGELOG for the current batch
+- docs: regenerate the CHANGELOG for the branch's final commits
 - docs: regenerate the CHANGELOG for this branch's commits
 - docs: ship the bundled font's licence, third-party notices, contributing guide
 
@@ -139,6 +140,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Maintenance
 
 - chore(api): remove unresolvable plan-tracker tags from comments
+- chore(scripts): make the shebang executable real for the five scripts that have one
 - chore(security): allowlist the reviewed ASCII-art hit in the full-history secret scan
 - chore(web): repoint /api proxy to current tunnel host (quick-tunnel rotation)
 - chore: code honesty - unused args, un-typed db params, inert suppressions, stale comments
