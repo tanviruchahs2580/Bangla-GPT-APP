@@ -26,6 +26,23 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12"]
+    # T-016: three tests in tests/test_cache_v2.py are skipped unless REDIS_URL
+    # is set, and no job declared Redis, so cross-instance cache consistency,
+    # the shared rate-limit window and cross-instance ranking-index hits -- the
+    # reason Redis exists in this stack -- were never executed by any pipeline.
+    # The service is declared here (both matrix legs) and REDIS_URL is set only
+    # on the step that needs it, so the rest of the suite keeps running exactly
+    # as it did before.
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     defaults:
       run:
         working-directory: apps/api
@@ -62,6 +79,16 @@ jobs:
 
       - name: Tests
         run: pytest -q
+
+      - name: Shared-cache tests against a real Redis (T-016)
+        # The three Redis-only tests in tests/test_cache_v2.py skip themselves
+        # without REDIS_URL. They are run here, on the service declared on the
+        # job, so the shared-cache/limiter/ranking-index behaviour is actually
+        # exercised; REDIS_URL is deliberately scoped to this step because the
+        # Tests/Coverage steps above must keep running exactly as before.
+        env:
+          REDIS_URL: redis://127.0.0.1:6379/0
+        run: pytest tests/test_cache_v2.py -q
 
       - name: Coverage gate (branch coverage, fail_under from pyproject)
         # Coverage used to be measured by nobody: fail_under was 0, no job
@@ -184,6 +211,16 @@ jobs:
       - name: Postgres-backed API journey tests
         run: pytest tests/test_postgres_smoke.py -v
 
+      - name: Postgres-only single-use/race tests (T-017)
+        # tests/test_single_use_tokens.py says "the `postgres` CI job sets it
+        # ["TEST_DATABASE_URL"]" -- but this job only ran test_postgres_smoke.py,
+        # so the two AUD-0034 race tests (exactly one winner for a verification
+        # code / reset token under contention, measured 40/40 double-redeemable
+        # on PostgreSQL before the fix) were asserted nowhere in CI despite the
+        # service being right here. TEST_DATABASE_URL is already set job-wide
+        # and the alembic steps above have created the schema in bgpt_ci.
+        run: pytest tests/test_single_use_tokens.py -q
+
   golden-eval:
     name: Golden retrieval benchmark (sample corpus)
     runs-on: ubuntu-latest
@@ -272,6 +309,28 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
+
+      # T-040/T-041: the pre-commit hook set was never executed by any
+      # workflow -- `.pre-commit-config.yaml` claimed the hook set is a subset
+      # of CI, but nothing verified that the committed tree satisfies it, and
+      # on a fresh clone it did not (37 files missing a final newline, 8 with
+      # trailing whitespace, 1 CRLF, all inside the old scope). CI stayed
+      # green while `pre-commit install` gave every developer a red first
+      # commit.
+      #
+      # pre-commit REWRITES the files a fixer hook repairs and then exits 1
+      # ("files were modified"), so this cannot pass on a tree that violates
+      # the config it ships; `--show-diff-on-failure` prints the offending
+      # diff. The tool version is pinned to the one the hook revs were
+      # verified against, so a new pre-commit release cannot silently change
+      # the gate.
+      - name: Pre-commit hooks (all files)
+        env:
+          PRE_COMMIT_VERSION: "4.7.0"
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet "pre-commit==${PRE_COMMIT_VERSION}"
+          pre-commit run --all-files --show-diff-on-failure
 
       - name: Lockfile is in sync with pyproject.toml
         # Without this, editing pyproject.toml leaves CI installing the old
