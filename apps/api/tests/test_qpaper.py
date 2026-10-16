@@ -11,7 +11,13 @@ from fastapi.testclient import TestClient
 
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
+from bangla_gpt_api.providers import ProviderError
 from bangla_gpt_api.providers.mock import MockLLMProvider
+from bangla_gpt_api.services.generators.question_paper import (
+    allocate_marks,
+    plan_counts,
+    validate_paper,
+)
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -141,6 +147,91 @@ def test_draft_difficulty_percentages_must_sum_100(client, teacher_headers) -> N
     body = dict(DRAFT_BODY, difficulty={"easy": 40, "medium": 50, "hard": 20})
     res = client.post("/teacher/qpapers", json=body, headers=teacher_headers)
     assert res.status_code == 422
+
+
+@pytest.mark.parametrize("marks", [10, 14])
+def test_declared_total_marks_are_allocated_across_questions(
+    client, teacher_headers, marks: int
+) -> None:
+    """A paper requested as N marks must contain questions summing to N.
+
+    Totals above the mock provider's distinct-sentence supply (and the large
+    100-mark case) are covered by ``test_allocate_marks_sums_to_the_declared_total``
+    -- the duplicate gate is a separate, pre-existing constraint.
+    """
+    res = client.post(
+        "/teacher/qpapers", json=dict(DRAFT_BODY, marks=marks), headers=teacher_headers
+    )
+    assert res.status_code == 201, res.text
+    questions = res.json()["questions"]
+    assert sum(int(q["marks"]) for q in questions) == marks
+    assert all(int(q["marks"]) >= 1 for q in questions)
+
+
+@pytest.mark.parametrize(
+    "difficulty",
+    [
+        {"easy": 0, "medium": 0, "hard": 100},
+        {"easy": 100, "medium": 0, "hard": 0},
+        {"easy": 50, "medium": 50, "hard": 0},
+    ],
+)
+def test_explicit_zero_difficulty_bucket_generates_successfully(
+    client, teacher_headers, difficulty: dict[str, int]
+) -> None:
+    """A legal 0% bucket must not be rescued to 1 and then rejected.
+
+    Before the fix marks=10 with easy=0/medium=0/hard=100 produced counts
+    {easy:1, medium:1, hard:3} and validate_paper rejected the resulting 20%
+    share against the 0% target: a deterministic 502 after the AI call was
+    already paid for.
+    """
+    res = client.post(
+        "/teacher/qpapers", json=dict(DRAFT_BODY, difficulty=difficulty), headers=teacher_headers
+    )
+    assert res.status_code == 201, res.text
+    body = res.json()
+    planned = body["meta"]["counts_planned"]
+    for label, pct in difficulty.items():
+        if pct == 0:
+            assert planned[label] == 0
+    assert sum(planned.values()) == len(body["questions"])
+    assert body["meta"]["difficulty_actual"] == planned
+    assert sum(int(q["marks"]) for q in body["questions"]) == DRAFT_BODY["marks"]
+
+
+def test_plan_counts_keeps_explicit_zero_buckets_empty() -> None:
+    assert plan_counts(10, 0, 0, 100) == {"easy": 0, "medium": 0, "hard": 5}
+    assert plan_counts(10, 50, 50, 0) == {"easy": 3, "medium": 2, "hard": 0}
+    assert sum(plan_counts(23, 30, 50, 20).values()) == 11
+
+
+def test_allocate_marks_sums_to_the_declared_total() -> None:
+    for total, count in ((5, 5), (10, 5), (23, 11), (100, 20)):
+        plan = allocate_marks(total, count)
+        assert len(plan) == count and sum(plan) == total and min(plan) >= 1
+
+
+def test_validate_paper_rejects_marks_that_do_not_match_declared_total() -> None:
+    """The gate between the printed header and the labels is explicit."""
+    evidence = "কোষ হলো জীবদেহের ক্ষুদ্রতম গঠন ও কার্যমূলক একক"
+    options = ["কোষ", "জীবদেহের", "গঠন", "একক"]
+    questions = [
+        {
+            "ref": f"q{i + 1}",
+            "text": token,
+            "options": list(options),
+            "answer_index": 0,
+            "marks": 2,
+            "difficulty": "easy",
+            "chapter": "কোষ",
+        }
+        for i, token in enumerate(("কোষ", "জীবদেহের", "গঠন"))
+    ]
+    with pytest.raises(
+        ProviderError, match=r"marks validation failed: questions sum to 6, declared 10"
+    ):
+        validate_paper(questions, {"easy": 3, "medium": 0, "hard": 0}, [evidence], total_marks=10)
 
 
 def test_garbage_provider_reply_502_nothing_persisted(tmp_path, monkeypatch) -> None:
@@ -328,6 +419,35 @@ def _finalized(client, headers) -> dict:
     res = client.post(f"/teacher/qpapers/{qp['id']}/finalize", headers=headers)
     assert res.status_code == 200
     return reviewed
+
+
+def _pdf_marks(text: str) -> list[int]:
+    """Per-question marks labels: question lines end with "(n)"."""
+    return [int(m) for m in re.findall(r"\((\d+)\)\s*$", text, re.M)]
+
+
+def test_pdf_marks_labels_sum_to_the_declared_total(client, teacher_headers) -> None:
+    res = client.post("/teacher/qpapers", json=dict(DRAFT_BODY, marks=14), headers=teacher_headers)
+    assert res.status_code == 201, res.text
+    qp = res.json()
+    _review_all(client, teacher_headers, qp)
+    finalized = client.post(f"/teacher/qpapers/{qp['id']}/finalize", headers=teacher_headers)
+    assert finalized.status_code == 200
+
+    paper = client.get(f"/teacher/qpapers/{qp['id']}/pdf", headers=teacher_headers)
+    assert paper.status_code == 200
+    text = _pdf_text(paper.content)
+    declared = int(re.search(r"(\d+) marks", text).group(1))
+    labels = _pdf_marks(text)
+    assert declared == 14
+    assert len(labels) == len(qp["questions"])
+    assert sum(labels) == declared == sum(int(q["marks"]) for q in qp["questions"])
+
+    answer = client.get(
+        f"/teacher/qpapers/{qp['id']}/pdf", params={"kind": "answer"}, headers=teacher_headers
+    )
+    answer_labels = _pdf_marks(_pdf_text(answer.content))
+    assert answer_labels == labels
 
 
 def test_pdf_export_renders_bengali_and_answer_key(client, teacher_headers) -> None:

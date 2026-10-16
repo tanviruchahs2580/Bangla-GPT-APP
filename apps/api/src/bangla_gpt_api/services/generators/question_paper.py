@@ -44,27 +44,50 @@ _SPEC_RE = re.compile(r"SPEC: easy=(\d+) medium=(\d+) hard=(\d+) chapters=([^\n]
 def plan_counts(marks: int, easy_pct: int, medium_pct: int, hard_pct: int) -> dict[str, int]:
     """Split a paper into per-difficulty question counts.
 
-    ``easy_pct`` and ``medium_pct`` are honoured directly and ``hard`` absorbs
-    the remainder, so the three always sum to ``total`` exactly (rounding
-    three independent percentages otherwise drifts by a question or two). If
-    the mix leaves a bucket empty, the largest bucket lends it one question so
-    every requested difficulty is represented - the previous version only
-    rescued ``medium`` and could return a paper with zero ``hard`` questions.
+    Largest-remainder allocation of ``total`` over the requested shares, so the
+    realised mix is the closest integer split of what the teacher asked for and
+    the three counts always sum to ``total``. A bucket requested at 0% stays
+    empty -- the teacher explicitly asked for no such question; a NONZERO share
+    that rounds down to zero is lent one question by the largest bucket so every
+    requested difficulty is represented. :func:`validate_paper` checks the
+    provider's mix against these counts, never against the raw percentages, so
+    the plan and the gate cannot disagree.
     """
     total = max(5, min(20, marks // 2))
-    counts = {
-        "easy": round(total * easy_pct / 100),
-        "medium": round(total * medium_pct / 100),
-    }
-    counts["hard"] = total - counts["easy"] - counts["medium"]
-    while min(counts.values()) < 1:
-        donor = max(counts, key=lambda name: counts[name])
-        if counts[donor] <= 1:
-            break
-        starved = next(name for name, value in counts.items() if value < 1)
-        counts[donor] -= 1
-        counts[starved] += 1
+    requested = {"easy": easy_pct, "medium": medium_pct, "hard": hard_pct}
+    exact = {label: total * pct / 100.0 for label, pct in requested.items()}
+    counts = {label: int(exact[label]) for label in DIFFICULTY_LABELS}
+    for label in DIFFICULTY_LABELS:
+        if requested[label] > 0 and counts[label] == 0:
+            donor = max(DIFFICULTY_LABELS, key=lambda name: counts[name])
+            if counts[donor] > 1:
+                counts[donor] -= 1
+                counts[label] += 1
+    # A request of 0/0/0 is impossible through DifficultySplit (shares must sum
+    # to 100); the fallback keeps direct callers from hitting max() on nothing.
+    positive = [name for name in DIFFICULTY_LABELS if requested[name] > 0] or list(
+        DIFFICULTY_LABELS
+    )
+    while sum(counts.values()) < total:
+        label = max(
+            positive,
+            key=lambda name: (exact[name] - int(exact[name]), -DIFFICULTY_LABELS.index(name)),
+        )
+        counts[label] += 1
     return counts
+
+
+def allocate_marks(total_marks: int, question_count: int) -> list[int]:
+    """Spread the paper's declared total across its questions.
+
+    The leading questions absorb the remainder so the per-question labels
+    always sum to the declared total: the printed header and the question
+    labels of the same paper must not contradict each other.
+    """
+    if question_count <= 0:
+        return []
+    base, extra = divmod(total_marks, question_count)
+    return [base + 1 if i < extra else base for i in range(question_count)]
 
 
 def build_qp_prompt(
@@ -104,7 +127,16 @@ def _jaccard(a: set[str], b: set[str]) -> float:
     return len(a & b) / len(union)
 
 
-def parse_qp_payload(raw: str, chapters: list[str]) -> list[dict[str, object]]:
+def parse_qp_payload(
+    raw: str, chapters: list[str], *, total_marks: int | None = None
+) -> list[dict[str, object]]:
+    """Parse and shape-check the provider's question list.
+
+    ``total_marks`` is the paper's declared total; when given, the marks are
+    allocated across the parsed questions so they sum to it exactly. Without it
+    each question keeps the previous default of one mark (direct parser
+    callers).
+    """
     start, end = raw.find("{"), raw.rfind("}")
     if start < 0 or end <= start:
         raise ProviderError("provider returned no JSON object")
@@ -115,6 +147,9 @@ def parse_qp_payload(raw: str, chapters: list[str]) -> list[dict[str, object]]:
     questions = data.get("questions") if isinstance(data, dict) else None
     if not isinstance(questions, list) or not questions:
         raise ProviderError("question paper payload must contain a non-empty questions list")
+    marks_plan = (
+        allocate_marks(total_marks, len(questions)) if total_marks else [1] * len(questions)
+    )
     out: list[dict[str, object]] = []
     for i, q in enumerate(questions):
         if not isinstance(q, dict):
@@ -131,7 +166,8 @@ def parse_qp_payload(raw: str, chapters: list[str]) -> list[dict[str, object]]:
             or not all(isinstance(o, str) and o.strip() for o in options)
         ):
             raise ProviderError(f"question {i} must have exactly four non-empty options")
-        if not isinstance(answer, int) or not 0 <= answer <= 3:
+        # bool is an int subclass: `True` must never pass as answer option b.
+        if not isinstance(answer, int) or isinstance(answer, bool) or not 0 <= answer <= 3:
             raise ProviderError(f"question {i} answer_index must be 0-3")
         if difficulty not in DIFFICULTY_LABELS:
             difficulty = "medium"
@@ -144,7 +180,7 @@ def parse_qp_payload(raw: str, chapters: list[str]) -> list[dict[str, object]]:
                 "text": text.strip(),
                 "options": [str(o).strip() for o in options],
                 "answer_index": int(answer),
-                "marks": 1,
+                "marks": marks_plan[i],
                 "difficulty": str(difficulty),
                 "chapter": chapter,
                 "reviewed": False,
@@ -156,10 +192,18 @@ def parse_qp_payload(raw: str, chapters: list[str]) -> list[dict[str, object]]:
 def validate_paper(
     questions: list[dict[str, object]],
     counts: dict[str, int],
-    difficulty_pct: dict[str, int],
     evidence_texts: list[str],
+    *,
+    total_marks: int | None = None,
 ) -> dict[str, object]:
-    """Alignment + duplicate + difficulty gates. Raises ProviderError on failure."""
+    """Alignment + duplicate + difficulty + marks gates. Raises ProviderError on failure.
+
+    Difficulty is validated against ``counts`` -- the plan the SPEC line asked
+    the model to satisfy -- never against the raw request percentages. The old
+    percentage check contradicted :func:`plan_counts` (a legal 0% bucket was
+    rescued to one question and then rejected after the provider call was
+    already paid for).
+    """
     all_terms: set[str] = set()
     for text in evidence_texts:
         terms = _stem_tokens(text)
@@ -187,17 +231,31 @@ def validate_paper(
     actual = {
         label: sum(1 for q in questions if q["difficulty"] == label) for label in DIFFICULTY_LABELS
     }
-    for label, want_pct in difficulty_pct.items():
+    planned_total = sum(counts.values())
+    for label in DIFFICULTY_LABELS:
+        want = counts.get(label, 0) / planned_total if planned_total else 0.0
         got = actual[label] / total if total else 0.0
-        if abs(got - want_pct / 100.0) > DIFFICULTY_TOLERANCE:
+        if abs(got - want) > DIFFICULTY_TOLERANCE:
             raise ProviderError(
-                f"difficulty validation failed: {label} share {got:.0%} vs target {want_pct}%"
+                f"difficulty validation failed: {label} share {got:.0%} vs planned {want:.0%}"
+            )
+    if total_marks is not None:
+        awarded = 0
+        for q in questions:
+            marks = q["marks"]
+            if not isinstance(marks, int) or isinstance(marks, bool):
+                raise ProviderError(f"marks validation failed: {q['ref']} has no integer marks")
+            awarded += marks
+        if awarded != total_marks:
+            raise ProviderError(
+                f"marks validation failed: questions sum to {awarded}, declared {total_marks}"
             )
     return {
         "alignment_min": min(per_question.values()),
         "alignment_per_question": per_question,
         "difficulty_actual": actual,
         "counts_planned": counts,
+        "marks_total": total_marks,
     }
 
 
@@ -238,6 +296,6 @@ async def generate_question_paper(
     # teacher generation is always a TOOL route (main model + RAG).
     set_current_route(Route.TOOL)
     raw = await provider.generate(prompt, system=QP_SYSTEM_PROMPT)
-    questions = parse_qp_payload(raw, chapters)
-    meta = validate_paper(questions, counts, difficulty_pct, evidence)
+    questions = parse_qp_payload(raw, chapters, total_marks=marks)
+    meta = validate_paper(questions, counts, evidence, total_marks=marks)
     return questions, meta
