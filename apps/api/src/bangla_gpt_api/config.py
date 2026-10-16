@@ -124,8 +124,11 @@ class Settings(BaseSettings):
     # inline = scheduler loops inside the web process (default);
     # arq = an external ARQ worker owns the schedule (job bodies live in jobs.py).
     jobs_backend: str = "inline"  # inline | arq
-    # Enable ONLY behind a trusted reverse proxy (Caddy/nginx) that overwrites
-    # X-Forwarded-For; otherwise clients can spoof their rate-limit identity.
+    # Enable ONLY behind a trusted reverse proxy (Caddy/nginx) that APPENDS
+    # the real peer to X-Forwarded-For ($proxy_add_x_forwarded_for) and is the
+    # only trusted hop; the limiter reads the LAST valid entry (S-001). With
+    # any other proxy setup the header is spoofable and clients could rotate
+    # fake rate-limit identities.
     trust_proxy_headers: bool = False
     # Fernet key (PII_ENC_KEY) for encrypting guardian phone at rest.
     # Without it values pass through unchanged (dev/test); production boot
@@ -214,6 +217,15 @@ class Settings(BaseSettings):
         "/teacher/jobs": (20, "user"),
         # Roster import runs one Argon2id hash per created student.
         "/teacher/classrooms": (30, "user"),
+        # S-003: each of these opens one QuizAttempt (plus an in-app
+        # notification) per roster student in a single call, so an unbounded
+        # caller is an unbounded row/notification pump aimed at minors.
+        "/teacher/shorttests": (20, "user"),
+        "/teacher/assignments": (20, "user"),
+        # S-012: quiz generation walks the whole corpus and inserts a
+        # QuizAttempt per call; unbounded it is both CPU and storage abuse.
+        # Per user, not per IP: a school NAT must not lock out a classroom.
+        "/quizzes": (20, "user"),
         "/events": (60, "ip"),
     }
 
