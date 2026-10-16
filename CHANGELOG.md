@@ -131,6 +131,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate CHANGELOG
 - docs: regenerate CHANGELOG for the branch commit
 - docs: regenerate CHANGELOG for the current batch
+- docs: regenerate the CHANGELOG for the acceptance-testing fixes
 - docs: regenerate the CHANGELOG for the branch's final commits
 - docs: regenerate the CHANGELOG for the scripts commit
 - docs: regenerate the CHANGELOG for this branch's commits
