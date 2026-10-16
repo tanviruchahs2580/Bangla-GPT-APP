@@ -90,24 +90,40 @@ jobs:
         # the entire outage this repository is currently in -- every API call
         # failing and the deploy reported itself healthy. The check has to
         # touch the thing that actually broke: the /api/* proxy to
-        # API_ORIGIN. handleApiProxy now answers 502 `api_origin_unreachable`
-        # when the origin cannot be reached, so both 200 and 502 are proof
-        # the proxy is live; only a 5xx-html page from the CDN would mean the
-        # deploy itself is broken.
+        # API_ORIGIN.
+        #
+        # T-028: the version of this step that accepted `200 || 502` had the
+        # same defect one step along. handleApiProxy answers 502 with
+        # `api_origin_unreachable` exactly when the origin could not be
+        # reached, so treating 502 as "proxy is live" made the one production
+        # check that touches the API report success for a dead origin -- the
+        # F-048 failure mode, re-opened. The only proof that the deploy is
+        # serving is a real 200 carrying the API's own health body; every
+        # other status is retried with a bounded backoff (~4 min) and then
+        # fails the workflow, including 502.
         run: |
           set -e
-          ok=0
-          for i in $(seq 1 12); do
-            code=$(curl -s -o /tmp/smoke.txt -w "%{http_code}" https://bangla-gpt-app.vercel.app/api/health || true)
-            if [ "$code" = "200" ] || [ "$code" = "502" ]; then
-              echo "production alias /api/health -> $code (proxy is live)"
+          url=https://bangla-gpt-app.vercel.app/api/health
+          delays=(5 10 15 20 30 30 30 30 30 30)
+          max_attempts=$(( ${#delays[@]} + 1 ))
+          attempt=0
+          code=000
+          while [ "$attempt" -lt "$max_attempts" ]; do
+            attempt=$((attempt + 1))
+            code=$(curl -s -o /tmp/smoke.txt -w "%{http_code}" "$url" || true)
+            if [ "$code" = "200" ]; then
+              echo "production alias $url -> 200 (API health served through the /api proxy)"
               head -c 300 /tmp/smoke.txt; echo
-              ok=1
-              break
+              exit 0
             fi
-            echo "waiting for alias (got $code)"; sleep 10
+            echo "attempt ${attempt}/${max_attempts}: $url -> ${code} (not healthy)"
+            head -c 300 /tmp/smoke.txt 2>/dev/null || true; echo
+            if [ "$attempt" -lt "$max_attempts" ]; then
+              sleep "${delays[$((attempt - 1))]}"
+            fi
           done
-          [ "$ok" = "1" ] || { echo "the /api proxy did not answer in time"; cat /tmp/smoke.txt || true; exit 1; }
+          echo "::error title=Post-deploy smoke failed::$url never returned 200 after ${max_attempts} attempts (~4 min). Last status: ${code}. A 502 here means the /api proxy could not reach API_ORIGIN (the API origin is down or unreachable); any other status means the alias is not serving the deployed app. The deployment is NOT healthy -- see docs/runbook.md."
+          exit 1
 
       - name: Post-deploy smoke check (production alias, /login serves)
         run: |
