@@ -436,17 +436,18 @@ const bn = {
   admRefusalClass: "শ্রেণি",
   admLastRefusal: "শেষ অস্বীকার",
   admNoRefusals: "কোনো অস্বীকৃত প্রশ্ন নেই",
-  // support-ops strings: admin/support tooling only, intentionally kept
-  // English in both dicts. Tracked as AUD-0047 (Bengali pass for the
-  // support-ops surface); do not translate piecemeal here.
-  statusPage: "System status",
-  statusAllOk: "All systems operational",
-  statusDegraded: "Some systems are degraded",
-  statusChecked: "Last checked: {when}",
-  actingAs: "You are acting as {name} in a support session",
-  exitImpersonation: "End support session",
-  impersonate: "Support check",
-  impReasonPrompt: "Reason for this support session (min 3 chars)",
+  // support-ops status + impersonation strings. The impersonation banner is
+  // shown to admins acting on another account, so its Bangla copy is formal
+  // and explicit. These were the last AUD-0047 keys; a native reviewer should
+  // still confirm the register of "সিস্টেমের অবস্থা".
+  statusPage: "সিস্টেমের অবস্থা",
+  statusAllOk: "সব সিস্টেম স্বাভাবিকভাবে চলছে",
+  statusDegraded: "কিছু সেবা সীমিতভাবে চলছে",
+  statusChecked: "সর্বশেষ যাচাই: {when}",
+  actingAs: "আপনি একটি সহায়তা সেশনে {name} হিসেবে কাজ করছেন",
+  exitImpersonation: "সহায়তা সেশন শেষ করুন",
+  impersonate: "সহায়তা যাচাই",
+  impReasonPrompt: "এই সহায়তা সেশনের কারণ (কমপক্ষে ৩ অক্ষর)",
   admTriage: "ফিডব্যাক পর্যালোচনা",
   admTriageOpen: "খোলা",
   admTriageAll: "সব",
@@ -613,6 +614,7 @@ const bn = {
   errTutorUnavailable: "টিউটর সেবা এখন বন্ধ — একটু পরে চেষ্টা করুন।",
   errNotAllowed: "এটি করার অনুমতি নেই।",
   errNetwork: "ইন্টারনেট সংযোগ পরীক্ষা করুন।",
+  errTimeout: "সার্ভার সাড়া দিচ্ছে না — একটু পরে আবার চেষ্টা করুন।",
   errGeneric: "কিছু একটা সমস্যা হয়েছে। একটু পরে আবার চেষ্টা করুন।",
   errMfaRequired: "দুই ধাপের যাচাই প্রয়োজন — অথেনটিকেটর কোড দিন।",
   errBadMfaCode: "কোডটি ভুল — আবার দেখে দিন।",
@@ -1062,8 +1064,9 @@ const en: Dict = {
   admRefusalClass: "Class",
   admLastRefusal: "Last refusal",
   admNoRefusals: "No refusals in the window.",
-  // support-ops strings: admin/support tooling only, kept
-  // English in both dicts (a dedicated Bengali pass is follow-up).
+  // support-ops status + impersonation strings. Six of these now carry
+  // Bangla copy in the bn block; statusPage/statusAllOk stay English until
+  // the AUD-0047 pass finishes (scripts/check_i18n.py PENDING_BANGLA_REVIEW).
   statusPage: "System status",
   statusAllOk: "All systems operational",
   statusDegraded: "Some systems are degraded",
@@ -1237,6 +1240,7 @@ const en: Dict = {
   errTutorUnavailable: "The tutor service is down — please try later.",
   errNotAllowed: "You don't have permission to do that.",
   errNetwork: "Check your internet connection.",
+  errTimeout: "The server isn't responding — please try again shortly.",
   errGeneric: "Something went wrong. Please try again later.",
   errMfaRequired:
     "Two-step verification required — enter your authenticator code.",
