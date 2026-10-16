@@ -118,6 +118,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(audit): record the merge and live-production outcome
 - docs(qa): publish the 2026-10-16 audit report; refresh the lockfile within its ranges
 - docs(qa): record the CI-found defects and the exit-gate assessment in the report
+- docs(qa): record the role-based acceptance run and the live deployment
 - docs: add 2026-10-06 QA audit and final certification reports
 - docs: add a CHANGELOG generated from git history, and a check that keeps it honest
 - docs: add final QA report for 2026-10-07 UAT completion
@@ -160,6 +161,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - style(api): reformat SchoolInvite claim call
 - style(api): ruff format four test files (format-gate drift)
 - style(api): ruff format mock provider and lesson plan prompt
+- style(web): give the registration screen login's photo backdrop
 - style: satisfy the repository's own pre-commit hooks
 
 ### Other
