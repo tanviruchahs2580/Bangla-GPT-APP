@@ -90,6 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Documentation
 
+- docs(audit): record the merge and live-production outcome
 - docs: add 2026-10-06 QA audit and final certification reports
 - docs: add a CHANGELOG generated from git history, and a check that keeps it honest
 - docs: add final QA report for 2026-10-07 UAT completion
@@ -129,6 +130,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Audit remediation, round 2: 38 findings closed across backend, privacy, auth and UX (#10)
 - Full engineering audit + remediation: 47 findings fixed, 0 open (#1)
+- Merge pull request #15 from tanviruchahs2580/audit/2026-10-16-live-verification
+- Merge pull request #16 from tanviruchahs2580/docs/2026-10-16-live-outcome
 
 ## v0.9.2 - 2026-09-15
 

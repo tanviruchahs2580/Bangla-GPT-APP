@@ -238,3 +238,76 @@ someone's behalf.
 4. Then re-run the authenticated smoke: register a class-6 student through the
    UI, ask the tutor one question, and take one quiz — the same journeys this
    audit verified locally end to end (154/154).
+
+---
+
+## 6. Made live (second session, owner-authorized Vercel access)
+
+### 6.1 Root cause of "the app is not usable": two configuration defects, not a missing host
+1. **`API_ORIGIN` pointed at a dead tunnel URL.** The Vercel project had exactly one
+   environment variable, `API_ORIGIN`, holding an old
+   `trycloudflare.com` quick-tunnel hostname. Quick tunnels get a new random
+   hostname every time `cloudflared` restarts, so the value had gone stale and
+   every `/api/*` call answered `api_origin_unreachable`. The live topology is
+   the owner's documented demo stack in Docker (api + redis + web preview +
+   mailpit + a `cloudflared` tunnel that publishes the API), and the tunnel was
+   running — only the pointer was wrong.
+2. **The running API container had an empty `JWT_SECRET`.** Registration worked
+   (it does not mint a token) while every login answered **500** with
+   `jwt.exceptions.InvalidKeyError: HMAC key must not be empty`. With
+   `ENV=test` the production boot guard that refuses a short/empty secret does
+   not apply, so the container booted and failed per-request instead. A real
+   finding: `ENV=test` + empty secret is a silent-failure configuration.
+
+### 6.2 What was changed (each verified)
+| # | Action | Verification |
+|---|---|---|
+| 1 | Updated `API_ORIGIN` in Vercel to the running tunnel host and triggered a redeploy from the dashboard | `GET /api/ready` on the production domain → `{"status":"ready","provider":"mock"}` |
+| 2 | Recreated the API container with a strong generated `JWT_SECRET`, preserving every other setting **and the `/data` volume** | login works; the DB keeps its rows |
+| 3 | Republished the container's port (`API_HOST_PORT`) — the first recreate silently bound a random port, which is the same failure mode `F-22` describes | `0.0.0.0:8000->8000`; the tunnel could reach it again |
+| 4 | Tagged the image built from the merged commit as the compose image and recreated the API | live `invite code` check now returns the 64-bit hex from this audit's fix, proving production runs the merged code |
+| 5 | Rotated `VERCEL_TOKEN` per the runbook: minted a team-scoped token (1-year expiry), set the repository secret, re-ran the deploy workflow | workflow **success**, including the post-deploy smoke `production alias /login -> 200` — a step that had never executed before |
+| 6 | Revoked the two superseded tokens afterwards, leaving one live credential | token list shows only `github-actions-ci-2026-10-16-team` |
+
+### 6.3 Live verification as a user
+`probes/live_smoke.py` against `https://bangla-gpt-app.vercel.app/api`:
+**31 / 31 checks pass** — register (with guardian consent), login, `/users/me`,
+learn subjects/chapters/content, tutor ask with sources, quiz start + graded
+submit, dashboard summary, revision queue, student report with suggestion
+code+params, 64-bit invite code, teacher workload/classrooms, and the negative
+matrix (401 unauth tutor/admin, 403 student→teacher, 404 unknown route).
+
+Browser pass on production (in-app browser, 1366×768): logged in as a live QA
+student, the student home rendered with the real greeting and quick actions, and
+the tutor answered "কোষ কী?" with the structured Bangla answer, an 84%
+confidence badge, "পাঠ্যবই-সমর্থিত" and source chips — screenshots captured in
+the session.
+
+### 6.4 What this deployment is, and what it is not
+It is the owner's **demo topology**: the frontend on Vercel, the API on a local
+Docker host behind a Cloudflare quick tunnel, `ENV=test`, `LLM_PROVIDER=mock`,
+SQLite in a Docker volume. Consequences to state plainly:
+
+* The app is **fully usable** — auth, learning, quizzes, reports, teacher tools.
+* The tutor answers with **mock text**, not a real model: no `GEMINI_API_KEY` is
+  deployed and `LLM_PROVIDER=mock` (the production guard that refuses mock is
+  bypassed because `ENV=test`).
+* Availability is bound to the owner's machine and to the quick-tunnel hostname.
+  **Every tunnel restart changes the hostname and therefore requires a new
+  `API_ORIGIN` value.** Promoting a named tunnel (stable hostname) or hosting the
+  API on a VPS is the durable fix — and per `docs/hosting_decision.md` that
+  choice (budget + data residency for minors' data) is a human sign-off, so this
+  audit did not provision one.
+* The container's SQLite was created by `create_all` in an earlier session, so
+  `alembic upgrade head` inside it fails on already-existing tables. A **fresh**
+  database migrates cleanly (proven by CI and by the local fresh-DB run), so this
+  is a legacy-state artifact of the demo volume, not a deploy defect.
+
+### 6.5 Mobile (APK)
+Not buildable from this environment, and the blockers are owner-side toolchain
+items, not the API any more: no JDK, no Android SDK (`ANDROID_HOME` unset) and
+no signing keystore exists in the repo or in `~/.android`. The manifest fixes
+from this audit (backup disabled, `RECORD_AUDIO` for dictation) are in place, and
+a release build now has a working API to point at —
+`VITE_API_BASE=https://bangla-gpt-app.vercel.app/api npm run build && npx cap sync
+android`, then assemble and sign with the owner's keystore.
