@@ -16,6 +16,7 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
 from bangla_gpt_api import caching
+from bangla_gpt_api.curriculum.models import Chunk
 from bangla_gpt_api.db.models import (
     AnswerLog,
     ChapterProgress,
@@ -97,19 +98,23 @@ logger = logging.getLogger(__name__)
 
 @router.get("/learn/subjects", response_model=list[SubjectOut])
 def learn_subjects(
+    app_ctx: Ctx,
     user: CurrentUser,
     class_level: int | None = Query(default=None),
 ) -> list[SubjectOut]:
-    return list_subjects(class_level)
+    # the tutor's actual loaded corpus (real NCTB corpus when configured),
+    # so Learn lists exactly the content the tutor can cite.
+    return list_subjects(class_level, chunks=_index_chunks(app_ctx))
 
 
 @router.get("/learn/subjects/{subject}/chapters", response_model=list[ChapterSummaryOut])
 def learn_subject_chapters(
+    app_ctx: Ctx,
     subject: str,
     user: CurrentUser,
     class_level: int | None = Query(default=None),
 ) -> list[ChapterSummaryOut]:
-    chapters = subject_chapters(subject, class_level)
+    chapters = subject_chapters(subject, class_level, chunks=_index_chunks(app_ctx))
     if not chapters:
         raise HTTPException(status_code=404, detail="Subject not found")
     return chapters
@@ -117,15 +122,21 @@ def learn_subject_chapters(
 
 @router.get("/learn/subjects/{subject}/chapters/{chapter}", response_model=ChapterContentOut)
 def learn_chapter_content(
+    app_ctx: Ctx,
     subject: str,
     chapter: str,
     user: CurrentUser,
     class_level: int | None = Query(default=None),
 ) -> ChapterContentOut:
-    content = chapter_content(subject, class_level, chapter)
+    content = chapter_content(subject, class_level, chapter, chunks=_index_chunks(app_ctx))
     if content is None:
         raise HTTPException(status_code=404, detail="Chapter not found")
     return content
+
+
+def _index_chunks(app_ctx: Ctx) -> list[Chunk] | None:
+    """The corpus the retrieval index serves, or None without an index."""
+    return app_ctx.index.chunks if app_ctx.index is not None else None
 
 
 # --- school tenancy helpers -----------------------------------------
@@ -607,7 +618,9 @@ def dashboard_summary(
 ) -> DashboardSummary:
     """per-user 60s cache over the summary (shared Redis cache
     when RATE_LIMIT_BACKEND=redis + REDIS_URL, memory cache otherwise)."""
-    today = datetime.now(UTC).date().isoformat()
+    # Same Asia/Dhaka day as every other learning surface (activity, revision,
+    # dashboard cache keys): a UTC date here flips "today" six hours early.
+    today = dhaka_date(datetime.now(UTC))
     summary_cache = app_ctx.cache
     key = f"summary:{user.id}:{today}"
     cached = summary_cache.get_json(key)
