@@ -73,13 +73,17 @@ describe("F-128 model-authored links cannot impersonate a citation", () => {
     expect(container.querySelectorAll("img")).toHaveLength(0);
   });
 
-  it("lazy-loads an allowed remote image", () => {
+  it("drops a remote image so no request reaches an arbitrary host", () => {
+    // F-039: this used to render the https image with loading="lazy". An
+    // <img> fetches automatically, so without the deployed CSP (dev, preview,
+    // the Vercel deploy) an AI-authored URL leaked the reader's IP and
+    // confirmed the answer was seen. Allowed sources are covered in
+    // markdown.test.tsx.
     const { container } = render(
       <SafeMarkdown content="![x](https://example.edu.bd/nctb/p1.png)" />,
     );
-    const img = container.querySelector("img");
-    expect(img).not.toBeNull();
-    expect(img?.getAttribute("loading")).toBe("lazy");
+    expect(container.querySelectorAll("img")).toHaveLength(0);
+    expect(container.textContent).toContain("x");
   });
 });
 

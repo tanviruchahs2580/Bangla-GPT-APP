@@ -97,8 +97,16 @@ describe("Tutor stream finalize dedup (Phase H)", () => {
 
     await waitFor(() => expect(apiMock.postStream).toHaveBeenCalledTimes(1));
     // The answer must appear in exactly ONE bubble: the placeholder merged
-    // with the done payload, never a second pushed copy.
-    await waitFor(() => expect(screen.getAllByText(ANSWER)).toHaveLength(1));
+    // with the done payload, never a second pushed copy. (Since F-016 the
+    // completed text is also mirrored into the visually hidden announcer live
+    // region, so count inside the transcript bubbles only.)
+    await waitFor(() =>
+      expect(
+        screen
+          .getAllByText(ANSWER)
+          .filter((el) => el.closest(".bubble") !== null),
+      ).toHaveLength(1),
+    );
     // And the merged bubble must carry the grounded badge (done payload applied).
     expect(await screen.findByText(t("supportedBadge"))).toBeTruthy();
   });
