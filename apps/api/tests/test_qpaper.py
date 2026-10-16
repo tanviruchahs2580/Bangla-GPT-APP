@@ -18,6 +18,7 @@ from bangla_gpt_api.services.generators.question_paper import (
     plan_counts,
     validate_paper,
 )
+from bangla_gpt_api.services.qp_pdf import render_qp_html
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -437,11 +438,26 @@ def test_pdf_marks_labels_sum_to_the_declared_total(client, teacher_headers) -> 
     paper = client.get(f"/teacher/qpapers/{qp['id']}/pdf", headers=teacher_headers)
     assert paper.status_code == 200
     text = _pdf_text(paper.content)
-    declared = int(re.search(r"(\d+) marks", text).group(1))
+    declared = 14
     labels = _pdf_marks(text)
-    assert declared == 14
     assert len(labels) == len(qp["questions"])
     assert sum(labels) == declared == sum(int(q["marks"]) for q in qp["questions"])
+    # The header that carries the declared total is Bangla now. It is checked in
+    # the HTML render rather than in extracted PDF text: text shaping reorders
+    # the reph in "নম্বর", so the extracted byte sequence is not stable.
+    html = render_qp_html(
+        {
+            "exam_type": qp["exam_type"],
+            "class_level": qp["class_level"],
+            "subject": qp["subject"],
+            "marks": qp["marks"],
+            "duration_min": qp["duration_min"],
+            "chapters": list(qp["chapters"]),
+            "questions": [dict(q) for q in qp["questions"]],
+        },
+        "paper",
+    )
+    assert f"{declared} নম্বর" in html
 
     answer = client.get(
         f"/teacher/qpapers/{qp['id']}/pdf", params={"kind": "answer"}, headers=teacher_headers
@@ -458,14 +474,14 @@ def test_pdf_export_renders_bengali_and_answer_key(client, teacher_headers) -> N
     assert paper.content[:5] == b"%PDF-"
     paper_text = _pdf_text(paper.content)
     assert CHAPTER in paper_text  # Bengali survives the font pipeline
-    assert "ANSWER KEY" not in paper_text
+    assert "উত্তরমালা" not in paper_text
 
     answer = client.get(
         f"/teacher/qpapers/{qp['id']}/pdf", params={"kind": "answer"}, headers=teacher_headers
     )
     assert answer.status_code == 200 and answer.content[:5] == b"%PDF-"
     answer_text = _pdf_text(answer.content)
-    assert "ANSWER KEY" in answer_text
+    assert "উত্তরমালা" in answer_text
     assert " <--" in answer_text
 
     bad = client.get(

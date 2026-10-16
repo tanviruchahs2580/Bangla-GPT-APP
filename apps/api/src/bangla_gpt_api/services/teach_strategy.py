@@ -40,7 +40,7 @@ def reteach_instruction(last: str | None) -> tuple[str, str]:
     key = next_strategy(last)
     if last is not None and last in _NAMES:
         instruction = (
-            f"শিক্ষক-নির্দেশ: আগের পদ্ধতি ({strategy_name(last)}) বুঝতে করোনি — "
+            f"শিক্ষক-নির্দেশ: আগের পদ্ধতিতে ({strategy_name(last)}) বিষয়টি বোঝানো যায়নি — "
             f"এবার অন্য পদ্ধতি ({strategy_name(key)}) ব্যবহার করে বোঝাও।"
         )
     else:

@@ -62,11 +62,11 @@ def test_build_body_aggregates_only() -> None:
     )
     body = build_body(digest)
     assert "Ayesha" in body
-    line = "Rahim (class 6): 3 study session(s), 2 graded attempt(s), average 55.0%"
-    assert line + " -- needs support." in body
-    assert "Chapters to practise: Algebra, Geometry" in body
-    assert "No activity this week" in body
-    assert "summary statistics only" in body
+    line = "Rahim (শ্রেণি 6): 3টি পড়ার সেশন, 2টি মূল্যায়িত পরীক্ষা, গড় 55.0%"
+    assert line + " — সহায়তা প্রয়োজন।" in body
+    assert "অনুশীলন দরকার এমন অধ্যায়: Algebra, Geometry" in body
+    assert "এ সপ্তাহে কোনো কার্যক্রম নেই" in body
+    assert "শুধু পরিসংখ্যান আছে" in body
 
 
 @pytest.fixture
@@ -180,9 +180,9 @@ def test_digest_content_no_raw_messages(env) -> None:
     assert "Weekly parent digest" in sent[0]["subject"]
     body = sent[0]["body"]
     # aggregates present, week-window enforced (the 9-day-old attempt excluded)
-    line = "Rahim (class 6): 2 study session(s), 1 graded attempt(s), average 60.0%"
-    assert line + " -- on track." in body
-    assert "Chapters to practise: Algebra" in body
+    line = "Rahim (শ্রেণি 6): 2টি পড়ার সেশন, 1টি মূল্যায়িত পরীক্ষা, গড় 60.0%"
+    assert line + " — ভালো এগোচ্ছে।" in body
+    assert "অনুশীলন দরকার এমন অধ্যায়: Algebra" in body
     # hard rule: no message/title content, ever
     assert SENTINEL not in body and SENTINEL not in sent[0]["subject"]
     assert "Algebra help" not in body

@@ -256,7 +256,7 @@ def test_same_value_from_all_three_surfaces(env) -> None:
     finally:
         session.close()
     assert stats.delivered == 1
-    assert "Chapters to practise: alpha, beta" in sent[0]
+    assert "অনুশীলন দরকার এমন অধ্যায়: alpha, beta" in sent[0]
 
     # THE consistency assertion: one value, every surface.
     assert home_weak == row["weak_concepts"] == parent_weak == EXPECTED

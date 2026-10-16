@@ -145,7 +145,7 @@ const bn = {
   // F-107: shown when a token is held but the API cannot be reached.
   apiUnreachableTitle: "সার্ভারের সাথে সংযোগ দেখা যাচ্ছে না",
   apiUnreachableBody:
-    "আপনার অ্যাকাউন্ট ঠিক আছে। সার্ভারটি এখন সাড়া দিচ্ছে না, তার তথ্য দেখা যাচ্ছে না। একতু পরে আবার চেষ্টা করুন। আপনার কাজ নষ্ট হয়েনি।",
+    "আপনার অ্যাকাউন্ট ঠিক আছে। সার্ভারটি এখন সাড়া দিচ্ছে না, তার তথ্য দেখা যাচ্ছে না। একটু পরে আবার চেষ্টা করুন। আপনার কাজ নষ্ট হয়নি।",
   send: "পাঠান",
   tabRead: "পড়া",
   tabPractice: "অনুশীলন",
@@ -192,7 +192,7 @@ const bn = {
   downloaded: "সংরক্ষিত",
   offlineBadge: "অফলাইন কপি",
   lowDataTitle: "কম ডেটা মোড",
-  lowDataHint: "ছবি বাদ; উত্তর সংক্ষিপ্ত রাখুন",
+  lowDataHint: "ছবি বাদ — উত্তর সংক্ষিপ্ত রাখুন",
   installApp: "অ্যাপ ইনস্টল করুন",
   classrooms: "শ্রেণিসমূহ",
   newClassroom: "নতুন শ্রেণি",
@@ -246,7 +246,7 @@ const bn = {
   students: "শিক্ষার্থী",
   classStudents: "শ্রেণির শিক্ষার্থীবৃন্দ",
   assignQuiz: "কুইজ অ্যাসাইন করুন",
-  assigned: "অ্যাসাইন হয়েছে (অ্যাটেম্প্ট #{id})",
+  assigned: "অ্যাসাইন হয়েছে (চেষ্টা #{id})",
   subjectScience: "বিজ্ঞান",
   subjectMath: "গণিত",
   subjectBangla: "বাংলা",
@@ -478,7 +478,7 @@ const bn = {
   assignedShortTest: "ছোট পরীক্ষা",
   assignedBulk: "অ্যাসাইনমেন্ট",
   // ── student home ──
-  homePromptPlaceholder: "আজ কী শিখতে চাও? লিখে জিজ্ঞাসা করুন…",
+  homePromptPlaceholder: "আজ কী শিখতে চান? লিখে জিজ্ঞাসা করুন…",
   homeAskBtn: "জিজ্ঞাসা করুন",
   continueLearning: "চালিয়ে যান",
   quickActionImage: "ছবির প্রশ্ন",
@@ -572,7 +572,7 @@ const bn = {
   resHigh: "সর্বোচ্চ",
   resLow: "সর্বনিম্ন",
   resCount: "জমা দিয়েছে {n} জন",
-  asmCreateInCreate: "নতুন তৈরি করতে Create ট্যাবে যান",
+  asmCreateInCreate: "নতুন কিছু তৈরি করতে ‘তৈরি করুন’ ট্যাবে যান",
   // ── analytics ──
   anaCiTitle: "AI ক্লাসরুম ইন্টেলিজেন্স",
   anaCiTop: "আজকের প্রধান পরামর্শ",
