@@ -42,9 +42,9 @@
   --earth: #78350f;
 
   /* Semantic */
-  --danger: #e11d3c;
+  --danger: #c2183a; /* A11Y-04: #e11d3c on --danger-soft measured 4.03:1; this is 5.14:1 */
   --danger-soft: #fde8ec;
-  --warn: #b45309;
+  --warn: #9a4a06; /* A11Y-04: #b45309 on --warn-soft measured 4.47:1; this is 5.56:1 */
   --warn-soft: #fdf0dc;
   --ok: #166534; /* A11Y-04: #15803d on --ok-soft measured 4.45:1; this is 6.32:1 */
   --ok-soft: #e3f6e9;
