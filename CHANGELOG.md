@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- feat(i18n): land Bangla copy for the status and impersonation strings
 - feat(web): login page background image with dark/light theme sync
 - feat(web): student section background image with dark/light sync
 
@@ -24,14 +25,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): align the served OpenAPI contract with runtime behaviour
 - fix(api): drop an unused variable the new RUF059 rule caught
 - fix(api): gate evals on hybrid retrieval, de-tautologize golden set, precompute BM25 trigrams, single-pass redteam (A13, A8, A18)
+- fix(api): harden authentication, session end and abuse limits
 - fix(api): impersonation revocation fails closed when cache is down (F-08)
+- fix(api): make question-paper marks, difficulty buckets and integer parsing truthful
+- fix(api): make the account export complete
+- fix(api): one weak-chapter rule, a survivable mastery rollup and content-verified images
 - fix(api): record an explicit auth decision on every public operation
+- fix(api): redact exception tracebacks in logs
 - fix(api): remove the dead 'answer is None' regeneration branch (A25)
 - fix(api): repair corrupted Bengali in tutor prompts, feedback IDOR, dead code
+- fix(api): repair the retrieval evaluation's coverage-gate call
 - fix(api): restore middleware_stack and circuit_breaker to last-green versions
 - fix(api): rotate token epoch on password change/reset — sessions revoke (F-05)
 - fix(api): ruff format circuit_breaker
 - fix(api): ruff format middleware_stack
+- fix(api): scope chapter-content writes to the author's school
+- fix(api): serve the configured corpus and the Dhaka day in the Learn flow
 - fix(api): vision-honest refusal for openai, max_output_tokens cap, transport retries (A10, A9, A16)
 - fix(api): wall school-less staff into the shared default school (F-04)
 - fix(api,web): audit remediations — breaker recovery, MFA/chat rate limits, CORS PATCH, model-refusal honesty, test runner
@@ -55,10 +64,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): close-JSDoc sequence inside edge-proxy comment broke Vercel TS build
 - fix(web): configurable production API origin via edge proxy (FE-01)
 - fix(web): guarantee minimum gap between stacked page sections
+- fix(web): guard the tutor turn, bound stalled requests and clear data on sign-out
 - fix(web): localize consent/invite copy, theme icon sync, error states, icon cleanup
 - fix(web): notification panel no longer clipped off the left edge
+- fix(web): recover from page errors, report load failures, and never show another child's data
 - fix(web): report a dead API origin accurately, not as a busy server (#14)
 - fix(web): route /api/* explicitly to the edge proxy function
+- fix(web): stop rendering remote images in answers and announce each answer once
 - fix: complete admin password-change flow, tutor typo gate, roster-scoped stats, quiz distractors, i18n
 - fix: land the verified remediation on current main (CORS-adjacent, budget, UI states)
 - fix: resolve mypy 2.4.0 type errors in teacher/school/common/weakness
@@ -70,9 +82,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - refactor(api): bring TutorService.ask/ask_stream down from grade E
+- refactor(web): use one data-fetching path in the admin centre and the paper review panel
 
 ### Build and dependencies
 
+- build(api): configure deptry for the src layout
 - build(api): turn on mypy strictness per flag, with a written plan to the rest
 - build(api): widen the ruff rule set from 5 families to 15, fixing what it found
 - build(ci): add guardrails for coverage, migration drift, secrets and Bangla
@@ -86,7 +100,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - ci: add CI-gated Vercel production deploy workflow
 - ci: add concurrency to api CI, fix eval-gate header, retire sanity workflow
 - ci: bound job runtimes and harden release/deploy workflows
+- ci: gate a release on a successful CI run for the tagged commit
 - ci: hermetic import-time settings patch + step-isolated migration DBs
+- ci: require a real 200 before calling a web deploy healthy
+- ci: run the skipped Redis and Postgres paths and enforce the hook set
 
 ### Documentation
 
@@ -94,11 +111,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: add 2026-10-06 QA audit and final certification reports
 - docs: add a CHANGELOG generated from git history, and a check that keeps it honest
 - docs: add final QA report for 2026-10-07 UAT completion
+- docs: correct stale facts and move point-in-time reports to the archive
 - docs: phase-2 CI/CD pipeline execution record (v0.9.2 shipped through full pipeline)
 - docs: pin the deploy host key, make the quick starts real, and repair script hygiene
 - docs: purge session-report accumulation, rewrite README, add docs index
 - docs: record Vercel sync verification + fix git-push auto-deploy (root dir apps/web)
 - docs: record final v0.9.2 live sync (tunnel host amd-reproduction-clips-cricket)
+- docs: record the live enablement and fix the token rotation procedure
 - docs: regenerate CHANGELOG
 - docs: regenerate CHANGELOG for the branch commit
 - docs: regenerate CHANGELOG for the current batch
@@ -114,6 +133,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Maintenance
 
 - chore(api): remove unresolvable plan-tracker tags from comments
+- chore(security): allowlist the reviewed ASCII-art hit in the full-history secret scan
 - chore(web): repoint /api proxy to current tunnel host (quick-tunnel rotation)
 - chore: code honesty - unused args, un-typed db params, inert suppressions, stale comments
 - chore: satisfy the two CI guardrails main added after this branch's baseline
@@ -125,6 +145,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - style(api): reformat SchoolInvite claim call
 - style(api): ruff format four test files (format-gate drift)
 - style(api): ruff format mock provider and lesson plan prompt
+- style: satisfy the repository's own pre-commit hooks
 
 ### Other
 
@@ -132,6 +153,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Full engineering audit + remediation: 47 findings fixed, 0 open (#1)
 - Merge pull request #15 from tanviruchahs2580/audit/2026-10-16-live-verification
 - Merge pull request #16 from tanviruchahs2580/docs/2026-10-16-live-outcome
+- Merge pull request #17 from tanviruchahs2580/docs/2026-10-16-live-enablement
 
 ## v0.9.2 - 2026-09-15
 
