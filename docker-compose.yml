@@ -235,5 +235,3 @@ volumes:
   caddy_data:
   caddy_config:
   backup_data:
-
-
