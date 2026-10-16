@@ -2,7 +2,8 @@
 
 Scope: every table in `apps/api/src/bangla_gpt_api/db/models.py` plus the
 log surfaces. Reviewer: engineering (self-review). **Bangladesh legal
-review is a human step and is NOT done here — see PROGRESS.md 🖐.**
+review is a human step and is NOT done here — see
+[`archive/PROGRESS.md`](archive/PROGRESS.md).**
 
 Legend: **KEEP** = required for the product or a legal obligation;
 **MINIMIZED** = stored, but with active reduction (hashing, encryption,
@@ -17,11 +18,11 @@ short TTL, sweep); **NONE** = we deliberately do not store it.
 | Role / school_id / flags | `users` | KEEP | Authorization model; no extra attributes stored. |
 | Name, class_level | `students`, `teachers`, `parents` | KEEP | Product function (addressing, class content). Single field, no birth dates, no addresses, no national IDs — we never ask for them. |
 | Guardian phone | `parents.phone_enc` | MINIMIZED | Fernet-encrypted at rest when `PII_ENC_KEY` is set; required in production by config guard. Never logged, never exported. Empty when not given. |
-| Consent `version` / `at` / `ip` | `students` | KEEP | Legal evidence of guardian consent. `consent_ip` is retained **only** as consent evidence (statutory-limitation horizon), never used for analytics, never joined to logs. keeps it current via the re-confirm flow (`/students/{id}/consent`). |
-| Chat content | `conversations`, `chat_messages` | MINIMIZED | Needed for multi-turn tutoring and the "ami bujhi na" loop. Retention: `chat_retention_days` (default 180) then hard-deleted by the retention sweep (endpoint + nightly job, ). |
-| Quiz attempts / answers | `quiz_attempts`, `answer_logs` | KEEP | Core pedagogy (weak-chapter detection). Content is NCTB corpus text, not user-authored PII. |
+| Consent `version` / `at` / `ip` | `students` | KEEP | Legal evidence of guardian consent. `consent_ip` is retained **only** as consent evidence (statutory-limitation horizon), never used for analytics, never joined to logs. Consent evidence stays current via the re-confirm flow (`GET /students/{id}/consent`, `POST /students/{id}/consent/reconfirm`). |
+| Chat content | `conversations`, `chat_messages` | MINIMIZED | Needed for multi-turn tutoring and the "ami bujhi na" loop. Retention: `chat_retention_days` (default 180) then hard-deleted by the retention sweep (endpoint + nightly job — see "What the sweep enforces" below). |
+| Quiz attempts / answers | `quiz_attempts`, `answer_log` | KEEP | Core pedagogy (weak-chapter detection). Content is NCTB corpus text, not user-authored PII. |
 | Reset / verification / invite tokens | `password_resets`, `email_verifications`, `parent_invites` | MINIMIZED | Only SHA-256 **hashes** stored; single-use; swept after expiry + 30-day grace (`retention.py`). |
-| Feedback (thumbs + optional comment) | `feedback` | KEEP | Product improvement; not joined to chat content beyond ids. Triage queue lands in |
+| Feedback (thumbs + optional comment) | `feedback` | KEEP | Product improvement; not joined to chat content beyond ids. Triage queue lands in `GET /admin/feedback` (oldest open first). |
 | Analytics events | — | NONE | `/events` logs event **name** and prop **keys** only — prop values (arbitrary client input) are never persisted or logged (main.py `record_event`). |
 | Audit trail | `audit_log` | MINIMIZED | Append-only, five privileged actions; `detail` holds ids and **counts only** — never message content, never PII. Covered by tests. |
 | Provider prompts/responses | — | NONE | No Gemini request/response logging. Provider calls keep no raw transcript on our side beyond the chat rows we already own. |

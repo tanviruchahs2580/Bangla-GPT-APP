@@ -7,6 +7,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import AdminDashboard from "../pages/AdminDashboard";
 import { t } from "../i18n";
@@ -114,9 +115,22 @@ beforeEach(() => {
   });
 });
 
+// AdminDashboard now fetches through react-query (F-021), so every render
+// needs a provider.
+function renderAdmin() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <AdminDashboard />
+    </QueryClientProvider>,
+  );
+}
+
 describe("admin center", () => {
   it("renders per-school stats and current content versions", async () => {
-    render(<AdminDashboard />);
+    renderAdmin();
     await screen.findByText(t("admSchools"));
     expect(screen.getByText("Adm School")).toBeInTheDocument();
     expect(screen.getByText("SCH-ABC")).toBeInTheDocument();
@@ -136,7 +150,7 @@ describe("admin center", () => {
         return Promise.resolve({ total: 0, items: [] });
       return Promise.resolve(null);
     });
-    render(<AdminDashboard />);
+    renderAdmin();
     await waitFor(() =>
       expect(screen.getByText(t("admNoSchools"))).toBeInTheDocument(),
     );
@@ -146,7 +160,7 @@ describe("admin center", () => {
   it("creates an invite once (plaintext shown once) and revokes an active one", async () => {
     apiMock.post.mockResolvedValue({ code: "INVITECODEX1" });
     apiMock.del.mockResolvedValue(undefined);
-    render(<AdminDashboard />);
+    renderAdmin();
     await screen.findByText("Adm School");
 
     fireEvent.click(screen.getByRole("button", { name: t("admInvite") }));
@@ -192,7 +206,7 @@ describe("admin center", () => {
       return original!(path);
     });
 
-    render(<AdminDashboard />);
+    renderAdmin();
     const select = await screen.findByRole("combobox", {
       name: /head@school\.edu\.bd/,
     });
@@ -216,7 +230,7 @@ describe("admin center", () => {
         offset: 0,
       });
 
-    render(<AdminDashboard />);
+    renderAdmin();
     await screen.findByText("Adm School");
 
     // The failure must be visible, not an endless "loading" state. Before the

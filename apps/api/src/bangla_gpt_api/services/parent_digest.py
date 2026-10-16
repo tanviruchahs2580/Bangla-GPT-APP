@@ -35,14 +35,26 @@ from bangla_gpt_api.db.models import (
 from bangla_gpt_api.services import atrisk, mailer, weakness
 
 # "Saptahik Pita-Mata Digest" (Bengali) / Weekly parent digest
-DIGEST_SUBJECT = "সাপ্তাহিক পিতা-মাতা ডাইজেস্ট / Weekly parent digest"
+DIGEST_SUBJECT = "সাপ্তাহিক অভিভাবক সারসংক্ষেপ / Weekly parent digest"
 GREETING = "প্রিয় "
-HEADER = "পিতা-মাতা সাপ্তাহিক সারসংক্ষেপ"
+HEADER = "অভিভাবক সাপ্তাহিক সারসংক্ষেপ"
 WEEK_SECONDS = 7 * 24 * 3600
 DIGEST_WEEKDAY = 6  # Sunday
 DIGEST_HOUR_UTC = 16  # 16:00 UTC = 22:00 Dhaka
 WEAK_CHAPTER_LIMIT = 3
-WEAK_CHAPTER_ACCURACY = 60.0
+
+# Parent-facing copy for the weekly digest, in one place. The recipient is a
+# Bangladeshi parent, so the digest is Bengali like the rest of the product.
+STATUS_OK = "ভালো এগোচ্ছে"
+STATUS_SUPPORT = "সহায়তা প্রয়োজন"
+CLASS_LABEL = "শ্রেণি"
+SESSIONS_SUFFIX = "টি পড়ার সেশন"
+ATTEMPTS_SUFFIX = "টি মূল্যায়িত পরীক্ষা"
+AVG_LABEL = "গড়"
+WEAK_CHAPTERS_LABEL = "অনুশীলন দরকার এমন অধ্যায়:"
+NO_ACTIVITY_LINE = "এ সপ্তাহে কোনো কার্যক্রম নেই — প্রতিদিন অল্প সময়ের রুটিন কাজে দেয়।"
+PRIVACY_LINE_1 = "এই সারসংক্ষেপে শুধু পরিসংখ্যান আছে। আপনার সন্তানের ব্যক্তিগত টিউটর আলাপ"
+PRIVACY_LINE_2 = "কখনোই এতে যোগ করা হয় না বা শেয়ার করা হয় না।"
 
 
 def week_key(dt: datetime) -> str:
@@ -78,33 +90,39 @@ class WeeklyDigest:
 
 
 def build_body(digest: WeeklyDigest) -> str:
-    """Render the email body. Aggregates and chapter labels ONLY."""
+    """Render the email body. Aggregates and chapter labels ONLY.
+
+    Bengali, like every other parent-facing surface in the product: the
+    recipient is a Bangladeshi parent, and an English summary under a
+    Bengali heading is not a digest they can read.
+    """
     lines = [
         f"{GREETING}{digest.parent_name},",
         "",
         f"{HEADER} ({digest.week_label})",
-        "Weekly summary for your classroom-linked children.",
+        "আপনার সন্তানের এ সপ্তাহের সারসংক্ষেপ নিচে দেওয়া হলো।",
         "",
     ]
     for child in digest.children:
-        avg = f"{child.avg_score_pct:.1f}%" if child.avg_score_pct is not None else "n/a"
-        status = "needs support" if child.at_risk else "on track"
+        avg = f"{child.avg_score_pct:.1f}%" if child.avg_score_pct is not None else "—"
+        status = STATUS_SUPPORT if child.at_risk else STATUS_OK
         lines.append(
-            f"- {child.name} (class {child.class_level}): {child.sessions} study session(s), "
-            f"{child.attempts_graded} graded attempt(s), average {avg} -- {status}."
+            f"- {child.name} ({CLASS_LABEL} {child.class_level}): "
+            f"{child.sessions}{SESSIONS_SUFFIX}, {child.attempts_graded}{ATTEMPTS_SUFFIX}, "
+            f"{AVG_LABEL} {avg} — {status}।"
         )
         if child.weak_chapters:
             lines.append(
-                "  Chapters to practise: " + ", ".join(child.weak_chapters[:WEAK_CHAPTER_LIMIT])
+                f"  {WEAK_CHAPTERS_LABEL} " + ", ".join(child.weak_chapters[:WEAK_CHAPTER_LIMIT])
             )
         if child.sessions == 0 and child.attempts_graded == 0:
-            lines.append("  No activity this week -- a short daily routine helps.")
+            lines.append("  " + NO_ACTIVITY_LINE)
     lines += [
         "",
-        "This digest contains summary statistics only. Your child's private tutor",
-        "conversations are never included or shared.",
+        PRIVACY_LINE_1,
+        PRIVACY_LINE_2,
         "",
-        "Bangla GPT",
+        "বাংলা GPT",
     ]
     return "\n".join(lines)
 

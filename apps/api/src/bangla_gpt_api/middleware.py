@@ -4,6 +4,7 @@ Moved verbatim from main.py; the drifted duplicate at ``core/middleware.py``
 (static CSP, divergent Prometheus labels) is deleted. Behavior unchanged.
 """
 
+import ipaddress
 import logging
 import re
 import secrets
@@ -51,18 +52,47 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         return response
 
 
+def _forwarded_ip(request: Request) -> str | None:
+    """The LAST valid IP in ``X-Forwarded-For``, or None when there is none.
+
+    With a correctly configured trusted proxy the header holds whatever the
+    client sent, followed by the peer address the proxy itself appended
+    (nginx's ``$proxy_add_x_forwarded_for`` / Caddy's default). Only that last
+    entry is trustworthy: every entry to its left came off the wire from the
+    client and can be spoofed. Reading the FIRST entry -- the previous
+    behaviour -- let any caller rotate a fake XFF value and bypass every
+    IP-scoped limit.
+
+    Entries are parsed with :mod:`ipaddress`, so header junk (a spoofed
+    hostname, a port suffix, an empty element) is skipped rather than
+    accepted as an identity. When no element parses, the caller falls back to
+    the transport peer (``request.client.host``).
+    """
+    forwarded = request.headers.get("x-forwarded-for", "")
+    for candidate in reversed(forwarded.split(",")):
+        candidate = candidate.strip()
+        if not candidate:
+            continue
+        try:
+            ipaddress.ip_address(candidate)
+        except ValueError:
+            continue
+        return candidate
+    return None
+
+
 def _client_ip(request: Request, *, trust_proxy: bool) -> str:
     """Client identity for IP-scoped rate limits.
 
-    Behind a trusted reverse proxy the real client IP arrives in
-    X-Forwarded-For; enable only when the proxy overwrites (not appends)
-    that header, otherwise clients can spoof it.
+    Only meaningful behind a reverse proxy that APPENDS the real peer to
+    ``X-Forwarded-For`` (not one that overwrites, and it must be the only
+    trusted hop): the appended entry is the last one, and that is what is
+    read here (S-001). Without a trusted proxy the transport peer is used.
     """
     if trust_proxy:
-        forwarded = request.headers.get("x-forwarded-for", "")
-        first = forwarded.split(",")[0].strip() if forwarded else ""
-        if first:
-            return first
+        forwarded = _forwarded_ip(request)
+        if forwarded:
+            return forwarded
     return request.client.host if request.client else "unknown"
 
 

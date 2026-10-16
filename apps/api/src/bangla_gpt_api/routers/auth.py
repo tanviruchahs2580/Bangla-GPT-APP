@@ -13,7 +13,6 @@ import jwt as pyjwt
 from fastapi import APIRouter, HTTPException, Request, Response
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
 
 from bangla_gpt_api.auth.mfa import new_secret, otpauth_uri, verify_code
 from bangla_gpt_api.auth.security import (
@@ -27,7 +26,6 @@ from bangla_gpt_api.auth.security import (
 )
 from bangla_gpt_api.auth.single_use import claim_single_use, fetch_by_hash
 from bangla_gpt_api.caching import CacheUnavailable
-from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.models import (
     EmailVerification,
     Parent,
@@ -60,6 +58,7 @@ from bangla_gpt_api.schemas import (
 )
 from bangla_gpt_api.security import encrypt_pii
 from bangla_gpt_api.services.mailer import send_mail, smtp_configured
+from bangla_gpt_api.services.verification import send_verification_email
 
 from .deps import (
     CONSENT_VERSION,
@@ -72,6 +71,18 @@ from .deps import (
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
+
+# --- S-002: per-account failed-login lockout --------------------------------
+# The per-IP login rule can be defeated by IP rotation, so the ACCOUNT also
+# backs off. Five consecutive password failures lock the account for 60 s;
+# every further failure doubles the lock (120 s, 240 s, ... up to 1 hour).
+# The counter only resets on a successful sign-in. Kept as module constants
+# (not Settings) so no new env surface is introduced.
+_LOGIN_LOCKOUT_THRESHOLD = 5
+_LOGIN_LOCKOUT_BASE_SECONDS = 60
+_LOGIN_LOCKOUT_MAX_SECONDS = 3600
+#: Stable machine code for the 429 refusal while locked.
+LOGIN_LOCKED_CODE = "account_locked"
 
 
 @router.post(
@@ -153,31 +164,8 @@ def register(
     db.add(profile)
     db.commit()
     if not verified:
-        _send_verification_email(db, app_ctx.settings, user)
+        send_verification_email(db, app_ctx.settings, user)
     return RegisterResponse(user_id=user.id, role=user.role, profile_id=profile.id)
-
-
-def _send_verification_email(db: Session, settings: Settings, user: User) -> None:
-    token = secrets.token_urlsafe(32)
-    db.add(
-        EmailVerification(
-            user_id=user.id,
-            token_hash=hashlib.sha256(token.encode()).hexdigest(),
-            expires_at=datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=24),
-        )
-    )
-    db.commit()
-    send_mail(
-        settings,
-        to=user.email,
-        subject="ইমেইল যাচাই / Verify your email",
-        body=(
-            "Bangla GPT Tutor-এ স্বাগতম! "
-            "ইমেইল যাচাই করতে নিচের কোডটি "
-            "অ্যাপের ঘরে দিন (২৪ ঘণ্টা বৈধ):\n\n"
-            f"{token}\n"
-        ),
-    )
 
 
 @router.post("/auth/verify-email", response_model=TokenResponse)
@@ -250,11 +238,37 @@ def resend_verification(
         email = payload.email.strip().lower()
         target = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if target is not None and smtp_configured(app_ctx.settings) and not target.email_verified:
-        _send_verification_email(db, app_ctx.settings, target)
+        send_verification_email(db, app_ctx.settings, target)
     return {"status": "accepted"}
 
 
-@router.post("/auth/login", response_model=TokenResponse)
+def _lockout_seconds(failed_count: int) -> int:
+    """Progressive lock length: doubles per failure past the threshold."""
+    over = max(0, failed_count - _LOGIN_LOCKOUT_THRESHOLD)
+    # Explicit int keeps the contract visible (the builtin min() overload with
+    # an `int ** int` operand is inferred as Any by this mypy/stubs pair).
+    delay: int = _LOGIN_LOCKOUT_BASE_SECONDS * (2**over)
+    return min(delay, _LOGIN_LOCKOUT_MAX_SECONDS)
+
+
+def _lock_remaining_seconds(user: User, now: datetime) -> int | None:
+    """Seconds the account stays locked, or None when it is not locked.
+
+    ``users.locked_until`` is a naive UTC column; attach UTC before comparing
+    with the timezone-aware ``now`` (SQLite/Postgres both drop tzinfo).
+    """
+    if user.locked_until is None:
+        return None
+    locked_until = user.locked_until
+    if locked_until.tzinfo is None:
+        locked_until = locked_until.replace(tzinfo=UTC)
+    remaining = (locked_until - now).total_seconds()
+    if remaining <= 0:
+        return None
+    return max(1, int(remaining))
+
+
+@router.post("/auth/login", response_model=TokenResponse, responses=coded(429))
 def login(app_ctx: Ctx, response: Response, payload: LoginRequest, db: DbSession) -> TokenResponse:
     email = payload.email.strip().lower()
     user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
@@ -281,11 +295,42 @@ def login(app_ctx: Ctx, response: Response, payload: LoginRequest, db: DbSession
             detail={"code": "bad_credentials", "message": "Incorrect email or password"},
         )
 
+    now = datetime.now(UTC)
+    # S-002: while the account is locked, even the CORRECT password is refused
+    # (429 + Retry-After), so guessing cannot continue regardless of the
+    # caller's IP. The password hash above was still verified, keeping the
+    # response time of a locked account in the same band as a normal login.
+    lock_remaining = _lock_remaining_seconds(user, now)
+    if lock_remaining is not None:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": LOGIN_LOCKED_CODE,
+                "message": "Account temporarily locked after repeated failed sign-ins",
+            },
+            headers={"Retry-After": str(lock_remaining)},
+        )
+
     if not password_ok:
+        # S-002: count the failure; crossing the threshold stamps a
+        # progressive lock. The response body stays exactly the same as for
+        # an unknown address (and as before this change).
+        user.failed_login_count = (user.failed_login_count or 0) + 1
+        if user.failed_login_count >= _LOGIN_LOCKOUT_THRESHOLD:
+            user.locked_until = now.replace(tzinfo=None) + timedelta(
+                seconds=_lockout_seconds(user.failed_login_count)
+            )
+        db.commit()
         raise HTTPException(
             status_code=401,
             detail={"code": "bad_credentials", "message": "Incorrect email or password"},
         )
+
+    # A successful sign-in clears the account's failure state.
+    if (user.failed_login_count or 0) > 0 or user.locked_until is not None:
+        user.failed_login_count = 0
+        user.locked_until = None
+        db.commit()
 
     if not user.email_verified:
         raise HTTPException(
@@ -473,10 +518,23 @@ def change_password(
             },
         )
     _reject_common_password(payload.new_password)
+    now = datetime.now(UTC).replace(tzinfo=None)
     user.password_hash = hash_password(payload.new_password)
     user.must_change_password = False
     # F-05: rotate the token epoch (see /auth/reset for the full contract).
-    user.sessions_invalidated_at = datetime.now(UTC).replace(tzinfo=None)
+    user.sessions_invalidated_at = now
+    # S-005: a password change must also kill pending reset tokens. They were
+    # left with used_at IS NULL and stayed redeemable for their full TTL, so
+    # whoever intercepted a reset link kept a working takeover path for up to
+    # password_reset_token_minutes AFTER the victim "fixed" the incident by
+    # changing the password. Same transaction: the new hash and the token
+    # invalidation commit together or not at all.
+    for reset in db.execute(
+        select(PasswordReset).where(
+            PasswordReset.user_id == user.id, PasswordReset.used_at.is_(None)
+        )
+    ).scalars():
+        reset.used_at = now
     db.commit()
     return TokenResponse(access_token=create_access_token(user, settings=app_ctx.settings))
 

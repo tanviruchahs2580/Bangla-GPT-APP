@@ -64,10 +64,15 @@ def _validate_mcq(item: object, label: str) -> dict:
     if not all(isinstance(o, str) and o.strip() for o in options):
         raise ProviderError(f"{label} options must be non-empty strings")
     answer_index = item.get("answer_index")
-    if not isinstance(answer_index, int) or not 0 <= answer_index <= 3:
+    # bool is an int subclass: `True` must never pass as answer option b.
+    if (
+        not isinstance(answer_index, int)
+        or isinstance(answer_index, bool)
+        or not 0 <= answer_index <= 3
+    ):
         raise ProviderError(f"{label} answer_index must be 0-3")
     marks = item.get("marks")
-    if not isinstance(marks, int) or marks < 1:
+    if not isinstance(marks, int) or isinstance(marks, bool) or marks < 1:
         raise ProviderError(f"{label} marks must be a positive integer")
     return {
         "text": text.strip(),

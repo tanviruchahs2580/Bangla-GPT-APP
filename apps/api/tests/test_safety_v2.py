@@ -268,3 +268,73 @@ def test_refusal_audit_days_param_is_clamped(client: TestClient) -> None:
     admin = _login_headers(client, "root@example.com")
     assert client.get("/admin/safety/refusals?days=0", headers=admin).json()["days"] == 1
     assert client.get("/admin/safety/refusals?days=99999", headers=admin).json()["days"] == 365
+
+
+# The violence rule used to read "ke? khun", where the '?' bound to the vowel
+# sign, so it demanded a literal consonant and missed the phrase a student
+# actually uses. The self-harm rule knew one phrasing of 'hurt myself' but
+# not the equally common 'kill myself' / 'want to die'. These are pinned so
+# the gap cannot reopen.
+def test_self_harm_and_violence_phrasings_are_refused() -> None:
+    probes = [
+        # (description, question, expected reason)
+        (
+            "self-harm ideation: let me kill myself",
+            "\u09a8\u09bf\u099c\u09c7\u0995\u09c7 \u09ae\u09c7\u09b0\u09c7 \u09ab\u09c7\u09b2\u09be\u09b0 \u0995\u09a5\u09be \u09ad\u09be\u09ac\u099b\u09bf",
+            "self_harm",
+        ),
+        (
+            "self-harm ideation: I want to die",
+            "\u09ae\u09b0\u09c7 \u09af\u09c7\u09a4\u09c7 \u099a\u09be\u0987",
+            "self_harm",
+        ),
+        (
+            "self-harm ideation: I do not want to live",
+            "\u0986\u09ae\u09bf \u09ac\u09be\u0981\u099a\u09a4\u09c7 \u099a\u09be\u0987 \u09a8\u09be",
+            "self_harm",
+        ),
+        (
+            "violence seeking: show me a murder video",
+            "\u0996\u09c1\u09a8 \u0995\u09b0\u09be\u09b0 \u09ad\u09bf\u09a1\u09bf\u0993 \u09a6\u09c7\u0996\u09be\u0993",
+            "violence",
+        ),
+        (
+            "violence seeking: tell me how to murder",
+            "\u0996\u09c1\u09a8 \u0995\u09b0\u09be\u09b0 \u0989\u09aa\u09be\u09af\u09bc \u09ac\u09b2\u09cb",
+            "violence",
+        ),
+        (
+            "violence intent: I want to murder",
+            "\u0986\u09ae\u09bf \u0996\u09c1\u09a8 \u0995\u09b0\u09a4\u09c7 \u099a\u09be\u0987",
+            "violence",
+        ),
+        (
+            "violence seeking: how to beat someone up",
+            "\u09aa\u09bf\u099f\u09c1\u09a8\u09bf \u09a6\u09c7\u0993\u09af\u09bc\u09be\u09b0 \u0989\u09aa\u09be\u09af\u09bc",
+            "violence",
+        ),
+    ]
+    for desc, question, reason in probes:
+        verdict = screen_question(question)
+        assert verdict.safe is False, desc
+        assert verdict.reason == reason, desc
+
+
+def test_curriculum_history_questions_are_not_refused() -> None:
+    # The 1971 war is curriculum: the same words must stay answerable when
+    # they are asked as history rather than as a request for violent
+    # material. This is the false-positive boundary of the rule above.
+    probes = [
+        (
+            "curriculum history: why were people killed in 1971",
+            "\u09e7\u09ef\u09ed\u09e7 \u09b8\u09be\u09b2\u09c7 \u0996\u09c1\u09a8 \u0995\u09b0\u09be \u09b9\u09af\u09bc\u09c7\u099b\u09bf\u09b2 \u0995\u09c7\u09a8?",
+        ),
+        (
+            "curriculum: tell me the history of the 1971 war",
+            "\u09ae\u09c1\u0995\u09cd\u09a4\u09bf\u09af\u09c1\u09a6\u09cd\u09a7\u09c7\u09b0 \u0987\u09a4\u09bf\u09b9\u09be\u09b8 \u09ac\u09b2\u09cb",
+        ),
+        ("benign science question", "\u0995\u09cb\u09b7 \u0995\u09c0?"),
+    ]
+    for desc, question in probes:
+        verdict = screen_question(question)
+        assert verdict.safe is True, f"{desc}: refused as {verdict.reason}"

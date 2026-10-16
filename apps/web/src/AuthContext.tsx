@@ -59,8 +59,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!cancelled) setLoading(false);
       });
     setUnauthorizedHandler(() => {
-      logout();
-      window.location.href = "/login";
+      // Clear this user's stored data (F-036) before bouncing to login — the
+      // reload must not race the storage wipe on a shared device.
+      void logout().finally(() => {
+        window.location.href = "/login";
+      });
     });
     return () => {
       cancelled = true;
@@ -71,10 +74,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const retrySession = () => setAttempt((n) => n + 1);
 
   const signOut = () => {
-    logout();
-    setMe(null);
-    setApiUnreachable(false);
-    window.location.href = "/login";
+    // F-036: logout() is awaitable precisely so sign-out cannot navigate away
+    // before the storage wipe finishes; the query cache is cleared by the
+    // cleanup registered in main.tsx.
+    void logout().finally(() => {
+      setMe(null);
+      setApiUnreachable(false);
+      window.location.href = "/login";
+    });
   };
 
   return (

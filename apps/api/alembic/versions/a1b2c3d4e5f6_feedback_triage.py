@@ -1,4 +1,4 @@
-"""feedback triage queue columns 
+"""feedback triage queue columns
 
 Revision ID: a1b2c3d4e5f6
 Revises: f9a0b1c2d3e4

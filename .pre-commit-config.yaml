@@ -10,6 +10,10 @@
 # cannot fix locally gets removed rather than left to annoy everyone:
 # check_readme_contract.py and check_i18n.py need the full apps/web tree and
 # so stay in CI only.
+#
+# CI enforcement: `.github/workflows/ci.yml` (guardrails job) runs
+# `pre-commit run --all-files` against the pinned revision below, so a tree
+# that violates this file cannot merge. Keep the two in step.
 
 default_install_hook_types: [pre-commit]
 
@@ -22,13 +26,17 @@ repos:
       - id: check-merge-conflict
       - id: check-yaml
       - id: end-of-file-fixer
-        exclude: ^apps/api/eval/
       - id: mixed-line-ending
         args: [--fix=lf]
-        exclude: ^apps/api/eval/
+        # .gitattributes pins *.ps1 to CRLF (`*.ps1 text eol=crlf`, for the
+        # Windows PowerShell helpers under apps/web) and .editorconfig agrees
+        # ([*.{bat,ps1}] end_of_line = crlf), so --fix=lf was rewriting
+        # apps/web/run_web_tests.ps1 to LF on every run and contradicting a
+        # checked-in attribute. The attribute file wins; this hook keeps
+        # normalising every other text file to LF. (T-040b)
+        exclude: \.ps1$
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
-        exclude: ^apps/api/eval/
       - id: detect-private-key
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -40,9 +48,23 @@ repos:
       - id: ruff-format
         files: ^apps/api/(src|tests|scripts)/
 
+# Exclusions for generated corpora, eval fixtures and the frozen docs archive.
+#
+# T-040a: this pattern used to end the group with `$` right after the bare
+# directory names, e.g. `^(...|apps/api/eval/|docs/archive/)$`. In `(?x)` mode
+# those lines compile to `^(docs/archive/)$`, which only matches a path that is
+# literally the directory -- no real file under it -- so the exclusions were
+# silently dead and the file-hygiene hooks rewrote the archive. The per-hook
+# `exclude: ^apps/api/eval/` did NOT replace this setting (pre-commit applies
+# the top-level `files`/`exclude` once to build the candidate list, then the
+# hook's own `files`/`exclude` as a further filter: they combine with AND);
+# it worked only because that regex is a plain unanchored search.
+#
+# `.*` after each directory makes the pattern match the files inside it. Each
+# hook-level `exclude` adds to this filter, never replaces it.
 exclude: |
   (?x)^(
-    data/nctb/(raw|extracted|normalized)/|
-    apps/api/eval/|
-    docs/archive/
+    data/nctb/(raw|extracted|normalized)/.*|
+    apps/api/eval/.*|
+    docs/archive/.*
   )$

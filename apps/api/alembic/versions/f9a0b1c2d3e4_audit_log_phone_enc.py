@@ -1,4 +1,4 @@
-"""security: audit_log table + encrypted guardian phone column 
+"""security: audit_log table + encrypted guardian phone column
 
 Revision ID: f9a0b1c2d3e4
 Revises: e8f9a0b1c2d3

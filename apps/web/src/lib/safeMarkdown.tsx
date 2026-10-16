@@ -44,6 +44,36 @@ function isSafeHref(href: string | undefined): boolean {
   }
 }
 
+/**
+ * F-039: only same-origin paths and inline data:image payloads may be an
+ * image source.
+ *
+ * `isSafeHref` passes http(s), which is right for a LINK the reader clicks
+ * deliberately — but an `<img>` is fetched automatically. A model-authored
+ * remote URL therefore leaked the reader's IP and confirmed the answer was
+ * seen, and nothing but the deployed CSP stopped it (dev, preview and the
+ * Vercel deploy without headers had no protection at all). Remote image
+ * hosts are now dropped, keeping only sources that cannot reach an
+ * arbitrary host.
+ */
+const SAFE_DATA_IMAGE =
+  /^data:image\/(?:png|jpe?g|gif|webp|avif);base64,[a-z0-9+/=\s]+$/i;
+
+function isSafeImageSrc(src: string): boolean {
+  const s = src.trim();
+  // react-markdown blanks unsafe protocols (data:, javascript:) to "" before
+  // this component runs; an empty src must stay dropped, not render a broken
+  // image element.
+  if (!s) return false;
+  // Protocol-relative (`//evil.example/x.png`) is a remote host in disguise.
+  if (s.startsWith("//")) return false;
+  // Same-origin absolute or relative paths cannot leak to another host.
+  if (s.startsWith("/") || s.startsWith("./") || s.startsWith("../"))
+    return true;
+  if (!s.includes(":")) return true; // plain relative path
+  return SAFE_DATA_IMAGE.test(s);
+}
+
 const components: Partial<Components> = {
   a({ href, children, ...rest }) {
     if (!isSafeHref(href)) {
@@ -74,8 +104,8 @@ const components: Partial<Components> = {
   },
   img({ src, alt, ...rest }) {
     // The model cannot cause a request to an arbitrary host by embedding an
-    // image; drop it and keep the alt text.
-    if (typeof src !== "string" || !isSafeHref(src)) {
+    // image: remote sources are dropped and the alt text is kept (F-039).
+    if (typeof src !== "string" || !isSafeImageSrc(src)) {
       return <span className="blocked-link">{alt ?? ""}</span>;
     }
     return <img {...rest} src={src} alt={alt ?? ""} loading="lazy" />;

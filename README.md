@@ -49,16 +49,21 @@ set, and `/metrics` then requires `Authorization: Bearer $METRICS_TOKEN`
 (`main.py::_validate_metrics`). A developer running `uvicorn` locally sees the
 open endpoint; that is not what a deployed instance does.
 
-This table covers the core surface only — the API now exposes ~135 routes
-(short tests, bulk assignments, question papers, schools, notifications, KG
-re-teach, admin center, status page). Generated baseline:
-[docs/route_baseline.md](docs/route_baseline.md).
-Full reference: [docs/API.md](docs/API.md). Operations: [docs/runbook.md](docs/runbook.md).
+This table covers the core surface only — the app registers 135 operations
+(134 OpenAPI operations over 116 unique path templates; short tests, bulk
+assignments, question papers, schools, notifications, KG re-teach, admin
+center, status page). For the whole surface use the checked-in inventory
+[docs/route_baseline.md](docs/route_baseline.md) or the live `/openapi.json`
+from a running instance. [docs/API.md](docs/API.md) is the hand-written
+request/response reference for the 31 core/auth/users/tutor/quiz/teacher/
+parent/admin operations it documents — useful detail, not the full surface.
+Operations: [docs/runbook.md](docs/runbook.md).
 Launch gates for the owner: [docs/LAUNCH_READINESS_CHECKLIST.md](docs/LAUNCH_READINESS_CHECKLIST.md).
 RAG design: [docs/RAG_ARCHITECTURE.md](docs/RAG_ARCHITECTURE.md).
 NCTB pipeline: [docs/NCTB_DATA_PIPELINE.md](docs/NCTB_DATA_PIPELINE.md).
-Current QA record: [docs/qa-audit-2026-10-14.md](docs/qa-audit-2026-10-14.md)
-(superseded record archived: [docs/archive/qa-audit-2026-10-06.md](docs/archive/qa-audit-2026-10-06.md)).
+Current QA record: [docs/qa/QA_REPORT_2026-10-16.md](docs/qa/QA_REPORT_2026-10-16.md)
+(superseded records archived: [docs/archive/qa-audit-2026-10-14.md](docs/archive/qa-audit-2026-10-14.md),
+[docs/archive/qa-audit-2026-10-06.md](docs/archive/qa-audit-2026-10-06.md)).
 
 ## Quick start
 
@@ -176,8 +181,9 @@ Environment variables are documented in `.env.example`. Default
 - `docs/` holds **living documentation** (architecture, runbook, ops, ADRs).
   Point-in-time session/audit reports go to `docs/archive/` and are never
   quoted as current state.
-- There is exactly **one current QA record** (`docs/qa-audit-YYYY-MM-DD.md`);
-  it moves to `docs/archive/` when the next one supersedes it.
+- There is exactly **one current QA record**, under `docs/qa/`
+  (`docs/qa/QA_REPORT_YYYY-MM-DD.md`); when the next one supersedes it, it
+  moves to `docs/archive/`.
 
 ## License
 

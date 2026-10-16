@@ -20,6 +20,23 @@
 # the count worse, not better.
 #
 # Reviewed 2026-10-09 during the engineering audit.
+#
+# T-029 (2026-10-16): a full-history scan (`gitleaks git . --log-opts=--all`)
+# exits 1 on one finding the 2026-10-09 review could not see because it scanned
+# the working tree, not the history: commit 8bd0556 has the archived ASCII-art
+# report at its pre-move path (repo root), and this path is not covered by the
+# docs/archive/ entry below. The hit is reviewed and is a false positive: the
+# box-drawing diagram line reads `Auth: JWT+RBAC+tenancy guards` and the
+# generic-api-key rule reads `JWT+RBAC+tenancy` as a key/value pair. The entry
+# added below is scoped to that exact matched TEXT (any file, any commit), not
+# to the file: a real secret anywhere -- including on another line of the same
+# report, if the report were ever edited -- still fails the gate.
+#
+# A path-only entry for that filename was considered and rejected: gitleaks
+# exempts the whole FILE for a path allowlist entry, which would have silenced
+# a genuine secret anywhere in the report. Confirmed with a local fixture: the
+# path entry hid a planted key on another line of the same-named file, while
+# the text-scoped entry below did not.
 
 [extend]
 useDefault = true
@@ -35,6 +52,11 @@ regexes = [
   # RFC 4226/6238 public HOTP test vector, not a deployed secret.
   '''RFC_SECRET_B32''',
   '''RFC\d{6}''',
+  # T-029: the exact text gitleaks matches inside the archived ASCII-art
+  # diagram line `Auth: JWT+RBAC+tenancy guards` (commit 8bd0556 at the file's
+  # pre-move root path). Content-scoped, so only this reviewed value is
+  # pardoned -- not the file that happens to contain it.
+  '''^Auth: JWT\+RBAC\+tenancy''',
 ]
 paths = [
   # Test suites only. Production code is never allowlisted here.

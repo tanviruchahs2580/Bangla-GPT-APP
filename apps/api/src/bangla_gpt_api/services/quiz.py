@@ -152,7 +152,7 @@ class ClozeQuizGenerator:
             id=hashlib.sha256(f"{chunk.id}|{term}".encode(), usedforsecurity=False).hexdigest()[
                 :10
             ],
-            question_text=f"রিক্তস্থানে সঠিক শব্দটি বসাও: {sentence.replace(term, '____', 1)}",
+            question_text=f"শূন্যস্থানে সঠিক শব্দটি বসান: {sentence.replace(term, '____', 1)}",
             options=options,
             answer_index=options.index(term),
             chapter=chunk.meta.chapter,

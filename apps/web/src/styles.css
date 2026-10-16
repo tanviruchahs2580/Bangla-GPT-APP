@@ -42,11 +42,11 @@
   --earth: #78350f;
 
   /* Semantic */
-  --danger: #e11d3c;
+  --danger: #c2183a; /* A11Y-04: #e11d3c on --danger-soft measured 4.03:1; this is 5.14:1 */
   --danger-soft: #fde8ec;
-  --warn: #b45309;
+  --warn: #9a4a06; /* A11Y-04: #b45309 on --warn-soft measured 4.47:1; this is 5.56:1 */
   --warn-soft: #fdf0dc;
-  --ok: #15803d;
+  --ok: #166534; /* A11Y-04: #15803d on --ok-soft measured 4.45:1; this is 6.32:1 */
   --ok-soft: #e3f6e9;
 
   /* Surfaces — warm paper background */
@@ -841,6 +841,16 @@ p {
 
 .btn-block {
   width: 100%;
+}
+
+/* I18N-12: the language switch must be reachable from the pages an
+   anonymous visitor sees, where AppShell (and its toggle) is absent.
+   Fixed to the top-right corner, clear of the safe areas on a phone. */
+.public-lang-toggle {
+  position: fixed;
+  top: calc(0.75rem + env(safe-area-inset-top, 0px));
+  right: calc(0.75rem + env(safe-area-inset-right, 0px));
+  z-index: 40;
 }
 
 .icon-btn {
@@ -2181,6 +2191,32 @@ form .btn[type="submit"] {
 /* F-110: measured 12x12 px, and axe independently failed it as WCAG 2.5.8
    target-size. This is the control that DELETES a child's chat history, so
    it is the last thing that should be hard to hit accurately. */
+/* A conversation chip is a container, not a control: the title opens the
+   conversation and the rename/delete controls are its siblings. They used to
+   be spans with role="button" nested inside the chip's own button, which axe
+   reports as nested-interactive and which a screen reader announces as a
+   button inside a button. */
+.conv-chip {
+  padding: 0 8px;
+}
+
+.conv-chip .conv-open {
+  padding: 8px 6px;
+  min-height: 44px;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.conv-chip .conv-icon-action {
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+}
 .conv-icon-action {
   margin-left: 6px;
   display: inline-flex;

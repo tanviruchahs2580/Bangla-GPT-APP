@@ -41,13 +41,13 @@ def render_qp_pdf(paper: dict, kind: str = "paper") -> bytes:
     pdf.cell(w=0, h=9, text=title, new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("nbg", size=10)
     pdf.set_text_color(90, 90, 90)
-    header = f"{paper['marks']} marks | {paper['duration_min']} min | " + ", ".join(
+    header = f"{paper['marks']} নম্বর | {paper['duration_min']} মিনিট | " + ", ".join(
         paper["chapters"]
     )
     pdf.cell(w=0, h=7, text=header, new_x="LMARGIN", new_y="NEXT")
     if kind == "answer":
         pdf.set_text_color(180, 30, 30)
-        pdf.cell(w=0, h=7, text="ANSWER KEY", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(w=0, h=7, text="উত্তরমালা", new_x="LMARGIN", new_y="NEXT")
     pdf.set_text_color(0, 0, 0)
     pdf.set_font("nbg", size=11)
     for i, q in enumerate(paper["questions"], start=1):
@@ -85,7 +85,7 @@ def render_qp_html(paper: dict, kind: str = "paper") -> str:
             f"<li><p>{_esc(q['text'])} <span class='marks'>({q['marks']})</span></p>"
             f"<ol type='a'>{''.join(opts)}</ol></li>"
         )
-    key = " / ANSWER KEY" if kind == "answer" else ""
+    key = " / উত্তরমালা" if kind == "answer" else ""
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
         f"<title>{_esc(paper['exam_type'])}{key}</title><style>"
@@ -94,8 +94,8 @@ def render_qp_html(paper: dict, kind: str = "paper") -> str:
         "@media print{body{margin:0}}"
         ".answer{font-weight:700}.marks{color:#666}</style></head><body>"
         f"<h1>{_esc(paper['exam_type'])} ({paper['class_level']}) - {_esc(paper['subject'])}"
-        f"{' / ANSWER KEY' if kind == 'answer' else ''}</h1>"
-        f"<p>{paper['marks']} | {paper['duration_min']} min | "
+        f"{' / উত্তরমালা' if kind == 'answer' else ''}</h1>"
+        f"<p>{paper['marks']} নম্বর | {paper['duration_min']} মিনিট | "
         f"{_esc(', '.join(paper['chapters']))}</p>"
         f"<ol>{''.join(rows)}</ol></body></html>"
     )
@@ -214,7 +214,7 @@ def _answer_key_pdf(pdf: FPDF, payload: dict) -> None:
     pdf.cell(
         w=0,
         h=8,
-        text=f"MARKING GUIDE - TOTAL {guide.get('total_marks')}",
+        text=f"মূল্যায়ন নির্দেশিকা — মোট {guide.get('total_marks')}",
         new_x="LMARGIN",
         new_y="NEXT",
     )

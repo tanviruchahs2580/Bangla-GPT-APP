@@ -1,9 +1,20 @@
+from datetime import UTC, datetime
+
 from fastapi.testclient import TestClient
 
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
 
 PASSWORD = "supersecret1"
+
+
+class _FixedInstant(datetime):
+    """A datetime whose now() is pinned (freezegun-free clock control)."""
+
+    @classmethod
+    def now(cls, tz=None):
+        instant = datetime(2026, 10, 16, 20, 30, tzinfo=UTC)  # 17 Oct in Dhaka
+        return instant.astimezone(tz) if tz else instant.replace(tzinfo=None)
 
 
 def _client(tmp_path):
@@ -51,6 +62,23 @@ def test_dashboard_summary_for_new_student(tmp_path):
     assert j["progress"] is not None
     # No continue yet (no quiz)
     assert j["continue_learning"] is None
+
+
+def test_dashboard_today_agrees_with_dhaka_activity_day(tmp_path, monkeypatch):
+    """At 20:30 UTC it is already the next day in Dhaka.
+
+    Every learning surface must report the same (Asia/Dhaka) day; the summary
+    used to report the UTC date while /activity reported the Dhaka one, so the
+    Home screen and the streak heatmap disagreed for six hours every night.
+    """
+    c = _client(tmp_path)
+    h = _register_login(c, "dash3@example.com")
+    monkeypatch.setattr("bangla_gpt_api.routers.learn.datetime", _FixedInstant)
+    pid = c.get("/users/me", headers=h).json()["profile_id"]
+    summary = c.get("/dashboard/summary", headers=h).json()
+    activity = c.get(f"/students/{pid}/activity", headers=h).json()
+    assert activity["today"] == "2026-10-17"
+    assert summary["today"] == activity["today"]
 
 
 def test_dashboard_summary_with_quiz_gives_continue_and_recommendation(tmp_path):

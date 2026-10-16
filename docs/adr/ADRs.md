@@ -7,9 +7,9 @@ The original `main.py` was ~7000 lines with all business logic, middleware, and 
 ## Decision
 
 Refactor into a modular monolith with:
-- Thin `main.py` (332 lines) delegating to `initialize/` subpackage
+- Thin `main.py` (581 lines today) delegating to `initialize/` subpackage
 - 13 domain routers in `routers/`
-- 45+ service modules in `services/`
+- 35 service modules in `services/` (incl. `generators/`)
 - Self-contained infrastructure modules (`providers/`, `retrieval/`)
 
 The entrypoint imports and re-exports test dependencies for monkeypatching.
@@ -160,7 +160,7 @@ Local development needs zero-configuration setup; production needs persistent, c
 
 ## Status
 
-Accepted — Implemented with migration in uncommitted changes.
+Accepted — implemented and committed; production boot still refuses in-memory/file SQLite via `validate_database_url()` (`initialize/dependencies.py`).
 
 ---
 
@@ -188,7 +188,7 @@ Apply `unicodedata.normalize("NFKC", text)` at the AI boundary — specifically 
 
 ## Status
 
-Accepted — Implemented in uncommitted changes.
+Accepted — implemented and committed (NFKC is applied in the BM25 tokenizer, `retrieval/bm25.py`, and in `normalize_query()` at the tutor boundary).
 
 ---
 
@@ -266,9 +266,13 @@ Student PII (phone numbers, emails) stored in database must be encrypted at rest
 ## Decision
 
 Use Fernet symmetric encryption (from `cryptography` library):
-- `PIIField` in models handles transparent encrypt/decrypt
-- Encryption key from env var (`PIENCRYPT_KEY` or generated)
-- Audit logging of all PII access
+- Helper functions `encrypt_pii()` / `decrypt_pii()` in `security.py` handle
+  encrypt/decrypt; the single encrypted column today is `parents.phone_enc`
+- Encryption key from the `PII_ENC_KEY` env var (production boot refuses to
+  start without a valid Fernet key — `main.py` `_validate_pii`)
+- Audit logging of the five privileged actions in `audit_log`
+  (role_change, data_export, purge, qp_finalize, impersonation) — **not**
+  "all PII access"
 
 ## Alternatives Considered
 
@@ -277,9 +281,9 @@ Use Fernet symmetric encryption (from `cryptography` library):
 
 ## Consequences
 
-- **+** Transparent encrypt/decrypt in ORM layer
+- **+** Explicit encrypt/decrypt at the one PII column (`parents.phone_enc`)
 - **+** Vendor-neutral (Python-level encryption)
-- **+** Audit trail of PII access
+- **+** Guarded at boot: a missing/invalid `PII_ENC_KEY` fails production startup
 - **-** Performance overhead on PII reads/writes
 
 ## Status

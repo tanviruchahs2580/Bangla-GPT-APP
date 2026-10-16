@@ -39,7 +39,7 @@ def _profile_id(client: TestClient, headers: dict) -> int:
 
 
 def test_quiz_honors_chapter_preselect(client: TestClient, student: dict) -> None:
-    """Anুশীলন tab: quiz questions must come from the requested chapter only."""
+    """অনুশীলন tab: quiz questions must come from the requested chapter only."""
     pid = _profile_id(client, student)
     r = client.post(
         "/quizzes",
@@ -68,7 +68,7 @@ def test_quiz_honors_chapter_preselect(client: TestClient, student: dict) -> Non
 
 
 def test_tutor_ask_honors_chapter_context(client: TestClient, student: dict) -> None:
-    """িজ্ঞাসা tab: grounded answer sources stay inside the requested chapter."""
+    """জিজ্ঞাসা tab: grounded answer sources stay inside the requested chapter."""
     r = client.post(
         "/tutor/ask",
         headers=student,

@@ -1,6 +1,7 @@
 /** admin refusal audit card renders aggregate counts, never content. */
 
 import { render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, expect, it, vi } from "vitest";
 import AdminDashboard from "../pages/AdminDashboard";
 import { t } from "../i18n";
@@ -63,8 +64,21 @@ beforeEach(() => {
   apiMock.del.mockReset().mockResolvedValue({});
 });
 
+// AdminDashboard now fetches through react-query (F-021), so every render
+// needs a provider.
+function renderAdmin() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <AdminDashboard />
+    </QueryClientProvider>,
+  );
+}
+
 it("shows refusal totals, reasons and classes from the audit endpoint", async () => {
-  render(<AdminDashboard />);
+  renderAdmin();
   await waitFor(() => expect(screen.getByText(t("admSafety"))).toBeTruthy());
   await waitFor(() => expect(screen.getByText("7")).toBeTruthy());
   expect(screen.getByText("self_harm")).toBeTruthy();
@@ -89,7 +103,7 @@ it("shows the empty state when nothing was refused", async () => {
       return Promise.resolve({ total: 0, items: [] });
     return Promise.resolve([]);
   });
-  render(<AdminDashboard />);
+  renderAdmin();
   await waitFor(() =>
     expect(screen.getByText(t("admNoRefusals"))).toBeTruthy(),
   );

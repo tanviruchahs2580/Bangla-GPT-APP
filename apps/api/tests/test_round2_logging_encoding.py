@@ -16,6 +16,7 @@ from __future__ import annotations
 import io
 import json
 import logging
+import sys
 
 import pytest
 
@@ -128,3 +129,52 @@ def test_encoding_safety_and_redaction_compose() -> None:
     assert "hunter2" not in out, out
     assert "[redacted]" in out, out
     assert json.loads(out)["chapter"] == BENGALI
+
+
+def _render_exception_to_string(
+    logger_name: str, exc: BaseException, monkeypatch: pytest.MonkeyPatch
+) -> str:
+    """Run the PRODUCTION wiring (configure_logging) with stdout captured."""
+    captured = io.StringIO()
+    root = logging.getLogger()
+    before = list(root.handlers)
+    try:
+        monkeypatch.setattr(sys, "stdout", captured)
+        configure_logging("ERROR")
+        logger = logging.getLogger(logger_name)
+        try:
+            raise exc
+        except type(exc):
+            logger.exception("unhandled_exception")
+    finally:
+        root.handlers.clear()
+        root.handlers.extend(before)
+    return captured.getvalue()
+
+
+def test_logger_exception_traceback_is_redacted_in_the_rendered_line(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """B-021: a filter scrubs exc_text too early; the formatter must redact it.
+
+    The filter runs before Formatter.format creates record.exc_text, so a
+    token inside the exception message used to reach the sink via the
+    traceback of logger.exception. Assertion is on the captured handler
+    output -- the rendered line -- not on record.exc_text.
+    """
+    out = _render_exception_to_string(
+        "test.exc-redaction",
+        RuntimeError("Authorization: Bearer ghp_" + "a" * 30),
+        monkeypatch,
+    )
+    assert "unhandled_exception" in out, out
+    assert "ghp_" not in out, out
+    assert "[redacted]" in out, out
+
+
+def test_clean_exception_traceback_still_renders(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Non-vacuity: redaction must not swallow every traceback."""
+    out = _render_exception_to_string("test.exc-clean", RuntimeError("plain failure"), monkeypatch)
+    assert "unhandled_exception" in out, out
+    assert "Traceback (most recent call last)" in out, out
+    assert "RuntimeError: plain failure" in out, out

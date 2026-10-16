@@ -35,10 +35,13 @@ Every non-preflight response carries `X-Request-ID` (echoed if supplied, otherwi
 | GET | `/users/me/export` | any | GDPR-style data export: account, profile, quiz attempts, parent links (`Content-Disposition: attachment`) |
 | DELETE | `/users/me` | any | Self-service account deletion (GDPR-style). Removes profile, quiz attempts + answer logs, parent links. Last remaining admin is refused (409). Returns 204 |
 
-Rate limits (per client IP): `/auth/login`, `/auth/forgot`, `/auth/reset`,
-`/auth/resend-verification`, `/auth/verify-email` 10/min, `/auth/mfa/challenge`
-5/min and `/tutor/ask` 30/min by default — configurable via
-`RATE_LIMIT_*_PER_MINUTE`. Backend is per-process memory or shared Redis
+Rate limits (per client IP unless noted): `/auth/login`, `/auth/forgot`,
+`/auth/reset`, `/auth/register`, `/auth/resend-verification`,
+`/auth/verify-email` 10/min, `/auth/mfa/challenge` 5/min and `/tutor/ask`
+30/min by default — configurable via `RATE_LIMIT_*_PER_MINUTE` and the
+`rate_limit_rules` table (`config.py`). The authenticated MFA legs
+(`/auth/mfa/enroll|verify|disable`) are limited per user (20/min) rather than
+per IP. Backend is per-process memory or shared Redis
 (`RATE_LIMIT_BACKEND=redis`; answers 503 on protected routes when Redis is down
 and `RATE_LIMIT_FAIL_OPEN=false`).
 

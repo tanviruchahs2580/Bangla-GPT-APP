@@ -57,7 +57,7 @@ docker compose --profile monitoring up -d           # Prometheus (+ Grafana)
 Single-container run remains available:
 
 ```bash
-docker build -t bangla-gpt-api:local.
+docker build -t bangla-gpt-api:local .
 docker run -d --name bgpt -p 8080:8000 \
   -e ENV=production -e DATABASE_URL=sqlite:////data/bangla_gpt.db \
   -e JWT_SECRET="$(openssl rand -hex 32)" \
@@ -94,7 +94,7 @@ Obtain it from the host, and record where you got it from:
 ```bash
 # run ON the deploy host, or against it from a trusted network:
 ssh-keyscan -p 22 deploy.example.com 2>/dev/null | ssh-keygen -lf -
-# e.g. 3072 SHA256:0ZC1x0KQ3dEXAMPLEkeymaterial... deploy.example.com (ED25519)
+# e.g. 256 SHA256:0ZC1x0KQ3dEXAMPLEkeymaterial... deploy.example.com (ED25519)
 
 # verify it out-of-band before trusting it: compare with the fingerprint the
 # host itself reports, e.g. `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`
@@ -108,7 +108,7 @@ Store the `SHA256:...` string (and nothing else) as the repository secret
 the deploy fails closed — that is the intended behaviour, not a bug. Confirm
 the new key through a second channel, update the secret, and re-run the tag.
 
-### Scheduled background jobs: inline vs ARQ
+### End-to-end stack smoke
 
 End-to-end stack smoke (executed inside the api container):
 
@@ -257,8 +257,9 @@ Quarterly rotation procedure:
 
 ## 8. Known operational limits
 
-- Redis rate limiting uses a fixed 60 s window; counts are approximate under
-  heavy skew (standard trade-off vs sliding-window log).
+- Redis rate limiting uses fixed 60 s `INCR`/`EXPIRE` windows (the in-process
+  `memory` backend is a sliding window); counts are approximate under heavy
+  skew (standard trade-off vs a sliding-window log).
 - `RATE_LIMIT_FAIL_OPEN=false` (default) answers **503** on protected routes if
   Redis is down; set `true` to prefer availability over strictness.
 - caches (`/dashboard/summary` 60 s per user; RAG query results 5 min,
@@ -272,11 +273,16 @@ Quarterly rotation procedure:
   client, live latency/quota behaviour is UNVERIFIED until a key is deployed.
 - Textbook (পাঠ্যপুস্তক) OCR ingestion is implemented behind a permission gate
   (`BGPT_OCR_CONFIRMED=yes`) pending rights-holder permission.
-- The Vercel web app proxies `/api/*` to the API behind a Cloudflare
-  **quick tunnel** (`apps/web/vercel.json`); quick-tunnel hostnames rotate on
-  every `cloudflared` restart, so each rotation needs one commit that updates
-  the rewrite destination (or promote a named tunnel / stable origin).
-- TOTP/MFA for admins not yet implemented (§6).
+- The Vercel web app proxies `/api/*` through its edge function
+  (`apps/web/api/[[...path]].ts`) to the origin named by the `API_ORIGIN`
+  project environment variable; `apps/web/vercel.json` only routes
+  `/api/(.*)` to that function and contains no host. No tunnel URL is baked
+  into the repo: changing the origin means updating `API_ORIGIN` in the Vercel
+  project and redeploying. Until it is set, `/api/*` answers 503
+  `api_origin_unconfigured` by design.
+- TOTP/MFA is implemented (§6). It is per-account opt-in: an admin who has not
+  enrolled a TOTP secret signs in with a password alone, so keep `/admin/*`
+  behind the reverse-proxy/VPN restriction until every admin has enrolled.
 
 ## 9. Pre-production checklist
 

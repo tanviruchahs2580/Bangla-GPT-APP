@@ -1,4 +1,6 @@
 import { asText } from "./lib/text";
+import { LAST_RESULT_KEY } from "./lib/quizExplain";
+import { clearOfflineChapters } from "./lib/offlineStore";
 
 const API_BASE: string = import.meta.env.VITE_API_BASE ?? "/api";
 
@@ -32,6 +34,8 @@ export interface MeResponse {
 }
 
 const TOKEN_KEY = "bgpt_token";
+const ADMIN_TOKEN_KEY = "bgpt_admin_token_backup";
+const IMP_ACTIVE_KEY = "bgpt_impersonating";
 
 /** Called when any API call comes back 401 — lets the app force re-login. */
 let onUnauthorized: (() => void) | null = null;
@@ -48,6 +52,83 @@ const AUTH_401_PATHS = [
   "/auth/mfa/challenge",
   "/auth/resend-verification",
 ];
+
+/**
+ * Request timeouts (F-015/F-030). A proxy that accepts the connection and
+ * then never answers used to hang the UI forever: a stalled GET left a
+ * spinner running, and a stalled answer stream left the tutor in its
+ * `streaming` state until the student pressed Stop. The stream is NOT
+ * bounded as a whole — long generations are legitimate — it gets a
+ * connect/first-byte deadline plus a stall deadline that resets on every
+ * received chunk.
+ */
+export const REQUEST_TIMEOUT_MS = 20_000;
+export const STREAM_CONNECT_TIMEOUT_MS = 20_000;
+export const STREAM_STALL_TIMEOUT_MS = 45_000;
+
+/** Machine-coded timeout error so `friendlyError` and tests can name it. */
+function timeoutError(): ApiError {
+  return new ApiError(0, "request timed out", "timeout", {
+    code: "timeout",
+    message: "request timed out",
+  });
+}
+
+function isAbortError(e: unknown): boolean {
+  return (e as { name?: string } | null)?.name === "AbortError";
+}
+
+/**
+ * First abort wins. `AbortSignal.any` where the runtime has it; a manual
+ * controller elsewhere (older WebViews, jsdom) so Stop still works there.
+ */
+function combineSignals(
+  signals: Array<AbortSignal | undefined>,
+): AbortSignal | undefined {
+  const list = signals.filter((s): s is AbortSignal => s !== undefined);
+  if (list.length === 0) return undefined;
+  if (list.length === 1) return list[0];
+  const anySignal = (
+    AbortSignal as unknown as {
+      any?: (s: AbortSignal[]) => AbortSignal;
+    }
+  ).any;
+  if (typeof anySignal === "function") return anySignal.call(AbortSignal, list);
+  const controller = new AbortController();
+  for (const s of list) {
+    if (s.aborted) {
+      controller.abort();
+      break;
+    }
+    s.addEventListener("abort", () => controller.abort(), { once: true });
+  }
+  return controller.signal;
+}
+
+/**
+ * Hard per-request deadline. Implemented with `setTimeout` rather than
+ * `AbortSignal.timeout` so tests can drive it with fake timers.
+ */
+function timeoutGuard(
+  ms: number,
+  caller?: AbortSignal,
+): {
+  signal: AbortSignal | undefined;
+  timedOut: () => boolean;
+  clear: () => void;
+} {
+  const controller = new AbortController();
+  let timedOut = false;
+  const id = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, ms);
+  return {
+    signal: combineSignals([caller, controller.signal]),
+    timedOut: () => timedOut,
+    clear: () => clearTimeout(id),
+  };
+}
 
 /** True inside the Capacitor WebView (capacitor://localhost origin). */
 function isNativeCapacitor(): boolean {
@@ -119,6 +200,7 @@ function parseDetail(body: unknown): { message: string; code?: string } {
 async function parseSse(
   response: Response,
   onToken: (text: string) => void,
+  onChunk?: () => void,
 ): Promise<Record<string, unknown> | null> {
   const reader = response.body?.getReader();
   if (!reader) return null;
@@ -165,6 +247,8 @@ async function parseSse(
   for (;;) {
     const { value, done: finished } = await reader.read();
     if (finished) break;
+    // Any bytes prove the stream is alive — reset the stall deadline (F-015).
+    onChunk?.();
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? "";
@@ -180,7 +264,7 @@ async function parseSse(
 export async function api<T>(
   path: string,
   options: RequestInit = {},
-  opts?: { skipUnauthorized?: boolean },
+  opts?: { skipUnauthorized?: boolean; signal?: AbortSignal },
 ): Promise<T> {
   const headers = new Headers(options.headers);
   if (options.body !== undefined && !(options.body instanceof FormData)) {
@@ -189,54 +273,80 @@ export async function api<T>(
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  let res: Response;
+  // F-015: every non-streaming request is bounded. A caller signal (the
+  // tutor's Stop) is combined so either can end the request.
+  const caller = opts?.signal ?? options.signal ?? undefined;
+  const guard = timeoutGuard(REQUEST_TIMEOUT_MS, caller);
   try {
-    assertApiBaseUsable();
-    res = await fetch(`${API_BASE}${path}`, { ...options, headers });
-  } catch (e) {
-    // The native-misconfiguration guard above throws an ApiError already —
-    // let its machine code through instead of masking it as "network".
-    if (e instanceof ApiError) throw e;
-    throw new ApiError(0, "network error", "network");
-  }
-  if (res.status === 204) return undefined as T;
-  if (!res.ok) {
-    let parsed: { message: string; code?: string } = {
-      message: res.statusText,
-    };
-    let jsonParseFailed = false;
+    let res: Response;
     try {
-      parsed = parseDetail(await res.json());
-    } catch {
-      jsonParseFailed = true;
+      assertApiBaseUsable();
+      res = await fetch(`${API_BASE}${path}`, {
+        ...options,
+        headers,
+        signal: guard.signal,
+      });
+    } catch (e) {
+      // The native-misconfiguration guard above throws an ApiError already —
+      // let its machine code through instead of masking it as "network".
+      if (e instanceof ApiError) throw e;
+      if (isAbortError(e)) {
+        // A caller-initiated abort must stay an AbortError: callers use it
+        // to tell "the user pressed Stop" from a real failure.
+        if (caller?.aborted) throw e;
+        if (guard.timedOut()) throw timeoutError();
+      }
+      throw new ApiError(0, "network error", "network");
     }
-    if (!parsed.code) {
-      // Upstream HTML error pages (dead Cloudflare tunnel 502, proxy 503)
-      // carry no machine code — attach one so the UI shows a retry hint
-      // instead of the generic fallback.
-      if (res.status === 502)
-        parsed = { message: parsed.message, code: "bad_gateway" };
-      else if (res.status === 503)
-        parsed = { message: parsed.message, code: "service_unavailable" };
-      else if (jsonParseFailed && res.status === 0)
-        parsed = { message: parsed.message, code: "network" };
+    if (res.status === 204) return undefined as T;
+    if (!res.ok) {
+      let parsed: { message: string; code?: string } = {
+        message: res.statusText,
+      };
+      let jsonParseFailed = false;
+      try {
+        parsed = parseDetail(await res.json());
+      } catch {
+        jsonParseFailed = true;
+      }
+      // A stalled error body is still a stalled request.
+      if (guard.timedOut()) throw timeoutError();
+      if (!parsed.code) {
+        // Upstream HTML error pages (dead Cloudflare tunnel 502, proxy 503)
+        // carry no machine code — attach one so the UI shows a retry hint
+        // instead of the generic fallback.
+        if (res.status === 502)
+          parsed = { message: parsed.message, code: "bad_gateway" };
+        else if (res.status === 503)
+          parsed = { message: parsed.message, code: "service_unavailable" };
+        else if (jsonParseFailed && res.status === 0)
+          parsed = { message: parsed.message, code: "network" };
+      }
+      if (
+        res.status === 401 &&
+        !opts?.skipUnauthorized &&
+        !AUTH_401_PATHS.some((p) => path.startsWith(p))
+      )
+        onUnauthorized?.();
+      throw new ApiError(res.status, parsed.message, parsed.code, parsed);
     }
-    if (
-      res.status === 401 &&
-      !opts?.skipUnauthorized &&
-      !AUTH_401_PATHS.some((p) => path.startsWith(p))
-    )
-      onUnauthorized?.();
-    throw new ApiError(res.status, parsed.message, parsed.code, parsed);
+    try {
+      return (await res.json()) as T;
+    } catch (e) {
+      if (guard.timedOut() || (isAbortError(e) && !caller?.aborted))
+        throw timeoutError();
+      throw e;
+    }
+  } finally {
+    guard.clear();
   }
-  return (await res.json()) as T;
 }
 
 export const get = <T>(path: string) => api<T>(path);
 export const post = <T>(
   path: string,
   body?: unknown,
-  opts?: { skipUnauthorized?: boolean },
+  opts?: { skipUnauthorized?: boolean; signal?: AbortSignal },
 ) =>
   api<T>(
     path,
@@ -253,6 +363,12 @@ export const del = (path: string) => api<void>(path, { method: "DELETE" });
 /**
  * POST an SSE endpoint and stream `token` events through `onToken`.
  * Resolves with the parsed `done` event payload.
+ *
+ * F-015: the connection has a first-byte deadline and each chunk resets a
+ * stall deadline, so a proxy that accepts the socket and goes silent ends
+ * the turn with a timeout error instead of leaving the UI streaming forever.
+ * There is deliberately no whole-stream deadline — a long generation is a
+ * legitimate answer.
  */
 export async function postStream<T>(
   path: string,
@@ -264,44 +380,85 @@ export async function postStream<T>(
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
   assertApiBaseUsable();
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-    signal: options?.signal,
+
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let timedOut = false;
+  let rejectGate: (e: unknown) => void = () => {};
+  // Rejects when either deadline fires, even while the body read is parked
+  // on a socket that never sends another byte.
+  const gate = new Promise<never>((_, reject) => {
+    rejectGate = reject;
   });
-  if (!res.ok) {
-    // postStream bypassed `api()`, so it reported every failure as a generic
-    // outage: a 429 rate limit read as "AI unavailable", and an expired session
-    // never reached the unauthorized handler (BUG-004).
-    let parsed: { message: string; code?: string } = {
-      message: res.statusText,
-    };
-    try {
-      parsed = parseDetail(await res.json());
-    } catch {
-      /* upstream HTML error page: fall back to the status text */
+  const arm = (ms: number) => {
+    if (timer !== undefined) clearTimeout(timer);
+    timer = setTimeout(() => {
+      timedOut = true;
+      const err = timeoutError();
+      rejectGate(err);
+      // Tear the real request down too; the race below reports the timeout.
+      controller.abort(err);
+    }, ms);
+  };
+  const clearTimer = () => {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      timer = undefined;
     }
-    if (res.status === 401 && !AUTH_401_PATHS.some((p) => path.startsWith(p)))
-      onUnauthorized?.();
-    throw new ApiError(res.status, parsed.message, parsed.code, parsed);
-  }
-  if (!res.headers.get("content-type")?.includes("text/event-stream"))
-    throw new ApiError(res.status, "stream unavailable", "llm_unavailable");
-  const done = await parseSse(res, onToken);
-  if (done && "__error" in done)
-    throw new ApiError(502, "stream failed", "llm_unavailable");
-  if (!done) {
-    // No terminal frame: a proxy timeout, or the server died mid-answer.
-    // Resolving null handed callers an object they dereference, so a truncated
-    // answer looked like a successful empty one (BUG-005).
-    throw new ApiError(
-      502,
-      "stream ended before completion",
-      "llm_unavailable",
+  };
+
+  const run = async (): Promise<T> => {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal: combineSignals([options?.signal, controller.signal]),
+    });
+    if (!res.ok) {
+      // postStream bypassed `api()`, so it reported every failure as a generic
+      // outage: a 429 rate limit read as "AI unavailable", and an expired session
+      // never reached the unauthorized handler (BUG-004).
+      let parsed: { message: string; code?: string } = {
+        message: res.statusText,
+      };
+      try {
+        parsed = parseDetail(await res.json());
+      } catch {
+        /* upstream HTML error page: fall back to the status text */
+      }
+      if (timedOut) throw timeoutError();
+      if (res.status === 401 && !AUTH_401_PATHS.some((p) => path.startsWith(p)))
+        onUnauthorized?.();
+      throw new ApiError(res.status, parsed.message, parsed.code, parsed);
+    }
+    if (!res.headers.get("content-type")?.includes("text/event-stream"))
+      throw new ApiError(res.status, "stream unavailable", "llm_unavailable");
+    // Still inside the first-byte window until the first chunk arrives; each
+    // chunk then resets the (shorter-windowed) inter-chunk stall deadline.
+    const done = await parseSse(res, onToken, () =>
+      arm(STREAM_STALL_TIMEOUT_MS),
     );
+    if (done && "__error" in done)
+      throw new ApiError(502, "stream failed", "llm_unavailable");
+    if (!done) {
+      // No terminal frame: a proxy timeout, or the server died mid-answer.
+      // Resolving null handed callers an object they dereference, so a truncated
+      // answer looked like a successful empty one (BUG-005).
+      throw new ApiError(
+        502,
+        "stream ended before completion",
+        "llm_unavailable",
+      );
+    }
+    return done as T;
+  };
+
+  arm(STREAM_CONNECT_TIMEOUT_MS);
+  try {
+    return await Promise.race([run(), gate]);
+  } finally {
+    clearTimer();
   }
-  return done as T;
 }
 
 export interface TokenResponse {
@@ -466,27 +623,58 @@ export async function fetchMe(): Promise<SessionProbe> {
     // freshly stored token — that turned every hiccup into an "instant
     // logout" right after login.
     if (e instanceof ApiError && e.status === 401) {
-      logout();
+      await logout();
       return { status: "unauthenticated" };
     }
     // 403 is a real answer ("your session is no longer permitted"), not an
     // outage, so it ends the session. Anything else — a network error, a 5xx,
     // a 502 from the proxy, a non-JSON body — means we do not know.
     if (e instanceof ApiError && e.status >= 400 && e.status < 500) {
-      logout();
+      await logout();
       return { status: "unauthenticated" };
     }
     return { status: "unreachable" };
   }
 }
 
-export function logout(): void {
-  localStorage.removeItem(TOKEN_KEY);
-  // The impersonation hand-off parks an admin JWT in storage; leaving it (and
-  // the banner flag) behind handed the next user on a shared device both an
-  // admin token and an "acting as <student>" session (SEC-006).
-  localStorage.removeItem(ADMIN_TOKEN_KEY);
-  localStorage.removeItem(IMP_ACTIVE_KEY);
+/**
+ * Every localStorage key that carries data belonging to the signed-in user.
+ * `bgpt_lang` (language) and `bgpt_theme` are deliberately absent: they are
+ * device preferences, not user data, and must survive a sign-out (F-036).
+ */
+const USER_STORAGE_KEYS = [
+  TOKEN_KEY,
+  ADMIN_TOKEN_KEY,
+  IMP_ACTIVE_KEY,
+  "lastChapter",
+  "fontScale",
+  "bgpt-lowdata",
+  "bgpt_teacher_default_class",
+];
+
+/** Extra teardown the app registers for logout — the react-query cache. */
+let logoutCleanup: (() => void) | null = null;
+export function setLogoutCleanup(fn: (() => void) | null): void {
+  logoutCleanup = fn;
+}
+
+/**
+ * Clear every trace of the signed-in user from this device (F-036).
+ *
+ * Awaitable on purpose: the offline chapter store (IndexedDB) and the
+ * registered teardown hooks must finish before sign-out navigates away, or
+ * the next user on a shared device inherits this one's downloaded chapters,
+ * last-open chapter and full last quiz result.
+ */
+export async function logout(): Promise<void> {
+  for (const key of USER_STORAGE_KEYS) localStorage.removeItem(key);
+  sessionStorage.removeItem(LAST_RESULT_KEY);
+  logoutCleanup?.();
+  try {
+    await clearOfflineChapters();
+  } catch {
+    /* the in-memory fallback is already gone; IDB clearing is best-effort */
+  }
 }
 
 /* -------- Learn catalog (grounded corpus) -------- */
@@ -531,9 +719,6 @@ export const upsertLearnProgress = (payload: {
 }) => post<import("./types").ChapterProgressOut>("/learn/progress", payload);
 
 /* -------- support ops -------- */
-
-const ADMIN_TOKEN_KEY = "bgpt_admin_token_backup";
-const IMP_ACTIVE_KEY = "bgpt_impersonating";
 
 export interface ImpersonateOut {
   access_token: string;
@@ -673,6 +858,54 @@ export const deleteTeacherDocument = (id: number) =>
   del(`/teacher/documents/${id}`);
 
 /**
+ * Authed binary GET through the shared client (F-032): same base-URL guard,
+ * 401 handling, error envelope and timeout as every JSON call. Raw `fetch`
+ * at a call site bypassed all of it (and only worked in the web build).
+ */
+export async function getBlob(
+  path: string,
+): Promise<{ blob: Blob; contentType: string }> {
+  const headers = new Headers();
+  const token = getToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  assertApiBaseUsable();
+  const guard = timeoutGuard(REQUEST_TIMEOUT_MS);
+  try {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}${path}`, {
+        headers,
+        signal: guard.signal,
+      });
+    } catch (e) {
+      if (e instanceof ApiError) throw e;
+      if (guard.timedOut()) throw timeoutError();
+      throw new ApiError(0, "network error", "network");
+    }
+    if (res.status === 401 && !AUTH_401_PATHS.some((p) => path.startsWith(p)))
+      onUnauthorized?.();
+    if (!res.ok) {
+      let parsed: { message: string; code?: string } = {
+        message: res.statusText,
+      };
+      try {
+        parsed = parseDetail(await res.json());
+      } catch {
+        /* upstream HTML error page: fall back to the status text */
+      }
+      if (guard.timedOut()) throw timeoutError();
+      throw new ApiError(res.status, parsed.message, parsed.code, parsed);
+    }
+    return {
+      blob: await res.blob(),
+      contentType: res.headers.get("content-type") ?? "",
+    };
+  } finally {
+    guard.clear();
+  }
+}
+
+/**
  * Authed binary download (auth is header-based, a bare <a href> would 401).
  * The server may fall back to an HTML print view when shaping libs are
  * unavailable — that variant opens in a new tab instead of downloading.
@@ -680,19 +913,12 @@ export const deleteTeacherDocument = (id: number) =>
 export async function downloadTeacherDocumentPdf(
   doc: TeacherDocument,
 ): Promise<void> {
-  const headers = new Headers();
-  const token = getToken();
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-  assertApiBaseUsable();
-  const res = await fetch(`${API_BASE}/teacher/documents/${doc.id}/pdf`, {
-    headers,
-  });
-  if (!res.ok) throw new ApiError(res.status, "download failed", "download");
-  const ct = res.headers.get("content-type") ?? "";
-  const blob = await res.blob();
+  const { blob, contentType } = await getBlob(
+    `/teacher/documents/${doc.id}/pdf`,
+  );
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  if (ct.includes("html")) {
+  if (contentType.includes("html")) {
     a.href = url;
     a.target = "_blank";
   } else {

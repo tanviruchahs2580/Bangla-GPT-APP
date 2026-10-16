@@ -69,6 +69,7 @@ from bangla_gpt_api.services import (
     govt_report,
 )
 from bangla_gpt_api.services.mailer import smtp_configured
+from bangla_gpt_api.services.verification import send_verification_email
 
 from .common import (
     SCHOOL_CODE_ALPHABET,
@@ -448,6 +449,12 @@ def auth_join_school(app_ctx: Ctx, payload: SchoolJoinIn, db: DbSession) -> Toke
     invite.used_by = user.id
     # used_at was already stamped atomically by claim_single_use above.
     db.commit()
+    if not user.email_verified:
+        # Same contract as /auth/register: in an SMTP-enabled deployment the
+        # account cannot sign in until the mailed code is redeemed, so the
+        # code has to be issued here too -- the invited teacher otherwise got
+        # a working session and then a permanent 403 on every later sign-in.
+        send_verification_email(db, app_ctx.settings, user)
     json_log(
         logger,
         logging.INFO,

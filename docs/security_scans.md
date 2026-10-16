@@ -10,11 +10,21 @@ is a static nginx image: `apps/web/Dockerfile` is multi-stage (node build ->
 vite/esbuild dev servers never reach a deployment target.
 
 ## pip-audit (apps/api)
-Latest run (, this branch): **no known vulnerabilities** across the
-locked dependency set.
+Re-run 2026-10-16 against this venv: **no known vulnerabilities found**
+(`python -m pip_audit`, exit 0; the only skipped entry is the local
+`bangla-gpt-api` package itself, which is not on PyPI). CI re-runs the same
+audit on every push, so that job's log is the current answer.
 
 ## npm audit --omit=dev (apps/web)
-Latest run: **0 vulnerabilities.** This is what the CI gate enforces.
+Re-run 2026-10-16: **4 low-severity advisories in the markdown/katex render
+chain, exit 0.** `katex` 0.16.47 (via `micromark-extension-math`,
+`remark-math`, `rehype-katex`) carries GHSA-238p-pmpm-9mq7, "Existing
+prototype pollution can bypass trust restrictions" (range 0.11.0–0.18.1);
+the fix is a semver-major `rehype-katex` bump. The CI gate is
+`npm audit --audit-level=high --omit=dev`, so low-severity findings are
+reported but do not fail it — "0 vulnerabilities" would be wrong, and the
+earlier "0 vulnerabilities" line here was that mistake. No high/critical
+advisory ships.
 
 ## npm audit (dev deps) -- triaged, not gate-blocking
 Full `npm audit` reports advisories in the dev toolchain. Each requires a

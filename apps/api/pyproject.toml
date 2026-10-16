@@ -232,6 +232,26 @@ exclude_lines = [
     "if __name__ ==",
 ]
 
+[tool.deptry]
+# CQ-03: without this, deptry does not recognise the project's own package as
+# first party and reports every `from bangla_gpt_api... import ...` as
+# "DEP003 imported but it is a transitive dependency" -- 392 findings (of 404)
+# on this tree, which buried the real ones. The distribution is
+# `bangla-gpt-api`, the import package is `bangla_gpt_api` under src/, and
+# deptry resolves first-party packages from `[project] name`/src layout only
+# when told the module name explicitly.
+#
+# Still reported, deliberately not silenced here:
+#   DEP002 - gunicorn, uvicorn-worker, psycopg, uharfbuzz (used through the
+#            Dockerfile CMD / SQLAlchemy driver URL / fpdf2 runtime shaping,
+#            never via an `import` deptry can see), and the dev tools
+#            (pytest*, ruff, mypy, pip-audit) that are executed, not imported.
+#   DEP001 - `_changelog_common`, a sibling module of the scripts in
+#            apps/api/scripts/ imported through a sys.path insert (its own
+#            module, not a distribution). Add it to known_first_party if
+#            deptry is ever wired into CI.
+known_first_party = ["bangla_gpt_api"]
+
 [tool.mypy]
 python_version = "3.11"
 ignore_missing_imports = true

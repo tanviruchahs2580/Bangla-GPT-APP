@@ -50,6 +50,15 @@ class User(Base):
     # ``iat`` is <= this moment is refused by get_current_user, so existing
     # sessions cannot ride out a credential rotation.
     sessions_invalidated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # S-002: per-account failed-login lockout. ``failed_login_count`` counts
+    # consecutive password failures (reset to 0 by a successful sign-in);
+    # ``locked_until`` is naive UTC (the SQLite column has no tzinfo) and is
+    # stamped once the counter crosses the threshold, doubling for every
+    # further failure up to the cap.
+    failed_login_count: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False, server_default="0"
+    )
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 

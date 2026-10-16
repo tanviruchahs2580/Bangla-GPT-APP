@@ -20,8 +20,9 @@ keeps its own copy of the weakness rule, so every consumer calls:func:`weak_conc
   table can never drift from the history the rollup reads.
 """
 
+import logging
 from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -35,7 +36,10 @@ from bangla_gpt_api.db.models import (
     QuizAttempt,
     _utcnow,
 )
+from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.services import knowledge
+
+logger = logging.getLogger(__name__)
 
 #: nightly slot: 21:00 UTC = 03:00 Dhaka, runs at most once per calendar day
 NIGHTLY_HOUR_UTC = 21
@@ -100,6 +104,16 @@ def weak_names(db: Session, student_id: int) -> list[str]:
     return [w.concept for w in weak_concepts(db, student_id)]
 
 
+def weak_from_cells(raw: Mapping[str, Sequence[int]]) -> list[WeakConcept]:
+    """The same verdict over pre-aggregated (asked, correct) cells.
+
+    Roster/class-wide readers already hold the aggregate; they must still
+    apply the one rule, so this exposes the canonicalize+rank path instead of
+    letting a surface compare percentages inline.
+    """
+    return _rank(merged_cells({name: list(cell) for name, cell in raw.items()}))
+
+
 def weak_names_for(db: Session, student_ids: Iterable[int]) -> dict[int, list[str]]:
     """Batched:func:`weak_names` (one query for a whole class roster)."""
     all_raw = raw_cells(db, list(student_ids))
@@ -128,6 +142,7 @@ def refresh_mastery(db: Session) -> tuple[int, int]:
     """
     rows = db.execute(
         select(
+            QuizAttempt.id,
             QuizAttempt.student_id,
             AnswerLog.chapter,
             QuizAttempt.class_level,
@@ -138,8 +153,24 @@ def refresh_mastery(db: Session) -> tuple[int, int]:
         .where(QuizAttempt.status == "graded")
     ).all()
     cells: dict[tuple[int, str], list[int]] = defaultdict(lambda: [0, 0])
-    meta: dict[str, tuple[int, str | None]] = {}
-    for sid, chapter, class_level, subject, ok in rows:
+    meta: dict[str, tuple[int, str]] = {}
+    skipped: set[int] = set()
+    for attempt_id, sid, chapter, class_level, subject, ok in rows:
+        if class_level is None or not subject:
+            # Concept.subject/class_level are NOT NULL and a chapter root cannot
+            # be placed without them; skipping one unresolvable attempt must not
+            # abort the nightly pass for every student. The warning carries the
+            # attempt id only -- nothing student-identifying.
+            if attempt_id not in skipped:
+                skipped.add(attempt_id)
+                json_log(
+                    logger,
+                    logging.WARNING,
+                    "weakness_refresh_skipped_attempt",
+                    attempt_id=attempt_id,
+                    reason="unresolved_subject" if not subject else "unresolved_class",
+                )
+            continue
         cell = cells[(sid, chapter)]
         cell[0] += 1
         cell[1] += int(ok)

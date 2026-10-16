@@ -26,6 +26,10 @@ const KEY: Record<string, Parameters<typeof t>[0]> = {
   not_allowed: "errNotAllowed",
   insufficient_role: "errNotAllowed",
   network: "errNetwork",
+  // F-015: a request that never answered (client-side timeout) surfaces with
+  // its own machine code and its own copy, because "check your connection" is
+  // wrong advice when the connection is fine and the server is not answering.
+  timeout: "errTimeout",
   // Login-path failures that previously fell through to the generic copy:
   // MFA step-up (backend 202 token_type=mfa), dead/stale API origins
   // (Vercel edge 503 api_origin_unconfigured, Cloudflare 502 HTML pages),
@@ -51,6 +55,7 @@ const ACTION: Record<string, ErrorCopy["action"]> = {
   llm_unavailable: "retry",
   tutor_unavailable: "retry",
   network: "retry",
+  timeout: "retry",
   bad_gateway: "retry",
   service_unavailable: "retry",
   api_origin_unconfigured: "retry",

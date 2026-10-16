@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { apiBase, getToken, post } from "../../api";
+import { getBlob, post } from "../../api";
 import type { QPaper } from "../../types";
 import { Badge, Button, Card } from "../ui";
 import { friendlyError } from "../../errors";
@@ -193,19 +193,21 @@ export function QPaperReviewPanel({
 
   async function download(kind: string) {
     try {
-      const res = await fetch(
-        `${apiBase}/teacher/qpapers/${qp.id}/pdf?kind=${kind}`,
-        { headers: { Authorization: `Bearer ${getToken() ?? ""}` } },
+      // Shared client (F-032): the raw fetch here bypassed the base-URL guard,
+      // the central 401 handling, the error envelope and the request timeout —
+      // in the Capacitor build a relative base could never work and an
+      // expired session never forced a re-login.
+      const { blob } = await getBlob(
+        `/teacher/qpapers/${qp.id}/pdf?kind=${encodeURIComponent(kind)}`,
       );
-      if (!res.ok) throw new Error(String(res.status));
-      const url = URL.createObjectURL(await res.blob());
+      const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = `qp-${qp.id}-${kind}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch {
-      setMsg(t("errorGeneric"));
+    } catch (err) {
+      setMsg(errText(err));
     }
   }
 

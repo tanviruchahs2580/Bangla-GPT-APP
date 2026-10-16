@@ -25,13 +25,16 @@ export const chapterKey = (
 
 const memory = new Map<string, OfflineChapter>();
 
+/** IndexedDB database holding downloaded chapters. */
+export const OFFLINE_DB_NAME = "bgpt-offline";
+
 function hasIDB(): boolean {
   return typeof indexedDB !== "undefined";
 }
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open("bgpt-offline", 1);
+    const req = indexedDB.open(OFFLINE_DB_NAME, 1);
     req.onupgradeneeded = () => {
       if (!req.result.objectStoreNames.contains("chapters")) {
         req.result.createObjectStore("chapters", { keyPath: "key" });
@@ -126,6 +129,25 @@ export async function deleteChapter(
   } else {
     memory.delete(key);
   }
+}
+
+/**
+ * Drop every saved chapter — the in-memory fallback and the IndexedDB
+ * database (F-036: downloaded chapters are user data and must not outlive
+ * logout on a shared device). Best-effort and awaitable: resolves once the
+ * database deletion request settles, so sign-out can wait for it.
+ */
+export async function clearOfflineChapters(): Promise<void> {
+  memory.clear();
+  if (!hasIDB()) return;
+  await new Promise<void>((resolve) => {
+    const req = indexedDB.deleteDatabase(OFFLINE_DB_NAME);
+    req.onsuccess = () => resolve();
+    // A blocked or failed delete cannot be retried usefully here; the in-memory
+    // copy is gone and the next save re-creates a clean database.
+    req.onerror = () => resolve();
+    req.onblocked = () => resolve();
+  });
 }
 
 /** Network first, saved offline copy second (PASS: offline readable). */

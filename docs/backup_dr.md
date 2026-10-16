@@ -14,9 +14,10 @@ both targets comfortably; the numbers below are measured, not aspirated.
 
 ## pgBackRest design
 
-- Image: `deploy/postgres/Dockerfile` -- postgres:16 + pgbackrest binary
-  (2.59.1) + the stanza config baked in (no host bind mounts; every config
-  change is a rebuild).
+- Image: `deploy/postgres/Dockerfile` -- postgres:16 + the Debian-packaged
+  `pgbackrest` binary (installed unpinned; the version is whatever
+  `postgres:16`'s apt sources currently ship) + the stanza config baked in
+  (no host bind mounts; every config change is a rebuild).
 - Continuous WAL archiving: the `postgres` compose service runs with
   `wal_level=replica`, `archive_mode=on`,
   `archive_command=pgbackrest --stanza=bgpt archive-push %p`,

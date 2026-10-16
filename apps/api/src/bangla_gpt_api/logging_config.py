@@ -128,10 +128,32 @@ class RedactionFilter(logging.Filter):
             record.msg = REDACTED
         # ``exc_info`` renders a traceback that may embed a repr() of the
         # offending object. The message is already redacted above; the
-        # formatted exception text is scrubbed once it exists.
+        # formatted exception text is scrubbed by RedactingFormatter, which
+        # runs after the stdlib has created record.exc_text (a filter runs
+        # before that, so scrubbing exc_text here was a no-op).
         if record.exc_text:
             record.exc_text = redact_value(record.exc_text)
         return True
+
+
+class RedactingFormatter(logging.Formatter):
+    """A Formatter that redacts the exception text it emits.
+
+    ``RedactionFilter`` runs before ``Formatter.format`` and therefore before
+    the stdlib creates ``record.exc_text`` from ``exc_info`` — the traceback of
+    every ``logger.exception`` reached the sink unredacted (B-021). Rendering
+    the exception here and caching only its redacted form closes that window
+    and keeps ``redact_value`` as the single redactor: the stdlib's
+    ``format()`` then appends the already-redacted text unchanged.
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        if record.exc_info and not record.exc_text:
+            record.exc_text = str(redact_value(super().formatException(record.exc_info)))
+        elif record.exc_text:
+            # An exc_text cached by an earlier handler may still be raw.
+            record.exc_text = str(redact_value(record.exc_text))
+        return super().format(record)
 
 
 class _EncodingSafeStream:
@@ -188,7 +210,7 @@ def _utf8_stream(stream):
 
 def configure_logging(level: str = "INFO") -> None:
     handler = logging.StreamHandler(_EncodingSafeStream(_utf8_stream(sys.stdout)))
-    handler.setFormatter(logging.Formatter("%(message)s"))
+    handler.setFormatter(RedactingFormatter("%(message)s"))
     handler.addFilter(RedactionFilter())
     root = logging.getLogger()
     root.handlers.clear()

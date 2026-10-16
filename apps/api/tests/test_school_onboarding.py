@@ -238,3 +238,59 @@ def test_classrooms_follow_the_teachers_school(env) -> None:
         (room2.json()["id"],),
     ).fetchone()[0]
     assert code == "BGPT-DEFAULT"
+
+
+def test_invited_staff_receive_a_verification_code_when_smtp_is_on(tmp_path) -> None:
+    """SMTP-enabled deployments must mail the invited account a code.
+
+    /auth/register issued one and /auth/join-school did not, so an invited
+    teacher held a working session and then a permanent 403 email_unverified
+    on every later sign-in, with no code ever sent and no way to obtain one.
+    """
+    settings = Settings(
+        env="test",
+        database_url=f"sqlite:///{tmp_path}/smtp.db",
+        jwt_secret="test-secret-0123456789abcdef0123456789",
+        admin_email="root@example.com",
+        admin_password=PASSWORD,
+        force_admin_password_change=False,
+        smtp_enabled=True,
+        smtp_host="localhost",
+        smtp_from="noreply@example.com",
+    )
+    client = TestClient(create_app(settings))
+    conn = sqlite3.connect(f"{tmp_path}/smtp.db")
+    try:
+        headers = _login(client, "root@example.com")
+        school = client.post("/admin/schools", json={"name": "Meghna High"}, headers=headers).json()
+        invite = client.post(
+            f"/schools/{school['id']}/invites", json={"role": "teacher"}, headers=headers
+        ).json()
+        joined = _join(client, invite["code"], "invited@meghna.test")
+        assert joined.status_code == 201, joined.text
+
+        row = conn.execute(
+            "SELECT email_verified FROM users WHERE email='invited@meghna.test'"
+        ).fetchone()
+        assert row == (0,), "an SMTP deployment must not mark the account verified"
+        codes = conn.execute(
+            "SELECT count(*) FROM email_verifications WHERE user_id="
+            "(SELECT id FROM users WHERE email='invited@meghna.test')"
+        ).fetchone()
+        assert codes == (1,), "the invited account must receive a verification code"
+
+        # And the account is unusable until that code is redeemed...
+        blocked = client.post(
+            "/auth/login", json={"email": "invited@meghna.test", "password": JOIN_PASSWORD}
+        )
+        assert blocked.status_code == 403
+        assert blocked.json()["detail"]["code"] == "email_unverified"
+
+        # The stored code is a hash, never the plaintext the mail carried.
+        issued = conn.execute(
+            "SELECT token_hash FROM email_verifications WHERE user_id="
+            "(SELECT id FROM users WHERE email='invited@meghna.test')"
+        ).fetchone()
+        assert issued is not None and len(issued[0]) == 64
+    finally:
+        conn.close()

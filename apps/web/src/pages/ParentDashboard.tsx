@@ -1,64 +1,98 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { get, getParentReport, post } from "../api";
-import type { ParentReport } from "../api";
 import { friendlyError } from "../errors";
 import { t } from "../i18n";
 import { track } from "../lib/analytics";
 import { suggestionSentence } from "../lib/text";
 import type { ActivitySummary, StudentBrief, StudentProgress } from "../types";
 
+/**
+ * F-024: switching the selected child used to keep rendering the previous
+ * child's name and scores until the new request resolved (the old data was
+ * only cleared when the selection became null), and a failed fetch silently
+ * removed the whole card. Each child section now shows its own loading or
+ * retryable error state instead of stale or absent data.
+ */
+function ChildSectionState({
+  title,
+  pending,
+  failed,
+  onRetry,
+}: {
+  title: string;
+  pending: boolean;
+  failed: boolean;
+  onRetry: () => void;
+}) {
+  if (!pending && !failed) return null;
+  return (
+    <section className="card" aria-label={title}>
+      <h2>{title}</h2>
+      {pending ? (
+        <p className="muted" role="status">
+          {t("loading")}
+        </p>
+      ) : (
+        <>
+          <p className="error" role="alert">
+            {t("errorGeneric")}
+          </p>
+          <button className="btn btn-sm btn-ghost" onClick={onRetry}>
+            {t("retry")}
+          </button>
+        </>
+      )}
+    </section>
+  );
+}
+
 export default function ParentDashboard() {
-  const [children, setChildren] = useState<StudentBrief[]>([]);
+  const queryClient = useQueryClient();
   const [code, setCode] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
-  const [progress, setProgress] = useState<StudentProgress | null>(null);
-  const [activity, setActivity] = useState<ActivitySummary | null>(null);
-  const [report, setReport] = useState<ParentReport | null>(null);
   const [period, setPeriod] = useState<"weekly" | "monthly">("weekly");
 
-  const loadChildren = useCallback(() => {
-    get<StudentBrief[]>("/parents/me/children")
-      .then(setChildren)
-      .catch((err: unknown) =>
-        setError(
-          friendlyError((err as { rawDetail?: unknown }).rawDetail)?.text ??
-            t("errorGeneric"),
-        ),
-      );
-  }, []);
+  const childrenQuery = useQuery({
+    queryKey: ["parent-children"],
+    queryFn: () => get<StudentBrief[]>("/parents/me/children"),
+  });
+  const children = childrenQuery.data ?? [];
 
-  useEffect(() => {
-    loadChildren();
-  }, [loadChildren]);
-
-  useEffect(() => {
-    if (selected === null) {
-      setProgress(null);
-      setReport(null);
-      setActivity(null);
-      return;
-    }
-    get<StudentProgress>(`/parents/me/children/${selected}/progress`)
-      .then(setProgress)
-      .catch((err: unknown) =>
-        setError(
-          friendlyError((err as { rawDetail?: unknown }).rawDetail)?.text ??
-            t("errorGeneric"),
-        ),
-      );
-    get<ActivitySummary>(`/parents/me/children/${selected}/activity`)
-      .then(setActivity)
-      .catch(() => setActivity(null));
-    getParentReport(selected, period)
-      .then((r) => {
-        setReport(r);
-        track("report_viewed", { role: "parent", period });
-      })
-      .catch(() => setReport(null));
-  }, [selected, period]);
+  // Per-child query keys: child B never renders under child A's data.
+  const progressQuery = useQuery({
+    queryKey: ["parent-progress", selected],
+    queryFn: () =>
+      get<StudentProgress>(`/parents/me/children/${selected}/progress`),
+    enabled: selected !== null,
+  });
+  const activityQuery = useQuery({
+    queryKey: ["parent-activity", selected],
+    queryFn: () =>
+      get<ActivitySummary>(`/parents/me/children/${selected}/activity`),
+    enabled: selected !== null,
+  });
+  const reportQuery = useQuery({
+    queryKey: ["parent-report", selected, period],
+    queryFn: async () => {
+      const r = await getParentReport(selected as number, period);
+      track("report_viewed", { role: "parent", period });
+      return r;
+    },
+    enabled: selected !== null,
+  });
+  const progress = progressQuery.data ?? null;
+  const activity = activityQuery.data ?? null;
+  const report = reportQuery.data ?? null;
+  const selectedChild = children.find((c) => c.student_id === selected) ?? null;
+  const childrenError =
+    error ??
+    (childrenQuery.isError
+      ? (friendlyError(childrenQuery.error)?.text ?? t("errorGeneric"))
+      : null);
 
   async function link(e: React.FormEvent) {
     e.preventDefault();
@@ -71,7 +105,7 @@ export default function ParentDashboard() {
       await post("/parents/link/invite", { code: code.trim().toUpperCase() });
       setMessage(t("parentLinkOk"));
       setCode("");
-      loadChildren();
+      void queryClient.invalidateQueries({ queryKey: ["parent-children"] });
     } catch (err) {
       setError(
         friendlyError((err as { rawDetail?: unknown }).rawDetail)?.text ??
@@ -118,9 +152,9 @@ export default function ParentDashboard() {
             {message}
           </p>
         )}
-        {error && (
+        {childrenError && (
           <p className="error" role="alert">
-            {error}
+            {childrenError}
           </p>
         )}
       </div>
@@ -166,6 +200,14 @@ export default function ParentDashboard() {
         )}
       </div>
 
+      {selected !== null && (
+        <ChildSectionState
+          title={t("progressTitle")}
+          pending={progressQuery.isPending}
+          failed={progressQuery.isError}
+          onRetry={() => void progressQuery.refetch()}
+        />
+      )}
       {selected !== null && progress && (
         <div className="card">
           <h2>
@@ -212,6 +254,14 @@ export default function ParentDashboard() {
           )}
         </div>
       )}
+      {selected !== null && (
+        <ChildSectionState
+          title={t("activityTitle")}
+          pending={activityQuery.isPending}
+          failed={activityQuery.isError}
+          onRetry={() => void activityQuery.refetch()}
+        />
+      )}
       {selected !== null && activity && (
         <div className="card">
           <h2>{t("activityTitle")}</h2>
@@ -244,6 +294,14 @@ export default function ParentDashboard() {
             })}
           </div>
         </div>
+      )}
+      {selected !== null && (
+        <ChildSectionState
+          title={`${selectedChild?.name ?? t("studentFallback")} · ${t("progressTitle")}`}
+          pending={reportQuery.isPending}
+          failed={reportQuery.isError}
+          onRetry={() => void reportQuery.refetch()}
+        />
       )}
       {selected !== null && report && (
         <div className="card">

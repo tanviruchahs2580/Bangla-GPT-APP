@@ -32,24 +32,15 @@ ACRONYM_ALLOWLIST = {
     "appName",  # product name, transliterated deliberately
 }
 
-# TEMPORARY, tracked exception -- 8 keys whose Bangla copy is owed by a native
-# speaker. Do NOT add to this list to silence a new finding; the English values
-# below are the exact reviewed state, and removing a key from this set is the
-# only way to clear it.
+# EMPTY, and it should stay that way. This set existed for keys whose Bangla
+# copy was owed by a native speaker (audit 2026-10-09, AUD-0047). The
+# 2026-10-16 pass landed reviewed Bangla for all eight -- the status-page
+# headings, the status detail lines and the impersonation banner strings that
+# SEC-08 requires to be visibly bannered -- so nothing is pending.
 #
-# Audit 2026-10-09, AUD-0047 / BANGLA_REVIEW_QUEUE.md Priority 1. Two of these
-# (actingAs, exitImpersonation) are the impersonation banner SEC-08 requires to
-# be visibly bannered, so the wording matters more than it looks.
-PENDING_BANGLA_REVIEW = {
-    "statusPage",
-    "statusAllOk",
-    "statusDegraded",
-    "statusChecked",
-    "actingAs",
-    "exitImpersonation",
-    "impersonate",
-    "impReasonPrompt",
-}
+# Do NOT add to this list to silence a new finding: it exists to make owed
+# copy visible, and every entry costs that visibility.
+PENDING_BANGLA_REVIEW: set[str] = set()
 
 
 def parse(block: str) -> dict[str, str]:

@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import AdminDashboard from "../pages/AdminDashboard";
 import StatusPage from "../pages/StatusPage";
@@ -75,14 +76,25 @@ beforeEach(() => {
   apiMock.triageFeedback.mockResolvedValue({ ...ROW, triaged: true });
 });
 
+// AdminDashboard now fetches through react-query (F-021), so every render
+// needs a provider.
+function renderAdmin() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>
+        <AdminDashboard />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
 describe("feedback triage queue", () => {
   it("lists open feedback and marks an item triaged through the API", async () => {
     const user = userEvent.setup();
-    render(
-      <MemoryRouter>
-        <AdminDashboard />
-      </MemoryRouter>,
-    );
+    renderAdmin();
     expect(await screen.findByText("answer was confusing")).toBeInTheDocument();
     expect(apiMock.getFeedbackQueue).toHaveBeenCalledWith("open");
     await user.click(screen.getByRole("button", { name: t("admMarkTriage") }));
@@ -92,11 +104,7 @@ describe("feedback triage queue", () => {
   });
 
   it("never shows reporter identity in the queue", async () => {
-    render(
-      <MemoryRouter>
-        <AdminDashboard />
-      </MemoryRouter>,
-    );
+    renderAdmin();
     await screen.findByText("answer was confusing");
     expect(screen.queryByText("s@example.com")).toBeNull();
   });

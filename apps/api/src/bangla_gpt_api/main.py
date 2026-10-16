@@ -535,10 +535,13 @@ def create_app(settings: Settings | None = None) -> object:
     )
     app.state.ctx = ctx
 
-    # Phase 6: Register middleware (rate limit, body size, security, prometheus)
-    from bangla_gpt_api.ratelimit import build_limiter as _bl
-
-    limiter = _bl(settings)
+    # Phase 6: Register middleware (rate limit, body size, security, prometheus).
+    # build_limiter is the module-level re-export on purpose: a local import
+    # here shadows it, so the monkeypatch seam this module documents for tests
+    # (see the import block at the top) silently stopped working -- and a test
+    # that believed it was injecting a dead limiter was really exercising the
+    # real Redis one.
+    limiter = build_limiter(settings)
     build_middleware_stack(app, settings, limiter)
 
     # Phase 7: Register routers
