@@ -8,7 +8,8 @@ import logging
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from sqlalchemy import delete, func, select, update
+from pydantic import Field
+from sqlalchemy import delete, func, or_, select, update
 
 from bangla_gpt_api.db.models import (
     AiJob,
@@ -20,6 +21,7 @@ from bangla_gpt_api.db.models import (
     ChapterContent,
     ChapterProgress,
     ChatMessage,
+    ClassRoom,
     ClassStudent,
     ClassTeacher,
     ConceptMastery,
@@ -70,6 +72,62 @@ from .deps import (
 router = APIRouter(responses=AUTH_GUARD_RESPONSES)
 
 logger = logging.getLogger(__name__)
+
+#: Stable version of the export payload. v1 was the original six sections
+#: (profile/attempts/links/conversations/messages/activity); v2 (S-021) adds
+#: every remaining per-user table. Clients pin this key to detect shape
+#: changes without diffing every list.
+EXPORT_SCHEMA_VERSION = "2"
+
+
+class _DataExportV2(DataExportResponse):
+    """Export v2: the full per-user data set (S-021).
+
+    The audit found the portability response omitted notes, notifications,
+    chapter progress, revision items, the AI-usage ledger and analytics events
+    -- all stored per user -- while ``DELETE /users/me`` cascaded through
+    every one of them. A data subject received a partial answer to "what do
+    you hold about me".
+
+    Extending the schema in a local subclass keeps the served OpenAPI document
+    honest (the versioned endpoint really returns these fields) without
+    touching ``schemas.py``.
+
+    Credential material is deliberately NOT exported: ``password_resets`` and
+    ``email_verifications`` appear as metadata rows without their token
+    hashes. Shared library artifacts (``chapter_contents`` authored by this
+    account) are also out of scope -- they are not personal data once another
+    school reads them -- and staff-only handling fields (feedback
+    ``triage_note``) are omitted.
+    """
+
+    schema_version: str = EXPORT_SCHEMA_VERSION
+    notes: list[dict] = Field(default_factory=list)
+    notifications: list[dict] = Field(default_factory=list)
+    chapter_progress: list[dict] = Field(default_factory=list)
+    revision_items: list[dict] = Field(default_factory=list)
+    concept_mastery: list[dict] = Field(default_factory=list)
+    student_abilities: list[dict] = Field(default_factory=list)
+    classrooms: list[dict] = Field(default_factory=list)
+    ai_usage: list[dict] = Field(default_factory=list)
+    analytics_events: list[dict] = Field(default_factory=list)
+    feedback: list[dict] = Field(default_factory=list)
+    ai_jobs: list[dict] = Field(default_factory=list)
+    teacher_documents: list[dict] = Field(default_factory=list)
+    question_papers: list[dict] = Field(default_factory=list)
+    question_bank: list[dict] = Field(default_factory=list)
+    short_tests: list[dict] = Field(default_factory=list)
+    assignments: list[dict] = Field(default_factory=list)
+    support_plans: list[dict] = Field(default_factory=list)
+    parent_invites: list[dict] = Field(default_factory=list)
+    student_invites: list[dict] = Field(default_factory=list)
+    password_resets: list[dict] = Field(default_factory=list)
+    email_verifications: list[dict] = Field(default_factory=list)
+    audit_events: list[dict] = Field(default_factory=list)
+
+
+def _iso(value: datetime | None) -> str | None:
+    return value.isoformat() if value else None
 
 
 @router.get("/users/me", response_model=MeResponse)
@@ -210,8 +268,8 @@ def delete_me(db: DbSession, user: CurrentUser) -> Response:
     return Response(status_code=204)
 
 
-@router.get("/users/me/export", response_model=DataExportResponse)
-def export_me(response: Response, db: DbSession, user: CurrentUser) -> DataExportResponse:
+@router.get("/users/me/export", response_model=_DataExportV2)
+def export_me(response: Response, db: DbSession, user: CurrentUser) -> _DataExportV2:
     """Self-service data portability: everything stored about this account."""
     response.headers["Content-Disposition"] = 'attachment; filename="my-data-export.json"'
     student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one_or_none()
@@ -320,7 +378,344 @@ def export_me(response: Response, db: DbSession, user: CurrentUser) -> DataExpor
         detail={"format": "json"},
     )
     db.commit()
-    return DataExportResponse(
+
+    # --- S-021: the remaining per-user tables -------------------------------
+    # Everything below is stored per user or per profile and was missing from
+    # the export while DELETE /users/me removed it. Queried after the audit
+    # write above so a failure changes nothing about the audit trail.
+    notes = [
+        {
+            "id": n.id,
+            "title": n.title,
+            "body": n.body,
+            "source": n.source,
+            "source_ref": n.source_ref,
+            "created_at": _iso(n.created_at),
+        }
+        for n in db.execute(select(SavedNote).where(SavedNote.user_id == user.id)).scalars()
+    ]
+    notifications = [
+        {
+            "id": n.id,
+            "kind": n.kind,
+            "code": n.code,
+            "params": n.params,
+            "link": n.link,
+            "read_at": _iso(n.read_at),
+            "created_at": _iso(n.created_at),
+        }
+        for n in db.execute(
+            select(Notification).where(Notification.user_id == user.id).order_by(Notification.id)
+        ).scalars()
+    ]
+    ai_usage = [
+        {
+            "id": row.id,
+            "route": row.route,
+            "model": row.model,
+            "prompt_tokens": row.prompt_tokens,
+            "completion_tokens": row.completion_tokens,
+            "estimated_cost_usd": row.estimated_cost_usd,
+            "created_at": _iso(row.created_at),
+        }
+        for row in db.execute(
+            select(AiUsage).where(AiUsage.user_id == user.id).order_by(AiUsage.id)
+        ).scalars()
+    ]
+    analytics_events = [
+        {
+            "id": row.id,
+            "name": row.name,
+            "role": row.role,
+            "props": row.props,
+            "created_at": _iso(row.created_at),
+        }
+        for row in db.execute(
+            select(AnalyticsEventRow)
+            .where(AnalyticsEventRow.user_id == user.id)
+            .order_by(AnalyticsEventRow.id)
+        ).scalars()
+    ]
+    feedback_rows = [
+        {
+            "id": row.id,
+            "rating": row.rating,
+            "comment": row.comment,
+            "message_id": row.message_id,
+            "attempt_id": row.attempt_id,
+            "created_at": _iso(row.created_at),
+        }
+        for row in db.execute(
+            select(Feedback).where(Feedback.user_id == user.id).order_by(Feedback.id)
+        ).scalars()
+    ]
+    ai_jobs = [
+        {
+            "id": row.id,
+            "kind": row.kind,
+            "status": row.status,
+            "created_at": _iso(row.created_at),
+            "updated_at": _iso(row.updated_at),
+        }
+        for row in db.execute(
+            select(AiJob).where(AiJob.user_id == user.id).order_by(AiJob.id)
+        ).scalars()
+    ]
+    teacher_documents = [
+        {
+            "id": row.id,
+            "kind": row.kind,
+            "class_level": row.class_level,
+            "subject": row.subject,
+            "chapter": row.chapter,
+            "title": row.title,
+            "payload": row.payload,
+            "created_at": _iso(row.created_at),
+        }
+        for row in db.execute(
+            select(TeacherDocument)
+            .where(TeacherDocument.teacher_id == user.id)
+            .order_by(TeacherDocument.id)
+        ).scalars()
+    ]
+    question_papers = [
+        {
+            "id": row.id,
+            "class_level": row.class_level,
+            "subject": row.subject,
+            "exam_type": row.exam_type,
+            "marks": row.marks,
+            "status": row.status,
+            "chapters": row.chapters,
+            "questions": row.questions,
+            "created_at": _iso(row.created_at),
+        }
+        for row in db.execute(
+            select(QuestionPaper)
+            .where(QuestionPaper.teacher_id == user.id)
+            .order_by(QuestionPaper.id)
+        ).scalars()
+    ]
+    question_bank = [
+        {
+            "id": row.id,
+            "question_text": row.question_text,
+            "options": row.options,
+            "answer_index": row.answer_index,
+            "subject": row.subject,
+            "chapter": row.chapter,
+            "class_level": row.class_level,
+            "created_at": _iso(row.created_at),
+        }
+        for row in db.execute(
+            select(QuestionBankEntry)
+            .where(QuestionBankEntry.teacher_id == user.id)
+            .order_by(QuestionBankEntry.id)
+        ).scalars()
+    ]
+    short_tests = [
+        {
+            "id": row.id,
+            "classroom_id": row.classroom_id,
+            "subject": row.subject,
+            "chapter": row.chapter,
+            "num_questions": row.num_questions,
+            "duration_min": row.duration_min,
+            "attempts": row.attempts,
+            "created_at": _iso(row.created_at),
+        }
+        for row in db.execute(
+            select(ShortTest).where(ShortTest.teacher_id == user.id).order_by(ShortTest.id)
+        ).scalars()
+    ]
+    assignments = [
+        {
+            "id": row.id,
+            "subject": row.subject,
+            "chapter": row.chapter,
+            "num_questions": row.num_questions,
+            "due_at": _iso(row.due_at),
+            "attempts": row.attempts,
+            "created_at": _iso(row.created_at),
+        }
+        for row in db.execute(
+            select(Assignment).where(Assignment.teacher_id == user.id).order_by(Assignment.id)
+        ).scalars()
+    ]
+    plan_filters = [SupportPlan.teacher_id == user.id]
+    if student is not None:
+        plan_filters.append(SupportPlan.student_id == student.id)
+    support_plans = [
+        {
+            "id": row.id,
+            "student_id": row.student_id,
+            "class_level": row.class_level,
+            "focus_concepts": row.focus_concepts,
+            "plan": row.plan,
+            "created_at": _iso(row.created_at),
+        }
+        for row in db.execute(
+            select(SupportPlan).where(or_(*plan_filters)).order_by(SupportPlan.id)
+        ).scalars()
+    ]
+    parent_invites: list[dict] = []
+    student_invites: list[dict] = []
+    if student is not None:
+        parent_invites = [
+            {
+                "id": row.id,
+                "expires_at": _iso(row.expires_at),
+                "used_at": _iso(row.used_at),
+                "created_at": _iso(row.created_at),
+            }
+            for row in db.execute(
+                select(ParentInvite)
+                .where(ParentInvite.student_id == student.id)
+                .order_by(ParentInvite.id)
+            ).scalars()
+        ]
+        student_invites = [
+            {
+                "id": row.id,
+                "email": row.email,
+                "classroom_id": row.classroom_id,
+                "expires_at": _iso(row.expires_at),
+                "used_at": _iso(row.used_at),
+                "created_at": _iso(row.created_at),
+            }
+            for row in db.execute(
+                select(StudentInvite)
+                .where(StudentInvite.student_id == student.id)
+                .order_by(StudentInvite.id)
+            ).scalars()
+        ]
+    # Single-use credential rows: SHAPE only -- the token hashes are never
+    # exported (they are derived secrets, not personal data).
+    password_resets = [
+        {
+            "id": row.id,
+            "expires_at": _iso(row.expires_at),
+            "used_at": _iso(row.used_at),
+            "created_at": _iso(row.created_at),
+        }
+        for row in db.execute(
+            select(PasswordReset).where(PasswordReset.user_id == user.id).order_by(PasswordReset.id)
+        ).scalars()
+    ]
+    email_verifications = [
+        {
+            "id": row.id,
+            "expires_at": _iso(row.expires_at),
+            "used_at": _iso(row.used_at),
+            "created_at": _iso(row.created_at),
+        }
+        for row in db.execute(
+            select(EmailVerification)
+            .where(EmailVerification.user_id == user.id)
+            .order_by(EmailVerification.id)
+        ).scalars()
+    ]
+    audit_events = [
+        {
+            "id": row.id,
+            "action": row.action,
+            "target": row.target,
+            "detail": row.detail,
+            "created_at": _iso(row.created_at),
+        }
+        for row in db.execute(
+            select(AuditLog).where(AuditLog.actor_user_id == user.id).order_by(AuditLog.id)
+        ).scalars()
+    ]
+
+    # Student-scoped learning tables not covered by the v1 sections.
+    chapter_progress: list[dict] = []
+    revision_items: list[dict] = []
+    concept_mastery: list[dict] = []
+    student_abilities: list[dict] = []
+    classrooms: list[dict] = []
+    if student is not None:
+        chapter_progress = [
+            {
+                "subject": row.subject,
+                "chapter": row.chapter,
+                "class_level": row.class_level,
+                "read_pct": row.read_pct,
+                "completed": row.completed,
+                "bookmarked": row.bookmarked,
+                "updated_at": _iso(row.updated_at),
+            }
+            for row in db.execute(
+                select(ChapterProgress)
+                .where(ChapterProgress.student_id == student.id)
+                .order_by(ChapterProgress.id)
+            ).scalars()
+        ]
+        revision_items = [
+            {
+                "id": row.id,
+                "question": row.question,
+                "options": row.options_json,
+                "correct_index": row.correct_index,
+                "chapter": row.chapter,
+                "subject": row.subject,
+                "class_level": row.class_level,
+                "reps": row.reps,
+                "interval_days": row.interval_days,
+                "ease_factor": row.ease_factor,
+                "due_date": row.due_date,
+                "updated_at": _iso(row.updated_at),
+            }
+            for row in db.execute(
+                select(RevisionItem)
+                .where(RevisionItem.student_id == student.id)
+                .order_by(RevisionItem.id)
+            ).scalars()
+        ]
+        concept_mastery = [
+            {
+                "concept_id": row.concept_id,
+                "correct": row.correct,
+                "total": row.total,
+                "updated_at": _iso(row.updated_at),
+            }
+            for row in db.execute(
+                select(ConceptMastery)
+                .where(ConceptMastery.student_id == student.id)
+                .order_by(ConceptMastery.concept_id)
+            ).scalars()
+        ]
+        student_abilities = [
+            {
+                "concept": row.concept,
+                "class_level": row.class_level,
+                "ability": row.ability,
+                "attempts": row.attempts,
+                "updated_at": _iso(row.updated_at),
+            }
+            for row in db.execute(
+                select(StudentAbility)
+                .where(StudentAbility.student_id == student.id)
+                .order_by(StudentAbility.concept)
+            ).scalars()
+        ]
+        classrooms = [
+            {
+                "classroom_id": room.id,
+                "school_id": room.school_id,
+                "class_level": room.class_level,
+                "section": room.section,
+            }
+            for room in db.execute(
+                select(ClassRoom)
+                .join(ClassStudent, ClassStudent.classroom_id == ClassRoom.id)
+                .where(ClassStudent.student_id == student.id)
+                .order_by(ClassRoom.id)
+            ).scalars()
+        ]
+
+    return _DataExportV2(
+        schema_version=EXPORT_SCHEMA_VERSION,
         user={
             "id": user.id,
             "email": user.email,
@@ -333,6 +728,28 @@ def export_me(response: Response, db: DbSession, user: CurrentUser) -> DataExpor
         conversations=conversations,
         chat_messages=chat_messages,
         learning_activity=learning_activity,
+        notes=notes,
+        notifications=notifications,
+        chapter_progress=chapter_progress,
+        revision_items=revision_items,
+        concept_mastery=concept_mastery,
+        student_abilities=student_abilities,
+        classrooms=classrooms,
+        ai_usage=ai_usage,
+        analytics_events=analytics_events,
+        feedback=feedback_rows,
+        ai_jobs=ai_jobs,
+        teacher_documents=teacher_documents,
+        question_papers=question_papers,
+        question_bank=question_bank,
+        short_tests=short_tests,
+        assignments=assignments,
+        support_plans=support_plans,
+        parent_invites=parent_invites,
+        student_invites=student_invites,
+        password_resets=password_resets,
+        email_verifications=email_verifications,
+        audit_events=audit_events,
     )
 
 
