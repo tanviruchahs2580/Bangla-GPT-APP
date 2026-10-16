@@ -25,10 +25,128 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  # T-026 -- the release pipeline had no dependency on CI at all.
+  #
+  # `push: tags: ["v*.*.*"]` started build-push (GHCR images + GitHub Release)
+  # and, when `vars.DEPLOY_ENABLED == 'true'`, the SSH production deploy --
+  # while ci.yml triggers on `push: branches: [main]` only, so the tag push ran
+  # no tests and nothing tied the release to a green build. Tagging a commit
+  # that CI never saw (or a mistaken tag on an old commit) shipped images and
+  # could deploy production. deploy/DEPLOYMENT.md claimed "the deploy workflow
+  # runs only after the full CI gate is green on main"; that claim was false.
+  #
+  # This job makes it true. Both jobs below `needs:` it, so it gates the image
+  # push, the release record and the SSH deploy from one place. It runs on
+  # every trigger (tag push and workflow_dispatch).
+  ci-gate:
+    name: Require green CI for this commit
+    runs-on: ubuntu-latest
+    # 10 minutes of bounded waiting below plus API/checkout overhead; a hung
+    # job is otherwise billed for GitHub's 6-hour default.
+    timeout-minutes: 15
+    # `checks: read` is deliberately NOT requested. The Checks API cannot say
+    # which workflow a check run belongs to -- a check run carries a name and a
+    # suite id, and an Actions check suite exposes no workflow name -- so a
+    # guard built on check-runs would have to hard-code the job names from
+    # ci.yml and would break the release on any rename. The Actions runs API
+    # answers the actual question ("did THIS repository's CI workflow conclude
+    # success for this commit?") and needs only `actions: read`.
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: CI must have concluded success for this commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Bounded wait: a tag pushed immediately after a merge races the CI
+          # run it is supposed to depend on. Waiting is preferred over failing
+          # outright because a false "CI is still running" failure would push
+          # operators to re-tag or bypass the gate; the wait is bounded so the
+          # job cannot hang, and the message on expiry is actionable.
+          CI_GATE_WAIT_SECONDS: "600"
+          CI_GATE_POLL_SECONDS: "20"
+        run: |
+          set -euo pipefail
+
+          # `github.sha` for an annotated-tag push is the TAG OBJECT, not the
+          # commit it points at. HEAD is checked out at the commit under both
+          # trigger types, so resolve through it and always query a commit.
+          COMMIT_SHA="$(git rev-parse --verify 'HEAD^{commit}')"
+          if [ "$COMMIT_SHA" != "$GITHUB_SHA" ]; then
+            echo "::notice::${GITHUB_REF} points at commit ${COMMIT_SHA} (github.sha ${GITHUB_SHA} is the tag object)"
+          fi
+
+          WORKFLOW_FILE="ci.yml"
+          deadline=$(( $(date +%s) + CI_GATE_WAIT_SECONDS ))
+          runs=""
+          pending=0
+          main_success=0
+          err="$(mktemp)"
+
+          while :; do
+            # An API/auth failure must not look like "no runs yet": capture the
+            # error and fail immediately rather than polling for 10 minutes.
+            if ! runs="$(gh api --paginate \
+                -H 'Accept: application/vnd.github+json' \
+                "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_FILE}/runs?head_sha=${COMMIT_SHA}&per_page=100" \
+                --jq '.workflow_runs[] | [.status, (.conclusion // "none"), .event, (.head_branch // "none"), .html_url] | @tsv' \
+                2>"$err")"; then
+              echo "::error title=CI gate cannot query GitHub::gh api failed for ${GITHUB_REPOSITORY} ${WORKFLOW_FILE} @ ${COMMIT_SHA}:"
+              cat "$err"
+              exit 1
+            fi
+
+            if [ -n "$runs" ]; then
+              echo "CI (${WORKFLOW_FILE}) runs for ${COMMIT_SHA}:"
+              printf '%s\n' "$runs" | awk -F'\t' '{printf "  status=%s conclusion=%s event=%s branch=%s %s\n", $1, $2, $3, $4, $5}'
+            fi
+
+            # A completed, successful run whose branch is main is the evidence
+            # this gate exists to require (push:main is the normal case; a
+            # manually dispatched CI run on main counts too).
+            main_success=$(printf '%s\n' "$runs" | awk -F'\t' '$1=="completed" && $2=="success" && $4=="main" {n++} END {print n+0}')
+            pending=$(printf '%s\n' "$runs" | awk -F'\t' '$1!="completed" {n++} END {print n+0}')
+
+            if [ "$main_success" -gt 0 ]; then
+              echo "CI (${WORKFLOW_FILE}) concluded success for ${COMMIT_SHA} on main; the release may proceed."
+              exit 0
+            fi
+
+            # Wait (bounded) while a run for this commit is missing or still in
+            # flight: a tag pushed right after a merge races its CI run.
+            if { [ "$pending" -gt 0 ] || [ -z "$runs" ]; } && [ "$(date +%s)" -lt "$deadline" ]; then
+              if [ -z "$runs" ]; then
+                echo "No ${WORKFLOW_FILE} run has appeared for ${COMMIT_SHA} yet; waiting ${CI_GATE_POLL_SECONDS}s (bounded to ${CI_GATE_WAIT_SECONDS}s in total)..."
+              else
+                echo "CI has not finished for ${COMMIT_SHA}; waiting ${CI_GATE_POLL_SECONDS}s (bounded to ${CI_GATE_WAIT_SECONDS}s in total)..."
+              fi
+              sleep "$CI_GATE_POLL_SECONDS"
+              continue
+            fi
+            break
+          done
+
+          # Every remaining path is a failure, with the reason spelled out.
+          if [ -z "$runs" ]; then
+            echo "::error title=No CI run for this commit::No run of ${WORKFLOW_FILE} exists for commit ${COMMIT_SHA} (ref ${GITHUB_REF}). A release tag must point at a commit this repository's CI workflow has tested. Push the commit to main, wait for 'API CI' to pass, then move the tag (git push --force origin ${GITHUB_REF} after git tag -f) or continue from a tested commit."
+            exit 1
+          fi
+          if [ "$pending" -gt 0 ]; then
+            echo "::error title=CI still running::${WORKFLOW_FILE} has not finished for ${COMMIT_SHA} within ${CI_GATE_WAIT_SECONDS}s. Wait for 'API CI' to complete, then re-run this workflow (gh workflow run release.yml --ref <ref>)."
+            exit 1
+          fi
+          echo "::error title=CI not green::No run of ${WORKFLOW_FILE} for ${COMMIT_SHA} concluded success on main (the run list is printed above). Fix the build on main and re-tag: releasing an untested commit is exactly what this gate exists to prevent."
+          exit 1
+
   build-push:
     name: Build & push images to GHCR
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs: ci-gate
     # packages:write is needed only to push to GHCR, so it is scoped to this
     # job rather than granted workflow-wide. The deploy job below runs SSH
     # commands on the host and has no reason to hold a registry token.
@@ -171,7 +289,10 @@ jobs:
 
   deploy:
     name: Deploy to production host (SSH)
-    needs: build-push
+    # ci-gate is transitive through build-push, but it is listed explicitly so
+    # the production-touching job cannot be reached by editing build-push's
+    # dependency list alone.
+    needs: [ci-gate, build-push]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Skips cleanly when deployment secrets are not configured yet.
