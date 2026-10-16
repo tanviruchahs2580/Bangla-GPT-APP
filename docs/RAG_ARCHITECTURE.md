@@ -1,8 +1,10 @@
 # RAG Architecture — Bangla GPT APP (NCTB subsystem)
 
 Status: **verified as implemented** (2026-08-25). Every component below maps
-to code in `apps/api/src/bangla_gpt_api/` and to executed evidence recorded
-in `FINAL_NCTB_RAG_PRODUCTION_AUDIT.md`.
+to code in `apps/api/src/bangla_gpt_api/` and to executed evidence recorded in
+`FINAL_NCTB_RAG_PRODUCTION_AUDIT.md` — archived, point-in-time evidence at
+`archive/FINAL_NCTB_RAG_PRODUCTION_AUDIT.md`; the measured numbers below are
+re-verified against the committed `data/nctb/retrieval_eval.json`.
 
 ## Implemented architecture (lexical baseline)
 

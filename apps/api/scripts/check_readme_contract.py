@@ -79,16 +79,18 @@ if "npm install" in text and "npm ci" not in text:
     )
 
 # 6. DOC-05: docs/ claims exactly one current QA record; make that true rather
-#    than aspirational. Superseded reports belong in docs/archive/.
+#    than aspirational. Superseded reports belong in docs/archive/. The record
+#    may sit either directly in docs/ or in docs/qa/ (QA_REPORT_<date>.md).
 qa_records = [
     p
-    for p in (REPO / "docs").glob("*.md")
+    for pattern in ("*.md", "qa/*.md")
+    for p in (REPO / "docs").glob(pattern)
     if "qa" in p.name.lower() or "certification" in p.name.lower()
 ]
 if len(qa_records) != 1:
     problems.append(
-        f"docs/ must hold exactly one current QA record, found {len(qa_records)}: "
-        f"{sorted(p.name for p in qa_records)}"
+        f"docs/ and docs/qa/ must hold exactly one current QA record, "
+        f"found {len(qa_records)}: {sorted(str(p.relative_to(REPO)) for p in qa_records)}"
     )
 
 # 7. Every relative link in the README must resolve. A dead link in the front

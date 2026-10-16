@@ -2,20 +2,21 @@
 
 Living documentation for the Bangla GPT APP. Point-in-time session and audit
 reports are **not** kept here — they live in [`archive/`](archive/) and are
-never quoted as current state. There is exactly one current QA record
-(`qa-audit-YYYY-MM-DD.md`), superseded and archived when the next is written.
+never quoted as current state. There is exactly one current QA record, under
+[`qa/`](qa/) (`qa/QA_REPORT_YYYY-MM-DD.md`), superseded and archived when the
+next is written.
 
 ## Core
 
 | Doc | Purpose |
 |---|---|
-| [API.md](API.md) | Hand-written endpoint reference |
+| [API.md](API.md) | Hand-written endpoint reference (core surface; see `route_baseline.md` + `/openapi.json` for the full route list) |
 | [architecture.md](architecture.md) | System architecture and decisions |
 | [architecture/DATABASE_ARCHITECTURE.md](architecture/DATABASE_ARCHITECTURE.md) | Data model |
 | [adr/ADRs.md](adr/ADRs.md) | Architecture decision records |
 | [runbook.md](runbook.md) | Operations runbook |
-| [route_baseline.md](route_baseline.md) | Hand-maintained route inventory — re-verify against the routers when routes change |
-| [qa-audit-2026-10-14.md](qa-audit-2026-10-14.md) | Current critical QA record |
+| [route_baseline.md](route_baseline.md) | Route inventory captured 2026-09-11 from the running app — no in-repo generator; re-verify against `/openapi.json` when routes change |
+| [qa/QA_REPORT_2026-10-16.md](qa/QA_REPORT_2026-10-16.md) | Current QA record |
 
 ## AI / data
 
@@ -33,6 +34,9 @@ never quoted as current state. There is exactly one current QA record
 | [capacity_plan.md](capacity_plan.md) | Capacity planning |
 | [owasp_checklist.md](owasp_checklist.md) | OWASP review checklist |
 | [security_scans.md](security_scans.md) | Security scan records |
+| [dependency_waivers.md](dependency_waivers.md) | Dependency risk waiver register |
+| [type-checking-plan.md](type-checking-plan.md) | mypy strictness plan |
+| [scale_report.md](scale_report.md) | Scale audit + local load-test numbers |
 | [data_minimization.md](data_minimization.md) | PII minimization policy |
 | [dpa_template.md](dpa_template.md) | Data processing agreement template |
 | [mobile_release.md](mobile_release.md) | Android/Capacitor release process |

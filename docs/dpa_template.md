@@ -3,7 +3,8 @@
 > **TEMPLATE — DRAFT, NOT LEGAL ADVICE.** This is an engineering-authored
 > starting point for a controller (school) / processor (platform) agreement.
 > It must be reviewed by a Bangladeshi lawyer before any school signs it —
-> that review is a 🖐 human step tracked in PROGRESS.md  and **has not
+> that review is a 🖐 human step tracked in
+> [`archive/PROGRESS.md`](archive/PROGRESS.md) and **has not
 > been performed**. Bangladesh's Digital Security Act / Cyber Security Act
 > 2023 and any applicable student-data rules must be checked by counsel; the
 > country has no comprehensive GDPR-equivalent statute yet, so contract terms
@@ -45,9 +46,10 @@ No student feature is usable without recorded guardian consent
    pgBackRest backups (14 fulls, restricted access), append-only audit log
    for privileged actions, OWASP-aligned review (docs/owasp_checklist.md),
    dependency scanning in CI (docs/security_scans.md).
-4. Assist the controller with data-subject requests: export
-   (`/account/export`, admin `/admin/users/{id}/export`) and deletion
-   (`/users/me`, admin deletion, plus the retention sweep for aged data).
+4. Assist the controller with data-subject requests: self-service export
+   (`GET /users/me/export`) and deletion (`DELETE /users/me`), plus the
+   retention sweep for aged data (`POST /admin/maintenance/purge` and the
+   nightly job). There is no admin export or admin-deletion endpoint.
 5. **Deletion SLA:** deletion requests executed within **[14] days**;
    backup media fall out per backup rotation (up to 14 days; documented in
    docs/backup_dr.md).

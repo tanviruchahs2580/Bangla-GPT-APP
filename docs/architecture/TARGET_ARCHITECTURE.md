@@ -36,7 +36,7 @@
 └────────────────────────┬─────────────────────────┘
                          │ HTTP / SSE / WebSocket
 ┌────────────────────────▼─────────────────────────┐
-│  API — FastAPI Entrypoint (main.py, 332 lines)   │
+│  API — FastAPI Entrypoint (main.py, 581 lines)   │
 │  ┌─────────────┐ ┌──────────────┐ ┌────────────┐│
 │  │ Middleware  │ │ CORS/SPF/CSH │ │ Request ID ││
 │  └──────┬──────┘ └──────┬───────┘ └─────┬──────┘│
@@ -44,12 +44,12 @@
 │  ┌──────▼────────────────▼───────────────▼──────┐│
 │  │  Routers (13 domain routers)                 ││
 │  │  admin / assessment / auth / common / learn  ││
-│  │  parent / school / system / teacher / tutor  ││
-│  │  users / workspace                           ││
+│  │  parent / school / system / teacher /        ││
+│  │  teacher_content / tutor / users / workspace ││
 │  └──────────────────┬──────────────────────────┘│
 │                     │                            │
 │  ┌──────────────────▼──────────────────────────┐│
-│  │  Application Services (45+ modules)        ││
+│  │  Application Services (35 modules)         ││
 │  │  tutor / learn / quiz / safety / knowledge  ││
 │  │  generators/ (lesson plan, quiz, homework)  ││
 │  │  circuit_breaker / mailer / cost tracking   ││
@@ -88,7 +88,7 @@ _screen_safety()         ← Bengali keyword regex (pre-retrieval gate)
     ↓
 retrieve(query, class, subject, chapter)  ← hybrid BM25 + vector + RRF
     ↓
-_coverage_gate(hits)     ← minimum evidence threshold
+_grounded(hits)          ← minimum evidence threshold (term coverage)
     ↓
 build_evidence_prompt()  ← PII redaction (phone/email/NID)
     ↓
@@ -133,9 +133,19 @@ middleware/ → no inbound from domain layers
 
 ## 6. API Boundaries
 
-All 116 routes registered via `register_routers()` in `routers/__init__.py`.
+All routes registered via `register_routers()` in `routers/__init__.py`:
+135 `@router` operations across 13 routers (134 OpenAPI operations; 116 unique
+path templates — `docs/route_baseline.md` is the checked-in per-route inventory
+and the live `/openapi.json` is authoritative).
 
-**Authentication-required routes:** All domain routes except `/health`, `/live`, `/ready`, `/register`, `/login`, `/forgot-password`, `/reset-password`, `/legal`, `/status`.
+**Authentication-required routes:** every domain route except the declared
+public set — the account entry points (`POST /auth/register`, `/auth/login`,
+`/auth/forgot`, `/auth/reset`, `/auth/verify-email`, `/auth/join-school`,
+`/auth/mfa/challenge`), `POST /auth/resend-verification` (optional auth) and the
+probes/status page (`GET /health`, `/live`, `/ready`, `/status`). The app marks
+this set explicitly in `PUBLIC_OPERATIONS` (`main.py`) and
+`tests/test_openapi_auth_matrix.py` fails if the contract and the declaration
+disagree.
 
 **CORS:** Configured via `ALLOWED_ORIGINS` env var, validated at startup.
 
@@ -147,7 +157,7 @@ All 116 routes registered via `register_routers()` in `routers/__init__.py`.
 |----------|---------------|
 | Transport | TLS via Caddy (prod); HTTP for local dev |
 | Auth | JWT with per-token jti revocation |
-| AuthN | PBKDF2 200K + MFA/TOTP optional |
+| AuthN | Argon2id (OWASP parameters) + optional TOTP/MFA (`auth/security.py`, `auth/mfa.py`) |
 | AuthZ | `require_roles()` decorator + school_id tenant filter |
 | Input | Pydantic validation on all endpoints |
 | Output | CSP headers, PII redaction, safe error messages |

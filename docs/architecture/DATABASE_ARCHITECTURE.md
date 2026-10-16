@@ -2,7 +2,9 @@
 
 > **Date:** 2026-09-14
 > **ORM:** SQLAlchemy 2.0
-> **Migrations:** Alembic (20 migrations, head: a1b2c3d4e5f6 — append-only)
+> **Migrations:** Alembic (append-only). The revision files in
+> `apps/api/alembic/versions/` are the source of truth for the current head —
+> run `alembic heads` from `apps/api/` to print it.
 
 ---
 
@@ -56,7 +58,14 @@ alembic downgrade -1
 alembic upgrade head && alembic downgrade base && alembic upgrade head
 ```
 
-**Current migration head:** `a1b2c3d4e5f6` (append-only — no downgrade-safe deletions).
+**Current migration head:** the repository has a single head; it moves with
+every new revision, so the authoritative answer is the command
+
+```bash
+cd apps/api && alembic heads        # prints "<revision> (head)"
+```
+
+(append-only — no downgrade-safe deletions).
 
 **Rules:**
 - Never delete or modify existing migration files
@@ -70,30 +79,42 @@ alembic upgrade head && alembic downgrade base && alembic upgrade head
 
 ### Core Tables (from `db/models.py`)
 
+Curated overview; `apps/api/src/bangla_gpt_api/db/models.py` is authoritative and
+also defines the remaining domain tables (assignments, question banks,
+short tests, question papers, chapter content, revision queue, notifications,
+AI jobs/usage, …).
+
 | Table | Key Fields | Purpose |
 |-------|-----------|---------|
-| `user` | id, email, hashed_password, role, school_id | Auth + RBAC |
-| `classroom` | id, school_id, class, section | School class structure |
-| `conversation` | id, user_id, strategy | Chat history |
-| `chat_message` | id, conversation_id, role, content, images | Message store |
-| `quiz_attempt` | id, user_id, quiz_id, score | Quiz results |
-| `audit_log` | id, user_id, action, entity, detail | Audit trail |
-| `job_run` | id, type, status, result, created_at | Job state tracking |
-| `parent_link` | id, parent_id, student_id, guardian_consent | Parent-child relationships |
-| `event` | id, user_id, type, data | Activity tracking |
+| `users` | id, email (unique), password_hash, role, school_id, email_verified, totp_secret, sessions_invalidated_at, failed_login_count, locked_until | Auth + RBAC |
+| `students` | id, user_id, name, class_level, learning_prefs, memory_enabled, consent_ip/consent_at/consent_version | Student profile + guardian-consent evidence |
+| `teachers` / `parents` | id, user_id, name (+ `parents.phone_enc`, encrypted) | Role profiles |
+| `schools` | id, name, code (unique) | School tenancy root |
+| `classrooms` | id, school_id, class_level, section (unique per school+level+section) | School class structure |
+| `class_students` / `class_teachers` | classroom_id + student_id / teacher_id, subject | Enrollment, teacher assignment |
+| `conversations` | id, student_id, title, last_strategy | Tutoring chat sessions |
+| `chat_messages` | id, conversation_id, role, content, grounded, refused_reason, sources_json, rating | Message store |
+| `quiz_attempts` | id, student_id, subject, class_level, status, total, correct, score_pct, quiz_json | Quiz results |
+| `answer_log` | id, attempt_id, question_text, chosen, correct_index, is_correct, chapter, book | Per-question answer trail |
+| `parent_student_links` | id, parent_id, student_id (unique pair) | Parent–child relationships (consent lives on `students`) |
+| `audit_log` | id, created_at, actor_user_id, actor_role, action, target, detail | Privileged-action audit trail |
+| `job_runs` | job, period_key (composite PK), started_at, finished_at, outcome | Scheduled-job claim/idempotency |
+| `analytics_events` | id, user_id (no FK), name, role, props | Privacy-safe activity tracking |
 
 ### Index Strategy
 
 | Table | Index | Reason |
 |-------|-------|--------|
-| `user.email` | UNIQUE | Auth lookup |
-| `conversation.user_id` | Non-unique | Query user conversations |
-| `chat_message.conversation_id` | Non-unique | Load chat history |
-| `quiz_attempt.user_id` | Non-unique | User quiz history |
-| `audit_log.user_id` | Non-unique | User audit trail |
-| `job_run.type + status` | Composite | Job claim/idempotency |
-| `parent_link.parent_id` | Non-unique | Parent's children |
-| `event.user_id + type` | Composite | Activity feed |
+| `users.email` | UNIQUE | Auth lookup |
+| `users.school_id` | Non-unique | Tenant scoping |
+| `students.user_id` | UNIQUE | Profile lookup |
+| `conversations.student_id` | Non-unique | Query a student's conversations |
+| `chat_messages.conversation_id` | Non-unique | Load chat history |
+| `quiz_attempts.student_id` | Non-unique | Student quiz history |
+| `audit_log.actor_user_id`, `audit_log.action` | Non-unique | Audit queries |
+| `job_runs (job, period_key)` | Composite primary key | Job claim/idempotency |
+| `parent_student_links.parent_id` / `.student_id` | Non-unique | Parent's children, student's guardians |
+| `analytics_events.user_id` / `.created_at` | Non-unique | Activity feed |
 
 ---
 

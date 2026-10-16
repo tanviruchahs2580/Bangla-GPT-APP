@@ -13,8 +13,8 @@ Legend: [DONE] implemented + tested | [PARTIAL] implemented, limitation noted
   Tests: `apps/api/tests/test_security_v2.py::test_audit_view_is_admin_only`,
   `test_security.py`.
 - [DONE] Object-level authorization: `authorize_student_access()`
-  (`apps/api/src/bangla_gpt_api/main.py`) gates student data to the student
-  themselves, their linked guardian, their school_admin (own school), or admin.
+  (`apps/api/src/bangla_gpt_api/routers/deps.py:331`) gates student data to the
+  student themselves, their linked guardian, their school_admin (own school), or admin.
   Tests: `test_parent_dashboard.py`, `test_school_dashboard.py`.
 - [DONE] Impersonation is admin-only and refuses admin/school_admin targets
   (403 `impersonation_forbidden`).
@@ -22,9 +22,12 @@ Legend: [DONE] implemented + tested | [PARTIAL] implemented, limitation noted
 - [DONE] Role changes are admin-only and audited (see A09).
 
 ## A02 -- Cryptographic Failures
-- [DONE] Passwords: PBKDF2-SHA256 with per-user salt and high iteration count
-  (`apps/api/src/bangla_gpt_api/auth/security.py`, format
-  `pbkdf2_sha256$<iterations>$<salt>$<digest>`). Never logged.
+- [DONE] Passwords: Argon2id at the OWASP Password Storage Cheat Sheet
+  parameters — `time_cost=2`, `memory_cost=19 MiB`, `parallelism=1`
+  (`apps/api/src/bangla_gpt_api/auth/security.py`, `PasswordHasher`). Never
+  logged. Legacy `pbkdf2_sha256$<iterations>$<salt>$<digest>` hashes are still
+  accepted for verification, but a successful login re-hashes them to Argon2id
+  in place (`needs_rehash()` / `POST /auth/login`).
 - [DONE] Guardian phone encrypted at rest with Fernet
   (`parents.phone_enc`, `apps/api/src/bangla_gpt_api/security.py`).
   Proof: raw-SQLite inspection asserts the cell starts with `fernet:` and the
@@ -72,10 +75,11 @@ Legend: [DONE] implemented + tested | [PARTIAL] implemented, limitation noted
 - [DONE] CORS: explicit allowlist from `CORS_ORIGINS`; no wildcard in prod
   (enforced at boot). Tests: `test_cors.py`.
 - [DONE] `Server` header stripped at the edge (`-Server` in Caddyfile).
-- [RISK] `/docs`, `/redoc`, `/openapi.json` are exempt from the API CSP and
-  are dev surfaces. Accepted for now because they only appear on the API
-  origin (behind Caddy's `/api` path strip) and carry no session state;
-  removing them in prod images is a post-hardening ticket.
+- [DONE] `/docs`, `/redoc`, `/openapi.json` are development-only surfaces:
+  `main.py` passes `docs_url=None`, `redoc_url=None` and `openapi_url=None` to
+  `FastAPI(...)` whenever `ENV=production`/`staging`, so a production image
+  serves no interactive reference or schema. They remain enabled outside
+  production, where they are the point.
 
 ## A06 -- Vulnerable & Outdated Components
 - [DONE] CI gates: `pip-audit` on the API job and
@@ -95,17 +99,24 @@ Legend: [DONE] implemented + tested | [PARTIAL] implemented, limitation noted
 - [DONE] Email verification + reset-token flow with single-use tokens
   (`test_password_reset.py`, `test_email_verification` coverage in
   `test_auth_teacher.py`).
-- [PARTIAL] No progressive login lockout beyond the per-IP rate limit;
-  accepted at current threat model, revisit with a real user base.
+- [DONE] Progressive per-account login lockout: five consecutive password
+  failures lock the account for `60 s × 2^(n−5)`, capped, tracked on
+  `users.failed_login_count` / `users.locked_until`
+  (`routers/auth.py` `_lockout_seconds()`, migration
+  `b4c6d8e0f2a4_login_lockout.py`); a successful sign-in clears both.
+  Independent of the per-IP rate limit above, so rotating IPs does not reset it.
 
 ## A08 -- Software & Data Integrity Failures
 - [DONE] Migrations are append-only Alembic revisions; CI runs
   upgrade-head -> downgrade-base -> upgrade-head on every push.
 - [DONE] Supply chain: lockfiles committed (`package-lock.json`, pinned
   pyproject deps); CI `npm ci` (not `npm install`).
-- [PARTIAL] Impersonation tokens are stateless JWTs: a live impersonation
-  session cannot be revoked before its hard 15-minute ceiling; stop-endpoint
-  plus audit rows make the window attributable. Revocation list is a follow-up. Test: `test_security_v2.py::test_impersonated_token_is_short_lived_and_attributable`.
+- [DONE] Impersonation tokens are purpose-bound JWTs with a hard 15-minute
+  ceiling, and the session can be ended before then: `POST
+  /auth/impersonate/exit` (and `DELETE /admin/users/{id}/impersonate`) parks
+  the token's `jti` in the shared deny-list, so the token is refused
+  server-side immediately. Start and exit are both audited. Tests:
+  `test_security_v2.py::test_impersonated_token_is_short_lived_and_attributable`.
 
 ## A09 -- Logging & Monitoring Failures
 - [DONE] Audit trail (`audit_log` table, migration

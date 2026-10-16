@@ -15,7 +15,7 @@ master plan (REQ-001..REQ-035+).
 | Toolchain | Present | Decision |
 |---|---|---|
 | Python 3.12.10 | yes | Backend language |
-| Node 24 / npm 11 | yes | Reserved for web dashboard phase |
+| Node 24 / npm 11 | yes | Frontend toolchain for the `apps/web` dashboard (Vite + React + TypeScript) |
 | Docker | yes | Containerized (Dockerfile + docker-compose.yml); CI builds and smoke-tests the image |
 | Flutter SDK | no | Mobile deferred (cannot verify locally) |
 | LLM API keys | no | Not provided; provider abstraction + deterministic mock |
@@ -37,14 +37,16 @@ master plan (REQ-001..REQ-035+).
 
 ```text
 BanglaGptApp/
-├── apps/api/                 # FastAPI service (Phase 1)
-│   ├── src/bangla_gpt_api/
-│   │   ├── config.py         # Settings (env-driven)
-│   │   ├── main.py           # app factory: /health /live /ready
-│   │   └── providers/        # LLMProvider protocol, mock impl, factory
+├── apps/api/                 # FastAPI service
+│   ├── src/bangla_gpt_api/   # config, main, routers/, services/, retrieval/, nctb/
 │   └── tests/
-├──.github/workflows/        # repository-sanity.yml, ci.yml
-└── docs/architecture.md
+├── apps/web/                 # React dashboard (Vite + TS) + Capacitor Android
+├── deploy/                   # caddy / postgres / prometheus / grafana configs
+├── scripts/                  # ops & maintenance scripts
+├── .github/workflows/        # ci.yml, eval-gate.yml, release.yml, vercel-deploy.yml
+├── docker-compose.yml
+├── Dockerfile
+└── docs/                     # living documentation (see docs/README.md)
 ```
 
 ## Stack decisions (Phase 2 — student domain core, verified)
@@ -103,8 +105,10 @@ BanglaGptApp/
 
 ## Stack decisions (Phase 4 — auth & teacher analytics, verified)
 
-- **Credentials**: PBKDF2-HMAC-SHA256 (200k iterations, per-user salt,
-  constant-time compare) via stdlib — no hashing dependency.
+- **Credentials**: Argon2id at the OWASP parameters (`time_cost=2`,
+  `memory_cost=19 MiB`, `parallelism=1`) via the `argon2-cffi` dependency
+  (`auth/security.py`). Legacy PBKDF2-HMAC-SHA256 hashes are still verified for
+  existing accounts and re-hashed to Argon2id on the next successful login.
 - **Tokens**: HS256 JWT (`pyjwt`), `sub`=user id, `role`, `exp`
   (`JWT_EXPIRE_MINUTES`). Secret from env (`JWT_SECRET`); the committed dev
   default is documented as insecure-on-purpose in `.env.example`.
@@ -133,12 +137,13 @@ BanglaGptApp/
   `ADMIN_PASSWORD` are set and no admin exists. Admin endpoints: list users,
   change roles (with last-admin demotion guard → 409), platform overview
   counts.
-- **Rate limiting** (`RateLimitMiddleware`): sliding window with IP and
-  per-user scopes over the configured rule set (`RATE_LIMIT_RULES` /
-  `_derive_default_rules`: login, MFA challenge, tutor, teacher AI generators,
-  …); limits via settings; returns 429. The memory backend is per-process; a
-  shared Redis backend is available for multi-worker deployments
-  (`RATE_LIMIT_BACKEND=redis`).
+- **Rate limiting** (`RateLimitMiddleware`): IP and per-user scopes over the
+  configured rule set (`RATE_LIMIT_RULES` / `_derive_default_rules`: login,
+  MFA challenge, tutor, teacher AI generators, …); limits via settings;
+  returns 429. Window type depends on the backend (`ratelimit.py`): the
+  default in-process `memory` backend is a sliding 60 s window, while the
+  shared `redis` backend (`RATE_LIMIT_BACKEND=redis`, the multi-worker/
+  production setting) uses fixed 60 s `INCR`/`EXPIRE` counters.
 - **Body-size guard**: requests with `Content-Length` above `MAX_BODY_BYTES`
   (default 4,000,000 bytes, see `config.py`) rejected 413 before routing.
 - **Container** (`Dockerfile`): python:3.12-slim, non-root user, healthcheck,
@@ -219,7 +224,9 @@ BanglaGptApp/
 - **Encoding**: all verified PDFs use legacy Bijoy/SutonnyMJ ANSI encoding;
   `nctb/bijoy.py` converts to Unicode (verified on real pages) with
   per-page crash isolation and honest QC (`quality_report.json`).
-- **Indexing safety**: sources below 0.5 Bangla ratio never reach the tutor
+- **Indexing safety**: only pages whose extracted text passes the corruption
+  heuristic are chunked (`nctb/extract.py` `PageText.usable` →
+  `nctb/chunking.py`), so un- or mis-converted pages never reach the tutor
   index. Class level is derived only when unambiguous, else the declared
   level range applies.
 - **Grounding gate**: query-term coverage ≥ 0.5 replaces absolute score
@@ -233,8 +240,8 @@ BanglaGptApp/
 
 | Item | Blocker |
 |---|---|
-| Real LLM provider integration + hallucination eval | API key required from user |
+| Live Gemini latency/quota validation | a real `GEMINI_API_KEY` must be deployed (the provider integration and its contract tests ship) |
 | Student পাঠ্যপুস্তক (textbook) corpus | not published as static downloads on nctb.gov.bd static pages; needs alternate authorized channel/OCR pipeline |
 | Model-based dense retrieval + model-based reranker benchmark | embedding-model benchmark infrastructure (a dependency-free vector lane and RRF fusion already ship; the golden set + 2pp gate run in CI) |
 | Mobile release builds (Capacitor Android signing, iOS) | no JDK/Android SDK or macOS host on the dev machine (the project ships at `apps/web/android`) |
-| Postgres/Redis, load testing at scale, monitoring/alerts, prod deploy | Production infrastructure required |
+| Sustained scale beyond the CI rehearsal | Postgres/Redis profiles, monitoring/alerts and backups ship (see `docs/runbook.md` §2/§5, `docs/backup_dr.md`); load numbers come from local probes, not a production soak |

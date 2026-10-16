@@ -66,23 +66,33 @@ affected content stays retrievable at reduced lexical precision.
 ## 4. Quality control (`quality_report.json`, committed)
 
 Per source: total/empty/garbage/usable pages, usable ratio, Bangla ratio on
-usable text, page-encoding histogram, chunk count. Verified run:
+usable text, page-encoding histogram, chunk count. The table below is a
+snapshot of the committed report (built 2026-10-05); it is derived, not
+maintained by hand — re-read it from the JSON before trusting a number:
+
+```bash
+# from the repository root
+python -c "import json; r=json.load(open('data/nctb/quality_report.json', encoding='utf-8')); [print(v['subject_bn'], f\"{v['usable_pages']}/{v['total_pages']}\", v['bangla_char_ratio_on_usable'], v['chunks']) for v in r.values()]"
+```
 
 | Source | usable pages | Bangla ratio (post-conversion) | chunks |
 |---|---|---|---|
-| বাংলা | 91/93 | 1.00 | 126 |
+| বাংলা | 91/93 | 1.00 | 130 |
 | ইংরেজি (English book) | 91/93 | 0.04 (correctly low) | 122 |
-| গণিত ও উচ্চতর গণিত | 143/146 | 1.00 | 173 |
-| বিজ্ঞান শাখার বিষয়সমূহ | 239/241 | 1.00 | 302 |
-| আইসিটি ও ক্যারিয়ার এডুকেশন | 109/111 | 1.00 | 147 |
-| পদার্থবিদ্যা | 52/52 | 0.84 | 81 |
-| রসায়ন | 45/45 | 0.90 | 83 |
-| জীববিজ্ঞান | 46/46 | 0.83 | 81 |
-| উচ্চতর গণিত | 52/52 | 0.73 | 84 |
+| গণিত ও উচ্চতর গণিত | 143/146 | 1.00 | 88 |
+| বিজ্ঞান শাখার বিষয়সমূহ | 239/241 | 1.00 | 81 |
+| আইসিটি ও ক্যারিয়ার এডুকেশন | 109/111 | 1.00 | 85 |
+| পদার্থবিদ্যা | 52/52 | 0.84 | 78 |
+| রসায়ন | 45/45 | 0.90 | 67 |
+| জীববিজ্ঞান | 46/46 | 0.83 | 69 |
+| উচ্চতর গণিত | 52/52 | 0.73 | 80 |
 
-Indexing gate: any source below **0.5 Bangla ratio on usable text** never
-reaches the tutor index (`nctb/corpus.py`) — this is what keeps
-un- or mis-converted content out of student answers.
+Indexing gate: only pages that pass the corruption heuristic are chunked —
+`PageText.usable` (non-empty text that `looks_like_garbage()` does not flag,
+`nctb/extract.py`) is the filter `nctb/chunking.py` applies before a page
+becomes chunks, so unusable or mis-extracted pages never reach the tutor
+index. The report keeps a row for every page either way; nothing is silently
+dropped.
 
 ## 5. Chunking & class metadata
 
@@ -99,9 +109,9 @@ un- or mis-converted content out of student answers.
 
 ```bash
 git clone <repo> && cd BanglaGptApp/apps/api
-python -m venv.venv &&.venv/Scripts/pip install -e ".[dev]"
-.venv/Scripts/python scripts/build_nctb_corpus.py --data-dir../../data/nctb --subset all
-.venv/Scripts/python scripts/evaluate_nctb_retrieval.py../../data/nctb
+python -m venv .venv && .venv/Scripts/pip install -e ".[dev]"
+.venv/Scripts/python scripts/build_nctb_corpus.py --data-dir ../../data/nctb --subset all
+.venv/Scripts/python scripts/evaluate_nctb_retrieval.py ../../data/nctb
 # then run API with NCTB_CORPUS_DIR=../../data/nctb
 ```
 

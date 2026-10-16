@@ -1,7 +1,9 @@
 # PRODUCTION DEPLOYMENT — Bangla-GPT-APP
 
 > **Date:** 2026-09-14
-> **Current production:** Vercel SPA + Cloudflare Tunnel API
+> **Current production:** Vercel SPA; the API origin is supplied per-deployment
+> through the `API_ORIGIN` variable of the `apps/web/api/[[...path]].ts` edge
+> proxy (no origin or tunnel hostname is baked into the repo — see README.md).
 
 ---
 
@@ -22,12 +24,13 @@
 ```bash
 # Build Docker image (same as CI)
 DOCKER_BUILDKIT=1 docker build \
-  --build-arg APP_VERSION=0.9.1 \
-  --tag ghcr.io/tanviruchahs2580/bangla-gpt-app/api:v0.9.1 \
-  --push.
+  --build-arg APP_VERSION=0.9.2 \
+  --tag ghcr.io/tanviruchahs2580/bangla-gpt-app/api:v0.9.2 \
+  --push .
 ```
 
-**Dockerfile:** Multi-stage build (builder → runner). Python 3.12-alpine base.
+**Dockerfile:** Multi-stage build (builder → runner). `python:3.12-slim`
+base, pinned by digest (`Dockerfile:11`).
 
 ### Web
 
@@ -71,14 +74,17 @@ ADMIN_PASSWORD=<12+ chars>
 
 1. **Frontend:** `npx vercel --prod` from `apps/web/`
 2. **API:** Deploy to any VM/PaaS (Railway, Fly.io, AWS EC2, GCP VM)
-3. **Update rewrite:** Change `apps/web/vercel.json` destination to new API host
+3. **Point the edge proxy at it:** set the `API_ORIGIN` project environment
+   variable in Vercel (the proxy `apps/web/api/[[...path]].ts` reads it;
+   `apps/web/vercel.json` contains no API destination). Until it is set,
+   `/api/*` answers 503 `api_origin_unconfigured` by design.
 4. **Reroute DNS:** Point custom domain to Vercel
 
 ### Option C: GHCR pull (verified in CI)
 
 ```bash
-docker pull ghcr.io/tanviruchahs2580/bangla-gpt-app/api:v0.9.1
-docker pull ghcr.io/tanviruchahs2580/bangla-gpt-app/web:v0.9.1
+docker pull ghcr.io/tanviruchahs2580/bangla-gpt-app/api:v0.9.2
+docker pull ghcr.io/tanviruchahs2580/bangla-gpt-app/web:v0.9.2
 ```
 
 ---
@@ -103,7 +109,7 @@ All of these must pass for a successful deployment:
 |---------|-----|------|
 | TLS | Optional (Caddy) | Required (Caddy auto-HTTPS) |
 | CORS | `http://localhost:5173` | Vercel domain only |
-| JWT_SECRET | `change-me-to-a-long-random-string` | 32+ char random |
+| JWT_SECRET | `dev-insecure-change-me` (`config.py` default) | 32+ char random |
 | PASSWORD_RESET_TOKEN_MINUTES | 30 | 30 |
 | FORCE_ADMIN_PASSWORD_CHANGE | true | true |
 | MAX_BODY_BYTES | 4000000 (4MB) | 4000000 (4MB) |
@@ -147,12 +153,14 @@ domain {
 | Grafana | `deploy/grafana/dashboards/bangla-gpt.json` | Dashboards |
 | Sentry | `configure_observability_with_sentry()` | Error tracking |
 
-**Key alerts** (`deploy/prometheus/alerts.yml`):
-- High error rate (>5% 5xx)
-- High latency (p95 > 2s)
-- DB connection pool exhaustion
-- Redis connectivity loss
-- AI circuit breaker open
+**Key alerts** — the threshold each rule actually ships with in
+`deploy/prometheus/alerts.yml` (also listed in `docs/runbook.md` §5):
+
+- `HighHTTP5xxRate` — >2% 5xx for 5 min (critical)
+- `HighP95Latency` — p95 > 1s for 10 min (warning)
+- `APIScrapeDown` — Prometheus scrape target down for 2 min (critical)
+- `UnhandledExceptions` — any unhandled exception in the last 10 min (warning)
+- `DiskNearFull` — disk >80% for 15 min (warning; needs node_exporter)
 
 ---
 
@@ -184,7 +192,10 @@ alembic downgrade -1
 alembic downgrade <revision>
 ```
 
-**Note:** Since migrations are append-only (head `a1b2c3d4e5f6`), rollback is safe for data migration reversibility but not for schema downgrades involving data loss.
+**Note:** Since migrations are append-only, rollback is safe for data migration
+reversibility but not for schema downgrades involving data loss. The revision to
+downgrade to is whatever `alembic heads` / `alembic history` prints for the
+deployed database — never a value copied from a document, including this one.
 
 ---
 
@@ -211,6 +222,14 @@ Validates:
 
 ## 10. Known Operational Caveats
 
-1. **Current API runs on owner's machine behind Cloudflare tunnel** — Not suitable for permanent production. Migrate API to a VM or PaaS.
-2. **Tunnel hostname rotates** — Update `vercel.json` destination after restart, or use a named Cloudflare tunnel.
-3. **LLM provider is `mock`** — Wire real `LLM_PROVIDER`/key for actual AI responses.
+1. **The web app has no origin of its own.** The Vercel edge proxy forwards
+   `/api/*` to whatever `API_ORIGIN` names, so the API side must be reachable
+   at a stable address; a rotating quick-tunnel hostname is explicitly not
+   suitable for permanent production. Migrate the API to a VM or PaaS and
+   give it a stable origin.
+2. **The origin is configuration, not a file.** Changing it means updating the
+   `API_ORIGIN` environment variable in the Vercel project (and redeploying).
+   `apps/web/vercel.json` holds no API destination to edit.
+3. **The code default LLM provider is `mock`.** Production must set
+   `LLM_PROVIDER`/key for real AI responses; the shipped template
+   (`.env.production.example`) sets `LLM_PROVIDER=gemini`.

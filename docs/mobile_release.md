@@ -67,7 +67,8 @@ Push requires human/external work: a Firebase console project,
 `@capacitor/push-notifications` + `@capacitor-firebase/messaging`
 plugins, and a server-side send path (the API currently has no push
 sender). The weekly parent digest and assignment reminders email today
-(mailer, ); push is an ADD-ON, tracked as a 🖐 follow-up, not a
+(SMTP via `services/mailer.py`, gated by `SMTP_ENABLED`); push is an ADD-ON,
+tracked as a 🖐 follow-up, not a
 silent gap: no code claims FCM exists.
 
 ### iOS
@@ -77,5 +78,5 @@ npx cap open ios`. Out of scope locally; 🖐.
 
 ## Status page note
 
-Admin-visible release status lives in (`/status` + admin status
-page), not here.
+Admin-visible release status lives in `GET /status` (public page, web route
+`/status`) and the admin dashboard, not here.

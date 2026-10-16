@@ -16,7 +16,7 @@ measurement during S7. No secrets, no PII in this document.
 | UI webfonts shipped | 12 woff2 subsets, 317 KB total (all weights × subsets) | dist/assets |
 | Bengali UI font on-wire | hind-siliguri-bengali-400: **51.6 KB gzip on-wire** | measured (:4174) |
 | KaTeX fonts | ~301 KB, but unicode-range split → only fetched by students who actually see math | dist/assets |
-| Full corpus server DB (dev, synthetic) | 1.3 MB SQLite | apps/api/dev.db |
+| Dev SQLite DB (synthetic data) | local artifact, **not committed** — `apps/api/bangla_gpt.db` measured 540 KiB (552,960 B) on 2026-10-16; the schema default is `sqlite:///./bangla_gpt.db`, created on first boot | `ls -l apps/api/bangla_gpt.db` |
 
 ## 2. Workload model (assumptions — replace with pilot data)
 
