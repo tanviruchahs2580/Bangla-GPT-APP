@@ -106,10 +106,10 @@ def main() -> int:
     ]
     gate_pass = 0
     for question in adversarial:
-        hits = index.search(question, class_level=6, top_k=1)
+        # exactly the ask() decision: retrieve, then the coverage gate.
+        hits = tutor._retrieve(question, class_level=6, subject=None)
         top_score = hits[0].score if hits else None
-        top_text = hits[0].chunk.text if hits else ""
-        refused = not tutor._grounded(question, top_score, top_text)
+        refused = not tutor._gate(question, hits)
         gate_pass += refused
         print(f"  adversarial '{question[:30]}…' top={top_score} refused={refused}")
 
