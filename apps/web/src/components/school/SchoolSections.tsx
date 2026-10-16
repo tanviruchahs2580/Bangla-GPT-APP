@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import {
   getSchoolAnalytics,
   getSchoolClasses,
@@ -6,9 +6,49 @@ import {
   getSchoolStudents,
   getSchoolTeachers,
 } from "../../api";
-import { Badge } from "../ui";
+import { Badge, Button } from "../ui";
 import { t } from "../../i18n";
 import { track } from "../../lib/analytics";
+
+/**
+ * F-022: the five section queries used to render nothing at all until data
+ * arrived, and nothing ever if the request failed — the school admin saw an
+ * empty dashboard with no spinner, no error and no way to retry. Each
+ * section now owns its pending/error state.
+ */
+function SectionState({
+  label,
+  q,
+}: {
+  label: string;
+  q: UseQueryResult<unknown>;
+}) {
+  if (q.isPending) {
+    return (
+      <section className="card" aria-label={label}>
+        <h2>{label}</h2>
+        <p className="muted" role="status">
+          {t("loading")}
+        </p>
+      </section>
+    );
+  }
+  if (q.isError) {
+    return (
+      <section className="card" aria-label={label}>
+        <h2>{label}</h2>
+        <p className="error" role="alert">
+          {t("errorGeneric")}
+        </p>
+        <Button variant="ghost" size="sm" onClick={() => void q.refetch()}>
+          {t("retry")}
+        </Button>
+      </section>
+    );
+  }
+  // Data is present: the caller renders the real section.
+  return null;
+}
 
 /** school section: roster, teachers, classes, coverage, analytics. */
 export function SchoolSections() {
@@ -38,7 +78,7 @@ export function SchoolSections() {
 
   return (
     <>
-      {students.data && (
+      {students.data ? (
         <section className="card" aria-label={t("students")}>
           <h2>
             {t("students")} ({students.data.total})
@@ -68,9 +108,11 @@ export function SchoolSections() {
             </table>
           </div>
         </section>
+      ) : (
+        <SectionState label={t("students")} q={students} />
       )}
 
-      {teachers.data && (
+      {teachers.data ? (
         <section className="card" aria-label={t("sdTeachers")}>
           <h2>{t("sdTeachers")}</h2>
           <div className="table-wrap">
@@ -94,9 +136,11 @@ export function SchoolSections() {
             </table>
           </div>
         </section>
+      ) : (
+        <SectionState label={t("sdTeachers")} q={teachers} />
       )}
 
-      {classes.data && (
+      {classes.data ? (
         <section className="card" aria-label={t("classrooms")}>
           <h2>{t("classrooms")}</h2>
           <div className="table-wrap">
@@ -130,9 +174,11 @@ export function SchoolSections() {
             </table>
           </div>
         </section>
+      ) : (
+        <SectionState label={t("classrooms")} q={classes} />
       )}
 
-      {coverage.data && (
+      {coverage.data ? (
         <section className="card" aria-label={t("covTitle")}>
           <h2>{t("covTitle")}</h2>
           {coverage.data.rows.length === 0 ? (
@@ -176,9 +222,11 @@ export function SchoolSections() {
             </div>
           )}
         </section>
+      ) : (
+        <SectionState label={t("covTitle")} q={coverage} />
       )}
 
-      {analytics.data && (
+      {analytics.data ? (
         <section className="card" aria-label={t("anaTitle")}>
           <h2>{t("anaTitle")}</h2>
           <p className="muted m-0">{analytics.data.days}d</p>
@@ -209,6 +257,8 @@ export function SchoolSections() {
             </div>
           </div>
         </section>
+      ) : (
+        <SectionState label={t("anaTitle")} q={analytics} />
       )}
     </>
   );

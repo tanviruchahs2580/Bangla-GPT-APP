@@ -3,7 +3,6 @@ import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes, Link } from "react-router-dom";
 import * as Sentry from "@sentry/react";
-
 // Sentry — no-op when DSN absent
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
@@ -17,10 +16,14 @@ import "@fontsource/noto-sans-bengali/400.css";
 import "@fontsource/noto-sans-bengali/700.css";
 import "@fontsource/hind-siliguri/400.css";
 import "@fontsource/hind-siliguri/600.css";
-import { getToken } from "./api";
+import { getToken, setLogoutCleanup } from "./api";
 import { AuthProvider, ROLE_HOME, useAuth } from "./AuthContext";
 import { AppShell } from "./AppShell";
 import { Skeleton } from "./components/ui";
+import {
+  AppErrorBoundary,
+  RouteErrorBoundary,
+} from "./components/AppErrorBoundary";
 import { onLangChange, t } from "./i18n";
 import { initInstallPrompt } from "./lib/installPrompt";
 import { initLowData } from "./lib/lowData";
@@ -73,6 +76,10 @@ const queryClient = new QueryClient({
   },
 });
 
+// F-036: cached query data is user data. logout() awaits this so sign-out
+// cannot hand the next user on a shared device the previous one's dashboards.
+setLogoutCleanup(() => queryClient.clear());
+
 function RequireAuth({
   role,
   children,
@@ -101,7 +108,13 @@ function RequireAuth({
   if (me === null) return <Navigate to="/login" replace />;
   if (role && me.role !== role)
     return <Navigate to={ROLE_HOME[me.role] ?? "/login"} replace />;
-  return <AppShell>{children}</AppShell>;
+  // F-001: the page renders inside its own boundary, so a page-level render
+  // error keeps the nav/sidebar alive and clears when the route changes.
+  return (
+    <AppShell>
+      <RouteErrorBoundary>{children}</RouteErrorBoundary>
+    </AppShell>
+  );
 }
 
 /**
@@ -152,22 +165,68 @@ function RoutesSwitch() {
           me ? (
             <Navigate to={ROLE_HOME[me.role] ?? "/login"} replace />
           ) : (
-            <WelcomePage />
+            <RouteErrorBoundary>
+              <WelcomePage />
+            </RouteErrorBoundary>
           )
         }
       />
       <Route
         path="/login"
-        element={me ? <Navigate to={home} replace /> : <LoginPage />}
+        element={
+          me ? (
+            <Navigate to={home} replace />
+          ) : (
+            <RouteErrorBoundary>
+              <LoginPage />
+            </RouteErrorBoundary>
+          )
+        }
       />
       <Route
         path="/register"
-        element={me ? <Navigate to={home} replace /> : <RegisterPage />}
+        element={
+          me ? (
+            <Navigate to={home} replace />
+          ) : (
+            <RouteErrorBoundary>
+              <RegisterPage />
+            </RouteErrorBoundary>
+          )
+        }
       />
-      <Route path="/forgot" element={<ForgotResetPage />} />
-      <Route path="/privacy" element={<LegalPage kind="privacy" />} />
-      <Route path="/terms" element={<LegalPage kind="terms" />} />
-      <Route path="/status" element={<StatusPage />} />
+      <Route
+        path="/forgot"
+        element={
+          <RouteErrorBoundary>
+            <ForgotResetPage />
+          </RouteErrorBoundary>
+        }
+      />
+      <Route
+        path="/privacy"
+        element={
+          <RouteErrorBoundary>
+            <LegalPage kind="privacy" />
+          </RouteErrorBoundary>
+        }
+      />
+      <Route
+        path="/terms"
+        element={
+          <RouteErrorBoundary>
+            <LegalPage kind="terms" />
+          </RouteErrorBoundary>
+        }
+      />
+      <Route
+        path="/status"
+        element={
+          <RouteErrorBoundary>
+            <StatusPage />
+          </RouteErrorBoundary>
+        }
+      />
 
       <Route
         path="/student"
@@ -332,47 +391,20 @@ function Footer() {
   );
 }
 
-class ErrorBoundary extends React.Component<
-  { children: React.ReactNode },
-  { error: Error | null }
-> {
-  state = { error: null as Error | null };
-  static getDerivedStateFromError(error: Error) {
-    return { error };
-  }
-  render() {
-    if (this.state.error) {
-      return (
-        <div className="container" role="alert">
-          <div className="card">
-            <h2>{t("errorGeneric")}</h2>
-            <p className="muted">{this.state.error.message}</p>
-            <button
-              className="btn btn-primary"
-              onClick={() => window.location.reload()}
-            >
-              {t("retry")}
-            </button>
-          </div>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
 // apply the persisted low-data mode before first paint.
 initLowData();
 initInstallPrompt();
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <ErrorBoundary>
+    {/* Last-resort boundary for errors above the routes (providers, shell);
+        per-route recovery lives in RouteErrorBoundary (F-001). */}
+    <AppErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <App />
         </AuthProvider>
       </QueryClientProvider>
-    </ErrorBoundary>
+    </AppErrorBoundary>
   </React.StrictMode>,
 );
 
