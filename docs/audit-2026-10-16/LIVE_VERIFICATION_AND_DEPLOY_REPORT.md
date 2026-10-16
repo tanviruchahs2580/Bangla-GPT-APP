@@ -178,3 +178,63 @@ The first hosted run failed two required checks — both real, both fixed:
 Hosted results for the remaining checks on the corrected branch: Postgres
 engine check **pass**, Docker build & smoke **pass**, golden retrieval benchmark
 **pass**, eval gate **pass**, Web build & test **pass**.
+
+---
+
+## 5. Outcome
+
+### 5.1 Merged and green on `main`
+- PR **#15** merged into `main` as merge commit **`afcbcb7`** (admin bypass used
+  for the one-approving-review rule; no second human was available, and the
+  bypass is stated in the merge message rather than hidden). A merge commit —
+  not a squash — is what the changelog guard expects, since merge commits are
+  excluded from its "every commit is listed" rule.
+- Post-merge `main`: **API CI success** and **eval gate success** on
+  `afcbcb7`. All seven required checks were green on the branch beforehand
+  (`Lint & test` 3.11 and 3.12, Postgres engine check, Docker build & smoke,
+  golden retrieval benchmark, Web build & test, Repository guardrails).
+
+### 5.2 Production is live with this build
+- Vercel's **Git integration** deployed the merge commit to production at
+  `2026-10-16T03:40:27Z` (`Last-Modified` on the served `index.html`).
+- Sync evidence from the live site:
+  - `index.html` now advertises **শ্রেণি ৬–১০**; an hour before this merge it
+    still served **১–১২** — the exact drift this audit flagged (`F-39`).
+  - The live main bundle contains `memory_on_disable_note`, `school_admin` and
+    `stream ended before completion` — i.e. the i18n copy fix (`F-34`), the
+    admin role-list fix (`F-35`) and the stream-error port (BUG-005) are all
+    running in production. (`suggestionSentence` and `api_origin_unreachable`
+    are minified and edge-only respectively, so they are absent by design.)
+  - Public routes `/`, `/welcome`, `/login`, `/status` all answer 200.
+- **The Actions deploy workflow is redundant and still red.** `vercel-deploy.yml`
+  ran again on the merge and failed at its preflight with the revoked
+  `VERCEL_TOKEN`. It does **not** gate the live site, because the Git
+  integration deploys independently. It should either be removed or have its
+  token re-minted — a permanently red required-adjacent workflow trains people
+  to ignore red.
+
+### 5.3 What is still not live (blocker B-2)
+`https://bangla-gpt-app.vercel.app/api/*` continues to answer
+`{"code":"api_origin_unreachable"}`. The frontend is current; **the API behind
+it is not running**, so sign-up, login, tutor, quiz and dashboard calls cannot
+work in production. The repository holds no API deployment credentials
+(`release.yml` expects `DEPLOY_HOST`/`DEPLOY_USER`/`DEPLOY_SSH_KEY`/
+`DEPLOY_HOST_FINGERPRINT`, none of which exist), so no pipeline here can start
+it. Authenticated journeys were therefore **not** exercised against production —
+and no production account was created, because a student sign-up in this product
+requires asserting guardian consent, which this audit will not assert on
+someone's behalf.
+
+### 5.4 Exact owner actions to finish the job
+1. **Host the API** somewhere reachable (a small VM via the existing
+   `deploy/` compose stack, or a managed host) and set the four `DEPLOY_*`
+   secrets if `release.yml` is to do it.
+2. **Point `API_ORIGIN`** (Vercel → project → environment variables) at that
+   host, and add the Vercel domain to the API's `ALLOWED_ORIGINS`.
+3. **Mint a fresh `VERCEL_TOKEN`** and update the repository secret, or delete
+   `.github/workflows/vercel-deploy.yml` now that the Git integration is the
+   working deploy path. Also connect the stale `web` Vercel project to nothing
+   (or delete it) — it fails on every push and its red check is noise.
+4. Then re-run the authenticated smoke: register a class-6 student through the
+   UI, ask the tutor one question, and take one quiz — the same journeys this
+   audit verified locally end to end (154/154).

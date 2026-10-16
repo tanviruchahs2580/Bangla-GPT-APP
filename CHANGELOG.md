@@ -115,6 +115,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(api): remove unresolvable plan-tracker tags from comments
 - chore(web): repoint /api proxy to current tunnel host (quick-tunnel rotation)
 - chore: code honesty - unused args, un-typed db params, inert suppressions, stale comments
+- chore: satisfy the two CI guardrails main added after this branch's baseline
 - fmt: ruff format teacher.py _room_counts
 
 ### Style
@@ -123,7 +124,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - style(api): reformat SchoolInvite claim call
 - style(api): ruff format four test files (format-gate drift)
 - style(api): ruff format mock provider and lesson plan prompt
-- style: apply prettier to the files this branch touched
 
 ### Other
 
