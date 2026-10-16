@@ -57,9 +57,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): guarantee minimum gap between stacked page sections
 - fix(web): localize consent/invite copy, theme icon sync, error states, icon cleanup
 - fix(web): notification panel no longer clipped off the left edge
-- fix(web): report a dead API origin accurately, not as a busy server
+- fix(web): report a dead API origin accurately, not as a busy server (#14)
 - fix(web): route /api/* explicitly to the edge proxy function
 - fix: complete admin password-change flow, tutor typo gate, roster-scoped stats, quiz distractors, i18n
+- fix: land the verified remediation on current main (CORS-adjacent, budget, UI states)
 - fix: resolve mypy 2.4.0 type errors in teacher/school/common/weakness
 
 ### Security
@@ -98,6 +99,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: record Vercel sync verification + fix git-push auto-deploy (root dir apps/web)
 - docs: record final v0.9.2 live sync (tunnel host amd-reproduction-clips-cricket)
 - docs: regenerate CHANGELOG
+- docs: regenerate CHANGELOG for the branch commit
 - docs: regenerate CHANGELOG for the current batch
 - docs: ship the bundled font's licence, third-party notices, contributing guide
 
@@ -121,6 +123,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - style(api): reformat SchoolInvite claim call
 - style(api): ruff format four test files (format-gate drift)
 - style(api): ruff format mock provider and lesson plan prompt
+- style: apply prettier to the files this branch touched
 
 ### Other
 

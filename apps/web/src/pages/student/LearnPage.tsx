@@ -369,6 +369,7 @@ export function LearnChapterPage() {
       }).catch(() => {});
       track("chapter_read", { subject, chapter });
     }, 1500);
+    let lastReported = 70;
     const onScroll = () => {
       const pct = Math.min(
         100,
@@ -378,14 +379,20 @@ export function LearnChapterPage() {
             100,
         ),
       );
-      if (pct > 70)
-        upsertLearnProgress({
-          subject,
-          chapter,
-          class_level: classLevel,
-          read_pct: pct,
-          completed: pct > 90,
-        }).catch(() => {});
+      if (pct <= 70) return;
+      // Throttle. This fired on every scroll event past 70%, which on a
+      // touch-scroll of a long chapter is dozens of authenticated POSTs per
+      // view -- each one a row in chapter_progress (BUG-006). Report the
+      // furthest point reached instead of the instantaneous one.
+      if (pct <= lastReported) return;
+      lastReported = pct;
+      upsertLearnProgress({
+        subject,
+        chapter,
+        class_level: classLevel,
+        read_pct: pct,
+        completed: pct > 90,
+      }).catch(() => {});
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => {
@@ -406,7 +413,8 @@ export function LearnChapterPage() {
         bookmarked: next,
       });
     } catch {
-      /* best-effort: a parse failure must not block startup */
+      /* Bookmarking is best-effort: a failed write must not drop the reader
+         out of the chapter they are reading. */
     }
   };
 
@@ -463,7 +471,19 @@ export function LearnChapterPage() {
           <div className="skeleton skeleton-text" />
           <div className="skeleton skeleton-card" />
         </Card>
-      ) : query.isError || !content ? (
+      ) : query.isError ? (
+        <Card>
+          <div className="center muted" role="alert">
+            {t("loadFailed")}{" "}
+            <button
+              className="btn btn-sm btn-ghost"
+              onClick={() => query.refetch()}
+            >
+              {t("retry")}
+            </button>
+          </div>
+        </Card>
+      ) : !content ? (
         <Card>
           <div className="center muted">{t("noChapters")}</div>
         </Card>

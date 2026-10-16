@@ -22,7 +22,7 @@ const bn = {
   featTeacherSub: "ওয়ার্কশীট, প্রশ্নপত্র ও লেসন প্ল্যান মিনিটেই",
   landingFeaturesLabel: "মূল ফিচার",
   landingStatsLabel: "এক নজরে",
-  statClassesValue: "১–১২",
+  statClassesValue: "৬–১০",
   statClassesLabel: "শ্রেণির পাঠ্যবই-ভিত্তিক কনটেন্ট",
   statRolesValue: "৫",
   statRolesLabel: "ভূমিকা — এক প্ল্যাটফর্মে",
@@ -87,6 +87,11 @@ const bn = {
   styleDetailed: "বিস্তারিত",
   subjectFocus: "যে বিষয়ে বেশি সহায়তা প্রয়োজন",
   memoryTitle: "টিউটর আপনার সম্পর্কে যা মনে রাখে",
+  // Server-supplied code (StudentMemoryOut.on_disable_note_code); snake_case on
+  // purpose — the API sends the code and the client renders the sentence, like
+  // the sugg_* report codes. Without this entry the raw key reached the screen.
+  memory_on_disable_note:
+    "AI মেমোরি বন্ধ আছে — ব্যক্তিগতকৃত পছন্দ ও মনে রাখা তথ্য সংরক্ষণ করা হচ্ছে না।",
   memoryHint: "মনে রাখা বন্ধ করলে টিউটর এই তথ্যগুলো আর ব্যবহার করবে না।",
   memoryFacts: "মনে রাখা তথ্য",
   noMemoryFacts: "এখন পর্যন্ত কিছুই মনে রাখা হয়নি",
@@ -714,6 +719,8 @@ const en: Dict = {
   styleDetailed: "Detailed",
   subjectFocus: "Subject you need most help with",
   memoryTitle: "What the tutor remembers about you",
+  memory_on_disable_note:
+    "AI memory is off — personalised preferences and remembered facts are not retained.",
   memoryHint: "If memory is off, the tutor will not use any of these facts.",
   memoryFacts: "Remembered facts",
   noMemoryFacts: "Nothing remembered yet",

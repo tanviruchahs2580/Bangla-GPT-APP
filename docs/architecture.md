@@ -16,7 +16,7 @@ master plan (REQ-001..REQ-035+).
 |---|---|---|
 | Python 3.12.10 | yes | Backend language |
 | Node 24 / npm 11 | yes | Reserved for web dashboard phase |
-| Docker | no | Containerization deferred |
+| Docker | yes | Containerized (Dockerfile + docker-compose.yml); CI builds and smoke-tests the image |
 | Flutter SDK | no | Mobile deferred (cannot verify locally) |
 | LLM API keys | no | Not provided; provider abstraction + deterministic mock |
 
@@ -57,8 +57,10 @@ BanglaGptApp/
 - **Ingestion** (`ingestion/text_ingester.py`): deterministic marker-based
   ingester for structured plain text (chapter/section/paragraph). PDF/OCR
   adapters pending corpus arrival.
-- **Retrieval** (`retrieval/bm25.py`): dependency-free Okapi BM25 with
-  curriculum-aware filtering. A Bangla-block tokenizer (U+0980-U+09FF) is
+- **Retrieval** (`retrieval/hybrid_index.py`; default `RETRIEVAL_MODE=hybrid`):
+  BM25 (`retrieval/bm25.py`, dependency-free Okapi BM25 with curriculum-aware
+  filtering) + a deterministic vector lane, fused by RRF and lexically
+  reranked. A Bangla-block tokenizer (U+0980-U+09FF) is
   required — `\w+` splits on Bangla vowel signs/virama and destroys words
   (verified bug, fixed, regression-tested).
 - **Tutor service** (`services/tutor.py`): retrieve → grounding gate →
@@ -79,8 +81,9 @@ BanglaGptApp/
 
 - **Persistence** (`db/`): SQLAlchemy 2.0 (`students`, `quiz_attempts`,
   `answer_log`). SQLite default (in-memory for tests; file URL via
-  `DATABASE_URL`). `create_all` startup is dev-grade — Alembic migrations
-  pending before any shared environment.
+  `DATABASE_URL`). Alembic migrations are checked in (`alembic/versions/`) and
+  CI runs upgrade → downgrade → upgrade plus `alembic check`; `create_all`
+  remains only for in-memory test databases.
 - **Quiz engine** (`services/quiz.py`): deterministic cloze generator over
   curriculum chunks (rare-term blanking, seeded distractor sampling). This is
   an honest baseline — an LLM-backed generator with a validation gate replaces
@@ -130,12 +133,14 @@ BanglaGptApp/
   `ADMIN_PASSWORD` are set and no admin exists. Admin endpoints: list users,
   change roles (with last-admin demotion guard → 409), platform overview
   counts.
-- **Rate limiting** (`RateLimitMiddleware`): in-memory sliding window per
-  client IP on `/auth/login` and `/tutor/ask`; limits via settings; returns
-  429. Known limits: per-process only (multi-worker deployments need Redis or
-  equivalent) — documented, pending until infra exists.
+- **Rate limiting** (`RateLimitMiddleware`): sliding window with IP and
+  per-user scopes over the configured rule set (`RATE_LIMIT_RULES` /
+  `_derive_default_rules`: login, MFA challenge, tutor, teacher AI generators,
+  …); limits via settings; returns 429. The memory backend is per-process; a
+  shared Redis backend is available for multi-worker deployments
+  (`RATE_LIMIT_BACKEND=redis`).
 - **Body-size guard**: requests with `Content-Length` above `MAX_BODY_BYTES`
-  (default 64 KiB) rejected 413 before routing.
+  (default 4,000,000 bytes, see `config.py`) rejected 413 before routing.
 - **Container** (`Dockerfile`): python:3.12-slim, non-root user, healthcheck,
   package install from source. Verified by CI job that builds the image,
   boots it, and asserts `/health` + `/ready` over HTTP.
@@ -230,6 +235,6 @@ BanglaGptApp/
 |---|---|
 | Real LLM provider integration + hallucination eval | API key required from user |
 | Student পাঠ্যপুস্তক (textbook) corpus | not published as static downloads on nctb.gov.bd static pages; needs alternate authorized channel/OCR pipeline |
-| Dense/hybrid retrieval + reranker + golden dataset benchmark | embedding-model benchmark infrastructure |
-| Mobile (Flutter) | SDK not installed on dev machine |
+| Model-based dense retrieval + model-based reranker benchmark | embedding-model benchmark infrastructure (a dependency-free vector lane and RRF fusion already ship; the golden set + 2pp gate run in CI) |
+| Mobile release builds (Capacitor Android signing, iOS) | no JDK/Android SDK or macOS host on the dev machine (the project ships at `apps/web/android`) |
 | Postgres/Redis, load testing at scale, monitoring/alerts, prod deploy | Production infrastructure required |

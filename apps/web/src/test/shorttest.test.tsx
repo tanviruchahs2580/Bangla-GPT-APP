@@ -130,4 +130,37 @@ describe("short test assignment card", () => {
     expect(screen.getByText(/kosh/)).toBeInTheDocument();
     expect(screen.queryByText(t("stEmpty"))).not.toBeInTheDocument();
   });
+
+  it("lets the teacher pick which classroom receives the test", async () => {
+    // Two rooms: the form used to post to whichever room loaded first, with no
+    // way to see or change the target.
+    const original = apiMock.get.getMockImplementation() as
+      ((path: string) => Promise<unknown>) | undefined;
+    apiMock.get.mockImplementation((path: string) => {
+      if (path === "/teacher/classrooms")
+        return Promise.resolve([
+          { id: 1, class_level: 6, section: "GEN", student_count: 2 },
+          { id: 2, class_level: 7, section: "B", student_count: 3 },
+        ]);
+      return original!(path);
+    });
+
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText(t("stEmpty"));
+
+    const picker = await screen.findByLabelText(t("classrooms"));
+    expect((picker as HTMLSelectElement).value).toBe("1"); // first room by default
+    await user.selectOptions(picker, "2");
+
+    await user.type(screen.getByLabelText(t("stChapterLabel")), "kosh");
+    await user.click(screen.getByRole("button", { name: t("stAssign") }));
+
+    await waitFor(() =>
+      expect(apiMock.post).toHaveBeenCalledWith(
+        "/teacher/shorttests",
+        expect.objectContaining({ classroom_id: 2 }),
+      ),
+    );
+  });
 });

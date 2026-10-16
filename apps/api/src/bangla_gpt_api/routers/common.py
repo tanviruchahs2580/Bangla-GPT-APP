@@ -2,6 +2,7 @@
 
 import base64
 import hashlib
+import json
 import logging
 import re
 from collections import defaultdict
@@ -49,6 +50,7 @@ from bangla_gpt_api.services.context import (
     history_summary,
     snapshot_mastery,
 )
+from bangla_gpt_api.services.costs import check_ai_budget, record_ai_usage
 from bangla_gpt_api.services.generators import (
     generate_answer_key,
     generate_homework,
@@ -472,9 +474,17 @@ async def _generate_document(
 ) -> tuple[dict, list[SourceRef], str | None]:
     """THE single execution path of the document generators: the sync
     endpoints and the AiJob runner below share it, so a background job
-    behaves exactly like the synchronous call."""
+    behaves exactly like the synchronous call.
+
+    Because every generator funnels through here, this is also where the
+    per-user AI budget is enforced and the spend ledgered (SEC-002). Doing it in
+    the route handlers instead would leave ``POST /teacher/jobs`` -- which runs
+    this on a detached task with its own session -- unbudgeted and unmetered,
+    and ``/admin/ai/quality`` would under-report every teacher generation.
+    """
     if app_ctx.tutor is None:
         raise ProviderError("provider not configured")
+    check_ai_budget(db, user_id=actor.id, settings=app_ctx.settings)
     class_level = int(gen.class_level)
     subject = str(gen.subject)
     chapter: str | None = getattr(gen, "chapter", None)
@@ -560,6 +570,18 @@ async def _generate_document(
         }
     else:
         raise ValueError(f"unsupported generator kind: {kind!r}")
+    # Ledger the spend. Adds only -- whichever caller persists the document (or
+    # marks the AiJob ready) commits this row with it. The prompt side is the
+    # retrieval context actually sent; the answer side is the serialised
+    # document, which is what the tokens were spent producing.
+    record_ai_usage(
+        db,
+        user_id=actor.id,
+        route=f"teacher/{kind}",
+        model=getattr(app_ctx.provider, "name", None),
+        prompt_text=f"{subject} {chapter or ''} class {class_level}",
+        answer_text=json.dumps(doc_payload, ensure_ascii=False, default=str),
+    )
     return doc_payload, sources, chapter
 
 

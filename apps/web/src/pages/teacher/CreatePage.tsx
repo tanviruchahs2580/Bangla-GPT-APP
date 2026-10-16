@@ -22,6 +22,9 @@ const errText = (err: unknown): string =>
   friendlyError((err as { rawDetail?: unknown }).rawDetail)?.text ??
   t("errorGeneric");
 
+/** Minimal shape of GET /teacher/classrooms used by the short-test form. */
+type Room = { id: number; class_level: number; section?: string | null };
+
 // Grid entry -> deep-link token (shared with TeacherHome quick-create).
 export type CreateEntry =
   | "question_paper"
@@ -295,13 +298,19 @@ export function ShortTestFlow() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [tests, setTests] = useState<ShortTest[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [roomId, setRoomId] = useState<number | null>(null);
 
   useEffect(() => {
     let live = true;
-    get<{ id: number }[]>("/teacher/classrooms")
+    get<Room[]>("/teacher/classrooms")
       .then((rs) => {
-        if (live) setRoomId(rs[0]?.id ?? null);
+        if (!live) return;
+        // Default to the first classroom (the previous behaviour) but keep the
+        // list so the teacher can see and change which room receives the test —
+        // it used to post to rooms[0] silently whatever was on screen.
+        setRooms(rs ?? []);
+        setRoomId(rs[0]?.id ?? null);
       })
       .catch(() => {});
     get<ShortTest[]>("/teacher/shorttests")
@@ -357,6 +366,25 @@ export function ShortTestFlow() {
               onChange={(e) => setChapter(e.target.value)}
             />
           </Field>
+          <Field
+            label={t("classrooms")}
+            htmlFor="strom"
+            className="field-inline"
+          >
+            <select
+              id="strom"
+              className="select"
+              value={roomId ?? ""}
+              onChange={(e) => setRoomId(Number(e.target.value) || null)}
+            >
+              {rooms.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {t("classLabel")} {r.class_level}
+                  {r.section ? ` · ${r.section}` : ""}
+                </option>
+              ))}
+            </select>
+          </Field>
           <Field label={t("subject")} htmlFor="stsubj" className="field-inline">
             <select
               id="stsubj"
@@ -407,7 +435,8 @@ export function ShortTestFlow() {
             variant="primary"
             type="submit"
             loading={busy}
-            disabled={!chapter.trim()}
+            // A test with nowhere to go used to look enabled and do nothing.
+            disabled={!chapter.trim() || roomId === null}
           >
             {t("stAssign")}
           </Button>

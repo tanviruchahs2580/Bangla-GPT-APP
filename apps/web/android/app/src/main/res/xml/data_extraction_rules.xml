@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android Auto Backup rules (API 31+).
+
+  The WebView keeps the session JWT and, during an admin support session, the
+  admin's own token in localStorage (src/api.ts). Both are bearer credentials
+  that grant real access to a child's records, so none of the app's WebView
+  data may leave the device. Cloud backup and device-to-device transfer are
+  therefore both disabled outright rather than filtered file by file: the
+  app stores no data that is worth restoring onto another device, and an
+  allow-list would silently start carrying data the day someone adds a
+  non-sensitive cache.
+-->
+<data-extraction-rules>
+    <cloud-backup disableIfNoEncryptionCapabilities="true">
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

@@ -124,32 +124,56 @@ async function parseSse(
   if (!reader) return null;
   const decoder = new TextDecoder();
   let buffer = "";
-  let currentEvent = "";
+  let event = "";
+  let dataLines: string[] = [];
   let done: Record<string, unknown> | null = null;
+
+  // A frame ends at a blank line, and it is the blank line that clears the
+  // event name. Parsing line-by-line let a stray `data:` line after a `done`
+  // frame inherit that event and overwrite the payload (BUG-005).
+  const dispatch = () => {
+    if (event && dataLines.length) {
+      try {
+        // JSON.parse returns `any`; narrow to a record before reading it.
+        const data = JSON.parse(dataLines.join("\n")) as Record<
+          string,
+          unknown
+        >;
+        if (event === "token") onToken(asText(data.text ?? ""));
+        else if (event === "done") done = data;
+        else if (event === "error") done = { __error: true, ...data };
+      } catch {
+        /* ignore malformed frames */
+      }
+    }
+    event = "";
+    dataLines = [];
+  };
+
+  const consume = (lines: string[]) => {
+    for (const raw of lines) {
+      const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
+      if (line === "") dispatch();
+      else if (line.startsWith("event:")) event = line.slice(6).trim();
+      else if (line.startsWith("data:"))
+        // Multiple `data:` lines belong to one payload; a proxy may wrap a long
+        // frame across them.
+        dataLines.push(line.slice(5).replace(/^ /, ""));
+    }
+  };
+
   for (;;) {
     const { value, done: finished } = await reader.read();
     if (finished) break;
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? "";
-    for (const line of lines) {
-      if (line.startsWith("event:")) currentEvent = line.slice(6).trim();
-      else if (line.startsWith("data:") && currentEvent) {
-        try {
-          // JSON.parse returns `any`; narrow to a record before reading it.
-          const data = JSON.parse(line.slice(5).trim()) as Record<
-            string,
-            unknown
-          >;
-          if (currentEvent === "token") onToken(asText(data.text ?? ""));
-          else if (currentEvent === "done") done = data;
-          else if (currentEvent === "error") done = { __error: true, ...data };
-        } catch {
-          /* ignore malformed frames */
-        }
-      }
-    }
+    consume(lines);
   }
+  // Flush whatever the stream left without a trailing blank line.
+  buffer += decoder.decode();
+  consume(buffer.split("\n"));
+  dispatch();
   return done;
 }
 
@@ -246,15 +270,37 @@ export async function postStream<T>(
     body: JSON.stringify(body),
     signal: options?.signal,
   });
-  if (
-    !res.ok ||
-    !res.headers.get("content-type")?.includes("text/event-stream")
-  ) {
-    throw new ApiError(res.status, "stream unavailable", "llm_unavailable");
+  if (!res.ok) {
+    // postStream bypassed `api()`, so it reported every failure as a generic
+    // outage: a 429 rate limit read as "AI unavailable", and an expired session
+    // never reached the unauthorized handler (BUG-004).
+    let parsed: { message: string; code?: string } = {
+      message: res.statusText,
+    };
+    try {
+      parsed = parseDetail(await res.json());
+    } catch {
+      /* upstream HTML error page: fall back to the status text */
+    }
+    if (res.status === 401 && !AUTH_401_PATHS.some((p) => path.startsWith(p)))
+      onUnauthorized?.();
+    throw new ApiError(res.status, parsed.message, parsed.code, parsed);
   }
+  if (!res.headers.get("content-type")?.includes("text/event-stream"))
+    throw new ApiError(res.status, "stream unavailable", "llm_unavailable");
   const done = await parseSse(res, onToken);
   if (done && "__error" in done)
     throw new ApiError(502, "stream failed", "llm_unavailable");
+  if (!done) {
+    // No terminal frame: a proxy timeout, or the server died mid-answer.
+    // Resolving null handed callers an object they dereference, so a truncated
+    // answer looked like a successful empty one (BUG-005).
+    throw new ApiError(
+      502,
+      "stream ended before completion",
+      "llm_unavailable",
+    );
+  }
   return done as T;
 }
 
@@ -381,7 +427,7 @@ export async function changePassword(
   localStorage.setItem(TOKEN_KEY, res.access_token);
 }
 
-/** Student generates a single-use code (BGPT-XXXXXXXX) a parent can redeem to link. */
+/** Student generates a single-use code (BGPT-XXXXXXXXXXXXXXXX) a parent can redeem to link. */
 export async function generateInviteCode(): Promise<{
   code: string;
   expires_in_minutes: number;
@@ -436,6 +482,11 @@ export async function fetchMe(): Promise<SessionProbe> {
 
 export function logout(): void {
   localStorage.removeItem(TOKEN_KEY);
+  // The impersonation hand-off parks an admin JWT in storage; leaving it (and
+  // the banner flag) behind handed the next user on a shared device both an
+  // admin token and an "acting as <student>" session (SEC-006).
+  localStorage.removeItem(ADMIN_TOKEN_KEY);
+  localStorage.removeItem(IMP_ACTIVE_KEY);
 }
 
 /* -------- Learn catalog (grounded corpus) -------- */

@@ -4,6 +4,7 @@ Behavior-identical extraction: same paths, validation, status codes.
 Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 """
 
+import json
 import logging
 import random
 import time
@@ -51,6 +52,7 @@ from bangla_gpt_api.security import write_audit
 from bangla_gpt_api.services.context import (
     RequestContext,
 )
+from bangla_gpt_api.services.costs import check_ai_budget, record_ai_usage
 from bangla_gpt_api.services.generators import (
     generate_chapter_content,
     generate_question_paper,
@@ -277,6 +279,8 @@ def _qp_out(qp: QuestionPaper) -> QPOut:
 
 async def _qp_fresh_draft(
     app_ctx: Ctx,
+    db: Session,
+    actor: User,
     class_level: int,
     subject: str,
     chapters: list[str],
@@ -284,10 +288,19 @@ async def _qp_fresh_draft(
     difficulty: dict[str, int],
     context: RequestContext | None = None,
 ) -> tuple[list[dict[str, object]], dict[str, object]]:
+    """One question-paper generation, with the per-user AI budget enforced and
+    the spend ledgered (SEC-002).
+
+    Drafting, regenerating and replacing a single question all reach the
+    provider through here, so this is the one place that has to know about the
+    budget; keeping it in the handlers is how the setting came to be documented
+    but never applied to teachers.
+    """
     if app_ctx.tutor is None:
         raise HTTPException(status_code=503, detail="provider not configured")
+    check_ai_budget(db, user_id=actor.id, settings=app_ctx.settings)
     try:
-        return await generate_question_paper(
+        questions, meta = await generate_question_paper(
             app_ctx.tutor.index,
             app_ctx.tutor.provider,
             class_level=class_level,
@@ -299,6 +312,16 @@ async def _qp_fresh_draft(
         )
     except ProviderError as exc:
         raise HTTPException(status_code=502, detail="question paper generation failed") from exc
+    # Adds only; the caller's commit persists the ledger row with the paper.
+    record_ai_usage(
+        db,
+        user_id=actor.id,
+        route="teacher/question_paper",
+        model=getattr(app_ctx.provider, "name", None),
+        prompt_text=f"{subject} {','.join(chapters)} class {class_level} {marks} marks",
+        answer_text=json.dumps(questions, ensure_ascii=False, default=str),
+    )
+    return questions, meta
 
 
 @router.post("/teacher/qpapers", response_model=QPOut, status_code=201)
@@ -310,6 +333,8 @@ async def teacher_qp_create(
     started = time.perf_counter()
     questions, meta = await _qp_fresh_draft(
         app_ctx,
+        db,
+        teacher,
         payload.class_level,
         payload.subject,
         payload.chapters,
@@ -403,6 +428,8 @@ async def teacher_qp_regenerate(
     started = time.perf_counter()
     questions, meta = await _qp_fresh_draft(
         app_ctx,
+        db,
+        teacher,
         qp.class_level,
         qp.subject,
         list(qp.chapters),
@@ -554,6 +581,8 @@ async def teacher_qp_replace(
     if replacement is None:
         fresh, _meta = await _qp_fresh_draft(
             app_ctx,
+            db,
+            teacher,
             qp.class_level,
             qp.subject,
             list(qp.chapters),

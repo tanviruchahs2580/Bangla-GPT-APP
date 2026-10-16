@@ -1,27 +1,11 @@
-import { asText } from "../lib/text";
 import { useCallback, useEffect, useState } from "react";
 import { get, getParentReport, post } from "../api";
 import type { ParentReport } from "../api";
 import { friendlyError } from "../errors";
 import { t } from "../i18n";
 import { track } from "../lib/analytics";
+import { suggestionSentence } from "../lib/text";
 import type { ActivitySummary, StudentBrief, StudentProgress } from "../types";
-
-// Server sends a suggestion CODE + params; the client renders the sentence (i18n).
-function suggestionSentence(report: ParentReport): string {
-  const key = report.suggestion_code as Parameters<typeof t>[0];
-  const vars: Record<string, string | number> = {};
-  for (const [k, v] of Object.entries(report.suggestion_params ?? {})) {
-    vars[k] = Array.isArray(v) ? v.join(", ") : asText(v);
-  }
-  try {
-    const text = t(key, vars);
-    if (text && text !== report.suggestion_code) return text;
-  } catch {
-    // unknown code falls through to the raw code below
-  }
-  return report.suggestion_code;
-}
 
 export default function ParentDashboard() {
   const [children, setChildren] = useState<StudentBrief[]>([]);
@@ -117,7 +101,7 @@ export default function ParentDashboard() {
               id="icode"
               className="input"
               value={code}
-              placeholder="BGPT-XXXXXXXX"
+              placeholder="BGPT-XXXXXXXXXXXXXXXX"
               required
               minLength={8}
               onChange={(e) => setCode(e.target.value)}

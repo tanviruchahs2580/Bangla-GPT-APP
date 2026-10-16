@@ -1,4 +1,4 @@
-import { asText } from "../../lib/text";
+import { asText, suggestionSentence } from "../../lib/text";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -508,9 +508,7 @@ export default function MePage() {
             </div>
           )}
           <p className="muted text-sm mt-2">
-            {t("reportSuggestion")}:{" "}
-            {t(report.suggestion_code as Parameters<typeof t>[0]) ||
-              report.suggestion_code}
+            {t("reportSuggestion")}: {suggestionSentence(report)}
           </p>
         </Card>
       )}

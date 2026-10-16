@@ -9,12 +9,12 @@ Errors use `{"detail": "..."}` with correct semantics: 401 unauthenticated · 40
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| GET | `/health` | — | Liveness + app/version/env |
+| GET | `/health` | — | Liveness only (`{"status":"ok"}`); version/env live on the authenticated `GET /admin/system/info` |
 | GET | `/live` | — | Process alive |
 | GET | `/ready` | — | DB reachable AND provider configured; else 503 |
-| GET | `/metrics` | — | Prometheus exposition (`bgpt_http_requests_total`, `bgpt_http_request_duration_seconds`, …) |
+| GET | `/metrics` | open in dev; `Bearer $METRICS_TOKEN` in production | Prometheus exposition (`bgpt_http_requests_total`, `bgpt_http_request_duration_seconds`, …) |
 
-Every response carries `X-Request-ID` (echoed if supplied, otherwise generated).
+Every non-preflight response carries `X-Request-ID` (echoed if supplied, otherwise generated); CORS preflight responses are answered before the request-id middleware runs.
 
 ## Auth
 

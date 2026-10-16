@@ -1,6 +1,12 @@
 /** admin center renders school stats, version rows, invite create/revoke. */
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import AdminDashboard from "../pages/AdminDashboard";
 import { t } from "../i18n";
@@ -163,6 +169,68 @@ describe("admin center", () => {
     );
     await waitFor(() =>
       expect(screen.getByText(t("admRevoked"))).toBeInTheDocument(),
+    );
+  });
+
+  it("offers school_admin as a role and shows a school_admin row as itself", async () => {
+    const original = apiMock.get.getMockImplementation() as
+      ((path: string) => Promise<unknown>) | undefined;
+    apiMock.get.mockImplementation((path: string) => {
+      if (path.startsWith("/admin/users")) {
+        return Promise.resolve({
+          total: 1,
+          items: [
+            {
+              id: 7,
+              email: "head@school.edu.bd",
+              role: "school_admin",
+              created_at: "2026-09-01T00:00:00",
+            },
+          ],
+        });
+      }
+      return original!(path);
+    });
+
+    render(<AdminDashboard />);
+    const select = await screen.findByRole("combobox", {
+      name: /head@school\.edu\.bd/,
+    });
+
+    // Before the fix school_admin was absent from the option list, so the row
+    // rendered the first option ("student") and any edit would have demoted them.
+    expect((select as HTMLSelectElement).value).toBe("school_admin");
+    expect(
+      within(select).getByRole("option", { name: "school_admin" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a retryable error when the feedback queue fails instead of loading forever", async () => {
+    apiMock.getFeedbackQueue
+      .mockRejectedValueOnce(new Error("boom"))
+      .mockResolvedValueOnce({
+        rows: [],
+        total: 0,
+        open_count: 0,
+        limit: 20,
+        offset: 0,
+      });
+
+    render(<AdminDashboard />);
+    await screen.findByText("Adm School");
+
+    // The failure must be visible, not an endless "loading" state. Before the
+    // fix this role never appeared: the queue stayed null and re-rendered
+    // t("loading") forever.
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain(t("errGeneric"));
+
+    fireEvent.click(screen.getByRole("button", { name: t("retry") }));
+    await waitFor(() =>
+      expect(apiMock.getFeedbackQueue).toHaveBeenCalledTimes(2),
+    );
+    await waitFor(() =>
+      expect(screen.getByText(t("admNoFeedback"))).toBeInTheDocument(),
     );
   });
 });

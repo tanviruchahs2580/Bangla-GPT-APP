@@ -2,9 +2,14 @@ node_modules
 dist
 *.local
 .env
-
-# Capacitor native scaffolds (regenerate with: npx cap add android)
-android/
-ios/
-.vercel
 .env*
+.vercel
+
+# Capacitor. android/ is deliberately TRACKED, not ignored: the APK is built
+# from it (docs/mobile_release.md), so the manifest, gradle config and
+# resources are release inputs, not regenerable scaffold. Listing it here
+# only ever misled the next person -- .gitignore does not untrack files that
+# are already in the index, so the entries were inert and wrong.
+# Regenerating a fresh platform instead: npx cap add android, then copy the
+# release-relevant values (applicationId, RECORD_AUDIO, backup rules).
+ios/

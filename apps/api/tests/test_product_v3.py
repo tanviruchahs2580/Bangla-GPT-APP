@@ -285,6 +285,25 @@ def test_parent_invite_flow_end_to_end(client: TestClient) -> None:
     assert bad.status_code == 400
 
 
+def test_parent_invite_code_carries_enough_entropy(client: TestClient) -> None:
+    """SEC-007: the code is the only secret guarding a child's records.
+
+    Redemption links the holder as a parent of whichever student owns the
+    code, so the search space must stay far outside guessing range for the
+    whole 24h TTL. A 4-byte (32-bit) code is ~4.3e9 candidates — within reach
+    of a distributed guesser; 8 bytes (64-bit) is not.
+    """
+    _register(client, "inv_entropy@example.com")
+    headers = _login(client, "inv_entropy@example.com")
+    code = client.post("/students/me/invite-code", headers=headers).json()["code"]
+
+    assert code.startswith("BGPT-")
+    body = code[len("BGPT-") :]
+    assert all(c in "0123456789ABCDEF" for c in body), f"unexpected invite format: {code!r}"
+    bits = len(body) * 4  # one hex digit carries 4 bits
+    assert bits >= 64, f"invite code carries only {bits} bits of entropy"
+
+
 # ---------------------------------------------------------------------------
 # C14: email verification when SMTP configured
 # ---------------------------------------------------------------------------
