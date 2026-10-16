@@ -26,7 +26,8 @@ _PATTERNS: tuple[tuple[str, str], ...] = (
     # Self-harm / suicide ideation or method-seeking
     (
         "self_harm",
-        r"আত্মহত্যা|আত্মঘাতী|নিজেকে\s*মার|গিলে\s*ফেল|বিষ\s*খাও|ফাঁসি\s*দেও|কাটা\s*যাবে"
+        r"আত্মহত্যা|আত্মঘাতী|নিজেকে\s*(?:মার|মারে|মেরে)\s*(?:ফেল|ফেলা|শেষ)?|মরে\s*যেতে\s*(?:চাই|ইচ্ছে)"
+        r"|বাঁচতে\s*চাই\s*না|জীবন\s*শেষ\s*কর|গিলে\s*ফেল|বিষ\s*খাও|ফাঁসি\s*দেও|কাটা\s*যাবে"
         # romanized Bangla + English variants (case handled by (?i) below)
         r"|(?i:suicid\w*|kill\s+(?:myself|me)|mar\s*kh\w+b?o?\s*(?:bo|dibo)?"
         r"|(?:gori|gola)\s*katbo|gila\s*felbo|bish\s*khabo|fashi\s*dibo)",
@@ -38,7 +39,19 @@ _PATTERNS: tuple[tuple[str, str], ...] = (
     # Sexual content (esp. anything sexualizing minors)
     ("sexual_content", r"যৌন|কাম\s*কাণ্ড|শ্লীলতাহানি|ধর্ষণ|পর্ন|অশ্লীল\s*(ছবি|ভিডিও|গল্প)"),
     # Violence / gore seeking
-    ("violence", r"মারধরের?\s*(ভিডিও|উপায়)|কে?\s*খুন\s*(কর|করা)|পিটুনি\s*দেওয়ার"),
+    # Violence / gore seeking. The category is about SEEKING violent material,
+    # not about violence as a subject: a history question that contains
+    # "খুন করা" (the 1971 war is curriculum) must not be refused, so the rule
+    # requires the seeking or intent frame rather than the bare verb. The old
+    # rule read `কে?\s*খুন`, where `?` bound to the vowel sign, so it demanded a
+    # literal ক and missed "খুন করা" — the most common phrasing — entirely.
+    (
+        "violence",
+        r"মারধরের?\s*(?:ভিডিও|উপায়)"
+        r"|খুন\s*করার\s*(?:ভিডিও|দৃশ্য|ক্লিপ|উপায়|পদ্ধতি|নিয়ম)"
+        r"|খুন\s*কর(?:ব|তে\s*চাই|তে\s*চাইছি)"
+        r"|পিটুনি\s*দেওয়ার",
+    ),
     # Personal-data harvesting about third parties
     ("personal_data", r"(ঠিকানা|ফোন\s*নম্বর)\s*(দাও|দে\s*যাও|বের\s*কর)"),
 )
