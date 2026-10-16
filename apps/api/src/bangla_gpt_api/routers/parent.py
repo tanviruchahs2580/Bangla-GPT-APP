@@ -57,7 +57,6 @@ from bangla_gpt_api.services.activity import (
 )
 
 from .common import (
-    _answer_cells,
     _hash_invite,
     _record_analytics,
     _student_briefs,
@@ -253,14 +252,10 @@ def get_my_memory(db: DbSession, user: CurrentUser) -> MemoryFactsOut:
         raise HTTPException(status_code=403, detail="Students only")
     student = _student_profile(db, user)
     prefs = student.learning_prefs if isinstance(student.learning_prefs, dict) else {}
-    cells = _answer_cells(db, [student.id]).get(student.id, {})
-    weak = sorted(
-        (
-            chapter
-            for chapter, (asked, correct) in cells.items()
-            if (acc := atrisk.cell_accuracy(asked, correct)) is not None and acc < 60.0
-        )
-    )[:5]
+    # the ONE weakness verdict (services.weakness): the inline 60% cut-off here
+    # disagreed with Home / teacher at-risk / the parent digest for mid-range
+    # accuracies and for chapters with too little evidence.
+    weak = weakness.weak_names(db, student.id)[:5]
     recent_subjects = [
         str(subject)
         for (subject,) in db.execute(

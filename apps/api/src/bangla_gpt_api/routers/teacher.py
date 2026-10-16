@@ -41,6 +41,7 @@ from bangla_gpt_api.schemas import (
     RosterEntryOut,
     StudentBrief,
 )
+from bangla_gpt_api.services import weakness
 
 from .common import (
     _classroom_or_404,
@@ -126,7 +127,9 @@ def teacher_analytics(
         class_level=class_level,
         students=len(students),
         chapters=chapters,
-        weak_chapters=[c.chapter for c in chapters if c.accuracy < 60.0],
+        # the ONE weakness rule (services.weakness): the inline 60% cut-off
+        # called chapters weak that Home / at-risk / parent surfaces did not.
+        weak_chapters=[w.concept for w in weakness.weak_from_cells(stats)],
         students_detail=briefs,
     )
 

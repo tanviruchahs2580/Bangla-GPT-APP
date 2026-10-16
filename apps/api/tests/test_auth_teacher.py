@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
+from bangla_gpt_api.services import knowledge
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -253,10 +254,14 @@ def test_teacher_roster_and_class_analytics(client: TestClient) -> None:
     assert analytics["class_level"] == 6
     assert analytics["students"] == 2
     assert analytics["chapters"], "expected chapter stats from graded attempts"
-    # Weak-chapter bookkeeping stays internally consistent regardless of how
-    # the expanded corpus distributes correct answers.
+    # Weak-chapter bookkeeping applies the ONE weakness rule
+    # (services.weakness: >= MIN_ATTEMPTS graded answers, < WEAK_THRESHOLD_PCT
+    # accuracy) so it matches Home / at-risk / parent surfaces regardless of
+    # how the expanded corpus distributes correct answers.
     assert set(analytics["weak_chapters"]) == {
-        c["chapter"] for c in analytics["chapters"] if c["accuracy"] < 60.0
+        c["chapter"]
+        for c in analytics["chapters"]
+        if c["asked"] >= knowledge.MIN_ATTEMPTS and c["accuracy"] < knowledge.WEAK_THRESHOLD_PCT
     }
     assert len(analytics["students_detail"]) == 2
 

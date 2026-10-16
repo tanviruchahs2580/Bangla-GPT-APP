@@ -11,10 +11,13 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from bangla_gpt_api.config import Settings
+from bangla_gpt_api.db.models import User
 from bangla_gpt_api.db.session import make_engine, make_session_factory
 from bangla_gpt_api.main import create_app
+from bangla_gpt_api.routers import common
 from bangla_gpt_api.services import knowledge, weakness
 from bangla_gpt_api.services.parent_digest import run_weekly_digest
 
@@ -100,17 +103,22 @@ def _login(client: TestClient, email: str) -> dict:
 
 
 def _seed_graded_answers(
-    conn: sqlite3.Connection, student_id: int, cells: dict[str, tuple[int, int]]
-) -> None:
+    conn: sqlite3.Connection,
+    student_id: int,
+    cells: dict[str, tuple[int, int]],
+    *,
+    subject: str | None = "math",
+) -> int:
     """One graded attempt whose answer log realises the given cells."""
     now = _now()
     total = sum(t for _, t in cells.values())
     correct = sum(c for c, _ in cells.values())
     conn.execute(
         "INSERT INTO quiz_attempts (student_id, subject, class_level, status, total, correct,"
-        " score_pct, quiz_json, created_at) VALUES (?, 'math', 6, 'graded', ?, ?, ?, '[]', ?)",
+        " score_pct, quiz_json, created_at) VALUES (?, ?, 6, 'graded', ?, ?, ?, '[]', ?)",
         (
             student_id,
+            subject,
             total,
             correct,
             round(100.0 * correct / total, 2),
@@ -132,6 +140,7 @@ def _seed_graded_answers(
                 (att, seq, int(i < ok_count), chapter),
             )
     conn.commit()
+    return att
 
 
 def _seed_family(
@@ -256,6 +265,38 @@ def test_same_value_from_all_three_surfaces(env) -> None:
 # ---------- nightly reconciliation ----------
 
 
+def test_weak_chapter_rule_agrees_across_memory_analytics_and_personalization(env) -> None:
+    """The three surfaces that used to inline a 60% rule share the verdict.
+
+    gamma sits at 50% (a near-miss under the old 60% rule) and delta has only
+    two graded answers (below MIN_ATTEMPTS): both were "weak" inline and must
+    be non-weak everywhere now.
+    """
+    client, conn, settings = env
+    sid = _register(client, "tri@rollup.test", role="student")
+    _seed_graded_answers(conn, sid, CELLS)
+    _enroll_in_default_school(conn, sid)
+    student_h = _login(client, "tri@rollup.test")
+    _register(client, "teach3@rollup.test", role="teacher")
+    teacher_h = _login(client, "teach3@rollup.test")
+
+    memory = client.get("/students/me/memory", headers=student_h)
+    assert memory.status_code == 200, memory.text
+    analytics = client.get("/teacher/classes/6/analytics", headers=teacher_h)
+    assert analytics.status_code == 200, analytics.text
+    assert memory.json()["facts"]["weak_chapters"] == EXPECTED
+    assert analytics.json()["weak_chapters"] == EXPECTED
+
+    # the tutor's personalization block is built by common._request_context
+    session = make_session_factory(make_engine(settings))()
+    try:
+        user = session.execute(select(User).where(User.email == "tri@rollup.test")).scalar_one()
+        ctx = common._request_context(session, user, class_level=6, subject="science")
+    finally:
+        session.close()
+    assert ctx.memory_block.split()[0] == "weak_chapters=alpha,beta"
+
+
 def test_refresh_mastery_reconciles_and_is_idempotent(env) -> None:
     client, conn, settings = env
     sid = _register(client, "sync@rollup.test", role="student")
@@ -278,3 +319,31 @@ def test_refresh_mastery_reconciles_and_is_idempotent(env) -> None:
         assert knowledge.mastery_map(session, sid) == mastery
     finally:
         session.close()
+
+
+def test_refresh_mastery_skips_unresolved_subject_instead_of_aborting(env, caplog) -> None:
+    """One graded attempt with subject IS NULL must not stop the whole pass.
+
+    Concept.subject is NOT NULL: before the fix the reconciliation raised
+    IntegrityError on the first NULL-subject attempt and no student was synced.
+    """
+    import logging
+
+    client, conn, settings = env
+    sid = _register(client, "nullsubject@rollup.test", role="student")
+    orphan_attempt = _seed_graded_answers(conn, sid, {"orphan": (0, 3)}, subject=None)
+    _seed_graded_answers(conn, sid, {"alpha": (1, 4)})
+    caplog.set_level(logging.WARNING)
+    session = make_session_factory(make_engine(settings))()
+    try:
+        students, rows = weakness.refresh_mastery(session)
+        assert (students, rows) == (1, 1)
+        # unresolved attempt contributes nothing; the resolvable one still syncs
+        assert knowledge.mastery_map(session, sid) == {"alpha": (1, 4)}
+        # idempotent: the skip is stable
+        assert weakness.refresh_mastery(session) == (1, 1)
+    finally:
+        session.close()
+    skipped = [r for r in caplog.records if "weakness_refresh_skipped_attempt" in r.getMessage()]
+    assert skipped, "a skipped attempt must be visible at warning level"
+    assert str(orphan_attempt) in skipped[0].getMessage()
