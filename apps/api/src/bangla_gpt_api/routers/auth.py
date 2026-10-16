@@ -13,7 +13,6 @@ import jwt as pyjwt
 from fastapi import APIRouter, HTTPException, Request, Response
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
 
 from bangla_gpt_api.auth.mfa import new_secret, otpauth_uri, verify_code
 from bangla_gpt_api.auth.security import (
@@ -27,7 +26,6 @@ from bangla_gpt_api.auth.security import (
 )
 from bangla_gpt_api.auth.single_use import claim_single_use, fetch_by_hash
 from bangla_gpt_api.caching import CacheUnavailable
-from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.models import (
     EmailVerification,
     Parent,
@@ -60,6 +58,7 @@ from bangla_gpt_api.schemas import (
 )
 from bangla_gpt_api.security import encrypt_pii
 from bangla_gpt_api.services.mailer import send_mail, smtp_configured
+from bangla_gpt_api.services.verification import send_verification_email
 
 from .deps import (
     CONSENT_VERSION,
@@ -165,31 +164,8 @@ def register(
     db.add(profile)
     db.commit()
     if not verified:
-        _send_verification_email(db, app_ctx.settings, user)
+        send_verification_email(db, app_ctx.settings, user)
     return RegisterResponse(user_id=user.id, role=user.role, profile_id=profile.id)
-
-
-def _send_verification_email(db: Session, settings: Settings, user: User) -> None:
-    token = secrets.token_urlsafe(32)
-    db.add(
-        EmailVerification(
-            user_id=user.id,
-            token_hash=hashlib.sha256(token.encode()).hexdigest(),
-            expires_at=datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=24),
-        )
-    )
-    db.commit()
-    send_mail(
-        settings,
-        to=user.email,
-        subject="ইমেইল যাচাই / Verify your email",
-        body=(
-            "Bangla GPT Tutor-এ স্বাগতম! "
-            "ইমেইল যাচাই করতে নিচের কোডটি "
-            "অ্যাপের ঘরে দিন (২৪ ঘণ্টা বৈধ):\n\n"
-            f"{token}\n"
-        ),
-    )
 
 
 @router.post("/auth/verify-email", response_model=TokenResponse)
@@ -262,7 +238,7 @@ def resend_verification(
         email = payload.email.strip().lower()
         target = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if target is not None and smtp_configured(app_ctx.settings) and not target.email_verified:
-        _send_verification_email(db, app_ctx.settings, target)
+        send_verification_email(db, app_ctx.settings, target)
     return {"status": "accepted"}
 
 
