@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): gate evals on hybrid retrieval, de-tautologize golden set, precompute BM25 trigrams, single-pass redteam (A13, A8, A18)
 - fix(api): harden authentication, session end and abuse limits
 - fix(api): impersonation revocation fails closed when cache is down (F-08)
+- fix(api): issue verification codes to invited school staff
 - fix(api): make question-paper marks, difficulty buckets and integer parsing truthful
 - fix(api): make the account export complete
 - fix(api): one weak-chapter rule, a survivable mastery rollup and content-verified images
@@ -71,7 +72,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): guard the tutor turn, bound stalled requests and clear data on sign-out
 - fix(web): let an anonymous visitor change the interface language
 - fix(web): localize consent/invite copy, theme icon sync, error states, icon cleanup
+- fix(web): make the register screen's email-verification step usable
 - fix(web): notification panel no longer clipped off the left edge
+- fix(web): raise three status tokens to the WCAG AA contrast minimum
 - fix(web): recover from page errors, report load failures, and never show another child's data
 - fix(web): report a dead API origin accurately, not as a busy server (#14)
 - fix(web): route /api/* explicitly to the edge proxy function
@@ -114,6 +117,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - docs(audit): record the merge and live-production outcome
 - docs(qa): publish the 2026-10-16 audit report; refresh the lockfile within its ranges
+- docs(qa): record the CI-found defects and the exit-gate assessment in the report
 - docs: add 2026-10-06 QA audit and final certification reports
 - docs: add a CHANGELOG generated from git history, and a check that keeps it honest
 - docs: add final QA report for 2026-10-07 UAT completion
