@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): repair corrupted Bengali in tutor prompts, feedback IDOR, dead code
 - fix(api): repair the retrieval evaluation's coverage-gate call
 - fix(api): restore middleware_stack and circuit_breaker to last-green versions
+- fix(api): restore the documented build_limiter patch seam in create_app
 - fix(api): rotate token epoch on password change/reset — sessions revoke (F-05)
 - fix(api): ruff format circuit_breaker
 - fix(api): ruff format middleware_stack
