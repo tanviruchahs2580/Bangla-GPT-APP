@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - feat(i18n): land Bangla copy for the status and impersonation strings
+- feat(rag): retrieval-quality rework - fair gate, query lanes, measured rank lift
 - feat(web): login page background image with dark/light theme sync
 - feat(web): student section background image with dark/light sync
 
@@ -154,6 +155,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate the CHANGELOG for the delivery record
 - docs: regenerate the CHANGELOG for the deployment record
 - docs: regenerate the CHANGELOG for the post-merge CI record
+- docs: regenerate the CHANGELOG for the redeploy record
 - docs: regenerate the CHANGELOG for the register-backdrop change
 - docs: regenerate the CHANGELOG for the scripts commit
 - docs: regenerate the CHANGELOG for the test and QA-record commits
@@ -197,6 +199,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #18 from tanviruchahs2580/qa/full-audit-hardening
 - Merge pull request #22 from tanviruchahs2580/qa/2026-10-17-audit-hardening
 - Merge pull request #24 from tanviruchahs2580/docs/2026-10-17-deployment-record
+- Merge pull request #25 from tanviruchahs2580/docs/2026-10-17-vercel-redeploy
 
 ## v0.9.2 - 2026-09-15
 
