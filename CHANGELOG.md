@@ -129,6 +129,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(qa): record the 2026-10-17 deployment and how it was verified
 - docs(qa): record the CI evidence and the two honest notes in the record
 - docs(qa): record the CI-found defects and the exit-gate assessment in the report
+- docs(qa): record the explicit Vercel redeploy and the 61-check role-level live test
 - docs(qa): record the fully green CI run and the final commit list
 - docs(qa): record the post-merge CI evidence and the live Dependabot result
 - docs(qa): record the registration-backdrop change and its deployment
@@ -152,6 +153,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate the CHANGELOG for the branch's final commits
 - docs: regenerate the CHANGELOG for the delivery record
 - docs: regenerate the CHANGELOG for the deployment record
+- docs: regenerate the CHANGELOG for the post-merge CI record
 - docs: regenerate the CHANGELOG for the register-backdrop change
 - docs: regenerate the CHANGELOG for the scripts commit
 - docs: regenerate the CHANGELOG for the test and QA-record commits
@@ -194,6 +196,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #17 from tanviruchahs2580/docs/2026-10-16-live-enablement
 - Merge pull request #18 from tanviruchahs2580/qa/full-audit-hardening
 - Merge pull request #22 from tanviruchahs2580/qa/2026-10-17-audit-hardening
+- Merge pull request #24 from tanviruchahs2580/docs/2026-10-17-deployment-record
 
 ## v0.9.2 - 2026-09-15
 
