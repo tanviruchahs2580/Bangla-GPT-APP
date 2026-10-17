@@ -185,6 +185,10 @@ class CorpusVocabulary:
         if not wanted or not wanted.isascii() or len(wanted) < 2:
             return []
         budget = edit_budget(len(wanted))
+        # Fuzzy roman matching starts at three characters: a two-character
+        # token ("er") is within one edit of nearly every short roman key
+        # and would expand to arbitrary terms ("er" -> বের) with maximum
+        # coverage weight. Exact roman keys still match at any length.
         matches: list[tuple[int, str]] = []
         for band, entries in self._roman_buckets.items():
             if abs(band - len(wanted)) > budget:
@@ -198,6 +202,13 @@ class CorpusVocabulary:
                 # BM25 hit for an out-of-domain query.
                 if distance is not None and similarity(wanted, roman) >= 0.65:
                     matches.append((distance, term))
+        if len(wanted) < 3:
+            seen_exact: dict[str, None] = {}
+            roman_key = to_roman(wanted)
+            for roman, term in self._roman_buckets.get(len(roman_key), ()):
+                if roman == roman_key:
+                    seen_exact.setdefault(term, None)
+            return list(seen_exact)[:MAX_MATCHES]
         if not matches:
             for roman, term in self._skeleton_buckets.get(_skeleton(wanted), ()):
                 distance = bounded_distance(wanted, roman, budget + 1)

@@ -196,8 +196,6 @@ ROMANISED_STOP_WORDS: frozenset[str] = frozenset(
         "moddhe",
         "upore",
         "niche",
-        "bhitore",
-        "bhire",
         "sathe",
         "jonno",
         "jonnyo",
