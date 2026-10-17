@@ -12,10 +12,13 @@ Current sources of truth live one level up (living docs):
   (the generated `../route_baseline.md` and the live `/openapi.json` are the
   full route list)
 - `../runbook.md` — operations runbook
-- `../qa/QA_REPORT_2026-10-16.md` — the single current QA record
+- `../qa/QA_REPORT_2026-10-17.md` — the single current QA record
 
 Point-in-time session and audit reports belong in this directory — never
 beside the living docs, and never promoted as a source of truth. The
 2026-10-16 audit set is archived here as
 [`2026-10-16-full-audit/`](2026-10-16-full-audit/) with its own banner README
-listing the statements in it that a reader should not act on.
+listing the statements in it that a reader should not act on. The QA records
+this directory holds as `qa-audit-<date>.md` are superseded snapshots: they
+describe the tree as it was, so their counts and their `docs/qa/…` links are
+historical, not current.
