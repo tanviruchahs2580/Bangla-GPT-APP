@@ -4,7 +4,10 @@ name: bangla-gpt-app
 #   core        — api + redis            (docker compose --profile core up -d)
 #   worker      — ARQ cron worker        (add --profile worker; set JOBS_BACKEND=arq)
 #   web         — static dashboard       (add --profile web)
-#   tls         — Caddy auto-HTTPS proxy (add --profile tls; requires DOMAIN/ACME_EMAIL)
+#   tls         — Caddy auto-HTTPS proxy (add --profile tls WITH --profile web;
+#                 Caddy reverse-proxies web:80, so `--profile tls` alone is an
+#                 invalid project: "caddy depends on undefined service web".
+#                 Requires DOMAIN/ACME_EMAIL)
 #   postgres    — Postgres service       (add --profile postgres)
 #   monitoring  — Prometheus + Grafana   (add --profile monitoring)
 #   backup      — scheduled DB backups   (add --profile backup)
@@ -59,10 +62,28 @@ services:
       SMTP_FROM: ${SMTP_FROM:-}
     volumes:
       - api_data:/data
-    # Publish to the host ONLY when API_HOST_PORT is set (e.g. staging).
-    # In production keep it unset so traffic enters through Caddy/nginx.
+    # Host-side port. This is for a tunnel or proxy that runs ON THE HOST, not
+    # on the Compose network -- Caddy reaches the API as `api:8000` and never
+    # uses this mapping.
+    #
+    # It used to read "${API_HOST_PORT:-}:8000" with a comment saying the port
+    # was published "ONLY when API_HOST_PORT is set". That was wrong: Compose
+    # renders an empty host segment as a full port entry, so an unset variable
+    # published the API on a RANDOM host port bound to 0.0.0.0 -- not the
+    # private posture the comment, the README and the runbook all promised, and
+    # a deployed API did end up listening on every interface that way.
+    #
+    # Now it is deterministic and bound to loopback unless the operator asks for
+    # wider: API_HOST_PORT picks the port (default 8000), API_HOST_BIND the
+    # interface. That default is what a host-side tunnel or a `curl
+    # 127.0.0.1:8000/health` from the host uses. The release workflow's
+    # post-deploy gate does not depend on it -- that reads the api container's
+    # own healthcheck, so it cannot fail a healthy release over a mapping the
+    # operator left out.
+    # Widen only deliberately: API_HOST_BIND=0.0.0.0 exposes the API to the
+    # network, and nothing in the stack authenticates the client at that layer.
     ports:
-      - "${API_HOST_PORT:-}:8000"
+      - "${API_HOST_BIND:-127.0.0.1}:${API_HOST_PORT:-8000}:8000"
     depends_on:
       redis:
         condition: service_started

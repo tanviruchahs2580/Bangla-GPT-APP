@@ -55,7 +55,7 @@ mitigation meanwhile: keep vite's default localhost binding, do not use
 # API
 apps/api: python -m pip_audit -r <(python -m pip freeze)   # CI does this in-job
 # Web
-apps/web: npm audit --omit=dev          # gate (must stay 0)
+apps/web: npm audit --omit=dev          # gate: fails on HIGH or above, not on 0
 apps/web: npm audit                     # full picture incl. triaged dev deps
 ```
 Update this register whenever the triage set changes.

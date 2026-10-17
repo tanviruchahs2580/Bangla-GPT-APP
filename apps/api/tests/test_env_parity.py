@@ -27,6 +27,8 @@ ROOT = Path(__file__).resolve().parents[3]
 # image tags) or the web build -- never the API process.
 INFRA_ONLY = {
     "ACME_EMAIL",  # Caddy auto-HTTPS certificate contact
+    "API_HOST_BIND",  # compose host-publish interface (loopback by default)
+    "API_HOST_PORT",  # compose host-publish port
     "API_TAG",  # compose image tag
     "WEB_TAG",  # compose image tag
     "BACKUP_INTERVAL_SECONDS",  # backup sidecar loop

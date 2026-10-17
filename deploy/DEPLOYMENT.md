@@ -90,8 +90,21 @@ network and a firewall rule that rejects everything but the API host.
 
 ## 5. Get the image and run the migrations
 
-The image is built from the repository root. There is no registry push in the
-current CI, so build on the host:
+The image is either pulled from the registry or built on the host. Pushing a
+`vX.Y.Z` tag makes `release.yml` publish both images to GHCR, gated on a green
+CI run for that commit, so pulling a released tag is the shorter path:
+
+```bash
+cd /opt/bangla-gpt
+git fetch --tags --force origin
+git checkout vX.Y.Z                    # never deploy a moving ref
+export API_TAG=vX.Y.Z WEB_TAG=vX.Y.Z   # the tags select the image; without
+                                       # them compose resolves `:local`
+docker compose --profile core pull
+docker compose --profile core up -d --wait
+```
+
+To build from source instead, build on the host from the repository root:
 
 ```bash
 cd /opt/bangla-gpt
@@ -215,8 +228,7 @@ repository is in.
 ## 8. TLS in front
 
 The API image serves plain HTTP and expects a proxy to terminate TLS. HSTS is
-correctly the proxy's job — see `deploy/caddy/Caddyfile` and
-`deploy/postgres/Caddyfile.template`.
+correctly the proxy's job — see `deploy/caddy/Caddyfile`.
 
 Minimum: HSTS (`max-age=31536000; includeSubDomains`), and the proxy forwards
 `X-Forwarded-For`. The rate limiter reads that header only when
@@ -290,10 +302,15 @@ That last one is the check people skip. Run it before you need it.
 ## 12. What this does not fix
 
 Deploying the API to a real host makes production *reachable*. It does not
-close the open findings. 91 of the 130 recorded findings remain open, including
-10 `async def` routes that block the event loop on the synchronous database
-session (F-078) and the database performance work (F-086…F-096). The full
-register is in the audit report's findings index.
+close the open findings. There is exactly one current record — the newest
+`docs/qa/QA_REPORT_*.md` — and it carries the open-item register with its
+severities and the reason each item was left open.
+
+This paragraph used to restate those totals ("91 of the 130 recorded findings
+remain open", with a "findings index" that exists nowhere in the tree, and ids
+like F-078 that appear nowhere else). A second copy of a number is a number
+that goes stale, and it had: the current record reports no open S0/S1/S2, and
+the remainder are S3/S4 items. Read the record, not this file.
 
 None of them make deploying unsafe. All of them make deploying premature for
 scale. Deploy, then work the register.

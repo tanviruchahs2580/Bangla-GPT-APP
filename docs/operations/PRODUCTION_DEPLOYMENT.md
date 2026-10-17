@@ -60,7 +60,7 @@ docker compose --profile core up -d
 ENV=production
 LLM_PROVIDER=gemini
 GEMINI_API_KEY=<key>
-DATABASE_URL=postgresql+psycopg://bgpt:bgpt@db:5432/bgpt
+DATABASE_URL=postgresql+psycopg://bgpt:bgpt@postgres:5432/bgpt
 JWT_SECRET=<32+ char random string>
 ALLOWED_ORIGINS=https://bangla-gpt-app.vercel.app
 REDIS_URL=redis://redis:6379/0
