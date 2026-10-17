@@ -23,12 +23,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - fix(api): P4 cleanup batch — chunk-id content hash, lesson echo gate, proportional Latin penalty, corpus-scoped RAG keys, history char cap (A20-A25)
 - fix(api): align the served OpenAPI contract with runtime behaviour
+- fix(api): burn pending verification codes when a new one is issued
 - fix(api): close two moderation false negatives and cover the chat routes
+- fix(api): derive the school analytics day window in Asia/Dhaka
 - fix(api): drop an unused variable the new RUF059 rule caught
 - fix(api): gate evals on hybrid retrieval, de-tautologize golden set, precompute BM25 trigrams, single-pass redteam (A13, A8, A18)
 - fix(api): harden authentication, session end and abuse limits
 - fix(api): impersonation revocation fails closed when cache is down (F-08)
 - fix(api): issue verification codes to invited school staff
+- fix(api): let a student clear their subject focus
 - fix(api): make question-paper marks, difficulty buckets and integer parsing truthful
 - fix(api): make the account export complete
 - fix(api): one weak-chapter rule, a survivable mastery rollup and content-verified images
@@ -44,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): ruff format middleware_stack
 - fix(api): scope chapter-content writes to the author's school
 - fix(api): serve the configured corpus and the Dhaka day in the Learn flow
+- fix(api): tie the quiz ceilings to one bound so an assignment stays submittable
 - fix(api): vision-honest refusal for openai, max_output_tokens cap, transport retries (A10, A9, A16)
 - fix(api): wall school-less staff into the shared default school (F-04)
 - fix(api,web): audit remediations — breaker recovery, MFA/chat rate limits, CORS PATCH, model-refusal honesty, test runner
@@ -52,8 +56,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(auth): redeem single-use codes with a compare-and-set, not a read-then-write
 - fix(auth): unblock login on web and APK (MFA step-up, unauth resend, proxy/APK errors)
 - fix(ci): exempt changelog-regenerating commits by changed paths, not subject text
+- fix(ci): make the doc-path guard cover the classes of path it claims to
 - fix(ci): make the lockfile guardrail deterministic
 - fix(ci): pin every action to a commit SHA and scope registry permission
+- fix(ci): repair two gates that could not fail, and stop the impossible redis bump
 - fix(ci): resolve README links portably so the docs guard works on Linux
 - fix(ci): serialise release and deploy runs per git ref
 - fix(ci): unblock Dependabot PRs and name the Vercel credential failure (#9)
@@ -61,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(db): reconcile ORM/migration drift so alembic check passes
 - fix(encoding): add .gitattributes and repair three encoding defects
 - fix(i18n): put the parent digest and the printed papers in Bangla, and correct five copy defects
+- fix(ops): stop publishing the API on a random host port, and make the release gate real
 - fix(pdf): enable Bengali complex-script shaping in PDF renderers
 - fix(sec): refuse unsafe production defaults at boot
 - fix(sec): stop serving the OpenAPI reference in production
@@ -79,6 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): report a dead API origin accurately, not as a busy server (#14)
 - fix(web): route /api/* explicitly to the edge proxy function
 - fix(web): stop rendering remote images in answers and announce each answer once
+- fix(web): stop showing failures as facts, and read API timestamps as UTC
 - fix: complete admin password-change flow, tutor typo gate, roster-scoped stats, quiz distractors, i18n
 - fix: land the verified remediation on current main (CORS-adjacent, budget, UI states)
 - fix: resolve mypy 2.4.0 type errors in teacher/school/common/weakness
@@ -118,6 +126,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(audit): record the merge and live-production outcome
 - docs(qa): publish the 2026-10-16 audit report; refresh the lockfile within its ranges
 - docs(qa): record the CI-found defects and the exit-gate assessment in the report
+- docs(qa): record the registration-backdrop change and its deployment
 - docs(qa): record the role-based acceptance run and the live deployment
 - docs: add 2026-10-06 QA audit and final certification reports
 - docs: add a CHANGELOG generated from git history, and a check that keeps it honest
@@ -172,6 +181,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #15 from tanviruchahs2580/audit/2026-10-16-live-verification
 - Merge pull request #16 from tanviruchahs2580/docs/2026-10-16-live-outcome
 - Merge pull request #17 from tanviruchahs2580/docs/2026-10-16-live-enablement
+- Merge pull request #18 from tanviruchahs2580/qa/full-audit-hardening
 
 ## v0.9.2 - 2026-09-15
 
