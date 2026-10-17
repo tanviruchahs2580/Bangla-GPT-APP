@@ -214,9 +214,17 @@ describe("admin center", () => {
     // Before the fix school_admin was absent from the option list, so the row
     // rendered the first option ("student") and any edit would have demoted them.
     expect((select as HTMLSelectElement).value).toBe("school_admin");
-    expect(
-      within(select).getByRole("option", { name: "school_admin" }),
-    ).toBeInTheDocument();
+    // Found by its machine value, not by its text: the label is localized now,
+    // and the guarantee this test exists for is that the option is present with
+    // the value the API expects.
+    const option = within(select)
+      .getAllByRole("option")
+      .find(
+        (o) => (o as HTMLOptionElement).value === "school_admin",
+      ) as HTMLOptionElement;
+    expect(option).toBeDefined();
+    expect(option.textContent).toBe(t("roleSchoolAdmin"));
+    expect(option.textContent).not.toBe("school_admin");
   });
 
   it("shows a retryable error when the feedback queue fails instead of loading forever", async () => {
