@@ -130,6 +130,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(qa): record the CI evidence and the two honest notes in the record
 - docs(qa): record the CI-found defects and the exit-gate assessment in the report
 - docs(qa): record the fully green CI run and the final commit list
+- docs(qa): record the post-merge CI evidence and the live Dependabot result
 - docs(qa): record the registration-backdrop change and its deployment
 - docs(qa): record the role-based acceptance run and the live deployment
 - docs: add 2026-10-06 QA audit and final certification reports
@@ -150,6 +151,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate the CHANGELOG for the acceptance-testing fixes
 - docs: regenerate the CHANGELOG for the branch's final commits
 - docs: regenerate the CHANGELOG for the delivery record
+- docs: regenerate the CHANGELOG for the deployment record
 - docs: regenerate the CHANGELOG for the register-backdrop change
 - docs: regenerate the CHANGELOG for the scripts commit
 - docs: regenerate the CHANGELOG for the test and QA-record commits
