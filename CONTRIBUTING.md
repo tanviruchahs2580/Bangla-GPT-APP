@@ -35,7 +35,7 @@ CI must be green on your branch. That means, at minimum:
 | API lint + format | `ruff check .` and `ruff format --check .` | `ruff format .` then re-check |
 | API type check | `mypy src` | From `apps/api` — matches the CI step |
 | API tests | `pytest` | Add tests for behaviour you change |
-| Dependencies | `pip-compile --generate-hashes --allow-unsafe --extra dev --strip-extras` | Regenerate `constraints.txt` — CI fails if it is stale |
+| Dependencies | `pip-compile --generate-hashes --allow-unsafe --extra dev --strip-extras` | Regenerate `constraints.txt` when `pyproject.toml` changes — the guardrails job fails if a declared dependency is missing or its pin violates the declared specifier |
 | Migrations | `alembic check` | Schema and models must not drift |
 | Web tests | `npm test` | vitest |
 | Web build | `npm run build` | `tsc && vite build` — typecheck included |
@@ -66,8 +66,19 @@ cd apps/api
 pip-compile --generate-hashes --allow-unsafe --extra dev --strip-extras
 ```
 
-The `guardrails` job re-runs `pip-compile` and fails if the result differs from
-what is committed, so a stale lock cannot slip through.
+The `guardrails` job runs `apps/api/scripts/check_lockfile.py`, which fails if a
+dependency declared in `pyproject.toml` is missing from the lock or if its pinned
+version violates the declared specifier — so `redis>=5.0,<6` cannot coexist with
+a pinned `redis==8.1.0`.
+
+It does **not** compare the whole lock against a fresh `pip-compile` run: that
+comparison is not reproducible against a live index (two clean resolves minutes
+apart legitimately differ) and it used to fail on untouched, valid locks. Nor
+does it check that transitive pins agree with each other — installing the lock
+(`pip install --require-hashes -r constraints.txt`, which every build and test
+job does) is what proves that. That install is the step that caught the redis/arq
+conflict; this gate exists so the same mistake fails in the cheap job, with a
+message that names the package and the fix.
 
 Because the lock carries hashes, pip runs in hash-checking mode; the project
 itself is therefore installed separately with `--no-deps` (a local directory has

@@ -43,7 +43,14 @@ dependencies = [
     "prometheus-client>=0.21",
     "pypdf>=5.0",
     "bijoy2unicode>=0.1.1",
-    "redis>=5.0",
+    # The ceiling is arq's, not ours: arq (0.28.0, the newest release) requires
+    # `redis[hiredis]<6`, so no redis 6/7/8 can be installed beside it. Spelling
+    # that out here is what makes the manifest satisfiable and stops a resolver
+    # from proposing redis 8.1.0 -- which is how the dependency-update queue
+    # went red and stopped landing updates in the first place. Re-check the
+    # bound when arq widens its range:
+    #   python -c "import importlib.metadata as m; print(m.requires('arq'))"
+    "redis>=5.0,<6",
     "arq>=0.26",
     "httpx>=0.27",
     "psycopg[binary]>=3.2",
