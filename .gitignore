@@ -99,6 +99,10 @@ data/nctb/normalized/
 # --- Local live-testing evidence (screenshots, not for repo) ---
 live_evidence/
 
+# Local live-QA working directory (openapi snapshots, role scripts, backups)
+# -- the QA record that matters lives in docs/qa/, not in this scratch dir.
+.qa-deploy/
+
 # --- Local tooling / test artifacts (not for repo) ---
 .zcodeignore
 .zcode/

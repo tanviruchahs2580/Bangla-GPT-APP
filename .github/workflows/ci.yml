@@ -253,6 +253,18 @@ jobs:
       - name: Run golden dataset evaluation (hit@3 / grounded accuracy gate)
         run: python scripts/evaluate_golden.py
 
+      # The 634-item eval-v2 suite + recorded baseline (any metric dropping
+      # >2pp fails) and the 16-item red-team gate ran previously only in the
+      # separate eval-gate workflow (push/PR) and in local test assertions;
+      # they now also gate every push to main here so a retrieval regression
+      # cannot merge without them. --seed-bad is deliberately NOT used: the
+      # baseline is a reviewed, committed artifact (R12).
+      - name: Eval-v2 regression gate (634-item golden suite vs committed baseline)
+        run: python -m bangla_gpt_api.evaluation.cli
+
+      - name: Red-team gate (16 adversarial prompts, all refused, no leakage)
+        run: python -m bangla_gpt_api.evaluation.cli --redteam
+
   web:
     name: Web build & test (apps/web)
     runs-on: ubuntu-latest

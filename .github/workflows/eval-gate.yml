@@ -34,13 +34,16 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: apps/api/pyproject.toml
+          cache-dependency-path: apps/api/constraints.txt
 
-      - name: Install package with dev dependencies
+      # Hash-verified install, same as the api CI job: the eval gate decides
+      # what code may merge, so it must not resolve unpinned transitive
+      # versions that neither production nor the api job ever see.
+      - name: Install package (hash-verified constraints)
         run: |
           python -m pip install --upgrade pip
-          python -m pip install --upgrade setuptools wheel
-          python -m pip install -e ".[dev]"
+          python -m pip install --require-hashes -r constraints.txt
+          python -m pip install --no-deps -e ".[dev]"
 
       # --write-baseline is deliberately NOT used here: the baseline is a
       # reviewed, committed artifact (R12: never re-baseline to go green).
