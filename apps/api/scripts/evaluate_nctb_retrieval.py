@@ -181,7 +181,9 @@ def main() -> int:
         },
     }
     out = corpus_root / "retrieval_eval.json"
-    out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    # trailing newline: the pre-commit end-of-file-fixer requires it, and a
+    # Windows text-mode write will not add one on its own.
+    out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + chr(10), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0
 
