@@ -70,7 +70,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(i18n): put the parent digest and the printed papers in Bangla, and correct five copy defects
 - fix(ops): stop publishing the API on a random host port, and make the release gate real
 - fix(pdf): enable Bengali complex-script shaping in PDF renderers
+- fix(rag): framing-plane coverage, cross-script gate resolution, in-corpus weighting
 - fix(rag): roman-lane floor, edit-similarity rank, MRR unit, trailing newline
+- fix(rag): runtime prompt-injection screening at the query boundary
 - fix(sec): refuse unsafe production defaults at boot
 - fix(sec): stop serving the OpenAPI reference in production
 - fix(web): clear footer from bottom nav + cut a round-trip from login
