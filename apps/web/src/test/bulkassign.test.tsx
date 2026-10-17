@@ -146,7 +146,14 @@ describe("bulk assign card", () => {
         subject: "science",
         chapter: "kosh",
         num_questions: 5,
-        due_at: "2026-09-10T10:00",
+        // An instant, not the raw "2026-09-10T10:00" the datetime-local input
+        // holds. The API stores a naive value as UTC and compares it against UTC
+        // now, while the card renders it with toLocaleString(), which reads a
+        // tz-less string as local time -- so a Dhaka deadline was displayed as
+        // 10:30 and expired at 16:30. Converted in the test the same way the
+        // component converts it, so this asserts the contract without pinning
+        // the runner's timezone.
+        due_at: new Date("2026-09-10T10:00").toISOString(),
       }),
     );
     // the assignment shows up; selections reset so the button disables again

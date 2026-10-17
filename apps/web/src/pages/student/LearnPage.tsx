@@ -26,7 +26,7 @@ import type {
   SubjectOut,
 } from "../../types";
 import { useAuth } from "../../AuthContext";
-import { Card } from "../../components/ui";
+import { Card, LoadError } from "../../components/ui";
 import { t, tSubject } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { chapterBadge, ttsSupported as ttsAvailable } from "../../lib/progress";
@@ -142,6 +142,13 @@ export function LearnPage() {
           <div className="skeleton skeleton-card" />
           <div className="skeleton skeleton-card" />
         </div>
+      ) : subjectsQuery.isError ? (
+        /* Without this branch a failed fetch fell through to the grid below
+           with an empty list, and the page looked like a catalogue with
+           nothing in it rather than a request that did not answer. */
+        <Card>
+          <LoadError onRetry={() => void subjectsQuery.refetch()} />
+        </Card>
       ) : (
         <div className="subject-grid">
           {subjects.map((s: SubjectOut) => {
@@ -208,6 +215,12 @@ export function LearnPage() {
             {chaptersQuery.isLoading ? (
               <Card>
                 <div className="skeleton skeleton-text" />
+              </Card>
+            ) : chaptersQuery.isError ? (
+              /* "no chapters for this subject" was also the message after a
+                 500, so a broken request was reported as a missing syllabus. */
+              <Card>
+                <LoadError onRetry={() => void chaptersQuery.refetch()} />
               </Card>
             ) : (chaptersQuery.data ?? []).length === 0 ? (
               <Card>
@@ -545,7 +558,7 @@ export function LearnChapterPage() {
                 value={fontScale}
                 onChange={(e) => setFontScale(parseFloat(e.target.value))}
                 className="font-range"
-                aria-label="font size"
+                aria-label={t("locFontSize")}
               />
               <span className="muted muted-sm" aria-hidden>
                 A+
@@ -557,7 +570,7 @@ export function LearnChapterPage() {
           <div
             className="chips workspace-tabs"
             role="tablist"
-            aria-label="workspace"
+            aria-label={t("locWorkspace")}
           >
             {(["read", "practice", "ask"] as const).map((k) => (
               <button

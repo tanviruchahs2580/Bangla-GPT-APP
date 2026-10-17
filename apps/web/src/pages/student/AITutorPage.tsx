@@ -1,4 +1,5 @@
 import { asText } from "../../lib/text";
+import { formatServerDate } from "../../lib/datetime";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -189,7 +190,6 @@ export default function AITutorPage() {
           { id: 0, role: "user", content: text, grounded: null, sources: [] },
         ]);
         setStreaming(true);
-        if (image) setImage(null);
         const acc = { text: "" };
         try {
           const undone = await postStream<ChatDoneEvent>(
@@ -252,6 +252,12 @@ export default function AITutorPage() {
           // The answer is complete: announce it once, politely. The transcript
           // itself is no longer a live region, so tokens are not read aloud.
           setAnnouncement(acc.text);
+          // Only now is the attachment discarded. Clearing it when the request
+          // started meant a failed turn -- timeout, llm_unavailable, a stall --
+          // showed the error and threw the student's photographed question away,
+          // so the retry began by finding the photo again. The bubble above
+          // carries the text, so the transcript is unaffected either way.
+          if (image) setImage(null);
         } catch (e) {
           if ((e as { name?: string })?.name === "AbortError") return;
           setError(
@@ -545,30 +551,14 @@ export default function AITutorPage() {
           {messages.map((m, i) => {
             const prev = messages[i - 1];
             const tight = prev && prev.role === m.role;
-            const day = m.created_at
-              ? (() => {
-                  try {
-                    return new Date(m.created_at).toLocaleDateString(
-                      undefined,
-                      { day: "numeric", month: "short" },
-                    );
-                  } catch {
-                    return null;
-                  }
-                })()
-              : null;
-            const prevDay = prev?.created_at
-              ? (() => {
-                  try {
-                    return new Date(prev.created_at).toLocaleDateString(
-                      undefined,
-                      { day: "numeric", month: "short" },
-                    );
-                  } catch {
-                    return null;
-                  }
-                })()
-              : null;
+            const day = formatServerDate(m.created_at, {
+              day: "numeric",
+              month: "short",
+            });
+            const prevDay = formatServerDate(prev?.created_at, {
+              day: "numeric",
+              month: "short",
+            });
             const showDay = day && day !== prevDay;
             return (
               <div

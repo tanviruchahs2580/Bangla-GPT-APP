@@ -248,7 +248,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {!isStaff && <>{children}</>}
 
       {me?.role === "student" && (
-        <nav className="bottombar" aria-label="Primary">
+        <nav className="bottombar" aria-label={t("locPrimaryNav")}>
           {STUDENT_NAV.map(({ to, end, label, icon: Icon }) => (
             <NavLink
               key={to}

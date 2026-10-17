@@ -97,6 +97,10 @@ export function CreateHub({
   const [docs, setDocs] = useState<TeacherDocument[]>([]);
   const [docKind, setDocKind] = useState<string | null>(null);
   const [openDoc, setOpenDoc] = useState<number | null>(null);
+  const [docError, setDocError] = useState<string | null>(null);
+  // Deleting a saved document is irreversible and regenerating it is work, so
+  // it takes a second tap (same shape as account deletion on MePage).
+  const [confirmDoc, setConfirmDoc] = useState<number | null>(null);
 
   const [jobs, setJobs] = useState<AiJob[]>([]);
   const [workload, setWorkload] = useState<TeacherWorkload | null>(null);
@@ -208,12 +212,23 @@ export function CreateHub({
   };
 
   const removeDoc = async (id: number) => {
+    setDocError(null);
+    setBusy(true);
     try {
       await del(`/teacher/documents/${id}`);
       setDocs((d) => d.filter((x) => x.id !== id));
       if (openDoc === id) setOpenDoc(null);
-    } catch {
-      /* ignore */
+      setConfirmDoc(null);
+    } catch (e) {
+      // Was `catch { /* ignore */ }`. A failed delete left the row on screen
+      // with no explanation, so a teacher could not tell a rejected request
+      // from an ignored tap.
+      setDocError(
+        friendlyError((e as { rawDetail?: unknown }).rawDetail)?.text ??
+          t("errorGeneric"),
+      );
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -393,6 +408,11 @@ export function CreateHub({
         {docs.length === 0 && (
           <p className="muted text-sm">{t("noDocumentsYet")}</p>
         )}
+        {docError && (
+          <p className="error text-sm" role="alert">
+            {docError}
+          </p>
+        )}
         <div className="table-wrap">
           {docs.map((d) => (
             <div key={d.id} className="gen-doc-row">
@@ -417,12 +437,34 @@ export function CreateHub({
                     {t("genDownloadPdf")}
                   </button>
                 )}
-                <button
-                  className="small secondary"
-                  onClick={() => void removeDoc(d.id)}
-                >
-                  {t("deleteGeneric")}
-                </button>
+                {confirmDoc === d.id ? (
+                  <>
+                    <button
+                      className="small secondary"
+                      onClick={() => void removeDoc(d.id)}
+                      disabled={busy}
+                    >
+                      {t("confirmDelete")}
+                    </button>
+                    <button
+                      className="small ghost"
+                      onClick={() => setConfirmDoc(null)}
+                      disabled={busy}
+                    >
+                      {t("cancel")}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    className="small secondary"
+                    onClick={() => {
+                      setDocError(null);
+                      setConfirmDoc(d.id);
+                    }}
+                  >
+                    {t("deleteGeneric")}
+                  </button>
+                )}
               </span>
             </div>
           ))}

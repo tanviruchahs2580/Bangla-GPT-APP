@@ -52,6 +52,23 @@ def parse(block: str) -> dict[str, str]:
     return out
 
 
+def dict_block(src: str, opener: str, closer: str | None) -> str:
+    """The text of one dictionary literal, from its opening line.
+
+    `en` used to be read as "everything from `const en` to the end of the
+    file". Anything a later commit added below it -- a helper, a lookup map --
+    was then parsed as translations, so a role map with two-space-indented
+    entries (`student: "roleStudent",`) reported five keys as "present in en
+    but missing from bn". That failure names the wrong cause and buries the
+    real one, so the block now ends where the literal does.
+    """
+    start = src.index(opener)
+    if closer is None:
+        return src[start:]
+    end = src.index(closer, start)
+    return src[start : end + len(closer)]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument(
@@ -61,8 +78,8 @@ def main() -> int:
 
     src = I18N.read_text(encoding="utf-8")
     try:
-        bn = parse(src[src.index("const bn = {") : src.index("const en: Dict = {")])
-        en = parse(src[src.index("const en: Dict = {") :])
+        bn = parse(dict_block(src, "const bn = {", "const en: Dict = {"))
+        en = parse(dict_block(src, "const en: Dict = {", "\n};"))
     except ValueError as exc:  # pragma: no cover - structural change in i18n.ts
         print(f"check_i18n: cannot locate the bn/en dictionaries in {I18N}: {exc}")
         return 2

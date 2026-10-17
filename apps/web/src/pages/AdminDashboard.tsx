@@ -12,7 +12,9 @@ import {
 import { friendlyError } from "../errors";
 import { AiQualityCard } from "../components/admin/AiQualityCard";
 import { t } from "../i18n";
+import { roleLabel } from "../lib/roles";
 import { useDebounced } from "../lib/useDebounced";
+import { formatServerDateTime } from "../lib/datetime";
 import type {
   AdminOverview,
   AdminSchoolStats,
@@ -49,6 +51,8 @@ export default function AdminDashboard() {
   const [roleFilter, setRoleFilter] = useState("");
   const [offset, setOffset] = useState(0);
   const [purgeMsg, setPurgeMsg] = useState<string | null>(null);
+  const [purgeConfirming, setPurgeConfirming] = useState(false);
+  const [purgeBusy, setPurgeBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const LIMIT = 20;
 
@@ -201,13 +205,17 @@ export default function AdminDashboard() {
 
   async function purge() {
     setPurgeMsg(null);
+    setPurgeBusy(true);
     try {
       const res = await post<Record<string, number>>(
         "/admin/maintenance/purge",
       );
       setPurgeMsg(`${t("purged")}: ${JSON.stringify(res)}`);
+      setPurgeConfirming(false);
     } catch (err) {
       setPurgeMsg(errOf(err));
+    } finally {
+      setPurgeBusy(false);
     }
   }
 
@@ -258,9 +266,37 @@ export default function AdminDashboard() {
 
       <div className="card">
         <h2>{t("maintenance")}</h2>
-        <button className="secondary" onClick={purge}>
-          {t("purgeExpired")}
-        </button>
+        {/* Two-step confirm, matching account deletion on MePage. This used to
+            be one click that permanently purged expired tokens, invites and old
+            chats server-side, with no warning, no busy state and no way back. */}
+        {!purgeConfirming ? (
+          <button
+            className="secondary"
+            onClick={() => setPurgeConfirming(true)}
+          >
+            {t("purgeExpired")}
+          </button>
+        ) : (
+          <div className="stack">
+            <p className="error m-0">{t("purgeConfirm")}</p>
+            <div className="row-flex">
+              <button
+                className="secondary"
+                onClick={purge}
+                disabled={purgeBusy}
+              >
+                {t("purgeExpired")}
+              </button>
+              <button
+                className="ghost"
+                onClick={() => setPurgeConfirming(false)}
+                disabled={purgeBusy}
+              >
+                {t("cancel")}
+              </button>
+            </div>
+          </div>
+        )}
         {purgeMsg && (
           <p className="muted" role="status">
             {purgeMsg}
@@ -348,7 +384,7 @@ export default function AdminDashboard() {
                 {refusals.last_refusal_at && (
                   <p className="muted">
                     {t("admLastRefusal")}:{" "}
-                    {new Date(refusals.last_refusal_at).toLocaleString()}
+                    {formatServerDateTime(refusals.last_refusal_at)}
                   </p>
                 )}
               </>
@@ -420,7 +456,7 @@ export default function AdminDashboard() {
                 {queue.rows.map((row) => (
                   <tr key={row.id}>
                     <td>{row.id}</td>
-                    <td>{row.role}</td>
+                    <td>{roleLabel(row.role)}</td>
                     <td>{row.rating > 0 ? "+" : row.rating < 0 ? "−" : "·"}</td>
                     <td className="cell-wrap">
                       {row.comment ?? "—"}
@@ -541,7 +577,7 @@ export default function AdminDashboard() {
                       >
                         {INVITE_ROLES.map((r) => (
                           <option key={r} value={r}>
-                            {r}
+                            {roleLabel(r)}
                           </option>
                         ))}
                       </select>{" "}
@@ -573,7 +609,7 @@ export default function AdminDashboard() {
               <tbody>
                 {invites.map((i) => (
                   <tr key={i.id}>
-                    <td>{i.role}</td>
+                    <td>{roleLabel(i.role)}</td>
                     <td>{i.used ? t("admUsed") : t("admActive")}</td>
                     <td>{i.created_at.slice(0, 10)}</td>
                     <td>
@@ -660,7 +696,7 @@ export default function AdminDashboard() {
             <option value="">—</option>
             {ROLES.map((r) => (
               <option key={r} value={r}>
-                {r}
+                {roleLabel(r)}
               </option>
             ))}
           </select>
@@ -684,7 +720,7 @@ export default function AdminDashboard() {
                 <tr key={u.id}>
                   <td>{u.id}</td>
                   <td className="cell-wrap-sm">{u.email}</td>
-                  <td>{u.role}</td>
+                  <td>{roleLabel(u.role)}</td>
                   <td>
                     <select
                       value={u.role}
@@ -693,7 +729,7 @@ export default function AdminDashboard() {
                     >
                       {ROLES.map((r) => (
                         <option key={r} value={r}>
-                          {r}
+                          {roleLabel(r)}
                         </option>
                       ))}
                     </select>{" "}

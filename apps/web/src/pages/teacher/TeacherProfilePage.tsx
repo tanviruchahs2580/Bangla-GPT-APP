@@ -3,18 +3,10 @@ import { Moon, Sun } from "lucide-react";
 import { useAuth } from "../../AuthContext";
 import { Avatar, Badge, Button, Card } from "../../components/ui";
 import { getLang, setLang, t } from "../../i18n";
+import { roleLabel } from "../../lib/roles";
 import { currentTheme, toggleTheme } from "../../lib/theme";
 
 const DEFAULT_CLASS_KEY = "bgpt_teacher_default_class";
-
-// localized role labels (same map as MePage).
-const ROLE_LABEL: Record<string, Parameters<typeof t>[0]> = {
-  student: "roleStudent",
-  teacher: "roleTeacher",
-  parent: "roleParent",
-  admin: "roleAdmin",
-  school_admin: "roleSchoolAdmin",
-};
 
 /** Teacher profile: teaching defaults + the shared settings block.
  *  Default class is a client-side preference that prefills generators —
@@ -43,13 +35,7 @@ export default function TeacherProfilePage() {
             </div>
             <div className="row-sub">{me?.email}</div>
             <div className="badge-row">
-              <Badge>
-                {me
-                  ? ROLE_LABEL[me.role]
-                    ? t(ROLE_LABEL[me.role])
-                    : me.role
-                  : "—"}
-              </Badge>
+              <Badge>{me ? roleLabel(me.role) : "—"}</Badge>
             </div>
           </div>
         </div>

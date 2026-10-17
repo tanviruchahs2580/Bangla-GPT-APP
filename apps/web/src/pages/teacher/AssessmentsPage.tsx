@@ -13,6 +13,7 @@ import { QPaperReviewPanel } from "../../components/teacher/QPaperReviewPanel";
 import { friendlyError } from "../../errors";
 import { t } from "../../i18n";
 import { cn } from "../../lib/cn";
+import { formatServerDateTime } from "../../lib/datetime";
 
 const errText = (err: unknown): string =>
   friendlyError((err as { rawDetail?: unknown }).rawDetail)?.text ??
@@ -161,7 +162,13 @@ export default function AssessmentsPage() {
         subject: asSubject,
         chapter: asChapter.trim(),
         num_questions: asCount,
-        due_at: asDue,
+        // A datetime-local input yields a bare local wall-clock string
+        // ("2026-10-20T10:30"). The API stores a naive value as UTC and compares
+        // it against UTC now, while the assignment card renders it with
+        // toLocaleString(), which reads a tz-less string as local time -- so a
+        // Dhaka 10:30 deadline displayed as 10:30 but expired at 16:30, six
+        // hours late. Sending an instant removes the disagreement.
+        due_at: new Date(asDue).toISOString(),
       });
       setAssigns((ls) => [row, ...ls]);
       setSelIds(new Set());
@@ -495,7 +502,7 @@ export default function AssessmentsPage() {
                       <span className="muted muted-sm">
                         {a.subject} ·{" "}
                         {t("baSelected", { n: a.attempts.length })} ·{" "}
-                        {t("baDue")}: {new Date(a.due_at).toLocaleString()}
+                        {t("baDue")}: {formatServerDateTime(a.due_at)}
                       </span>
                       <Button
                         variant="ghost"
