@@ -48,3 +48,44 @@ RAG_INDEX_CHUNKS = Gauge(
     labelnames=["corpus"],
     registry=REGISTRY,
 )
+
+# RAG hot-path latency. The tutor's retrieval+rerank stage is CPU-bound;
+# this histogram is the p50/p95 signal for scaling decisions (index size vs
+# latency) that previously lived only in one-off eval scripts.
+RAG_RETRIEVAL_LATENCY_SECONDS = Histogram(
+    "bgpt_rag_retrieval_latency_seconds",
+    "Retrieval + rerank latency per tutoring turn (index search only, gate excluded).",
+    buckets=(0.005, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5),
+    registry=REGISTRY,
+)
+
+# Grounding-gate verdicts: one per tutoring turn. Aggregate volume backs the
+# HighRAGRefusalRate alert (denominator); a refuse-heavy shift is the
+# signature of silent corpus degradation or a retrieval regression.
+RAG_GATE_OUTCOMES_TOTAL = Counter(
+    "bgpt_rag_gate_outcomes_total",
+    "Grounding-gate verdicts per tutoring turn (pass or refuse).",
+    labelnames=["gate"],
+    registry=REGISTRY,
+)
+
+# Refusal reasons, including the safety screen (which runs before retrieval):
+# each blocked category is low-rate, high-signal traffic worth one label --
+# more precise than folding them into the aggregate outcome series alone.
+RAG_GATE_REFUSALS_TOTAL = Counter(
+    "bgpt_rag_gate_refusals_total",
+    "Tutor refusals by reason (safety categories, insufficient_evidence, model_refused).",
+    labelnames=["reason"],
+    registry=REGISTRY,
+)
+
+# Post-generation citation verification. A fail means the grounded answer
+# leaned on material the evidence does not support -- previously a boolean
+# dropped into the response with no metering, so ungrounded drift in
+# production (new provider, new corpus) was invisible.
+RAG_CITATION_CHECKS_TOTAL = Counter(
+    "bgpt_rag_citation_checks_total",
+    "Post-generation citation verification verdicts on grounded answers.",
+    labelnames=["result"],
+    registry=REGISTRY,
+)

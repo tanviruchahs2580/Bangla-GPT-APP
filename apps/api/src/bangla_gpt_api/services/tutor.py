@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import re
 import time
@@ -8,7 +9,13 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from bangla_gpt_api.logging_config import json_log
-from bangla_gpt_api.metrics import PII_REDACTED_TOTAL
+from bangla_gpt_api.metrics import (
+    PII_REDACTED_TOTAL,
+    RAG_CITATION_CHECKS_TOTAL,
+    RAG_GATE_OUTCOMES_TOTAL,
+    RAG_GATE_REFUSALS_TOTAL,
+    RAG_RETRIEVAL_LATENCY_SECONDS,
+)
 from bangla_gpt_api.providers.base import LLMProvider, ProviderError
 from bangla_gpt_api.retrieval.base import RankingIndex
 from bangla_gpt_api.retrieval.bm25 import indexable_text, tokenize
@@ -401,6 +408,39 @@ class TutorService:
             )
         return hits
 
+    #: a follow-up question may at most carry this many content terms of the
+    #: previous user turn; more would turn BM25 into a blurred keyword soup.
+    _FOLLOWUP_CONTEXT_TERMS = 8
+
+    def _conversation_retrieval_query(
+        self, question: str, history: list[dict[str, str]] | None
+    ) -> str:
+        """Resolve a short follow-up against the prior user turn.
+
+        Multi-turn chat is the product's core surface, but retrieval ran on the
+        bare latest message: a follow-up like "আরেকটু সহজ করে বোঝাও" ("explain
+        it more simply") carries no retrievable subject, so its content-term
+        set is empty and the coverage gate refused conversations that a
+        first-time question grounds fine. When the question is **not**
+        self-sufficient (≤1 content term) and a prior user turn exists, that
+        turn's content terms are appended — retrieval and the gate then see
+        the same resolved subject. Rich questions (≥2 content terms) and
+        deliberate ``search_query`` overrides are never rewritten, so
+        single-turn behaviour is byte-identical to before.
+        """
+        if not history:
+            return question
+        if len(content_terms(question)) > 1:
+            return question
+        prior_user = next(
+            (turn.get("content", "") for turn in reversed(history) if turn.get("role") == "user"),
+            "",
+        )
+        context_terms = content_terms(prior_user) if prior_user else ()
+        if not context_terms:
+            return question
+        return question + " " + " ".join(context_terms[: self._FOLLOWUP_CONTEXT_TERMS])
+
     @staticmethod
     def _sources(hits: list) -> list[SourceRef]:
         return [
@@ -526,6 +566,11 @@ class TutorService:
         refusal) funnels through here so they cannot drift apart."""
         from bangla_gpt_api.services.safety import answer_confidence
 
+        # Every refusal reason is one label value on the same counter: ops
+        # gets the split between safety categories, evidence refusal and
+        # provider refusal without a log query (HighRAGRefusalRate alerts on
+        # the insufficient_evidence label).
+        RAG_GATE_REFUSALS_TOTAL.labels(reason=reason).inc()
         return AskResponse(
             answer=answer,
             grounded=False,
@@ -590,9 +635,23 @@ class TutorService:
             prompt_chars=len(context_blocks),
             answer_chars=len(answer),
         )
-        citation_ok = verify_citation(answer, " ".join(h.chunk.text for h in hits))
         refs = self._sources(hits)
         refused = _model_refused(answer)
+        if refused:
+            RAG_GATE_REFUSALS_TOTAL.labels(reason="model_refused").inc()
+        else:
+            # Meter the post-generation honesty check and warn on failure: the
+            # docstring contract ("callers log a warning") was previously met
+            # by nothing -- a failed check used to vanish into the response
+            # payload. A model refusal is not citation-verified at all (same
+            # as the refusal paths above): there is no grounded answer to vet.
+            citation_ok = verify_citation(answer, " ".join(h.chunk.text for h in hits))
+            RAG_CITATION_CHECKS_TOTAL.labels(result="pass" if citation_ok else "fail").inc()
+            if not citation_ok:
+                logger.warning(
+                    "citation_check_failed: grounded answer leans on material "
+                    "outside the retrieved evidence"
+                )
         return AskResponse(
             answer=answer,
             grounded=not refused,
@@ -639,11 +698,19 @@ class TutorService:
             refusal_copy, reason = unsafe
             return self._refusal(refusal_copy, reason)
 
-        retrieval_query = search_query or question
+        # search_query is a deliberate override (quiz-explain): never rewritten.
+        retrieval_query = search_query or self._conversation_retrieval_query(question, history)
+        # Retrieval is synchronous CPU work (BM25 scan + rerank over the whole
+        # corpus); offloaded off the event loop so a 120-250 ms p95 search no
+        # longer freezes concurrent SSE streams on the same worker.
         retrieval_started = time.perf_counter()
-        hits = self._retrieve(retrieval_query, class_level, subject, chapter)
+        hits = await asyncio.to_thread(
+            self._retrieve, retrieval_query, class_level, subject, chapter
+        )
         retrieval_ms = int((time.perf_counter() - retrieval_started) * 1000)
+        RAG_RETRIEVAL_LATENCY_SECONDS.observe(retrieval_ms / 1000.0)
         coverage_value, gate_pass = self._coverage_details(retrieval_query, hits)
+        RAG_GATE_OUTCOMES_TOTAL.labels(gate="pass" if gate_pass else "refuse").inc()
         # Retrieval telemetry. Logged without the question text: the privacy
         # posture of this service is that student wording is PII-adjacent and
         # is never written to logs (ask() redacts it before it leaves here).
@@ -715,11 +782,20 @@ class TutorService:
                 type="final",
                 response=AskResponse(answer=refusal_copy, grounded=False, refused_reason=reason),
             )
+            RAG_GATE_REFUSALS_TOTAL.labels(reason=reason).inc()
             return
 
-        retrieval_query = search_query or question
-        hits = self._retrieve(retrieval_query, class_level, subject, chapter)
+        retrieval_query = search_query or self._conversation_retrieval_query(question, history)
+        # Same event-loop offload as the non-stream path: an SSE turn must not
+        # stall other in-flight streams while it searches the corpus.
+        retrieval_started = time.perf_counter()
+        hits = await asyncio.to_thread(
+            self._retrieve, retrieval_query, class_level, subject, chapter
+        )
+        retrieval_ms = int((time.perf_counter() - retrieval_started) * 1000)
+        RAG_RETRIEVAL_LATENCY_SECONDS.observe(retrieval_ms / 1000.0)
         coverage_value, gate_pass = self._coverage_details(retrieval_query, hits)
+        RAG_GATE_OUTCOMES_TOTAL.labels(gate="pass" if gate_pass else "refuse").inc()
         json_log(
             logger,
             logging.INFO,
@@ -732,6 +808,7 @@ class TutorService:
         )
         if not gate_pass:
             yield StreamEvent(type="token", text=INSUFFICIENT_EVIDENCE_ANSWER)
+            RAG_GATE_REFUSALS_TOTAL.labels(reason="insufficient_evidence").inc()
             yield StreamEvent(
                 type="final",
                 response=AskResponse(
@@ -805,19 +882,38 @@ class TutorService:
         )
         from bangla_gpt_api.services.safety import verify_citation
 
-        citation_ok = verify_citation(answer, " ".join(h.chunk.text for h in hits))
+        # The citation check speaks to a grounded answer only: an outage notice
+        # (or an empty stream) is a service-level message, not evidence-based
+        # text, so verifying — let alone metering — it against the evidence
+        # would record a check that answers nothing.
+        if answer_is_grounded:
+            citation_ok = verify_citation(answer, " ".join(h.chunk.text for h in hits))
+            # Same metering contract as _assemble (non-stream path).
+            RAG_CITATION_CHECKS_TOTAL.labels(result="pass" if citation_ok else "fail").inc()
+            if not citation_ok:
+                logger.warning(
+                    "citation_check_failed: grounded answer leans on material "
+                    "outside the retrieved evidence"
+                )
+        else:
+            citation_ok = False
         # Same honesty downgrade as the non-stream path: a "not in the
         # textbook" reply is a refusal, not a grounded answer.
         model_refused = _model_refused(answer)
         if answer_is_grounded and model_refused:
             answer_is_grounded = False
+        if model_refused:
+            RAG_GATE_REFUSALS_TOTAL.labels(reason="model_refused").inc()
         yield StreamEvent(
             type="final",
             response=AskResponse(
                 answer=answer,
                 grounded=answer_is_grounded,
                 sources=self._sources(hits) if answer_is_grounded else [],
-                citation_verified=citation_ok if answer_is_grounded else False,
+                # Contract parity with the non-stream path (and the seam
+                # tests): a refusal carries no citation verdict, not a False
+                # one -- None is the schema's documented "not applicable".
+                citation_verified=citation_ok if answer_is_grounded else None,
                 refused_reason="model_refused" if model_refused else None,
             ),
         )
