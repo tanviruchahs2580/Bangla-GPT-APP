@@ -11,8 +11,15 @@ from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.metrics import PII_REDACTED_TOTAL
 from bangla_gpt_api.providers.base import LLMProvider, ProviderError
 from bangla_gpt_api.retrieval.base import RankingIndex
-from bangla_gpt_api.retrieval.bm25 import tokenize
+from bangla_gpt_api.retrieval.bm25 import indexable_text, tokenize
 from bangla_gpt_api.retrieval.hybrid import light_stem, trigram_similarity
+from bangla_gpt_api.retrieval.query_analysis import (
+    content_terms,
+    coverage_weights,
+    english_gloss_terms,
+    weighted_coverage,
+)
+from bangla_gpt_api.retrieval.vocabulary import TermStats
 from bangla_gpt_api.schemas import AskResponse, SourceRef
 from bangla_gpt_api.services.answer_structure import (  # noqa: F401 (re-export for prompt/mock/tests)
     SECTION_CHECK,
@@ -205,8 +212,14 @@ class TutorService:
         top_k: int = 3,
         circuit_breaker: CircuitBreaker | None = None,
         fallback_provider: LLMProvider | None = None,
+        term_stats: TermStats | None = None,
     ) -> None:
         self.index = index
+        # Corpus term statistics (document frequencies) that let the
+        # grounding gate weight rare curriculum terms above scaffolding.
+        # Optional: without them the gate falls back to uniform weights
+        # over content terms, which stays correct, only coarser.
+        self.term_stats = term_stats
         self.provider = provider
         # optional lane for SIMPLE routes (services/router.py). None ->
         # the main provider serves every route (mock mode / no fast model).
@@ -249,26 +262,119 @@ class TutorService:
                 return True
         return False
 
+    def _coverage_details(self, question: str, hits: list) -> tuple[float, bool]:
+        """Weighted content-term coverage of the best chunk, plus the verdict.
+
+        Replaces raw token coverage, which measurably refused answerable
+        questions: "সালোকসংশ্লেষণ কী এবং কোথায় ঘটে?" scored 0.40 against its
+        own section because কোথায় / ঘটে / এবং are function words a textbook
+        passage cannot contain, and the gate counted them as must-cover terms
+        with equal weight. Three corrections, each measured:
+
+        * only **content terms** count (query_analysis: copulas, conjunctions,
+          question particles, pronouns, postpositions in Bangla, Banglish and
+          English);
+        * the remaining terms are weighted by corpus document frequency --
+          missing a term the whole book repeats costs nearly nothing, missing
+          a one-of-a-kind curriculum term dominates the verdict;
+        * the evidence the gate reads is the text the lexical lane indexes
+          (heading + chapter + body), so a chapter-title question can be
+          satisfied by its own section heading;
+        * coverage is measured over the question's terms the corpus *knows*:
+          the student's own framing vocabulary ("explain করো", "৬ষ্ঠ শ্রেণির")
+          is absent from the textbook by construction, and weighting it at
+          the IDF maximum made user phrasing dilute coverage. A question
+          whose content terms are all absent from the corpus is
+          out-of-corpus, and still refuses.
+
+        The verdict passes when ANY retrieved chunk clears the threshold:
+        ranking noise between near-tied chunks must not flip a grounded
+        question into a refusal. Returns ``(best_coverage, passed)``.
+        """
+        query_terms = content_terms(question)
+        if not query_terms:
+            # a question made only of function words/punctuation: fall back to
+            # every stemmed token, the pre-stop-word behaviour, rather than
+            # scoring an empty term set as instant groundability.
+            query_terms = tuple(
+                dict.fromkeys(light_stem(t) for t in tokenize(question) if len(t) >= 2)
+            )
+        # Cross-script resolution: the retrieval lanes already widen a query
+        # through the glossary (cell → কোষ) and the roman lane (bhognangsho →
+        # ভগ্নাংশ); the gate must see the SAME resolved terms or it would
+        # refuse, for script reasons, a question retrieval just answered.
+        # Graceful degradation: statistics without the matching surfaces
+        # resolve nothing, and the gate proceeds on the raw terms.
+        roman_matcher = getattr(self.term_stats, "match_roman", None)
+        resolved: list[str] = []
+        for term in query_terms:
+            if term.isascii():
+                substitutes = english_gloss_terms(term)
+                if not substitutes and roman_matcher is not None:
+                    substitutes = tuple(roman_matcher(term))
+                resolved.extend(substitutes)
+                if not substitutes:
+                    resolved.append(term)
+            else:
+                resolved.append(term)
+        query_terms = tuple(dict.fromkeys(resolved))
+        if not query_terms or not hits:
+            return 0.0, False
+
+        # Out-of-domain budget. A question carrying TWO OR MORE content terms
+        # the corpus has never seen (ইউক্লিড + স্বতঃসিদ্ধ; ক্রিকেট + বিশ্বকাপ;
+        # মঙ্গল + গ্রহে) is asking about the outside world, and no lexical
+        # gate can verify that the retrieved prose answers it — refuse.
+        # ONE unknown term is the everyday case (a colloquial filler word
+        # like জিনিস next to the concept), so it passes here and its weight
+        # is simply not paid: coverage is measured over the in-corpus terms
+        # only. With no statistics the budget is not enforceable — the gate
+        # runs on uniform weights over all content terms, the historical
+        # behaviour.
+        if self.term_stats is not None and self.term_stats.total_documents > 0:
+            unknown = [t for t in query_terms if self.term_stats.document_frequency(t) == 0]
+            if len(unknown) >= 2:
+                json_log(
+                    logger,
+                    logging.INFO,
+                    "tutor_retrieval",
+                    gate="out_of_domain",
+                    unknown_terms=len(unknown),
+                )
+                return 0.0, False
+            query_terms = tuple(t for t in query_terms if t not in unknown) or tuple(unknown)
+
+        if self.term_stats is not None and self.term_stats.total_documents > 0:
+            weights = coverage_weights(
+                query_terms,
+                {t: self.term_stats.document_frequency(t) for t in query_terms},
+                self.term_stats.total_documents,
+            )
+        else:
+            weights = {t: 1.0 for t in query_terms}
+
+        best_coverage = 0.0
+        passed = False
+        for hit in hits:
+            evidence_terms = {light_stem(t) for t in tokenize(indexable_text(hit.chunk))}
+            covered = [t for t in query_terms if self._term_covered(t, evidence_terms)]
+            coverage = weighted_coverage(query_terms, covered, weights)
+            best_coverage = max(best_coverage, coverage)
+            if coverage >= self.min_coverage and hit.score > self.min_score:
+                passed = True
+        return round(best_coverage, 4), passed
+
     def _gate(self, question: str, hits: list) -> bool:
         """Coverage gate over the best retrieved chunk.
 
         Any single retrieved chunk that covers enough of the question's
-        (stemmed) terms counts as sufficient evidence — ranking noise between
-        near-tied chunks must not flip a grounded question into a refusal.
+        weighted *content* terms counts as sufficient evidence — ranking noise
+        between near-tied chunks must not flip a grounded question into a
+        refusal. Kept as the boolean form of :meth:`_coverage_details` because
+        callers (and tests) reason about the verdict, not the number.
         """
-        raw_terms = [t for t in tokenize(question) if len(t) >= 2]
-        if not hits or not raw_terms:
-            return False
-        # Stem-only matching in the gate (expansion is retrieval-side only:
-        # counting synonym predictions against evidence dilutes coverage).
-        query_terms = {light_stem(t) for t in raw_terms}
-        for hit in hits:
-            evidence_terms = {light_stem(t) for t in tokenize(hit.chunk.text)}
-            covered = sum(1 for t in query_terms if self._term_covered(t, evidence_terms))
-            coverage = covered / len(query_terms)
-            if coverage >= self.min_coverage and hit.score > self.min_score:
-                return True
-        return False
+        _coverage_value, passed = self._coverage_details(question, hits)
+        return passed
 
     def _retrieve(
         self, question: str, class_level: int, subject: str | None, chapter: str | None = None
@@ -530,8 +636,24 @@ class TutorService:
             return self._refusal(refusal_copy, reason)
 
         retrieval_query = search_query or question
+        retrieval_started = time.perf_counter()
         hits = self._retrieve(retrieval_query, class_level, subject, chapter)
-        if not self._gate(retrieval_query, hits):
+        retrieval_ms = int((time.perf_counter() - retrieval_started) * 1000)
+        coverage_value, gate_pass = self._coverage_details(retrieval_query, hits)
+        # Retrieval telemetry. Logged without the question text: the privacy
+        # posture of this service is that student wording is PII-adjacent and
+        # is never written to logs (ask() redacts it before it leaves here).
+        json_log(
+            logger,
+            logging.INFO,
+            "tutor_retrieval",
+            retrieval_ms=retrieval_ms,
+            evidence_chunks=len(hits),
+            top_score=(round(hits[0].score, 4) if hits else None),
+            coverage=coverage_value,
+            gate="pass" if gate_pass else "refuse",
+        )
+        if not gate_pass:
             return self._refusal(INSUFFICIENT_EVIDENCE_ANSWER, "insufficient_evidence")
         context_blocks = self._prompt_blocks(
             hits,
@@ -593,7 +715,18 @@ class TutorService:
 
         retrieval_query = search_query or question
         hits = self._retrieve(retrieval_query, class_level, subject, chapter)
-        if not self._gate(retrieval_query, hits):
+        coverage_value, gate_pass = self._coverage_details(retrieval_query, hits)
+        json_log(
+            logger,
+            logging.INFO,
+            "tutor_retrieval",
+            stream=True,
+            evidence_chunks=len(hits),
+            top_score=(round(hits[0].score, 4) if hits else None),
+            coverage=coverage_value,
+            gate="pass" if gate_pass else "refuse",
+        )
+        if not gate_pass:
             yield StreamEvent(type="token", text=INSUFFICIENT_EVIDENCE_ANSWER)
             yield StreamEvent(
                 type="final",

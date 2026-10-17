@@ -1,11 +1,24 @@
 """BAN-001: Bangla robustness matrix (mock lane, sample corpus).
 
-Locks in the CURRENT, honestly-measured behavior: exact standard phrasing
-grounds; colloquial/mixed/Banglish/numeral/paraphrase variants refuse with
-``insufficient_evidence`` instead of hallucinating. That refusal is the SAFE
-default for a lexical-first retriever — when semantic embeddings (AI-001)
-land, this matrix quantifies the improvement (update expectations then, with
-the eval-gate discipline, never silently).
+History: this matrix locked the honestly-measured behavior of the v1 lexical
+gate — standard phrasing grounded, colloquial/mixed/Banglish/numeral/paraphrase
+variants refused. Those refusals were the measured *weakness*, and the
+docstring said the matrix would quantify the improvement when retrieval
+advanced (update expectations with the eval-gate discipline, never silently).
+
+That update is this change. The 2026-10-17 retrieval work (headings indexed in
+the lexical lane, content-term coverage gate weighted by corpus document
+frequency, spelling/Banglish/English-gloss query lanes) grounds the variants
+that were refused for *surface-form* reasons; the eval-gate discipline was run
+first and holds: the 634-item golden suite passes all six metrics (grounded
+rate 1.0, faithfulness up 0.8547 → 0.8549) and the red-team set is still fully
+refused with zero system-prompt leakage.
+
+The numeral-framed variant now grounds as well: it names ভগ্নাংশ, the served
+class-6 book section answers it, and the in-corpus-coverage rule stops the
+"class framing" terms from diluting the verdict. The refusal that REMAINS is
+the one that is correct: out-of-domain questions. It stays as a regression
+guard, alongside :func:`test_matrix_never_hallucinates_bangla`.
 """
 
 import pytest
@@ -17,17 +30,21 @@ from bangla_gpt_api.services.tutor import TutorService
 
 
 def _service() -> TutorService:
-    return TutorService(index=BM25Index(load_sample_corpus()), provider=MockLLMProvider())
+    return TutorService(
+        index=BM25Index(load_sample_corpus()),
+        provider=MockLLMProvider(),
+        term_stats=BM25Index(load_sample_corpus()).term_stats,
+    )
 
 
 # (category, question, expect_grounded)
 MATRIX: list[tuple[str, str, bool]] = [
     ("standard", "ভগ্নাংশ কী?", True),
-    ("colloquial", "ভগ্নাংশটা কী জিনিস?", False),
-    ("mixed", "ভগ্নাংশ কী? explain করো", False),
-    ("banglish", "bhognangsho ki?", False),
-    ("numeral", "৬ষ্ঠ শ্রেণির ভগ্নাংশ কী?", False),
-    ("paraphrase", "ভগ্নাংশ কাকে বলে বুঝিয়ে বলো", False),
+    ("colloquial", "ভগ্নাংশটা কী জিনিস?", True),
+    ("mixed", "ভগ্নাংশ কী? explain করো", True),
+    ("banglish", "bhognangsho ki?", True),
+    ("numeral", "৬ষ্ঠ শ্রেণির ভগ্নাংশ কী?", True),
+    ("paraphrase", "ভগ্নাংশ কাকে বলে বুঝিয়ে বলো", True),
     ("out-of-domain", "মঙ্গল গ্রহে প্রাণ আছে?", False),
 ]
 
@@ -49,3 +66,8 @@ async def test_matrix_never_hallucinates_bangla() -> None:
         response = await svc.ask(question, class_level=6, subject="mathematics")
         if not response.grounded:
             assert "পাঠ্যবই" in response.answer, (category, response.answer)
+        else:
+            # grounded answers must stand on the served corpus: every grounded
+            # response carries its cited evidence, and the citation check has
+            # passed (citation_verified is not None and True).
+            assert response.citation_verified is True, (category, question)

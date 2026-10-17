@@ -1,6 +1,4 @@
 import math
-import re
-import unicodedata
 from collections import Counter
 from dataclasses import dataclass
 
@@ -8,30 +6,20 @@ from bangla_gpt_api.curriculum.models import Chunk
 from bangla_gpt_api.retrieval.hybrid import (
     expand_query,
     light_stem,
+    tokenize,
     trigram_jaccard,
     trigram_ngrams,
 )
-
-_BANGLA_WORD_RE = re.compile(r"[A-Za-z0-9\u0980-\u09FF]+")
+from bangla_gpt_api.retrieval.query_analysis import english_gloss_terms, is_stop_word
+from bangla_gpt_api.retrieval.vocabulary import CorpusVocabulary
 
 # Weight of the character-trigram fallback blended into the BM25 score.
 _TRIGRAM_WEIGHT = 2.0
 
-
-def tokenize(text: str) -> list[str]:
-    """Tokenize keeping Bangla graphemes intact.
-
-    ``\\w+`` splits on Bangla combining marks (vowel signs U+09BE-U+09CC,
-    virama U+09CD), destroying words like 'বিশ্বকাপ'. The explicit range
-    U+0980-U+09FF covers the full Bangla block incl. signs and digits.
-
-    NFKC folds compatibility variants (e.g. mobile-keyboard precomposed vs
-    decomposed Bangla) so indexing and querying stay symmetric.
-    """
-    return [
-        match.group(0).lower()
-        for match in _BANGLA_WORD_RE.finditer(unicodedata.normalize("NFKC", text))
-    ]
+# Public re-export: callers that imported the shared tokenizer from this
+# module keep working (bm25 owned tokenize before the query-analysis layer
+# needed it; hybrid.py is the shared leaf).
+__all__ = ["BM25Index", "Hit", "indexable_text", "tokenize"]
 
 
 @dataclass
@@ -40,11 +28,38 @@ class Hit:
     score: float
 
 
+def indexable_text(chunk: Chunk) -> str:
+    """What the lexical index (and the grounding gate) sees for a chunk.
+
+    The section heading is indexed with double weight and the chapter with
+    single weight, ahead of the body. This closes a measured defect: five of
+    the golden chapter-title questions pointed at text that existed *only in
+    the heading* ("সূচক কী" → section "সূচকের নিয়ম"), and the heading was
+    invisible to the lexical lane, so those questions refused or mis-ranked
+    while the evidence existed. Prominence comes from repetition — BM25 has no
+    field model, and repeating rare heading terms is the cheapest way to give
+    a title the same influence a body paragraph earns by length.
+
+    The evidence *displayed* to the student stays ``chunk.text`` — indexing
+    text and showing text are different obligations, deliberately separated.
+    """
+    section = chunk.meta.section or ""
+    chapter = chunk.meta.chapter or ""
+    parts = [section, section, chapter, chunk.text]
+    return "\n".join(part for part in parts if part)
+
+
 class BM25Index:
     """Lexical Okapi BM25 index over curriculum chunks.
 
     Intentionally dependency-free so the retrieval contract is testable now;
     a vector store can replace/augment it once infrastructure exists.
+
+    Also owns the :class:`CorpusVocabulary` — document frequencies, the
+    spelling lane and the Banglish lane — because all three are built from
+    the same tokenised corpus scan this index already performs. Exposed as
+    :attr:`term_stats` for the grounding gate, which needs document frequency
+    to weight query terms.
     """
 
     def __init__(
@@ -56,7 +71,8 @@ class BM25Index:
         self.chunks = chunks
         self.k1 = k1
         self.b = b
-        self.term_freqs = [Counter(tokenize(chunk.text)) for chunk in chunks]
+        indexed = [indexable_text(chunk) for chunk in chunks]
+        self.term_freqs = [Counter(tokenize(text)) for text in indexed]
         self.doc_lengths = [sum(tf.values()) for tf in self.term_freqs]
         self.avgdl = (sum(self.doc_lengths) / len(self.doc_lengths)) if self.doc_lengths else 0.0
         self.doc_freq: Counter[str] = Counter()
@@ -66,6 +82,12 @@ class BM25Index:
         # soft-match fallback signal. A8: precomputed ONCE at build time —
         # recomputing them per query over the whole corpus was the hot path.
         self._trigrams: list[frozenset[str]] = [trigram_ngrams(chunk.text) for chunk in chunks]
+        self.vocabulary = CorpusVocabulary.from_frequencies(self.doc_freq, len(chunks))
+
+    @property
+    def term_stats(self) -> CorpusVocabulary:
+        """Corpus term statistics for the grounding gate and reranker."""
+        return self.vocabulary
 
     def search(
         self,
@@ -78,9 +100,10 @@ class BM25Index:
         min_score: float = 0.0,
     ) -> list[Hit]:
         raw_terms = tokenize(query)
-        # Query-side expansion: stems + curated synonyms improve recall for
-        # paraphrased questions without touching document text.
-        query_terms = expand_query([light_stem(t) for t in raw_terms])
+        query_terms = expand_query(
+            [light_stem(t) for t in raw_terms],
+            extra=self._query_side_expansions(raw_terms),
+        )
         query_grams = trigram_ngrams(query)
         hits: list[Hit] = []
         for i, chunk in enumerate(self.chunks):
@@ -101,6 +124,40 @@ class BM25Index:
                 hits.append(Hit(chunk=chunk, score=round(score, 4)))
         hits.sort(key=lambda hit: hit.score, reverse=True)
         return hits[:top_k]
+
+    def _query_side_expansions(self, raw_terms: list[str]) -> list[str]:
+        """Corpus-vocabulary expansions for code-switched and misspelled tokens.
+
+        Three lanes, in priority order: an English/Banglish *glossary* term maps
+        to its Bangla curriculum term (``cell`` → ``কোষ``); a Latin token that
+        matches the romanised form of a corpus term rides the Banglish lane
+        (``kosh`` → ``কোষ``); a Bangla token that is *not* corpus vocabulary
+        but looks like a typo of one is repaired (``কোশ`` → ``কোষ``). Every
+        expansion is then stemmed, exactly like the query terms it joins.
+
+        Cost is bounded by construction: glossary lookups are dictionary hits,
+        and the spelling/roman lanes only run for tokens they cannot find in
+        the vocabulary — ordinary Bangla queries pay a set-membership test.
+        """
+        extras: list[str] = []
+        seen = set(self.doc_freq)
+        for token in raw_terms:
+            if token.isascii():
+                if len(token) < 2 or is_stop_word(token):
+                    continue
+                if token not in seen:
+                    for term in english_gloss_terms(token):
+                        extras.append(light_stem(term))
+                if token not in seen:
+                    for term in self.vocabulary.match_roman(token):
+                        extras.append(light_stem(term))
+                continue
+            stemmed = light_stem(token)
+            if stemmed in seen:
+                continue
+            for term in self.vocabulary.match_spelling(token):
+                extras.append(light_stem(term))
+        return [term for term in extras if term]
 
     def _score(self, query_terms: list[str], doc_index: int) -> float:
         total = 0.0

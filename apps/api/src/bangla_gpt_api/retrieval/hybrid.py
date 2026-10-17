@@ -16,8 +16,37 @@ backend can slot in behind the same interface later.
 """
 
 import re
+import unicodedata
 
-_BANGLA_RE = re.compile(r"\u0980-\u09FF")
+# The character-class brackets are load-bearing. BAN-001 follow-up, measured
+# 2026-10-17: written unbracketed (`r"\u0980-\u09FF"`), this pattern only
+# matches the literal "U+0980-dash-U+09FF" sequence -- never a Bangla word --
+# so light_stem returned every term unchanged and the stemmer was inert since
+# its introduction. Bracketed, it is the Bangla-block membership test the
+# suffix stripper needs.
+_BANGLA_WORD_RE = re.compile("[A-Za-z0-9" + chr(92) + "u0980-" + chr(92) + "u09FF]+")
+_BANGLA_RE = re.compile("[" + chr(92) + "u0980-" + chr(92) + "u09FF]")
+
+
+def tokenize(text: str) -> list[str]:
+    """Tokenize keeping Bangla graphemes intact.
+
+    ``\\w+\\`` splits on Bangla combining marks (vowel signs
+    U+09BE-U+09CC, virama U+09CD), destroying words like 'বিশ্বকাপ'. The
+    explicit range U+0980-U+09FF covers the full Bangla block incl. signs
+    and digits.
+
+    NFKC folds compatibility variants (e.g. mobile-keyboard precomposed vs
+    decomposed Bangla) so indexing and querying stay symmetric. Lives
+    beside :func:`light_stem` rather than in :mod:`bm25` because both the
+    lexical index and the query-side analysis need it, and the analysis
+    layer must not depend on the index.
+    """
+    return [
+        match.group(0).lower()
+        for match in _BANGLA_WORD_RE.finditer(unicodedata.normalize("NFKC", text))
+    ]
+
 
 # Longest-match-first so 'গুলোকে' wins over 'কে'.
 _SUFFIXES: tuple[str, ...] = (
@@ -56,6 +85,12 @@ QUERY_EXPANSIONS: dict[str, frozenset[str]] = {
     "সংখ্যা": frozenset({"মৌলিক", "পূর্ণসংখ্যা"}),
     "কোণ": frozenset({"সমকোণ", "সূক্ষ্মকোণ", "স্থূলকোণ"}),
     "ত্রিভুজ": frozenset({"অতিভুজ", "লম্ব", "ভূমি", "পিথাগোরাস"}),
+    # হাইপা is the colloquial abbreviation of অতিভুজ — a root *change*, so it
+    # belongs here (curated expansion) and not in the spell-checker, whose
+    # first-grapheme rule excludes it by design.
+    "হাইপা": frozenset({"অতিভুজ", "ত্রিভুজ"}),
+    "আয়না": frozenset({"প্রতিবিম্ব", "প্রতিফলন"}),
+    "লোহা": frozenset({"চুম্বক", "আকর্ষণ"}),
     "বৃত্ত": frozenset({"পরিধি", "ব্যাসার্ধ", "ক্ষেত্রফল"}),
     "এনজাইম": frozenset({"ভিত", "প্রভাবক"}),
     "শ্বসন": frozenset({"অক্সিজেন", "শক্তি", "ফুসফুস"}),
@@ -75,14 +110,23 @@ def light_stem(term: str) -> str:
     return term
 
 
-def expand_query(terms: list[str]) -> list[str]:
-    """Return the original terms plus curated expansions (deduplicated)."""
+def expand_query(terms: list[str], extra: list[str] | None = None) -> list[str]:
+    """Return the original terms plus curated expansions (deduplicated).
+
+    ``extra`` carries corpus-vocabulary expansions computed by the caller
+    (the spelling and Banglish lanes in :class:`BM25Index`); they are added
+    after the curated map so an observed corpus term can never be displaced
+    by a dictionary suggestion.
+    """
     out = list(dict.fromkeys(terms))
     for term in terms:
         stemmed = light_stem(term)
-        extra = QUERY_EXPANSIONS.get(stemmed)
-        if extra:
-            out.extend(t for t in extra if t not in out)
+        expansion = QUERY_EXPANSIONS.get(stemmed)
+        if expansion:
+            out.extend(t for t in expansion if t not in out)
+    for term in extra or []:
+        if term and term not in out:
+            out.append(term)
     return out
 
 
