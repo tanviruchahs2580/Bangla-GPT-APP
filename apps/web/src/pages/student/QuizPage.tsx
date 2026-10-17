@@ -25,10 +25,18 @@ import type {
 } from "../../types";
 import { buildExplainPayload, LAST_RESULT_KEY } from "../../lib/quizExplain";
 import { useAuth } from "../../AuthContext";
-import { Badge, Button, Card, ProgressRing, Stat } from "../../components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  LoadError,
+  ProgressRing,
+  Stat,
+} from "../../components/ui";
 import { friendlyError } from "../../errors";
 import { t, tSubject } from "../../i18n";
 import { cn } from "../../lib/cn";
+import { formatServerDateTime } from "../../lib/datetime";
 import { celebrate } from "../../lib/confetti";
 
 // labels from i18n, evaluated per render (lang switch remounts).
@@ -68,6 +76,7 @@ function ReteachCards({ cards }: { cards: ReteachCard[] }) {
 
 export default function QuizPage() {
   const { me } = useAuth();
+  const isStudent = me?.role === "student";
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [number, setNumber] = useState<string>(
@@ -104,12 +113,22 @@ export default function QuizPage() {
     enabled: me?.role === "student",
   });
   // + merged "assigned by teacher" list (short tests + bulk).
-  const { data: stMine } = useQuery({
+  const {
+    data: stMine,
+    isPending: stMinePending,
+    isError: stMineFailed,
+    refetch: refetchStMine,
+  } = useQuery({
     queryKey: ["shorttests-mine"],
     queryFn: () => get<ShortTestMine[]>("/shorttests/mine"),
     enabled: me?.role === "student",
   });
-  const { data: asMine } = useQuery({
+  const {
+    data: asMine,
+    isPending: asMinePending,
+    isError: asMineFailed,
+    refetch: refetchAsMine,
+  } = useQuery({
     queryKey: ["assignments-mine"],
     queryFn: () => get<AssignmentMine[]>("/assignments/mine"),
     enabled: me?.role === "student",
@@ -535,10 +554,35 @@ export default function QuizPage() {
         </div>
       ) : tab === "assigned" ? (
         <div className="stack">
-          {assigned.length === 0 && (
+          {/* A failed fetch used to render "no work assigned yet", which reads
+              as a fact about the student's homework rather than a failed
+              request -- so they would skip work that actually exists. */}
+          {stMineFailed || asMineFailed ? (
             <Card>
-              <p className="muted flush">{t("assignedEmpty")}</p>
+              <LoadError
+                onRetry={() => {
+                  if (stMineFailed) void refetchStMine();
+                  if (asMineFailed) void refetchAsMine();
+                }}
+              />
             </Card>
+          ) : isStudent &&
+            (stMinePending || asMinePending) &&
+            assigned.length === 0 ? (
+            // isStudent guards this: react-query reports isPending while a query
+            // is disabled too, so without it a teacher opening this tab would
+            // wait on a "loading" that never resolves.
+            <Card>
+              <p className="muted flush" role="status">
+                {t("loading")}
+              </p>
+            </Card>
+          ) : (
+            assigned.length === 0 && (
+              <Card>
+                <p className="muted flush">{t("assignedEmpty")}</p>
+              </Card>
+            )
           )}
           {assigned.map(({ kind, item }) => {
             if (kind === "shorttest") {
@@ -579,7 +623,7 @@ export default function QuizPage() {
                   </div>
                   <div className="row-sub">
                     {tSubject(a.subject)} · {t("baDue")}:{" "}
-                    {new Date(a.due_at).toLocaleString()}
+                    {formatServerDateTime(a.due_at)}
                     {a.done ? (
                       <Badge tone="ok"> {t("baDone")}</Badge>
                     ) : a.overdue ? (

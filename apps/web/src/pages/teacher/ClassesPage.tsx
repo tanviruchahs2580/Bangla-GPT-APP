@@ -30,10 +30,14 @@ const HEALTH_DOT: Record<Health, string> = {
   support: "dot-support",
   risk: "dot-risk",
 };
-const HEALTH_LABEL: Record<Health, string> = {
-  strong: t("sdStrong"),
-  support: t("sdSupport"),
-  risk: t("clsRisk"),
+// Keys, not copy. A module-level table of t(...) results is evaluated once, when
+// the module is first imported, so it kept whichever language was active then:
+// a teacher who switched to English still saw these badges and the legend in
+// Bengali until a hard reload. t() is called at render time instead.
+const HEALTH_LABEL_KEY: Record<Health, Parameters<typeof t>[0]> = {
+  strong: "sdStrong",
+  support: "sdSupport",
+  risk: "clsRisk",
 };
 
 export default function ClassesPage() {
@@ -346,7 +350,7 @@ export default function ClassesPage() {
                   className={`health-dot ${HEALTH_DOT[classHealth]}`}
                   aria-hidden
                 />{" "}
-                {HEALTH_LABEL[classHealth]}
+                {t(HEALTH_LABEL_KEY[classHealth])}
               </Badge>
             )}
           </div>
@@ -560,7 +564,7 @@ export default function ClassesPage() {
                             aria-hidden
                           />
                           <span className="visually-hidden">
-                            {HEALTH_LABEL[h]}
+                            {t(HEALTH_LABEL_KEY[h])}
                           </span>
                         </td>
                         <td>

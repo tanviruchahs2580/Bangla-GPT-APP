@@ -4,6 +4,7 @@ import { CheckCircle2, AlertTriangle, RefreshCw } from "lucide-react";
 import { getStatus } from "../api";
 import { friendlyError } from "../errors";
 import { t } from "../i18n";
+import { formatServerDateTime } from "../lib/datetime";
 import type { StatusOut } from "../types";
 
 /**
@@ -79,7 +80,7 @@ export default function StatusPage() {
           </ul>
           <p className="muted">
             {t("statusChecked", {
-              when: new Date(data.checked_at).toLocaleString(),
+              when: formatServerDateTime(data.checked_at),
             })}{" "}
             <button
               className="small secondary"

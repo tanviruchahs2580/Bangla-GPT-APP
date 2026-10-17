@@ -24,6 +24,20 @@ backticked prose as references, ~500 false breaks). A check that cries wolf is
 worse than no check, because it gets deleted.
 
 Excluded: URLs, anchors, and anything under data/nctb (not shipped).
+
+## Two holes closed on 2026-10-17
+
+* The extension list stopped at `.md`/`.ts`/`.css`/`.example`, so whole classes
+  of path were invisible while the CI step is named "Every repo path a document
+  names exists". `deploy/DEPLOYMENT.md` pointed at
+  `deploy/postgres/Caddyfile.template` -- a file that has never existed -- and
+  the guard could not see it, because `.template` was not in the list. The
+  classes are now spelled out.
+* The scan walked the working tree, so it read files git does not track. In CI
+  those are absent and the check passes; on a developer machine they are
+  present and it fails on a path inside, say, an editor's scratch directory.
+  A guard that is green in CI and red locally teaches people to ignore it, so
+  directories whose name starts with a dot are skipped.
 """
 
 from __future__ import annotations
@@ -48,13 +62,24 @@ UNTRACKED_PREFIXES = (
 
 PATH_LIKE = re.compile(
     r"`([A-Za-z0-9_][A-Za-z0-9_./-]*"
-    r"(?:\.py|\.sh|\.yml|\.yaml|\.toml|\.json|\.md|\.ts|\.tsx|\.css|\.example))"
+    r"(?:\.py|\.sh|\.yml|\.yaml|\.toml|\.json|\.md|\.ts|\.tsx|\.css|\.example"
+    r"|\.template|\.js|\.jsx|\.txt|\.conf|\.html|\.sql|\.ini|\.cfg|\.ps1|\.lock))"
     r"`"
 )
 
 
 def top_level_dirs() -> set[str]:
     return {p.name for p in REPO.iterdir() if p.is_dir() and p.name not in {".git"}}
+
+
+def is_untracked_scan_target(path: Path) -> bool:
+    """True for paths git does not track, so CI and a local run agree.
+
+    `.gitignore` keeps dot-directories out of the repository (`.zcode/`,
+    `.venv/`, editor state). They exist locally and not in CI, which is exactly
+    the asymmetry that makes a check untrustworthy.
+    """
+    return any(part.startswith(".") for part in path.relative_to(REPO).parts[:-1])
 
 
 def main() -> int:
@@ -67,6 +92,7 @@ def main() -> int:
         for p in REPO.rglob("*.md")
         if not any(p.relative_to(REPO).as_posix().startswith(x) for x in UNTRACKED_PREFIXES)
         and "node_modules" not in p.parts
+        and not is_untracked_scan_target(p)
     )
     for doc in docs:
         text = doc.read_text(encoding="utf-8", errors="replace")

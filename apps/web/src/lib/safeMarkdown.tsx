@@ -2,6 +2,7 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
+import { t } from "../i18n";
 
 interface Props {
   content: string;
@@ -80,10 +81,7 @@ const components: Partial<Components> = {
       // Render the text, drop the link. Silently keeping an un-clickable
       // span would look like a rendering bug; saying so is honest.
       return (
-        <span
-          className="blocked-link"
-          title="This link was removed by the assistant."
-        >
+        <span className="blocked-link" title={t("locLinkRemoved")}>
           {children}
         </span>
       );
@@ -98,7 +96,9 @@ const components: Partial<Components> = {
           : {})}
       >
         {children}
-        {external ? <span className="sr-only"> (external link)</span> : null}
+        {external ? (
+          <span className="sr-only">{t("locExternalLink")}</span>
+        ) : null}
       </a>
     );
   },

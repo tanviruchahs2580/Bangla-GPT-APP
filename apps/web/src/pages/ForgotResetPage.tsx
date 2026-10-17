@@ -98,7 +98,7 @@ function ForgotForm() {
         {t("forgotSent")}
       </p>
       <form onSubmit={doReset}>
-        <label htmlFor="rtoken">Reset code</label>
+        <label htmlFor="rtoken">{t("locResetCode")}</label>
         <input
           id="rtoken"
           value={token}
@@ -158,7 +158,7 @@ function VerifyForm() {
     <>
       <p className="muted">{t("verifySent")}</p>
       <form onSubmit={submit}>
-        <label htmlFor="vcode">Code</label>
+        <label htmlFor="vcode">{t("locCode")}</label>
         <input
           id="vcode"
           value={code}

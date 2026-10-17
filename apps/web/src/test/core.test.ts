@@ -51,6 +51,27 @@ describe("friendlyError", () => {
     expect(friendlyError(null).text).toBeTruthy();
     expect(friendlyError("Email already registered").text).toBeTruthy();
   });
+
+  it("maps a bare machine code string, not just an object", () => {
+    // The register / verify / reset screens hold only `err.code`, so they pass
+    // the code on its own: `friendlyError((err as {code?: string}).code)`. The
+    // string branch used to consult LEGACY_BN only, so every one of those fell
+    // through to "something went wrong" while the same code inside an object
+    // produced the right copy.
+    expect(friendlyError("rate_limited").text).toBe(t("errRateLimited"));
+    expect(friendlyError("rate_limited").text).not.toBe(t("errGeneric"));
+    expect(friendlyError("invalid_token").text).toBe(t("errInvalidToken"));
+    expect(friendlyError("email_unverified").action).toBe(
+      "resend-verification",
+    );
+  });
+
+  it("still maps legacy Bengali detail strings, which are not codes", () => {
+    expect(
+      friendlyError("অনেকবার চেষ্টা হয়েছে। এক মিনিট অপেক্ষা করুন।").text,
+    ).toBe(t("errRateLimited"));
+    expect(friendlyError("এটি করার অনুমতি নেই।").text).toBe(t("errNotAllowed"));
+  });
 });
 
 describe("i18n", () => {

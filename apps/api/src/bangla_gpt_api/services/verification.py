@@ -12,6 +12,7 @@ import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from bangla_gpt_api.config import Settings
@@ -28,14 +29,35 @@ def send_verification_email(db: Session, settings: Settings, user: User) -> None
     Only the hash is stored; the plaintext code exists in the message and
     nowhere else. Delivery failures are the mailer's business (it logs and
     returns False), so the caller does not have to handle them.
+
+    Any code still pending for this account is burned first, the way
+    ``forgot_password`` already did for reset tokens. Without that, every
+    ``/auth/resend-verification`` left another live 24-hour code behind and a
+    code that leaked earlier stayed redeemable after the user asked for a fresh
+    one -- so "resend" invalidated nothing. Doing it here covers every entry
+    point at once (register, join-school, resend); for a first-time issue the
+    pending set is empty and this is a no-op.
     """
+    now = datetime.now(UTC).replace(tzinfo=None)
+    pending = (
+        db.execute(
+            select(EmailVerification).where(
+                EmailVerification.user_id == user.id,
+                EmailVerification.used_at.is_(None),
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for row in pending:
+        row.used_at = now
+
     token = secrets.token_urlsafe(32)
     db.add(
         EmailVerification(
             user_id=user.id,
             token_hash=hashlib.sha256(token.encode()).hexdigest(),
-            expires_at=datetime.now(UTC).replace(tzinfo=None)
-            + timedelta(hours=VERIFICATION_TTL_HOURS),
+            expires_at=now + timedelta(hours=VERIFICATION_TTL_HOURS),
         )
     )
     db.commit()

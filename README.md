@@ -61,8 +61,10 @@ Operations: [docs/runbook.md](docs/runbook.md).
 Launch gates for the owner: [docs/LAUNCH_READINESS_CHECKLIST.md](docs/LAUNCH_READINESS_CHECKLIST.md).
 RAG design: [docs/RAG_ARCHITECTURE.md](docs/RAG_ARCHITECTURE.md).
 NCTB pipeline: [docs/NCTB_DATA_PIPELINE.md](docs/NCTB_DATA_PIPELINE.md).
-Current QA record: [docs/qa/QA_REPORT_2026-10-16.md](docs/qa/QA_REPORT_2026-10-16.md)
-(superseded records archived: [docs/archive/qa-audit-2026-10-14.md](docs/archive/qa-audit-2026-10-14.md),
+Current QA record: [docs/qa/QA_REPORT_2026-10-17.md](docs/qa/QA_REPORT_2026-10-17.md)
+(superseded records archived:
+[docs/archive/qa-audit-2026-10-16.md](docs/archive/qa-audit-2026-10-16.md),
+[docs/archive/qa-audit-2026-10-14.md](docs/archive/qa-audit-2026-10-14.md),
 [docs/archive/qa-audit-2026-10-06.md](docs/archive/qa-audit-2026-10-06.md)).
 
 ## Quick start
@@ -133,9 +135,11 @@ docker build -t bangla-gpt-api:local .
 #
 # ENV defaults to "production", and the app refuses to boot in production
 # without a real JWT_SECRET and admin credentials - that gate is deliberate.
-# For a local stack, run as test. API_HOST_PORT publishes the API on the host;
-# leave it unset and traffic must enter through the proxy (production posture).
-ENV=test API_HOST_PORT=8000 docker compose --profile core up -d --wait
+# For a local stack, run as test. The API is published to the host on
+# 127.0.0.1:8000 by default (only a host-side tunnel needs that; Caddy reaches
+# it as api:8000 over the Compose network). API_HOST_PORT moves the port and
+# API_HOST_BIND widens the interface - 0.0.0.0 exposes the API to the network.
+ENV=test docker compose --profile core up -d --wait
 curl -fsS http://127.0.0.1:8000/health        # {"status":"ok"}
 
 docker compose --profile core logs -f api
@@ -172,9 +176,16 @@ Environment variables are documented in `.env.example`. Default
 | Workflow | What it does | Trigger |
 |---|---|---|
 | `ci.yml` | api: ruff → format → mypy → pytest (3.11+3.12) → pip-audit → alembic cycle → smoke; postgres journey tests; golden-eval gate; web: tsc + build + vitest; docker build + probes | push/PR to main |
-| `eval-gate.yml` | golden retrieval benchmark w/ grounded-accuracy gate | push to main |
-| `release.yml` | tag → GHCR images → optional SSH deploy w/ health-gated rollback | tag `v*` |
-| `vercel-deploy.yml` | production web deploy (CI-gated) | push to main |
+| `eval-gate.yml` | golden retrieval benchmark w/ grounded-accuracy gate | push/PR to main, or manual |
+| `release.yml` | CI-gated: tag → GHCR images → optional SSH deploy w/ health-gated rollback | tag `v*.*.*`, or manual |
+| `vercel-deploy.yml` | production web deploy (CI-gated) | `workflow_run` on a green `API CI` for main, or manual |
+
+This table is itself checkable: every row above was read off the workflow's own
+`on:` block, and two rows used to disagree with it (`vercel-deploy.yml` was
+listed as "push to main" when it runs on a `workflow_run`, and `eval-gate.yml`
+as main-push-only when it also runs on pull requests). A trigger table that is
+wrong is worse than absent, because it is what an operator consults before
+concluding a pipeline is broken.
 
 ## Documentation conventions
 

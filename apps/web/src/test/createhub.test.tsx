@@ -121,7 +121,13 @@ it("delete removes the row via DELETE /teacher/documents/{id}", async () => {
   const user = userEvent.setup();
   render(<CreateHub />);
   await screen.findByText("Photosynthesis worksheet");
+  // Deleting a saved document is irreversible and regenerating it is work, so
+  // it takes a second tap: the first arms the confirm, the second sends the
+  // DELETE. The assertion between them is the point of the change -- one tap
+  // must not destroy anything.
   await user.click(screen.getByRole("button", { name: t("deleteGeneric") }));
+  expect(apiMock.del).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: t("confirmDelete") }));
   await waitFor(() =>
     expect(apiMock.del).toHaveBeenCalledWith("/teacher/documents/9"),
   );

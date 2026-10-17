@@ -205,6 +205,38 @@ export function EmptyState({
    vocabulary, one form field / segmented / avatar pattern for
    every page. */
 
+/** A failed query, said out loud.
+ *
+ * Pages that branched only on `isLoading` fell through to their empty state on
+ * failure, so an outage read as "you have no homework" / "there are no chapters
+ * for this subject" -- a confident, wrong statement the student cannot tell
+ * apart from the truth, and one that makes them skip work that does exist.
+ * This is the retryable alternative, matching the treatment each parent
+ * section already uses.
+ */
+export function LoadError({
+  message,
+  onRetry,
+  className,
+}: {
+  message?: ReactNode;
+  onRetry?: () => void;
+  className?: string;
+}) {
+  return (
+    <div className={cn("center stack", className)}>
+      <p className="error m-0" role="alert">
+        {message ?? t("errorGeneric")}
+      </p>
+      {onRetry && (
+        <button className="btn btn-sm btn-ghost" onClick={onRetry}>
+          {t("retry")}
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** Accessible modal dialog: portal, focus trap, Esc to close,
     scroll lock, focus restore. Styling reuses .modal-backdrop/.modal. */
 export function Modal({
@@ -267,7 +299,7 @@ export function Modal({
       className="modal-backdrop"
       role="button"
       tabIndex={0}
-      aria-label="Close dialog"
+      aria-label={t("locCloseDialog")}
       onKeyDown={(e) => {
         // The backdrop dismisses on click, so it must be reachable and
         // dismissible by keyboard too.

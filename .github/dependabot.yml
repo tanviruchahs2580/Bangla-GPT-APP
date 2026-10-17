@@ -43,6 +43,20 @@ updates:
     labels: [dependencies, python]
     commit-message:
       prefix: "build(python)"
+    ignore:
+      # Dependabot reads constraints.txt, and a pip-compile lock carries only
+      # `==` pins -- no ranges -- so the ceiling arq imposes on redis is
+      # invisible to it. It therefore keeps offering redis 6/7/8, none of which
+      # can ever install: arq (0.28.0, the newest release) requires
+      # `redis[hiredis]<6`. PR #20 did exactly that; five required checks died
+      # with `ResolutionImpossible` and dependency updates stopped landing.
+      #
+      # 5.x releases, including security patches, are NOT ignored -- only the
+      # majors that cannot coexist with arq. Delete this entry when arq widens
+      # its range:
+      #   python -c "import importlib.metadata as m; print(m.requires('arq'))"
+      - dependency-name: "redis"
+        versions: [">=6"]
 
   - package-ecosystem: npm
     directory: /apps/web

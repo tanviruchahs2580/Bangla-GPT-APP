@@ -85,9 +85,16 @@ export function friendlyError(detail: unknown): ErrorCopy {
   let code: string | undefined;
   if (detail && typeof detail === "object") {
     code = (detail as { code?: string }).code;
-  }
-  if (!code && typeof detail === "string") {
-    code = LEGACY_BN[detail];
+  } else if (typeof detail === "string") {
+    // A bare machine code, which is what the register / verify / reset paths
+    // hold: they read `err.code` and pass the string on. The string branch used
+    // to consult LEGACY_BN only, so `friendlyError("rate_limited")` and
+    // `friendlyError("invalid_token")` fell through to the generic copy even
+    // though KEY maps both -- a student who hit the login rate limit while
+    // registering was told "something went wrong" instead of "too many
+    // attempts, wait a minute". Accepting either shape here fixes every caller
+    // at once rather than one screen at a time.
+    code = KEY[detail] ? detail : LEGACY_BN[detail];
   }
   if (code && KEY[code]) {
     return { text: t(KEY[code]), action: ACTION[code] };

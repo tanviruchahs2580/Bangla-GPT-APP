@@ -28,8 +28,10 @@ describe("F-128 model-authored links cannot impersonate a citation", () => {
     expect(rel).toContain("noopener");
     expect(rel).toContain("noreferrer");
     // Distinguished from the citation chips, in text a screen reader reads.
+    // Asserted through t() because the marker is localized now: the literal
+    // "external link" pinned the English locale.
     expect(container.querySelector(".sr-only")?.textContent).toContain(
-      "external link",
+      t("locExternalLink"),
     );
   });
 

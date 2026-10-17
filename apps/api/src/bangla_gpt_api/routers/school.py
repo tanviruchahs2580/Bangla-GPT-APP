@@ -68,6 +68,7 @@ from bangla_gpt_api.services import (
     atrisk,
     govt_report,
 )
+from bangla_gpt_api.services.activity import dhaka_date
 from bangla_gpt_api.services.mailer import smtp_configured
 from bangla_gpt_api.services.verification import send_verification_email
 
@@ -968,7 +969,12 @@ def school_analytics(
     student_ids = [s.id for s in students]
     now = datetime.now(UTC).replace(tzinfo=None)
     since = now - timedelta(days=days)
-    since_day = since.strftime("%Y-%m-%d")
+    # DailyActivity.date is a Dhaka calendar day (services.activity.dhaka_date),
+    # so the bound has to be one too. Deriving it from a UTC instant made the
+    # window up to two days longer than `days` -- at 20:00 UTC, Dhaka "today" is
+    # already the next calendar day -- which put more entries in active_by_date
+    # than the caller asked for and diluted daily_active_avg below.
+    since_day = dhaka_date(since)
     active_by_date: list[SchoolActiveDay] = []
     questions_asked = 0
     attempts = graded = 0

@@ -217,15 +217,23 @@ def patch_my_prefs(payload: StudentPrefsPatch, db: DbSession, user: CurrentUser)
                     )
                 merged["explanation_style"] = value
             elif key == "subject_focus":
-                if not isinstance(value, str) or not 1 <= len(value.strip()) <= 60:
+                # `null` clears the key. Omitting it was the only other option,
+                # and because this dict is merged into the stored value,
+                # omitting it kept the old focus -- so a student could set one
+                # and never remove it, and the screen said "saved" while the
+                # old value came straight back from the refetch.
+                if value is None:
+                    merged.pop("subject_focus", None)
+                elif not isinstance(value, str) or not 1 <= len(value.strip()) <= 60:
                     raise HTTPException(
                         status_code=422,
                         detail={
                             "code": "invalid_subject_focus",
-                            "message": "subject_focus must be a 1-60 character string",
+                            "message": "subject_focus must be a 1-60 character string or null to clear",
                         },
                     )
-                merged["subject_focus"] = value.strip()
+                else:
+                    merged["subject_focus"] = value.strip()
             else:
                 raise HTTPException(
                     status_code=422,

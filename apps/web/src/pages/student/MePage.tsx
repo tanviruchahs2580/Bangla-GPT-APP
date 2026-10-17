@@ -29,17 +29,9 @@ import { useAuth } from "../../AuthContext";
 import { Avatar, Badge, Button, Card, Segmented } from "../../components/ui";
 import { friendlyError } from "../../errors";
 import { getLang, setLang, t, tSubject } from "../../i18n";
+import { roleLabel } from "../../lib/roles";
 import { getLowData, toggleLowData } from "../../lib/lowData";
 import { currentTheme, toggleTheme } from "../../lib/theme";
-
-// roles come from the API in English; display them localized.
-const ROLE_LABEL: Record<string, Parameters<typeof t>[0]> = {
-  student: "roleStudent",
-  teacher: "roleTeacher",
-  parent: "roleParent",
-  admin: "roleAdmin",
-  school_admin: "roleSchoolAdmin",
-};
 
 // The memory panel shows what the tutor has stored — raw backend keys and
 // null values are noise for students, so map known keys to labels, localize
@@ -105,12 +97,22 @@ export default function MePage() {
     queryKey: ["my-report", reportPeriod],
     queryFn: () => getMyReport(reportPeriod),
     enabled: isStudent,
+    // Hold the previous period's report on screen while the new one loads.
+    // Without this, changing the query key made `data` undefined, the
+    // `report &&` guard unmounted the whole card, and the weekly/monthly
+    // control the user had just clicked went with it -- the section vanished
+    // for the length of the request with no spinner and no way back until it
+    // resolved.
+    placeholderData: (prev) => prev,
   });
   const [style, setStyle] = useState("standard");
   const [focus, setFocus] = useState("");
   const [memory, setMemory] = useState(true);
   const [prefsBusy, setPrefsBusy] = useState(false);
   const [prefsMsg, setPrefsMsg] = useState<string | null>(null);
+  // The same state carries success and failure copy; without this flag the
+  // failure was rendered with the success class, green, under the save button.
+  const [prefsOk, setPrefsOk] = useState(false);
 
   useEffect(() => {
     if (!prefs) return;
@@ -122,16 +124,27 @@ export default function MePage() {
   const savePrefs = async () => {
     setPrefsBusy(true);
     setPrefsMsg(null);
+    setPrefsOk(false);
     try {
-      const lp: Record<string, unknown> = { explanation_style: style };
-      if (focus.trim()) lp.subject_focus = focus.trim().slice(0, 60);
-      await patchMyPrefs({ memory_enabled: memory, learning_prefs: lp });
+      const trimmed = focus.trim().slice(0, 60);
+      await patchMyPrefs({
+        memory_enabled: memory,
+        // subject_focus is always sent, as null when the box is empty, because
+        // the server merges this dict: sending only the non-empty case left the
+        // stored focus in place and the field refilled itself after the refetch.
+        learning_prefs: {
+          explanation_style: style,
+          subject_focus: trimmed || null,
+        },
+      });
       track("prefs_updated", { style, memory });
       await refetchPrefs();
       await refetchMem();
       setPrefsMsg(t("prefsSaved"));
+      setPrefsOk(true);
     } catch {
       setPrefsMsg(t("errorGeneric"));
+      setPrefsOk(false);
     } finally {
       setPrefsBusy(false);
     }
@@ -228,13 +241,7 @@ export default function MePage() {
             </div>
             <div className="row-sub">{me?.email}</div>
             <div className="badge-row">
-              <Badge>
-                {me
-                  ? ROLE_LABEL[me.role]
-                    ? t(ROLE_LABEL[me.role])
-                    : me.role
-                  : "—"}
-              </Badge>
+              <Badge>{me ? roleLabel(me.role) : "—"}</Badge>
               {me?.class_level ? (
                 <Badge tone="teal">
                   {t("classLabel")} {me.class_level}
@@ -349,7 +356,14 @@ export default function MePage() {
               />
             </div>
           </div>
-          {prefsMsg && <p className="ok text-sm mt-2">{prefsMsg}</p>}
+          {prefsMsg &&
+            (prefsOk ? (
+              <p className="ok text-sm mt-2">{prefsMsg}</p>
+            ) : (
+              <p className="error text-sm mt-2" role="alert">
+                {prefsMsg}
+              </p>
+            ))}
           <div className="row-flex gap-2 mt-3">
             <Button
               variant="primary"

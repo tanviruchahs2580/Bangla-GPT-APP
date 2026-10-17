@@ -48,7 +48,7 @@ export default function WelcomePage() {
               </Button>
             </Link>
           </div>
-          <ul className="trust-row" aria-label="highlights">
+          <ul className="trust-row" aria-label={t("locHighlights")}>
             <li>
               <BadgeCheck size={16} aria-hidden />
               <span>{t("trustNctb")}</span>

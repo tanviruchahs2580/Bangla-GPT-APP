@@ -64,7 +64,9 @@ jobs:
           # Install locked, hash-verified dependencies first, then the project
           # itself with --no-deps (a local directory has no hash to check).
           # Regenerate constraints.txt with `pip-compile` when pyproject changes;
-          # CI fails if the two disagree.
+          # the "Lockfile satisfies pyproject.toml" step in the guardrails job
+          # fails if a declared dependency is missing or its pin violates the
+          # declared specifier.
           python -m pip install --require-hashes -r constraints.txt
           python -m pip install --no-deps -e ".[dev]"
 
@@ -185,7 +187,9 @@ jobs:
           # Install locked, hash-verified dependencies first, then the project
           # itself with --no-deps (a local directory has no hash to check).
           # Regenerate constraints.txt with `pip-compile` when pyproject changes;
-          # CI fails if the two disagree.
+          # the "Lockfile satisfies pyproject.toml" step in the guardrails job
+          # fails if a declared dependency is missing or its pin violates the
+          # declared specifier.
           python -m pip install --require-hashes -r constraints.txt
           python -m pip install --no-deps -e ".[dev]"
 
@@ -332,57 +336,28 @@ jobs:
           python -m pip install --quiet "pre-commit==${PRE_COMMIT_VERSION}"
           pre-commit run --all-files --show-diff-on-failure
 
-      - name: Lockfile is in sync with pyproject.toml
-        # Without this, editing pyproject.toml leaves CI installing the old
-        # pinned set forever: `>=` bounds would be satisfied and the lock would
-        # never be regenerated. Regenerate with
-        #   pip install pip-tools && pip-compile --generate-hashes --allow-unsafe --extra dev --strip-extras
+      - name: Lockfile satisfies pyproject.toml
+        # The previous version of this step could not fail. It ran
+        #   pip-compile --output-file constraints.txt --quiet pyproject.toml
+        # *in the checkout*, overwriting the committed lock, and then read that
+        # regenerated file back to assert that each dependency named in
+        # pyproject.toml appeared in it -- which is true of any file compiled
+        # from pyproject.toml. CONTRIBUTING.md promised "a stale lock cannot
+        # slip through"; none of that was enforced.
         #
-        # The check compares the RESOLVED VERSION OF EVERY DIRECT DEPENDENCY,
-        # not the whole file byte-for-byte. A byte-diff is not reproducible:
-        # pip-compile resolves floating transitives against whatever PyPI
-        # serves at that moment, on that platform, with that pip-tools version.
-        # Two clean resolves minutes apart legitimately differ (platformdirs
-        # 4.12.4 -> 4.13.0 was observed), which made this gate fail on
-        # untouched, valid locks. What must never drift is the pinned version
-        # of a package pyproject.toml actually declares -- that is the
-        # staleness this guard exists to catch, and it is fully deterministic.
-        run: |
-          python -m pip install --quiet pip-tools
-          cd apps/api
-          pip-compile --generate-hashes --allow-unsafe --extra dev --strip-extras \
-            --output-file constraints.txt --quiet pyproject.toml
-          cd ../..
-          python3 - <<'PY'
-          import re, sys, tomllib
-          from pathlib import Path
-
-          api = Path("apps/api")
-          pyproject = tomllib.loads((api / "pyproject.toml").read_text(encoding="utf-8"))
-          declared: set[str] = set()
-          for dep in pyproject["project"].get("dependencies", []):
-              declared.add(re.split(r"[<>=!~\[; ]", dep, 1)[0].strip().lower())
-          for deps in pyproject["project"].get("optional-dependencies", {}).values():
-              for dep in deps:
-                  declared.add(re.split(r"[<>=!~\[; ]", dep, 1)[0].strip().lower())
-
-          pinned: dict[str, str] = {}
-          for line in (api / "constraints.txt").read_text(encoding="utf-8").splitlines():
-              m = re.match(r"^([A-Za-z0-9._-]+)==(\S+)", line)
-              if m:
-                  pinned[m.group(1).lower().replace("_", "-")] = m.group(2)
-
-          missing = sorted(d for d in declared if d.replace("_", "-") not in pinned)
-          if missing:
-              print("::error::direct dependencies absent from constraints.txt: "
-                    + ", ".join(missing))
-              print("Regenerate: pip install pip-tools && pip-compile --generate-hashes"
-                    " --allow-unsafe --extra dev --strip-extras --output-file"
-                    " constraints.txt pyproject.toml (see CONTRIBUTING.md)")
-              sys.exit(1)
-          print(f"lockfile covers all {len(declared)} direct dependencies "
-                f"({len(pinned)} packages pinned overall)")
-          PY
+        # It was not academic. Dependabot pinned redis==8.1.0 in the lock while
+        # arq -- the reason redis is capped -- requires redis[hiredis]<6. This
+        # job passed in 32 s and five other jobs then died with
+        # `ResolutionImpossible`, which is how the whole dependency-update queue
+        # stopped landing.
+        #
+        # check_lockfile.py asserts the two things that are true and decidable
+        # offline: every declared dependency is pinned, and the pin satisfies
+        # the declared specifier. It is read-only, so it cannot repeat the
+        # mistake of grading a file it just rewrote. Regex differences between
+        # it and a fresh `pip-compile` are not checked: that comparison is not
+        # reproducible against a live index and it failed on valid locks.
+        run: python3 apps/api/scripts/check_lockfile.py
 
       - name: Docs agree with the code
         # "Docs-as-tests" (DOC-02): the README's endpoint table and install
@@ -429,8 +404,18 @@ jobs:
       - name: Bangla script hygiene (Appendix C scanner)
         # Catches wrong-script code points, broken normalisation and stray BOMs
         # in tracked text. Mechanical only; it never rewrites prose.
+        #
+        # The `|| true` that used to sit on the first line hid a dead scanner.
+        # bn_scan.py always exits 0, so the only failure signal it has is the
+        # summary it prints -- which means "the tool ran and found nothing" and
+        # "the tool never ran" produced the same green step. A missing python3,
+        # a crash, or an xargs failure left /tmp/bn.txt empty, grep matched
+        # nothing, and the check passed. The exit status is left intact now, and
+        # the empty-output assertion catches the case where the scanner runs but
+        # writes nothing.
         run: |
-          git ls-files -z | xargs -0 python3 scripts/bn_scan.py > /tmp/bn.txt || true
+          git ls-files -z | xargs -0 python3 scripts/bn_scan.py > /tmp/bn.txt
+          test -s /tmp/bn.txt || { echo "::error::bn_scan.py produced no output -- the scanner did not run"; exit 1; }
           grep -E '^(ASSAMESE_LETTER|DEVANAGARI_NON_PUNCT|REPLACEMENT_CHAR|BOM_INSIDE_TEXT|NOT_NFC) +[1-9]' /tmp/bn.txt && {
             echo "::error::Bangla script hygiene check failed -- see the summary above"
             tail -40 /tmp/bn.txt

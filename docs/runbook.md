@@ -49,8 +49,16 @@ docker compose --profile monitoring up -d           # Prometheus (+ Grafana)
   `docker-compose.yml` interpolates a variable that is neither documented in
   `.env.production.example` nor defaulted inline. New deploy vars MUST be added
   to one of those two places.
-- Set `API_HOST_PORT=18000` in `.env` ONLY for staging/debug when you need direct
-  host access to the API; production traffic must enter through Caddy/nginx.
+- The API is published to the host on `127.0.0.1:8000` by default — loopback
+  only, which is what a host-side tunnel or a `curl 127.0.0.1:8000/health` from
+  the host uses. `API_HOST_PORT` moves the port, `API_HOST_BIND` widens the
+  interface; `0.0.0.0` exposes the API to the network and nothing in the stack
+  authenticates a client at that layer, so set it only when a remote tunnel
+  genuinely requires it. The release workflow's own gate does not use this
+  mapping — it reads the api container's healthcheck, so a healthy release
+  passes whether or not the port was published.
+- Caddy and nginx reach the API as `api:8000` on the Compose network and never
+  use that host mapping.
 - Postgres profile: start `--profile postgres`, point `DATABASE_URL` at
   `postgresql+psycopg://…` and run alembic (§3).
 
@@ -176,10 +184,11 @@ append-only — never edit a revision that shipped):
    re-adding what they dropped; older than that, restore from backup instead).
 
 **Rolling deploy procedure (health-gated, blue–green):**
-`python scripts/deploy_rolling.py --old <host:port> --new <host:port>` starts
-the new release alongside the old, polls `GET /ready` on it until ready
+`python scripts/deploy_rolling.py --ready-url <new /ready URL> --reload-cmd
+"<proxy upstream switch>" [--drain-cmd "<old instance stop>"]` starts the new
+release alongside the old, polls `--ready-url` until ready
 (boot guard + index built), flips the front proxy upstream atomically, then
-drains the old instance (`SIGTERM` ≤ `--graceful-timeout 30s`). If `/ready`
+drains the old instance via `--drain-cmd`. If `/ready`
 never goes green the script flips nothing and exits 1 — the old release keeps
 serving (verified locally with continuous load: 0 failed requests,
 `scripts/deploy_rolling.py --demo`, see §10 note).
@@ -247,9 +256,25 @@ Quarterly rotation procedure:
 
 ## 7. Rollback
 
-- **Release rollback:** redeploy previous tag — `git checkout vX.Y.Z &&
-  docker compose pull && docker compose up -d`. The release workflow performs
-  this automatically when its post-deploy health gate fails.
+- **Release rollback:** redeploy the previous tag. The image tags are what
+  select the release — `api` and `web` resolve to `${API_TAG:-local}` and
+  `${WEB_TAG:-local}`, so both must be exported or `docker compose pull` goes
+  looking for a `:local` tag that the registry does not have, and the `&&`
+  chain stops before anything is deployed:
+
+  ```bash
+  cd /opt/bangla-gpt
+  git fetch --tags --force origin
+  git checkout vX.Y.Z
+  export API_TAG=vX.Y.Z WEB_TAG=vX.Y.Z
+  docker compose --profile core pull
+  docker compose --profile core up -d --wait --wait-timeout 120
+  ```
+
+  The release workflow performs this automatically, on a failed `compose up`
+  **and** on a failed post-deploy health gate. Before 2026-10-17 only the first
+  of those paths rolled back: this section described a health-gated rollback
+  that the workflow did not implement.
 - **DB rollback:** `alembic downgrade <revision>` (verified cycle). Always take
   a backup (§4) before downgrading.
 - **Bad release prevention:** CI gates (lint/format/type/tests/pip-audit/
