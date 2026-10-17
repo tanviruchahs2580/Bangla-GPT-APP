@@ -24,6 +24,18 @@ ChatStrategy = Literal["simple", "example", "book_language", "steps", "analogy"]
 EXPLANATION_STYLES: tuple[str, ...] = ("simple", "standard", "detailed")
 ExplanationStyle = Literal["simple", "standard", "detailed"]
 
+# The most questions any generation path can put in front of a student, and so
+# the ceiling for the answers they must be able to send back. Assignments take
+# the largest set (25; quizzes and short tests cap at 10).
+#
+# One constant on purpose. This used to be two independent literals --
+# AssignmentIn allowed 25 questions while QuizSubmitRequest.answers allowed 20
+# items -- so a teacher could create a 21-question assignment that no student
+# could ever submit: FastAPI rejected the body with 422 before the handler ran,
+# the attempt stayed open forever, and nothing deletes an assignment. Tying
+# both bounds to one name is what stops them drifting apart again.
+MAX_QUIZ_QUESTIONS = 25
+
 
 class QuizExplainContext(BaseModel):
     """quiz review context handed to the tutor for a wrong item."""
@@ -38,9 +50,14 @@ class QuizExplainContext(BaseModel):
 class AskRequest(BaseModel):
     question: str = Field(min_length=3, max_length=1000)
     class_level: int = Field(ge=1, le=12)
-    subject: str | None = None
+    # Bounded to the columns these are written to (subject VARCHAR(60),
+    # chapter VARCHAR(200)) and to what is sensible to interpolate into the
+    # provider prompt. Unbounded, a long value was a 500 on PostgreSQL
+    # (StringDataRightTruncation on the INSERT) and a free prompt-bloat
+    # channel on the AI routes.
+    subject: str | None = Field(default=None, max_length=60)
     # optional chapter context from the unified workspace "জিজ্ঞাসা" tab.
-    chapter: str | None = None
+    chapter: str | None = Field(default=None, max_length=200)
     # 'বুঝিয়ে দাও' — structured context of a wrong quiz answer.
     explain: QuizExplainContext | None = None
     # low-data mode — request a short answer to cut payload size.
@@ -104,9 +121,9 @@ class ConversationOut(BaseModel):
 class ChatSendRequest(BaseModel):
     message: str = Field(min_length=3, max_length=1000)
     class_level: int | None = Field(default=None, ge=1, le=12)
-    subject: str | None = None
+    subject: str | None = Field(default=None, max_length=60)
     # optional chapter context chip.
-    chapter: str | None = None
+    chapter: str | None = Field(default=None, max_length=200)
     # 'আমি বুঝিন' — force the next re-teach strategy for this turn.
     reteach: bool = False
     # low-data mode — request a short answer to cut payload size.
@@ -137,6 +154,11 @@ class ChatMessageOut(BaseModel):
 
 
 class FeedbackRequest(BaseModel):
+    # -1 = down, +1 = up, 0 = no verdict. 0 stays valid deliberately: the field
+    # is required, so it is the only way to send a comment with no thumbs
+    # answer, and an aggregate that counts only -1/+1 is then correct rather
+    # than incomplete. Tightening this to Literal[-1, 1] removes comment-only
+    # feedback and breaks the coded 400 that a body with no target must get.
     rating: int = Field(ge=-1, le=1)
     message_id: int | None = None
     attempt_id: int | None = None
@@ -390,9 +412,9 @@ class ClassAnalytics(BaseModel):
 class QuizStartRequest(BaseModel):
     student_id: int
     class_level: int | None = Field(default=None, ge=1, le=12)
-    subject: str | None = None
+    subject: str | None = Field(default=None, max_length=60)
     # chapter preselect for the workspace "অনুশীলন" tab.
-    chapter: str | None = None
+    chapter: str | None = Field(default=None, max_length=200)
     num_questions: int = Field(default=5, ge=1, le=10)
 
 
@@ -421,7 +443,9 @@ class QuizStarted(BaseModel):
 
 
 class QuizSubmitRequest(BaseModel):
-    answers: list[int] = Field(min_length=1, max_length=20)
+    # Bounded by the same constant assignments generate from; see
+    # MAX_QUIZ_QUESTIONS. A lower cap here makes an assignment unsubmittable.
+    answers: list[int] = Field(min_length=1, max_length=MAX_QUIZ_QUESTIONS)
 
 
 class ReviewItem(BaseModel):
@@ -892,7 +916,7 @@ class AssignmentIn(BaseModel):
     student_ids: list[int] = Field(min_length=1, max_length=200)
     subject: str = Field(min_length=1, max_length=60)
     chapter: str = Field(min_length=1, max_length=200)
-    num_questions: int = Field(default=5, ge=1, le=25)
+    num_questions: int = Field(default=5, ge=1, le=MAX_QUIZ_QUESTIONS)
     due_at: datetime
 
 
@@ -1417,7 +1441,8 @@ class StudentPrefsOut(BaseModel):
 
 class StudentPrefsPatch(BaseModel):
     """Partial update; learning_prefs keys are whitelisted in the route
-    (explanation_style in EXPLANATION_STYLES, subject_focus 1-60 chars)."""
+    (explanation_style in EXPLANATION_STYLES, subject_focus a 1-60 character
+    string, or null to clear it)."""
 
     memory_enabled: bool | None = None
     learning_prefs: dict[str, Any] | None = None

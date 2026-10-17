@@ -236,7 +236,9 @@ class Feedback(Base):
     attempt_id: Mapped[int | None] = mapped_column(
         ForeignKey("quiz_attempts.id"), nullable=True, index=True
     )
-    rating: Mapped[int] = mapped_column(Integer)  # -1 or +1
+    # -1 = down, +1 = up, 0 = no verdict (comment-only feedback; the schema
+    # keeps 0 valid because `rating` is required). Aggregates count -1/+1 only.
+    rating: Mapped[int] = mapped_column(Integer)
     comment: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # triage queue: admins work the queue oldest-first and mark rows
     # handled; triage_note is staff-facing text, still never chat/message logs.
