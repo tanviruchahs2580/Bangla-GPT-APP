@@ -125,6 +125,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - docs(audit): record the merge and live-production outcome
 - docs(qa): publish the 2026-10-16 audit report; refresh the lockfile within its ranges
+- docs(qa): publish the 2026-10-17 QA record and archive its predecessor
 - docs(qa): record the CI-found defects and the exit-gate assessment in the report
 - docs(qa): record the registration-backdrop change and its deployment
 - docs(qa): record the role-based acceptance run and the live deployment
@@ -141,6 +142,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate CHANGELOG
 - docs: regenerate CHANGELOG for the branch commit
 - docs: regenerate CHANGELOG for the current batch
+- docs: regenerate the CHANGELOG for the 2026-10-17 audit fixes
 - docs: regenerate the CHANGELOG for the acceptance-testing fixes
 - docs: regenerate the CHANGELOG for the branch's final commits
 - docs: regenerate the CHANGELOG for the register-backdrop change
@@ -153,6 +155,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - test(api): cover school admin fallbacks and tenant guards
 - test(school): cover the aggregation routes TST-04 flagged as unexercised
 - test(tenancy): cover school dashboard routes across two tenants
+- test(web): assert the changed behaviour instead of the old literals
 - test(web): drop remaining plan-tracker tags from suite titles
 
 ### Maintenance
