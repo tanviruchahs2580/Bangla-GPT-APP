@@ -1,17 +1,34 @@
 {
   "corpus_chunks": 2508,
-  "index_build_seconds": 0.361,
+  "index_build_seconds": 23.164,
+  "served_index": "hybrid",
   "family_A_self_sentence": {
     "n": 100,
-    "recall_at_1": 0.38,
-    "recall_at_5": 1.0
+    "recall_at_1": 0.98,
+    "recall_at_5": 0.98,
+    "mrr": 0.6107
   },
   "family_B_chapter_title": {
     "n": 80,
-    "recall_at_1": 0.225,
-    "recall_at_5": 0.525
+    "recall_at_1": 1.0,
+    "recall_at_5": 1.0,
+    "mrr": 1.0
   },
   "family_C_adversarial_refusal_rate": 1.0,
-  "search_latency_p50_ms": 2.44,
-  "search_latency_p95_ms": 3.26
+  "search_latency_p50_ms": 130.61,
+  "search_latency_p95_ms": 250.08,
+  "baseline_lexical": {
+    "family_A_self_sentence": {
+      "n": 100,
+      "recall_at_1": 0.98,
+      "recall_at_5": 0.98,
+      "mrr": 0.6098
+    },
+    "family_B_chapter_title": {
+      "n": 80,
+      "recall_at_1": 1.0,
+      "recall_at_5": 1.0,
+      "mrr": 1.0
+    }
+  }
 }

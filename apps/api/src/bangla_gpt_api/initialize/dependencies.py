@@ -25,7 +25,10 @@ from bangla_gpt_api.curriculum.models import Chunk
 from bangla_gpt_api.data.loader import load_sample_corpus
 from bangla_gpt_api.db.models import User
 from bangla_gpt_api.db.session import init_db, make_session_factory
+from bangla_gpt_api.logging_config import json_log
+from bangla_gpt_api.metrics import RAG_INDEX_CHUNKS
 from bangla_gpt_api.retrieval.hybrid_index import HybridIndex  # noqa: F401 (re-exported for tests)
+from bangla_gpt_api.retrieval.vocabulary import TermStats
 from bangla_gpt_api.routers.deps import AppContext
 from bangla_gpt_api.services.tutor import TutorService
 
@@ -140,19 +143,35 @@ def _build_tutor(
     fast_provider: LLMProvider | None,
     circuit_breaker: CircuitBreaker | None,
     fallback_provider: LLMProvider | None,
+    term_stats: TermStats | None = None,
 ) -> TutorService:
-    """Construct the TutorService with optional circuit breaker + fallback."""
+    """Construct the TutorService with optional circuit breaker + fallback.
+
+    ``term_stats`` carries corpus document frequencies to the grounding gate
+    (weighted content-term coverage). Optional: absence degrades the gate to
+    uniform weights over content terms, never to a lie.
+    """
     return TutorService(
         index=index,
         provider=provider,
         fast_provider=fast_provider,
         circuit_breaker=circuit_breaker,
         fallback_provider=fallback_provider,
+        term_stats=term_stats,
     )
 
 
-def _load_corpus_chunks(settings: Settings) -> list[Chunk]:
-    """Load NCTB corpus or fall back to sample corpus."""
+def _load_corpus_chunks(settings: Settings) -> tuple[list[Chunk], str]:
+    """Load the NCTB corpus, falling back to the bundled sample corpus.
+
+    Returns ``(chunks, identity)`` where ``identity`` names the corpus the
+    index will serve — ``nctb`` or ``bundled-sample``. The identity is logged
+    at boot and exported as a metric, because the failure this guards against
+    is silent: an empty or mis-set ``NCTB_CORPUS_DIR`` used to degrade the
+    tutor to the 78-chunk sample without any signal that anything had
+    changed. A fallback is still correct behaviour (start small, never
+    crash); it is just not allowed to be invisible anymore.
+    """
     if settings.nctb_corpus_dir:
         from pathlib import Path as _Path
 
@@ -164,8 +183,8 @@ def _load_corpus_chunks(settings: Settings) -> list[Chunk]:
             quality_report_path=corpus_root / "quality_report.json",
         )
         if chunks:
-            return chunks
-    return load_sample_corpus()
+            return chunks, "nctb"
+    return load_sample_corpus(), "bundled-sample"
 
 
 # ---------------------------------------------------------------------------
@@ -208,7 +227,27 @@ def build_dependencies(
     index: RankingIndex | None = None
     tutor: TutorService | None = None
     if provider is not None:
-        chunks = _load_corpus_chunks(settings)
+        chunks, corpus_identity = _load_corpus_chunks(settings)
+        # Corpus identity is boot-level operational state: which corpus the
+        # tutor actually serves, how many evidence chunks it has, and whether
+        # a configured NCTB directory degraded to the bundled sample. Logged
+        # and exported so the degradation is observable the moment it happens.
+        json_log(
+            logger,
+            logging.INFO,
+            "rag_corpus_loaded",
+            corpus=corpus_identity,
+            chunks=len(chunks),
+            requested_dir=settings.nctb_corpus_dir or None,
+        )
+        RAG_INDEX_CHUNKS.labels(corpus=corpus_identity).set(len(chunks))
+        if corpus_identity == "bundled-sample" and settings.nctb_corpus_dir:
+            logger.warning(
+                "rag_corpus_fallback: NCTB_CORPUS_DIR=%s produced no usable "
+                "chunks; the tutor is serving the bundled sample corpus",
+                settings.nctb_corpus_dir,
+            )
+
         from bangla_gpt_api.caching import RAG_CACHE_TTL_SECONDS, CachedRankingIndex
         from bangla_gpt_api.retrieval.embedding import build_embedder
 
@@ -227,7 +266,17 @@ def build_dependencies(
 
         index = CachedRankingIndex(inner, cache, ttl=RAG_CACHE_TTL_SECONDS)
 
-        tutor = _build_tutor(index, provider, fast_provider, circuit_breaker, fallback_provider)
+        # Statistics come from the *inner* index: the caching wrapper proxies
+        # search results, not corpus statistics.
+        term_stats = getattr(inner, "term_stats", None)
+        tutor = _build_tutor(
+            index,
+            provider,
+            fast_provider,
+            circuit_breaker,
+            fallback_provider,
+            term_stats=term_stats,
+        )
     else:
         tutor = None
 

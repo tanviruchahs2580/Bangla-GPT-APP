@@ -4,7 +4,7 @@ Counters/histograms are registered once per process on a dedicated registry
 so multiple ``create_app`` instances (tests, workers) never double-register.
 """
 
-from prometheus_client import CollectorRegistry, Counter, Histogram
+from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram
 
 REGISTRY = CollectorRegistry(auto_describe=True)
 
@@ -34,5 +34,17 @@ PII_REDACTED_TOTAL = Counter(
     "bgpt_pii_redacted_total",
     "PII spans stripped by the pre-LLM redactor before upstream egress.",
     labelnames=["kind"],
+    registry=REGISTRY,
+)
+
+# Boot-level retrieval state: which corpus the tutor is actually serving and
+# how large it is. The operational failure this answers is silent degradation
+# -- an empty or mis-set NCTB_CORPUS_DIR dropping the tutor onto the bundled
+# sample corpus -- which used to be invisible in metrics, logs and answers
+# alike until a student asked a question the sample does not contain.
+RAG_INDEX_CHUNKS = Gauge(
+    "bgpt_rag_index_chunks",
+    "Chunks loaded into the retrieval index at boot, by corpus identity (nctb or bundled-sample).",
+    labelnames=["corpus"],
     registry=REGISTRY,
 )
