@@ -71,6 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(ops): stop publishing the API on a random host port, and make the release gate real
 - fix(pdf): enable Bengali complex-script shaping in PDF renderers
 - fix(rag): framing-plane coverage, cross-script gate resolution, in-corpus weighting
+- fix(rag): locative reclassification + short-token roman guard
 - fix(rag): roman-lane floor, edit-similarity rank, MRR unit, trailing newline
 - fix(rag): runtime prompt-injection screening at the query boundary
 - fix(sec): refuse unsafe production defaults at boot
@@ -158,6 +159,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate the CHANGELOG for the branch's final commits
 - docs: regenerate the CHANGELOG for the delivery record
 - docs: regenerate the CHANGELOG for the deployment record
+- docs: regenerate the CHANGELOG for the injection screen
 - docs: regenerate the CHANGELOG for the post-merge CI record
 - docs: regenerate the CHANGELOG for the redeploy record
 - docs: regenerate the CHANGELOG for the register-backdrop change
