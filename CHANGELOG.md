@@ -126,6 +126,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(audit): record the merge and live-production outcome
 - docs(qa): publish the 2026-10-16 audit report; refresh the lockfile within its ranges
 - docs(qa): publish the 2026-10-17 QA record and archive its predecessor
+- docs(qa): record the CI evidence and the two honest notes in the record
 - docs(qa): record the CI-found defects and the exit-gate assessment in the report
 - docs(qa): record the registration-backdrop change and its deployment
 - docs(qa): record the role-based acceptance run and the live deployment
@@ -147,6 +148,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate the CHANGELOG for the branch's final commits
 - docs: regenerate the CHANGELOG for the register-backdrop change
 - docs: regenerate the CHANGELOG for the scripts commit
+- docs: regenerate the CHANGELOG for the test and QA-record commits
 - docs: regenerate the CHANGELOG for this branch's commits
 - docs: ship the bundled font's licence, third-party notices, contributing guide
 
