@@ -128,6 +128,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(qa): publish the 2026-10-17 QA record and archive its predecessor
 - docs(qa): record the CI evidence and the two honest notes in the record
 - docs(qa): record the CI-found defects and the exit-gate assessment in the report
+- docs(qa): record the fully green CI run and the final commit list
 - docs(qa): record the registration-backdrop change and its deployment
 - docs(qa): record the role-based acceptance run and the live deployment
 - docs: add 2026-10-06 QA audit and final certification reports
@@ -144,6 +145,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate CHANGELOG for the branch commit
 - docs: regenerate CHANGELOG for the current batch
 - docs: regenerate the CHANGELOG for the 2026-10-17 audit fixes
+- docs: regenerate the CHANGELOG for the QA-record amendment
 - docs: regenerate the CHANGELOG for the acceptance-testing fixes
 - docs: regenerate the CHANGELOG for the branch's final commits
 - docs: regenerate the CHANGELOG for the register-backdrop change
