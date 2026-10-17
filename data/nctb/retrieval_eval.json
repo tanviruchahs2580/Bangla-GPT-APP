@@ -1,6 +1,6 @@
 {
   "corpus_chunks": 2508,
-  "index_build_seconds": 23.687,
+  "index_build_seconds": 26.471,
   "served_index": "hybrid",
   "family_A_self_sentence": {
     "n": 100,
@@ -15,8 +15,8 @@
     "mrr": 1.0
   },
   "family_C_adversarial_refusal_rate": 1.0,
-  "search_latency_p50_ms": 118.76,
-  "search_latency_p95_ms": 203.37,
+  "search_latency_p50_ms": 120.23,
+  "search_latency_p95_ms": 252.94,
   "baseline_lexical": {
     "family_A_self_sentence": {
       "n": 100,

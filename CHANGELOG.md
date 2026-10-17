@@ -159,6 +159,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate the CHANGELOG for the post-merge CI record
 - docs: regenerate the CHANGELOG for the redeploy record
 - docs: regenerate the CHANGELOG for the register-backdrop change
+- docs: regenerate the CHANGELOG for the roman-lane fix
 - docs: regenerate the CHANGELOG for the scripts commit
 - docs: regenerate the CHANGELOG for the test and QA-record commits
 - docs: regenerate the CHANGELOG for this branch's commits
@@ -202,6 +203,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #22 from tanviruchahs2580/qa/2026-10-17-audit-hardening
 - Merge pull request #24 from tanviruchahs2580/docs/2026-10-17-deployment-record
 - Merge pull request #25 from tanviruchahs2580/docs/2026-10-17-vercel-redeploy
+- Merge pull request #26 from tanviruchahs2580/feat/rag-retrieval-quality
 
 ## v0.9.2 - 2026-09-15
 

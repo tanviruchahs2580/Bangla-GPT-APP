@@ -321,28 +321,32 @@ class TutorService:
         if not query_terms or not hits:
             return 0.0, False
 
-        # Out-of-domain budget. A question carrying TWO OR MORE content terms
-        # the corpus has never seen (ইউক্লিড + স্বতঃসিদ্ধ; ক্রিকেট + বিশ্বকাপ;
-        # মঙ্গল + গ্রহে) is asking about the outside world, and no lexical
-        # gate can verify that the retrieved prose answers it — refuse.
-        # ONE unknown term is the everyday case (a colloquial filler word
-        # like জিনিস next to the concept), so it passes here and its weight
-        # is simply not paid: coverage is measured over the in-corpus terms
-        # only. With no statistics the budget is not enforceable — the gate
-        # runs on uniform weights over all content terms, the historical
-        # behaviour.
+        # Coverage is measured over the question's terms the corpus KNOWS
+        # about (df >= 1), weighted by ln(1 + N/df). Two documented reasons:
+        #
+        # * a term the corpus has never seen (ইউক্লিড, স্বতঃসিদ্ধ, ক্রিকেট)
+        #   is the question's subject world, not the textbook's: the evidence
+        #   cannot contain it, and its uncovered maximum weight is exactly
+        #   what refuses an out-of-corpus question (the out-of-domain matrix
+        #   row). A question whose content terms are ALL df=0 is therefore
+        #   out-of-corpus by definition and refuses here;
+        # * terms the corpus does know carry ln(1 + N/df): missing a
+        #   one-of-a-kind curriculum term dominates the verdict, while
+        #   missing a term the whole book repeats costs little -- which is
+        #   how "ভগ্নাংশ কী? explain করো" grounds on ভগ্নাংশ alone instead
+        #   of being vetoed by the instruction word.
         if self.term_stats is not None and self.term_stats.total_documents > 0:
-            unknown = [t for t in query_terms if self.term_stats.document_frequency(t) == 0]
-            if len(unknown) >= 2:
+            in_corpus = tuple(t for t in query_terms if self.term_stats.document_frequency(t) > 0)
+            if not in_corpus:
                 json_log(
                     logger,
                     logging.INFO,
                     "tutor_retrieval",
                     gate="out_of_domain",
-                    unknown_terms=len(unknown),
+                    out_of_corpus_terms=len(query_terms),
                 )
                 return 0.0, False
-            query_terms = tuple(t for t in query_terms if t not in unknown) or tuple(unknown)
+            query_terms = in_corpus
 
         if self.term_stats is not None and self.term_stats.total_documents > 0:
             weights = coverage_weights(
