@@ -96,6 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): let an anonymous visitor change the interface language
 - fix(web): localize consent/invite copy, theme icon sync, error states, icon cleanup
 - fix(web): make the register screen's email-verification step usable
+- fix(web): move the list key onto the element the map returns
 - fix(web): notification panel no longer clipped off the left edge
 - fix(web): raise three status tokens to the WCAG AA contrast minimum
 - fix(web): recover from page errors, report load failures, and never show another child's data
@@ -170,6 +171,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate the CHANGELOG for the QA-record amendment
 - docs: regenerate the CHANGELOG for the RAG retrieval rework
 - docs: regenerate the CHANGELOG for the acceptance-testing fixes
+- docs: regenerate the CHANGELOG for the audit remediation commits
 - docs: regenerate the CHANGELOG for the branch's final commits
 - docs: regenerate the CHANGELOG for the delivery record
 - docs: regenerate the CHANGELOG for the deployment record
