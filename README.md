@@ -175,8 +175,9 @@ Environment variables are documented in `.env.example`. Default
 
 | Workflow | What it does | Trigger |
 |---|---|---|
-| `ci.yml` | api: ruff → format → mypy → pytest (3.11+3.12) → pip-audit → alembic cycle → smoke; postgres journey tests; golden-eval gate; web: tsc + build + vitest; docker build + probes | push/PR to main |
-| `eval-gate.yml` | golden retrieval benchmark w/ grounded-accuracy gate | push/PR to main, or manual |
+| `ci.yml` | api: ruff → format → mypy → pytest (3.11+3.12) → pip-audit → alembic cycle → smoke; postgres journey tests; golden-eval: golden retrieval + eval-v2 baseline gate + red-team gate; web: tsc + build + vitest; docker build + probes | push/PR to main |
+| `eval-gate.yml` | golden retrieval benchmark w/ grounded-accuracy gate + eval-v2 regression vs committed baseline | push/PR to main, or manual |
+| `codeql.yml` | CodeQL SAST (security-extended) over the API (python) and web (javascript-typescript); findings to the Security tab | push/PR to main, weekly |
 | `release.yml` | CI-gated: tag → GHCR images → optional SSH deploy w/ health-gated rollback | tag `v*.*.*`, or manual |
 | `vercel-deploy.yml` | production web deploy (CI-gated) | `workflow_run` on a green `API CI` for main, or manual |
 

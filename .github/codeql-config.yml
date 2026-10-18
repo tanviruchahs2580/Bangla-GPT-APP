@@ -1,0 +1,11 @@
+# CodeQL scan scoping: exclude generated / vendored / third-party trees that
+# are not first-party source. Referenced from codeql.yml (init.config-file).
+paths:
+  - apps/api/src
+  - apps/web/src
+paths-ignore:
+  - apps/web/dist
+  # Capacitor's generated Android project (Java/Gradle wrappers) is not
+  # first-party review code; it is tracked for the Android build only.
+  - apps/web/android
+  - "**/node_modules"

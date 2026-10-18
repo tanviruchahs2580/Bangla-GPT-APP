@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - feat(i18n): land Bangla copy for the status and impersonation strings
+- feat(rag): free the event loop, meter the hot path, resolve follow-ups
 - feat(rag): retrieval-quality rework - fair gate, query lanes, measured rank lift
 - feat(web): login page background image with dark/light theme sync
 - feat(web): student section background image with dark/light sync
@@ -122,6 +123,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - ci: add concurrency to api CI, fix eval-gate header, retire sanity workflow
 - ci: bound job runtimes and harden release/deploy workflows
 - ci: gate a release on a successful CI run for the tagged commit
+- ci: gate every push on the retrieval baselines, add CodeQL SAST
 - ci: hermetic import-time settings patch + step-isolated migration DBs
 - ci: require a real 200 before calling a web deploy healthy
 - ci: run the skipped Redis and Postgres paths and enforce the hook set
@@ -160,6 +162,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate the CHANGELOG for the delivery record
 - docs: regenerate the CHANGELOG for the deployment record
 - docs: regenerate the CHANGELOG for the injection screen
+- docs: regenerate the CHANGELOG for the locative reclassification fix
 - docs: regenerate the CHANGELOG for the post-merge CI record
 - docs: regenerate the CHANGELOG for the redeploy record
 - docs: regenerate the CHANGELOG for the register-backdrop change

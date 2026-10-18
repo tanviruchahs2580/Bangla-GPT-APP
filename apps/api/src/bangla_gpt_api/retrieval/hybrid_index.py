@@ -115,6 +115,21 @@ def make_lexical_rerank(term_stats: TermStats | None = None) -> Reranker:
             term_stats.total_documents,
         )
 
+    # indexable_text -> tokens is deterministic per chunk and the corpus is
+    # immutable for this closure's lifetime, but candidates recur across
+    # queries; re-tokenising the same 220-word section on every turn was a
+    # measurable slice of per-query CPU. The memo is bounded by the corpus:
+    # at most one entry per chunk, i.e. the same order the BM25 counters
+    # already occupy in memory.
+    token_memo: dict[str, list[str]] = {}
+
+    def _chunk_tokens(chunk: Chunk) -> list[str]:
+        tokens = token_memo.get(chunk.id)
+        if tokens is None:
+            tokens = tokenize(indexable_text(chunk))
+            token_memo[chunk.id] = tokens
+        return tokens
+
     def rerank(query: str, candidates: list[tuple[Chunk, float, float]]) -> list[float]:
         query_terms = content_terms(query)
         if not query_terms:
@@ -125,7 +140,7 @@ def make_lexical_rerank(term_stats: TermStats | None = None) -> Reranker:
         weights = weight_map(query_terms)
         scores: list[float] = []
         for chunk, rrf_score, lexical_base in candidates:
-            text_tokens = tokenize(indexable_text(chunk))
+            text_tokens = _chunk_tokens(chunk)
             chunk_terms = {light_stem(t) for t in text_tokens}
             covered = [t for t in query_terms if t in chunk_terms]
             weighted = weighted_coverage(query_terms, covered, weights) if query_terms else 0.0

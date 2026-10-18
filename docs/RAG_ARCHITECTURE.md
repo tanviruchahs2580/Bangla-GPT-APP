@@ -16,6 +16,12 @@ Student question (Bangla / Banglish / English terms)
         ↓
   query normalisation (NFKC + zero-width strip) → safety screen
         ↓
+  follow-up resolution (short conversational turn ≤1 content term:
+        the previous user turn's content terms are appended, so a
+        "আরেকবার বলো" follow-up retrieves the same subject; rich
+        questions and deliberate search_query overrides are never
+        rewritten — TutorService._conversation_retrieval_query)
+        ↓
   Query understanding (retrieval/query_analysis.py)
         │   • content terms: stop-words (BN + romanised + EN) removed
         │   • question-framing words removed (imperatives, class/level context)
@@ -53,6 +59,26 @@ Student question (Bangla / Banglish / English terms)
   AskResponse{answer, grounded, sources[book/chapter/section/page/score],
               citation_verified (stem coverage ≥ 0.25 vs evidence),
               confidence (documented formula)}
+
+Runtime execution notes (2026-10-18 hardening):
+
+* Retrieval is synchronous CPU work, so both `ask` and `ask_stream` run it
+  through `asyncio.to_thread` — a 120–250 ms search no longer freezes
+  concurrent SSE streams sharing the worker's event loop.
+* The reranker memoizes `indexable_text → tokens` per chunk inside
+  `make_lexical_rerank` (bounded by the corpus, same lifetime as the BM25
+  counters), removing a re-tokenisation of the same candidate sections on
+  every turn.
+* The hot path is exported to Prometheus: `bgpt_rag_retrieval_latency_seconds`
+  (histogram), `bgpt_rag_gate_outcomes_total{gate}` and
+  `bgpt_rag_gate_refusals_total{reason}` (every refusal path, safety screen
+  included), and `bgpt_rag_citation_checks_total{result}` — a failed
+  post-generation citation check is metered AND logged (warn), so ungrounded
+  drift under a new provider/corpus is observable in /metrics. The
+  `HighRAGRefusalRate` / `RAGCitationCheckFailures` alerts in
+  deploy/prometheus/alerts.yml read these series.
+* Streaming and non-streaming share one refusal contract: a refusal (answer
+  could not be vetted) carries `citation_verified=None` on both paths.
 ```
 
 ## The retrieval-quality defects this design fixes
@@ -112,19 +138,27 @@ vector store, and an LLM faithfulness judge (see evaluation/metrics.py,
 
 ## Measured baseline (real corpus, 2,508 chunks, this commit)
 
-| Metric | Before rework | After rework |
+The committed `data/nctb/retrieval_eval.json` is the record of truth for
+these numbers: this table quotes it verbatim (the earlier text sat on values
+from an interim local run — build 23.9 s, latency 127/224 ms — that the
+committed artifact superseded), and any retrieval change regenerates the
+artifact locally, with the diff reviewed as retrieval evidence.
+
+| Metric | Before rework | After rework (committed artifact) |
 |---|---|---|
-| Index build | 0.36 s (lexical only) | 23.9 s (lexical + vector + vocabulary) |
+| Index build | 0.36 s (lexical only) | 26.5 s (lexical + vector + vocabulary) |
 | Family A self-sentence recall@1 / @5 (n=100) | 0.38 / 1.00 | **0.98 / 0.98** |
 | Family A MRR | — (not computed) | 0.61 |
 | Family B chapter-title recall@1 / @5 (n=80) | 0.225 / 0.525 | **1.00 / 1.00** |
 | Family B MRR | — (not computed) | 1.00 |
 | Adversarial refusal rate | 1.00 | **1.00** |
-| Search latency p50 / p95 (hybrid, real corpus) | — | 127 ms / 224 ms |
+| Search latency p50 / p95 (hybrid, real corpus) | — | 120 ms / 253 ms |
 
 Golden-set regression discipline (unchanged contract, still enforced in CI):
 the 634-item golden suite + 16-item red-team set run through the hermetic mock
-provider; every metric is compared against the committed baseline
+provider — both as the dedicated `eval-gate.yml` workflow and as steps of the
+`ci.yml` golden-eval job (the 24-question hit@3 gate runs alongside them) — and
+every metric is compared against the committed baseline
 (`eval/baseline_v2.json`); any drop > 2 percentage points fails. After the
 rework: grounded_rate 1.00, faithfulness 0.8549 (up from 0.8547), grammar
 0.9881, red-team refusal 16/16, zero system-prompt leakage.
@@ -145,11 +179,15 @@ refuse. That test file records which expectation flipped and why.
    its own corpus revision with regenerated baselines.
 3. **Faithfulness judge**: `mode="local_overlap"` until an LLM provider is
    configured; `_JUDGE_INSTRUCTION` and the scoring contract are ready.
-4. **Index lifecycle**: full in-memory rebuild at boot (~24 s on the real
-   corpus, hybrid). Fine at this scale; pgvector + incremental updates remain
-   the scaling path (explicitly deferred as infra).
+4. **Index lifecycle**: full in-memory rebuild at boot (~26 s on the real
+   corpus, hybrid, per worker). Fine at this scale; pgvector + incremental
+   updates remain the scaling path (explicitly deferred as infra).
 5. **Class coverage of the deployed corpus**: production serves whatever
    `NCTB_CORPUS_DIR` contains; the bundled sample covers classes 6–10 only.
    The boot identity log/metric makes the served corpus observable; supplying
    the real corpus to production is a deployment + licensing step
    (docs/operations/PRODUCTION_DEPLOYMENT.md, DATA-01/LEGAL-02).
+6. **Follow-up resolution scope**: the conversational rewrite covers the
+   short-follow-up case (≤1 content term → prior user turn's terms appended).
+   Full coreference resolution (pronoun substitution mid-sentence, multi-turn
+   embedding rewriter) remains an embedding-model-staged decision.

@@ -51,3 +51,30 @@ groups:
           severity: warning
         annotations:
           summary: "Disk usage above 80% on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+
+      # RAG grounding health: the refusal signal catching silent corpus
+      # degradation (e.g. NCTB_CORPUS_DIR mis-set in production, so the tutor
+      # fell back to the 78-chunk bundled sample and every real question is
+      # refused). Measured over gated retrieval traffic only.
+      - alert: HighRAGRefusalRate
+        expr: >
+          sum(rate(bgpt_rag_gate_refusals_total{reason="insufficient_evidence"}[15m]))
+          / clamp_min(sum(rate(bgpt_rag_gate_outcomes_total[15m])), 0.001) > 0.5
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RAG evidence gate refuses >50% of grounded attempts for 15 minutes"
+          description: >
+            Likely corpus degradation (NCTB_CORPUS_DIR mis-set / corpus too small) or a
+            retrieval regression. Check bgpt_rag_index_chunks and the rag_corpus_loaded boot log.
+
+      # Post-generation honesty signal: a citation check that fails means the
+      # answer leaned on material the evidence does not support.
+      - alert: RAGCitationCheckFailures
+        expr: increase(bgpt_rag_citation_checks_total{result="fail"}[15m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Citation verification failed on a grounded answer in the last 15 minutes"
+          description: "Inspect the ai_call / tutor_retrieval logs for the affected request id."
