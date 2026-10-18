@@ -94,6 +94,15 @@ becomes chunks, so unusable or mis-extracted pages never reach the tutor
 index. The report keeps a row for every page either way; nothing is silently
 dropped.
 
+**Per-chunk content QA gate (build time).** `nctb/content_qa.py` checks every
+chunk for `not_nfc`, `zero_width`, `math_mojibake`, `replacement_char`,
+`pua_char` and `legacy_bijoy`; `build_nctb_corpus.py` writes
+`<data-dir>/qa_report.json` and exits non-zero when any source exceeds the
+`DEFAULT_FLAGGED_THRESHOLD` of 2% flagged chunks. At load time
+`data/nctb_loader.py` strips private-use glyph residue to spaces and drops
+chunks still matching legacy-Bijoy ASCII, with a warning count — QA-flagged
+artifacts reach neither the index nor a served answer.
+
 ## 5. Chunking & class metadata
 
 - Structure-aware: chapter-parent → section-child units, page ranges kept;

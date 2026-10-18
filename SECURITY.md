@@ -7,15 +7,23 @@ report accordingly and do not paste real student data into an issue.
 
 ## Reporting a vulnerability
 
-**Do not open a public issue.** Public issues are visible to everyone,
-including people who would use the knowledge.
+**Do not open a public issue describing the vulnerability.** Public issues
+are visible to everyone, including people who would use the knowledge.
 
-Email the maintainer, or use GitHub's private reporting:
+Two private channels:
 
-- Repository → **Security** → **Advisories** → **Report a vulnerability**
-  (preferred: it gives you a private thread and a tracking id)
-- Email: the address in `pyproject.toml` `[project.urls]` / the repository
-  owner profile
+- **Email `tanvir.uchahs2580@gmail.com`** (the maintainer's address as
+  published in this repository's commit history). This works today.
+- GitHub private reporting: Repository → **Security** → **Advisories** →
+  **Report a vulnerability** (preferred where available: it gives you a
+  private thread and a tracking id). Private vulnerability reporting is
+  currently **disabled** on this repository, so this form only appears after
+  the maintainer enables it (Settings → Code security and analysis).
+  If the form is absent, use the email above instead.
+
+If neither channel is usable, open a minimal public issue that asks the
+maintainer for a private channel **without disclosing any vulnerability
+details**, and you will be contacted privately.
 
 Please include:
 

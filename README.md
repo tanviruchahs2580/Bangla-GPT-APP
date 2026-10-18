@@ -75,6 +75,11 @@ python -m venv .venv
 .venv\Scripts\python -m pip install --require-hashes -r constraints.txt
 .venv\Scripts\python -m pip install --no-deps -e ".[dev]"
 # optional: build + serve the real NCTB curriculum corpus
+# needs network access to the official NCTB links; with no raw PDFs under
+# ..\..\data\nctb\raw it exits with a clear "no acquired sources" error
+# (expected on a fresh clone). Runs a content-QA gate and writes
+# ..\..\data\nctb\qa_report.json; the build fails if the gate fails.
+# Student-facing redistribution of NCTB content needs rights-holder permission.
 .venv\Scripts\python scripts\build_nctb_corpus.py --data-dir ..\..\data\nctb --subset ssc-science
 $env:NCTB_CORPUS_DIR = "..\..\data\nctb"
 .venv\Scripts\python -m uvicorn bangla_gpt_api.main:app --reload
@@ -99,6 +104,11 @@ python3 -m venv .venv
 .venv/bin/pip install --require-hashes -r constraints.txt
 .venv/bin/pip install --no-deps -e ".[dev]"
 # optional: build + serve the real NCTB curriculum corpus
+# needs network access to the official NCTB links; with no raw PDFs under
+# ../../data/nctb/raw it exits with a clear "no acquired sources" error
+# (expected on a fresh clone). Runs a content-QA gate and writes
+# ../../data/nctb/qa_report.json; the build fails if the gate fails.
+# Student-facing redistribution of NCTB content needs rights-holder permission.
 .venv/bin/python scripts/build_nctb_corpus.py --data-dir ../../data/nctb --subset ssc-science
 export NCTB_CORPUS_DIR="../../data/nctb"
 .venv/bin/python -m uvicorn bangla_gpt_api.main:app --reload
