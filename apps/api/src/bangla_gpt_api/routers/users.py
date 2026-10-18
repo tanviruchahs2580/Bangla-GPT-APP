@@ -64,6 +64,7 @@ from .deps import (
     Ctx,
     CurrentUser,
     DbSession,
+    NonImpersonatedUser,
     _assert_student_in_school,
     _build_me_response,
     authorize_student_access,
@@ -136,14 +137,16 @@ def read_me(app_ctx: Ctx, db: DbSession, user: CurrentUser) -> MeResponse:
 
 
 @router.delete("/users/me", status_code=204)
-def delete_me(db: DbSession, user: CurrentUser) -> Response:
+def delete_me(db: DbSession, user: NonImpersonatedUser) -> Response:
     """GDPR-style self-service account deletion.
 
     Removes the account and every row owned by it: student/teacher/parent
     profile and ALL FK-children (Postgres enforces referential integrity --
     SQLite silently does not, so every child table must be cleaned here or
     the delete aborts mid-transaction on the production engine). The last
-    remaining admin cannot delete their own account (409).
+    remaining admin cannot delete their own account (409). Impersonation
+    sessions are refused outright (403): the erasure is irreversible and
+    belongs to the account holder alone (AUD-B-02).
     """
     if user.role == "admin":
         admins = db.execute(

@@ -198,6 +198,24 @@ def get_current_user(
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
+def forbid_impersonation(request: Request, user: CurrentUser) -> User:
+    """Refuse actions an impersonation session must never perform.
+
+    A support admin wearing a user's identity may look and help, but must
+    not exercise the target's irreversible rights: erasing the account via
+    DELETE /users/me destroyed the real user's data with no way back
+    (AUD-B-02). The guard depends on ``CurrentUser`` so the decoded payload
+    is always on ``request.state``; FastAPI caches that dependency per
+    request, so there is no extra user lookup.
+    """
+    if (getattr(request.state, "jwt_claims", None) or {}).get("imp"):
+        raise HTTPException(status_code=403, detail="Not available during an impersonation session")
+    return user
+
+
+NonImpersonatedUser = Annotated[User, Depends(forbid_impersonation)]
+
+
 def require_roles(*roles: str):
     def dependency(user: CurrentUser) -> User:
         if user.role not in roles:
