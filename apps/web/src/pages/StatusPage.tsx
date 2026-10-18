@@ -40,7 +40,8 @@ export default function StatusPage() {
   const ok = data?.status === "ok";
 
   return (
-    <div className="card card-narrow">
+    // AUD-G-18: public routes had no main landmark; this is the page's.
+    <main className="card card-narrow">
       <h2>{t("statusPage")}</h2>
       {error && (
         <p className="error" role="alert">
@@ -95,6 +96,6 @@ export default function StatusPage() {
       <p>
         <Link to="/login">{t("login")}</Link>
       </p>
-    </div>
+    </main>
   );
 }

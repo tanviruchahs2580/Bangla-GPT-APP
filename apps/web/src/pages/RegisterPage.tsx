@@ -95,7 +95,8 @@ export default function RegisterPage() {
     // Shares login's photo backdrop (.splash-login): the desktop artwork, the
     // portrait mobile artwork with its ambient fill, the dark-mode veil and
     // the low-data kill-switch all live in that one class.
-    <div className="splash splash-login auth-shell">
+    // AUD-G-18: public routes had no main landmark; this is the page's.
+    <main className="splash splash-login auth-shell">
       <section className="auth-brand">
         <div className="auth-brand-head">
           <span className="auth-brand-logo" aria-hidden>
@@ -243,11 +244,21 @@ export default function RegisterPage() {
                       />
                       <span>
                         {t("consentPrefix")}{" "}
-                        <a href="/privacy" target="_blank" rel="noreferrer">
+                        <a
+                          className="inline-link"
+                          href="/privacy"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
                           {t("privacy")}
                         </a>{" "}
                         ·{" "}
-                        <a href="/terms" target="_blank" rel="noreferrer">
+                        <a
+                          className="inline-link"
+                          href="/terms"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
                           {t("terms")}
                         </a>{" "}
                         {t("consentSuffix")}
@@ -279,6 +290,6 @@ export default function RegisterPage() {
           </>
         )}
       </Card>
-    </div>
+    </main>
   );
 }

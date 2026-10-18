@@ -9,7 +9,8 @@ export default function ForgotResetPage() {
   const [tab, setTab] = useState<Tab>("forgot");
 
   return (
-    <div className="card auth-card">
+    // AUD-G-18: public routes had no main landmark; this is the page's.
+    <main className="card auth-card">
       <h2>{tab === "forgot" ? t("resetTitle") : t("verifyTitle")}</h2>
       <p className="muted">
         <button
@@ -27,9 +28,12 @@ export default function ForgotResetPage() {
       </p>
       {tab === "forgot" ? <ForgotForm /> : <VerifyForm />}
       <p className="muted">
-        {t("haveAccount")} <a href="/login">{t("login")}</a>
+        {t("haveAccount")}{" "}
+        <a className="inline-link" href="/login">
+          {t("login")}
+        </a>
       </p>
-    </div>
+    </main>
   );
 }
 

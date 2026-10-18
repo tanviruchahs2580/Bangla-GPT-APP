@@ -2995,8 +2995,23 @@ button.source-chip:hover {
 }
 
 .consent-check {
-  width: auto;
-  margin-top: 3px;
+  /* AUD-G-01 (WCAG 2.2 SC 2.5.8): the native box measured ~13 px with a
+     mouse — under the 24 px minimum — and 22 px on touch. The box is drawn at
+     24 px everywhere; on coarse pointers F-110's generic 44 px floor applies. */
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  flex: none;
+}
+
+/* AUD-G-01 (WCAG 1.4.1): links that sit inside a sentence — the register
+   consent row and the forgot/reset footer — were distinguishable from the
+   surrounding text by colour alone; Lighthouse's link-in-text-block flagged
+   them. Underline is the non-colour cue. */
+.inline-link {
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .link-row-center {
@@ -5067,9 +5082,8 @@ button.small {
    F-110: tap-target floor for a product used on cheap Android phones by
    children. WCAG 2.5.8 asks for 24 px; 44 px is the figure platform
    guidelines use for touch, and the audience makes the difference. These
-   rules raise the measured offenders without changing layout: where a
-   control must stay visually small (a checkbox beside its label) the hit
-   area grows around it rather than the glyph.
+   rules raise the measured offenders, sizing the controls themselves so the
+   hit area matches what is drawn (AUD-G-01).
    --------------------------------------------------------------------------- */
 
 @media (pointer: coarse) {
@@ -5079,15 +5093,10 @@ button.small {
     min-height: 44px;
   }
 
-  /* Keep the visual box small but the target large. */
-  input[type="checkbox"].consent-check {
-    appearance: none;
-    width: 22px;
-    height: 22px;
-    min-width: 22px;
-    min-height: 22px;
-    margin: -11px;
-  }
+  /* The consent box used to opt out of the 44 px floor with
+     `appearance: none` and a 22 px box, which made it 22 px *and* invisible
+     on touch — below the SC 2.5.8 minimum and unreadable (AUD-G-01). It now
+     keeps the generic 44 px target and the box it draws. */
 
   select,
   .rate-btn,
