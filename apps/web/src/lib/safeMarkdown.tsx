@@ -9,15 +9,14 @@ interface Props {
   className?: string;
 }
 
-// Sanitize raw HTML tags in markdown source (XSS guard).
-// react-markdown without rehype-raw does not render HTML tags,
-// but we still strip script-like content at source level.
-function sanitize(source: string): string {
-  return source
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<iframe[\s\S]*?<\/iframe>/gi, "")
-    .replace(/on\w+\s*=\s*["'][^"']*["']/gi, "");
-}
+// Raw-HTML safety here is structural, not regex-based. react-markdown is
+// used WITHOUT rehype-raw, so it never parses HTML out of the source:
+// "<script>alert(1)</script>" arrives in the DOM as escaped text, and the
+// link/image rules below decide what may become an element. A hand-rolled
+// multi-character stripper used to sit here; it was incomplete (nested
+// "<scr<script>ipt>" survived — CodeQL js/incomplete-multi-character-
+// sanitization, js/bad-tag-filter) and made the guard look stronger than
+// the architecture already was, so it was removed rather than patched.
 
 /**
  * Only these schemes may appear in a link the model produced.
@@ -113,7 +112,6 @@ const components: Partial<Components> = {
 };
 
 export function SafeMarkdown({ content, className }: Props) {
-  const safe = sanitize(content);
   return (
     <div className={className}>
       <ReactMarkdown
@@ -121,7 +119,7 @@ export function SafeMarkdown({ content, className }: Props) {
         rehypePlugins={[rehypeKatex]}
         components={components}
       >
-        {safe}
+        {content}
       </ReactMarkdown>
     </div>
   );

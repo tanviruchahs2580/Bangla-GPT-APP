@@ -86,6 +86,15 @@ export default function AITutorPage() {
   const [savedId, setSavedId] = useState<number | null>(null);
   // explicit explanation strategy + image attachment.
   const [strategy, setStrategy] = useState<string | null>(null);
+  // Both the attach handler and the <img> render below enforce this list:
+  // the data: URL must never be built from a mime type the browser would
+  // treat as anything but a still image (CodeQL js/xss-through-dom on the
+  // preview sink). The server re-validates too (422 image_invalid).
+  const ALLOWED_IMAGE_MIMES: readonly string[] = [
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+  ];
   const [image, setImage] = useState<{
     mime_type: string;
     data_base64: string;
@@ -334,10 +343,7 @@ export default function AITutorPage() {
   // turn. Server re-validates mime + decoded size and answers 422 image_invalid.
   const attachFile = (f: File | null) => {
     if (!f) return;
-    if (
-      !["image/png", "image/jpeg", "image/webp"].includes(f.type) ||
-      f.size > 1_500_000
-    ) {
+    if (!ALLOWED_IMAGE_MIMES.includes(f.type) || f.size > 1_500_000) {
       setError(t("imageTooLarge"));
       return;
     }
@@ -777,11 +783,13 @@ export default function AITutorPage() {
         {image && (
           <div className="attach-row attach-flow">
             <div className="row-flex">
-              <img
-                src={`data:${image.mime_type};base64,${image.data_base64}`}
-                alt=""
-                className="attach-preview"
-              />
+              {ALLOWED_IMAGE_MIMES.includes(image.mime_type) && (
+                <img
+                  src={`data:${image.mime_type};base64,${image.data_base64}`}
+                  alt=""
+                  className="attach-preview"
+                />
+              )}
               <button
                 className="icon-btn rate-btn"
                 aria-label={t("removeImage")}

@@ -20,6 +20,19 @@ describe("SafeMarkdown", () => {
     expect(container.textContent).toContain("world");
   });
 
+  // The old hand-rolled regex stripper (removed) let nested payloads
+  // through: "<scr<script>ipt>" came out as "<script>". Safety is
+  // structural — no rehype-raw — so every raw tag stays inert text.
+  it("keeps nested multi-character payloads inert", () => {
+    const { container } = render(
+      <SafeMarkdown content={"x <scr<script>ipt>alert(1)</scr" + "ipt> y"} />,
+    );
+    expect(container.querySelectorAll("script")).toHaveLength(0);
+    expect(container.querySelectorAll("iframe")).toHaveLength(0);
+    expect(container.innerHTML).not.toContain("<script");
+    expect(container.textContent).toContain("alert(1)");
+  });
+
   it("renders markdown headings and lists", () => {
     const md = "## Title\n- item 1\n- item 2";
     const { container } = render(<SafeMarkdown content={md} />);
