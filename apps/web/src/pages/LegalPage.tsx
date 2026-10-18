@@ -34,16 +34,17 @@ const SECTIONS: {
     titleBn: "ডেটা নিরাপত্তা",
     titleEn: "Data security",
     bodyBn:
-      "পাসওয়ার্ড PBKDF2 দিয়ে হ্যাশ করা হয়, সেশন JWT টোকেন দিয়ে চলে, এবং রিসেট টোকেন শুধু হ্যাশ আকারে সংরক্ষিত হয়।",
+      "পাসওয়ার্ড Argon2id দিয়ে হ্যাশ করা হয়, সেশন JWT টোকেন দিয়ে চলে, এবং রিসেট টোকেন শুধু হ্যাশ আকারে সংরক্ষিত হয়।",
     bodyEn:
-      "Passwords are hashed with PBKDF2, sessions use JWT tokens, and password-reset tokens are stored only as hashes.",
+      "Passwords are hashed with Argon2id, sessions use JWT tokens, and password-reset tokens are stored only as hashes.",
   },
 ];
 
 export default function LegalPage({ kind }: { kind: "privacy" | "terms" }) {
   const isPrivacy = kind === "privacy";
   return (
-    <div className="card card-legal">
+    // AUD-G-18: public routes had no main landmark; this is the page's.
+    <main className="card card-legal">
       <h2>
         {isPrivacy
           ? "গোপনীয়তা নীতি / Privacy Policy"
@@ -106,6 +107,6 @@ export default function LegalPage({ kind }: { kind: "privacy" | "terms" }) {
         <a href="/login">{t("login")}</a> ·{" "}
         <a href="/register">{t("register")}</a>
       </p>
-    </div>
+    </main>
   );
 }
