@@ -93,6 +93,16 @@ optional `OFFSITE_SYNC_CMD`) + `scripts/restore_test.py` (monthly restore
 rehearsal with `PRAGMA integrity_check`). Postgres + pgBackRest above is the
 production path.
 
+**WAL and raw file copies.** Since the engine now runs SQLite in WAL mode
+(`db/session.py`: `journal_mode=WAL`, `busy_timeout=5000`,
+`foreign_keys=ON`), a committed transaction may live in the `app.db-wal`
+sidecar until the next checkpoint. The online-backup script above is
+WAL-aware and remains the supported path. An ad-hoc raw copy is only a
+complete backup if it takes all three files together (`app.db`,
+`app.db-wal`, `app.db-shm`) or first runs `PRAGMA wal_checkpoint(TRUNCATE)`
+on a connection to the live database; a bare `cp app.db` can silently lose
+the most recent transactions.
+
 ## Corpus object storage
 
 `scripts/s3_corpus_sync.py` (optional boto3; any S3-compatible endpoint)

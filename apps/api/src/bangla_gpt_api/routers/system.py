@@ -51,6 +51,12 @@ async def ready(app_ctx: Ctx, db: DbSession) -> dict:
             "Set LLM_PROVIDER=mock or configure a supported provider."
         )
         raise HTTPException(status_code=503, detail=detail)
+    # The retrieval index is what every tutoring turn runs on. A boot whose
+    # index failed to build used to answer "ready" while /tutor/ask returned
+    # 503 for every student; readiness must state the dependency the product
+    # actually needs, so a rolling deploy drains such a worker instead.
+    if app_ctx.index is None or app_ctx.tutor is None:
+        raise HTTPException(status_code=503, detail="Retrieval index unavailable")
     try:
         db.execute(select(1))
     except Exception as exc:
@@ -86,6 +92,17 @@ def status(app_ctx: Ctx, db: DbSession) -> StatusOut:
             name="assistant",
             ok=assistant_ok,
             detail="provider configured" if assistant_ok else "no LLM provider configured",
+        )
+    )
+    # Presence-only, same disclosure rule as the rest of this payload: the
+    # status page should show a failed index build (the tutor answers nothing
+    # without it) without exposing corpus identity or size.
+    index_ok = app_ctx.index is not None and app_ctx.tutor is not None
+    components.append(
+        StatusComponent(
+            name="curriculum",
+            ok=index_ok,
+            detail="retrieval index loaded" if index_ok else "retrieval index unavailable",
         )
     )
     healthy = all(c.ok for c in components)
