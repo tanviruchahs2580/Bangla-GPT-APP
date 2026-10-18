@@ -108,7 +108,9 @@ def test_family_a_recall_at_1_never_exceeds_recall_at_5(tmp_path, monkeypatch) -
     report = json.loads((corpus / "retrieval_eval.json").read_text(encoding="utf-8"))
     for lane in ("family_A_self_sentence", "baseline_lexical"):
         block = (
-            report[lane] if lane == "family_A_self_sentence" else report[lane]["family_A_self_sentence"]
+            report[lane]
+            if lane == "family_A_self_sentence"
+            else report[lane]["family_A_self_sentence"]
         )
         assert block["recall_at_1"] <= block["recall_at_5"]
 

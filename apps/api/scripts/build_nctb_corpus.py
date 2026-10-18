@@ -8,6 +8,8 @@ Stages:
     1. acquire — respectful download of officially linked PDFs
     2. process — extract pages + QC + chunking + JSONL artifacts
     3. classes — derived class detection stamped onto chunk files
+    4. quality — per-chunk content QA gate; the build fails on a corpus
+       that must not be indexed (report: <data-dir>/qa_report.json)
 
 Subsets:
     ssc-science: Secondary বাংলা/ইংরেজি/গণিত/বিজ্ঞান-শাখা/ICT
@@ -18,13 +20,15 @@ Subsets:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
 from bangla_gpt_api.data.nctb_loader import attach_detected_classes
 from bangla_gpt_api.nctb import HSC_ARTIFACTS, SECONDARY_ARTIFACTS
 from bangla_gpt_api.nctb.acquisition import acquire_many
-from bangla_gpt_api.nctb.corpus import load_manifest, process_source
+from bangla_gpt_api.nctb.content_qa import qa_chunks
+from bangla_gpt_api.nctb.corpus import load_chunks_jsonl, load_manifest, process_source
 
 SUBSETS = {
     "ssc-science": [
@@ -89,6 +93,14 @@ def main() -> int:
 
     records = load_manifest(manifest_path)
     acquired = [r for r in records.values() if r.source_status == "acquired"]
+    if not acquired:
+        print(
+            "No acquired sources in the manifest — the acquisition step did not "
+            "produce raw PDFs, so there is nothing to build. Re-run without "
+            "--skip-acquire (or fix the acquisition errors above).",
+            file=sys.stderr,
+        )
+        return 1
     print(f"\nProcessing {len(acquired)} acquired sources ...")
     for record in acquired:
         summary = process_source(
@@ -110,6 +122,36 @@ def main() -> int:
     print("\nDerived class detection:")
     for source_id, detected in detections.items():
         print(f"  {source_id}: {'class ' + str(detected) if detected else 'UNDETECTED'}")
+
+    # Content QA gate: a corpus that fails the per-chunk QA must not be
+    # indexed; the report lists every flagged chunk for investigation.
+    qa_report_path = args.data_dir / "qa_report.json"
+    qa_report: dict[str, dict] = {}
+    failed_sources: list[str] = []
+    for path in sorted(out_normalized.glob("*.chunks.jsonl")):
+        rows = [
+            {"chunk_id": chunk.chunk_id, "text": chunk.text} for chunk in load_chunks_jsonl(path)
+        ]
+        report = qa_chunks(rows)
+        qa_report[path.name.removesuffix(".chunks.jsonl")] = report.to_dict()
+        status = "pass" if report.passed else "FAIL"
+        print(
+            f"  qa {status}: {path.name} "
+            f"({report.flagged_chunks}/{report.total_chunks} flagged, "
+            f"issues={report.issues or 'none'})"
+        )
+        if not report.passed:
+            failed_sources.append(path.name)
+    qa_report_path.write_text(
+        json.dumps(qa_report, ensure_ascii=False, indent=2) + chr(10), encoding="utf-8"
+    )
+    print(f"\nContent QA report: {qa_report_path}")
+    if failed_sources:
+        print(
+            "CONTENT QA GATE FAILED — do not index this corpus: " + ", ".join(failed_sources),
+            file=sys.stderr,
+        )
+        return 1
 
     print(f"\nQuality report: {report_path}")
     return 0

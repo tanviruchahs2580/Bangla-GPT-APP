@@ -32,14 +32,12 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
 from bangla_gpt_api.nctb.bijoy import is_likely_legacy_bijoy
-from bangla_gpt_api.nctb.normalize import ZERO_WIDTH_CHARS
+from bangla_gpt_api.nctb.normalize import ZERO_WIDTH_CHARS, in_private_use_area
 
 # Classic double-encoded math symbols: a multi-byte UTF-8 lead byte (C2/C3/E2)
 # followed by a raw C1/Latin-1-supplement byte. Legitimate Bangla text
 # never contains C1 control characters, so this pattern is safe.
 _MATH_MOJIBAKE = re.compile("[\u00c2\u00c3\u00e2][\u0080-\u00bf]")
-
-_PUA_RANGES = ((0xE000, 0xF8FF), (0xF0000, 0xFFFFD), (0x100000, 0x10FFFD))
 
 ISSUE_CODES = (
     "not_nfc",
@@ -56,8 +54,7 @@ DEFAULT_FLAGGED_THRESHOLD = 0.02
 
 
 def _in_pua(char: str) -> bool:
-    cp = ord(char)
-    return any(lo <= cp <= hi for lo, hi in _PUA_RANGES)
+    return in_private_use_area(char)
 
 
 def qa_text(text: str) -> list[str]:

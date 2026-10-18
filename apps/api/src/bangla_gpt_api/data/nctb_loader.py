@@ -7,6 +7,11 @@ Class-level detection is DERIVED from book front matter; sources where the
 class cannot be determined are indexed under every class in their declared
 level range ONLY when ``multi_class_fallback=True`` — otherwise they are
 skipped. This keeps class filtering honest instead of inventing metadata.
+
+Served-text quality: private-use glyph residue (symbol-font bullets) is
+replaced by spaces, and chunks whose text is still detectably legacy-Bijoy
+ASCII are dropped with a count — an index must never serve either
+(AUD-A1-01/AUD-A1-03; content QA's ``qa_text`` is the contract).
 """
 
 from __future__ import annotations
@@ -16,6 +21,8 @@ import logging
 from pathlib import Path
 
 from bangla_gpt_api.curriculum.models import Chunk, CurriculumMeta
+from bangla_gpt_api.nctb.bijoy import is_likely_legacy_bijoy
+from bangla_gpt_api.nctb.normalize import strip_private_use
 from bangla_gpt_api.services.safety import strip_injections
 
 logger = logging.getLogger(__name__)
@@ -73,6 +80,7 @@ def load_nctb_corpus(
 
     chunks: list[Chunk] = []
     injection_drops_total = 0
+    legacy_drops_total = 0
     for path in sorted(chunks_dir.glob("*.chunks.jsonl")):
         source_id = path.name.removesuffix(".chunks.jsonl")
         report = reports.get(source_id, {})
@@ -91,8 +99,11 @@ def load_nctb_corpus(
                 if not line.strip():
                     continue
                 data = json.loads(line)
-                text = data["text"]
-                if not text:
+                text = strip_private_use(data["text"])
+                if not text.strip():
+                    continue
+                if is_likely_legacy_bijoy(text):
+                    legacy_drops_total += 1
                     continue
                 # Same ingest-time injection filter the sample corpus gets
                 # (services/safety.py documents it as the first of the two
@@ -134,6 +145,12 @@ def load_nctb_corpus(
         logger.warning(
             "nctb_loader: dropped %d prompt-injection sentences at load time",
             injection_drops_total,
+        )
+    if legacy_drops_total:
+        logger.warning(
+            "nctb_loader: dropped %d chunks with unreadable legacy-Bijoy ASCII; "
+            "rebuild the affected sources with the conversion stage",
+            legacy_drops_total,
         )
     return chunks
 
