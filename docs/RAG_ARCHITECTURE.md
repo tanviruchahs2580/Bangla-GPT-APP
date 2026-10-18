@@ -146,20 +146,26 @@ vector store, and an LLM faithfulness judge (see evaluation/metrics.py,
 ## Measured baseline (real corpus, 2,508 chunks, this commit)
 
 The committed `data/nctb/retrieval_eval.json` is the record of truth for
-these numbers: this table quotes it verbatim (the earlier text sat on values
-from an interim local run — build 23.9 s, latency 127/224 ms — that the
-committed artifact superseded), and any retrieval change regenerates the
-artifact locally, with the diff reviewed as retrieval evidence.
+these numbers: this table quotes it (any retrieval change regenerates the
+artifact locally, with the diff reviewed as retrieval evidence). Recall
+values reproduced across three runs on the audit host; latency values did
+not — p95 moved between 133 ms and 1,010 ms with host load, so treat the
+latency row as indicative and re-measure on a quiet host before using it.
 
 | Metric | Before rework | After rework (committed artifact) |
 |---|---|---|
-| Index build | 0.36 s (lexical only) | 26.5 s (lexical + vector + vocabulary) |
-| Family A self-sentence recall@1 / @5 (n=100) | 0.38 / 1.00 | **0.98 / 0.98** |
-| Family A MRR | — (not computed) | 0.61 |
+| Index build | 0.36 s (lexical only) | 64.4 s (lexical + vector + vocabulary; 15–64 s observed for the same corpus under different host load) |
+| Family A self-sentence recall@1 / @5 (n=100) | 0.38 / 1.00 | **0.51 / 0.99** |
+| Family A MRR | — (not computed) | 0.69 |
 | Family B chapter-title recall@1 / @5 (n=80) | 0.225 / 0.525 | **1.00 / 1.00** |
 | Family B MRR | — (not computed) | 1.00 |
 | Adversarial refusal rate | 1.00 | **1.00** |
-| Search latency p50 / p95 (hybrid, real corpus) | — | 120 ms / 253 ms |
+| Search latency p50 / p95 (hybrid, real corpus) | — | 337 ms / 829 ms (host-load dependent, see note above) |
+
+Recall@1 here is rank-1 membership only. An earlier revision of the harness
+appended `1.0 if matched[:1]` — a non-empty top-k membership list — so it
+reported recall@1 = recall@5 (0.98 / 0.98 alongside an MRR of 0.61, an
+impossible triple) until the metric was corrected and pinned by tests.
 
 Golden-set regression discipline (unchanged contract, still enforced in CI):
 the 634-item golden suite + 16-item red-team set run through the hermetic mock
