@@ -176,6 +176,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate the CHANGELOG for the delivery record
 - docs: regenerate the CHANGELOG for the deployment record
 - docs: regenerate the CHANGELOG for the injection screen
+- docs: regenerate the CHANGELOG for the key-prop fix
 - docs: regenerate the CHANGELOG for the locative reclassification fix
 - docs: regenerate the CHANGELOG for the post-merge CI record
 - docs: regenerate the CHANGELOG for the redeploy record
