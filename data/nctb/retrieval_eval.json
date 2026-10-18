@@ -1,10 +1,10 @@
 {
   "corpus_chunks": 2508,
-  "index_build_seconds": 26.471,
+  "index_build_seconds": 15.501,
   "served_index": "hybrid",
   "family_A_self_sentence": {
     "n": 100,
-    "recall_at_1": 0.98,
+    "recall_at_1": 0.38,
     "recall_at_5": 0.98,
     "mrr": 0.6107
   },
@@ -15,12 +15,12 @@
     "mrr": 1.0
   },
   "family_C_adversarial_refusal_rate": 1.0,
-  "search_latency_p50_ms": 120.23,
-  "search_latency_p95_ms": 252.94,
+  "search_latency_p50_ms": 92.99,
+  "search_latency_p95_ms": 133.27,
   "baseline_lexical": {
     "family_A_self_sentence": {
       "n": 100,
-      "recall_at_1": 0.98,
+      "recall_at_1": 0.38,
       "recall_at_5": 0.98,
       "mrr": 0.6098
     },

@@ -53,6 +53,15 @@ def _rank_of(hits, wanted_units: set[str]) -> int:
     return 0
 
 
+def _recall_at_1(matched_ranks: list[int]) -> float:
+    """1.0 only when the wanted evidence unit sits at rank 1.
+
+    ``matched_ranks`` holds the 1-based positions where the evidence unit
+    occurred in the top-k; membership alone is Recall@k, not Recall@1.
+    """
+    return 1.0 if matched_ranks and matched_ranks[0] == 1 else 0.0
+
+
 def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -102,7 +111,7 @@ def main() -> int:
                 for position, hit in enumerate(hits, start=1)
                 if evidence_unit(hit.chunk.id) == base
             ]
-            stats_a[name]["recall_at_1"].append(1.0 if matched[:1] else 0.0)
+            stats_a[name]["recall_at_1"].append(_recall_at_1(matched))
             stats_a[name]["recall_at_5"].append(1.0 if matched else 0.0)
             # The RANK (1-based) feeds the MRR helper — it computes the
             # reciprocal itself; feeding the reciprocal here would

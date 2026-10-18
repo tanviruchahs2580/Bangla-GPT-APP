@@ -83,5 +83,35 @@ def test_eval_script_refuses_to_run_without_chunks(tmp_path, monkeypatch, capsys
     assert "NO_INDEXABLE_CHUNKS" in capsys.readouterr().out
 
 
+def test_recall_at_1_counts_rank_one_only() -> None:
+    """Top-k membership must not be reported as Recall@1 (AUD-A1-02).
+
+    The 0.9x-era harness appended ``1.0 if matched[:1]`` — a non-empty
+    membership list — so Recall@1 always equalled Recall@5 while MRR
+    (0.61) contradicted it. Rank 1 only.
+    """
+    module = _load_script()
+    assert module._recall_at_1([1, 4]) == 1.0
+    assert module._recall_at_1([2]) == 0.0
+    assert module._recall_at_1([3, 5]) == 0.0
+    assert module._recall_at_1([]) == 0.0
+
+
+def test_family_a_recall_at_1_never_exceeds_recall_at_5(tmp_path, monkeypatch) -> None:
+    corpus = tmp_path / "nctb"
+    _write_synthetic_corpus(corpus)
+    module = _load_script()
+    monkeypatch.setattr(sys, "argv", ["evaluate_nctb_retrieval.py", str(corpus)])
+
+    assert module.main() == 0
+
+    report = json.loads((corpus / "retrieval_eval.json").read_text(encoding="utf-8"))
+    for lane in ("family_A_self_sentence", "baseline_lexical"):
+        block = (
+            report[lane] if lane == "family_A_self_sentence" else report[lane]["family_A_self_sentence"]
+        )
+        assert block["recall_at_1"] <= block["recall_at_5"]
+
+
 if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__])
