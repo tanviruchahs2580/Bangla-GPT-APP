@@ -11,16 +11,20 @@ import re
 from dataclasses import dataclass
 
 SAFETY_ANSWER = "এই প্রশ্নের উত্তর এই প্ল্যাটফর্মে দেওয়া যাচ্ছে না। এটি আপনার জন্য ক্ষতিকর হতে পারে।"
+# AUD-A2: the previous copy printed an unverified mental-health helpline
+# number. It was removed rather than guessed at; owner action — a number may
+# only be re-added after its accuracy is verified (see
+# docs/LAUNCH_READINESS_CHECKLIST.md, "Helpline accuracy").
 SELF_HARM_ANSWER = (
     "আপনি নিজেকে কষ্ট দিতে চাইলে অনুগ্রহ করে কাছের কোনো বড় মানুষ, "
     "অভিভাবক বা শিক্ষককে সঙ্গে কথা বলুন। আপনি গুরুত্বপূর্ণ — সাহায্য পাওয়া সম্ভব। "
-    "জাতীয় মানসিক স্বাস্থ্য সহায়তা: ০৯৬৬৬-৭৭৭২২২।"
+    "তাত্ক্ষণিক বিপদে থাকলে স্থানীয় জরুরি সেবাকে জানান।"
 )
 
 # Category -> compiled regex over the normalized question text.
 # Teens on mobile keyboards frequently type romanized Bangla ("Banglish"),
-# so the self-harm category — the one with a helpline response — also
-# carries romanized/English variants. Keep the set conservative: these
+# so the self-harm category — the one with a dedicated supportive response —
+# also carries romanized/English variants. Keep the set conservative: these
 # regexes refuse real children's questions.
 _PATTERNS: tuple[tuple[str, str], ...] = (
     # Self-harm / suicide ideation or method-seeking
