@@ -130,9 +130,8 @@ export default function TeacherHomePage() {
       <Card title={t("thQuickCreate")}>
         <div className="create-grid create-grid-compact" role="list">
           {QUICK.map(({ kind, label, icon: Icon }) => (
-            <div role="listitem">
+            <div role="listitem" key={kind}>
               <button
-                key={kind}
                 className="create-tile"
                 onClick={() => navigate(`/teacher/create?kind=${kind}`)}
               >
