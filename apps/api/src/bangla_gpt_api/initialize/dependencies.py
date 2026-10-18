@@ -12,6 +12,7 @@ provider/engine to ``build_lifespan``.
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
@@ -26,7 +27,7 @@ from bangla_gpt_api.data.loader import load_sample_corpus
 from bangla_gpt_api.db.models import User
 from bangla_gpt_api.db.session import init_db, make_session_factory
 from bangla_gpt_api.logging_config import json_log
-from bangla_gpt_api.metrics import RAG_INDEX_CHUNKS
+from bangla_gpt_api.metrics import RAG_INDEX_BUILD_SECONDS, RAG_INDEX_CHUNKS
 from bangla_gpt_api.retrieval.hybrid_index import HybridIndex  # noqa: F401 (re-exported for tests)
 from bangla_gpt_api.retrieval.vocabulary import TermStats
 from bangla_gpt_api.routers.deps import AppContext
@@ -251,7 +252,9 @@ def build_dependencies(
         from bangla_gpt_api.caching import RAG_CACHE_TTL_SECONDS, CachedRankingIndex
         from bangla_gpt_api.retrieval.embedding import build_embedder
 
-        if settings.retrieval_mode.strip().lower() == "hybrid":
+        retrieval_mode = settings.retrieval_mode.strip().lower()
+        index_build_started = time.perf_counter()
+        if retrieval_mode == "hybrid":
             if _hi_cls is None:
                 from bangla_gpt_api.retrieval.hybrid_index import HybridIndex as _real_hybrid
 
@@ -263,6 +266,19 @@ def build_dependencies(
             from bangla_gpt_api.retrieval.bm25 import BM25Index
 
             inner = BM25Index(chunks)
+        index_build_seconds = time.perf_counter() - index_build_started
+        # Boot cost is part of the retrieval architecture (full rebuild per
+        # worker, deferred persistence): count it so a slow boot is
+        # attributable in /metrics, not only in the boot log.
+        RAG_INDEX_BUILD_SECONDS.labels(mode=retrieval_mode).observe(index_build_seconds)
+        json_log(
+            logger,
+            logging.INFO,
+            "rag_index_built",
+            mode=retrieval_mode,
+            chunks=len(chunks),
+            build_seconds=round(index_build_seconds, 2),
+        )
 
         index = CachedRankingIndex(inner, cache, ttl=RAG_CACHE_TTL_SECONDS)
 

@@ -77,6 +77,13 @@ Runtime execution notes (2026-10-18 hardening):
   drift under a new provider/corpus is observable in /metrics. The
   `HighRAGRefusalRate` / `RAGCitationCheckFailures` alerts in
   deploy/prometheus/alerts.yml read these series.
+* Boot cost is observable too: `bgpt_rag_index_build_seconds{mode}` records
+  index construction per worker (plus a `rag_index_built` boot log line) —
+  the signal that says when the deferred persistence/pgvector work becomes
+  necessary and which mode a slow boot ran.
+* Readiness is truthful about this subsystem: `/ready` and `/status` report
+  503/degraded when the index is absent, instead of accepting traffic that
+  would answer every tutoring turn with 503.
 * Streaming and non-streaming share one refusal contract: a refusal (answer
   could not be vetted) carries `citation_verified=None` on both paths.
 ```

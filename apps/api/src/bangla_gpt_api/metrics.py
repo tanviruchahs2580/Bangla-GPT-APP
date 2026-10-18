@@ -59,6 +59,18 @@ RAG_RETRIEVAL_LATENCY_SECONDS = Histogram(
     registry=REGISTRY,
 )
 
+# Boot-time index construction. The index is rebuilt in-memory per worker at
+# start (the accepted design at this corpus scale), so build duration is the
+# signal that says when the deferred pgvector/persistence work becomes
+# necessary, and it makes a slow boot attributable during a rolling deploy.
+RAG_INDEX_BUILD_SECONDS = Histogram(
+    "bgpt_rag_index_build_seconds",
+    "Wall time to build the retrieval index at process boot.",
+    labelnames=["mode"],
+    buckets=(0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0),
+    registry=REGISTRY,
+)
+
 # Grounding-gate verdicts: one per tutoring turn. Aggregate volume backs the
 # HighRAGRefusalRate alert (denominator); a refuse-heavy shift is the
 # signature of silent corpus degradation or a retrieval regression.
