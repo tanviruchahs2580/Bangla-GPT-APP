@@ -35,6 +35,7 @@ CI must be green on your branch. That means, at minimum:
 | API lint + format | `ruff check .` and `ruff format --check .` | `ruff format .` then re-check |
 | API type check | `mypy src` | From `apps/api` — matches the CI step |
 | API tests | `pytest` | Add tests for behaviour you change |
+| API tests on Postgres | `BGPT_TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/bgpt_test pytest` | Optional locally, required in CI. Runs the same domain suite on the engine production uses, with per-test truncation isolation (`tests/conftest.py`); the CI `Postgres engine check` job runs it automatically |
 | Dependencies | `pip-compile --generate-hashes --allow-unsafe --extra dev --strip-extras` | Regenerate `constraints.txt` when `pyproject.toml` changes — the guardrails job fails if a declared dependency is missing or its pin violates the declared specifier |
 | Migrations | `alembic check` | Schema and models must not drift |
 | Web tests | `npm test` | vitest |

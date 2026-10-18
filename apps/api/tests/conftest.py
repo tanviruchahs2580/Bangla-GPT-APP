@@ -36,13 +36,26 @@ _ORIG_INIT = Settings.__init__
 _HERMETIC_MODEL_CONFIG = dict(_ORIG_MODEL_CONFIG)
 _HERMETIC_MODEL_CONFIG["env_file"] = None
 
+# Opt-in: run the domain suite against a real PostgreSQL database.
+# `BGPT_TEST_DATABASE_URL` (deliberately NOT a Settings field, so the
+# per-test env scrub below cannot remove it) switches every test that uses
+# the default hermetic database to this URL, with table truncation between
+# tests for isolation. The postgres CI job sets it so the production engine
+# runs the same domain suite SQLite runs -- catching engine-specific drift
+# (JSON/boolean/UPSERT/transaction semantics) that a SQLite-only suite
+# cannot see. Tests that pass an explicit database_url (engine-specific
+# tests) keep their engine either way.
+_PG_TEST_URL = os.environ.get("BGPT_TEST_DATABASE_URL", "").strip()
+
+_pg_engine = None
+
 
 def _hermetic_init(self, *args, **kwargs):  # type: ignore[no-untyped-def]
     kwargs["_env_file"] = None
     # Explicit kwargs/env still win (pydantic-settings precedence); only the
-    # file-DB default is replaced, so tests never share./bangla_gpt.db.
+    # default is replaced, so tests never share ./bangla_gpt.db.
     if "database_url" not in kwargs and "DATABASE_URL" not in os.environ:
-        kwargs["database_url"] = "sqlite://"
+        kwargs["database_url"] = _PG_TEST_URL or "sqlite://"
     return _ORIG_INIT(self, *args, **kwargs)
 
 
@@ -77,3 +90,38 @@ def _no_dotenv(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(Settings, "__init__", _hermetic_init)
     for field in Settings.model_fields:
         monkeypatch.delenv(field.upper(), raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _pg_test_isolation():
+    """Truncate every table after each test when running on PostgreSQL.
+
+    The default hermetic database is per-engine in-memory SQLite, which is
+    isolated by construction. A shared PostgreSQL database is not: without
+    cleanup, a test's committed rows (users, schools, conversations) leak
+    into the next test and produce order-dependent failures -- the reason a
+    full-suite PG run was previously impossible rather than merely absent.
+    Truncation runs after the test so a failing test's data is still
+    inspectable in the failure output; RESTART IDENTITY keeps id-based
+    assertions deterministic, and CASCADE follows the FK graph in one
+    statement.
+    """
+    yield
+    if not _PG_TEST_URL:
+        return
+    global _pg_engine
+    from sqlalchemy import create_engine
+    from sqlalchemy.exc import ProgrammingError
+
+    from bangla_gpt_api.db.base import Base
+
+    if _pg_engine is None:
+        _pg_engine = create_engine(_PG_TEST_URL)
+    table_names = ", ".join(sorted(Base.metadata.tables))
+    try:
+        with _pg_engine.begin() as conn:
+            conn.exec_driver_sql(f"TRUNCATE {table_names} RESTART IDENTITY CASCADE")
+    except ProgrammingError:
+        # Schema not created yet (first test that builds the app does it);
+        # nothing to clean in that case.
+        pass
