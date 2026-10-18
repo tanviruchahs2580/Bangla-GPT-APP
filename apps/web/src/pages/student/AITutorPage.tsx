@@ -437,7 +437,13 @@ export default function AITutorPage() {
           placeholder={t("searchHistory")}
           aria-label={t("searchHistory")}
           onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && runSearch()}
+          onKeyDown={(e) => {
+            // A Bangla phonetic/IME keyboard confirms a candidate with Enter
+            // while it is still composing; searching here would run on a
+            // half-typed word (AUD-G-04).
+            if (e.key === "Enter" && !e.nativeEvent.isComposing)
+              void runSearch();
+          }}
         />
         <Button
           variant="ghost"
@@ -483,7 +489,11 @@ export default function AITutorPage() {
                 aria-label={t("rename")}
                 onChange={(e) => setRenameValue(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") void commitRename(c.id);
+                  // Enter mid-composition belongs to the IME, not to us
+                  // (AUD-G-04); Escape still leaves the rename.
+                  if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                    void commitRename(c.id);
+                  }
                   if (e.key === "Escape") setRenamingId(null);
                 }}
                 onBlur={() => void commitRename(c.id)}
@@ -815,7 +825,12 @@ export default function AITutorPage() {
             value={input}
             placeholder={t("askPlaceholder")}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && send()}
+            onKeyDown={(e) => {
+              // The Enter that confirms a phonetic/IME candidate is composed,
+              // not sent: without this a Bangla keyboard submitted a half-word
+              // on every selection (AUD-G-04).
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) void send();
+            }}
             aria-label={t("askPlaceholder")}
           />
           <input

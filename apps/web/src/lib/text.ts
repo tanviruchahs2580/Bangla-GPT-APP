@@ -1,6 +1,48 @@
 import { t } from "../i18n";
 
 /**
+ * Truncate `text` to at most `limit` code points, never cutting inside a
+ * grapheme cluster.
+ *
+ * `String.prototype.slice` counts UTF-16 code units, so `"ক্ষম".slice(0, 2)`
+ * returns `"ক্"` — a consonant followed by a dangling virama, which renders as
+ * a broken conjunct and reads as a typo (AUD-G-04). Bengali builds aksharas
+ * from base letters, the virama U+09CD and dependent vowel signs, so the cut
+ * has to land on a cluster boundary (UAX #29).
+ *
+ * The budget stays in code points because that is the unit the API counts:
+ * `subject_focus` is validated with Python's `len()` as 1-60 characters
+ * (`routers/parent.py`), and one cluster is several code points — a 60-cluster
+ * result can be three times the accepted length. `Intl.Segmenter` with
+ * `granularity: "grapheme"` does the splitting; runtimes without it (older
+ * Safari, some WebViews) fall back to code points, which at least never splits
+ * a surrogate pair.
+ */
+export function truncateGraphemes(text: string, limit: number): string {
+  if (limit <= 0) return "";
+  let out = "";
+  let used = 0;
+  for (const cluster of graphemeClusters(text)) {
+    const size = Array.from(cluster).length;
+    if (used + size > limit) break;
+    out += cluster;
+    used += size;
+  }
+  return out;
+}
+
+/** Grapheme clusters via `Intl.Segmenter`, or code points without it. */
+function graphemeClusters(text: string): string[] {
+  if (typeof Intl.Segmenter === "function") {
+    const segmenter = new Intl.Segmenter(undefined, {
+      granularity: "grapheme",
+    });
+    return Array.from(segmenter.segment(text), (part) => part.segment);
+  }
+  return Array.from(text);
+}
+
+/**
  * Coerce an unknown value into text that is safe to show a user.
  *
  * `String({})` produces "[object Object]", so anything that is not already a

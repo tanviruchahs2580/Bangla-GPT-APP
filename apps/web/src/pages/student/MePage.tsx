@@ -1,4 +1,4 @@
-import { asText, suggestionSentence } from "../../lib/text";
+import { asText, suggestionSentence, truncateGraphemes } from "../../lib/text";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -126,7 +126,10 @@ export default function MePage() {
     setPrefsMsg(null);
     setPrefsOk(false);
     try {
-      const trimmed = focus.trim().slice(0, 60);
+      // Grapheme-safe: a raw slice(0, 60) can cut a Bangla conjunct in half
+      // (AUD-G-04). The 60-code-point budget matches the input's maxLength and
+      // the API's own 1-60 validation of subject_focus.
+      const trimmed = truncateGraphemes(focus.trim(), 60);
       await patchMyPrefs({
         memory_enabled: memory,
         // subject_focus is always sent, as null when the box is empty, because
