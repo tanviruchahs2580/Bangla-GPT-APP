@@ -15,7 +15,11 @@ export function AiQualityCard() {
     track("report_viewed", { role: "admin", period: "30d" });
     get<AdminAiQuality>("/admin/ai/quality?days=30")
       .then((r) => alive && setQ(r ?? null))
-      .catch(() => {});
+      .catch((err) => {
+        // AUD-CD-07: the panel renders nothing when the request fails, so the
+        // failure used to be invisible to the admin and to the logs alike.
+        console.error("admin AI quality load failed", err);
+      });
     return () => {
       alive = false;
     };

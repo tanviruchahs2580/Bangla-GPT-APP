@@ -326,6 +326,9 @@ export function LearnChapterPage() {
   });
   const [speaking, setSpeaking] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
+  // AUD-G-07: a rejected bookmark write is rolled back and reported here,
+  // next to the control, without dropping the reader out of the chapter.
+  const [error, setError] = useState<string | null>(null);
   // unified workspace tabs — পড়া | অনুশীলন | জিজ্ঞাসা (no page exit).
   const [tab, setTab] = useState<"read" | "practice" | "ask">("read");
   // offline-copy availability + download button state
@@ -350,7 +353,11 @@ export function LearnChapterPage() {
       .then((rec) => {
         if (alive) setSaved(!!rec);
       })
-      .catch(() => {});
+      .catch((err) => {
+        // AUD-CD-07: an absent offline copy is normal, but a rejected
+        // IndexedDB read is not, and it used to disappear silently.
+        console.error("offline chapter copy check failed", err);
+      });
     return () => {
       alive = false;
     };
@@ -379,7 +386,11 @@ export function LearnChapterPage() {
         chapter,
         class_level: classLevel,
         read_pct: 40,
-      }).catch(() => {});
+      }).catch((err) => {
+        // AUD-CD-07: progress writes are best-effort, but a rejected one used
+        // to leave no trace anywhere.
+        console.error("learn progress write failed", err);
+      });
       track("chapter_read", { subject, chapter });
     }, 1500);
     let lastReported = 70;
@@ -405,7 +416,10 @@ export function LearnChapterPage() {
         class_level: classLevel,
         read_pct: pct,
         completed: pct > 90,
-      }).catch(() => {});
+      }).catch((err) => {
+        // AUD-CD-07: same as the initial write — throttled, not silent.
+        console.error("scroll progress write failed", err);
+      });
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => {
@@ -417,6 +431,7 @@ export function LearnChapterPage() {
   const toggleBookmark = async () => {
     if (!subject || !chapter || !classLevel) return;
     const next = !bookmarked;
+    setError(null);
     setBookmarked(next);
     try {
       await upsertLearnProgress({
@@ -425,9 +440,14 @@ export function LearnChapterPage() {
         class_level: classLevel,
         bookmarked: next,
       });
-    } catch {
-      /* Bookmarking is best-effort: a failed write must not drop the reader
-         out of the chapter they are reading. */
+    } catch (err) {
+      // AUD-G-07: the optimistic flip used to stay on screen after a rejected
+      // write, so the reader saw a bookmark the server never stored. Roll it
+      // back and report it the way the rest of the page does; the reader is
+      // not navigated away by this.
+      setBookmarked(!next);
+      setError(t("errorGeneric"));
+      console.error("bookmark toggle failed", err);
     }
   };
 
@@ -521,6 +541,7 @@ export function LearnChapterPage() {
               />{" "}
               {t("bookmark")}
             </button>
+            {error && <p className="error">{error}</p>}
             {ttsSupported && (
               <button
                 className="btn btn-sm btn-ghost"

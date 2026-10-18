@@ -154,7 +154,10 @@ export function CreateHub({
   useEffect(() => {
     get<TeacherWorkload | null>("/teacher/workload")
       .then((w) => setWorkload(w ?? null))
-      .catch(() => {});
+      .catch((err) => {
+        // AUD-CD-07: a failed load silently dropped the workload strip.
+        console.error("teacher workload load failed", err);
+      });
   }, []);
 
   const body = () => {

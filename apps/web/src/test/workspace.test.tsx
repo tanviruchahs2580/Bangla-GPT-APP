@@ -119,6 +119,33 @@ describe("unified workspace tabs", () => {
     expect(await screen.findByText("কোষ কী")).toBeTruthy();
   });
 
+  it("rolls a rejected bookmark back and reports it (AUD-G-07)", async () => {
+    const user = userEvent.setup();
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    // The optimistic flip used to survive a rejected write: the reader saw a
+    // bookmark the server never stored, with no rollback and no message.
+    apiMock.upsertLearnProgress.mockRejectedValue(new Error("write failed"));
+    renderChapter();
+
+    const bookmark = await screen.findByRole("button", {
+      name: t("bookmark"),
+    });
+    expect(bookmark).toHaveAttribute("aria-pressed", "false");
+
+    await user.click(bookmark);
+
+    expect(await screen.findByText(t("errorGeneric"))).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: t("bookmark") })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(errorSpy).toHaveBeenCalledWith(
+      "bookmark toggle failed",
+      expect.any(Error),
+    );
+    errorSpy.mockRestore();
+  });
+
   it("read tab reports a failed fetch as an error, not as an empty subject", async () => {
     apiMock.getChapterContent
       .mockRejectedValueOnce(new Error("boom"))

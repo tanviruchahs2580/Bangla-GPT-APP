@@ -601,7 +601,11 @@ function ShortTestList() {
       .then((r) => {
         if (live) setRows((r as typeof rows) ?? []);
       })
-      .catch(() => {});
+      .catch((err) => {
+        // AUD-CD-07: a failed load rendered the "no tests yet" empty state,
+        // which reads as a fact rather than an error.
+        console.error("short tests load failed", err);
+      });
     return () => {
       live = false;
     };

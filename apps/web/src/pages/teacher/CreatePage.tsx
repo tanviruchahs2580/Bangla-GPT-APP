@@ -312,12 +312,18 @@ export function ShortTestFlow() {
         setRooms(rs ?? []);
         setRoomId(rs[0]?.id ?? null);
       })
-      .catch(() => {});
+      .catch((err) => {
+        // AUD-CD-07: the classroom picker went silently empty; the teacher
+        // could not tell "no classes" from "the request failed".
+        console.error("teacher classrooms load failed", err);
+      });
     get<ShortTest[]>("/teacher/shorttests")
       .then((rows) => {
         if (live) setTests(rows ?? []);
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error("short tests load failed", err);
+      });
     return () => {
       live = false;
     };
@@ -479,7 +485,11 @@ export function LessonPlanFlow() {
       .then((rs) => {
         if (live) setRooms(rs ?? []);
       })
-      .catch(() => {});
+      .catch((err) => {
+        // AUD-CD-07: generate() then threw a bare "no classroom" with no
+        // explanation of why the list was empty.
+        console.error("teacher classrooms load failed (lesson plan)", err);
+      });
     return () => {
       live = false;
     };
