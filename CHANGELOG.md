@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- feat(api): production connection posture, truthful readiness, boot index metric
+- feat(api): production connection posture, truthful readiness, boot index metric; full-suite Postgres parity in CI (#29)
 - feat(i18n): land Bangla copy for the status and impersonation strings
 - feat(rag): event-loop hardening, hot-path observability, follow-up retrieval; gate CI on retrieval baselines + CodeQL SAST (#27)
 - feat(rag): retrieval-quality rework - fair gate, query lanes, measured rank lift
@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): close two moderation false negatives and cover the chat routes
 - fix(api): derive the school analytics day window in Asia/Dhaka
 - fix(api): drop an unused variable the new RUF059 rule caught
+- fix(api): drop the unverified helpline number from self-harm support copy
 - fix(api): gate evals on hybrid retrieval, de-tautologize golden set, precompute BM25 trigrams, single-pass redteam (A13, A8, A18)
 - fix(api): harden authentication, session end and abuse limits
 - fix(api): impersonation revocation fails closed when cache is down (F-08)
@@ -40,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): one weak-chapter rule, a survivable mastery rollup and content-verified images
 - fix(api): record an explicit auth decision on every public operation
 - fix(api): redact exception tracebacks in logs
+- fix(api): refuse account deletion from an impersonation session
 - fix(api): remove the dead 'answer is None' regeneration branch (A25)
 - fix(api): repair corrupted Bengali in tutor prompts, feedback IDOR, dead code
 - fix(api): repair the retrieval evaluation's coverage-gate call
@@ -70,20 +72,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(db): reconcile ORM/migration drift so alembic check passes
 - fix(encoding): add .gitattributes and repair three encoding defects
 - fix(i18n): put the parent digest and the printed papers in Bangla, and correct five copy defects
+- fix(ops): point the Grafana dashboard at the exported metric names
 - fix(ops): stop publishing the API on a random host port, and make the release gate real
 - fix(pdf): enable Bengali complex-script shaping in PDF renderers
 - fix(rag): framing-plane coverage, cross-script gate resolution, in-corpus weighting
 - fix(rag): locative reclassification + short-token roman guard
+- fix(rag): report true recall@1 in retrieval evaluation
 - fix(rag): roman-lane floor, edit-similarity rank, MRR unit, trailing newline
 - fix(rag): runtime prompt-injection screening at the query boundary
+- fix(rag): strip symbol-font PUA residue and gate corpus quality at build and load
 - fix(sec): refuse unsafe production defaults at boot
 - fix(sec): stop serving the OpenAPI reference in production
+- fix(web): WCAG 2.2 fixes on the public routes
 - fix(web): clear footer from bottom nav + cut a round-trip from login
 - fix(web): clear the two WCAG AA failures axe found on the tutor screen
 - fix(web): close-JSDoc sequence inside edge-proxy comment broke Vercel TS build
 - fix(web): configurable production API origin via edge proxy (FE-01)
+- fix(web): correct the password-hashing claim in the legal copy
+- fix(web): drop the regex HTML stripper and guard the image-preview sink
 - fix(web): guarantee minimum gap between stacked page sections
 - fix(web): guard the tutor turn, bound stalled requests and clear data on sign-out
+- fix(web): keep Enter out of IME composition and truncate by grapheme
 - fix(web): let an anonymous visitor change the interface language
 - fix(web): localize consent/invite copy, theme icon sync, error states, icon cleanup
 - fix(web): make the register screen's email-verification step usable
@@ -94,6 +103,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): route /api/* explicitly to the edge proxy function
 - fix(web): stop rendering remote images in answers and announce each answer once
 - fix(web): stop showing failures as facts, and read API timestamps as UTC
+- fix(web): stop swallowing failed writes; roll back the bookmark toggle
 - fix: complete admin password-change flow, tutor typo gate, roster-scoped stats, quiz distractors, i18n
 - fix: land the verified remediation on current main (CORS-adjacent, budget, UI states)
 - fix: resolve mypy 2.4.0 type errors in teacher/school/common/weakness
@@ -141,10 +151,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(qa): record the post-merge CI evidence and the live Dependabot result
 - docs(qa): record the registration-backdrop change and its deployment
 - docs(qa): record the role-based acceptance run and the live deployment
+- docs(rag): correct the measured-baseline table to the fixed harness
 - docs: add 2026-10-06 QA audit and final certification reports
 - docs: add a CHANGELOG generated from git history, and a check that keeps it honest
 - docs: add final QA report for 2026-10-07 UAT completion
 - docs: correct stale facts and move point-in-time reports to the archive
+- docs: fix the loader path named in the NCTB pipeline guide
 - docs: phase-2 CI/CD pipeline execution record (v0.9.2 shipped through full pipeline)
 - docs: pin the deploy host key, make the quick starts real, and repair script hygiene
 - docs: purge session-report accumulation, rewrite README, add docs index
@@ -171,11 +183,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate the CHANGELOG for the test and QA-record commits
 - docs: regenerate the CHANGELOG for this branch's commits
 - docs: ship the bundled font's licence, third-party notices, contributing guide
+- docs: truthful disclosure channel, corpus step, pipeline gate and PDF engine copy
 
 ### Tests
 
 - test(api): cover school admin fallbacks and tenant guards
-- test(ci): run the full domain suite on Postgres with truncation isolation
 - test(school): cover the aggregation routes TST-04 flagged as unexercised
 - test(tenancy): cover school dashboard routes across two tenants
 - test(web): assert the changed behaviour instead of the old literals
