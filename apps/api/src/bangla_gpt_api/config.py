@@ -297,27 +297,6 @@ class Settings(BaseSettings):
         return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
 
 
-class SettingsRegistry:
-    """Thread-safe settings cache with optional hot-reload capability.
-
-    By default it uses:func:`get_settings` (cached singleton) for simplicity.
-    When ``force_reload=True`` is passed, a fresh ``Settings`` instance is
-    constructed (useful for tests or config-reload scenarios).
-    """
-
-    _settings: Settings | None = None
-
-    @classmethod
-    def get(cls, force_reload: bool = False) -> Settings:
-        if cls._settings is None or force_reload:
-            cls._settings = Settings()
-        return cls._settings
-
-    @classmethod
-    def clear(cls) -> None:
-        cls._settings = None
-
-
 @lru_cache
 def get_settings() -> Settings:
     return Settings()

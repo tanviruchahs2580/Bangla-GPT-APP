@@ -80,6 +80,10 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
+      # gunicorn >= 23 opens a control socket at $HOME/.gunicorn; with the
+      # read-only rootfs that write fails and every boot logs an ERROR. HOME
+      # points at the tmpfs /tmp already mounted below.
+      HOME: /tmp
       # E-18: settings .env.production.example documents and the deployment
       # guide requires, but this list never forwarded -- so a production boot
       # had no PII_ENC_KEY (a hard boot refusal) and no metrics gate. Every one
