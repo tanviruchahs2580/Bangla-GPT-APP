@@ -72,6 +72,21 @@ from .deps import (
     _provider_lacks_vision,
 )
 
+#: Headers every SSE response must carry (AUD-HI-09 / H-16).
+#:
+#: * ``X-Accel-Buffering: no`` is the de-facto nginx signal to disable
+#:   ``proxy_buffering`` for this response; without it an nginx-fronted
+#:   deployment (apps/web/deploy/nginx.conf) holds tokens until its buffer
+#:   fills or the stream ends, so students see a silent pause instead of a
+#:   stream. Caddy flushes ``text/event-stream`` immediately and ignores the
+#:   header, so it is harmless on the documented default topology.
+#: * ``Cache-Control: no-cache, no-transform`` keeps shared caches and
+#:   compression proxies from storing or re-framing a per-user answer stream.
+SSE_STREAM_HEADERS: dict[str, str] = {
+    "X-Accel-Buffering": "no",
+    "Cache-Control": "no-cache, no-transform",
+}
+
 router = APIRouter(responses=AUTH_GUARD_RESPONSES)
 
 logger = logging.getLogger(__name__)
@@ -608,7 +623,11 @@ async def stream_chat_message(
                 + "\n\n"
             )
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers=SSE_STREAM_HEADERS,
+    )
 
 
 # ------------------------------------------------------------------
