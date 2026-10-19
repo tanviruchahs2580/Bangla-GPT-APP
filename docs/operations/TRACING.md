@@ -82,14 +82,14 @@ query string) appears in any attribute.
 
 ## Privacy rules (minors-facing product)
 
-* **No question or answer text** on a span or a trace record: the LLM span
+- **No question or answer text** on a span or a trace record: the LLM span
   carries provider/model only, the DB span carries the statement with string
   literals replaced by `'?'`, and the per-stage records carry counts and ids.
-* **No query strings**: `/search?q=…` would put a student's wording into
+- **No query strings**: `/search?q=…` would put a student's wording into
   `http.url`; the server-request hook strips everything after `?`.
-* **No headers, no cookies, no bodies**: the ASGI instrumentation captures
+- **No headers, no cookies, no bodies**: the ASGI instrumentation captures
   none of them, and SQLAlchemy parameters are never recorded.
-* **Attribute filter**: `tracing.span(**attributes)` drops any key the log
+- **Attribute filter**: `tracing.span(**attributes)` drops any key the log
   redactor treats as sensitive (`logging_config.is_sensitive_key`), so a
   future call site cannot export a token by accident.
 
@@ -102,9 +102,9 @@ request-level correlation id" since AUD-HI-18, and operator queries use it.
 
 Joining the two worlds:
 
-* log line → trace: take `otel_trace_id` and look the trace up in the
+- log line → trace: take `otel_trace_id` and look the trace up in the
   collector;
-* trace → logs: the access line and every per-stage record of one request
+- trace → logs: the access line and every per-stage record of one request
   carry the same `trace_id` (the request id), so one
   `grep '"request_id": "<id>"'` reconstructs the pipeline.
 
@@ -127,12 +127,12 @@ server-side (PII-hint keys dropped, primitives only, 40-char cap —
 
 ## Cost and volume notes
 
-* One server span plus a handful of DB spans per request; the DB span count
+- One server span plus a handful of DB spans per request; the DB span count
   tracks the statement count, and the heaviest read paths are the dashboard
   fan-outs (see `docs/operations/PROFILE.md`).
-* `otel_trace_id`/`otel_span_id` add two fields to existing log lines, not
+- `otel_trace_id`/`otel_span_id` add two fields to existing log lines, not
   extra lines. The per-stage records remain the verbose layer and stay behind
   `TRACING_ENABLED`.
-* Sampling is the production knob: keep `parentbased_traceidratio` at a rate
+- Sampling is the production knob: keep `parentbased_traceidratio` at a rate
   the collector can store, and sample by trace id so a whole request is kept
   or dropped together.

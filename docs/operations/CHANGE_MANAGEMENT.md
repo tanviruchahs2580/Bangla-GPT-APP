@@ -52,13 +52,51 @@ AUD-A2-13 (A10-03), AUD-A2-06 (A5-02), AUD-A2-08 (A6-06).
 
 ## 3. Wiring status (honest, 2026-10-19)
 
-* Prompt versions ride generation traces (`services/tutor.py`).
-* Index version rides retrieval/generation traces and the retrieval cache key.
-* Model ids ride every `ai_call` line and the token/cost counters.
-* The admin AI-quality board exposes per-model and per-prompt aggregates; the
+- Prompt versions ride generation traces (`services/tutor.py`).
+- Index version rides retrieval/generation traces and the retrieval cache key.
+- Model ids ride every `ai_call` line and the token/cost counters.
+- The admin AI-quality board exposes per-model and per-prompt aggregates; the
   `prompt_version` dimension is the follow-up wiring named in
   `.audit/handoffs/api-rag2.md` (the endpoint itself lives in
   `routers/admin.py`, outside this change's ownership).
+- **Version-identity payload ready to serialize** (A10-03):
+  `bangla_gpt_api.evaluation.version_board.version_board(api_root,
+  index_fingerprint=…, embedding_model=…)` returns the prompt version, judge
+  prompt version, prompt-registry manifest digest and per-prompt versions,
+  index fingerprint (or an explicit `null` when the caller has no built
+  index), embedding model (or the empty-string stand-in), thresholds version
+  and the golden dataset/test-split hashes — every field read from the
+  artifact that owns it. `python -m bangla_gpt_api.evaluation.cli
+  --version-board` prints it today; adding it to `/admin/ai-quality` is a
+  schema field plus a two-line route change (exact snippet in
+  `.audit/handoffs/r3-ws2.md`), so the board can show *which* prompt, index
+  and embedding produced the counts it already shows.
+
+### Re-index drill (A10-03, exercised)
+
+Command: `cd apps/api && python -m bangla_gpt_api.evaluation.cli
+--reindex-drill --out eval/tmp/reindex_drill.json`. Artifact:
+`apps/api/eval/reindex_drill.json`; code `evaluation/reindex_drill.py`; tests
+`tests/test_eval3_rag_eval.py`.
+
+The drill builds three index generations over the same corpus (the incumbent
+default embedder and two candidates with different n-gram sets/dimensions —
+the only embedding change this environment can make without downloading
+weights), measures all of them on the frozen held-out split, applies the
+pre-registered decision rule (a candidate ships only if it **beats** the
+incumbent on Recall@5; a tie keeps the incumbent), and then pushes them
+through the real `IndexRegistry`: publish ×3, `rollback()` to the incumbent,
+assert the active pointer really changed (audit trail:
+`publish, publish, publish, rollback`).
+
+Last run: incumbent 0.9171 Recall@1 / 1.0 Recall@5; all three generations tie
+on the served metric because the sample corpus is saturated at Recall@5, so
+**nothing shipped** — and the drill says so instead of claiming a win. The
+dense-lane column is where the change is visible (0.9945 incumbent → 1.0 for
+the 3-5-gram candidate → 0.9724 for the deliberately weaker 1-2-gram
+candidate), which is the evidence an owner needs to know the corpus cannot
+resolve an embedding-only change and the real corpus must be used for that
+decision.
 
 ## 4. Exercise log
 

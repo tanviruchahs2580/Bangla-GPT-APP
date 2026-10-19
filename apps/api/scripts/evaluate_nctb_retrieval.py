@@ -27,11 +27,13 @@ Also emitted, because the audit found them unmeasured:
 * ``index_footprint`` — tracemalloc-measured build memory plus the served
   chunk/duplicate counts (AUD-A1-22, AUD-A1-06).
 
-Outputs data/nctb/retrieval_eval.json; the corpus text itself is NCTB source
-material and stays out of the repository (data/nctb/raw|extracted|normalized
-are gitignored — see docs/NCTB_DATA_PIPELINE.md), so the committed
-retrieval_eval.json IS this script's regression baseline: regenerate it
-locally after any retrieval change and read the diff.
+Outputs data/nctb/retrieval_eval.json by default (``--out PATH`` redirects it,
+which is how the one-command harness writes into an untracked directory); the
+corpus text itself is NCTB source material and stays out of the repository
+(data/nctb/raw|extracted|normalized are gitignored — see
+docs/NCTB_DATA_PIPELINE.md), so the committed retrieval_eval.json IS this
+script's regression baseline: regenerate it locally with an explicit
+``--out`` (or after a deliberate retrieval change) and read the diff.
 """
 
 from __future__ import annotations
@@ -90,6 +92,26 @@ def bootstrap_ci(
     means = []
     for _ in range(resamples):
         means.append(sum(values[rng.randrange(n)] for _ in range(n)) / n)
+    means.sort()
+    return [round(means[int(0.025 * resamples)], 4), round(means[int(0.975 * resamples)], 4)]
+
+
+def paired_bootstrap_ci(
+    diffs: list[float], *, seed: int, resamples: int = BOOTSTRAP_RESAMPLES
+) -> list[float]:
+    """95% CI of the mean paired difference (A4-04's Banglish gap).
+
+    The same chunk is queried in Bangla and in its romanised form, so the
+    difference is paired per chunk; resampling *pairs* keeps the per-chunk
+    difficulty out of the interval instead of inflating it.
+    """
+    if not diffs:
+        return [0.0, 0.0]
+    rng = random.Random(seed)
+    n = len(diffs)
+    means = []
+    for _ in range(resamples):
+        means.append(sum(diffs[rng.randrange(n)] for _ in range(n)) / n)
     means.sort()
     return [round(means[int(0.025 * resamples)], 4), round(means[int(0.975 * resamples)], 4)]
 
@@ -209,8 +231,21 @@ def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-    corpus_root = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("../../data/nctb")
-    seed = int(sys.argv[2]) if len(sys.argv) > 2 else DEFAULT_SEED
+    args = sys.argv[1:]
+    out_path: Path | None = None
+    # ``--out PATH`` redirects the artifact (A8-10: the one-command harness
+    # writes into an untracked directory and must not dirty this committed
+    # file). Everything else keeps the historical positional form the tests
+    # and docs use.
+    if "--out" in args:
+        index = args.index("--out")
+        if index + 1 >= len(args):
+            print("--out needs a PATH")
+            return 1
+        out_path = Path(args[index + 1])
+        args = args[:index] + args[index + 2 :]
+    corpus_root = Path(args[0]) if args else Path("../../data/nctb")
+    seed = int(args[1]) if len(args) > 1 else DEFAULT_SEED
     load_stats: dict[str, int] = {}
     chunks = load_nctb_corpus(
         corpus_root / "normalized",
@@ -364,6 +399,49 @@ def main() -> int:
         "expansion_targets_absent_count": len(absent_targets),
     }
 
+    # --- Banglish subset metric (A4-04) ------------------------------------
+    #
+    # Family D is family A romanised: the same chunks, the script students
+    # actually type. The subset metric is the paired recall@5 difference, so
+    # "the roman lane costs X points" is a number with an interval, not an
+    # anecdote. Family labels come from the shipped detector
+    # (retrieval/langid.classify_query), not from a hand-assigned list.
+    from bangla_gpt_api.retrieval.langid import classify_query
+
+    vocabulary = getattr(getattr(served, "bm25", None), "term_stats", None)
+
+    def _roman_matches(text: str) -> list[str]:
+        if vocabulary is None or not hasattr(vocabulary, "match_roman"):
+            return []
+        return [match for token in text.split() for match in vocabulary.match_roman(token)]
+
+    labels_a = [
+        classify_query(query, roman_matches=_roman_matches(query)) for query, _c, _l in queries_a
+    ]
+    labels_d = [
+        classify_query(query, roman_matches=_roman_matches(query)) for query, _c, _l in queries_d
+    ]
+    values_a = [1.0 if 0 < rank <= 5 else 0.0 for rank in ranks["hybrid"]["A"]]
+    values_d = [1.0 if 0 < rank <= 5 else 0.0 for rank in ranks["hybrid"]["D"]]
+    paired_diffs = [d - a for a, d in zip(values_a, values_d, strict=True)]
+    banglish_gap = {
+        "n_pairs": len(paired_diffs),
+        "recall_at_5_bangla": mean(values_a),
+        "recall_at_5_banglish": mean(values_d),
+        "paired_delta_banglish_minus_bangla": mean(paired_diffs),
+        "paired_delta_ci95": paired_bootstrap_ci(paired_diffs, seed=seed),
+        "delta_definition": (
+            "mean over chunks of (recall@5 on the romanised form - recall@5 on the "
+            "Bangla form); a negative value is the roman lane's cost"
+        ),
+        "labels_family_a": sorted(
+            {label: labels_a.count(label) for label in set(labels_a)}.items()
+        ),
+        "labels_family_d": sorted(
+            {label: labels_d.count(label) for label in set(labels_d)}.items()
+        ),
+    }
+
     report: dict[str, Any] = {
         "corpus_chunks": len(chunks),
         "index_build_seconds": build_seconds,
@@ -410,13 +488,15 @@ def main() -> int:
         },
         "gate_threshold_calibration": calibration,
         "lexicon_audit": lexicon_audit,
+        "banglish_subset": banglish_gap,
         "index_footprint": {
             "build_peak_memory_mb": round(peak_bytes / (1024 * 1024), 2),
             "chunks": len(chunks),
             "chunks_per_second_of_build": round(len(chunks) / max(build_seconds, 0.001), 1),
         },
     }
-    out = corpus_root / "retrieval_eval.json"
+    out = out_path or (corpus_root / "retrieval_eval.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
     # trailing newline: the pre-commit end-of-file-fixer requires it, and a
     # Windows text-mode write will not add one on its own.
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + chr(10), encoding="utf-8")

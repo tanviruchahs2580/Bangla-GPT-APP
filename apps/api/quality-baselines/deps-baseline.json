@@ -1,8 +1,8 @@
 {
  "accepted": {
-  "DEP001:_changelog_common:scripts\\check_changelog.py": "'_changelog_common' imported but missing from the dependency definitions",
-  "DEP001:_changelog_common:scripts\\gen_changelog.py": "'_changelog_common' imported but missing from the dependency definitions",
   "DEP002:gunicorn:pyproject.toml": "'gunicorn' defined as a dependency but not used in the codebase",
+  "DEP002:hypothesis:pyproject.toml": "'hypothesis' defined as a dependency but not used in the codebase",
+  "DEP002:mutmut:pyproject.toml": "'mutmut' defined as a dependency but not used in the codebase",
   "DEP002:mypy:pyproject.toml": "'mypy' defined as a dependency but not used in the codebase",
   "DEP002:pip-audit:pyproject.toml": "'pip-audit' defined as a dependency but not used in the codebase",
   "DEP002:psycopg:pyproject.toml": "'psycopg' defined as a dependency but not used in the codebase",
@@ -11,10 +11,8 @@
   "DEP002:pytest:pyproject.toml": "'pytest' defined as a dependency but not used in the codebase",
   "DEP002:ruff:pyproject.toml": "'ruff' defined as a dependency but not used in the codebase",
   "DEP002:uharfbuzz:pyproject.toml": "'uharfbuzz' defined as a dependency but not used in the codebase",
-  "DEP002:uvicorn-worker:pyproject.toml": "'uvicorn-worker' defined as a dependency but not used in the codebase",
-  "DEP003:packaging:scripts\\check_lockfile.py": "'packaging' imported but it is a transitive dependency",
-  "DEP003:radon:scripts\\check_quality_ratchet.py": "'radon' imported but it is a transitive dependency"
+  "DEP002:uvicorn-worker:pyproject.toml": "'uvicorn-worker' defined as a dependency but not used in the codebase"
  },
- "generated": "2026-10-18T20:01:02Z",
+ "generated": "2026-10-19T15:01:10Z",
  "tool": "deptry"
 }

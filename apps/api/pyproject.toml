@@ -127,6 +127,16 @@ where = ["src"]
 # the S5 knowledge graph, and the Bengali TTF embedded in generated PDFs. The
 # font's SIL OFL licence travels with it (OFL-1.1 requires the licence to
 # accompany every copy).
+#
+# A5-02 prompt registry: apps/api/prompts/ is loaded at runtime too, but it
+# sits OUTSIDE this import package (apps/api/src/bangla_gpt_api), and
+# package-data globs are relative to the package directory, so no pattern
+# here can carry it. The Docker image copies the directory and sets
+# BANGLA_GPT_PROMPTS_DIR (see Dockerfile), the env override the loader
+# documents (services/tutor.prompts_dir); MANIFEST.in keeps source
+# distributions whole. A wheel-only, non-Docker deployment would have to
+# either move the prompts under src/bangla_gpt_api/prompts/ or set the same
+# env var to a directory shipped beside the wheel.
 bangla_gpt_api = [
     "data/sample_nctb/*.md",
     "data/kg/*.json",
@@ -315,11 +325,12 @@ exclude_lines = [
 #            Dockerfile CMD / SQLAlchemy driver URL / fpdf2 runtime shaping,
 #            never via an `import` deptry can see), and the dev tools
 #            (pytest*, ruff, mypy, pip-audit) that are executed, not imported.
-#   DEP001 - `_changelog_common`, a sibling module of the scripts in
-#            apps/api/scripts/ imported through a sys.path insert (its own
-#            module, not a distribution). Add it to known_first_party if
-#            deptry is ever wired into CI.
-known_first_party = ["bangla_gpt_api", "_changelog_common"]
+#   DEP001 - sibling modules of the scripts in apps/api/scripts/ imported
+#            through a sys.path insert (their own modules, not distributions):
+#            `_changelog_common` and `seed_demo` (imported by
+#            scripts/backup_restore_drill.py). Listed as first party rather
+#            than silenced per finding.
+known_first_party = ["bangla_gpt_api", "_changelog_common", "seed_demo"]
 
 # Import-name to distribution-name mappings deptry cannot infer without the
 # project's environment installed. Locally the venv resolves them; in CI's
@@ -330,6 +341,18 @@ known_first_party = ["bangla_gpt_api", "_changelog_common"]
 "pyjwt" = "jwt"
 "argon2-cffi" = "argon2"
 "fpdf2" = "fpdf"
+# A2-17/I-03: Pillow's module is PIL; the OpenTelemetry distributions all
+# contribute to the shared `opentelemetry` namespace, and deptry matches
+# top-level module names only -- without these entries the guardrails env
+# (project not installed) reported every one of them DEP001/DEP002 while the
+# developer venv reported none, so the gate must be told the same mapping in
+# both places.
+"pillow" = "PIL"
+"opentelemetry-api" = "opentelemetry"
+"opentelemetry-sdk" = "opentelemetry"
+"opentelemetry-instrumentation-fastapi" = "opentelemetry"
+"opentelemetry-instrumentation-sqlalchemy" = "opentelemetry"
+"opentelemetry-exporter-otlp" = "opentelemetry"
 
 [tool.mypy]
 python_version = "3.11"

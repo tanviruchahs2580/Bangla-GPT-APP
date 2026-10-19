@@ -15,7 +15,7 @@ read when the machine is shared with other work).
 
 ## Top functions by self time
 
-```
+```text
    0.2076s self     0.4369s cum  hybrid.py:111(light_stem)
    0.1898s self     0.1898s cum  ~:0(<method 'endswith' of 'str' objects>)
    0.0862s self     0.0862s cum  ~:0(<method 'translate' of 'str' objects>)
@@ -56,13 +56,14 @@ read when the machine is shared with other work).
    0.0072s self     0.0079s cum  ~:0(<method 'sub' of 're.Pattern' objects>)
    0.0071s self     0.0268s cum  elements.py:2060(__init__)
    0.0071s self     0.0071s cum  ~:0(<method 'fetchall' of 'sqlite3.Cursor' objects>)
-   0.0070s self     0.0245s cum  default.py:2104(_setup_result_proxy)```
+   0.0070s self     0.0245s cum  default.py:2104(_setup_result_proxy)
+```
 
 ## TutorService.ask
 
 ### by cumulative time
 
-```
+```text
          595952 function calls (588900 primitive calls) in 1.179 seconds
 
    Ordered by: cumulative time
@@ -90,12 +91,11 @@ read when the machine is shared with other work).
     20184    0.208    0.000    0.437    0.000 C:\Users\DST\projects\Bangla GPT APP\apps\api\src\bangla_gpt_api\retrieval\hybrid.py:111(light_stem)
        60    0.004    0.000    0.319    0.005 C:\Users\DST\projects\Bangla GPT APP\apps\api\src\bangla_gpt_api\services\tutor.py:1265(_assemble)
 
-
 ```
 
 ### by self time (CPU hot list)
 
-```
+```text
          595952 function calls (588900 primitive calls) in 1.179 seconds
 
    Ordered by: internal time
@@ -123,14 +123,13 @@ read when the machine is shared with other work).
   540/180    0.008    0.000    0.039    0.000 C:\Users\DST\AppData\Local\Programs\Python\Python312\Lib\copy.py:217(_deepcopy_dict)
       193    0.008    0.000    0.008    0.000 {built-in method _overlapped.GetQueuedCompletionStatus}
 
-
 ```
 
 ## GET /dashboard/summary
 
 ### by cumulative time
 
-```
+```text
          102923 function calls (96829 primitive calls) in 0.610 seconds
 
    Ordered by: cumulative time
@@ -158,12 +157,11 @@ read when the machine is shared with other work).
      1464    0.034    0.000    0.096    0.000 C:\Users\DST\projects\Bangla GPT APP\.venv\Lib\site-packages\sqlalchemy\sql\coercions.py:323(expect)
  1200/300    0.004    0.000    0.084    0.000 C:\Users\DST\projects\Bangla GPT APP\.venv\Lib\site-packages\sqlalchemy\sql\operators.py:741(__eq__)
 
-
 ```
 
 ### by self time (CPU hot list)
 
-```
+```text
          102923 function calls (96829 primitive calls) in 0.610 seconds
 
    Ordered by: internal time
@@ -191,6 +189,4 @@ read when the machine is shared with other work).
       300    0.007    0.000    0.027    0.000 C:\Users\DST\projects\Bangla GPT APP\.venv\Lib\site-packages\sqlalchemy\sql\elements.py:2060(__init__)
       240    0.007    0.000    0.025    0.000 C:\Users\DST\projects\Bangla GPT APP\.venv\Lib\site-packages\sqlalchemy\engine\default.py:2104(_setup_result_proxy)
 
-
 ```
-

@@ -274,6 +274,15 @@ def _start_server(db_path: Path, port: int) -> tuple[Any, Any, Any, Any]:
             "/auth/forgot": (1_000_000, "ip"),
             "/events": (1_000_000, "ip"),
         },
+        # Same reasoning one level up: the mix reuses ONE conversation for every
+        # stream turn, and ``ai_max_conversation_messages`` (default 200 = 100
+        # turns) is a per-conversation ceiling, not a limiter under test. Without
+        # this the stream endpoint starts answering 429
+        # ``conversation_limit_reached`` after ~100 turns and stays refused for
+        # the rest of the run -- measured: 99 x 200 then 1 702 x 429 in the
+        # 30-minute run of 2026-10-20, i.e. 25 minutes measuring a refusal
+        # instead of the endpoint. 0 disables the cap (services/costs.py).
+        ai_max_conversation_messages=0,
     )
     assert settings.llm_provider == "mock", "the soak must never call a paid provider"
     app = create_app(settings)

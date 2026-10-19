@@ -259,10 +259,10 @@ def to_markdown(report: dict[str, Any]) -> str:
     for key, count in sorted(topics["counts"].items()):
         lines.append(f"- {key}: {count}")
     if topics["uncovered_demand"]:
-        lines += ["", "Demand with no coverage (curriculum-gap backlog):"]
+        lines += ["", "Demand with no coverage (curriculum-gap backlog):", ""]
         lines += [f"- {key}" for key in topics["uncovered_demand"]]
     if topics["covered_but_never_asked"]:
-        lines += ["", "Covered but never asked (thinning candidates):"]
+        lines += ["", "Covered but never asked (thinning candidates):", ""]
         lines += [f"- {key}" for key in topics["covered_but_never_asked"]]
     lines += [
         "",

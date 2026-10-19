@@ -52,8 +52,13 @@ say so rather than reporting a green number (truth protocol T2/T7).
 - **SLI (b), tutor streaming:** live-model time-to-first-token is **not
   instrumented as a histogram today** (only total request duration, which for
   SSE includes the whole stream). Target proposal for when the histogram lands:
-  TTFT p95 ≤ 3 s per the audit's A9-01 proposal. **Status: UNVERIFIED / not
-  measurable in this build** — listed so it is not silently dropped.
+  TTFT p95 ≤ 3 s per the audit's A9-01 proposal. **Status: app-side measured /
+  model-side unverified** — the stage harness
+  (`python -m bangla_gpt_api.evaluation.cli --stage-latency`, artifact
+  `apps/api/eval/stage_latency.json`, see `docs/evaluation/load-harness.md`)
+  now measures pipeline TTFT to the first SSE token (mock provider, p95
+  15.13 ms at concurrency 1), which bounds the app's share; the model's own
+  TTFT still needs a live-provider run.
 
 ### SLO-3 — Answer quality proxy (refusal behaviour)
 
@@ -140,7 +145,7 @@ multi-window burn-rate construction (long window proves the trend, short
 
 Gaps, stated rather than papered over:
 
-- No TTFT histogram (SLO-2b unmeasurable today).
+- No TTFT histogram; the app-side TTFT is measured offline (`eval/stage_latency.json`), the model-side share is not (SLO-2b).
 - No cumulative error-budget ledger; burn-rate only.
 - No per-tenant SLIs (school-scoped reporting is an owner decision).
 - The refusal-share SLI cannot separate correct from incorrect refusals.

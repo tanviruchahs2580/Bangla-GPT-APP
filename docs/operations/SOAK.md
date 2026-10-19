@@ -39,6 +39,35 @@ first run measured 718 of them).
 The 800 ms non-LLM budget (`docs/operations/SLO.md`) is met with ~9× headroom
 at this load.
 
+## Two replicas behind a proxy (A9-04)
+
+Command: `cd apps/api && python scripts/replica_check.py [--json out.json]`.
+Artifact of the last run: `.audit/tmp/r3/replica_check.json` (evidence
+`E-R3-ws2-replica-check`). Owner: ai-platform.
+
+The script starts **two API processes** on one shared SQLite database and one
+shared Redis (a throwaway docker container by default), puts a round-robin
+proxy in front of them and proves the things a second replica is allowed to
+break. Last run (2026-10-19, Windows 11 developer host, docker available):
+
+| Check | Result |
+| --- | --- |
+| readiness of both replicas | PASS (A=200, B=200, redis_ok=yes) |
+| shared Redis reachable | PASS (SET/GET) |
+| login on replica A | PASS |
+| shared rate-limit counters | PASS — 4 requests through A/B, then the 5th through the proxy answers 429. A per-process counter would answer 200 |
+| shared RAG cache | PASS — hits on B moved 2 → 3 for a query warmed on A |
+| shared database state | PASS — a conversation created on A is visible on B |
+| SSE through the proxy | PASS — token + done events, ~3 KB |
+| per-worker memory | PASS — RSS recorded per replica (3.1 MB each in this run) |
+
+Exit codes: 0 pass, 1 check failed, 3 blocked (no docker and no
+`--redis-url`, or a replica never became ready). A blocked run prints the
+blocker and changes nothing. The job-queue half of A9-04 is covered separately
+by `tests/test_h2_jobs_single_run.py` (two processes, one job, exactly one
+run) — the replica script's scope is counters, caches, SSE, DB state and
+memory.
+
 ## Saturation point
 
 The ramp raises concurrency on `/tutor/ask` in a 1→32 ladder (15 s per step):
@@ -62,13 +91,13 @@ retrieval index or Python (see `docs/operations/PROFILE.md`: the ask path is
 
 Consequences, stated honestly:
 
-* with the documented Postgres deployment the writer serialisation changes
+- with the documented Postgres deployment the writer serialisation changes
   shape (WAL, concurrent writers, pooled connections) — this number is the
   **local/default-engine** ceiling, not a Postgres capacity claim;
-* at 6 req/s the app is comfortably stable for 12 minutes with zero errors and
+- at 6 req/s the app is comfortably stable for 12 minutes with zero errors and
   flat memory; the failure mode past saturation is latency growth, not errors,
   crashes or leaks;
-* before any load increase, re-run this script against Postgres
+- before any load increase, re-run this script against Postgres
   (`DATABASE_URL=postgresql+psycopg://…`) and compare the ramp columns.
 
 The two earlier soak runs in this session (before the path/RSS fixes) are not
@@ -78,7 +107,7 @@ committed so the next one is one command.
 
 ## Reproducibility note (script revision)
 
-The archive above was produced by `scripts/soak.py` at the revision that
+The archive above was produced by `apps/api/scripts/soak.py` at the revision that
 introduced the per-endpoint warm-up and the working Windows RSS counter. After
 that run the script was compacted (docstring/comment reduction and helper
 inlining) to stay under the repository's 500-line file limit; the measurement

@@ -140,7 +140,7 @@ domain {
     # SPA: hashed assets + client routes
     handle {
         header "Content-Security-Policy" "default-src 'self';..."
-        reverse_proxy web:80
+        reverse_proxy web:8080
     }
 }
 ```

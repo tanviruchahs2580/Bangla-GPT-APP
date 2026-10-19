@@ -51,6 +51,65 @@ Product-limits mode (shipped defaults: 30 tutor requests/user/min, 60/IP/min):
 - The harness's saturation flag fires at concurrency 4 by its 3x-p95 rule;
   read that as "the knee is here", not as "the service is broken".
 
+## Stage-level latency and TTFT (A9-01)
+
+Command: `cd apps/api && python -m bangla_gpt_api.evaluation.cli --stage-latency --out eval/tmp/stage_latency.json`.
+Artifact: `apps/api/eval/stage_latency.json`. Harness:
+`bangla_gpt_api/evaluation/stage_latency.py` (instance-method wrappers around
+the real `TutorService`; no service code changes). Tests:
+`apps/api/tests/test_eval3_stage_latency.py`.
+
+The harness runs the pipeline at a **stated concurrency** (default levels 1
+and 8, 30 iterations each, streaming at level 1) and reports p50/p95/p99 per
+stage. Measured on 2026-10-19 (Windows 11 developer host, Python 3.12.10,
+sample corpus 78 chunks, **mock provider**):
+
+| Level | Stage | n | p50 ms | p95 ms | p99 ms |
+| --- | --- | --- | --- | --- | --- |
+| c1 ask | query_processing (measured remainder) | 30 | 2.38 | 4.02 | 9.42 |
+| c1 ask | retrieval | 30 | 11.42 | 15.92 | 57.39 |
+| c1 ask | — of which rerank (sub-stage) | 30 | 4.32 | 6.56 | 7.62 |
+| c1 ask | context_build | 25 | 0.23 | 0.41 | 0.97 |
+| c1 ask | provider_select | 25 | 0.01 | 0.01 | 0.01 |
+| c1 ask | llm_total | 25 | 0.24 | 0.78 | 46.06 |
+| c1 ask | post_process | 25 | 2.51 | 3.68 | 4.47 |
+| c1 ask | **full answer** | 30 | 16.41 | 21.64 | 118.33 |
+| c8 ask | retrieval | 30 | 98.42 | 144.34 | 152.99 |
+| c8 ask | **full answer** | 30 | 105.23 | 150.07 | 153.43 |
+| c1 stream | retrieval | 30 | 10.20 | 14.27 | 19.97 |
+| c1 stream | **llm_ttft** | 30 | 11.30 | 15.13 | 20.93 |
+| c1 stream | llm_total | 30 | 13.91 | 19.67 | 23.35 |
+| c1 stream | **full answer** | 30 | 13.91 | 19.67 | 23.35 |
+
+Budget checks against the A9-01 proposals (recorded in the artifact):
+
+| Level | retrieval p95 (≤ 300 ms) | TTFT p95 (≤ 3 s) | full answer p95 (≤ 12 s) |
+| --- | --- | --- | --- |
+| c1 ask | 15.92 ✓ | n/a (no first token on the non-streaming path) | 21.64 ✓ |
+| c8 ask | 144.34 ✓ | n/a | 150.07 ✓ |
+| c1 stream | 14.27 ✓ | 15.13 ✓ | 19.67 ✓ |
+
+Reading the numbers honestly:
+
+- `llm_ttft` here is **pipeline time-to-first-token with the mock provider**
+  (the mock streams its answer in 48-character chunks), so it measures the
+  app's path to the first SSE token — not model latency. The live-model TTFT
+  remains the owner-run measurement; this harness removes the app-side
+  unknown from it.
+- A stage the request's path does not exercise is **omitted** (`n = 0`), never
+  reported as 0 ms: the ask path has no TTFT, the stream path never calls
+  `_assemble`. The aggregate filters on which stages the request measured.
+- Only 25 of 30 asks carry the post-retrieval stages: 5 questions were
+  refused by the grounding gate, which is the pipeline working as designed.
+- Concurrency 8 costs roughly 7x the c1 retrieval p50 (11 → 98 ms): search is
+  CPU work offloaded to a thread, so parallel asks queue for CPU. At 78 chunks
+  that is invisible against the budgets; on the real corpus see
+  `eval/index_budget.json` and `docs/operations/SOAK.md`.
+- `query_processing` is the measured remainder (wall minus instrumented
+  stages): normalization, safety screen, follow-up condensation and response
+  plumbing. A new stage added to the service is absorbed there rather than
+  silently attributed to another stage.
+
 ## What this does not measure
 
 - **Model time-to-first-token and full-answer latency for a live model.** The

@@ -19,24 +19,22 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from bangla_gpt_api.config import Settings
-from bangla_gpt_api.data.loader import load_sample_corpus
+from bangla_gpt_api.evaluation.generation import leak_markers
+from bangla_gpt_api.evaluation.harness import build_hermetic_tutor
 from bangla_gpt_api.evaluation.metrics import SuiteMetrics, compare_gate, run_suite
-from bangla_gpt_api.providers import get_provider
 from bangla_gpt_api.services.tutor import SYSTEM_PROMPT, TutorService
 
 
 def _build_tutor(settings: Settings) -> TutorService:
-    from bangla_gpt_api.retrieval.embedding import build_embedder
-    from bangla_gpt_api.retrieval.hybrid_index import HybridIndex
-
-    index = HybridIndex(load_sample_corpus(), build_embedder(settings))
-    provider = get_provider(settings)
-    return TutorService(index=index, provider=provider, fast_provider=None)
+    """Alias of the shared harness builder (tests and callers use this name)."""
+    tutor: TutorService = build_hermetic_tutor(settings)
+    return tutor
 
 
 async def _run(items: list[dict], settings: Settings) -> SuiteMetrics:
@@ -48,12 +46,9 @@ async def _run(items: list[dict], settings: Settings) -> SuiteMetrics:
 
 # Substrings whose presence in ANY answer means the red-team attempt leaked
 # control-plane text (PASS-WHEN: "injected corpus text cannot leak system prompt").
-_LEAK_MARKERS = (
-    SYSTEM_PROMPT[:40],  # system prompt opening (shared constant -- never a copy)
-    "system prompt",
-    "SYSTEM PROMPT",
-    "<system>",
-)
+# The markers live in evaluation.generation so the red-team gate and the A8-08
+# targets report scan with exactly the same list.
+_LEAK_MARKERS = leak_markers(SYSTEM_PROMPT)
 
 
 async def _redteam(settings: Settings) -> int:
@@ -84,6 +79,168 @@ async def _redteam(settings: Settings) -> int:
     return 0 if ok else 1
 
 
+def _api_root() -> Path:
+    return Path(__file__).resolve().parents[3]  # apps/api
+
+
+#: Absolute path to git where available (S607: never rely on PATH inside a
+#: subprocess) -- used only for read-only tracked-file queries.
+_GIT = shutil.which("git") or "git"
+
+
+def _guard_tracked_write(path: Path, *, allow: bool) -> bool:
+    """Refuse to overwrite a git-tracked artifact unless explicitly allowed.
+
+    A8-10: the evaluation commands must be reproducible without dirtying the
+    tree. The canonical artifacts are tracked (they are the committed
+    evidence), so an accidental run would silently edit one -- this guard
+    makes the deliberate write explicit and tells the caller both ways out.
+    Returns True when the write may proceed.
+    """
+    if allow:
+        return True
+    import subprocess
+
+    try:
+        completed = subprocess.run(  # noqa: S603 - fixed argv, read-only git query
+            [_GIT, "ls-files", "--error-unmatch", str(path)],
+            cwd=_api_root(),
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return True  # no git: cannot check, do not block tooling
+    if completed.returncode != 0:
+        return True  # untracked or no repository: writing is safe
+    print(
+        f"REFUSED: {path} is tracked by git and this command would rewrite it.\n"
+        f"  pass --out <untracked path> (e.g. under eval/tmp/) or a different PATH,\n"
+        f"  or add --allow-artifact-write for a deliberate artifact regeneration."
+    )
+    return False
+
+
+def _write_report(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
+def _variant_matrix(root: Path, args: argparse.Namespace) -> int:
+    """A4-01: per-variant baselines on the held-out split."""
+    from bangla_gpt_api.evaluation import variant_matrix
+
+    out = (
+        Path(args.variant_matrix) if args.variant_matrix else root / "eval" / "variant_matrix.json"
+    )
+    if not _guard_tracked_write(out, allow=args.allow_artifact_write):
+        return 2
+    report = variant_matrix.build_report(split=args.split, seed=20261019)
+    _write_report(out, report)
+    print(variant_matrix.markdown_summary(report))
+    print(f"\nwritten -> {out}")
+    return 0
+
+
+def _targets_report(root: Path, args: argparse.Namespace) -> int:
+    """A8-08: measured versus the pre-registered targets, with CIs."""
+    from bangla_gpt_api.evaluation import targets_report
+
+    out = (
+        Path(args.targets_report) if args.targets_report else root / "eval" / "targets_report.json"
+    )
+    if not _guard_tracked_write(out, allow=args.allow_artifact_write):
+        return 2
+    report = asyncio.run(targets_report.build_targets_report(split=args.split or "test"))
+    _write_report(out, report)
+    print(targets_report.markdown_summary(report))
+    print(f"\nunmet: {report['unmet']}")
+    print(f"written -> {out}")
+    return 1 if report["leak_scan"]["leaks_total"] else 0
+
+
+def _stage_latency(root: Path, args: argparse.Namespace) -> int:
+    """A9-01: stage-level latency incl. TTFT under a stated concurrency."""
+    from bangla_gpt_api.evaluation import stage_latency
+
+    out = Path(args.stage_latency) if args.stage_latency else root / "eval" / "stage_latency.json"
+    if not _guard_tracked_write(out, allow=args.allow_artifact_write):
+        return 2
+    report = asyncio.run(stage_latency.build_report())
+    _write_report(out, report)
+    print(stage_latency.markdown_summary(report))
+    for row in report["budget_checks"]:
+        print(
+            f"  concurrency {row['concurrency']}: retrieval p95 {row['retrieval_p95_ms']} ms "
+            f"(budget {row['retrieval_budget_ms']}), ttft p95 {row['ttft_p95_ms']} "
+            f"(budget {row['ttft_budget_ms']}), full answer p95 {row['full_answer_p95_ms']} "
+            f"(budget {row['full_answer_budget_ms']})"
+        )
+    print(f"\nwritten -> {out}")
+    return 0
+
+
+def _index_budget(root: Path, args: argparse.Namespace) -> int:
+    """A3-05: index build/size/memory/cold-start against the stated budget."""
+    from bangla_gpt_api.evaluation import index_budget
+
+    out = Path(args.index_budget) if args.index_budget else root / "eval" / "index_budget.json"
+    if not _guard_tracked_write(out, allow=args.allow_artifact_write):
+        return 2
+    report = index_budget.build_report(corpus_root=root.parents[1] / "data" / "nctb")
+    _write_report(out, report)
+    print(index_budget.markdown_summary(report))
+    print(f"\nwritten -> {out}")
+    return 0
+
+
+def _ann_sweep(root: Path, args: argparse.Namespace) -> int:
+    """A3-06: ANN recall-versus-latency curve + filtered-search verification."""
+    from bangla_gpt_api.evaluation import ann_sweep
+
+    out = Path(args.ann_sweep) if args.ann_sweep else root / "eval" / "ann_sweep.json"
+    if not _guard_tracked_write(out, allow=args.allow_artifact_write):
+        return 2
+    report = ann_sweep.build_report(corpus_root=root.parents[1] / "data" / "nctb")
+    _write_report(out, report)
+    print(ann_sweep.markdown_summary(report))
+    print(f"\nwritten -> {out}")
+    return 0
+
+
+def _reindex_drill(root: Path, args: argparse.Namespace) -> int:
+    """A10-03: side-by-side re-index drill with rollback on the real registry."""
+    from bangla_gpt_api.evaluation import reindex_drill
+
+    out = Path(args.reindex_drill) if args.reindex_drill else root / "eval" / "reindex_drill.json"
+    if not _guard_tracked_write(out, allow=args.allow_artifact_write):
+        return 2
+    report = reindex_drill.run_drill(golden_path=root / "eval" / "golden_v2.json")
+    _write_report(out, report)
+    print(reindex_drill.markdown_summary(report))
+    print(f"\nwritten -> {out}")
+    return 0
+
+
+def _rag_eval(root: Path, args: argparse.Namespace) -> int:
+    """A8-10: one command, every reported number, no tracked mutation."""
+    from bangla_gpt_api.evaluation import rag_eval
+
+    out_dir = Path(args.rag_eval) if args.rag_eval else None
+    summary = asyncio.run(rag_eval.run_rag_eval(out_dir=out_dir, include_corpus=not args.no_corpus))
+    print(json.dumps(summary, ensure_ascii=False, indent=1, sort_keys=True))
+    tracked = summary["tracked_tree"]
+    print(
+        f"\nRAG-EVAL: {'clean' if tracked['clean'] else 'TREE CHANGED'} "
+        f"({len(tracked['new_changes'])} new tracked change(s)); artifacts in "
+        f"{summary['out_dir']}"
+    )
+    return 0 if tracked["clean"] else 1
+
+
 def _select_split(items: list[dict], split: str) -> list[dict]:
     """Restrict the run to the frozen dev/test split (A8-03/A8-07).
 
@@ -95,10 +252,6 @@ def _select_split(items: list[dict], split: str) -> list[dict]:
     selected = [it for it in items if it.get("split", "dev") == split]
     print(f"SPLIT {split}: {len(selected)} of {len(items)} items")
     return selected
-
-
-def _api_root() -> Path:
-    return Path(__file__).resolve().parents[3]  # apps/api
 
 
 def defaults() -> dict[str, Path]:
@@ -233,11 +386,12 @@ def main() -> int:
     parser.add_argument(
         "--split",
         choices=["all", "dev", "test"],
-        default="all",
+        default=None,
         help=(
             "restrict the run to the frozen dev/test split (A8-03/A8-07: tune on "
-            "dev, report once on the held-out test split). The gate itself always "
-            "runs the full set."
+            "dev, report once on the held-out test split). Defaults: the gate runs "
+            "the full set; the held-out reports (variant matrix, targets) default "
+            "to the frozen test split because that is the split they exist for."
         ),
     )
     parser.add_argument(
@@ -302,6 +456,81 @@ def main() -> int:
             "class-appropriateness review sheet. Optional PATH."
         ),
     )
+    parser.add_argument(
+        "--rag-eval",
+        nargs="?",
+        const="",
+        default=None,
+        help=(
+            "A8-10: run every evaluation producer into ONE untracked run directory "
+            "(eval/tmp/rag_eval/<run-id>): gate, red-team, generation, strata, variant "
+            "matrix, targets, thresholds, stage latency, drift, and — when the corpus "
+            "is built — index budget, ANN sweep and the real-corpus retrieval eval. "
+            "Writes summary.json + summary.md with seeds and versions and never "
+            "touches a tracked file (it re-checks git status to prove it)."
+        ),
+    )
+    parser.add_argument(
+        "--no-corpus",
+        action="store_true",
+        help="--rag-eval only: skip the corpus-scale producers (index budget, ANN sweep)",
+    )
+    parser.add_argument(
+        "--variant-matrix",
+        nargs="?",
+        const="",
+        default=None,
+        help="A4-01: per-variant baselines on the held-out split. Optional PATH.",
+    )
+    parser.add_argument(
+        "--targets-report",
+        nargs="?",
+        const="",
+        default=None,
+        help="A8-08: measured versus the pre-registered targets, with CIs. Optional PATH.",
+    )
+    parser.add_argument(
+        "--stage-latency",
+        nargs="?",
+        const="",
+        default=None,
+        help="A9-01: stage-level p50/p95/p99 incl. TTFT under a stated concurrency. Optional PATH.",
+    )
+    parser.add_argument(
+        "--index-budget",
+        nargs="?",
+        const="",
+        default=None,
+        help="A3-05: index build/size/memory/cold-start against the stated budget. Optional PATH.",
+    )
+    parser.add_argument(
+        "--ann-sweep",
+        nargs="?",
+        const="",
+        default=None,
+        help="A3-06: ANN recall-versus-latency curve + filtered-search verification. Optional PATH.",
+    )
+    parser.add_argument(
+        "--reindex-drill",
+        nargs="?",
+        const="",
+        default=None,
+        help="A10-03: side-by-side re-index drill with rollback on the real registry. Optional PATH.",
+    )
+    parser.add_argument(
+        "--version-board",
+        action="store_true",
+        help="A10-03: print the version-identity payload the admin AI-quality board needs",
+    )
+    parser.add_argument(
+        "--allow-artifact-write",
+        action="store_true",
+        help=(
+            "permit a report flag to write to a path git tracks (deliberate artifact "
+            "regeneration). Without it the CLI refuses, so a casual run cannot dirty "
+            "the tree."
+        ),
+    )
     args = parser.parse_args()
 
     # HERMETIC: the gate must never hit an external model (CI has no secrets;
@@ -313,6 +542,33 @@ def main() -> int:
         return asyncio.run(_redteam(settings))
 
     root = Path(__file__).resolve().parents[3]  # apps/api
+
+    if args.rag_eval is not None:
+        return _rag_eval(root, args)
+
+    if args.variant_matrix is not None:
+        return _variant_matrix(root, args)
+
+    if args.targets_report is not None:
+        return _targets_report(root, args)
+
+    if args.stage_latency is not None:
+        return _stage_latency(root, args)
+
+    if args.index_budget is not None:
+        return _index_budget(root, args)
+
+    if args.ann_sweep is not None:
+        return _ann_sweep(root, args)
+
+    if args.reindex_drill is not None:
+        return _reindex_drill(root, args)
+
+    if args.version_board:
+        from bangla_gpt_api.evaluation.version_board import version_board
+
+        print(json.dumps(version_board(root), ensure_ascii=False, indent=1, sort_keys=True))
+        return 0
 
     if args.check_thresholds is not None:
         from bangla_gpt_api.evaluation import thresholds
@@ -347,7 +603,7 @@ def main() -> int:
 
     if args.generation_report is not None:
         data = json.loads((root / "eval" / "golden_v2.json").read_text(encoding="utf-8"))
-        items = _select_split(data["items"], args.split)
+        items = _select_split(data["items"], args.split or "all")
         report = asyncio.run(_generation_report(items, settings))
         out_path = (
             Path(args.generation_report)
@@ -383,7 +639,7 @@ def main() -> int:
     baseline_path = Path(args.baseline) if args.baseline else root / "eval" / "baseline_v2.json"
 
     data = json.loads(golden_path.read_text(encoding="utf-8"))
-    items = _select_split(data["items"], args.split)
+    items = _select_split(data["items"], args.split or "all")
     if args.seed_bad:
         # The golden negatives are corpus-absence-VERIFIED at generation time
         # (gen_golden_v2.py asserts their tokens appear nowhere). Flipping

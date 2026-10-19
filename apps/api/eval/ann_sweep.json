@@ -1,0 +1,169 @@
+{
+ "ann_curve": [
+  {
+   "build_seconds": 2.567,
+   "lists": 4,
+   "mean_scanned_fraction": 0.3706,
+   "p50_ms": 31.0,
+   "p95_ms": 75.424,
+   "probes": 1,
+   "recall_at_10": 0.525
+  },
+  {
+   "build_seconds": 2.567,
+   "lists": 4,
+   "mean_scanned_fraction": 0.6744,
+   "p50_ms": 46.393,
+   "p95_ms": 86.721,
+   "probes": 2,
+   "recall_at_10": 0.55
+  },
+  {
+   "build_seconds": 2.567,
+   "lists": 4,
+   "mean_scanned_fraction": 1.0,
+   "p50_ms": 72.765,
+   "p95_ms": 162.351,
+   "probes": 4,
+   "recall_at_10": 0.55
+  },
+  {
+   "build_seconds": 9.628,
+   "lists": 8,
+   "mean_scanned_fraction": 0.2344,
+   "p50_ms": 40.059,
+   "p95_ms": 82.945,
+   "probes": 1,
+   "recall_at_10": 0.425
+  },
+  {
+   "build_seconds": 9.628,
+   "lists": 8,
+   "mean_scanned_fraction": 0.5279,
+   "p50_ms": 75.039,
+   "p95_ms": 117.796,
+   "probes": 2,
+   "recall_at_10": 0.525
+  },
+  {
+   "build_seconds": 9.628,
+   "lists": 8,
+   "mean_scanned_fraction": 0.8316,
+   "p50_ms": 142.125,
+   "p95_ms": 195.332,
+   "probes": 4,
+   "recall_at_10": 0.55
+  },
+  {
+   "build_seconds": 9.628,
+   "lists": 8,
+   "mean_scanned_fraction": 1.0,
+   "p50_ms": 185.094,
+   "p95_ms": 363.674,
+   "probes": 8,
+   "recall_at_10": 0.55
+  },
+  {
+   "build_seconds": 15.642,
+   "lists": 16,
+   "mean_scanned_fraction": 0.0772,
+   "p50_ms": 9.868,
+   "p95_ms": 44.63,
+   "probes": 1,
+   "recall_at_10": 0.3
+  },
+  {
+   "build_seconds": 15.642,
+   "lists": 16,
+   "mean_scanned_fraction": 0.1954,
+   "p50_ms": 29.97,
+   "p95_ms": 55.515,
+   "probes": 2,
+   "recall_at_10": 0.5
+  },
+  {
+   "build_seconds": 15.642,
+   "lists": 16,
+   "mean_scanned_fraction": 0.3931,
+   "p50_ms": 64.929,
+   "p95_ms": 160.926,
+   "probes": 4,
+   "recall_at_10": 0.55
+  },
+  {
+   "build_seconds": 15.642,
+   "lists": 16,
+   "mean_scanned_fraction": 0.6709,
+   "p50_ms": 71.515,
+   "p95_ms": 107.909,
+   "probes": 8,
+   "recall_at_10": 0.55
+  }
+ ],
+ "best_ann_within_budget": {
+  "build_seconds": 2.567,
+  "lists": 4,
+  "mean_scanned_fraction": 0.3706,
+  "p50_ms": 31.0,
+  "p95_ms": 75.424,
+  "probes": 1,
+  "recall_at_10": 0.525
+ },
+ "decision_inputs": {
+  "ann_parameter_note": "lists ~= sqrt(n) is the pgvector guidance; the curve shows what each (lists, probes) pair actually costs on this corpus",
+  "exact_p95_within_budget": true,
+  "search_p95_budget_ms": 1500.0
+ },
+ "exact_lane": {
+  "index": "VectorIndex (brute-force cosine -- the lane the repo serves)",
+  "mean_scanned": 1390,
+  "p50_ms": 85.918,
+  "p95_ms": 299.548,
+  "recall_at_10": 0.55
+ },
+ "filtered_search": {
+  "ann_lists": 8,
+  "ann_mean_scanned_postfilter": 1156.0,
+  "ann_mean_scanned_prefilter": 177.5,
+  "ann_postfilter_p95_ms": 59.791,
+  "ann_prefilter_p95_ms": 104.267,
+  "ann_probes": 4,
+  "exact_prefilter_p50_ms": 31.922,
+  "exact_prefilter_p95_ms": 59.762,
+  "exact_unfiltered_p50_ms": 178.096,
+  "exact_unfiltered_p95_ms": 327.55,
+  "matching_chunks_per_class": {
+   "10": 238,
+   "11": 100,
+   "12": 100,
+   "6": 238,
+   "7": 238,
+   "8": 238,
+   "9": 238
+  },
+  "note": "the exact lane pre-filters (the product's behaviour: the filter is inside the scan); the ANN lane is measured both ways because a post-filtering vector store scans more and silently loses recall"
+ },
+ "generated_by": "bangla_gpt_api.evaluation.ann_sweep",
+ "run_conditions": {
+  "chunks": 1390,
+  "corpus": "nctb:C:\\Users\\DST\\projects\\Bangla GPT APP\\data\\nctb",
+  "embedder": "HashingEmbedder (deterministic stand-in; no model weights offline)",
+  "host": "DESKTOP-GET9GA6",
+  "note": "latency is host-dependent; compare curve points within this run",
+  "platform": "Windows-11-10.0.26300-SP0",
+  "python": "3.12.10",
+  "queries": 40,
+  "seed": 20261019,
+  "top_k": 10
+ },
+ "scale_projection": {
+  "basis": "measured exact-lane mean latency / chunks (linear scan model)",
+  "per_chunk_ms": 0.0753771,
+  "projected_p95_ms": {
+   "10000": 2261.3,
+   "100000": 22613.1,
+   "1000000": 226131.3
+  },
+  "projection_note": "linear extrapolation: p95 ~= 3x the measured mean per-chunk cost x corpus size. A projection, not a measurement -- it names the corpus size where the exact lane stops being viable, and nothing more."
+ }
+}

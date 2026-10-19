@@ -68,6 +68,12 @@ LAYERS: dict[str, int] = {
     f"{PACKAGE}.services.answer_structure": 0,
     f"{PACKAGE}.services.breached_passwords": 0,
     f"{PACKAGE}.services.context": 0,
+    # the prompt-registry loader (A5-02): a stdlib-only file reader shared by
+    # the kernel, the providers and the services, kept import-cycle-free by
+    # design; its single upward edge (the AGE_RULE_SENTENCE constant) is in
+    # EXCEPTIONS below. Filed under services/, so the longest-prefix fallback
+    # would otherwise put it at layer 3 and break every layer-0 consumer.
+    f"{PACKAGE}.services.prompt_registry": 0,
     f"{PACKAGE}.services.router": 0,
     f"{PACKAGE}.services.trace_meta": 0,
     f"{PACKAGE}.tracing": 0,
@@ -103,6 +109,15 @@ LAYERS: dict[str, int] = {
 #: (importer prefix, imported prefix) -> why this reverse edge is accepted.
 #: Keep this tiny: an entry here is a design decision, not a silence switch.
 EXCEPTIONS: dict[tuple[str, str], str] = {
+    (
+        f"{PACKAGE}.services.prompt_registry",
+        f"{PACKAGE}.services.safety",
+    ): (
+        "the registry substitutes {{age_rule}} from services.safety so the "
+        "child-safety sentence keeps exactly one source; safety has no "
+        "module-level internal imports, so this upward read is not a cycle -- "
+        "it is the one documented edge of the shared-kernel loader"
+    ),
     (
         f"{PACKAGE}.providers.mock",
         f"{PACKAGE}.services.generators",
