@@ -38,7 +38,7 @@ OUT = REPO / "docs" / "native-review" / "ui-strings.md"
 
 BANGLA = re.compile("[\u0980-\u09FF]")
 DICT_ENTRY = re.compile(
-    r'^\s{2}([A-Za-z_][A-Za-z0-9_]*):\s*"((?:[^"\\]|\\.)*)",?\s*$', re.M
+    r'^\s{2}([A-Za-z_][A-Za-z0-9_]*):\s*"((?:[^"\\]|\\.)*)",?\s*$', re.MULTILINE
 )
 TS_STRING = re.compile(r'"[^"\n]*[\u0980-\u09FF][^"\n]*"')
 PY_STRING = re.compile(

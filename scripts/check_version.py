@@ -115,7 +115,7 @@ def latest_tag() -> str | None:
         ).stdout.strip()
     except (subprocess.CalledProcessError, FileNotFoundError):
         return None
-    return out[1:] if out.startswith("v") else out
+    return out.removeprefix("v")
 
 
 def main(argv: list[str] | None = None) -> int:
