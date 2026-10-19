@@ -44,7 +44,9 @@ async function signIn(page: Page, email: string): Promise<void> {
 }
 
 async function signOut(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Log out' }).click()
+  // Scoped to the header: MePage also carries a labelled "Log out" button, so
+  // a page-wide role query is ambiguous (strict-mode violation) on that route.
+  await page.locator('header').getByRole('button', { name: 'Log out' }).click()
   await expect(page).toHaveURL(/\/login$/)
 }
 

@@ -68,6 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(auth): redeem single-use codes with a compare-and-set, not a read-then-write
 - fix(auth): unblock login on web and APK (MFA step-up, unauth resend, proxy/APK errors)
 - fix(ci): exempt changelog-regenerating commits by changed paths, not subject text
+- fix(ci): make the commit-subject gate testable anywhere; lint fixes the CI run caught
 - fix(ci): make the doc-path guard cover the classes of path it claims to
 - fix(ci): make the lockfile guardrail deterministic
 - fix(ci): pin every action to a commit SHA and scope registry permission
@@ -148,12 +149,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - ci: hermetic import-time settings patch + step-isolated migration DBs
 - ci: require a real 200 before calling a web deploy healthy
 - ci: run the skipped Redis and Postgres paths and enforce the hook set
+- ci: wire the handoff gates into workflows
 
 ### Documentation
 
 - docs(adr): record the data and artifact management decision (K-05)
 - docs(audit): final audit report (INCOMPLETE — BLOCKED) + changelog refresh
 - docs(audit): record the merge and live-production outcome
+- docs(audit): refresh the audit report for the second remediation pass (61.0/100)
 - docs(dx): threat model, AI system card, OpenSSF self-assessment, devcontainer and Make targets
 - docs(qa): publish the 2026-10-16 audit report; refresh the lockfile within its ranges
 - docs(qa): publish the 2026-10-17 QA record and archive its predecessor
@@ -207,6 +210,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - test(api): cover school admin fallbacks and tenant guards
 - test(api): make the injection-guard fixture grounded under the enforced contract
 - test(e2e): Playwright smoke scaffold and a sqlite boot-timeout regression test
+- test(e2e): wait for the session in signIn, not just the submit click
 - test(school): cover the aggregation routes TST-04 flagged as unexercised
 - test(tenancy): cover school dashboard routes across two tenants
 - test(web): assert the changed behaviour instead of the old literals
@@ -218,6 +222,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(scripts): make the shebang executable real for the five scripts that have one
 - chore(security): allowlist the reviewed ASCII-art hit in the full-history secret scan
 - chore(web): repoint /api proxy to current tunnel host (quick-tunnel rotation)
+- chore: apply the repository's pre-commit hooks to the second-pass files
 - chore: code honesty - unused args, un-typed db params, inert suppressions, stale comments
 - chore: satisfy the two CI guardrails main added after this branch's baseline
 - fmt: ruff format teacher.py _room_counts
