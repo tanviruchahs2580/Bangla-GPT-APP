@@ -10,6 +10,8 @@ the structural rules hold on the current tree.
 from __future__ import annotations
 
 import importlib.util
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -67,11 +69,57 @@ def test_script_passes_over_recent_history_structure() -> None:
     assert "no subject-structure errors" in result.stdout
 
 
-def test_script_strict_length_can_fail() -> None:
+def test_script_strict_length_can_fail(tmp_path: Path) -> None:
+    """The gate is not vacuous: a 90-character subject must turn it red.
+
+    Runs against a throwaway repository instead of the real history -- an
+    assertion on "the last N commits" silently passed once CI checked out a
+    shallow clone, which is exactly the vacuity this test exists to prevent.
+    """
+    repo = _throwaway_repo(
+        tmp_path,
+        "feat(api): a deliberately over-length subject that no reviewer would ever accept because it keeps going",
+    )
     result = subprocess.run(
-        [sys.executable, str(SCRIPT), "--max-count", "3", "--strict-length"],
+        [sys.executable, str(SCRIPT), "--repo", str(repo), "--max-count", "1", "--strict-length"],
         capture_output=True,
         text=True,
-        cwd=REPO,
+        cwd=repo,
     )
-    assert result.returncode == 1, result.stdout
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "chars (limit 72)" in result.stdout
+
+
+def test_script_strict_length_passes_a_compliant_subject(tmp_path: Path) -> None:
+    repo = _throwaway_repo(tmp_path, "fix(api): keep subjects short")
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--repo", str(repo), "--max-count", "1", "--strict-length"],
+        capture_output=True,
+        text=True,
+        cwd=repo,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def _throwaway_repo(base: Path, subject: str) -> Path:
+    """Initialize a one-commit repository whose commit carries ``subject``."""
+    repo = base / "subject-lint-repo"
+    repo.mkdir()
+    git = shutil.which("git")
+    assert git is not None, "git must be on PATH for the commit-lint test"
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "lint test",
+        "GIT_AUTHOR_EMAIL": "lint@example.invalid",
+        "GIT_COMMITTER_NAME": "lint test",
+        "GIT_COMMITTER_EMAIL": "lint@example.invalid",
+    }
+
+    def run(*args: str) -> None:
+        subprocess.run([git, *args], cwd=repo, capture_output=True, text=True, check=True, env=env)
+
+    run("init", "-q")
+    (repo / "f.txt").write_text("x\n", encoding="utf-8")
+    run("add", "f.txt")
+    run("commit", "-q", "-m", subject)
+    return repo

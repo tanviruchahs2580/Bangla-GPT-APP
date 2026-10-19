@@ -89,7 +89,7 @@ def check_subject(subject: str) -> tuple[list[str], list[str]]:
     return errors, warnings
 
 
-def git_subjects(count: int, rev_range: str | None) -> list[tuple[str, str]]:
+def git_subjects(count: int, rev_range: str | None, repo: Path = ROOT) -> list[tuple[str, str]]:
     if rev_range:
         rev_args = [rev_range]
         format_str = "%h%x00%s"
@@ -98,7 +98,7 @@ def git_subjects(count: int, rev_range: str | None) -> list[tuple[str, str]]:
         format_str = "%h%x00%s"
     out = subprocess.run(
         ["git", "log", "--no-merges", f"--format={format_str}", *rev_args],
-        cwd=ROOT,
+        cwd=repo,
         capture_output=True,
         text=True,
         check=True,
@@ -125,15 +125,26 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="treat over-length subjects as errors (use for new commits in CI)",
     )
+    parser.add_argument(
+        "--repo",
+        default=None,
+        help=(
+            "repository to scan (default: this checkout). Exists so the gate's own "
+            "test can build a throwaway repository and prove the failure path -- "
+            "asserting against the real history made the test depend on clone depth "
+            "(it failed in CI's shallow checkout)."
+        ),
+    )
     args = parser.parse_args(argv)
+    repo = Path(args.repo).resolve() if args.repo else ROOT
 
     subprocess.run(
         ["git", "rev-parse", "--is-inside-work-tree"],
-        cwd=ROOT,
+        cwd=repo,
         capture_output=True,
         check=True,
     )
-    rows = git_subjects(args.max_count, args.range)
+    rows = git_subjects(args.max_count, args.range, repo)
     scope = args.range or f"last {args.max_count} commits"
     print(f"commit-subject lint over {scope} ({len(rows)} non-merge commits)")
 

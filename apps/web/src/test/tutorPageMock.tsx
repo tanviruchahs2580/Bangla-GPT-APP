@@ -65,15 +65,21 @@ export function wireTutorMocks(apiMock: ApiMocks, authMock: AuthMocks): void {
     last_strategy: null,
   });
   apiMock.postStream.mockImplementation(
-    async (_url: string, _body: unknown, onToken: (tok: string) => void) => {
+    // The return type is annotated `unknown`, not inferred: the mock surface
+    // is untyped, and @typescript-eslint/no-misused-promises rejects a
+    // promise-returning callback in this position. The function still returns
+    // the resolved response -- the component awaits what the real postStream
+    // returns, and the annotation only keeps the linter's void-return check
+    // from reading the promise out of the signature.
+    (_url: string, _body: unknown, onToken: (tok: string) => void): unknown => {
       onToken(ANSWER_TEXT);
-      return {
+      return Promise.resolve({
         message_id: 2,
         user_message_id: 1,
         answer: ANSWER_TEXT,
         grounded: true,
         sources: [SOURCE],
-      };
+      });
     },
   );
 }

@@ -28,9 +28,9 @@ REPO = Path(__file__).resolve().parents[1]
 GLOSSARY = REPO / "docs" / "i18n-glossary.md"
 I18N = REPO / "apps" / "web" / "src" / "i18n.ts"
 
-ROW = re.compile(r"^\|(?P<cells>.+)\|\s*$", re.M)
+ROW = re.compile(r"^\|(?P<cells>.+)\|\s*$", re.MULTILINE)
 ENTRY = re.compile(
-    r'^\s{2}([A-Za-z_][A-Za-z0-9_]*):\s*"((?:[^"\\]|\\.)*)",?\s*$', re.M
+    r'^\s{2}([A-Za-z_][A-Za-z0-9_]*):\s*"((?:[^"\\]|\\.)*)",?\s*$', re.MULTILINE
 )
 
 
@@ -73,7 +73,7 @@ def parse_pending(text: str) -> list[tuple[str, str]]:
         cells = [c.strip() for c in match.group("cells").split("|")]
         if len(cells) != 3 or cells[0] in {"Concept"} or set(cells[0]) <= {"-"}:
             continue
-        concept, in_use, _where = cells
+        _concept, in_use, _where = cells
         parts = re.split(r"\s+vs\s+", in_use, maxsplit=1)
         if len(parts) == 2:
             rows.append((clean(parts[0]), clean(parts[1])))
