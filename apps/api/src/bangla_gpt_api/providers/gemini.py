@@ -24,12 +24,12 @@ import httpx
 
 from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.providers.base import (
-    MAX_BACKOFF_SECONDS as _MAX_BACKOFF_SECONDS,
-)
-from bangla_gpt_api.providers.base import (
     ProviderError,
     ProviderSettings,
+    SamplingParams,
     fit_timeout,
+    retry_delay_seconds,
+    sampling_for,
 )
 from bangla_gpt_api.services.context import get_current_context
 
@@ -122,8 +122,42 @@ def _error_message_text(body: bytes) -> str:
         return body[:200].decode(errors="replace")
 
 
+def _generation_config(
+    max_output_tokens: int | None, sampling: SamplingParams | None, *, supports_seed: bool
+) -> dict | None:
+    """``generationConfig`` for this request (A6-06/AUD-A2-08).
+
+    Field support is documented per provider:
+    * ``maxOutputTokens``, ``temperature``, ``topP`` are GenerationConfig
+      fields in the Gemini API reference (ai.google.dev/api/generate-content,
+      retrieved 2026-10-19; the REST sample carries ``temperature``/``topP``).
+    * ``seed`` is NOT documented there as of that date, so it is only emitted
+      when the provider declares support (``supports_seed``); sending an
+      undocumented field risks a request rejection.
+    * The text-generation page (retrieved 2026-10-19) states that Gemini 4
+      and 3.6+ models ignore custom ``temperature``/``top_p``/``top_k``; the
+      configured models here are below that line, so the values apply.
+    """
+    config: dict = {}
+    if max_output_tokens:
+        config["maxOutputTokens"] = max_output_tokens
+    if sampling is not None:
+        config["temperature"] = sampling.temperature
+        if sampling.top_p is not None:
+            config["topP"] = sampling.top_p
+        if sampling.seed is not None and supports_seed:
+            config["seed"] = sampling.seed
+    return config or None
+
+
 def _build_payload(
-    prompt: str, system: str | None, image: dict | None, max_output_tokens: int | None = None
+    prompt: str,
+    system: str | None,
+    image: dict | None,
+    max_output_tokens: int | None = None,
+    sampling: SamplingParams | None = None,
+    *,
+    supports_seed: bool = False,
 ) -> dict:
     """One user message: the text prompt plus, when given, the validated
     inline image part (vision contract: ``{"inline_data":
@@ -134,9 +168,12 @@ def _build_payload(
     payload: dict = {"contents": [{"role": "user", "parts": parts}]}
     if system:
         payload["systemInstruction"] = {"parts": [{"text": system}]}
-    # A9: bound generation size so a looping model cannot run up the ledger.
-    if max_output_tokens:
-        payload["generationConfig"] = {"maxOutputTokens": max_output_tokens}
+    # A9/A6-06: bound generation size and pin the sampling profile so a
+    # looping model cannot run up the ledger and two identical calls do not
+    # drift.
+    config = _generation_config(max_output_tokens, sampling, supports_seed=supports_seed)
+    if config:
+        payload["generationConfig"] = config
     return payload
 
 
@@ -144,6 +181,12 @@ class GeminiProvider:
     name = "gemini"
     # Gemini accepts inline_data image parts (see _build_payload).
     supports_vision = True
+    # A6-06: this provider consumes SamplingParams (see _generation_config).
+    supports_sampling = True
+    #: ``seed`` is not in the Gemini GenerationConfig reference (retrieved
+    #: 2026-10-19), so the seed stays out of the request until the owner
+    #: verifies support for the configured model/version.
+    supports_seed = False
 
     def __init__(
         self,
@@ -154,6 +197,7 @@ class GeminiProvider:
         max_retries: int,
         max_output_tokens: int | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
+        default_sampling: SamplingParams | None = None,
     ) -> None:
         self._api_key = api_key
         self.model = model
@@ -164,8 +208,21 @@ class GeminiProvider:
         # worker (F-080).
         self._timeout_seconds = fit_timeout(timeout_seconds, self._max_retries)
         self._max_output_tokens = max_output_tokens
+        # Callers that do not name a task (the teacher generators) get the
+        # structured-generation profile, never the vendor default.
+        self._sampling = default_sampling or sampling_for("generation")
         self._transport = transport
         self._http: httpx.AsyncClient | None = None
+
+    def _sampling_log_fields(self, sampling: SamplingParams | None) -> dict[str, object]:
+        """Sampling controls actually sent -- proof for the determinism trace."""
+        if sampling is None:
+            return {}
+        return {
+            "temperature": sampling.temperature,
+            "top_p": sampling.top_p,
+            "seed": sampling.seed if self.supports_seed else None,
+        }
 
     def _client(self) -> httpx.AsyncClient:
         # One pooled client per provider instance instead of a new
@@ -180,7 +237,12 @@ class GeminiProvider:
             self._http = None
 
     async def stream(
-        self, prompt: str, *, system: str | None = None, image: dict | None = None
+        self,
+        prompt: str,
+        *,
+        system: str | None = None,
+        image: dict | None = None,
+        sampling: SamplingParams | None = None,
     ) -> AsyncIterator[str]:
         """Stream tokens via ``streamGenerateContent`` SSE transport.
 
@@ -190,7 +252,15 @@ class GeminiProvider:
         """
         url = f"{_API_BASE}/models/{self.model}:streamGenerateContent?alt=sse"
         headers = {"x-goog-api-key": self._api_key}
-        payload = _build_payload(prompt, system, image, self._max_output_tokens)
+        effective = sampling or self._sampling
+        payload = _build_payload(
+            prompt,
+            system,
+            image,
+            self._max_output_tokens,
+            effective,
+            supports_seed=self.supports_seed,
+        )
 
         attempt = 0
         emitted_any = False
@@ -223,6 +293,7 @@ class GeminiProvider:
                                 answer_chars=chars,
                                 chunks=emitted,
                                 retries=attempt,
+                                **self._sampling_log_fields(effective),
                                 **_context_log_fields(),
                             )
                             return
@@ -241,23 +312,36 @@ class GeminiProvider:
                         else f"Gemini stream failed: {exc}"
                     )
                     raise ProviderError(detail) from exc
-                await asyncio.sleep(min(0.5 * (2**attempt), _MAX_BACKOFF_SECONDS))
+                await asyncio.sleep(retry_delay_seconds(attempt))
                 attempt += 1
                 continue
 
             retryable = status in _RETRYABLE_STATUS
             if retryable and attempt < self._max_retries:
-                await asyncio.sleep(min(0.5 * (2**attempt), _MAX_BACKOFF_SECONDS))
+                await asyncio.sleep(retry_delay_seconds(attempt))
                 attempt += 1
                 continue
             raise ProviderError(f"Gemini API error {status}: {_error_message_text(body)}")
 
     async def generate(
-        self, prompt: str, *, system: str | None = None, image: dict | None = None
+        self,
+        prompt: str,
+        *,
+        system: str | None = None,
+        image: dict | None = None,
+        sampling: SamplingParams | None = None,
     ) -> str:
         url = f"{_API_BASE}/models/{self.model}:generateContent"
         headers = {"x-goog-api-key": self._api_key}
-        payload = _build_payload(prompt, system, image, self._max_output_tokens)
+        effective = sampling or self._sampling
+        payload = _build_payload(
+            prompt,
+            system,
+            image,
+            self._max_output_tokens,
+            effective,
+            supports_seed=self.supports_seed,
+        )
 
         attempt = 0
         start = time.perf_counter()
@@ -274,7 +358,7 @@ class GeminiProvider:
                         else f"Gemini request failed: {exc}"
                     )
                     raise ProviderError(detail) from exc
-                await asyncio.sleep(min(0.5 * (2**attempt), _MAX_BACKOFF_SECONDS))
+                await asyncio.sleep(retry_delay_seconds(attempt))
                 attempt += 1
                 continue
 
@@ -292,6 +376,7 @@ class GeminiProvider:
                         prompt_chars=len(prompt),
                         answer_chars=len(text),
                         retries=attempt,
+                        **self._sampling_log_fields(effective),
                         **_context_log_fields(),
                     )
                     return text
@@ -300,7 +385,7 @@ class GeminiProvider:
 
             retryable = response.status_code in _RETRYABLE_STATUS
             if retryable and attempt < self._max_retries:
-                await asyncio.sleep(min(0.5 * (2**attempt), _MAX_BACKOFF_SECONDS))
+                await asyncio.sleep(retry_delay_seconds(attempt))
                 attempt += 1
                 continue
             raise ProviderError(

@@ -458,3 +458,76 @@ than passing silently.
 | Model-based dense retrieval + model-based reranker benchmark | embedding-model benchmark infrastructure (a dependency-free vector lane and RRF fusion already ship; the golden set + 2pp gate run in CI) |
 | Mobile release builds (Capacitor Android signing, iOS) | no JDK/Android SDK or macOS host on the dev machine (the project ships at `apps/web/android`) |
 | Sustained scale beyond the CI rehearsal | Postgres/Redis profiles, monitoring/alerts and backups ship (see `docs/runbook.md` §2/§5, `docs/backup_dr.md`); load numbers come from local probes, not a production soak |
+
+## C-05 design review, round 2: the ten largest / highest-churn modules
+
+AUD-CD-06 recorded that the first pass produced no per-module design review and
+no before/after complexity. This is that review. Selection is mechanical:
+**size** (lines, `wc -l` over `apps/api/src`) unioned with **churn** (commits
+touching the file since 2026-08-01, `git log --since`), which is the "largest
+or highest-churn" rule the catalog asks for. Modules owned by a workstream
+running in parallel to this one were reviewed at their committed state and are
+marked *in flight* where their numbers moved after the review.
+
+| Module | Size | Churn | Verdict (SRP / coupling / testability) | Action |
+|---|---|---|---|---|
+| `services/tutor.py` | 1735 | 18 | **Highest risk in the tree.** One class owns prompt assembly, retrieval orchestration, streaming, fallback routing, coverage details and citation scoring. Coupled to provider + index + cache + context. Testability is good (`test_tutor_service_seams.py` injects every collaborator) but the surface is too wide to reason about at once. | **Not refactored here** — it is being actively rewritten by the determinism/streaming workstream (1132 → 1735 lines during this pass). Reviewed, tracked as candidate #1; a split along `assemble` / `stream` / `coverage` is the next change after that workstream lands. |
+| `db/models.py` | 978 | 14 | Declarative models plus CHECK constraints; no branching logic. The size is column declarations. | **No action** (documented, as in round 1). |
+| `schemas.py` | 1471 | 21 | Flat catalogue of request/response models, no logic. | **No action**; split only when a schema change forces a merge conflict (unchanged decision). |
+| `routers/teacher_content.py` | 960 | 6 | Two question-paper flows (`teacher_qp_replace` CC 30, `teacher_qp_review` CC 17) share a review/transition shape. | **Deferred** by the ratchet; the two functions are the remaining D-rank offenders. Candidate #3. |
+| `routers/users.py` | 910 | 7 | Already refactored in round 1 (`export_me` F(43) → A(2)); the remaining complexity is in consent/MFA edges, not in one dump. | **No further action.** |
+| `routers/assessment.py` | 837 | 6 | `teacher_curriculum_coverage` (CC 22) is the same shape as the school coverage refactor below, over assignments. | **Deferred** (candidate #4); the school refactor is the template. |
+| `routers/learn.py` | 828 | 5 | `_build_dashboard_summary` (CC 28) and `global_search` (CC 21); five independent aggregates in one function. | **Deferred** (candidate #5); needs the student-dashboard fixtures extended first. |
+| `routers/tutor.py` | 813 | 9 | `send_chat_message` (CC 14); belongs to the same streaming refactor as `ask_stream`. | **Deferred** with `services/tutor.py`. |
+| `routers/common.py` | 700 | 6 | `_generate_document` (CC 23) dispatches four generator kinds; helpers are shared, not duplicated. | **Deferred** (candidate #6). |
+| `main.py` | 592 | 36 | **Highest churn, lowest logic density**: a 25-line factory plus re-exports for monkeypatching. The churn is boot wiring, and each wave re-reads one file instead of ten. | **No action**; splitting it would move the churn, not remove it. |
+| `config.py` | 296 | 28 | One typed settings object, every field commented with the finding it answers; the churn is the audit adding fields. | **No action.** |
+| `routers/auth.py` | 687 | 12 | `login`/`register` carry the lockout/MFA/consent edges; each branch is a security decision with its own test. | **No action**; complexity here is policy, not structure. |
+| `routers/deps.py` | 415 | 10 | Dependency wiring plus role guards; the one hot function (`get_current_user`, CC 19) is a guard chain. | **No action.** |
+| `providers/mock.py` | 330 | 10 | Test/dev provider; deterministic fixtures. | **No action.** |
+
+### Refactored in this pass
+
+**1. `routers/school.py` (1060 lines) → package `routers/school/`** (C-03).
+
+The split is by responsibility, and the three D/C-rank functions were
+decomposed while moving: the before/after numbers below are radon cyclomatic
+complexity, `radon cc -s`.
+
+| Function | Before | After | Where |
+|---|---|---|---|
+| `school_health_overview` | **26** | **2** | `school/_health.py` — cohort resolution, staff count, 7-day sessions and the bucket/at-risk loop became `_cohort`, `_staff_count`, `_sessions_7d`, `_bucket_cohort`; the endpoint now calls the same shared `_actor_school` scope resolver the other `/school/*` routes use (identical 403/404 shapes, verified by the tenancy tests). |
+| `school_students` | **16** | **9** | `school/_roster.py` — the three grouped roster queries moved into `_roster_signals`. |
+| `school_coverage` | **13** | **7** | `school/_analytics.py` — one grade band per call to `_level_coverage`. |
+| whole module | 1060 lines, 7 files | 34 + 287 + 268 + 139 + 197 + 197 + 95 = 1217 | All seven files are inside the 500-line budget. |
+
+Behaviour preservation is evidenced three ways: the served route table is
+unchanged (`/openapi.json` diffs clean against `docs/route_baseline.md` apart
+from the one route added after that snapshot), the 17 routes appear in the same
+*order* (AST extraction of the old file vs the new package compares equal), and
+the eight school test modules plus the tenancy/aggregation suites stay green.
+Because all three hotspots fell below rank C, their entries disappear from
+`quality-baselines/complexity-baseline.json` by ratchet (an improvement needs no
+baseline edit) — no baseline was updated for this refactor.
+
+**2. `jobs.py` → `jobs.py` (389) + `ai_jobs.py` (327)** (C-04/C-08).
+
+Adding the AiJob state machine, claim, lease, retry and recovery to `jobs.py`
+took it to 704 lines, i.e. the next god module, so the work split along the
+seam it already had: `jobs.py` keeps the *scheduled-period* ledger, the retry
+policies and the unit of work; `ai_jobs.py` owns the AiJob row. Worst function
+in either file is `recover_stale_ai_jobs` at CC 8.
+
+### What is still frozen, and why that is the honest state
+
+The four remaining D-rank functions (`ask_stream` 25 / `_coverage_details` 26 in
+`services/tutor.py`, `teacher_qp_replace` 30 in `teacher_content.py`,
+`_build_dashboard_summary` 28 in `learn.py`) are recorded in the complexity
+baseline and in the table above. Refactoring them is not blocked by tooling —
+it is blocked by the precondition this review states per row: the streaming
+fallback path needs a failure-injection test before it is moved, and the
+dashboard aggregates need fixtures that assert the summary values, not only the
+status code. Doing them blind would trade a measurable complexity number for an
+unmeasurable behaviour risk, which is not a trade this review is willing to
+make. Each row names its precondition, so the next pass can pick them up in
+order.

@@ -68,36 +68,72 @@ Update this register whenever the triage set changes.
 
 ## DAST baseline (AUD-B-15)
 
-A ZAP 2.17.0 baseline scan against the running test-mode API container
-(`http://127.0.0.1:8000`, `ENV=test`) on 2026-10-18 produced
-`FAIL-NEW 0 / WARN-NEW 1 / PASS 66`; the single warning is the
-storable-and-cacheable-404 rule (no cache headers on 404s). Artifacts from
-that run live in `.audit/tmp/zap/` (audit workspace, not committed). That
-scan was ad hoc: nothing in `.github/workflows` runs DAST, so there is no
-repo-owned baseline and no trend.
+Status: **repo-owned baseline exists (weekly CI job) and the dated local
+report is now committed** under `docs/security/dast/`.
 
-Status: **accepted as an ad-hoc cadence for now, with a handoff**. A
-scheduled ZAP baseline job (weekly, against the compose test stack, report
-archived as a workflow artifact) is specified as an exact YAML block in
-`.audit/handoffs/ef-from-b.md`; until that job exists, re-run manually with:
+### Committed run — 2026-10-19 (TAG=b2)
+
+Target: a locally started API — `uvicorn bangla_gpt_api.main:app` on
+`127.0.0.1:8020` with `ENV=ci LLM_PROVIDER=mock` and a throwaway JWT secret —
+reached from the ZAP container as `http://host.docker.internal:8020`. Mock
+provider: no LLM key, no outbound traffic. `ENV=ci` keeps `/docs` and
+`/openapi.json` enabled exactly as the CI DAST job's test posture does.
+
+Result: **FAIL-NEW 0 / WARN-NEW 1 / PASS 66** (same shape as the 2026-10-18
+ad-hoc run).
+
+Artifacts:
+
+- `docs/security/dast/zap-baseline-2026-10-19.json` (machine report)
+- `docs/security/dast/zap-baseline-2026-10-19.html` (human report)
+- `docs/security/dast/zap-automation-config-2026-10-19.yaml` (the exact
+  automation plan ZAP generated for the run)
+
+Image: the workflow pins
+`ghcr.io/zaproxy/zaproxy@sha256:5ccfff9a411743ab2615136a2edd7416bec9ce41572fa94e935df38c14adb2b6`.
+That digest could not be pulled in this environment (two attempts, ~30 min,
+no layer progress — the registry transfer stalled), so this run used the
+locally available `ghcr.io/zaproxy/zaproxy:stable`, recorded as
+`sha256:7aaa659b0d43078febd82e29bad112285c370727e86ab8340444220e17d9f0d2`
+(10 days old at run time). Same ZAP 2.17.0 rule pack; **re-run with the pinned
+digest before treating numbers as release-grade**. The CI job still uses the
+pin.
+
+Triage of the single warning:
+
+| Alert | Instances | Verdict |
+|---|---|---|
+| 10049 Storable and Cacheable Content (Informational, Medium confidence) | `GET /` 404, `GET /robots.txt` 404 (no `Cache-Control` on the API's 404 bodies) | **Accepted-with-action for the API**; not fixed in this round because the header set lives in `apps/api/src/bangla_gpt_api/middleware.py` (outside this agent's file set). Exact patch + rationale handed to the middleware owner in `.audit/handoffs/middleware-b2.md`. Impact is low: the bodies are the fixed coded 404 envelope, the API sits behind Caddy which can also set the header, and no per-user data is ever served on a 404. The CI ZAP job runs with `-I` (warn-level does not fail), so this stays a tracked warning, not a gate. |
+
+Everything else passed (66 PASS rules), including the security-headers,
+anti-CSRF-absence and information-disclosure rule families. Caveat unchanged:
+an unauthenticated baseline does not exercise authenticated surfaces (tutor,
+admin, exports); those are covered by the authorization/tenancy negative
+suites.
+
+Re-run locally (test-mode posture):
 
 ```sh
-# test-mode stack up, then:
-docker run --rm -v "$(pwd)/.zap:/zap/wrk:rw" -t ghcr.io/zaproxy/zaproxy:stable \
-  zap-baseline.py -t http://host.docker.internal:8000 -r zap-baseline.html -J zap-baseline.json
+docker run --rm -v "$(pwd)/docs/security/dast:/zap/wrk:rw" \
+  ghcr.io/zaproxy/zaproxy@sha256:5ccfff9a411743ab2615136a2edd7416bec9ce41572fa94e935df38c14adb2b6 \
+  zap-baseline.py -t http://host.docker.internal:8000 -J zap-baseline.json -r zap-baseline.html -I
 ```
-
-Caveat unchanged: an unauthenticated baseline does not exercise
-authenticated surfaces (tutor, admin, exports); those are covered by the
-authorization/tenancy negative suites.
 
 ## SBOM and licence artifacts (AUD-B-16)
 
-`release.yml` builds both images with buildx `sbom: true` and
-`provenance: mode=max`, but no release has been cut in this repo, so no SBOM
-artifact exists to inspect (`git ls-files` has none) and the licence
-inventory lives only as `THIRD_PARTY_NOTICES.md` prose. Status: the licence
-inventory is committed; the generated SBOM and a CI licence gate are
-handed off as an exact YAML block in `.audit/handoffs/ef-from-b.md`
-(CycloneDX per image + a `pip-licenses`/`license-checker` gate against the
-existing notices file).
+Status: **fixed**. The CI job `sbom-licence` (`.github/workflows/ci.yml`)
+generates both SBOMs and enforces the licence gate on every PR; the missing
+piece — a dated, repo-owned artifact — now lives under `docs/security/sbom/`:
+
+- `bangla-gpt-api-2026-10-19.cdx.json` — CycloneDX 1.6, 91 components, the
+  runtime set installed from the hash-verified `apps/api/constraints.txt`.
+- `bangla-gpt-web-2026-10-19.cdx.json` — CycloneDX 1.6, 127 components, the
+  production tree from `package-lock.json` (`--omit dev`, same semantics as
+  the CI job).
+- `licence-inventory-2026-10-19.md` — machine-derived licence counts plus
+  every copyleft/restricted/unresolved component, with review notes
+  (LGPL-3.0-only `fpdf2`/`psycopg`(+binary) covered by the existing relink
+  note; `pyphen` triple-license; MPL-2.0 file-level set; OFL-1.1 fonts).
+- `README.md` — exact regeneration commands, tool pin caveat and the
+  release-time buildx attestation note (still unverifiable until a release
+  is cut).

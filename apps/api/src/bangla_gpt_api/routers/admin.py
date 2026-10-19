@@ -28,7 +28,7 @@ from bangla_gpt_api.db.models import (
     Student,
     User,
 )
-from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES
+from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded, message
 from bangla_gpt_api.schemas import (
     AdminAiQualityOut,
     AdminAuditPage,
@@ -94,10 +94,17 @@ def admin_list_users(
     )
 
 
-@router.patch("/admin/users/{user_id}/role", response_model=UserPublic)
+@router.patch(
+    "/admin/users/{user_id}/role",
+    response_model=UserPublic,
+    responses=message(404, 409),
+)
 def admin_update_role(
     user_id: int, payload: RoleUpdateRequest, db: DbSession, admin: AdminUser
 ) -> UserPublic:
+    # AUD-B-19: 404/409 are raised with the plain message shape; declared here
+    # so the served OpenAPI document matches the wire (the router-level
+    # AUTH_GUARD_RESPONSES covers 401/403).
     target = db.get(User, user_id)
     if target is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -133,10 +140,18 @@ def admin_update_role(
 # the shared cache, so a session no longer rides out its 15-minute ceiling.
 
 
-@router.post("/admin/users/{user_id}/impersonate", response_model=ImpersonateOut)
+@router.post(
+    "/admin/users/{user_id}/impersonate",
+    response_model=ImpersonateOut,
+    responses={**message(404), **coded(503)},
+)
 def admin_impersonate(
     app_ctx: Ctx, user_id: int, payload: ImpersonateRequest, db: DbSession, admin: AdminUser
 ) -> ImpersonateOut:
+    # AUD-B-19: 404 (no such user) and 503 (revocation store unreachable,
+    # `revocation_store_unavailable`) were raised but undocumented; 403 has two
+    # real bodies here (guard MessageDetail, coded `impersonation_forbidden`)
+    # and the router-level guard shape stays the documented one.
     target = db.get(User, user_id)
     if target is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -190,8 +205,13 @@ def admin_impersonate(
     )
 
 
-@router.delete("/admin/users/{user_id}/impersonate", status_code=204)
+@router.delete(
+    "/admin/users/{user_id}/impersonate",
+    status_code=204,
+    responses={**message(404), **coded(503)},
+)
 def admin_impersonate_end(app_ctx: Ctx, user_id: int, db: DbSession, admin: AdminUser) -> None:
+    # AUD-B-19: same declaration rule as the start route above.
     target = db.get(User, user_id)
     if target is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -222,7 +242,11 @@ def admin_impersonate_end(app_ctx: Ctx, user_id: int, db: DbSession, admin: Admi
     db.commit()
 
 
-@router.post("/auth/impersonate/exit", status_code=204)
+@router.post(
+    "/auth/impersonate/exit",
+    status_code=204,
+    responses={**coded(403, 503)},
+)
 def impersonate_exit(app_ctx: Ctx, request: Request, db: DbSession, user: CurrentUser) -> None:
     """the holder of an impersonation token ends the session NOW.
 
@@ -231,6 +255,10 @@ def impersonate_exit(app_ctx: Ctx, request: Request, db: DbSession, user: Curren
     itself disappears when the token would have expired anyway. Only works
     with an impersonation token -- a normal session token cannot 'exit'
     itself into 401s (that would be a self-DoS foot-gun).
+
+    AUD-B-19: this route never raises the guard-shaped 403 -- its 403 is
+    always the coded ``not_impersonation`` body, and the 503 is the coded
+    ``revocation_unavailable`` -- so both are declared as coded here.
     """
     claims = getattr(request.state, "jwt_claims", None) or {}
     if not claims.get("imp") or not isinstance(claims.get("jti"), str):

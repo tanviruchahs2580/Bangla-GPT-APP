@@ -11,6 +11,7 @@ from argon2.exceptions import InvalidHashError, VerificationError
 
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.models import User
+from bangla_gpt_api.services.breached_passwords import BREACHED_PASSWORDS, fold_variants
 
 # OWASP Password Storage Cheat Sheet (fetched 2026-10-09): "Argon2id with a
 # minimum configuration of 19 MiB of memory, an iteration count of 2, and 1
@@ -26,9 +27,11 @@ _ARGON2 = PasswordHasher(time_cost=2, memory_cost=19 * 1024, parallelism=1)
 _DECOY_HASH: str | None = None
 
 #: The most-used passwords in the world. Checked case-insensitively after
-#: leetspeak folding, because "P@ssw0rd1" is the same guess as "password1"
-#: (F-072). This is a floor, not a replacement for a breach corpus: it
-#: exists so the obvious choices cannot be registered at all.
+#: leetspeak folding (see ``services/breached_passwords.fold_variants``),
+#: because "P@ssw0rd1" is the same guess as "password1" (F-072). This is the
+#: hand-curated obvious set; the embedded breach corpus lives in
+#: ``services/breached_passwords.BREACHED_PASSWORDS`` (AUD-B-06) and
+#: ``is_common_password`` checks both.
 COMMON_PASSWORDS = frozenset(
     {
         "password",
@@ -89,37 +92,34 @@ COMMON_PASSWORDS = frozenset(
     }
 )
 
-_LEET = str.maketrans(
-    {"@": "a", "0": "o", "1": "l", "3": "e", "4": "a", "5": "s", "7": "t", "$": "s"}
-)
-
 
 def _variants(password: str) -> set[str]:
     """The shapes a guesser would actually try for this candidate.
 
-    Both the plain lowercase form and the leet-folded form are kept. Either
-    transformation on its own makes the blocklist silently useless: folding
-    turns "12345678" into "l2eas6t8", which matches nothing in any word list,
-    and collapsing repeated characters turns "password" into "pasword", which
-    also matches nothing.
+    AUD-B-06: the transformation itself now lives in
+    ``services/breached_passwords.fold_variants`` so the small blocklist here
+    and the embedded breached corpus cannot drift apart in how they read a
+    candidate. This alias keeps the module's historical call sites (and its
+    tests) working unchanged.
     """
-    lowered = (password or "").strip().lower()
-    if not lowered:
-        return set()
-    out: set[str] = set()
-    for form in (lowered, lowered.translate(_LEET)):
-        out.add(form)
-        stripped = form.rstrip("0123456789")
-        if stripped:
-            out.add(stripped)
-    return out
+    return fold_variants(password)
 
 
 def is_common_password(password: str) -> bool:
-    """True when the password is a well-known guess (F-072)."""
+    """True when the password is a well-known guess (F-072/AUD-B-06).
+
+    Three layers, all offline:
+
+    1. ``COMMON_PASSWORDS`` -- the hand-curated obvious choices.
+    2. ``BREACHED_PASSWORDS`` -- the embedded top of the public breach lists
+       (AUD-B-06); NIST SP 800-63B §3.1.1.2 requires a breached-value check
+       and this repository cannot call a network service from registration.
+    3. Structure rules for the guesses no word list holds: "aaaaaaaa",
+       "abababab", "00000000" (NIST's repetitive-character check).
+    """
     if not (password or "").strip():
         return True
-    if _variants(password) & COMMON_PASSWORDS:
+    if _variants(password) & (COMMON_PASSWORDS | BREACHED_PASSWORDS):
         return True
     # Structure rules, covering the guesses no word list holds:
     # "aaaaaaaa", "abababab", "00000000".

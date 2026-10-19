@@ -3,13 +3,16 @@
 #   make setup   create the Python venv + install locked deps, install web deps
 #   make dev     run the API with reload on http://127.0.0.1:8000
 #   make test    run the real test commands (API pytest + web vitest)
-#   make ci      every CI check that needs no external service, in CI's order
+#   make ci-static  every CI gate that needs no service container (F-06)
+#   make ci      `ci-static` plus both test suites, in CI's order
 #   make help    list every target
 #
 # Requirements: run from Git Bash (or any POSIX shell) with GNU make, Python
 # 3.12 (see .python-version) and Node 24 (see .nvmrc). Every command below is
-# the one CI runs in .github/workflows/ci.yml; nothing is invented here.
-# Overridable: VENV (default .venv), PYTEST_ARGS, NPM_INSTALL.
+# the one CI runs in .github/workflows/ci.yml; nothing is invented here. The
+# ci.yml job `make-parity` runs `make ci-static PY=python3`, so this file and
+# CI cannot drift: a check that lives in only one of the two fails the build.
+# Overridable: VENV (default .venv), PY, PYTEST_ARGS, NPM_INSTALL.
 #
 # `make test` runs the full API suite (several minutes) plus the web unit
 # tests; `make test-fast` runs the guardrail subset in a few minutes.
@@ -21,14 +24,14 @@ VENV ?= .venv
 PYTEST_ARGS ?= -q
 NPM_INSTALL ?= npm ci
 
-ifeq ($(OS),Windows_NT)
-  PY := $(CURDIR)/$(VENV)/Scripts/python.exe
-else
-  PY := $(CURDIR)/$(VENV)/bin/python
-endif
+# PY is overridable on purpose: the make-parity CI job passes PY=python3 so the
+# same targets run against the runner interpreter (F-06). Locally the venv
+# interpreter is the default.
+PY ?= $(if $(filter Windows_NT,$(OS)),$(CURDIR)/$(VENV)/Scripts/python.exe,$(CURDIR)/$(VENV)/bin/python)
 
 .PHONY: help setup setup-python setup-web dev test test-fast test-api test-web \
-        lint lint-api lint-web build check-version check-commits ci
+        lint lint-api lint-web build check-version check-commits check-docs \
+        ci-static ci
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-14s %s\n", $$1, $$2}'
@@ -81,9 +84,22 @@ check-version: ## Verify the version is identical in every file that states it
 check-commits: ## Verify recent commit subjects follow the repository rules
 	"$(PY)" scripts/check_commits.py --max-count 50
 
-ci: lint test check-version check-commits ## Local mirror of the CI checks that need no services
-	cd apps/web && npm run build
+check-docs: ## Doc, changelog, lockfile, glossary, i18n and API-drift guards (CI's guardrails job)
+	"$(PY)" scripts/check_glossary.py
+	"$(PY)" scripts/check_placeholders.py
+	"$(PY)" scripts/check_i18n.py
 	"$(PY)" apps/api/scripts/check_lockfile.py
 	"$(PY)" apps/api/scripts/check_readme_contract.py
 	"$(PY)" apps/api/scripts/check_doc_paths.py
 	"$(PY)" apps/api/scripts/check_changelog.py
+	cd apps/api && "$(PY)" scripts/check_dashboards.py
+	cd apps/api && "$(PY)" scripts/gen_api_docs.py --check
+
+# F-06: the exact half of CI that needs no service containers (no Postgres,
+# Redis, browser or Docker). The ci.yml job `make-parity` runs
+#   make ci-static PY=python3
+# against the same locked dependency set the api job installs, so this target
+# cannot drift from CI unnoticed.
+ci-static: lint build check-version check-commits check-docs ## CI gates that need no service container
+
+ci: ci-static test ## Full local mirror: the static gates then both test suites

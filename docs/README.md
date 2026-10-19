@@ -6,13 +6,22 @@ never quoted as current state. There is exactly one current QA record, under
 [`qa/`](qa/) (`qa/QA_REPORT_YYYY-MM-DD.md`), superseded and archived when the
 next is written.
 
+This page is the curated shortlist; [INDEX.md](INDEX.md) is the full tracked
+inventory — every document, one line each — and is the page to check before
+adding a file to `docs/`.
+
 ## Core
 
 | Doc | Purpose |
 |---|---|
-| [API.md](API.md) | Hand-written endpoint reference (core surface; see `route_baseline.md` + `/openapi.json` for the full route list) |
+| [INDEX.md](INDEX.md) | Full tracked inventory + the `docs/` tree |
+| [API.md](API.md) | Generated endpoint reference (regenerate with `apps/api/scripts/gen_api_docs.py`; drift-checked in CI) |
 | [architecture.md](architecture.md) | System architecture and decisions |
 | [architecture/DATABASE_ARCHITECTURE.md](architecture/DATABASE_ARCHITECTURE.md) | Data model |
+| [code-style.md](code-style.md) | House conventions beyond the linters |
+| [ci.md](ci.md) | What each workflow checks and how to reproduce it locally |
+| [requirements-traceability.md](requirements-traceability.md) | Requirement → test → evidence matrix |
+| [testing-strategy.md](testing-strategy.md) | Test pyramid, suites and gates |
 | [adr/ADRs.md](adr/ADRs.md) | Architecture decision records (0001–0010; 0011 is a standalone file below) |
 | [adr/ADR-0011-data-and-artifact-management.md](adr/ADR-0011-data-and-artifact-management.md) | What lives in git vs out-of-band (corpus, screenshots, evals) |
 | [runbook.md](runbook.md) | Operations runbook |

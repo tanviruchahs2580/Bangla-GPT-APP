@@ -17,6 +17,7 @@ from collections.abc import Callable
 
 from sqlalchemy.orm import Session
 
+from bangla_gpt_api.ai_jobs import AI_JOB_RECOVERY_INTERVAL_SECONDS, recover_stale_ai_jobs
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.jobs import (
     run_nightly_rollup,
@@ -140,3 +141,52 @@ async def _run_weakness_loop(
             else max(1, check_interval) * 60
         )
         await asyncio.sleep(wait_seconds)
+
+
+# ---------------------------------------------------------------------------
+# AiJob recovery loop (C-08)
+# ---------------------------------------------------------------------------
+
+
+async def _run_ai_job_recovery_loop(
+    session_factory: Callable[[], Session],
+    check_interval: float,
+    dispatch: Callable[[str], object],
+) -> None:
+    """Hand killed-worker jobs and due retries back to the durable runner.
+
+    This loop is what makes a hard kill survivable: the killed worker leaves a
+    row at ``status='generating'`` with an expired lease, and the next sweep
+    either re-dispatches it (attempts remain) or dead-letters it -- never
+    "generating forever". It runs under every ``JOBS_BACKEND`` because AiJob
+    execution is always in-process, and every replica may run it: the claim is
+    an atomic conditional UPDATE in ``ai_jobs.claim_ai_job``, so extra sweepers
+    are harmless.
+    """
+    while True:
+        try:
+            ready = await asyncio.to_thread(recover_stale_ai_jobs, session_factory)
+            for job_id in ready:
+                dispatch(job_id)
+            if ready:
+                from bangla_gpt_api.logging_config import json_log
+
+                json_log(
+                    logger,
+                    logging.INFO,
+                    "ai_job_recovery_dispatched",
+                    jobs=len(ready),
+                )
+        except asyncio.CancelledError:
+            logger.info("ai_job_recovery_cancelled")
+            return  # graceful shutdown
+        except Exception as exc:  # a broken sweep must not kill the loop
+            from bangla_gpt_api.logging_config import json_log
+
+            json_log(
+                logger,
+                logging.WARNING,
+                "ai_job_recovery_error",
+                error=type(exc).__name__,
+            )
+        await asyncio.sleep(max(1.0, float(check_interval) or AI_JOB_RECOVERY_INTERVAL_SECONDS))

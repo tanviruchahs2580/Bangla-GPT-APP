@@ -4,8 +4,10 @@
 # Or: ./scripts/pg_backup.sh backup|restore <file>
 set -euo pipefail
 DB_URL="${DATABASE_URL:-postgresql+psycopg://bgpt:bgpt@localhost:5432/bgpt}"
-# Strip driver prefix for pg_dump (psycopg)
-PG_URL=$(echo "$DB_URL" | sed 's|postgresql+psycopg://|postgresql://|')
+# Strip driver prefix for pg_dump (psycopg). Parameter expansion rather than
+# sed: it silences SC2001 and cannot fail on sed's locale/regex differences.
+DB_SCHEME="postgresql+psycopg://"
+PG_URL="${DB_URL/$DB_SCHEME/postgresql://}"
 BACKUP_DIR="${BACKUP_DIR:-./backups}"
 mkdir -p "$BACKUP_DIR"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)

@@ -18,6 +18,13 @@ on:
   schedule:
     - cron: "0 3 * * 1" # weekly, Monday 03:00 UTC
 
+concurrency:
+  # F-05: a new push to the same ref supersedes the running analysis; the
+  # weekly schedule tick runs on the default branch and is unaffected by
+  # pull-request groups.
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 

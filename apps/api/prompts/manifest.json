@@ -1,0 +1,202 @@
+{
+  "schema_version": 1,
+  "notes": [
+    "Every prompt the app sends as a system or instruction message is registered here with one owner.",
+    "version is SemVer; bump it and append a changelog entry in the SAME change that edits the file (docs/operations/CHANGE_MANAGEMENT.md).",
+    "{{age_rule}} is substituted at load time from services/safety.AGE_RULE_SENTENCE, so the child-safety sentence has exactly one source.",
+    "Prompts carrying module_constant are not yet loaded from this file; tests/test_rag2_prompt_registry.py pins file<->constant equality so the two cannot drift."
+  ],
+  "prompts": [
+    {
+      "id": "tutor_system",
+      "file": "tutor_system.md",
+      "version": "1.0.1",
+      "owner": "ai-platform",
+      "summary": "Grounded tutor system prompt (rules 1-7: evidence isolation, refusal, age rule).",
+      "changelog": [
+        {
+          "version": "1.0.1",
+          "date": "2026-10-19",
+          "note": "Moved verbatim out of the module constant (same text, digest unchanged); the registry file is now the loader."
+        },
+        {
+          "version": "1.0.0",
+          "date": "2026-10-17",
+          "note": "Text as shipped in services/tutor.py (AUD-A2-06 baseline)."
+        }
+      ]
+    },
+    {
+      "id": "tutor_grounding_retry",
+      "file": "tutor_grounding_retry.md",
+      "version": "1.0.1",
+      "owner": "ai-platform",
+      "summary": "One-shot regeneration instruction when the first answer fails the grounding check.",
+      "changelog": [
+        {
+          "version": "1.0.1",
+          "date": "2026-10-19",
+          "note": "Moved verbatim out of the module constant (same text, digest unchanged); the registry file is now the loader."
+        },
+        {
+          "version": "1.0.0",
+          "date": "2026-10-17",
+          "note": "Text as shipped in services/tutor.py."
+        }
+      ]
+    },
+    {
+      "id": "tutor_hint_first",
+      "file": "tutor_hint_first.md",
+      "version": "1.0.1",
+      "owner": "pedagogy",
+      "summary": "Hint-first instruction for homework-like prompts (AUD-A2-19 / A11-03). NEEDS NATIVE REVIEW.",
+      "changelog": [
+        {
+          "version": "1.0.1",
+          "date": "2026-10-19",
+          "note": "Copy clarification during the change-management exercise: after a wrong attempt the tutor marks the wrong step and asks the student to retry instead of silently revealing the answer. NEEDS NATIVE REVIEW."
+        },
+        {
+          "version": "1.0.0",
+          "date": "2026-10-19",
+          "note": "New prompt: hint-first behaviour for homework-like prompts (A11-03)."
+        }
+      ]
+    },
+    {
+      "id": "tutor_study_steps",
+      "file": "tutor_study_steps.md",
+      "version": "1.0.0",
+      "owner": "pedagogy",
+      "summary": "Step-by-step instruction for study-mode turns (context.goal == 'study'). NEEDS NATIVE REVIEW.",
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-19",
+          "note": "New prompt: study-mode step-by-step behaviour (A11-03)."
+        }
+      ]
+    },
+    {
+      "id": "tutor_short_answer",
+      "file": "tutor_short_answer.md",
+      "version": "1.0.0",
+      "owner": "ai-platform",
+      "summary": "Low-data short-answer instruction prepended to the user prompt.",
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-19",
+          "note": "Registered verbatim from the module constant; the constant is still the loader (handoff: switch the module to load_prompt). Drift is impossible: tests/test_rag2_prompt_registry.py pins equality."
+        }
+      ],
+      "module_constant": "bangla_gpt_api.services.answer_structure:SHORT_ANSWER_INSTRUCTION"
+    },
+    {
+      "id": "qp_system",
+      "file": "qp_system.md",
+      "version": "1.0.0",
+      "owner": "assessment",
+      "summary": "Teacher question-paper generation system prompt.",
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-19",
+          "note": "Registered verbatim from the module constant; the constant is still the loader (handoff: switch the module to load_prompt). Drift is impossible: tests/test_rag2_prompt_registry.py pins equality."
+        }
+      ],
+      "module_constant": "bangla_gpt_api.services.generators.question_paper:QP_SYSTEM_PROMPT"
+    },
+    {
+      "id": "content_system",
+      "file": "content_system.md",
+      "version": "1.0.0",
+      "owner": "content",
+      "summary": "Chapter study-material generation system prompt.",
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-19",
+          "note": "Registered verbatim from the module constant; the constant is still the loader (handoff: switch the module to load_prompt). Drift is impossible: tests/test_rag2_prompt_registry.py pins equality."
+        }
+      ],
+      "module_constant": "bangla_gpt_api.services.generators.chapter_content:CONTENT_SYSTEM_PROMPT"
+    },
+    {
+      "id": "answer_key_system",
+      "file": "answer_key_system.md",
+      "version": "1.0.0",
+      "owner": "assessment",
+      "summary": "Teacher answer-key generation system prompt.",
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-19",
+          "note": "Registered verbatim from the module constant; the constant is still the loader (handoff: switch the module to load_prompt). Drift is impossible: tests/test_rag2_prompt_registry.py pins equality."
+        }
+      ],
+      "module_constant": "bangla_gpt_api.services.generators.answer_key:ANSWER_KEY_SYSTEM_PROMPT"
+    },
+    {
+      "id": "homework_system",
+      "file": "homework_system.md",
+      "version": "1.0.0",
+      "owner": "content",
+      "summary": "Homework assignment generation system prompt.",
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-19",
+          "note": "Registered verbatim from the module constant; the constant is still the loader (handoff: switch the module to load_prompt). Drift is impossible: tests/test_rag2_prompt_registry.py pins equality."
+        }
+      ],
+      "module_constant": "bangla_gpt_api.services.generators.homework:HOMEWORK_SYSTEM_PROMPT"
+    },
+    {
+      "id": "rubric_system",
+      "file": "rubric_system.md",
+      "version": "1.0.0",
+      "owner": "assessment",
+      "summary": "Marking-rubric generation system prompt.",
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-19",
+          "note": "Registered verbatim from the module constant; the constant is still the loader (handoff: switch the module to load_prompt). Drift is impossible: tests/test_rag2_prompt_registry.py pins equality."
+        }
+      ],
+      "module_constant": "bangla_gpt_api.services.generators.rubric:RUBRIC_SYSTEM_PROMPT"
+    },
+    {
+      "id": "worksheet_system",
+      "file": "worksheet_system.md",
+      "version": "1.0.0",
+      "owner": "content",
+      "summary": "Worksheet generation system prompt.",
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-19",
+          "note": "Registered verbatim from the module constant; the constant is still the loader (handoff: switch the module to load_prompt). Drift is impossible: tests/test_rag2_prompt_registry.py pins equality."
+        }
+      ],
+      "module_constant": "bangla_gpt_api.services.generators.worksheet:WORKSHEET_SYSTEM_PROMPT"
+    },
+    {
+      "id": "lesson_system",
+      "file": "lesson_system.md",
+      "version": "1.0.0",
+      "owner": "content",
+      "summary": "Lesson-plan generation system prompt.",
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-19",
+          "note": "Registered verbatim from the module constant; the constant is still the loader (handoff: switch the module to load_prompt). Drift is impossible: tests/test_rag2_prompt_registry.py pins equality."
+        }
+      ],
+      "module_constant": "bangla_gpt_api.services.generators.lesson_plan:LESSON_SYSTEM_PROMPT"
+    }
+  ]
+}

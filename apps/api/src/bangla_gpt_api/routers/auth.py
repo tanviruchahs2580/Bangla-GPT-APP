@@ -57,6 +57,7 @@ from bangla_gpt_api.schemas import (
     VerifyEmailRequest,
 )
 from bangla_gpt_api.security import encrypt_pii
+from bangla_gpt_api.services.breached_passwords import is_breached_password
 from bangla_gpt_api.services.mailer import send_mail, smtp_configured
 from bangla_gpt_api.services.verification import send_verification_email
 
@@ -169,7 +170,7 @@ def register(
     return RegisterResponse(user_id=user.id, role=user.role, profile_id=profile.id)
 
 
-@router.post("/auth/verify-email", response_model=TokenResponse)
+@router.post("/auth/verify-email", response_model=TokenResponse, responses=coded(400))
 def verify_email(app_ctx: Ctx, payload: VerifyEmailRequest, db: DbSession) -> TokenResponse:
     """Complete email verification with the token from the mail.
 
@@ -269,7 +270,7 @@ def _lock_remaining_seconds(user: User, now: datetime) -> int | None:
     return max(1, int(remaining))
 
 
-@router.post("/auth/login", response_model=TokenResponse, responses=coded(429))
+@router.post("/auth/login", response_model=TokenResponse, responses=coded(401, 403, 429))
 def login(app_ctx: Ctx, response: Response, payload: LoginRequest, db: DbSession) -> TokenResponse:
     email = payload.email.strip().lower()
     user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
@@ -396,12 +397,28 @@ def _burn_mfa_token(app_ctx: AppContext, jti: str, claims: dict) -> None:
 
 
 def _reject_common_password(password: str) -> None:
-    """Refuse a well-known guess with the one coded 400 (F-072).
+    """Refuse a well-known or breached guess with the one coded 400 (F-072/AUD-B-06).
 
     Applied at registration, at reset and at change-password. A blocklist on
     registration alone is bypassed the moment a user resets to "12345678",
     which is exactly what a forced-reset flow pushes people toward.
+
+    A breached value gets its own message ("appears in known data breaches")
+    because it tells the user what to fix; the machine code stays
+    ``password_too_common`` -- one code for "this candidate is refused", so no
+    client switch or error-catalog entry changes (NIST SP 800-63B §3.1.1.2
+    calls for both the check and useful feedback).
     """
+    if is_breached_password(password):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "password_too_common",
+                "message": (
+                    "That password appears in known data breaches. Choose a different one."
+                ),
+            },
+        )
     if is_common_password(password):
         raise HTTPException(
             status_code=400,
@@ -418,7 +435,7 @@ def _reject_common_password(password: str) -> None:
 _REVOKED_JTI_KEY_PREFIX = "token_revoke:"
 
 
-@router.post("/auth/logout", status_code=204, responses=AUTH_GUARD_RESPONSES)
+@router.post("/auth/logout", status_code=204, responses={**AUTH_GUARD_RESPONSES, **coded(503)})
 def logout(app_ctx: Ctx, request: Request, user: CurrentUser) -> Response:
     """Retire the caller's token server-side (AUD-B-04).
 
@@ -507,7 +524,7 @@ def forgot_password(app_ctx: Ctx, payload: ForgotPasswordRequest, db: DbSession)
     return {"status": "accepted"}
 
 
-@router.post("/auth/reset", response_model=TokenResponse)
+@router.post("/auth/reset", response_model=TokenResponse, responses=message(400))
 def reset_password(app_ctx: Ctx, payload: ResetPasswordRequest, db: DbSession) -> TokenResponse:
     now = datetime.now(UTC).replace(tzinfo=None)
     # Compare-and-set so a reset token cannot be redeemed twice under
@@ -589,7 +606,11 @@ def mfa_enroll(app_ctx: Ctx, user: CurrentUser) -> MfaEnrollOut:
     return MfaEnrollOut(secret=secret, otpauth_uri=otpauth_uri(secret, user.email))
 
 
-@router.post("/auth/mfa/verify", response_model=dict, responses=AUTH_GUARD_RESPONSES)
+@router.post(
+    "/auth/mfa/verify",
+    response_model=dict,
+    responses={**AUTH_GUARD_RESPONSES, **message(409)},
+)
 def mfa_verify(app_ctx: Ctx, payload: MfaVerifyIn, db: DbSession, user: CurrentUser) -> dict:
     if user.totp_secret:
         raise HTTPException(status_code=409, detail="MFA is already enabled")
@@ -618,7 +639,7 @@ def mfa_disable(app_ctx: Ctx, payload: MfaDisableIn, db: DbSession, user: Curren
     return {"disabled": True}
 
 
-@router.post("/auth/mfa/challenge", response_model=TokenResponse)
+@router.post("/auth/mfa/challenge", response_model=TokenResponse, responses=coded(401))
 def mfa_challenge(app_ctx: Ctx, payload: MfaChallengeIn, db: DbSession) -> TokenResponse:
     try:
         claims = decode_token(payload.mfa_token, settings=app_ctx.settings)

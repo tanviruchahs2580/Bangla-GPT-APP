@@ -1,0 +1,475 @@
+name: Nightly and scheduled scans
+
+# AUD-EF-12 / F-15: the only scheduled workflow in the tree was CodeQL's weekly
+# tick. This workflow adds the three scheduled checks the audit asked for:
+#
+#   * nightly  — the full browser e2e matrix (every project the Playwright
+#     config defines; WebKit/Firefox are deliberately kept off PRs because
+#     their install cost does not belong there) plus the Lighthouse budgets
+#     for the public routes.
+#   * weekly   — dependency and vulnerability sweeps (pip-audit on the locked
+#     set, npm audit on the shipped tree, a Trivy image scan of the built API
+#     image) and the budget-capped live-model evaluation placeholder.
+#
+# workflow_dispatch runs everything on demand, for example before a release.
+
+on:
+  schedule:
+    - cron: "23 19 * * *" # nightly 19:23 UTC = 01:23 Asia/Dhaka
+    - cron: "41 4 * * 1" # weekly, Monday 04:41 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-nightly:
+    name: Nightly e2e (every browser project)
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '23 19 * * *'
+    runs-on: ubuntu-latest
+    # The Chromium smoke journey took ~9.5 min on a first run; the full matrix
+    # triples the browser install and the journeys share one worker.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/api/constraints.txt
+
+      - name: Set up Node 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install the API (hash-verified lock)
+        working-directory: apps/api
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --require-hashes -r constraints.txt
+          python -m pip install --no-deps -e .
+
+      - name: Install web dependencies (npm ci)
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('apps/web/package-lock.json') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: Detect the browser projects playwright.config.ts defines
+        # F-15 coordination: WebKit and Firefox belong to the nightly matrix,
+        # but apps/web/playwright.config.ts (owned by the web/e2e work) defines
+        # only Chromium today, so selecting a missing project fails the run for
+        # a reason that is not a defect. `--list` exits non-zero for an unknown
+        # project and never starts the webServer, so it is the detection; when
+        # the projects land, this job picks them up with no edit here.
+        id: projects
+        working-directory: apps/web
+        run: |
+          set -euo pipefail
+          projects="chromium"
+          for candidate in firefox webkit; do
+            if npx playwright test --list --project="$candidate" >/dev/null 2>&1; then
+              echo "project '$candidate' is defined in playwright.config.ts"
+              projects="$projects $candidate"
+            else
+              echo "::notice title=Project not defined::playwright.config.ts does not define '$candidate'; the nightly matrix skips it (request: .audit/handoffs/coordinator-from-f2.md)."
+            fi
+          done
+          echo "projects=$projects" >> "$GITHUB_OUTPUT"
+
+      - name: Install the browsers
+        working-directory: apps/web
+        env:
+          PROJECTS: ${{ steps.projects.outputs.projects }}
+        run: |
+          set -euo pipefail
+          extra=()
+          for project in $PROJECTS; do
+            [ "$project" = "chromium" ] || extra+=("$project")
+          done
+          npx playwright install --with-deps chromium "${extra[@]}"
+
+      - name: Journeys on every defined project
+        # Same selection as the PR e2e job (handoff TAG=g2 §4): the screenshot
+        # baselines were reviewed on Windows/Chromium and perf.spec.ts needs a
+        # seeded conversation database, so `visual:` and `CPU throttle` stay
+        # out until those two prerequisites land (see docs/ci.md §6).
+        working-directory: apps/web
+        env:
+          E2E_PYTHON: python
+          PROJECTS: ${{ steps.projects.outputs.projects }}
+        run: |
+          set -euo pipefail
+          for project in $PROJECTS; do
+            echo "== project: $project =="
+            npx playwright test --project="$project" --grep-invert "visual:|CPU throttle"
+          done
+
+      - name: Upload Playwright report, junit and failure traces
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: playwright-nightly
+          path: |
+            apps/web/coverage/e2e/junit.xml
+            apps/web/coverage/e2e/html
+            apps/web/coverage/e2e/results
+          retention-days: 30
+          if-no-files-found: ignore
+
+  lighthouse:
+    name: Lighthouse budgets (public routes)
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '41 4 * * 1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/api/constraints.txt
+
+      - name: Install the API and web dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --require-hashes -r apps/api/constraints.txt
+          (cd apps/api && python -m pip install --no-deps -e .)
+          (cd apps/web && npm ci)
+
+      - name: Build the web app
+        working-directory: apps/web
+        run: npm run build
+
+      - name: Run Lighthouse CI against the committed budgets
+        # lighthouserc.json starts the audit stack itself
+        # (apps/web/e2e/serve_for_audit.mjs: seeded API on 8010, static dist on
+        # 5183) and asserts the accessibility, best-practices and performance
+        # budgets. `lhci` resolves to the lockfile-pinned devDependency
+        # (@lhci/cli 0.15.1), not an ad-hoc install. Kept off the PR path: the
+        # handoff TAG=g2 §3 measured LCP/perf below budget on a contended host
+        # (single run), and the audit's F-15/F-14 ask for the scheduled run
+        # plus the archived reports, not a merge gate that would be red for
+        # host reasons.
+        working-directory: apps/web
+        env:
+          E2E_PYTHON: python
+        run: npx lhci autorun
+
+      - name: Upload the Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: lighthouse-reports
+          path: |
+            apps/web/coverage/lighthouse
+            apps/web/.lighthouseci
+          retention-days: 30
+          if-no-files-found: ignore
+
+  dependency-scan:
+    name: Weekly dependency and image vulnerability scan
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '41 4 * * 1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/api/constraints.txt
+
+      - name: Set up Node 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: pip-audit against the locked dependency set
+        # A dedicated venv, like the sbom-licence job, so the audit describes
+        # the shipped set and nothing else.
+        run: |
+          set -euo pipefail
+          python -m venv .venv-scan
+          .venv-scan/bin/python -m pip install --quiet --upgrade pip "setuptools>=83.0.0"
+          .venv-scan/bin/python -m pip install --quiet --require-hashes -r apps/api/constraints.txt
+          .venv-scan/bin/python -m pip install --quiet pip-audit
+          .venv-scan/bin/python -m pip_audit | tee pip-audit.txt
+
+      - name: npm audit (shipped dependency set)
+        working-directory: apps/web
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts
+          npm audit --audit-level=high --omit=dev | tee ../npm-audit.txt
+
+      - name: Build the API image and scan it (Trivy, fixable high/critical)
+        run: |
+          set -euo pipefail
+          docker build -t bgpt-api:nightly .
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:0.58.0@sha256:b88012e2a0a309d6a8a00463d4e63e5e513377fb74eccbc8f9b0f8f81940ebeb \
+            image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 bgpt-api:nightly \
+            | tee trivy-image.txt
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: weekly-scan-reports
+          path: |
+            pip-audit.txt
+            npm-audit.txt
+            trivy-image.txt
+          retention-days: 90
+          if-no-files-found: ignore
+
+  drift-report:
+    name: Corpus and query drift report (weekly)
+    # AUD-A2-13 / A10-04 (handoff TAG=rag2 Sec.1): the drift report existed but
+    # ran only by hand, so nothing produced the periodic baseline it is compared
+    # against. Weekly + dispatch; the artifacts (JSON + markdown) are the
+    # comparison points for the next run (`--previous`).
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '41 4 * * 1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/api/constraints.txt
+
+      - name: Install the API (hash-verified lock)
+        working-directory: apps/api
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --require-hashes -r constraints.txt
+          python -m pip install --no-deps -e .
+
+      - name: Corpus / query drift report
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          python scripts/drift_report.py --quiet \
+            --out drift_report.json --markdown drift_report.md
+          cat drift_report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the drift report
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: drift-report
+          path: |
+            apps/api/drift_report.json
+            apps/api/drift_report.md
+          retention-days: 90
+          if-no-files-found: ignore
+
+  mutation-sample:
+    name: Mutation sample (one critical module, weekly)
+    # AUD-EF-04 / E-04 (handoff TAG=e2 Sec.1): mutation testing scored 17/20 on
+    # a hand-made sample and nothing re-measured it. mutmut is Linux/macOS
+    # only, which is why this is a scheduled job and not a PR check. The run is
+    # bounded by the module and test selection in [tool.mutmut]
+    # (apps/api/pyproject.toml) and reports rather than reds until that module
+    # has a measured baseline -- the handoff's explicit instruction.
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '41 4 * * 1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/api/constraints.txt
+
+      - name: Install the API with dev dependencies and the pinned mutmut
+        # mutmut is not in the hash-verified lock (a scheduled-job tool, not a
+        # project dependency), so it is pinned here like the other CI-only
+        # tools. 3.8.0 is the version this job was written against.
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install --require-hashes -r constraints.txt
+          python -m pip install --no-deps -e ".[dev]"
+          python -m pip install --quiet "mutmut==3.8.0"
+
+      - name: Run the bounded mutation sample
+        id: mutmut
+        working-directory: apps/api
+        env:
+          # mutmut copies src/ and tests/ into mutants/; the prompt registry
+          # beside the package would be missing in that copy, so point it at
+          # the checkout explicitly (handoff TAG=e2 Sec.1).
+          BANGLA_GPT_PROMPTS_DIR: ${{ github.workspace }}/apps/api/prompts
+        run: |
+          set -euo pipefail
+          if ! grep -q '^\[tool\.mutmut\]' pyproject.toml; then
+            echo "::notice title=Mutation sample not configured::apps/api/pyproject.toml has no [tool.mutmut] section yet, so the module/test selection is unknown and a full-project run would blow the timeout. This job activates by itself once the section lands (requested in .audit/handoffs/pyproject-e2.md Sec.2)."
+            echo "configured=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "configured=1" >> "$GITHUB_OUTPUT"
+          python -m mutmut run --max-children 4 || true   # report first, do not red the schedule on a survivor
+          python -m mutmut results 2>&1 | tee mutmut-results.txt || true
+          python -m mutmut export-cicd-stats
+          python - <<'MUTMUT_STATS' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json, pathlib
+          stats = json.loads(pathlib.Path("mutants/mutmut-cicd-stats.json").read_text())
+          total = sum(stats.values())
+          killed = stats.get("killed", 0) + stats.get("timeout", 0)
+          survived = stats.get("survived", 0)
+          score = 100.0 * killed / total if total else 0.0
+          print("### Mutation sample")
+          print()
+          print(f"- mutants: {total} (killed {killed}, survived {survived})")
+          print(f"- kill score: {score:.1f}%  (proposal floor: 70%)")
+          print("- module and tests: see [tool.mutmut] in apps/api/pyproject.toml")
+          print("- two Postgres-only race tests skip on SQLite; the score is the")
+          print("  deterministic subset and the survivor list is the triage input.")
+          if score < 70.0:
+              print(f"::warning title=Mutation score below floor::{score:.1f}% < 70%")
+          MUTMUT_STATS
+
+      - name: Upload the mutation report
+        if: always() && steps.mutmut.outputs.configured == '1'
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: mutation-sample
+          path: |
+            apps/api/mutmut-results.txt
+            apps/api/mutants/mutmut-cicd-stats.json
+          retention-days: 90
+          if-no-files-found: ignore
+
+  live-eval:
+    name: Live-model evaluation (budget-capped placeholder)
+    # AUD-A8-05 / F-15: the live-model run is BLOCKED without a provider key,
+    # and the evaluation CLI is hermetic by construction today (it forces
+    # LLM_PROVIDER=mock; see apps/api/src/bangla_gpt_api/evaluation/cli.py
+    # `Settings(env="test", llm_provider="mock")`). This job is the scheduled
+    # hook for the live run: it validates the key and the budget cap, records
+    # the BLOCKED state in the run summary when no key exists, and calls the
+    # same entry point the deterministic gate uses. When the CLI grows a live
+    # mode, this job's last step is the only line to change.
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '41 4 * * 1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/api/constraints.txt
+
+      - name: Install the API (hash-verified lock)
+        working-directory: apps/api
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --require-hashes -r constraints.txt
+          python -m pip install --no-deps -e .
+
+      - name: Check the provider key and the budget cap
+        id: budget
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          LIVE_EVAL_BUDGET_USD: ${{ vars.LIVE_EVAL_BUDGET_USD }}
+        run: |
+          set -euo pipefail
+          budget="${LIVE_EVAL_BUDGET_USD:-1}"
+          if [ -z "${GEMINI_API_KEY:-}" ]; then
+            echo "run=0" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Live evaluation: BLOCKED"
+              echo
+              echo "GEMINI_API_KEY is not configured, so no live-model evaluation ran."
+              echo "The deterministic replay gates (ci.yml: golden-eval, eval-gate.yml)"
+              echo "remain the enforced ones; this is the A8-05 BLOCKED state recorded"
+              echo "in the audit register, not a failure."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          case "$budget" in
+            ''|*[!0-9.]*)
+              echo "::error::LIVE_EVAL_BUDGET_USD must be a number (got '$budget')"
+              exit 1
+              ;;
+          esac
+          if awk "BEGIN{exit !($budget <= 0 || $budget > 5)}"; then
+            echo "::error title=Budget cap::LIVE_EVAL_BUDGET_USD='$budget' is outside (0, 5]. A live run may only execute inside the owner's cap (the audit's authorization caps the whole remediation at \$10); refusing the run rather than spending uncapped."
+            exit 1
+          fi
+          echo "run=1" >> "$GITHUB_OUTPUT"
+          echo "budget=$budget" >> "$GITHUB_OUTPUT"
+
+      - name: Run the evaluation entry point (hermetic today)
+        if: steps.budget.outputs.run == '1'
+        working-directory: apps/api
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          BUDGET_USD: ${{ steps.budget.outputs.budget }}
+        run: |
+          set -euo pipefail
+          # The CLI forces the mock provider (hermetic by design), so this run
+          # is the same gate CI enforces on every PR; it exists here so the
+          # live key's presence and the budget check are exercised on a
+          # schedule. Live numbers stay BLOCKED until the CLI gains a live
+          # mode; the budget cap above is what will bound it.
+          python -m bangla_gpt_api.evaluation.cli --split test | tee live-eval-report.json
+          echo "live-eval ran with the hermetic provider inside budget ${BUDGET_USD} USD" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the evaluation report
+        if: always() && steps.budget.outputs.run == '1'
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: live-eval-report
+          path: apps/api/live-eval-report.json
+          retention-days: 90
+          if-no-files-found: ignore

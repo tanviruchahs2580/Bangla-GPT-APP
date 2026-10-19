@@ -26,9 +26,10 @@ import json
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import CursorResult, delete, func, select, update
+from sqlalchemy.exc import IntegrityError
 
 from bangla_gpt_api.db.models import Concept, ConceptMastery, ConceptPrerequisite
 
@@ -369,6 +370,60 @@ async def rebuild_concepts(
     return {"concepts": concepts + llm_added, "llm_concepts": llm_added, "edges": edges}
 
 
+def _bump_mastery(
+    db: Session, student_id: int, concept_id: int, correct_add: int, total_add: int
+) -> None:
+    """Add to a mastery cell with ONE atomic statement (no lost updates).
+
+    The previous read-modify-write (``row.correct += n``) lost updates when
+    two quiz submissions for the same student overlapped: both sessions read
+    the same row, the second commit overwrote the first increment. The
+    conditional UPDATE moves the arithmetic into the database, which is the
+    only place it is serialized. The INSERT fallback races too -- the loser's
+    INSERT violates the composite primary key, and its retry finds the row
+    the winner created.
+    """
+    updated = cast(
+        CursorResult,
+        db.execute(
+            update(ConceptMastery)
+            .where(
+                ConceptMastery.student_id == student_id,
+                ConceptMastery.concept_id == concept_id,
+            )
+            .values(
+                correct=ConceptMastery.correct + correct_add,
+                total=ConceptMastery.total + total_add,
+            )
+        ),
+    )
+    if updated.rowcount:
+        return
+    try:
+        with db.begin_nested():
+            db.add(
+                ConceptMastery(
+                    student_id=student_id,
+                    concept_id=concept_id,
+                    correct=correct_add,
+                    total=total_add,
+                )
+            )
+    except IntegrityError:
+        # Another submission created the row first: apply our delta to theirs.
+        db.execute(
+            update(ConceptMastery)
+            .where(
+                ConceptMastery.student_id == student_id,
+                ConceptMastery.concept_id == concept_id,
+            )
+            .values(
+                correct=ConceptMastery.correct + correct_add,
+                total=ConceptMastery.total + total_add,
+            )
+        )
+
+
 def record_quiz_result(
     db: Session,
     student_id: int,
@@ -395,14 +450,7 @@ def record_quiz_result(
             correct, total = updates.get(concept.id, (0, 0))
             updates[concept.id] = (correct + (1 if item.is_correct else 0), total + 1)
     for concept_id, (correct_add, total_add) in updates.items():
-        row = db.get(ConceptMastery, (student_id, concept_id))
-        if row is None:
-            # explicit zeros: column defaults apply only at INSERT, a pending
-            # instance would read None here and break the += below.
-            row = ConceptMastery(student_id=student_id, concept_id=concept_id, correct=0, total=0)
-            db.add(row)
-        row.correct += correct_add
-        row.total += total_add
+        _bump_mastery(db, student_id, concept_id, correct_add, total_add)
     db.commit()
 
 

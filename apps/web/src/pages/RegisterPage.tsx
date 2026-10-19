@@ -289,6 +289,10 @@ export default function RegisterPage() {
                   )}
                 </p>
               )}
+              {/* AUD-B-30: standing AI-use notice next to the consent block. */}
+              <p className="muted" data-testid="ai-disclosure">
+                {t("aiDisclosureShort")}
+              </p>
               <Button variant="primary" block type="submit" disabled={busy}>
                 {t("register")}
               </Button>

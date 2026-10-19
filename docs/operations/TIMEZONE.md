@@ -1,96 +1,84 @@
-# Timezone posture and the timestamptz migration plan
+# Timezone posture: UTC storage, the clock seam, Dhaka presentation
 
-> Status: the **session pin is shipped** (this round, AUD-HI-02); the **column
-> migration is DEFERRED** with the plan below, because it rewrites every
-> timestamp column in a live schema and must be executed as a separately
-> reviewed, expand–contract change with an explicit owner go-ahead.
+> Status: **shipped**. The session pin (AUD-HI-02), the column migration to
+> ``timestamptz`` (H-14, alembic ``b5d7f9a1c3e5``) and the injectable clock
+> seam (``db/clock.py``) are in the tree and verified on SQLite and on
+> PostgreSQL 16 (evidence ``E-R2-h2-001``/``E-R2-h2-002``, ``E-R2-h2-004``).
+> The one deliberate remainder is the router-side aware-datetime cleanup,
+> which is independent and tracked as AUD-EF-16.
 
-## 1. The defect this addresses
+## 1. The contract
 
-- Every timestamp column in `db/models.py` is a naive `DateTime` → PostgreSQL
-  `timestamp without time zone` (`rg 'DateTime\(timezone=True\)'`: 0 hits).
-- The application writes **aware UTC** values (`datetime.now(UTC)`) and around
-  ten call sites strip the tzinfo (`.replace(tzinfo=None)`) before storing.
-- A naive value is interpreted in the **session** timezone. On a host or managed
-  database whose default is not UTC, the stored instant silently shifts — and a
-  system serving South Asian users will meet such a host eventually.
+| Layer | Type | Rationale |
+|---|---|---|
+| Application code (Python) | naive UTC ``datetime`` | The house contract everywhere (``db/models._utcnow``, ``jobs._utc_naive_now``, ~30 ``.replace(tzinfo=None)`` sites in routers, PDF/export formatters). |
+| Database (PostgreSQL) | ``timestamptz`` (UTC) | The stored instant is unambiguous to any reader: ``psql``, BI, a dump restored on another host, ``now()`` comparisons. |
+| Database (SQLite) | ISO-8601 text, UTC wall clock | SQLite has no timestamp type; its date functions are UTC. |
+| Display | ``Asia/Dhaka`` (UTC+6, no DST) | ``services/activity.dhaka_date`` / ``now_dhaka`` for day boundaries (streaks, heatmap, digest hour). |
 
-## 2. What ships now (verified)
+``db/types.py::UtcDateTime`` implements the bridge: on PostgreSQL it binds an
+aware UTC value (a naive value is *defined* to be UTC) and returns naive UTC,
+so the existing call sites keep working; the column itself is ``timestamptz``.
+On SQLite the value is stored as naive ISO text, exactly as before.
 
-`db/session.py` pins every PostgreSQL session through libpq options:
+## 2. What the migration does
 
-```python
-connect_args = {"connect_timeout": 10,
-                "options": "-c timezone=utc -c statement_timeout=30000 -c lock_timeout=5000"}
-```
-
-- `timezone=utc` makes the naive values unambiguously UTC for every pooled
-  connection, on any host, without touching a single stored byte.
-- Timeouts are configurable: `DB_STATEMENT_TIMEOUT_MS`, `DB_LOCK_TIMEOUT_MS`
-  (0 disables a guard; omitted from the options string).
-- SQLite needs no equivalent: it has no session timezone, its date functions
-  are UTC, and the application always writes UTC values.
-- Pinned by `apps/api/tests/test_hi_db_posture.py`.
-
-This is a correctness pin, not the end state: a naive column still cannot
-represent an instant unambiguously to an external reader (a BI tool, a
-`psql` session, a future service) and it cannot be compared against
-`now()` correctly.
-
-## 3. Migration plan (deferred work, in order)
-
-**Preconditions:**
-
-1. Owner go-ahead (schema rewrite on a live education system).
-2. A staging run against a production-sized dump, with row counts recorded.
-3. `pgbackrest` restore point taken immediately before the production step
-   (`docs/backup_dr.md`).
-
-**Step 1 — inventory.** Generate the full list of `DateTime` columns and their
-tables (`db/models.py` is the source; the alembic head is the comparison). Every
-column gets a decision: convert, or justify keeping naive. Do not proceed with
-an incomplete list.
-
-**Step 2 — expand.** One alembic revision per table group, each:
+``alembic/versions/b5d7f9a1c3e5_h2_timestamptz.py`` converts all 58 timestamp
+columns in 38 tables:
 
 ```sql
-ALTER TABLE t
-  ALTER COLUMN created_at TYPE timestamptz
+ALTER TABLE t ALTER COLUMN created_at TYPE timestamptz
   USING created_at AT TIME ZONE 'UTC';
 ```
 
-`AT TIME ZONE 'UTC'` is correct **only** because §2 pins the writing sessions
-to UTC. Run against a staging dump first and compare a sample of instants
-before/after to prove no shift.
+* ``AT TIME ZONE 'UTC'`` is correct because every writing session has been
+  pinned to UTC since AUD-HI-02 (``db/session.py``: ``-c timezone=utc``); the
+  stored values already denote UTC wall-clock readings.
+* **Downgrade** applies the inverse expression, so the expansion is reversible
+  while the session pin is in force (removing the pin first would break the
+  rollback — do not).
+* **SQLite** is a deliberate no-op in both directions: the type name carries no
+  semantics there, and rebuilding 38 tables to change an inert string would
+  risk far more than it buys.
+* **Locking:** PostgreSQL rewrites each table under ``ACCESS EXCLUSIVE``. Run it
+  in the deploy window; a table rewrite of this size is seconds for the
+  current data volume, but it is not an online operation.
+* **Verification:** up → down → up on a fresh SQLite database and on a fresh
+  PostgreSQL 16 database, with ``alembic check`` clean after each cycle
+  (``E-R2-h2-001``, ``E-R2-h2-002``); the type of ``users.created_at`` /
+  ``locked_until`` and a native ``now() - interval`` comparison are asserted in
+  ``tests/test_h2_time.py`` (``E-R2-h2-004``).
 
-**Step 3 — code.** Flip the models to `DateTime(timezone=True)`, remove the 30
-`.replace(tzinfo=None)` call sites, and let SQLAlchemy pass aware values.
-Grep for `_utcnow`, `now(UTC)`, `isoformat(sep=" ")` and the strip sites; each
-is either removed or documented as a boundary (for example an HTTP header
-formatting site).
+## 3. The injectable clock (``db/clock.py``)
 
-**Step 4 — contract.** After a full deploy of step 3 has been stable for one
-release, drop nothing (Postgres does not need it) and keep the `AT TIME ZONE`
-defaults out of the way. The migration is complete when
-`rg 'DateTime\(' apps/api/src` matches only `timezone=True` columns plus
-documented exceptions.
+* ``utcnow()`` -> naive UTC through the seam (the shape the code expects);
+  ``Clock.now_aware()`` -> the same instant with tzinfo.
+* Production reads ``SystemClock``; tests install ``FrozenClock`` with
+  ``set_clock`` and remove it with ``reset_clock`` (``tests/conftest.py`` also
+  resets it after every test).
+* Callers migrated in this round: ``services/retention.py`` and
+  ``services/parent_digest.py``. The bulk migration of the remaining ~90 direct
+  ``datetime.now`` sites belongs to AUD-EF-16 (an EF-domain finding) and is
+  deliberately not bundled here.
 
-**Step 5 — tests.** A `test_*_timestamptz.py` that asserts, on the SQLite test
-database, that a freshly written row round-trips as an aware UTC datetime, plus
-a Postgres-marked integration test in CI's postgres job.
+## 4. Boundary tests
 
-**Rollback.** Each expand step is reversible with the inverse
-`USING created_at AT TIME ZONE 'UTC'` — *only* while the pins of §2 are still
-in force. Both this document and the alembic revisions must say so; removing
-the session pin before step 4 completes would break the rollback.
+``tests/test_h2_time.py`` pins, with exact instants:
 
-## 4. Why this is not in this round
+* the Asia/Dhaka day flip at 18:00 UTC (including the leap-day boundary);
+* the digest hour at 16:00 UTC == 22:00 Dhaka, including the second before;
+* the retention cutoff being strict (a row exactly on the cutoff survives; a
+  microsecond older is swept);
+* a write at 00:00:01 Dhaka storing the UTC instant, not a local-wall-clock
+  value (read back through a raw SQLite connection).
 
-The change touches 41 tables (`grep -c '^class .*(Base):' db/models.py`), 59
-`DateTime` column declarations, and 30 `.replace(tzinfo=None)` sites across the
-routers (`rg 'replace\(tzinfo=None\)' apps/api/src`: 30 hits), plus the export
-paths and the PDF/notification formatters. Shipping it without a staging
-rehearsal against real data would trade a silent-shift risk for a loud-corruption
-risk. The session pin removes the *actual* failure mode the audit found (a
-non-UTC server storing shifted timestamps) today; the column rewrite is filed
-as its own issue with this plan attached.
+## 5. Operational notes
+
+* ``DB_STATEMENT_TIMEOUT_MS`` / ``DB_LOCK_TIMEOUT_MS`` and ``timezone=utc``
+  travel in the libpq ``options`` string, so the posture applies to every
+  pooled connection (H-07; verified against a real server in
+  ``tests/test_h2_pg_posture.py``).
+* If a future migration adds a timestamp column, declare it
+  ``UtcDateTime`` from ``db/types.py`` — a bare ``DateTime`` reintroduces a
+  ``timestamp without time zone`` column, and ``alembic check`` in the
+  PostgreSQL CI job is what catches it.

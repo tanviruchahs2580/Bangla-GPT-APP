@@ -59,11 +59,14 @@ CI must be green on your branch. That means, at minimum:
 | API tests | `pytest` | Add tests for behaviour you change |
 | API tests on Postgres | `BGPT_TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/bgpt_test pytest` | Optional locally, required in CI. Runs the same domain suite on the engine production uses, with per-test truncation isolation (`tests/conftest.py`); the CI `Postgres engine check` job runs it automatically |
 | Dependencies | `pip-compile --generate-hashes --allow-unsafe --extra dev --strip-extras` | Regenerate `constraints.txt` when `pyproject.toml` changes — the guardrails job fails if a declared dependency is missing or its pin violates the declared specifier |
-| Migrations | `alembic check` | Schema and models must not drift |
+| Migrations | `alembic check` | Schema and models must not drift. On a database with no migrations applied yet, run `alembic upgrade head` first — `check` alone then reports "Target database is not up to date" |
 | Web tests | `npm test` | vitest |
 | Web build | `npm run build` | `tsc && vite build` — typecheck included |
 | Web lint | `npm run lint` | ESLint, type-aware, `--max-warnings 0` |
 | Web format | `npm run format:check` | prettier — run `npm run format` to fix |
+| Relative links | `python scripts/check_links.py --anchors` | From the repository root; fails on a missing file or `#anchor` |
+| Markdown | `npx --yes markdownlint-cli2@0.23.3 "**/*.md"` | The version CI pins; `.markdownlint-cli2.jsonc` is the config |
+| Spelling | `npx --yes cspell "**/*.md"` | English prose only against the project word list in `cspell.json`; Bangla wording goes to native review, not here |
 
 Both web checks run in the `Web build & test (apps/web)` CI job.
 
@@ -160,6 +163,38 @@ the change:
 The audit's own ledgers (`.audit/`, a work-in-progress artifact set from the
 2026-10 hardening round) are not the long-term tracker: the issue tracker is.
 
+### The pull-request body, section by section
+
+A reviewer opening the PR must be able to answer four questions without
+opening a single commit: what changed and why, what it fixes (by id), how it
+was verified (command + number), and how to undo it. That is the whole
+checklist:
+
+| Section | Required content |
+| --- | --- |
+| Summary | What this PR does, in one paragraph a reader who was not in the thread can follow |
+| Findings addressed | Every issue/finding id the change closes (`Closes #42`, `AUD-XX-07`), or the sentence "no tracker item, and here is why" |
+| Changes by area | The diff grouped into reviewer-sized parts (API, web, CI, docs) — not a commit list |
+| Evidence | For each measurable claim: the command and the before/after numbers, with an evidence id (`.audit/evidence/E-…`) when the audit produced one. "Ran the tests" is not evidence |
+| Migration and configuration | Schema/data migrations, new or changed environment variables, deployment steps, or an explicit "none" |
+| Risk and rollback | What could go wrong, how it would be detected, and the exact undo (revert range, flag, `alembic downgrade`) |
+| Checklist | Tests added/updated, docs updated, changelog regenerated, no secrets, no weakened gates, accessibility/i18n considered when touched |
+
+The PR is also where the audit report is linked once it exists
+(`.audit/reports/FINAL.md` until it moves), so a future reader can trace a
+merged change back to the finding that motivated it.
+
+**Verification of the current PR (#30, 2026-10-19).** The body satisfies the
+table on five of seven rows: Summary, Findings addressed (11 `AUD-` ids),
+Evidence (six before/after pairs), Risk and rollback, and Checklist are
+present. Two gaps: no explicit "Changes by area" grouping and no explicit
+"Migration and configuration" section (the body says "no migrations, no
+schema changes" inside the risk paragraph instead). It also references no
+`.audit/evidence/E-…` ids and does not link the report — both existed only
+after the body was written. The check is recorded at
+`.audit/evidence/E-R2-j2-013-pr30-audit-trail-check.txt`; the PR body is
+updated at the end of the audit round to close those gaps.
+
 ## Branch model and merge policy
 
 Check the repository settings before relying on this section: merge methods
@@ -180,17 +215,28 @@ configuration:
 - Only maintainers merge to `main`, and production deploys only after the
   full gate is green on `main`.
 
-What is actually configured today, verified 2026-10-18 at commit `0b7dfe6`: the
+What is actually configured today, verified 2026-10-19 at commit `eddd04c`: the
 repository allows merge commits, squash merges and rebase merges at the same
-time, and the history contains nine `Merge pull request #N` commits, so the
-squash-only intent above is *not* enforced by configuration. The remote
-carries 30 heads — 12 already merged into `main` (including
-`backup/pre-qa-2026-10-16`), 18 not, 14 of those Dependabot branches — and the
-local clone has 13. The full inventory is recorded at
-`.audit/evidence/E-FIX-JK-009-stale-branches.txt` as the pruning baseline.
-Changing repository settings or deleting remote branches needs maintainer
-admin scope — both are listed as owner actions in
-`.audit/handoffs/ef-from-jk.md`.
+time (`allow_squash_merge`, `allow_merge_commit`, `allow_rebase_merge` all
+true), and the history contains nine `Merge pull request #N` commits, so the
+squash-only intent above is *not* enforced by configuration. `main` is the
+default branch and `delete_branch_on_merge` is true. The remote carries **11
+heads**: 2 are already merged into `main` (`backup/pre-qa-2026-10-16`), 9 are
+not — 7 of those are Dependabot bumps, one is the audit branch, one is
+`docs/2026-10-17-post-merge`. A further **19 remote-tracking refs are stale
+locally** (the branch is gone on the remote; `git branch -r` still lists it
+because nothing pruned). The local clone holds 13 branches, four of them with
+no upstream at all, including `hold/pre-audit-uncommitted-20261009` whose tip
+is a `wip:` commit.
+
+The full inventory, with per-branch last-commit dates and merged/unmerged
+status, is the pruning baseline at
+`.audit/evidence/E-R2-j2-012-stale-branch-inventory.txt`. Deleting remote
+branches and changing merge settings need maintainer admin scope: both are
+listed as owner actions (`.audit/handoffs/ef-from-jk.md` section 2d,
+`.audit/handoffs/workflows-j2.md`). Locally, `git fetch --prune` clears the 19
+stale tracking refs; `git branch -d <branch>` removes a merged local branch
+only after you have confirmed its commits are in `main`.
 
 Pull-request review is required for changes under `apps/api/src` and anything
 that touches authentication, PII handling, migrations, or CI configuration.

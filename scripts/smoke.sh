@@ -15,7 +15,8 @@ echo "→ ready"
 curl -fsS "$BASE/ready" | grep -q '"status":"ready"' && echo "  ready ok"
 
 echo "→ register $EMAIL"
-REG=$(curl -fsS -X POST "$BASE/auth/register" -H "Content-Type: application/json" -d "{\"email\":\"$EMAIL\",\"password\":\"$PASS\",\"name\":\"$NAME\",\"role\":\"student\",\"class_level\":6,\"guardian_consent\":true}")
+# The response body is not needed; the status is (curl -f fails on 4xx/5xx).
+curl -fsS -X POST "$BASE/auth/register" -H "Content-Type: application/json" -d "{\"email\":\"$EMAIL\",\"password\":\"$PASS\",\"name\":\"$NAME\",\"role\":\"student\",\"class_level\":6,\"guardian_consent\":true}" > /dev/null
 echo "  register ok"
 
 echo "→ login"
@@ -38,7 +39,12 @@ curl -fsS -H "$AUTH" "$BASE/learn/subjects?class_level=6" | grep -q "science" &&
 
 echo "→ tutor grounded"
 ASK=$(curl -fsS -X POST "$BASE/tutor/ask" -H "Content-Type: application/json" -H "$AUTH" --data-binary @"$TMPD/ask1.json")
-echo "$ASK" | grep -q '"grounded":true' && echo "  tutor grounded ok" || (echo "  tutor failed: $ASK"; exit 1)
+if echo "$ASK" | grep -q '"grounded":true'; then
+  echo "  tutor grounded ok"
+else
+  echo "  tutor failed: $ASK"
+  exit 1
+fi
 
 echo "→ quiz start"
 QZ=$(curl -fsS -X POST "$BASE/quizzes" -H "Content-Type: application/json" -H "$AUTH" -d '{"student_id":1,"class_level":6,"subject":"science","num_questions":2}' || true)  # probing call; the correct-SID call below is the gate
@@ -75,7 +81,14 @@ echo "→ export"
 curl -fsS -H "$AUTH" "$BASE/users/me/export" | grep -q '"user"' && echo "  export ok"
 
 echo "→ delete"
-curl -fsS -X DELETE -H "$AUTH" "$BASE/users/me" -i | grep -q "204" && echo "  delete ok" || curl -fsS -X DELETE -H "$AUTH" "$BASE/users/me" && echo "  delete ok"
+# 204 is the contract; retry once so a transient failure does not look like a
+# contract violation (an idempotent delete may answer 204 or 404 on retry).
+if curl -fsS -X DELETE -H "$AUTH" "$BASE/users/me" -i | grep -q "204"; then
+  echo "  delete ok"
+else
+  curl -fsS -X DELETE -H "$AUTH" "$BASE/users/me"
+  echo "  delete ok"
+fi
 
 echo "✓ SMOKE OK — all steps passed"
 echo "Rollback (if deployed via compose): docker compose --profile core pull && docker compose --profile core up -d --wait (previous tag via API_TAG env)"

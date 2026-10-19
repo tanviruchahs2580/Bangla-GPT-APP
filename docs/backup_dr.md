@@ -98,7 +98,7 @@ Evidence: drill output `PASS... (9s restore)`; postgres log during recovery:
 `restored log file "000000010000000000000005" from archive`, `archive
 recovery complete`, new timeline 2 selected.
 
-**Status as of the 2026-10-18 hardening round: NOT re-executed.** The
+**Status as of the 2026-10-19 hardening round: NOT re-executed.** The
 paragraph above is the maintainers' record from 2026-09-07. The remediation
 run that enabled backup encryption did not re-run the drill (docker-in-docker
 sizing), so the 9 s restore figure stays a claim, not a measurement, and the
@@ -111,6 +111,40 @@ The weekly cadence on the real staging box is the human/infra step
 (staging server itself is pending 🖐); until then run the drill locally --
 it is host-agnostic (needs docker only). Schedule suggestion:
 `0 4 * * 1 cd /srv/bangla-gpt && bash scripts/pgbackrest_drill.sh`.
+
+### Exact owner steps for the pgBackRest re-run (BLOCKED here)
+
+The audit could not reproduce the destructive drill: it builds the pgBackRest
+image, wipes a data volume and restores it, so it needs an isolated Docker host
+and a spare volume (not a developer workstation with live compose volumes).
+Exact sequence for the owner, to be executed on staging and recorded here:
+
+```bash
+# 1. Isolation: a throwaway project name, its own volumes, non-default ports.
+cd /srv/bangla-gpt
+export COMPOSE_PROJECT_NAME=bgpt-drill-$(date +%Y%m%d)
+export PGBR_CIPHER_PASS="<from the secret store>"
+export POSTGRES_PASSWORD="<throwaway>"
+export PORT_API=18080 PORT_WEB=18081 PORT_POSTGRES=15432
+
+# 2. Bring the stack up with the backup profile and let one full backup run.
+docker compose --profile postgres --profile backup up -d
+docker compose exec pgbackrest pgbackrest --stanza=bgpt --type=full backup
+docker compose exec pgbackrest pgbackrest --stanza=bgpt info
+
+# 3. Seed markers, write MORE data after the backup, then wipe the volume.
+bash scripts/pgbackrest_drill.sh          # performs steps 3-6 itself:
+#    stanza-create -> check -> full backup -> extra writes -> volume wipe ->
+#    --delta restore -> start -> assert both markers + WAL replay
+
+# 4. Record in this file: date, host, wall-clock restore time, log lines
+#    ("archive recovery complete", timeline switch), then tear down:
+#    docker compose --profile postgres --profile backup down -v
+```
+
+Until that run, the honest status is **documented, previously measured
+(2026-09-07), not re-verified this round**. The SQLite rehearsal below *was*
+re-run this round and is the fallback path for dev installs.
 
 ## Key loss caveat (operator duty)
 
@@ -141,6 +175,37 @@ complete backup if it takes all three files together (`app.db`,
 `app.db-wal`, `app.db-shm`) or first runs `PRAGMA wal_checkpoint(TRUNCATE)`
 on a connection to the live database; a bare `cp app.db` can silently lose
 the most recent transactions.
+
+### SQLite restore rehearsal, re-run 2026-10-19 (PASS)
+
+`apps/api/scripts/backup_restore_drill.py` is the rehearsal: online backup via
+SQLite's backup API, restore into a fresh file, and verification of integrity,
+foreign keys and per-table row counts -- plus a deliberate demonstration of the
+raw-copy trap above. Measured on the deterministic demo dataset
+(12 students, 5 activity days), evidence `E-R2-h2-005`, re-run 2026-10-19
+(`E-R2-h2b-005`) with the same result:
+
+| Measurement | Value |
+|---|---|
+| Tables / rows in the source | 42 / 228 |
+| `PRAGMA integrity_check` (source, restore) | `ok` / `ok` |
+| `PRAGMA foreign_key_check` violations | 0 / 0 |
+| Online backup wall time | 0.77 s; 0.048 s on the 2026-10-19 re-run (`E-R2-h2b-005`) -- host-dependent |
+| Row counts identical after restore | yes (228 = 228) |
+| Newest post-checkpoint commit present in the restore | yes |
+| Same commit present in a bare `cp` of `app.db` | **no** (the trap, demonstrated) |
+| Drill exit code | 0 (`DRILL PASSED`) |
+
+Run it against any database (or the built-in demo) with:
+
+```bash
+cd apps/api && python scripts/backup_restore_drill.py            # demo database
+cd apps/api && python scripts/backup_restore_drill.py --source /data/app.db
+```
+
+Exit code 0 means: integrity ok, no FK violations, identical row counts, and
+the newest committed transaction present in the restore. A non-zero exit lists
+the failed checks.
 
 ## Corpus object storage
 

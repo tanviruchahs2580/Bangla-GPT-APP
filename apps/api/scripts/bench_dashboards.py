@@ -161,6 +161,50 @@ def _statement_counter(engine) -> list[str]:
     return statements
 
 
+#: Statements that carry no query plan worth recording.
+_PLAN_SKIP_PREFIXES = ("BEGIN", "COMMIT", "ROLLBACK", "PRAGMA", "SAVEPOINT", "RELEASE")
+
+
+def _explain(db_path: Path, statements: list[str], *, limit: int = 6) -> list[dict]:
+    """``EXPLAIN QUERY PLAN`` for the distinct statements a request issued.
+
+    H-06 asks for plans, not only timings: the durable signal of a dashboard
+    benchmark is that the heavy reads use an index and do not rescan per row.
+    Plans are recorded per distinct statement (longest first, capped) with the
+    statement text so a reviewer can match plan to query.
+    """
+    seen: dict[str, list[list[str]]] = {}
+    conn = sqlite3.connect(db_path)
+    try:
+        for statement in statements:
+            if statement.upper().startswith(_PLAN_SKIP_PREFIXES):
+                continue
+            if statement in seen:
+                continue
+            # SQLite refuses to plan a parameterized statement without values,
+            # so every bind parameter is replaced by NULL. The plan shape for an
+            # equality-shaped query does not depend on the bound value; the
+            # original text stays in the record for review.
+            planned = statement.replace("?", "NULL") if "?" in statement else statement
+            try:
+                rows = conn.execute(f"EXPLAIN QUERY PLAN {planned}").fetchall()
+            except sqlite3.Error as exc:  # pragma: no cover - defensive
+                seen[statement] = [["error", str(exc)]]
+                continue
+            seen[statement] = [[str(cell) for cell in row] for row in rows]
+    finally:
+        conn.close()
+    ordered = sorted(seen.items(), key=lambda item: len(item[0]), reverse=True)[:limit]
+    return [
+        {
+            "statement": statement[:400],
+            "bind_parameters_replaced_with_null": "?" in statement,
+            "plan": plan,
+        }
+        for statement, plan in ordered
+    ]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--rows", type=int, default=100_000, help="target answer_log rows")
@@ -305,12 +349,14 @@ def main(argv: list[str] | None = None) -> int:
                 "slowest_statement_preview": (
                     max(request_statements, key=len)[:240] if request_statements else None
                 ),
+                "query_plans": _explain(db_path, request_statements),
             }
         )
 
     payload = {
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "engine": "sqlite",
+        "explain_engine": "sqlite EXPLAIN QUERY PLAN (per endpoint, distinct statements)",
         "seed": {**seed_stats, "seed_seconds": seed_seconds},
         "endpoints": results,
         "query_count_max": max((row["statements"] for row in results), default=0),
@@ -318,9 +364,11 @@ def main(argv: list[str] | None = None) -> int:
         if results
         else None,
         "notes": (
-            "SQLite on developer hardware; query counts are the durable signal, "
-            "wall time is host-dependent. Re-run with --rows 20000/100000 to see "
-            "whether statement counts (not just time) grow with the row count."
+            "SQLite on developer hardware; query counts and plans are the durable "
+            "signal, wall time is host-dependent. Re-run with --rows 20000/100000 to "
+            "see whether statement counts (not just time) grow with the row count. "
+            "PostgreSQL plans (EXPLAIN ANALYZE, BUFFERS) for the same endpoints live "
+            "in the audit evidence for H-06."
         ),
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)

@@ -4,7 +4,7 @@ from uuid import uuid4
 from sqlalchemy import (
     JSON,
     Boolean,
-    DateTime,
+    CheckConstraint,
     Float,
     ForeignKey,
     Integer,
@@ -17,6 +17,7 @@ from sqlalchemy import true as sa_true
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from bangla_gpt_api.db.base import Base
+from bangla_gpt_api.db.types import UtcDateTime
 
 
 def _utcnow() -> datetime:
@@ -25,6 +26,16 @@ def _utcnow() -> datetime:
 
 class User(Base):
     __tablename__ = "users"
+    #: H-04: value invariants that lived only in Pydantic/routes, now enforced
+    #: by the database so a script, migration or repair cannot write a row the
+    #: API would then serve.
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('student', 'teacher', 'parent', 'admin', 'school_admin')",
+            name="ck_users_role",
+        ),
+        CheckConstraint("failed_login_count >= 0", name="ck_users_failed_login_count"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
@@ -49,7 +60,7 @@ class User(Base):
     # F-05 token epoch: set at password change/reset. Any access token whose
     # ``iat`` is <= this moment is refused by get_current_user, so existing
     # sessions cannot ride out a credential rotation.
-    sessions_invalidated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    sessions_invalidated_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
     # S-002: per-account failed-login lockout. ``failed_login_count`` counts
     # consecutive password failures (reset to 0 by a successful sign-in);
     # ``locked_until`` is naive UTC (the SQLite column has no tzinfo) and is
@@ -58,8 +69,8 @@ class User(Base):
     failed_login_count: Mapped[int] = mapped_column(
         Integer, default=0, nullable=False, server_default="0"
     )
-    locked_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    locked_until: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
 
 
 class PasswordReset(Base):
@@ -69,13 +80,17 @@ class PasswordReset(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     # Only the SHA-256 hash of the single-use token is persisted.
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    expires_at: Mapped[datetime] = mapped_column(DateTime)
-    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    expires_at: Mapped[datetime] = mapped_column(UtcDateTime)
+    used_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
 
 
 class Student(Base):
     __tablename__ = "students"
+    __table_args__ = (
+        CheckConstraint("class_level BETWEEN 1 AND 12", name="ck_students_class_level"),
+        CheckConstraint("length(name) > 0", name="ck_students_name_not_blank"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int | None] = mapped_column(
@@ -95,9 +110,9 @@ class Student(Base):
     )
     # Guardian-consent evidence trail (child-safety compliance, D20).
     consent_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    consent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    consent_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
     consent_version: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
 
 
 class Teacher(Base):
@@ -108,7 +123,7 @@ class Teacher(Base):
     name: Mapped[str] = mapped_column(String(120))
     # free-form teacher UI/workflow preferences (dict, additive).
     prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
 
 
 class Parent(Base):
@@ -117,24 +132,48 @@ class Parent(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(120))
-    # guardian phone, encrypted at rest (Fernet) whenever PII_ENC_KEY is
+    # notified (Fernet) whenever PII_ENC_KEY is
     # configured; None when no phone was given. Never logged, never exported.
     phone_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    #: H-11: user-level email preference. The weekly digest is the only bulk
+    #: email the product sends; a guardian can opt out per account
+    #: (transactional mail -- resets, verification -- is unaffected) and picks
+    #: the digest language (bn | en).
+    digest_opt_out: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default=sa_false()
+    )
+    digest_language: Mapped[str] = mapped_column(
+        String(2), default="bn", nullable=False, server_default="bn"
+    )
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
 
 
 class ParentStudentLink(Base):
     __tablename__ = "parent_student_links"
+    #: parent_id index pruned: uq_parent_student leads with it (H-04).
     __table_args__ = (UniqueConstraint("parent_id", "student_id", name="uq_parent_student"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    parent_id: Mapped[int] = mapped_column(ForeignKey("parents.id"), index=True)
+    parent_id: Mapped[int] = mapped_column(ForeignKey("parents.id"))
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
 
 
 class QuizAttempt(Base):
     __tablename__ = "quiz_attempts"
+    __table_args__ = (
+        CheckConstraint("class_level BETWEEN 1 AND 12", name="ck_quiz_attempts_class_level"),
+        CheckConstraint(
+            "score_pct IS NULL OR (score_pct >= 0 AND score_pct <= 100)",
+            name="ck_quiz_attempts_score_pct",
+        ),
+        CheckConstraint("total IS NULL OR total >= 0", name="ck_quiz_attempts_total"),
+        CheckConstraint("correct IS NULL OR correct >= 0", name="ck_quiz_attempts_correct"),
+        CheckConstraint(
+            "total IS NULL OR correct IS NULL OR correct <= total",
+            name="ck_quiz_attempts_correct_le_total",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
@@ -145,13 +184,18 @@ class QuizAttempt(Base):
     correct: Mapped[int | None] = mapped_column(Integer, nullable=True)
     score_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     quiz_json: Mapped[list] = mapped_column(JSON, default=list)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
 
     student: Mapped["Student"] = relationship()
 
 
 class AnswerLog(Base):
     __tablename__ = "answer_log"
+    __table_args__ = (
+        CheckConstraint("seq >= 0", name="ck_answer_log_seq"),
+        CheckConstraint("chosen >= 0", name="ck_answer_log_chosen"),
+        CheckConstraint("correct_index >= 0", name="ck_answer_log_correct_index"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     attempt_id: Mapped[int] = mapped_column(ForeignKey("quiz_attempts.id"), index=True)
@@ -172,9 +216,9 @@ class EmailVerification(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    expires_at: Mapped[datetime] = mapped_column(DateTime)
-    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    expires_at: Mapped[datetime] = mapped_column(UtcDateTime)
+    used_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
 
 
 class Conversation(Base):
@@ -187,13 +231,17 @@ class Conversation(Base):
     title: Mapped[str | None] = mapped_column(String(120), nullable=True)
     # last explanation strategy used in this conversation ('আমি বুঝিন' loop).
     last_strategy: Mapped[str | None] = mapped_column(String(24), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
 
     messages: Mapped[list["ChatMessage"]] = relationship(back_populates="conversation")
 
 
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
+    __table_args__ = (
+        CheckConstraint("role IN ('user', 'assistant')", name="ck_chat_messages_role"),
+        CheckConstraint("rating IS NULL OR rating IN (-1, 1)", name="ck_chat_messages_rating"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     conversation_id: Mapped[int] = mapped_column(ForeignKey("conversations.id"), index=True)
@@ -203,7 +251,7 @@ class ChatMessage(Base):
     refused_reason: Mapped[str | None] = mapped_column(String(40), nullable=True)
     sources_json: Mapped[list | None] = mapped_column(JSON, nullable=True)
     rating: Mapped[int | None] = mapped_column(Integer, nullable=True)  # -1 | +1
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
 
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")
 
@@ -217,16 +265,23 @@ class ParentInvite(Base):
     # Only the SHA-256 hash of the code is persisted (same scheme as resets).
     code_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
-    expires_at: Mapped[datetime] = mapped_column(DateTime)
-    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    used_by_parent_id: Mapped[int | None] = mapped_column(ForeignKey("parents.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    expires_at: Mapped[datetime] = mapped_column(UtcDateTime)
+    used_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    #: FK index added by H-04 (parent erasure scans this column).
+    used_by_parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("parents.id"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
 
 
 class Feedback(Base):
     """Thumbs up/down product feedback on tutor answers."""
 
     __tablename__ = "feedback"
+    __table_args__ = (
+        CheckConstraint("rating BETWEEN -1 AND 1", name="ck_feedback_rating"),
+        CheckConstraint("triaged = false OR triaged_at IS NOT NULL", name="ck_feedback_triaged_at"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
@@ -243,30 +298,34 @@ class Feedback(Base):
     # triage queue: admins work the queue oldest-first and mark rows
     # handled; triage_note is staff-facing text, still never chat/message logs.
     triaged: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
-    triaged_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    triaged_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
     triage_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
 
 
 class ChapterProgress(Base):
     """Per-student chapter progress (read%, completed, bookmarked)."""
 
     __tablename__ = "chapter_progress"
+    #: The unique constraint's index covers the student_id prefix, so the old
+    #: single-column student_id index was pure write overhead (H-04 prune).
     __table_args__ = (
         UniqueConstraint(
             "student_id", "subject", "chapter", "class_level", name="uq_chapter_progress"
         ),
+        CheckConstraint("class_level BETWEEN 1 AND 12", name="ck_chapter_progress_class_level"),
+        CheckConstraint("read_pct BETWEEN 0 AND 100", name="ck_chapter_progress_read_pct"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"))
     subject: Mapped[str] = mapped_column(String(60))
     chapter: Mapped[str] = mapped_column(String(200))
     class_level: Mapped[int] = mapped_column(Integer)
     read_pct: Mapped[int] = mapped_column(Integer, default=0)  # 0-100
     completed: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa_false())
     bookmarked: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa_false())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow, onupdate=_utcnow)
 
 
 class DailyActivity(Base):
@@ -277,12 +336,17 @@ class DailyActivity(Base):
     """
 
     __tablename__ = "daily_activity"
+    #: student_id index pruned: uq_daily_activity_student_date leads with it.
     __table_args__ = (
         UniqueConstraint("student_id", "date", name="uq_daily_activity_student_date"),
+        CheckConstraint("questions >= 0", name="ck_daily_activity_questions"),
+        CheckConstraint("quizzes >= 0", name="ck_daily_activity_quizzes"),
+        CheckConstraint("minutes >= 0", name="ck_daily_activity_minutes"),
+        CheckConstraint("length(date) = 10", name="ck_daily_activity_date_iso"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"))
     date: Mapped[str] = mapped_column(String(10), index=True)  # ISO date in Asia/Dhaka
     questions: Mapped[int] = mapped_column(Integer, default=0)
     quizzes: Mapped[int] = mapped_column(Integer, default=0)
@@ -293,12 +357,18 @@ class RevisionItem(Base):
     """SM-2-lite spaced-revision queue seeded from quiz results."""
 
     __tablename__ = "revision_queue"
+    #: student_id index pruned: uq_revision_queue_student_question leads with it.
     __table_args__ = (
         UniqueConstraint("student_id", "question", name="uq_revision_queue_student_question"),
+        CheckConstraint("reps >= 0", name="ck_revision_queue_reps"),
+        CheckConstraint("interval_days >= 0", name="ck_revision_queue_interval_days"),
+        CheckConstraint("ease_factor > 0", name="ck_revision_queue_ease_factor"),
+        CheckConstraint("correct_index >= 0", name="ck_revision_queue_correct_index"),
+        CheckConstraint("length(due_date) = 10", name="ck_revision_queue_due_date_iso"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"))
     question: Mapped[str] = mapped_column(Text)
     options_json: Mapped[list] = mapped_column(JSON, default=list)
     correct_index: Mapped[int] = mapped_column(Integer, default=0)
@@ -309,7 +379,7 @@ class RevisionItem(Base):
     interval_days: Mapped[int] = mapped_column(Integer, default=0)  # 0 => due today
     ease_factor: Mapped[float] = mapped_column(Float, default=2.5)
     due_date: Mapped[str] = mapped_column(String(10), index=True)  # ISO, Asia/Dhaka
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow, onupdate=_utcnow)
 
 
 class School(Base):
@@ -324,8 +394,10 @@ class School(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(200))
-    code: Mapped[str] = mapped_column(String(32), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    #: uq_school_code already indexes this column; a second index was pure
+    #: write overhead (H-04 prune).
+    code: Mapped[str] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
 
 
 class ClassRoom(Base):
@@ -339,25 +411,29 @@ class ClassRoom(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), index=True)
+    #: school_id index pruned: uq_classroom_school_level_section leads with it.
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"))
     class_level: Mapped[int] = mapped_column(Integer)
     section: Mapped[str] = mapped_column(String(8), default="GEN", server_default="GEN")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
 
 
 class ClassStudent(Base):
     """enrollment linking a student to exactly one classroom (v1 rule)."""
 
     __tablename__ = "class_students"
+    #: Both column-level indexes were redundant (H-04 prune): classroom_id is
+    #: the prefix of uq_class_student, student_id is covered exactly by
+    #: uq_class_student_single_class.
     __table_args__ = (
         UniqueConstraint("classroom_id", "student_id", name="uq_class_student"),
         UniqueConstraint("student_id", name="uq_class_student_single_class"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), index=True)
-    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"))
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"))
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
 
 
 class ClassTeacher(Base):
@@ -369,12 +445,13 @@ class ClassTeacher(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), index=True)
+    #: classroom_id index pruned: uq_class_teacher leads with it (H-04).
+    classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"))
     teacher_id: Mapped[int] = mapped_column(ForeignKey("teachers.id"), index=True)
     subject: Mapped[str] = mapped_column(
         String(60), default="", server_default="", comment="'' means all subjects"
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
 
 
 class StudentInvite(Base):
@@ -393,9 +470,9 @@ class StudentInvite(Base):
     email: Mapped[str] = mapped_column(String(255), index=True)
     classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), index=True)
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
-    expires_at: Mapped[datetime] = mapped_column(DateTime)
-    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    expires_at: Mapped[datetime] = mapped_column(UtcDateTime)
+    used_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
 
 
 class ChapterContent(Base):
@@ -408,6 +485,7 @@ class ChapterContent(Base):
     """
 
     __tablename__ = "chapter_contents"
+    #: subject index pruned: uq_chapter_content_version leads with it (H-04).
     __table_args__ = (
         UniqueConstraint(
             "subject",
@@ -416,17 +494,24 @@ class ChapterContent(Base):
             "version",
             name="uq_chapter_content_version",
         ),
+        CheckConstraint("class_level BETWEEN 1 AND 12", name="ck_chapter_contents_class_level"),
+        CheckConstraint("version >= 1", name="ck_chapter_contents_version"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    subject: Mapped[str] = mapped_column(String(60), index=True)
+    #: H-04 prune: uq_chapter_content_version leads with subject, and
+    #: ix_chapter_contents_chapter stays for chapter-only lookups.
+    subject: Mapped[str] = mapped_column(String(60))
     class_level: Mapped[int] = mapped_column(Integer)
     chapter: Mapped[str] = mapped_column(String(200), index=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
     source: Mapped[str] = mapped_column(String(12), default="ai")  # ai | teacher
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
-    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    #: FK index added by H-04 (the account-erasure path deletes/updates by it).
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
 
 
 class QuestionPaper(Base):
@@ -434,10 +519,17 @@ class QuestionPaper(Base):
 
     A draft is produced by ONE AI call plus validation (NCTB alignment,
     duplicate, difficulty). A paper can only be finalized after EVERY
+    a queue the teacher reviews. A paper can only be finalized after EVERY
     question was explicitly reviewed by the teacher (HIL gate).
     """
 
     __tablename__ = "question_papers"
+    __table_args__ = (
+        CheckConstraint("class_level BETWEEN 1 AND 12", name="ck_question_papers_class_level"),
+        CheckConstraint("marks > 0", name="ck_question_papers_marks"),
+        CheckConstraint("duration_min > 0", name="ck_question_papers_duration_min"),
+        CheckConstraint("status IN ('draft', 'final')", name="ck_question_papers_status"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     teacher_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
@@ -451,9 +543,9 @@ class QuestionPaper(Base):
     status: Mapped[str] = mapped_column(String(8), default="draft", index=True)
     questions: Mapped[list] = mapped_column(JSON, default=list)
     meta: Mapped[dict] = mapped_column(JSON, default=dict)
-    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    finalized_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    reviewed_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    finalized_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
 
 
 class ShortTest(Base):
@@ -466,6 +558,10 @@ class ShortTest(Base):
     """
 
     __tablename__ = "short_tests"
+    __table_args__ = (
+        CheckConstraint("num_questions > 0", name="ck_short_tests_num_questions"),
+        CheckConstraint("duration_min > 0", name="ck_short_tests_duration_min"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), index=True)
@@ -476,7 +572,7 @@ class ShortTest(Base):
     duration_min: Mapped[int] = mapped_column(Integer, default=10)
     questions: Mapped[list] = mapped_column(JSON, default=list)
     attempts: Mapped[list] = mapped_column(JSON, default=list)  # [{student_id, attempt_id}]
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
 
 
 class SupportPlan(Base):
@@ -487,6 +583,9 @@ class SupportPlan(Base):
     """
 
     __tablename__ = "support_plans"
+    __table_args__ = (
+        CheckConstraint("class_level BETWEEN 1 AND 12", name="ck_support_plans_class_level"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
@@ -494,7 +593,7 @@ class SupportPlan(Base):
     class_level: Mapped[int] = mapped_column(Integer)
     focus_concepts: Mapped[list] = mapped_column(JSON, default=list)
     plan: Mapped[dict] = mapped_column(JSON, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
 
 
 class Assignment(Base):
@@ -507,16 +606,17 @@ class Assignment(Base):
     """
 
     __tablename__ = "assignments"
+    __table_args__ = (CheckConstraint("num_questions > 0", name="ck_assignments_num_questions"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     teacher_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     subject: Mapped[str] = mapped_column(String(60))
     chapter: Mapped[str] = mapped_column(String(200))
     num_questions: Mapped[int] = mapped_column(Integer, default=5)
-    due_at: Mapped[datetime] = mapped_column(DateTime)
+    due_at: Mapped[datetime] = mapped_column(UtcDateTime)
     questions: Mapped[list] = mapped_column(JSON, default=list)
     attempts: Mapped[list] = mapped_column(JSON, default=list)  # [{student_id, attempt_id}]
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
 
 
 class QuestionBankEntry(Base):
@@ -529,6 +629,13 @@ class QuestionBankEntry(Base):
     """
 
     __tablename__ = "question_bank"
+    __table_args__ = (
+        CheckConstraint("class_level BETWEEN 1 AND 12", name="ck_question_bank_class_level"),
+        CheckConstraint(
+            "answer_index IS NULL OR answer_index >= 0", name="ck_question_bank_answer_index"
+        ),
+        CheckConstraint("times_reused >= 0", name="ck_question_bank_times_reused"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     teacher_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
@@ -541,7 +648,7 @@ class QuestionBankEntry(Base):
     class_level: Mapped[int] = mapped_column(Integer, index=True)
     source: Mapped[str] = mapped_column(String(30), default="qp_review")
     times_reused: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
 
 
 class SchoolInvite(Base):
@@ -555,16 +662,20 @@ class SchoolInvite(Base):
     """
 
     __tablename__ = "school_invites"
+    __table_args__ = (
+        CheckConstraint("role IN ('teacher', 'school_admin')", name="ck_school_invites_role"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     code_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), index=True)
     role: Mapped[str] = mapped_column(String(16), default="teacher")
-    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    used_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
-    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    #: FK indexes added by H-04: both are read by the invite audit path.
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    used_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
+    used_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
 
 
 class Concept(Base):
@@ -573,7 +684,8 @@ class Concept(Base):
     __tablename__ = "concepts"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String(200), index=True)
+    #: name index pruned: uq_concept_identity leads with name (H-04).
+    name: Mapped[str] = mapped_column(String(200))
     class_level: Mapped[int] = mapped_column(Integer, index=True)
     subject: Mapped[str] = mapped_column(String(60), index=True)
     chapter: Mapped[str] = mapped_column(String(200))
@@ -581,10 +693,11 @@ class Concept(Base):
     source: Mapped[str] = mapped_column(String(16), default="chapter")
     #: colloquial/alternate spellings, e.g. বীজগণিত for বীজগণিতীয় রাশি
     aliases: Mapped[list] = mapped_column(JSON, default=list)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
 
     __table_args__ = (
         UniqueConstraint("name", "class_level", "subject", name="uq_concept_identity"),
+        CheckConstraint("class_level BETWEEN 1 AND 12", name="ck_concepts_class_level"),
     )
 
 
@@ -594,7 +707,9 @@ class ConceptPrerequisite(Base):
     __tablename__ = "concept_prerequisites"
 
     concept_id: Mapped[int] = mapped_column(ForeignKey("concepts.id"), primary_key=True)
-    prereq_id: Mapped[int] = mapped_column(ForeignKey("concepts.id"), primary_key=True)
+    #: FK index added by H-04: the PK (concept_id, prereq_id) does not cover
+    #: the second FK column, which concept deletion and gap-hunt reads use.
+    prereq_id: Mapped[int] = mapped_column(ForeignKey("concepts.id"), primary_key=True, index=True)
 
 
 class ConceptMastery(Base):
@@ -603,10 +718,12 @@ class ConceptMastery(Base):
     __tablename__ = "concept_mastery"
 
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), primary_key=True)
-    concept_id: Mapped[int] = mapped_column(ForeignKey("concepts.id"), primary_key=True)
+    #: FK index added by H-04: the PK (student_id, concept_id) does not cover
+    #: concept_id alone (per-concept reads, concept deletion).
+    concept_id: Mapped[int] = mapped_column(ForeignKey("concepts.id"), primary_key=True, index=True)
     correct: Mapped[int] = mapped_column(Integer, default=0)
     total: Mapped[int] = mapped_column(Integer, default=0)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
 
 
 class PracticeItem(Base):
@@ -618,6 +735,13 @@ class PracticeItem(Base):
     """
 
     __tablename__ = "practice_items"
+    __table_args__ = (
+        CheckConstraint("class_level BETWEEN 1 AND 12", name="ck_practice_items_class_level"),
+        CheckConstraint("elo > 0", name="ck_practice_items_elo"),
+        CheckConstraint("attempts >= 0", name="ck_practice_items_attempts"),
+        CheckConstraint("correct >= 0", name="ck_practice_items_correct"),
+        CheckConstraint("correct <= attempts", name="ck_practice_items_correct_le_attempts"),
+    )
 
     fingerprint: Mapped[str] = mapped_column(String(16), primary_key=True)
     chapter: Mapped[str] = mapped_column(String(200))
@@ -626,7 +750,7 @@ class PracticeItem(Base):
     elo: Mapped[float] = mapped_column(Float, default=1200.0)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     correct: Mapped[int] = mapped_column(Integer, default=0)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow, onupdate=_utcnow)
 
 
 class StudentAbility(Base):
@@ -637,13 +761,18 @@ class StudentAbility(Base):
     """
 
     __tablename__ = "student_abilities"
+    __table_args__ = (
+        CheckConstraint("class_level BETWEEN 1 AND 12", name="ck_student_abilities_class_level"),
+        CheckConstraint("ability > 0", name="ck_student_abilities_ability"),
+        CheckConstraint("attempts >= 0", name="ck_student_abilities_attempts"),
+    )
 
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), primary_key=True)
     concept: Mapped[str] = mapped_column(String(200), primary_key=True)
     class_level: Mapped[int] = mapped_column(Integer, index=True)
     ability: Mapped[float] = mapped_column(Float, default=1200.0)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow, onupdate=_utcnow)
 
 
 class JobRun(Base):
@@ -660,8 +789,8 @@ class JobRun(Base):
 
     job: Mapped[str] = mapped_column(String(80), primary_key=True)
     period_key: Mapped[str] = mapped_column(String(40), primary_key=True)
-    started_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
     outcome: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
 
@@ -680,7 +809,7 @@ class AuditLog(Base):
     __tablename__ = "audit_log"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow, index=True)
     actor_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id"), nullable=True, index=True
     )
@@ -714,7 +843,7 @@ class TeacherDocument(Base):
     chapter: Mapped[str | None] = mapped_column(String(200), nullable=True)
     title: Mapped[str] = mapped_column(String(200))
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow, index=True)
 
 
 class SavedNote(Base):
@@ -728,7 +857,7 @@ class SavedNote(Base):
     body: Mapped[str] = mapped_column(Text)
     source: Mapped[str] = mapped_column(String(16))  # tutor | chapter | other
     source_ref: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
 
 
 class Notification(Base):
@@ -746,8 +875,8 @@ class Notification(Base):
     code: Mapped[str] = mapped_column(String(64))
     params: Mapped[dict] = mapped_column(JSON, default=dict)
     link: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
+    read_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow, index=True)
 
 
 class AnalyticsEventRow(Base):
@@ -766,7 +895,7 @@ class AnalyticsEventRow(Base):
     name: Mapped[str] = mapped_column(String(64))
     role: Mapped[str | None] = mapped_column(String(20), nullable=True)
     props: Mapped[dict] = mapped_column(JSON, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow, index=True)
 
 
 class AiJob(Base):
@@ -779,6 +908,13 @@ class AiJob(Base):
 
     __tablename__ = "ai_jobs"
 
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued', 'generating', 'validating', 'ready', 'failed')",
+            name="ck_ai_jobs_status",
+        ),
+    )
+
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     kind: Mapped[str] = mapped_column(String(40))
@@ -786,8 +922,8 @@ class AiJob(Base):
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
     result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     error: Mapped[str | None] = mapped_column(String(300), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow, onupdate=_utcnow)
 
 
 class AiUsage(Base):
@@ -801,6 +937,12 @@ class AiUsage(Base):
 
     __tablename__ = "ai_usage"
 
+    __table_args__ = (
+        CheckConstraint("prompt_tokens >= 0", name="ck_ai_usage_prompt_tokens"),
+        CheckConstraint("completion_tokens >= 0", name="ck_ai_usage_completion_tokens"),
+        CheckConstraint("estimated_cost_usd >= 0", name="ck_ai_usage_estimated_cost_usd"),
+    )
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     route: Mapped[str] = mapped_column(String(40), default="tutor.ask")
@@ -808,4 +950,29 @@ class AiUsage(Base):
     prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)
     completion_tokens: Mapped[int] = mapped_column(Integer, default=0)
     estimated_cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow, index=True)
+
+
+class EmailBounce(Base):
+    """H-11: suppression ledger for undeliverable recipients.
+
+    Only the SHA-256 of the lowercased address is stored -- the ledger can
+    suppress a bounced guardian without keeping a second copy of PII, and a
+    hash is enough to match the recipient of every later send. ``reason`` is
+    the operator-readable summary of the DSN status/diagnostic (never a
+    message body). A row is never deleted by the app: suppression is the
+    product decision, and the retention sweep leaves it alone.
+    """
+
+    __tablename__ = "email_bounces"
+    __table_args__ = (
+        UniqueConstraint("recipient_hash", name="uq_email_bounces_recipient_hash"),
+        CheckConstraint("bounce_count >= 1", name="ck_email_bounces_count"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    recipient_hash: Mapped[str] = mapped_column(String(64))
+    reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    bounce_count: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    first_bounced_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
+    last_bounced_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)

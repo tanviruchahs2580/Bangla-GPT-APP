@@ -38,6 +38,8 @@ Three wire shapes, all of them declared in `routers/_error_contract.py`:
 |---|---|---|---|
 | `account_locked` | 429 | code, message | Account temporarily locked after repeated failed sign-ins |
 | `ai_budget_exceeded` | 429 | code, message | Monthly AI budget exhausted. Please try again next month. |
+| `ai_daily_budget_exceeded` | 429 | code, message | Deployment-wide daily AI budget exhausted; retry tomorrow |
+| `ai_school_budget_exceeded` | 429 | code, message | This school's daily AI budget exhausted; retry tomorrow |
 | `already_used` | 409 | code, message | Invite already redeemed |
 | `answer_count_mismatch` | 400 | code, message, expected, received | Answer count does not match question count |
 | `bad_credentials` | 401 | code, message | Incorrect email or password |
@@ -47,6 +49,7 @@ Three wire shapes, all of them declared in `routers/_error_contract.py`:
 | `code_used` | 409 | code, message | Invite already used |
 | `consent_not_accepted` | 400 | code, message | acceptance required |
 | `content_read_only` | 403 | code, message | This chapter content was authored by another school and is read-only |
+| `conversation_limit_reached` | 429 | code, message | Conversation reached its message cap; start a new one |
 | `conversation_not_found` | 404 | code, message | Conversation not found |
 | `direct_link_disabled` | 410 | code, message | Use the student's invite code via /parents/link/invite |
 | `email_taken` | 409 | code, message | Email already registered |
@@ -141,9 +144,9 @@ Applied per client IP unless the scope column says `user` (an authenticated call
 | DELETE | `/admin/schools/{school_id}/invites/{invite_id}` | bearer | Admin School Invite Revoke | - | 204 | 401, 403, 422, 429, 503 |
 | GET | `/admin/system/info` | bearer | System Info | - | 200: SystemInfoOut | 401, 403, 429, 503 |
 | GET | `/admin/users` | bearer | Admin List Users | - | 200: AdminUsersPage | 401, 403, 422, 429, 503 |
-| DELETE | `/admin/users/{user_id}/impersonate` | bearer | Admin Impersonate End | - | 204 | 401, 403, 422, 429, 503 |
-| POST | `/admin/users/{user_id}/impersonate` | bearer | Admin Impersonate | ImpersonateRequest | 200: ImpersonateOut | 401, 403, 422, 429, 503 |
-| PATCH | `/admin/users/{user_id}/role` | bearer | Admin Update Role | RoleUpdateRequest | 200: UserPublic | 401, 403, 422, 429, 503 |
+| DELETE | `/admin/users/{user_id}/impersonate` | bearer | Admin Impersonate End | - | 204 | 401, 403, 404, 422, 429, 503 |
+| POST | `/admin/users/{user_id}/impersonate` | bearer | Admin Impersonate | ImpersonateRequest | 200: ImpersonateOut | 401, 403, 404, 422, 429, 503 |
+| PATCH | `/admin/users/{user_id}/role` | bearer | Admin Update Role | RoleUpdateRequest | 200: UserPublic | 401, 403, 404, 409, 422, 429, 503 |
 
 ### assignments
 
@@ -159,16 +162,16 @@ Applied per client IP unless the scope column says `user` (an authenticated call
 | POST | `/auth/forgot` | none | Forgot Password | ForgotPasswordRequest | 202: object | 422, 429, 503 |
 | POST | `/auth/impersonate/exit` | bearer | Impersonate Exit | - | 204 | 401, 403, 429, 503 |
 | POST | `/auth/join-school` | none | Auth Join School | SchoolJoinIn | 201: TokenResponse | 401, 403, 404, 409, 410, 422, 429, 503 |
-| POST | `/auth/login` | none | Login | LoginRequest | 200: TokenResponse | 422, 429, 503 |
+| POST | `/auth/login` | none | Login | LoginRequest | 200: TokenResponse | 401, 403, 422, 429, 503 |
 | POST | `/auth/logout` | bearer | Logout | - | 204 | 401, 403, 429, 503 |
-| POST | `/auth/mfa/challenge` | none | Mfa Challenge | MfaChallengeIn | 200: TokenResponse | 422, 429, 503 |
+| POST | `/auth/mfa/challenge` | none | Mfa Challenge | MfaChallengeIn | 200: TokenResponse | 401, 422, 429, 503 |
 | POST | `/auth/mfa/disable` | bearer | Mfa Disable | MfaDisableIn | 200: object | 401, 403, 409, 422, 429, 503 |
 | POST | `/auth/mfa/enroll` | bearer | Mfa Enroll | - | 200: MfaEnrollOut | 401, 403, 429, 503 |
-| POST | `/auth/mfa/verify` | bearer | Mfa Verify | MfaVerifyIn | 200: object | 401, 403, 422, 429, 503 |
+| POST | `/auth/mfa/verify` | bearer | Mfa Verify | MfaVerifyIn | 200: object | 401, 403, 409, 422, 429, 503 |
 | POST | `/auth/register` | none | Register | RegisterRequest | 201: RegisterResponse | 409, 422, 429, 503 |
 | POST | `/auth/resend-verification` | none | Resend Verification | ResendVerificationRequest | null | 202: object | 422, 429, 503 |
-| POST | `/auth/reset` | none | Reset Password | ResetPasswordRequest | 200: TokenResponse | 422, 429, 503 |
-| POST | `/auth/verify-email` | none | Verify Email | VerifyEmailRequest | 200: TokenResponse | 422, 429, 503 |
+| POST | `/auth/reset` | none | Reset Password | ResetPasswordRequest | 200: TokenResponse | 400, 422, 429, 503 |
+| POST | `/auth/verify-email` | none | Verify Email | VerifyEmailRequest | 200: TokenResponse | 400, 422, 429, 503 |
 
 ### dashboard
 
@@ -377,7 +380,7 @@ Applied per client IP unless the scope column says `user` (an authenticated call
 
 | Method | Path | Auth | Summary | Request | 2xx | Errors |
 |---|---|---|---|---|---|---|
-| DELETE | `/users/me` | bearer | Delete Me | - | 204 | 401, 403, 429, 503 |
+| DELETE | `/users/me` | bearer | Delete Me | - | 204 | 401, 403, 409, 429, 503 |
 | GET | `/users/me` | bearer | Read Me | - | 200: MeResponse | 401, 403, 429, 503 |
 | GET | `/users/me/export` | bearer | Export Me | - | 200: _DataExportV2 | 401, 403, 429, 503 |
 

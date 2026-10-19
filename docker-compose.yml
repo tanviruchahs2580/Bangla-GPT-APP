@@ -30,6 +30,14 @@ x-api-common: &api-common
 
 services:
   api:
+    # Resource limits (F-11 / AUD-EF-10): bounded blast radius for a
+    # runaway process or a memory leak. Verified with docker compose v2
+    # (deploy.resources.limits is applied to the container, 2026-10-19).
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1g
     <<: *api-common
     build: .
     image: ghcr.io/tanviruchahs2580/bangla-gpt-app/api:${API_TAG:-local}
@@ -106,7 +114,17 @@ services:
       retries: 3
 
   redis:
-    image: redis:7-alpine
+    # Resource limits (F-11 / AUD-EF-10): bounded blast radius for a
+    # runaway process or a memory leak. Verified with docker compose v2
+    # (deploy.resources.limits is applied to the container, 2026-10-19).
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128m
+    # Digest-pinned (AUD-EF-10 / F-11), resolved 2026-10-19. Dependabot's
+    # docker ecosystem keeps the digest and the comment in step.
+    image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
     profiles: [core]
     restart: unless-stopped
     command: ["redis-server", "--save", "", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
@@ -127,6 +145,14 @@ services:
   # JOBS_BACKEND=arq on the api service so its web workers stop scheduling,
   # and start exactly ONE of these (job_runs still guarantees no double runs).
   worker:
+    # Resource limits (F-11 / AUD-EF-10): bounded blast radius for a
+    # runaway process or a memory leak. Verified with docker compose v2
+    # (deploy.resources.limits is applied to the container, 2026-10-19).
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768m
     build: .
     image: ghcr.io/tanviruchahs2580/bangla-gpt-app/api:${API_TAG:-local}
     profiles: [worker]
@@ -161,6 +187,14 @@ services:
         condition: service_started
 
   web:
+    # Resource limits (F-11 / AUD-EF-10): bounded blast radius for a
+    # runaway process or a memory leak. Verified with docker compose v2
+    # (deploy.resources.limits is applied to the container, 2026-10-19).
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256m
     build:
       context: ./apps/web
       args:
@@ -194,7 +228,16 @@ services:
       - api
 
   caddy:
-    image: caddy:2-alpine
+    # Resource limits (F-11 / AUD-EF-10): bounded blast radius for a
+    # runaway process or a memory leak. Verified with docker compose v2
+    # (deploy.resources.limits is applied to the container, 2026-10-19).
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128m
+    # Digest-pinned (AUD-EF-10 / F-11), resolved 2026-10-19.
+    image: caddy:2-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
     profiles: [tls]
     restart: unless-stopped
     # AUD-B-07: Caddy needs exactly one capability -- binding the privileged
@@ -220,6 +263,14 @@ services:
       - web
 
   postgres:
+    # Resource limits (F-11 / AUD-EF-10): bounded blast radius for a
+    # runaway process or a memory leak. Verified with docker compose v2
+    # (deploy.resources.limits is applied to the container, 2026-10-19).
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1g
     # S5.7: postgres 16 + pgBackRest binary (archive-push runs inside this
     # container); the pgbackrest sidecar shares the socket + repo volumes.
     build: ./deploy/postgres
@@ -265,7 +316,16 @@ services:
       retries: 5
 
   prometheus:
-    image: prom/prometheus:v2.53.0
+    # Resource limits (F-11 / AUD-EF-10): bounded blast radius for a
+    # runaway process or a memory leak. Verified with docker compose v2
+    # (deploy.resources.limits is applied to the container, 2026-10-19).
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
+    # Digest-pinned (AUD-EF-10 / F-11), resolved 2026-10-19.
+    image: prom/prometheus:v2.53.0@sha256:075b1ba2c4ebb04bc3a6ab86c06ec8d8099f8fda1c96ef6d104d9bb1def1d8bc
     profiles: [monitoring]
     restart: unless-stopped
     # AUD-B-07: runs as nobody with no capabilities needed.
@@ -280,7 +340,16 @@ services:
       - "127.0.0.1:9090:9090"
 
   grafana:
-    image: grafana/grafana:11.1.0
+    # Resource limits (F-11 / AUD-EF-10): bounded blast radius for a
+    # runaway process or a memory leak. Verified with docker compose v2
+    # (deploy.resources.limits is applied to the container, 2026-10-19).
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
+    # Digest-pinned (AUD-EF-10 / F-11), resolved 2026-10-19.
+    image: grafana/grafana:11.1.0@sha256:079600c9517b678c10cda6006b4487d3174512fd4c6cface37df7822756ed7a5
     profiles: [monitoring]
     restart: unless-stopped
     # AUD-B-07: runs as the grafana uid; no capabilities needed.
@@ -295,6 +364,14 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
 
   backup:
+    # Resource limits (F-11 / AUD-EF-10): bounded blast radius for a
+    # runaway process or a memory leak. Verified with docker compose v2
+    # (deploy.resources.limits is applied to the container, 2026-10-19).
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256m
     build: .
     image: ghcr.io/tanviruchahs2580/bangla-gpt-app/api:${API_TAG:-local}
     profiles: [backup]
@@ -321,6 +398,14 @@ services:
       - no-new-privileges:true
 
   pgbackrest:
+    # Resource limits (F-11 / AUD-EF-10): bounded blast radius for a
+    # runaway process or a memory leak. Verified with docker compose v2
+    # (deploy.resources.limits is applied to the container, 2026-10-19).
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512m
     # S5.7: nightly pgBackRest full backups (WAL archiving runs continuously
     # via the postgres service's archive_command, so effective RPO is
     # minutes, not a day). Restore drill: scripts/pgbackrest_drill.sh.

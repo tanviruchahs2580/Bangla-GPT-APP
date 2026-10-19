@@ -1,0 +1,74 @@
+{
+  "hardcoded_colours": {
+    "count": 75,
+    "by_file": {
+      "apps/web/src/components/BrandMark.tsx": 9,
+      "apps/web/src/lib/confetti.ts": 6,
+      "apps/web/src/styles.css": 60
+    },
+    "examples": [
+      "BrandMark.tsx:32: #16a34a",
+      "BrandMark.tsx:33: #166534",
+      "BrandMark.tsx:34: #052e16",
+      "BrandMark.tsx:37: #fde68a",
+      "BrandMark.tsx:38: #f59e0b",
+      "BrandMark.tsx:43: #ffffff",
+      "BrandMark.tsx:67: #ffffff",
+      "BrandMark.tsx:71: #ffffff",
+      "BrandMark.tsx:78: #166534",
+      "confetti.ts:6: #16a34a",
+      "confetti.ts:7: #4ade80",
+      "confetti.ts:8: #0284c7",
+      "confetti.ts:9: #4f46e5",
+      "confetti.ts:10: #f59e0b",
+      "confetti.ts:11: #f472b6",
+      "styles.css:1388: #f59e0b",
+      "styles.css:1596: #fff",
+      "styles.css:1663: #fff",
+      "styles.css:1668: #fff",
+      "styles.css:2984: #000"
+    ]
+  },
+  "off_grid_px": {
+    "count": 58,
+    "common_values": {
+      "1.5px": 8,
+      "30px": 7,
+      "5px": 6,
+      "26px": 5,
+      "15px": 4,
+      "9px": 4,
+      "1.2px": 4,
+      "90px": 3,
+      "50px": 3,
+      "899px": 2,
+      "46px": 2,
+      "150px": 2,
+      "13px": 2,
+      "7px": 2,
+      "225px": 1
+    },
+    "examples": [
+      "styles.css:263: 1.5px",
+      "styles.css:264: 1.5px",
+      "styles.css:268: 1.5px",
+      "styles.css:269: 1.5px",
+      "styles.css:508: 30px",
+      "styles.css:509: 30px",
+      "styles.css:572: 5px",
+      "styles.css:694: 1.5px",
+      "styles.css:904: 15px",
+      "styles.css:973: 1.5px",
+      "styles.css:1020: 90px",
+      "styles.css:1032: 5px",
+      "styles.css:1035: 9px",
+      "styles.css:1296: 899px",
+      "styles.css:1339: 899px",
+      "styles.css:1431: 1.2px",
+      "styles.css:1432: 1.2px",
+      "styles.css:1558: 5px",
+      "styles.css:1609: 1.2px",
+      "styles.css:1610: 1.2px"
+    ]
+  }
+}

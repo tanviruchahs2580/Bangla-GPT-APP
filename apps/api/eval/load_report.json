@@ -1,0 +1,239 @@
+{
+ "base_url": "http://127.0.0.1:53970",
+ "budgets": {
+  "dashboard_p95_ms": 2000,
+  "full_answer_p95_ms": 12000,
+  "saturation_error_rate": 0.01,
+  "saturation_p95_multiplier": 3.0
+ },
+ "generated_at": "2026-10-19T08:35:24+00:00",
+ "generated_by": "scripts/loadgen.py",
+ "levels": [
+  {
+   "ask": {
+    "mean_ms": 53.37,
+    "n": 25,
+    "p50_ms": 48.28,
+    "p95_ms": 76.27,
+    "p99_ms": 169.07
+   },
+   "concurrency": 1,
+   "dashboard": {
+    "mean_ms": 25.46,
+    "n": 5,
+    "p50_ms": 23.75,
+    "p95_ms": 34.59,
+    "p99_ms": 34.59
+   },
+   "error_rate": 0.0,
+   "errors": 0,
+   "requests": 50,
+   "search": {
+    "mean_ms": 86.0,
+    "n": 10,
+    "p50_ms": 72.96,
+    "p95_ms": 261.67,
+    "p99_ms": 261.67
+   },
+   "status_counts": {
+    "200": 50
+   },
+   "stream": {
+    "mean_ms": 85.23,
+    "n": 10,
+    "p50_ms": 83.99,
+    "p95_ms": 125.03,
+    "p99_ms": 125.03
+   },
+   "throughput_rps": 15.73,
+   "wall_seconds": 3.18
+  },
+  {
+   "ask": {
+    "mean_ms": 275.08,
+    "n": 25,
+    "p50_ms": 176.16,
+    "p95_ms": 763.63,
+    "p99_ms": 886.12
+   },
+   "concurrency": 4,
+   "dashboard": {
+    "mean_ms": 129.57,
+    "n": 5,
+    "p50_ms": 103.04,
+    "p95_ms": 179.3,
+    "p99_ms": 179.3
+   },
+   "error_rate": 0.0,
+   "errors": 0,
+   "requests": 50,
+   "search": {
+    "mean_ms": 229.06,
+    "n": 10,
+    "p50_ms": 223.92,
+    "p95_ms": 354.41,
+    "p99_ms": 354.41
+   },
+   "status_counts": {
+    "200": 50
+   },
+   "stream": {
+    "mean_ms": 311.45,
+    "n": 10,
+    "p50_ms": 298.16,
+    "p95_ms": 474.75,
+    "p99_ms": 474.75
+   },
+   "throughput_rps": 15.03,
+   "wall_seconds": 3.33
+  },
+  {
+   "ask": {
+    "mean_ms": 614.99,
+    "n": 25,
+    "p50_ms": 554.22,
+    "p95_ms": 963.02,
+    "p99_ms": 1161.73
+   },
+   "concurrency": 8,
+   "dashboard": {
+    "mean_ms": 536.95,
+    "n": 5,
+    "p50_ms": 366.5,
+    "p95_ms": 1297.87,
+    "p99_ms": 1297.87
+   },
+   "error_rate": 0.0,
+   "errors": 0,
+   "requests": 50,
+   "search": {
+    "mean_ms": 541.93,
+    "n": 10,
+    "p50_ms": 529.62,
+    "p95_ms": 1120.44,
+    "p99_ms": 1120.44
+   },
+   "status_counts": {
+    "200": 50
+   },
+   "stream": {
+    "mean_ms": 742.22,
+    "n": 10,
+    "p50_ms": 800.27,
+    "p95_ms": 1125.3,
+    "p99_ms": 1125.3
+   },
+   "throughput_rps": 12.15,
+   "wall_seconds": 4.11
+  },
+  {
+   "ask": {
+    "mean_ms": 1334.25,
+    "n": 34,
+    "p50_ms": 1162.36,
+    "p95_ms": 2920.45,
+    "p99_ms": 3716.59
+   },
+   "concurrency": 16,
+   "dashboard": {
+    "mean_ms": 740.27,
+    "n": 6,
+    "p50_ms": 507.86,
+    "p95_ms": 1490.37,
+    "p99_ms": 1490.37
+   },
+   "error_rate": 0.0,
+   "errors": 0,
+   "requests": 64,
+   "search": {
+    "mean_ms": 1379.22,
+    "n": 12,
+    "p50_ms": 1470.27,
+    "p95_ms": 3257.4,
+    "p99_ms": 3257.4
+   },
+   "status_counts": {
+    "200": 64
+   },
+   "stream": {
+    "mean_ms": 1449.27,
+    "n": 12,
+    "p50_ms": 1454.15,
+    "p95_ms": 2567.32,
+    "p99_ms": 2567.32
+   },
+   "throughput_rps": 11.1,
+   "wall_seconds": 5.77
+  },
+  {
+   "ask": {
+    "mean_ms": 2548.84,
+    "n": 65,
+    "p50_ms": 2418.82,
+    "p95_ms": 6330.45,
+    "p99_ms": 8808.89
+   },
+   "concurrency": 32,
+   "dashboard": {
+    "mean_ms": 3470.69,
+    "n": 12,
+    "p50_ms": 3479.61,
+    "p95_ms": 7642.17,
+    "p99_ms": 7642.17
+   },
+   "error_rate": 0.0,
+   "errors": 0,
+   "requests": 128,
+   "search": {
+    "mean_ms": 2615.84,
+    "n": 25,
+    "p50_ms": 1978.68,
+    "p95_ms": 5015.16,
+    "p99_ms": 8947.11
+   },
+   "status_counts": {
+    "200": 128
+   },
+   "stream": {
+    "mean_ms": 3214.42,
+    "n": 26,
+    "p50_ms": 2839.87,
+    "p95_ms": 8659.26,
+    "p99_ms": 9211.59
+   },
+   "throughput_rps": 10.12,
+   "wall_seconds": 12.65
+  }
+ ],
+ "mix": "50% POST /tutor/ask, 20% streaming chat, 20% GET /search, 10% GET /dashboard/summary",
+ "mode": "capacity",
+ "run_conditions": {
+  "cpu_count": 8,
+  "database": "sqlite (dev/test posture; Postgres numbers differ)",
+  "host": "DESKTOP-GET9GA6",
+  "mode": "capacity",
+  "platform": "Windows-11-10.0.26300-SP0",
+  "provider": "mock (app-side latency only; TTFT is NOT measured)",
+  "python": "3.12.10",
+  "rate_limits": "raised for this capacity run (shipped: 30/user/min, 60/IP/min)",
+  "server": "single in-process uvicorn worker, throwaway sqlite"
+ },
+ "saturation": {
+  "first_saturated_concurrency": 4,
+  "note": "saturation = error rate above the stated cap, ask/stream p95 beyond the A9-01 answer budget, dashboard p95 beyond its own budget, or ask p95 above 3x the lowest-concurrency p95",
+  "observations": [
+   "concurrency 4: ask p95 763.63ms, stream p95 474.75ms, dashboard p95 179.3ms (base 76.27ms), error rate 0.0",
+   "concurrency 8: ask p95 963.02ms, stream p95 1125.3ms, dashboard p95 1297.87ms (base 76.27ms), error rate 0.0",
+   "concurrency 16: ask p95 2920.45ms, stream p95 2567.32ms, dashboard p95 1490.37ms (base 76.27ms), error rate 0.0",
+   "concurrency 32: ask p95 6330.45ms, stream p95 8659.26ms, dashboard p95 7642.17ms (base 76.27ms), error rate 0.0"
+  ],
+  "peak_throughput_concurrency": 1,
+  "peak_throughput_rps": 15.73,
+  "saturated": true
+ },
+ "unmeasured": [
+  "model time-to-first-token (needs a live provider)",
+  "multi-worker / multi-replica capacity",
+  "abort/cancellation behaviour under client disconnects"
+ ]
+}

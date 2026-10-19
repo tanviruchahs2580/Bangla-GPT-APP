@@ -1,0 +1,40 @@
+{
+ "abstention_precision": 1.0,
+ "abstention_recall": 1.0,
+ "citation_precision": 0.3337,
+ "citation_precision_chapter": 0.5374,
+ "citation_recall": 1.0,
+ "citations_total": 1870,
+ "false_refusal_rate": 0.0,
+ "format_validity": 1.0,
+ "grounded_items": 624,
+ "items": 646,
+ "judge_agreement": {
+  "generator_model": null,
+  "human_labelled_items": 0,
+  "human_sample_rows": 0,
+  "items_with_judge_score": 0,
+  "judge_model": null,
+  "judge_prompt_version": "jp-1619728cd7e0",
+  "min_human_labels": 50,
+  "note": "The human sample (eval/judge_agreement_sample.json) is not filled in: no agreement number is reported, and the judge must not be used as a metric of record until it is.",
+  "sample_file": "judge_agreement_sample.json",
+  "self_preference_flag": false,
+  "status": "owner_action_required",
+  "template_items": 50,
+  "verbosity_bias": null
+ },
+ "judge_prompt_version": "jp-1619728cd7e0",
+ "refusal_correctness_unsafe": 1.0,
+ "refusals_total": 22,
+ "response_language_correctness": 1.0,
+ "run_conditions": {
+  "generated_at": "2026-10-19T08:59:32+00:00",
+  "index_fingerprint": "HybridIndex:78:aec05278706d",
+  "items": 646,
+  "judge": "disabled: local_overlap fallback only (no provider configured)",
+  "provider": "mock (hermetic; live generation metrics require a key -- owner action)",
+  "redteam_items": 43
+ },
+ "unsafe_items": 43
+}

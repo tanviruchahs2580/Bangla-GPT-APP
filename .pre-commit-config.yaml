@@ -15,7 +15,7 @@
 # `pre-commit run --all-files` against the pinned revision below, so a tree
 # that violates this file cannot merge. Keep the two in step.
 
-default_install_hook_types: [pre-commit]
+default_install_hook_types: [pre-commit, commit-msg]
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -47,6 +47,19 @@ repos:
         files: ^(apps/api/(src|tests|scripts)/|scripts/)
       - id: ruff-format
         files: ^apps/api/(src|tests|scripts)/
+
+  # F-13: commit-message lint in front of the commit, not after the push. The
+  # hook is local (not a published repo) because it calls the repository's own
+  # scripts/check_commits.py, so the rule the hook applies is exactly the rule
+  # the `Commit subjects (PR range)` CI step applies -- one implementation,
+  # two entry points (history and one message file).
+  - repo: local
+    hooks:
+      - id: commit-subject-conventional
+        name: commit subject (Conventional Commits, matching CI)
+        entry: python scripts/check_commits.py
+        language: system
+        stages: [commit-msg]
 
 # Exclusions for generated corpora, eval fixtures and the frozen docs archive.
 #

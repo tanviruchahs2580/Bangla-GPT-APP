@@ -137,7 +137,7 @@ def read_me(app_ctx: Ctx, db: DbSession, user: CurrentUser) -> MeResponse:
     return _build_me_response(app_ctx, db, user)
 
 
-@router.delete("/users/me", status_code=204)
+@router.delete("/users/me", status_code=204, responses=message(409))
 def delete_me(db: DbSession, user: NonImpersonatedUser) -> Response:
     """GDPR-style self-service account deletion.
 
@@ -148,6 +148,10 @@ def delete_me(db: DbSession, user: NonImpersonatedUser) -> Response:
     remaining admin cannot delete their own account (409). Impersonation
     sessions are refused outright (403): the erasure is irreversible and
     belongs to the account holder alone (AUD-B-02).
+
+    AUD-B-19: the last-admin 409 body is the plain message shape and was
+    undocumented; the 403 comes from the NonImpersonatedUser dependency and
+    keeps the router-level guard declaration.
     """
     if user.role == "admin":
         admins = db.execute(

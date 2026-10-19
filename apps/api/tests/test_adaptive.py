@@ -294,3 +294,46 @@ def test_wrong_answers_produce_reteach_then_reach_next_quiz(client: TestClient) 
     start_pairs = {(c["concept"], c["prereq"]) for c in started["reteach"]}
     for card in last["reteach"]:
         assert (card["concept"], card["prereq"]) in start_pairs
+
+
+# --- Domain-E mutation sample (E-05): pin the constants the sample proved
+# unpinned. Found by the audit's 20-test mutation sample (AUD-EF-04): a
+# mutation of the two constants below SURVIVED the tests above, because they
+# assert directions ("> 0.5") rather than the curve's scale.
+
+
+def test_e2_expected_score_pins_the_400_point_scale() -> None:
+    """400 Elo points of advantage is exactly 10:1 odds: 1/11 vs 10/11.
+
+    Mutation that this catches, and the example tests above do not: changing
+    ``(elo - ability) / 400.0`` to any other scale (e.g. / 200.0) keeps every
+    direction assertion true while rescaling the whole difficulty ladder.
+    """
+    assert adaptive.expected_score(1000.0, 1400.0) == pytest.approx(1 / 11)
+    assert adaptive.expected_score(1400.0, 1000.0) == pytest.approx(10 / 11)
+
+
+def test_e2_item_elo_moves_opposite_to_the_student(session) -> None:
+    """A correct answer raises ability AND lowers the item's own Elo.
+
+    Mutation that this catches (survivor M05 in the audit sample): flipping the
+    item term to ``elo + K_FACTOR * (score - exp)`` makes a correct answer pull
+    the item *harder* -- the opposite of adaptive behaviour -- while the
+    existing test only checked the student's ability direction.
+    """
+    corpus = load_sample_corpus()
+    gen = ClozeQuizGenerator(corpus)
+    pool = gen.generate(class_level=7, subject="mathematics", num=6, seed=11)
+    adaptive.pick_questions(
+        session, pool, student_id=1, subject="mathematics", class_level=7, num=6
+    )
+    graded = [(pool[0].id, pool[0].chapter, True) for _ in range(3)] + [
+        (pool[1].id, pool[1].chapter, False) for _ in range(3)
+    ]
+    adaptive.apply_review(session, student_id=1, class_level=7, graded=graded)
+
+    item_good = session.get(PracticeItem, pool[0].id)
+    item_bad = session.get(PracticeItem, pool[1].id)
+    assert item_good is not None and item_bad is not None
+    assert item_good.elo < adaptive.DEFAULT_ELO  # solved repeatedly -> easier
+    assert item_bad.elo > adaptive.DEFAULT_ELO  # missed repeatedly -> harder

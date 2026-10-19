@@ -16,8 +16,10 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from fastapi import FastAPI
 from sqlalchemy.orm import Session
 
+from bangla_gpt_api.ai_jobs import AI_JOB_RECOVERY_INTERVAL_SECONDS
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.initialize.schedulers import (
+    _run_ai_job_recovery_loop,
     _run_digest_loop,
     _run_weakness_loop,
 )
@@ -105,9 +107,29 @@ def build_lifespan(
             )
             json_log(logger, logging.INFO, "weakness_refresh_scheduler_started")
 
+        # AiJob recovery (C-08): a sweep at startup is what picks up the jobs a
+        # previous process was killed in the middle of; the loop keeps doing it.
+        # Deliberately NOT gated on JOBS_BACKEND: AiJob execution is always
+        # in-process, so every deployment shape needs its own recovery. Any
+        # replica may run it -- the claim in jobs.claim_ai_job is atomic.
+        recovery_task: asyncio.Task[None] | None = None
+        ctx = getattr(app.state, "ctx", None)
+        if ctx is not None:
+            from bangla_gpt_api.routers.workspace import dispatch_ai_job
+
+            recovery_task = asyncio.create_task(
+                _run_ai_job_recovery_loop(
+                    session_factory,
+                    AI_JOB_RECOVERY_INTERVAL_SECONDS,
+                    lambda job_id: dispatch_ai_job(ctx, job_id),
+                )
+            )
+            json_log(logger, logging.INFO, "ai_job_recovery_scheduler_started")
+
         # Store task handles for shutdown
         app.state.digest_task = digest_task
         app.state.weakness_task = weakness_task
+        app.state.ai_job_recovery_task = recovery_task
 
         yield  # --- Application runs ---
 
@@ -126,6 +148,7 @@ def build_lifespan(
         for attr, label in (
             ("digest_task", "parent_digest"),
             ("weakness_task", "weakness_refresh"),
+            ("ai_job_recovery_task", "ai_job_recovery"),
         ):
             task = getattr(app.state, attr, None)
             if task is not None:

@@ -77,6 +77,24 @@ class Settings(BaseSettings):
     # with the provider figure you have actually budgeted; the alert compares
     # the projected month-end spend against it.
     ai_monthly_budget_usd: float = 0.0
+    # --- AI quotas and breakers (AUD-A2-10 / A7-05) ---
+    # Whole-deployment DAILY AI budget in USD (estimated ledger, see
+    # services/costs.py). 0 (default) = disabled. Env fallback today:
+    # AI_DAILY_BUDGET_USD (the settings field wins once it exists).
+    ai_daily_budget_usd: float = 0.0
+    # Per-school daily AI budget in USD. 0 (default) = disabled.
+    # Env fallback: AI_DAILY_BUDGET_USD_PER_SCHOOL.
+    ai_daily_budget_usd_per_school: float = 0.0
+    # Maximum stored messages per conversation before a new turn is refused
+    # with 429 conversation_limit_reached. 0 = disabled. Default 200.
+    # Env fallback: AI_MAX_CONVERSATION_MESSAGES.
+    ai_max_conversation_messages: int = 200
+    # A11-03: hint-first behaviour for homework-like prompts (configurable).
+    # Env fallback: TUTOR_HINT_FIRST; default true.
+    tutor_hint_first: bool = True
+    # A6-08: idle seconds before an SSE stream emits a heartbeat event.
+    # Env fallback: TUTOR_STREAM_HEARTBEAT_SECONDS; <= 0 disables.
+    tutor_stream_heartbeat_seconds: float = 10.0
     # I-01: emit one structured JSON access line per request (method, route,
     # status, latency_ms, pseudonymous user ref) next to the Prometheus
     # counters, so metric-to-log correlation does not need the database.

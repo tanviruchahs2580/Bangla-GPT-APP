@@ -29,8 +29,58 @@ function cacheControl(): Plugin {
   }
 }
 
+/**
+ * AUD-G-03 (G-15): the webfonts that paint the first screen must not wait for
+ * the stylesheet to arrive and be parsed. Lighthouse measured the LCP element
+ * on /welcome and /login as text whose font request only started ~500 ms after
+ * the CSS was already in the browser; the two faces below are the ones that
+ * first paint needs (body 400 and heading 700 of the primary family, Bengali
+ * subset -- the Latin subsets stay on demand so they do not compete with the
+ * entry bundle). The URLs are content-hashed, so they are read out of the
+ * emitted CSS instead of being hard-coded here.
+ */
+const FIRST_PAINT_FACES = [
+  'noto-sans-bengali-bengali-400-normal',
+  'noto-sans-bengali-bengali-700-normal',
+]
+
+function preloadFirstPaintFonts(): Plugin {
+  return {
+    name: 'bgpt-preload-first-paint-fonts',
+    apply: 'build',
+    enforce: 'post',
+    transformIndexHtml(html, ctx) {
+      const bundle = ctx.bundle
+      if (!bundle) return html
+      const found = new Map<string, string>()
+      for (const [fileName, output] of Object.entries(bundle)) {
+        if (output.type !== 'asset' || !fileName.endsWith('.css')) continue
+        const css = output.source.toString()
+        for (const face of FIRST_PAINT_FACES) {
+          const match = css.match(new RegExp(`assets/(${face}-[A-Za-z0-9_-]+\\.woff2)`))
+          if (match && !found.has(face)) found.set(face, match[1])
+        }
+      }
+      return {
+        html,
+        tags: [...found.values()].map((file) => ({
+          tag: 'link',
+          attrs: {
+            rel: 'preload',
+            as: 'font',
+            type: 'font/woff2',
+            href: `/assets/${file}`,
+            crossorigin: '',
+          },
+          injectTo: 'head' as const,
+        })),
+      }
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [react(), cacheControl()],
+  plugins: [react(), cacheControl(), preloadFirstPaintFonts()],
   server: {
     port: 5173,
     proxy: {

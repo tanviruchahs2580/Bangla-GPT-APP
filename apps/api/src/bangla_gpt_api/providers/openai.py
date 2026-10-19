@@ -26,13 +26,13 @@ import httpx
 
 from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.providers.base import (
-    MAX_BACKOFF_SECONDS as _MAX_BACKOFF_SECONDS,
-)
-from bangla_gpt_api.providers.base import (
     LLMProvider,
     ProviderError,
     ProviderSettings,
+    SamplingParams,
     fit_timeout,
+    retry_delay_seconds,
+    sampling_for,
 )
 
 logger = logging.getLogger(__name__)
@@ -116,6 +116,11 @@ class OpenAIProvider(LLMProvider):
     # here is text-only, so image turns are refused at the route — never
     # answered text-only as if the picture had been seen.
     supports_vision = False
+    # A6-06: this provider consumes SamplingParams (see _apply_sampling).
+    supports_sampling = True
+    #: OpenAI's ``seed`` support is UNVERIFIED here (docs fetch 403 on
+    #: 2026-10-19); flip once the owner confirms it for the model in use.
+    supports_seed = False
 
     def __init__(
         self,
@@ -127,6 +132,7 @@ class OpenAIProvider(LLMProvider):
         max_retries: int,
         max_output_tokens: int | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
+        default_sampling: SamplingParams | None = None,
     ) -> None:
         self._api_key = api_key
         self.model = model
@@ -139,6 +145,9 @@ class OpenAIProvider(LLMProvider):
         self._timeout_seconds = fit_timeout(timeout_seconds, self._max_retries)
         # A9: completion ceiling (OpenAI ``max_tokens``); None/0 omits the key.
         self._max_output_tokens = max_output_tokens
+        # Callers that do not name a task (the teacher generators) get the
+        # structured-generation profile, never the vendor default.
+        self._sampling = default_sampling or sampling_for("generation")
         self._transport = transport
         self._http: httpx.AsyncClient | None = None
 
@@ -155,8 +164,40 @@ class OpenAIProvider(LLMProvider):
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
 
+    def _sampling_log_fields(self, sampling: SamplingParams | None) -> dict[str, object]:
+        """Sampling controls actually sent -- proof for the determinism trace."""
+        if sampling is None:
+            return {}
+        return {
+            "temperature": sampling.temperature,
+            "top_p": sampling.top_p,
+            "seed": sampling.seed if self.supports_seed else None,
+        }
+
+    def _apply_sampling(self, payload: dict, sampling: SamplingParams | None) -> None:
+        """Add the sampling fields this provider documents support for.
+
+        ``temperature``/``top_p``/``max_tokens`` are Chat Completions request
+        fields. ``seed`` is gated by :attr:`supports_seed`: the OpenAI docs
+        could not be retrieved from this environment (platform.openai.com
+        answered 403 on 2026-10-19), so seed support is UNVERIFIED and the
+        field is not sent until the owner confirms it for the model in use.
+        """
+        if sampling is None:
+            return
+        payload["temperature"] = sampling.temperature
+        if sampling.top_p is not None:
+            payload["top_p"] = sampling.top_p
+        if sampling.seed is not None and self.supports_seed:
+            payload["seed"] = sampling.seed
+
     async def stream(
-        self, prompt: str, *, system: str | None = None, image: dict | None = None
+        self,
+        prompt: str,
+        *,
+        system: str | None = None,
+        image: dict | None = None,
+        sampling: SamplingParams | None = None,
     ) -> AsyncIterator[str]:
         """Stream tokens via the Chat Completions streaming endpoint.
 
@@ -166,9 +207,11 @@ class OpenAIProvider(LLMProvider):
         """
         url = f"{self._base_url}{_CHAT_ENDPOINT}"
         messages = _build_messages(prompt, system)
+        effective = sampling or self._sampling
         payload: dict = {"model": self.model, "messages": messages, "stream": True}
         if self._max_output_tokens:
             payload["max_tokens"] = self._max_output_tokens
+        self._apply_sampling(payload, effective)
         if image is not None:
             # A10: this provider cannot see. Refuse loudly — the route-level
             # vision gate normally answers vision_unsupported before an image
@@ -208,6 +251,7 @@ class OpenAIProvider(LLMProvider):
                                 answer_chars=chars,
                                 chunks=emitted,
                                 retries=attempt,
+                                **self._sampling_log_fields(effective),
                             )
                             return
                         raise ProviderError("OpenAI stream produced no text")
@@ -225,25 +269,32 @@ class OpenAIProvider(LLMProvider):
                         else f"OpenAI stream failed: {exc}"
                     )
                     raise ProviderError(detail) from exc
-                await asyncio.sleep(min(0.5 * (2**attempt), _MAX_BACKOFF_SECONDS))
+                await asyncio.sleep(retry_delay_seconds(attempt))
                 attempt += 1
                 continue
 
             retryable = status in _RETRYABLE_STATUS
             if retryable and attempt < self._max_retries:
-                await asyncio.sleep(min(0.5 * (2**attempt), _MAX_BACKOFF_SECONDS))
+                await asyncio.sleep(retry_delay_seconds(attempt))
                 attempt += 1
                 continue
             raise ProviderError(f"OpenAI API error {status}: {_error_message_text(body)}")
 
     async def generate(
-        self, prompt: str, *, system: str | None = None, image: dict | None = None
+        self,
+        prompt: str,
+        *,
+        system: str | None = None,
+        image: dict | None = None,
+        sampling: SamplingParams | None = None,
     ) -> str:
         url = f"{self._base_url}{_CHAT_ENDPOINT}"
         messages = _build_messages(prompt, system)
+        effective = sampling or self._sampling
         payload: dict = {"model": self.model, "messages": messages}
         if self._max_output_tokens:
             payload["max_tokens"] = self._max_output_tokens
+        self._apply_sampling(payload, effective)
 
         if image is not None:
             # A10: see stream() — text-only answers to image turns are
@@ -265,7 +316,7 @@ class OpenAIProvider(LLMProvider):
                         else f"OpenAI request failed: {exc}"
                     )
                     raise ProviderError(detail) from exc
-                await asyncio.sleep(min(0.5 * (2**attempt), _MAX_BACKOFF_SECONDS))
+                await asyncio.sleep(retry_delay_seconds(attempt))
                 attempt += 1
                 continue
 
@@ -282,6 +333,7 @@ class OpenAIProvider(LLMProvider):
                         prompt_chars=len(prompt),
                         answer_chars=len(text),
                         retries=attempt,
+                        **self._sampling_log_fields(effective),
                     )
                     return text
                 except ValueError as exc:
@@ -289,7 +341,7 @@ class OpenAIProvider(LLMProvider):
 
             retryable = response.status_code in _RETRYABLE_STATUS
             if retryable and attempt < self._max_retries:
-                await asyncio.sleep(min(0.5 * (2**attempt), _MAX_BACKOFF_SECONDS))
+                await asyncio.sleep(retry_delay_seconds(attempt))
                 attempt += 1
                 continue
             raise ProviderError(

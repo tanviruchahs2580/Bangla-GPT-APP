@@ -13,6 +13,14 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  # F-05: superseded PR runs are cancelled (the audit found the eval gate
+  # queueing full runs against an already-replaced commit). cancel-in-progress
+  # is safe here: the gate is read-only and a cancelled run is never the
+  # evidence a merge relies on, the successor rerun is.
+  group: eval-gate-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 

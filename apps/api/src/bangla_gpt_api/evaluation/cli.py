@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -96,6 +97,133 @@ def _select_split(items: list[dict], split: str) -> list[dict]:
     return selected
 
 
+def _api_root() -> Path:
+    return Path(__file__).resolve().parents[3]  # apps/api
+
+
+def defaults() -> dict[str, Path]:
+    """Default artifact paths, in one place so the CLI and docs agree."""
+    root = _api_root()
+    return {
+        "synthetic_sheet": root / "eval" / "review_sheets" / "synthetic_review_sheet.csv",
+        "appropriateness_sheet": (
+            root / "eval" / "review_sheets" / "class_appropriateness_sheet.csv"
+        ),
+        "review_ledger": root / "eval" / "synthetic_review_ledger.json",
+    }
+
+
+def _export_synthetic_sheet(args: argparse.Namespace, root: Path) -> int:
+    """A2-11: pending synthetic items as the teacher's review sheet."""
+    from bangla_gpt_api.evaluation import review_sheet
+
+    out_path = (
+        Path(args.export_synthetic_sheet)
+        if args.export_synthetic_sheet
+        else (defaults()["synthetic_sheet"])
+    )
+    items = json.loads((root / "eval" / "golden_v2.json").read_text(encoding="utf-8"))["items"]
+    ledger_path = defaults()["review_ledger"]
+    decided: set[str] = set()
+    if ledger_path.exists():
+        ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+        decided = set(ledger.get("verdicts", {}))
+    ordered = review_sheet.queue_priority(items)
+    pending = [
+        item
+        for item in ordered
+        if review_sheet.item_id(item["class_level"], item.get("subject"), item["question"])
+        not in decided
+    ]
+    rows = review_sheet.build_synthetic_rows(pending)
+    review_sheet.write_sheet(rows, out_path, review_sheet.SYNTHETIC_COLUMNS)
+    print(
+        f"synthetic review sheet: {len(rows)} pending item(s) of {len(ordered)} synthetic "
+        f"(queue order: must-refuse, then definition, then contextual) -> {out_path}"
+    )
+    return 0
+
+
+def _review_status(root: Path) -> int:
+    """A2-11: ledger state plus how many items still need a human."""
+    from bangla_gpt_api.evaluation import review_sheet
+
+    ledger_path = defaults()["review_ledger"]
+    items = json.loads((root / "eval" / "golden_v2.json").read_text(encoding="utf-8"))["items"]
+    synthetic = [item for item in items if item.get("synthetic")]
+    if not ledger_path.exists():
+        print(f"review ledger absent: 0 of {len(synthetic)} synthetic items reviewed")
+        return 0
+    ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+    counts = review_sheet.ledger_state(ledger)
+    reviewed = sum(counts.values())
+    print(
+        f"review ledger: approved={counts['approve']} rejected={counts['reject']} "
+        f"edited={counts['edit']} reviewed={reviewed} of {len(synthetic)} synthetic "
+        f"items; pending={len(synthetic) - reviewed}"
+    )
+    return 0
+
+
+def _apply_review_sheet(sheet_path: Path, root: Path) -> int:
+    """A2-11: merge a filled sheet into the ledger (strict validation)."""
+    from bangla_gpt_api.evaluation import review_sheet
+
+    rows = review_sheet.read_sheet(sheet_path)
+    try:
+        state = review_sheet.apply_review_sheet(rows, defaults()["review_ledger"])
+    except ValueError as exc:
+        print(f"REVIEW SHEET: FAIL -- {exc}")
+        return 1
+    print(
+        f"review sheet applied: approved={state['approve']} rejected={state['reject']} "
+        f"edited={state['edit']} (ledger: {defaults()['review_ledger']})"
+    )
+    return 0
+
+
+def _export_appropriateness_sheet(out_path: Path, root: Path, settings: Settings) -> int:
+    """A11-01: sample real answers per class and export the teacher rubric sheet."""
+    from bangla_gpt_api.evaluation import review_sheet
+
+    items = json.loads((root / "eval" / "golden_v2.json").read_text(encoding="utf-8"))["items"]
+    tutor = _build_tutor(settings)
+    rows = asyncio.run(review_sheet.run_appropriateness_sample(tutor, items, per_class=6))
+    review_sheet.write_sheet(rows, out_path, review_sheet.APPROPRIATENESS_COLUMNS)
+    print(
+        f"class-appropriateness sheet: {len(rows)} answers sampled "
+        f"(provider: mock -- re-run with a live provider before judging) -> {out_path}"
+    )
+    return 0
+
+
+async def _generation_report(items: list[dict], settings: Settings) -> dict:
+    """A8-04: run the golden set and the red-team set, aggregate every metric."""
+    from bangla_gpt_api.evaluation.generation import (
+        judge_prompt_path,
+        judge_prompt_version,
+        load_judge_harness,
+        run_generation_report,
+    )
+    from bangla_gpt_api.services.trace_meta import index_fingerprint
+
+    root = _api_root()
+    redteam = json.loads((root / "eval" / "redteam_v2.json").read_text(encoding="utf-8"))["items"]
+    tutor = _build_tutor(settings)
+    report = await run_generation_report(tutor, items, unsafe_items=redteam)
+    report["run_conditions"] = {
+        "provider": "mock (hermetic; live generation metrics require a key -- owner action)",
+        "judge": "disabled: local_overlap fallback only (no provider configured)",
+        "index_fingerprint": index_fingerprint(tutor.index),
+        "items": len(items),
+        "redteam_items": len(redteam),
+        "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
+    }
+    report["judge_prompt_version"] = judge_prompt_version(judge_prompt_path(root))
+    report["judge_agreement"] = load_judge_harness(root)
+    return report
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="eval-v2")
     parser.add_argument("--golden", default=None)
@@ -117,6 +245,63 @@ def main() -> int:
         action="store_true",
         help="run eval/redteam_v2.json: all refused, no system-prompt leak",
     )
+    parser.add_argument(
+        "--generation-report",
+        nargs="?",
+        const="",
+        default=None,
+        help=(
+            "A8-04: run the golden set + red-team set and write the generation-quality "
+            "report (citation/abstention precision-recall, language, format, refusal "
+            "correctness, judge state). Optional PATH (default eval/generation_report.json)."
+        ),
+    )
+    parser.add_argument(
+        "--judge-agreement",
+        action="store_true",
+        help="A8-04: print the judge-human agreement harness state (no model calls)",
+    )
+    parser.add_argument(
+        "--check-thresholds",
+        nargs="?",
+        const="",
+        default=None,
+        help=(
+            "A8-07/AUD-A2-13: validate the versioned thresholds file and its "
+            "change-management hook; optional PATH (default eval/thresholds_v1.json). "
+            "Exit 1 on a violation."
+        ),
+    )
+    parser.add_argument(
+        "--export-synthetic-sheet",
+        nargs="?",
+        const="",
+        default=None,
+        help=(
+            "A2-11: export the teacher review sheet for synthetic golden items "
+            "(pending items by default). Optional PATH."
+        ),
+    )
+    parser.add_argument(
+        "--apply-review-sheet",
+        default=None,
+        help="A2-11: validate a filled review sheet and merge it into the review ledger",
+    )
+    parser.add_argument(
+        "--review-status",
+        action="store_true",
+        help="A2-11: print the synthetic-item review ledger state and pending count",
+    )
+    parser.add_argument(
+        "--export-appropriateness-sheet",
+        nargs="?",
+        const="",
+        default=None,
+        help=(
+            "A11-01: sample real tutor answers per class and export the "
+            "class-appropriateness review sheet. Optional PATH."
+        ),
+    )
     args = parser.parse_args()
 
     # HERMETIC: the gate must never hit an external model (CI has no secrets;
@@ -128,6 +313,72 @@ def main() -> int:
         return asyncio.run(_redteam(settings))
 
     root = Path(__file__).resolve().parents[3]  # apps/api
+
+    if args.check_thresholds is not None:
+        from bangla_gpt_api.evaluation import thresholds
+
+        path = (
+            Path(args.check_thresholds) if args.check_thresholds else thresholds.default_path(root)
+        )
+        try:
+            payload = thresholds.load_thresholds(path)
+            thresholds.validate_against_code(payload)
+        except thresholds.ThresholdError as exc:
+            print(f"THRESHOLDS: FAIL -- {exc}")
+            return 1
+        print(
+            f"THRESHOLDS: PASS -- version {payload['version']} "
+            f"({len(payload['changelog'])} changelog entries), "
+            f"tolerance {payload['gate']['tolerance_pp']}pp, "
+            f"primary metric {payload['primary_metric']!r} on split "
+            f"{payload['primary_split']!r}"
+        )
+        for kind in ("model", "prompt", "index", "embedding"):
+            missing = thresholds.missing_evidence(kind, root.parent.parent)
+            if missing:
+                print(f"  change '{kind}': MISSING required evidence {missing}")
+        return 0
+
+    if args.judge_agreement:
+        from bangla_gpt_api.evaluation.generation import load_judge_harness
+
+        print(json.dumps(load_judge_harness(root), indent=1))
+        return 0
+
+    if args.generation_report is not None:
+        data = json.loads((root / "eval" / "golden_v2.json").read_text(encoding="utf-8"))
+        items = _select_split(data["items"], args.split)
+        report = asyncio.run(_generation_report(items, settings))
+        out_path = (
+            Path(args.generation_report)
+            if args.generation_report
+            else (root / "eval" / "generation_report.json")
+        )
+        out_path.write_text(
+            json.dumps(report, ensure_ascii=False, indent=1, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        print(json.dumps(report, ensure_ascii=False, indent=1))
+        print(f"generation report written: {out_path}")
+        return 0
+
+    if args.export_synthetic_sheet is not None:
+        return _export_synthetic_sheet(args, root)
+
+    if args.review_status:
+        return _review_status(root)
+
+    if args.apply_review_sheet:
+        return _apply_review_sheet(Path(args.apply_review_sheet), root)
+
+    if args.export_appropriateness_sheet is not None:
+        out_path = (
+            Path(args.export_appropriateness_sheet)
+            if args.export_appropriateness_sheet
+            else root / "eval" / "review_sheets" / "class_appropriateness_sheet.csv"
+        )
+        return _export_appropriateness_sheet(out_path, root, settings)
+
     golden_path = Path(args.golden) if args.golden else root / "eval" / "golden_v2.json"
     baseline_path = Path(args.baseline) if args.baseline else root / "eval" / "baseline_v2.json"
 

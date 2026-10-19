@@ -173,7 +173,7 @@ def _apply_sqlite_pragmas(target: Engine, url: str) -> None:
 
     @event.listens_for(target, "connect")
     def _set_pragmas(dbapi_connection: object, _record: object) -> None:
-        cursor = dbapi_connection.cursor()  # type: ignore[attr-defined]
+        cursor = dbapi_connection.cursor()  # type: ignore[attr-defined]  # SQLAlchemy hands the raw DBAPI connection; our listener types it `object`.
         try:
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
@@ -247,4 +247,11 @@ def make_session_factory(engine: Engine) -> sessionmaker[Session]:
 
 
 def init_db(engine: Engine) -> None:
+    # Import the model module for its registration side effect BEFORE
+    # create_all: a caller that imported only ``db.session`` leaves
+    # Base.metadata empty and this call then creates nothing, silently -- a
+    # footgun met while writing the two-process scheduled-job test (the child
+    # interpreter imported session but not models and created an empty DB).
+    from bangla_gpt_api.db import models  # noqa: F401
+
     Base.metadata.create_all(engine)

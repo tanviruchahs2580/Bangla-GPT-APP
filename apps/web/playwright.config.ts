@@ -62,7 +62,16 @@ export default defineConfig({
   // navigation of a run pays for the compile/loading of every route chunk.
   // The per-assertion default stays tight so a broken selector still fails fast.
   timeout: 120_000,
-  expect: { timeout: 20_000 },
+  expect: {
+    timeout: 20_000,
+    // AUD-G-07: one reviewed baseline set serves every runner -- the platform
+    // suffix is dropped from the snapshot file name (snapshotPathTemplate
+    // below) and a 2% pixel-ratio difference is tolerated so cross-platform
+    // text rasterisation does not fail the review it is meant to support.
+    // The matrix and the review note live in e2e/visual.spec.ts.
+    toHaveScreenshot: { maxDiffPixelRatio: 0.02, animations: 'disabled', caret: 'hide' },
+  },
+  snapshotPathTemplate: '{testDir}/__screenshots__/{testFileName}/{arg}{ext}',
   fullyParallel: false,
   workers: 1,
   forbidOnly: !!process.env.CI,
@@ -86,8 +95,10 @@ export default defineConfig({
   webServer: [
     {
       // Seed first (roles cannot be self-registered), then serve. One shell so
-      // both processes inherit the same DATABASE_URL.
-      command: `"${PYTHON}" apps/web/e2e/seed_e2e_users.py && "${PYTHON}" -m uvicorn bangla_gpt_api.main:app --app-dir apps/api/src --host 127.0.0.1 --port ${API_PORT}`,
+      // both processes inherit the same DATABASE_URL. The long-history seed
+      // (AUD-G-19) is what perf.spec.ts throttles; it is idempotent and costs
+      // 120 inserts on a fresh database.
+      command: `"${PYTHON}" apps/web/e2e/seed_e2e_users.py && "${PYTHON}" apps/web/e2e/seed_long_history.py && "${PYTHON}" -m uvicorn bangla_gpt_api.main:app --app-dir apps/api/src --host 127.0.0.1 --port ${API_PORT}`,
       cwd: REPO_ROOT,
       url: `${API_URL}/health`,
       reuseExistingServer: !process.env.CI,

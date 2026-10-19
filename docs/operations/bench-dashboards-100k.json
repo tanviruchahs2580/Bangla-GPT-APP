@@ -1,59 +1,418 @@
 {
-  "generated_at": "2026-10-18T19:20:26+00:00",
+  "generated_at": "2026-10-19T13:44:09+00:00",
   "engine": "sqlite",
+  "explain_engine": "sqlite EXPLAIN QUERY PLAN (per endpoint, distinct statements)",
   "seed": {
     "schools": 1,
     "classrooms": 1,
     "students": 400,
     "quiz_attempts": 800,
     "answer_log_rows": 100000,
-    "seed_seconds": 1.5
+    "seed_seconds": 1.18
   },
   "endpoints": [
     {
       "endpoint": "GET /teacher/students?class_level=6",
-      "status": 403,
-      "wall_ms": 450.5,
-      "statements": 1,
-      "slowest_statement_preview": "SELECT users.id, users.email, users.password_hash, users.role, users.school_id, users.must_change_password, users.email_verified, users.totp_secret, users.sessions_invalidated_at, users.failed_login_count, users.locked_until, users.created_"
+      "status": 200,
+      "wall_ms": 298.3,
+      "statements": 4,
+      "slowest_statement_preview": "SELECT students.id, students.user_id, students.name, students.class_level, students.learning_prefs, students.memory_enabled, students.consent_ip, students.consent_at, students.consent_version, students.created_at FROM students JOIN class_st",
+      "query_plans": [
+        {
+          "statement": "SELECT students.id, students.user_id, students.name, students.class_level, students.learning_prefs, students.memory_enabled, students.consent_ip, students.consent_at, students.consent_version, students.created_at FROM students JOIN class_students ON class_students.student_id = students.id JOIN classrooms ON classrooms.id = class_students.classroom_id WHERE students.class_level = ? AND classrooms.s",
+          "bind_parameters_replaced_with_null": true,
+          "plan": [
+            [
+              "11",
+              "0",
+              "56",
+              "SEARCH classrooms USING COVERING INDEX sqlite_autoindex_classrooms_1 (school_id=?)"
+            ],
+            [
+              "17",
+              "0",
+              "55",
+              "SEARCH class_students USING COVERING INDEX sqlite_autoindex_class_students_1 (classroom_id=?)"
+            ],
+            [
+              "21",
+              "0",
+              "45",
+              "SEARCH students USING INTEGER PRIMARY KEY (rowid=?)"
+            ],
+            [
+              "45",
+              "0",
+              "0",
+              "USE TEMP B-TREE FOR ORDER BY"
+            ]
+          ]
+        },
+        {
+          "statement": "SELECT users.id, users.email, users.password_hash, users.role, users.school_id, users.must_change_password, users.email_verified, users.totp_secret, users.sessions_invalidated_at, users.failed_login_count, users.locked_until, users.created_at FROM users WHERE users.id = ?",
+          "bind_parameters_replaced_with_null": true,
+          "plan": [
+            [
+              "2",
+              "0",
+              "33",
+              "SEARCH users USING INTEGER PRIMARY KEY (rowid=?)"
+            ]
+          ]
+        },
+        {
+          "statement": "SELECT schools.id, schools.name, schools.code, schools.created_at FROM schools WHERE schools.code = ?",
+          "bind_parameters_replaced_with_null": true,
+          "plan": [
+            [
+              "3",
+              "0",
+              "39",
+              "SEARCH schools USING INDEX sqlite_autoindex_schools_1 (code=?)"
+            ]
+          ]
+        },
+        {
+          "statement": "INSERT INTO schools (name, code, created_at) VALUES (?, ?, ?)",
+          "bind_parameters_replaced_with_null": true,
+          "plan": []
+        }
+      ]
     },
     {
       "endpoint": "GET /teacher/classes/6/analytics",
-      "status": 403,
-      "wall_ms": 59.8,
-      "statements": 1,
-      "slowest_statement_preview": "SELECT users.id, users.email, users.password_hash, users.role, users.school_id, users.must_change_password, users.email_verified, users.totp_secret, users.sessions_invalidated_at, users.failed_login_count, users.locked_until, users.created_"
+      "status": 200,
+      "wall_ms": 29.1,
+      "statements": 4,
+      "slowest_statement_preview": "SELECT students.id, students.user_id, students.name, students.class_level, students.learning_prefs, students.memory_enabled, students.consent_ip, students.consent_at, students.consent_version, students.created_at FROM students JOIN class_st",
+      "query_plans": [
+        {
+          "statement": "SELECT students.id, students.user_id, students.name, students.class_level, students.learning_prefs, students.memory_enabled, students.consent_ip, students.consent_at, students.consent_version, students.created_at FROM students JOIN class_students ON class_students.student_id = students.id JOIN classrooms ON classrooms.id = class_students.classroom_id WHERE students.class_level = ? AND classrooms.s",
+          "bind_parameters_replaced_with_null": true,
+          "plan": [
+            [
+              "5",
+              "0",
+              "56",
+              "SEARCH classrooms USING COVERING INDEX sqlite_autoindex_classrooms_1 (school_id=?)"
+            ],
+            [
+              "11",
+              "0",
+              "55",
+              "SEARCH class_students USING COVERING INDEX sqlite_autoindex_class_students_1 (classroom_id=?)"
+            ],
+            [
+              "15",
+              "0",
+              "45",
+              "SEARCH students USING INTEGER PRIMARY KEY (rowid=?)"
+            ],
+            [
+              "34",
+              "0",
+              "0",
+              "USE TEMP B-TREE FOR ORDER BY"
+            ]
+          ]
+        },
+        {
+          "statement": "SELECT users.id, users.email, users.password_hash, users.role, users.school_id, users.must_change_password, users.email_verified, users.totp_secret, users.sessions_invalidated_at, users.failed_login_count, users.locked_until, users.created_at FROM users WHERE users.id = ?",
+          "bind_parameters_replaced_with_null": true,
+          "plan": [
+            [
+              "2",
+              "0",
+              "33",
+              "SEARCH users USING INTEGER PRIMARY KEY (rowid=?)"
+            ]
+          ]
+        },
+        {
+          "statement": "SELECT schools.id, schools.name, schools.code, schools.created_at FROM schools WHERE schools.code = ?",
+          "bind_parameters_replaced_with_null": true,
+          "plan": [
+            [
+              "3",
+              "0",
+              "39",
+              "SEARCH schools USING INDEX sqlite_autoindex_schools_1 (code=?)"
+            ]
+          ]
+        },
+        {
+          "statement": "INSERT INTO schools (name, code, created_at) VALUES (?, ?, ?)",
+          "bind_parameters_replaced_with_null": true,
+          "plan": []
+        }
+      ]
     },
     {
       "endpoint": "GET /dashboard/summary",
       "status": 200,
-      "wall_ms": 59.0,
-      "statements": 1,
-      "slowest_statement_preview": "SELECT users.id, users.email, users.password_hash, users.role, users.school_id, users.must_change_password, users.email_verified, users.totp_secret, users.sessions_invalidated_at, users.failed_login_count, users.locked_until, users.created_"
+      "wall_ms": 26.4,
+      "statements": 2,
+      "slowest_statement_preview": "SELECT users.id, users.email, users.password_hash, users.role, users.school_id, users.must_change_password, users.email_verified, users.totp_secret, users.sessions_invalidated_at, users.failed_login_count, users.locked_until, users.created_",
+      "query_plans": [
+        {
+          "statement": "SELECT users.id, users.email, users.password_hash, users.role, users.school_id, users.must_change_password, users.email_verified, users.totp_secret, users.sessions_invalidated_at, users.failed_login_count, users.locked_until, users.created_at FROM users WHERE users.id = ?",
+          "bind_parameters_replaced_with_null": true,
+          "plan": [
+            [
+              "2",
+              "0",
+              "33",
+              "SEARCH users USING INTEGER PRIMARY KEY (rowid=?)"
+            ]
+          ]
+        },
+        {
+          "statement": "SELECT teachers.id, teachers.user_id, teachers.name, teachers.prefs, teachers.created_at FROM teachers WHERE teachers.user_id = ?",
+          "bind_parameters_replaced_with_null": true,
+          "plan": [
+            [
+              "3",
+              "0",
+              "39",
+              "SEARCH teachers USING INDEX ix_teachers_user_id (user_id=?)"
+            ]
+          ]
+        }
+      ]
     },
     {
       "endpoint": "GET /school/overview",
       "status": 200,
-      "wall_ms": 278.3,
+      "wall_ms": 147.3,
       "statements": 8,
-      "slowest_statement_preview": "SELECT students.id, students.user_id, students.name, students.class_level, students.learning_prefs, students.memory_enabled, students.consent_ip, students.consent_at, students.consent_version, students.created_at FROM students WHERE student"
+      "slowest_statement_preview": "SELECT students.id, students.user_id, students.name, students.class_level, students.learning_prefs, students.memory_enabled, students.consent_ip, students.consent_at, students.consent_version, students.created_at FROM students WHERE student",
+      "query_plans": [
+        {
+          "statement": "SELECT students.id, students.user_id, students.name, students.class_level, students.learning_prefs, students.memory_enabled, students.consent_ip, students.consent_at, students.consent_version, students.created_at FROM students WHERE students.id IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?",
+          "bind_parameters_replaced_with_null": true,
+          "plan": [
+            [
+              "2",
+              "0",
+              "131",
+              "SEARCH students USING INTEGER PRIMARY KEY (rowid=?)"
+            ]
+          ]
+        },
+        {
+          "statement": "SELECT quiz_attempts.student_id, quiz_attempts.score_pct FROM quiz_attempts WHERE quiz_attempts.student_id IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?",
+          "bind_parameters_replaced_with_null": true,
+          "plan": [
+            [
+              "4",
+              "0",
+              "147",
+              "SEARCH quiz_attempts USING INDEX ix_quiz_attempts_student_id (student_id=?)"
+            ],
+            [
+              "1237",
+              "0",
+              "0",
+              "USE TEMP B-TREE FOR LAST TERM OF ORDER BY"
+            ]
+          ]
+        },
+        {
+          "statement": "SELECT count(conversations.id) AS count_1 FROM conversations WHERE conversations.student_id IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?",
+          "bind_parameters_replaced_with_null": true,
+          "plan": [
+            [
+              "4",
+              "0",
+              "147",
+              "SEARCH conversations USING INDEX ix_conversations_student_id (student_id=?)"
+            ]
+          ]
+        },
+        {
+          "statement": "SELECT users.id, users.email, users.password_hash, users.role, users.school_id, users.must_change_password, users.email_verified, users.totp_secret, users.sessions_invalidated_at, users.failed_login_count, users.locked_until, users.created_at FROM users WHERE users.id = ?",
+          "bind_parameters_replaced_with_null": true,
+          "plan": [
+            [
+              "2",
+              "0",
+              "33",
+              "SEARCH users USING INTEGER PRIMARY KEY (rowid=?)"
+            ]
+          ]
+        },
+        {
+          "statement": "SELECT classrooms.id, classrooms.school_id, classrooms.class_level, classrooms.section, classrooms.created_at FROM classrooms WHERE classrooms.school_id = ? ORDER BY classrooms.class_level, classrooms.section, classrooms.id",
+          "bind_parameters_replaced_with_null": true,
+          "plan": [
+            [
+              "4",
+              "0",
+              "63",
+              "SEARCH classrooms USING INDEX sqlite_autoindex_classrooms_1 (school_id=?)"
+            ]
+          ]
+        },
+        {
+          "statement": "SELECT class_students.student_id, class_students.classroom_id FROM class_students WHERE class_students.classroom_id IN (?) ORDER BY class_students.classroom_id, class_students.student_id",
+          "bind_parameters_replaced_with_null": true,
+          "plan": [
+            [
+              "3",
+              "0",
+              "55",
+              "SEARCH class_students USING COVERING INDEX sqlite_autoindex_class_students_1 (classroom_id=?)"
+            ]
+          ]
+        }
+      ]
     },
     {
       "endpoint": "GET /school/students",
       "status": 200,
-      "wall_ms": 67.1,
+      "wall_ms": 75.8,
       "statements": 8,
-      "slowest_statement_preview": "SELECT students.id, students.user_id, students.name, students.class_level, students.learning_prefs, students.memory_enabled, students.consent_ip, students.consent_at, students.consent_version, students.created_at FROM students WHERE student"
+      "slowest_statement_preview": "SELECT students.id, students.user_id, students.name, students.class_level, students.learning_prefs, students.memory_enabled, students.consent_ip, students.consent_at, students.consent_version, students.created_at FROM students WHERE student",
+      "query_plans": [
+        {
+          "statement": "SELECT students.id, students.user_id, students.name, students.class_level, students.learning_prefs, students.memory_enabled, students.consent_ip, students.consent_at, students.consent_version, students.created_at FROM students WHERE students.id IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?",
+          "bind_parameters_replaced_with_null": true,
+          "plan": [
+            [
+              "2",
+              "0",
+              "131",
+              "SEARCH students USING INTEGER PRIMARY KEY (rowid=?)"
+            ]
+          ]
+        },
+        {
+          "statement": "SELECT quiz_attempts.student_id, max(quiz_attempts.created_at) AS max_1 FROM quiz_attempts WHERE quiz_attempts.student_id IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) GROUP BY quiz_attempts.student_id",
+          "bind_parameters_replaced_with_null": true,
+          "plan": [
+            [
+              "7",
+              "0",
+              "117",
+              "SEARCH quiz_attempts USING INDEX ix_quiz_attempts_student_id (student_id=?)"
+            ]
+          ]
+        },
+        {
+          "statement": "SELECT daily_activity.student_id, max(daily_activity.date) AS max_1 FROM daily_activity WHERE daily_activity.student_id IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) GROUP BY daily_activity.student_id",
+          "bind_parameters_replaced_with_null": true,
+          "plan": [
+            [
+              "6",
+              "0",
+              "111",
+              "SEARCH daily_activity USING COVERING INDEX sqlite_autoindex_daily_activity_1 (student_id=?)"
+            ]
+          ]
+        },
+        {
+          "statement": "SELECT quiz_attempts.student_id, count(*) AS count_1 FROM quiz_attempts WHERE quiz_attempts.student_id IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) GROUP BY quiz_attempts.student_id",
+          "bind_parameters_replaced_with_null": true,
+          "plan": [
+            [
+              "6",
+              "0",
+              "108",
+              "SEARCH quiz_attempts USING COVERING INDEX ix_quiz_attempts_student_id (student_id=?)"
+            ]
+          ]
+        },
+        {
+          "statement": "SELECT users.id, users.email, users.password_hash, users.role, users.school_id, users.must_change_password, users.email_verified, users.totp_secret, users.sessions_invalidated_at, users.failed_login_count, users.locked_until, users.created_at FROM users WHERE users.id = ?",
+          "bind_parameters_replaced_with_null": true,
+          "plan": [
+            [
+              "2",
+              "0",
+              "33",
+              "SEARCH users USING INTEGER PRIMARY KEY (rowid=?)"
+            ]
+          ]
+        },
+        {
+          "statement": "SELECT classrooms.id, classrooms.school_id, classrooms.class_level, classrooms.section, classrooms.created_at FROM classrooms WHERE classrooms.school_id = ? ORDER BY classrooms.class_level, classrooms.section, classrooms.id",
+          "bind_parameters_replaced_with_null": true,
+          "plan": [
+            [
+              "4",
+              "0",
+              "63",
+              "SEARCH classrooms USING INDEX sqlite_autoindex_classrooms_1 (school_id=?)"
+            ]
+          ]
+        }
+      ]
     },
     {
       "endpoint": "GET /admin/analytics/overview",
       "status": 200,
-      "wall_ms": 480.1,
+      "wall_ms": 368.5,
       "statements": 4,
-      "slowest_statement_preview": "SELECT users.id, users.email, users.password_hash, users.role, users.school_id, users.must_change_password, users.email_verified, users.totp_secret, users.sessions_invalidated_at, users.failed_login_count, users.locked_until, users.created_"
+      "slowest_statement_preview": "SELECT users.id, users.email, users.password_hash, users.role, users.school_id, users.must_change_password, users.email_verified, users.totp_secret, users.sessions_invalidated_at, users.failed_login_count, users.locked_until, users.created_",
+      "query_plans": [
+        {
+          "statement": "SELECT users.id, users.email, users.password_hash, users.role, users.school_id, users.must_change_password, users.email_verified, users.totp_secret, users.sessions_invalidated_at, users.failed_login_count, users.locked_until, users.created_at FROM users WHERE users.id = ?",
+          "bind_parameters_replaced_with_null": true,
+          "plan": [
+            [
+              "2",
+              "0",
+              "33",
+              "SEARCH users USING INTEGER PRIMARY KEY (rowid=?)"
+            ]
+          ]
+        },
+        {
+          "statement": "SELECT count(*) AS count_1, avg(quiz_attempts.score_pct) AS avg_1 FROM quiz_attempts WHERE quiz_attempts.status = ? AND quiz_attempts.score_pct IS NOT NULL",
+          "bind_parameters_replaced_with_null": true,
+          "plan": [
+            [
+              "3",
+              "0",
+              "216",
+              "SCAN quiz_attempts"
+            ]
+          ]
+        },
+        {
+          "statement": "SELECT users.role, count(*) AS count_1 FROM users GROUP BY users.role",
+          "bind_parameters_replaced_with_null": false,
+          "plan": [
+            [
+              "6",
+              "0",
+              "216",
+              "SCAN users"
+            ],
+            [
+              "8",
+              "0",
+              "0",
+              "USE TEMP B-TREE FOR GROUP BY"
+            ]
+          ]
+        },
+        {
+          "statement": "SELECT count(*) AS count_1 FROM users",
+          "bind_parameters_replaced_with_null": false,
+          "plan": [
+            [
+              "4",
+              "0",
+              "0",
+              "SCAN users USING COVERING INDEX ix_users_school_id"
+            ]
+          ]
+        }
+      ]
     }
   ],
   "query_count_max": 8,
-  "wall_ms_median": 172.7,
-  "notes": "SQLite on developer hardware; query counts are the durable signal, wall time is host-dependent. Re-run with --rows 20000/100000 to see whether statement counts (not just time) grow with the row count."
+  "wall_ms_median": 111.55000000000001,
+  "notes": "SQLite on developer hardware; query counts and plans are the durable signal, wall time is host-dependent. Re-run with --rows 20000/100000 to see whether statement counts (not just time) grow with the row count. PostgreSQL plans (EXPLAIN ANALYZE, BUFFERS) for the same endpoints live in the audit evidence for H-06."
 }

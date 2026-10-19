@@ -295,4 +295,4 @@ def iter_corpus_search(
     **filters: object,
 ) -> list[list[Hit]]:
     """Batch helper for the hit@k evaluation harness (keeps top_k explicit)."""
-    return [index.search(q, **filters) for q in queries]  # type: ignore[arg-type]
+    return [index.search(q, **filters) for q in queries]  # type: ignore[arg-type]  # `**filters: object` is a pass-through bag; callers build it from `search`'s keyword-only params.

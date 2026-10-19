@@ -43,6 +43,13 @@
     "node_modules/**",
     ".venv/**",
     "**/node_modules/**",
+    // The README quick start creates apps/api/.venv (and a devcontainer may
+    // create others), so a bare ".venv/**" is not enough: without this, a
+    // developer who followed the README gets dozens of MD004/MD041 hits from
+    // vendored licence files inside the virtualenv while CI (which installs
+    // no venv) stays green -- a guard that is red locally and green in CI
+    // teaches people to ignore it. Found on a fresh clone, 2026-10-19.
+    "**/.venv/**",
     "CHANGELOG.md",
     "docs/archive/**",
     "docs/audit/**",
@@ -64,6 +71,11 @@
     // Issue forms: these files are YAML (front matter + body: schema), not
     // markdown documents. Linting them as prose only produces false MD007/
     // MD041 hits from the YAML indentation and the leading `name:` key.
-    ".github/pull_request_template.md"
+    ".github/pull_request_template.md",
+    // LLM prompt templates, not prose: no H1 by design (the model reads the
+    // text, not a document) and `<evidence>` is a literal tag the model sees,
+    // so MD041/MD033 are false by construction. They are covered by their own
+    // tests and by the prompt-registry checks.
+    "apps/api/prompts/**"
   ]
 }

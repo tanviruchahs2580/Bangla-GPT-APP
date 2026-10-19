@@ -23,6 +23,16 @@ const SECTIONS: {
       "Guardian consent is mandatory for student accounts. We never sell data to advertisers and do not use children’s data for targeted advertising.",
   },
   {
+    // AUD-B-30: students and parents must be able to see, in the product,
+    // that answers come from an external model.
+    titleBn: "AI ব্যবহার ও তৃতীয় পক্ষের মডেল",
+    titleEn: "AI use & third-party models",
+    bodyBn:
+      "উত্তর তৈরি করতে আমাদের AI টিউটর একটি তৃতীয় পক্ষের মডেল (Google Gemini) ব্যবহার করতে পারে। পাঠানো হয় আপনার প্রশ্ন ও পাঠ্যবইয়ের প্রাসঙ্গিক অংশ; আপনার নাম, ইমেইল বা ফোন নম্বর পাঠানো হয় না।",
+    bodyEn:
+      "To write answers, our AI tutor may use a third-party model (Google Gemini). We send the question and the relevant textbook passage; your name, email and phone number are not sent.",
+  },
+  {
     titleBn: "আপনার নিয়ন্ত্রণ",
     titleEn: "Your controls",
     bodyBn:

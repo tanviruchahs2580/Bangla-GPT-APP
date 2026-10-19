@@ -156,3 +156,19 @@ Gaps, stated rather than papered over:
 - [ ] Escalation contacts (see `docs/runbook.md` → "Escalation contacts", currently owner actions)
 
 Signed: ______________________  Date: __________
+
+## 7. Where the measured evidence lives (I-07 / I-08)
+
+The targets above are proposals; these are the numbers behind them, each with
+the command that produced it:
+
+| Question | Document | Measurement |
+|---|---|---|
+| How fast is a tutoring turn, and where does the time go? | [`PROFILE.md`](PROFILE.md) | cProfile: tutor ask 20.6 ms/call, uncached dashboard 15.9 ms/call (mock provider, sample corpus) |
+| Is it stable under sustained load, and when does it saturate? | [`SOAK.md`](SOAK.md) | 12 min at 6 req/s: 4 300 requests, 0 errors, flat RSS; saturation at 16 concurrent ask clients (~20 req/s) on SQLite |
+| What does a request trace look like, and what is not collected? | [`TRACING.md`](TRACING.md) | one span tree per request; no question text, no query strings, no headers |
+| What happens when the database is lost? | [`DR.md`](DR.md) | restore drill 1.32 s on a 5.1 MiB store; RTO/RPO schedule and owner decisions |
+
+None of these numbers is a production capacity claim: they are the
+local/default-engine measurements the targets should be calibrated against,
+and the soak script re-runs against Postgres by changing `DATABASE_URL`.

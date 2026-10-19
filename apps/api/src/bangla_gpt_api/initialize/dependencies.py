@@ -354,6 +354,13 @@ def build_dependencies(
 
         _me_fn = _real_make_engine
     engine = _me_fn(settings)
+    # I-03: one span per statement on this engine, so a slow request can be
+    # attributed to the DB. No-op unless TRACING_ENABLED is set (it is the
+    # master switch, see tracing.configure_tracing), and it covers the boot
+    # DDL below because it is attached before init_db runs.
+    from bangla_gpt_api import tracing as _tracing
+
+    _tracing.instrument_engine(engine)
     _safe_init_db(engine, settings)
     session_factory = make_session_factory(engine)
 

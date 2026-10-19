@@ -33,7 +33,7 @@ from sqlalchemy import select  # noqa: E402
 
 from bangla_gpt_api.auth.security import hash_password  # noqa: E402
 from bangla_gpt_api.config import Settings  # noqa: E402
-from bangla_gpt_api.db.models import Parent, Student, Teacher, User  # noqa: E402
+from bangla_gpt_api.db.models import Parent, School, Student, Teacher, User  # noqa: E402
 from bangla_gpt_api.db.session import (  # noqa: E402
     init_db,
     make_engine,
@@ -48,7 +48,22 @@ ACCOUNTS = {
     "teacher": "teacher1@e2e.test",
     "parent": "parent1@e2e.test",
     "admin": "admin1@e2e.test",
+    "school_admin": "schooladmin1@e2e.test",
 }
+
+#: AUD-G-07/G-10: the visual and axe suites need accounts whose screens are
+#: still in their seed state -- student1 and teacher1 accumulate
+#: conversations, classrooms and roster rows from the journey, keyboard and
+#: load runs, and a screenshot taken after those runs would record the side
+#: effect rather than the UI. These two accounts are never written to by a
+#: test, so their dashboards stay deterministic.
+READONLY_ACCOUNTS = {
+    "student": "student2@e2e.test",
+    "teacher": "teacher2@e2e.test",
+}
+
+#: The school the seeded school_admin belongs to (AUD-G-10 audits /school).
+SCHOOL_CODE = "E2E-SCHOOL"
 
 
 def _upsert_user(db, email: str, role: str) -> User:  # noqa: ANN001 - Session
@@ -98,13 +113,49 @@ def seed() -> None:
             db.add(Parent(user_id=parent_user.id, name="E2E Parent"))
 
         _upsert_user(db, ACCOUNTS["admin"], "admin")
+
+        # school_admin needs a school; the dashboard 404s a provisioned admin
+        # without one (routers/school.py: "No school linked to this account").
+        school = db.execute(select(School).where(School.code == SCHOOL_CODE)).scalar_one_or_none()
+        if school is None:
+            school = School(name="E2E School", code=SCHOOL_CODE)
+            db.add(school)
+            db.flush()
+        school_admin = _upsert_user(db, ACCOUNTS["school_admin"], "school_admin")
+        school_admin.school_id = school.id
+
+        for role, email in READONLY_ACCOUNTS.items():
+            user = _upsert_user(db, email, role)
+            if role == "student":
+                if (
+                    db.execute(
+                        select(Student).where(Student.user_id == user.id)
+                    ).scalar_one_or_none()
+                    is None
+                ):
+                    db.add(
+                        Student(
+                            user_id=user.id,
+                            name="E2E Visual Student",
+                            class_level=6,
+                            consent_ip="127.0.0.1",
+                            consent_version="e2e",
+                        )
+                    )
+            elif (
+                db.execute(select(Teacher).where(Teacher.user_id == user.id)).scalar_one_or_none()
+                is None
+            ):
+                db.add(Teacher(user_id=user.id, name="E2E Visual Teacher"))
+
         db.commit()
     finally:
         db.close()
         engine.dispose()
     print(
         "seeded roles "
-        + ", ".join(f"{role}={email}" for role, email in ACCOUNTS.items())
+        + ", ".join(f"{role}={email}" for role, email in {**ACCOUNTS, **READONLY_ACCOUNTS}.items())
+        + f" (school={SCHOOL_CODE})"
         + f" (DATABASE_URL={os.environ.get('DATABASE_URL', settings.database_url)})"
     )
 

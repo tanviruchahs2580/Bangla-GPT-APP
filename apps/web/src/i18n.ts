@@ -389,6 +389,8 @@ const bn = {
   subject: "বিষয়",
   consentPrefix: "আমি অভিভাবক হিসেবে বা অভিভাবকের সম্মতিতে নিবন্ধন করছি এবং",
   consentSuffix: "পড়ে সম্মত হচ্ছি।",
+  aiDisclosureShort:
+    "উত্তর তৈরি করতে তৃতীয় পক্ষের AI মডেল ব্যবহার করা হয় — বিস্তারিত গোপনীয়তা নীতিতে।",
   consentRequired: "অনুগ্রহ করে অভিভাবকের সম্মতি নিশ্চিত করে নিবন্ধন করুন।",
   privacy: "গোপনীয়তা",
   terms: "শর্তাবলি",
@@ -1050,6 +1052,8 @@ const en: Dict = {
   consentPrefix:
     "I am the guardian or register with guardian consent, and I agree to the",
   consentSuffix: ".",
+  aiDisclosureShort:
+    "Answers are generated with the help of a third-party AI model — see the Privacy Policy.",
   consentRequired: "Please confirm guardian consent to register.",
   privacy: "Privacy",
   terms: "Terms",

@@ -22,6 +22,7 @@ Usage:
     python scripts/check_commits.py                       # last 50 commits
     python scripts/check_commits.py --max-count 20
     python scripts/check_commits.py --range origin/main..HEAD --strict-length
+    python scripts/check_commits.py .git/COMMIT_EDITMSG    # commit-msg hook
 """
 
 from __future__ import annotations
@@ -112,6 +113,21 @@ def git_subjects(count: int, rev_range: str | None, repo: Path = ROOT) -> list[t
     return rows
 
 
+def subject_from_message_file(path: Path) -> str:
+    """Return the subject line of a commit-message file (git commit-msg hook).
+
+    Git passes the message file (``.git/COMMIT_EDITMSG``) as the hook's only
+    argument. The subject is the first line that is neither blank nor a
+    comment, which is exactly how git derives it.
+    """
+    for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        return line
+    return ""
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--max-count", type=int, default=50, help="how many commits to scan")
@@ -135,7 +151,47 @@ def main(argv: list[str] | None = None) -> int:
             "(it failed in CI's shallow checkout)."
         ),
     )
+    parser.add_argument(
+        "message_file",
+        nargs="?",
+        default=None,
+        metavar="COMMIT_MSG_FILE",
+        help=(
+            "check one commit-message file instead of git history. A commit-msg "
+            "hook passes the message path as its only positional argument, so the "
+            "hook needs no extra flags. Same rules and severities as the history "
+            "scan, so the hook and CI cannot disagree (F-13)."
+        ),
+    )
     args = parser.parse_args(argv)
+
+    if args.message_file:
+        path = Path(args.message_file)
+        if not path.is_file():
+            print(f"FAIL: commit message file {path} does not exist")
+            return 1
+        subject = subject_from_message_file(path)
+        if not subject:
+            print("FAIL: the commit message is empty")
+            return 1
+        errs, warns = check_subject(subject)
+        if args.strict_length:
+            errs, warns = errs + warns, []
+        print("commit-subject lint over the message file")
+        for message in errs:
+            print(f"  ERROR     {subject}\n              {message}")
+        for message in warns:
+            print(f"  warning   {subject}\n              {message}")
+        print(f"\n{len(errs)} error(s), {len(warns)} warning(s)")
+        if errs:
+            print(
+                "FAIL: fix the subject before committing (CONTRIBUTING.md "
+                "'Branches and commits'). This is the same rule CI enforces."
+            )
+            return 1
+        print("OK: subject passes the repository rules")
+        return 0
+
     repo = Path(args.repo).resolve() if args.repo else ROOT
 
     subprocess.run(

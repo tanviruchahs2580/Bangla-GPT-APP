@@ -1,0 +1,808 @@
+{
+  "started_at": "2026-10-19T07:52:53.025870+00:00",
+  "argv": {
+    "minutes": 12.0,
+    "rate": 6.0,
+    "sample_seconds": 15.0,
+    "ramp_top": 32,
+    "ramp_seconds": 15,
+    "port": 8077,
+    "out": null
+  },
+  "python": "3.12.10",
+  "platform": "win32",
+  "database": "sqlite:///C:/Users/DST/projects/Bangla GPT APP/.audit/tmp-i2/soak/soak-18220.db",
+  "llm_provider": "mock",
+  "rate_per_second": 6.0,
+  "phases": {
+    "soak": {
+      "seconds": 720.2,
+      "samples": [
+        {
+          "t_s": 0.0,
+          "rss_mb": 121.5,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 1,
+            "overflow": -4,
+            "checked_out": 0
+          },
+          "client_conns": 1,
+          "requests": 0
+        },
+        {
+          "t_s": 16.3,
+          "rss_mb": 122.1,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 0,
+            "overflow": -4,
+            "checked_out": 1
+          },
+          "client_conns": 3,
+          "requests": 95
+        },
+        {
+          "t_s": 31.3,
+          "rss_mb": 74.3,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 3,
+            "overflow": -2,
+            "checked_out": 0
+          },
+          "client_conns": 1,
+          "requests": 188
+        },
+        {
+          "t_s": 46.3,
+          "rss_mb": 54.0,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 3,
+            "overflow": -2,
+            "checked_out": 0
+          },
+          "client_conns": 1,
+          "requests": 278
+        },
+        {
+          "t_s": 61.4,
+          "rss_mb": 53.9,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 3,
+            "overflow": -2,
+            "checked_out": 0
+          },
+          "client_conns": 1,
+          "requests": 368
+        },
+        {
+          "t_s": 76.4,
+          "rss_mb": 54.0,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 3,
+            "overflow": -2,
+            "checked_out": 0
+          },
+          "client_conns": 1,
+          "requests": 459
+        },
+        {
+          "t_s": 91.5,
+          "rss_mb": 40.4,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 3,
+            "overflow": -2,
+            "checked_out": 0
+          },
+          "client_conns": 1,
+          "requests": 549
+        },
+        {
+          "t_s": 106.5,
+          "rss_mb": 40.4,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 3,
+            "overflow": -2,
+            "checked_out": 0
+          },
+          "client_conns": 1,
+          "requests": 640
+        },
+        {
+          "t_s": 121.5,
+          "rss_mb": 38.5,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 3,
+            "overflow": -2,
+            "checked_out": 0
+          },
+          "client_conns": 1,
+          "requests": 730
+        },
+        {
+          "t_s": 136.6,
+          "rss_mb": 38.5,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 3,
+            "overflow": -2,
+            "checked_out": 0
+          },
+          "client_conns": 1,
+          "requests": 821
+        },
+        {
+          "t_s": 151.6,
+          "rss_mb": 37.3,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 3,
+            "overflow": -2,
+            "checked_out": 0
+          },
+          "client_conns": 1,
+          "requests": 911
+        },
+        {
+          "t_s": 166.7,
+          "rss_mb": 36.8,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 2,
+            "overflow": -2,
+            "checked_out": 1
+          },
+          "client_conns": 1,
+          "requests": 1001
+        },
+        {
+          "t_s": 181.8,
+          "rss_mb": 37.4,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 3,
+            "overflow": -2,
+            "checked_out": 0
+          },
+          "client_conns": 1,
+          "requests": 1092
+        },
+        {
+          "t_s": 196.9,
+          "rss_mb": 37.5,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 3,
+            "overflow": -2,
+            "checked_out": 0
+          },
+          "client_conns": 1,
+          "requests": 1182
+        },
+        {
+          "t_s": 212.0,
+          "rss_mb": 37.8,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 3,
+            "overflow": -2,
+            "checked_out": 0
+          },
+          "client_conns": 1,
+          "requests": 1272
+        },
+        {
+          "t_s": 227.0,
+          "rss_mb": 38.4,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 3,
+            "overflow": -2,
+            "checked_out": 0
+          },
+          "client_conns": 1,
+          "requests": 1362
+        },
+        {
+          "t_s": 242.0,
+          "rss_mb": 37.3,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 3,
+            "overflow": -2,
+            "checked_out": 0
+          },
+          "client_conns": 1,
+          "requests": 1452
+        },
+        {
+          "t_s": 257.0,
+          "rss_mb": 37.4,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 3,
+            "overflow": -2,
+            "checked_out": 0
+          },
+          "client_conns": 1,
+          "requests": 1542
+        },
+        {
+          "t_s": 272.0,
+          "rss_mb": 37.8,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 3,
+            "overflow": -2,
+            "checked_out": 0
+          },
+          "client_conns": 1,
+          "requests": 1632
+        },
+        {
+          "t_s": 287.1,
+          "rss_mb": 39.3,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 3,
+          "requests": 1715
+        },
+        {
+          "t_s": 302.1,
+          "rss_mb": 41.5,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 2,
+          "requests": 1805
+        },
+        {
+          "t_s": 317.1,
+          "rss_mb": 39.7,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 2,
+          "requests": 1895
+        },
+        {
+          "t_s": 332.1,
+          "rss_mb": 39.3,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 3,
+          "requests": 1985
+        },
+        {
+          "t_s": 347.1,
+          "rss_mb": 38.2,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 3,
+          "requests": 2075
+        },
+        {
+          "t_s": 362.1,
+          "rss_mb": 40.2,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 3,
+          "requests": 2165
+        },
+        {
+          "t_s": 377.1,
+          "rss_mb": 38.9,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 3,
+          "requests": 2255
+        },
+        {
+          "t_s": 392.1,
+          "rss_mb": 38.4,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 2,
+          "requests": 2345
+        },
+        {
+          "t_s": 407.1,
+          "rss_mb": 39.0,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 2,
+          "requests": 2435
+        },
+        {
+          "t_s": 422.1,
+          "rss_mb": 39.3,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 5,
+          "requests": 2525
+        },
+        {
+          "t_s": 437.1,
+          "rss_mb": 38.5,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 2,
+          "requests": 2615
+        },
+        {
+          "t_s": 452.2,
+          "rss_mb": 38.6,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 2,
+          "requests": 2705
+        },
+        {
+          "t_s": 467.2,
+          "rss_mb": 39.6,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 3,
+          "requests": 2795
+        },
+        {
+          "t_s": 482.2,
+          "rss_mb": 108.6,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 6,
+          "requests": 2885
+        },
+        {
+          "t_s": 497.2,
+          "rss_mb": 38.9,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 3,
+          "requests": 2975
+        },
+        {
+          "t_s": 512.2,
+          "rss_mb": 39.2,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 3,
+          "requests": 3065
+        },
+        {
+          "t_s": 527.2,
+          "rss_mb": 38.3,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 2,
+          "requests": 3155
+        },
+        {
+          "t_s": 542.2,
+          "rss_mb": 38.1,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 2,
+          "requests": 3245
+        },
+        {
+          "t_s": 557.3,
+          "rss_mb": 39.2,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 3,
+          "requests": 3337
+        },
+        {
+          "t_s": 572.4,
+          "rss_mb": 39.5,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 4,
+          "requests": 3425
+        },
+        {
+          "t_s": 587.5,
+          "rss_mb": 39.7,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 5,
+          "requests": 3515
+        },
+        {
+          "t_s": 602.6,
+          "rss_mb": 41.8,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 4,
+          "requests": 3605
+        },
+        {
+          "t_s": 617.6,
+          "rss_mb": 39.4,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 4,
+          "requests": 3695
+        },
+        {
+          "t_s": 632.7,
+          "rss_mb": 38.2,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 4,
+          "requests": 3785
+        },
+        {
+          "t_s": 647.7,
+          "rss_mb": 108.8,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 6,
+          "requests": 3868
+        },
+        {
+          "t_s": 662.8,
+          "rss_mb": 39.7,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 4,
+          "requests": 3958
+        },
+        {
+          "t_s": 677.8,
+          "rss_mb": 38.0,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 4,
+          "requests": 4048
+        },
+        {
+          "t_s": 692.9,
+          "rss_mb": 38.6,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 3,
+          "requests": 4138
+        },
+        {
+          "t_s": 707.9,
+          "rss_mb": 38.9,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 4,
+          "requests": 4228
+        },
+        {
+          "t_s": 720.1,
+          "rss_mb": 38.1,
+          "sockets": null,
+          "db_pool": {
+            "pool_size": 5,
+            "in_pool": 4,
+            "overflow": -1,
+            "checked_out": 0
+          },
+          "client_conns": 4,
+          "requests": 4300
+        }
+      ],
+      "result": {
+        "endpoints": {
+          "ask": {
+            "n": 717,
+            "p50_ms": 46.8,
+            "p95_ms": 92.5,
+            "p99_ms": 276.3,
+            "max_ms": 1696.4,
+            "errors": 0
+          },
+          "dashboard": {
+            "n": 716,
+            "p50_ms": 23.5,
+            "p95_ms": 71.1,
+            "p99_ms": 249.2,
+            "max_ms": 1711.2,
+            "errors": 0
+          },
+          "health": {
+            "n": 718,
+            "p50_ms": 8.9,
+            "p95_ms": 47.1,
+            "p99_ms": 145.0,
+            "max_ms": 974.3,
+            "errors": 0
+          },
+          "metrics": {
+            "n": 717,
+            "p50_ms": 18.1,
+            "p95_ms": 58.7,
+            "p99_ms": 239.3,
+            "max_ms": 1996.4,
+            "errors": 0
+          },
+          "search": {
+            "n": 717,
+            "p50_ms": 22.1,
+            "p95_ms": 79.2,
+            "p99_ms": 294.3,
+            "max_ms": 1671.0,
+            "errors": 0
+          },
+          "stream": {
+            "n": 715,
+            "p50_ms": 62.9,
+            "p95_ms": 113.3,
+            "p99_ms": 333.7,
+            "max_ms": 3165.8,
+            "errors": 0
+          }
+        },
+        "statuses": {
+          "ask:200": 717,
+          "dashboard:200": 716,
+          "health:200": 718,
+          "metrics:200": 717,
+          "search:200": 717,
+          "stream:200": 715
+        },
+        "total": 4300
+      }
+    },
+    "ramp": [
+      {
+        "workers": 1,
+        "seconds": 15.1,
+        "requests": 398,
+        "rps": 26.3,
+        "p50_ms": 37.2,
+        "p95_ms": 45.5,
+        "errors": 0
+      },
+      {
+        "workers": 2,
+        "seconds": 15.3,
+        "requests": 340,
+        "rps": 22.2,
+        "p50_ms": 74.1,
+        "p95_ms": 112.8,
+        "errors": 0
+      },
+      {
+        "workers": 4,
+        "seconds": 15.4,
+        "requests": 334,
+        "rps": 21.7,
+        "p50_ms": 166.3,
+        "p95_ms": 254.5,
+        "errors": 0
+      },
+      {
+        "workers": 8,
+        "seconds": 15.6,
+        "requests": 326,
+        "rps": 20.9,
+        "p50_ms": 351.7,
+        "p95_ms": 567.0,
+        "errors": 0
+      },
+      {
+        "workers": 16,
+        "seconds": 19.0,
+        "requests": 374,
+        "rps": 19.7,
+        "p50_ms": 693.3,
+        "p95_ms": 1304.9,
+        "errors": 0
+      },
+      {
+        "workers": 32,
+        "seconds": 17.8,
+        "requests": 369,
+        "rps": 20.7,
+        "p50_ms": 1471.3,
+        "p95_ms": 1874.1,
+        "errors": 0
+      }
+    ]
+  },
+  "finished_at": "2026-10-19T08:06:34.776090+00:00",
+  "memory": {
+    "first_mb": 121.5,
+    "min_mb": 36.8,
+    "last_mb": 38.1,
+    "peak_mb": 122.1,
+    "slope_mb_per_hour": -416.88
+  },
+  "db_checked_out": {
+    "first": 0,
+    "min": 0,
+    "max": 1,
+    "last": 0
+  },
+  "saturation": {
+    "budget_p95_ms": 800.0,
+    "error_budget_ratio": 0.01,
+    "first_step_over_budget": {
+      "workers": 16,
+      "seconds": 19.0,
+      "requests": 374,
+      "rps": 19.7,
+      "p50_ms": 693.3,
+      "p95_ms": 1304.9,
+      "errors": 0
+    },
+    "saturation_workers": 16,
+    "saturation_rps": 19.7,
+    "note": "first step where p95 exceeded 800 ms or errors exceeded 1%"
+  }
+}

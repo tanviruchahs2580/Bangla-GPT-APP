@@ -131,8 +131,13 @@ class RedisCache:
     def __init__(self, url: str) -> None:
         import redis  # declared hard dependency, lazy import like the limiter
 
+        from bangla_gpt_api.ratelimit import REDIS_SOCKET_TIMEOUT_SECONDS
+
         self._redis: redis.Redis = redis.Redis.from_url(
-            url, socket_connect_timeout=1.0, socket_timeout=1.0, decode_responses=True
+            url,
+            socket_connect_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
+            socket_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
+            decode_responses=True,
         )
 
     def get_json(self, key: str) -> Any:
@@ -218,26 +223,63 @@ def build_cache(settings: Any) -> Cache:
 class CachedRankingIndex:
     """Transparent Cache decorator over any RankingIndex.
 
-    Retrieval answers depend only on (query, class, subject, chapter, top_k,
-    min_score) and the immutable boot-time corpus, so the whole result list
-    is cacheable. The query goes into the key as SHA-256. Class-scope
-    isolation is preserved: class/subject are part of the key, so a class-8
-    hit list can never answer a class-10 query (lesson).
+    Retrieval answers depend only on (query, tenant_id, class, subject,
+    chapter, top_k, min_score) and the immutable versioned corpus, so the
+    whole result list is cacheable. The query goes into the key as SHA-256.
+    Scope isolation is preserved by construction: tenant, class and subject
+    are part of the KEY, and the index version (corpus fingerprint, or an
+    explicit ``index_version`` when the deployment versions its indexes
+    independently) prefixes it — so a class-8 hit list can never answer a
+    class-10 query, another tenant's cache entry can never be served, and a
+    rebuilt/rolled-back index invalidates naturally instead of serving stale
+    passages (AUD-A2-15 / A9-06, A4-09).
     """
 
-    def __init__(self, inner: Any, cache: Cache, ttl: float = RAG_CACHE_TTL_SECONDS) -> None:
+    def __init__(
+        self,
+        inner: Any,
+        cache: Cache,
+        ttl: float = RAG_CACHE_TTL_SECONDS,
+        *,
+        index_version: str | None = None,
+    ) -> None:
         self.inner = inner
         self._cache = cache
         self._ttl = ttl
         # A23: corpus fingerprint in every cache key — two pods serving
         # DIFFERENT corpora behind one Redis must never share retrieval
-        # answers, and a rebuilt corpus invalidates naturally.
+        # answers, and a rebuilt corpus invalidates naturally. An explicit
+        # index_version (an immutable index artifact name) overrides it so a
+        # blue/green swap rolls the key space too.
         self._corpus_fp = hashlib.sha256(
             "|".join(str(getattr(chunk, "id", id(chunk))) for chunk in inner.chunks).encode()
         ).hexdigest()[:16]
+        self.index_version = index_version or self._corpus_fp
         # Corpus is fixed at build time; share the list so the RankingIndex
         # protocol attribute (read/write) stays satisfied for type-checkers.
         self.chunks: list[Chunk] = inner.chunks
+
+    def key_for(
+        self,
+        query: str,
+        *,
+        class_level: int | None = None,
+        subject: str | None = None,
+        chapter: str | None = None,
+        top_k: int = 4,
+        min_score: float = 0.0,
+        tenant_id: int | str | None = None,
+    ) -> str:
+        """The exact cache key for one lookup (public for tests and operators).
+
+        Every scope dimension goes in: tenant, class, subject, chapter, top_k,
+        min_score, the index version and a SHA-256 of the raw query (learner
+        questions never appear verbatim in Redis key-space).
+        """
+        digest = hashlib.sha256(
+            f"{query}|{tenant_id}|{class_level}|{subject}|{chapter}|{top_k}|{min_score}".encode()
+        ).hexdigest()
+        return f"rag:{self.index_version}:{digest}"
 
     def search(
         self,
@@ -248,11 +290,17 @@ class CachedRankingIndex:
         chapter: str | None = None,
         top_k: int = 4,
         min_score: float = 0.0,
+        tenant_id: int | str | None = None,
     ) -> list[Hit]:
-        digest = hashlib.sha256(
-            f"{query}|{class_level}|{subject}|{chapter}|{top_k}|{min_score}".encode()
-        ).hexdigest()
-        key = f"rag:{self._corpus_fp}:{digest}"
+        key = self.key_for(
+            query,
+            class_level=class_level,
+            subject=subject,
+            chapter=chapter,
+            top_k=top_k,
+            min_score=min_score,
+            tenant_id=tenant_id,
+        )
         raw = self._cache.get_json(key)
         if raw is not None:
             try:
@@ -267,14 +315,19 @@ class CachedRankingIndex:
                 CACHE_EVENTS_TOTAL.labels(cache="rag", result="hit").inc()
                 return parsed
         CACHE_EVENTS_TOTAL.labels(cache="rag", result="miss").inc()
-        hits: list[Hit] = self.inner.search(
-            query,
-            class_level=class_level,
-            subject=subject,
-            chapter=chapter,
-            top_k=top_k,
-            min_score=min_score,
-        )
+        search_kwargs: dict[str, Any] = {
+            "class_level": class_level,
+            "subject": subject,
+            "chapter": chapter,
+            "top_k": top_k,
+            "min_score": min_score,
+        }
+        # tenant_id is always a KEY dimension; it is forwarded when the wrapped
+        # index declares it can filter by tenant (capability flag), so a
+        # tenant-aware index never needs a second decorator.
+        if tenant_id is not None and getattr(self.inner, "supports_tenant_filter", False):
+            search_kwargs["tenant_id"] = tenant_id
+        hits: list[Hit] = self.inner.search(query, **search_kwargs)
         self._cache.set_json(
             key,
             [{"chunk": h.chunk.model_dump(mode="json"), "score": h.score} for h in hits],

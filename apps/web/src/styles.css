@@ -49,6 +49,17 @@
   --ok: #166534; /* A11Y-04: #15803d on --ok-soft measured 4.45:1; this is 6.32:1 */
   --ok-soft: #e3f6e9;
 
+  /* Foreground for accent surfaces (AUD-G-10, measured by the browser axe
+     sweep). Every accent hue flips lightness between themes -- --brand is
+     dark green (#166534) in light and light green (#4ade80) in dark -- so the
+     text that sits on an accent has to flip with it. A hard-coded #fff is
+     what made the /forgot primary button (and the skip link, the offline and
+     impersonation banners, the user chat bubble) 1.4:1-1.7:1 in dark mode. */
+  --on-brand: #ffffff;
+  --on-teal: #ffffff;
+  --on-ai: #ffffff;
+  --on-danger: #ffffff;
+
   /* Surfaces — warm paper background */
   --bg: #f5f1e8;
   --bg-elev: #fffdf8;
@@ -154,6 +165,13 @@
   --warn-soft: #3a2c12;
   --ok: #34d399;
   --ok-soft: #163527;
+
+  /* AUD-G-10: white measured 1.4:1-2.7:1 on these light dark-theme accents;
+     the on-colours below keep each accent's hue and measure 6.0:1-10.6:1. */
+  --on-brand: #052e16;
+  --on-teal: #06283d;
+  --on-ai: #14103a;
+  --on-danger: #3b0d16;
 
   --bg: #12140e;
   --bg-elev: #1a1c14;
@@ -365,7 +383,7 @@ p {
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-full);
   background: var(--brand);
-  color: #fff;
+  color: var(--on-brand);
   font-weight: 700;
   text-decoration: none;
   box-shadow: var(--elev-3);
@@ -828,7 +846,7 @@ p {
 
 .btn-primary {
   background: var(--grad-brand);
-  color: #fff;
+  color: var(--on-brand);
   box-shadow: var(--shadow-brand);
 }
 
@@ -839,7 +857,7 @@ p {
 
 .btn-teal {
   background: linear-gradient(135deg, var(--teal), var(--teal-strong));
-  color: #fff;
+  color: var(--on-teal);
   box-shadow: 0 4px 14px color-mix(in srgb, var(--teal) 30%, transparent);
 }
 
@@ -1196,7 +1214,7 @@ p {
   font-weight: 700;
   font-size: var(--fs-sm);
   background: var(--brand);
-  color: #fff;
+  color: var(--on-brand);
   padding: 8px 16px;
   display: flex;
   gap: 12px;
@@ -2085,7 +2103,7 @@ form .btn[type="submit"] {
 .bubble.user {
   align-self: flex-end;
   background: var(--grad-brand);
-  color: #fff;
+  color: var(--on-brand);
   border-top-right-radius: var(--radius-sm);
   box-shadow: var(--shadow-sm);
 }
@@ -3099,13 +3117,11 @@ button.source-chip:hover {
    the v2/v3 design system (parent / teacher / admin / forgot) use
    a shorter class vocabulary; map it onto the token system so
    those pages render with the real design instead of unstyled
-   defaults. New markup should prefer the .btn-*/
-.stat-*/.table-wrap
-  names
-  above.
-  ------------------------------------------------------------
-  */
-  .page-title {
+   defaults. New markup should prefer the `.btn-*` and
+   `.table-wrap` names above.
+   ------------------------------------------------------------
+   */
+.page-title {
   font-size: var(--fs-2xl);
   font-weight: 700;
   margin: 0 0 var(--space-4);
@@ -3130,7 +3146,7 @@ button.secondary {
 }
 button.primary {
   background: var(--brand);
-  color: #fff;
+  color: var(--on-brand);
 }
 button.primary:hover {
   background: var(--brand-strong);
@@ -3226,7 +3242,7 @@ button.small {
   padding: 0 3px;
   border-radius: 999px;
   background: var(--danger);
-  color: #fff;
+  color: var(--on-danger);
   font-size: 10px;
   font-weight: 700;
   display: inline-flex;
@@ -4345,7 +4361,7 @@ button.small {
 /* gradient icon tiles per tone */
 .tile-teal {
   background: linear-gradient(140deg, #38bdf8, var(--teal-strong));
-  color: #fff !important;
+  color: var(--on-teal) !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.45),
     0 6px 14px -4px color-mix(in srgb, var(--teal) 55%, transparent);
@@ -4361,7 +4377,7 @@ button.small {
 
 .tile-ai {
   background: linear-gradient(140deg, #818cf8, var(--ai));
-  color: #fff !important;
+  color: var(--on-ai) !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.45),
     0 6px 14px -4px color-mix(in srgb, var(--ai) 55%, transparent);
@@ -4369,7 +4385,7 @@ button.small {
 
 .quick-icon:not(.tile-teal):not(.tile-warn):not(.tile-ai) {
   background: var(--grad-cta);
-  color: #fff;
+  color: var(--on-brand);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.45),
     0 6px 14px -4px color-mix(in srgb, var(--brand) 55%, transparent);
@@ -4473,7 +4489,7 @@ button.small {
 .chip.active {
   background: var(--grad-cta);
   border-color: transparent;
-  color: #fff;
+  color: var(--on-brand);
   box-shadow:
     0 1px 2px rgba(5, 46, 22, 0.28),
     0 6px 16px -6px color-mix(in srgb, var(--brand) 60%, transparent);

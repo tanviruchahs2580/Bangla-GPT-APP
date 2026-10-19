@@ -129,7 +129,7 @@ jobs:
         run: |
           set -e
           ok=0
-          for i in $(seq 1 6); do
+          for _ in $(seq 1 6); do
             code=$(curl -s -o /dev/null -w "%{http_code}" https://bangla-gpt-app.vercel.app/login || true)
             if [ "$code" = "200" ]; then
               echo "production alias /login -> 200"

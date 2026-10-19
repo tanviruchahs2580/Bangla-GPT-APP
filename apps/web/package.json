@@ -14,10 +14,31 @@
     "format": "prettier --write src",
     "format:check": "prettier --check src",
     "preview": "vite preview",
+    "audit:serve": "node e2e/serve_for_audit.mjs",
     "cap:sync": "npm run build && cap sync",
     "cap:android": "npm run build && cap sync android && cap open android",
     "lint": "eslint src --max-warnings 0"
   },
+  "size-limit": [
+    {
+      "name": "entry bundle (dist/assets/index-*.js)",
+      "path": "dist/assets/index-*.js",
+      "gzip": true,
+      "limit": "200 kB"
+    },
+    {
+      "name": "tutor markdown chunk (dist/assets/safeMarkdown-*.js)",
+      "path": "dist/assets/safeMarkdown-*.js",
+      "gzip": true,
+      "limit": "160 kB"
+    },
+    {
+      "name": "initial CSS (dist/assets/*.css)",
+      "path": "dist/assets/*.css",
+      "gzip": true,
+      "limit": "40 kB"
+    }
+  ],
   "dependencies": {
     "@capacitor/core": "^7.6.9",
     "@fontsource/hind-siliguri": "^5.3.0",
@@ -34,9 +55,12 @@
     "remark-math": "^6.0.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@capacitor/android": "^7.6.9",
     "@capacitor/cli": "^7.6.9",
+    "@lhci/cli": "0.15.1",
     "@playwright/test": "1.63.0",
+    "@size-limit/file": "14.1.0",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.6",
@@ -52,6 +76,7 @@
     "globals": "^15.15.0",
     "jsdom": "^30.0.1",
     "prettier": "^3.9.6",
+    "size-limit": "14.1.0",
     "typescript": "~5.6.3",
     "typescript-eslint": "^8.71.1",
     "vite": "^5.4.11",

@@ -212,7 +212,7 @@ def validate_paper(
     token_sets: dict[str, set[str]] = {}
     for q in questions:
         ref = str(q["ref"])
-        q_terms = _stem_tokens(str(q["text"]) + " " + " ".join(q["options"]))  # type: ignore[arg-type]
+        q_terms = _stem_tokens(str(q["text"]) + " " + " ".join(q["options"]))  # type: ignore[arg-type]  # `questions` are JSON-decoded `dict[str, object]`; `options: list[str]` is guaranteed by the caller's schema check.
         token_sets[ref] = _stem_tokens(str(q["text"]))
         cov = _coverage(q_terms, all_terms)
         per_question[ref] = round(cov, 3)
