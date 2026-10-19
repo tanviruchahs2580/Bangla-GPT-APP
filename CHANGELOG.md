@@ -208,6 +208,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate the CHANGELOG for the test and QA-record commits
 - docs: regenerate the CHANGELOG for this branch's commits
 - docs: ship the bundled font's licence, third-party notices, contributing guide
+- docs: the AI system card cites current numbers and an artifact that exists
 - docs: truthful disclosure channel, corpus step, pipeline gate and PDF engine copy
 
 ### Tests
