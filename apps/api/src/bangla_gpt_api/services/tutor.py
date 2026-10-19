@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import logging
 import re
 import time
@@ -8,13 +9,14 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
-from bangla_gpt_api.logging_config import json_log
+from bangla_gpt_api.logging_config import json_log, trace_event
 from bangla_gpt_api.metrics import (
     PII_REDACTED_TOTAL,
     RAG_CITATION_CHECKS_TOTAL,
     RAG_GATE_OUTCOMES_TOTAL,
     RAG_GATE_REFUSALS_TOTAL,
     RAG_RETRIEVAL_LATENCY_SECONDS,
+    record_tutor_answer,
 )
 from bangla_gpt_api.providers.base import LLMProvider, ProviderError
 from bangla_gpt_api.retrieval.base import RankingIndex
@@ -42,6 +44,7 @@ from bangla_gpt_api.services.circuit_breaker import (
     ProviderFallbackRouter,
 )
 from bangla_gpt_api.services.context import RequestContext, set_current_context
+from bangla_gpt_api.services.costs import estimate_tokens
 from bangla_gpt_api.services.pii import redact_pii
 from bangla_gpt_api.services.router import (
     Route,
@@ -50,11 +53,21 @@ from bangla_gpt_api.services.router import (
     set_current_route,
 )
 from bangla_gpt_api.services.safety import AGE_RULE_SENTENCE, refusal_for, screen_question
+from bangla_gpt_api.services.trace_meta import index_fingerprint
 
 logger = logging.getLogger("bangla_gpt_api.tutor")
 
 INSUFFICIENT_EVIDENCE_ANSWER = (
     "উত্তরটি পাঠ্যবইয়ের বিষয়বস্তুর ভিত্তিতে দেওয়া সম্ভব নয়। অনুগ্রহ করে পাঠ্যবইয়ের সংশ্লিষ্ট অধ্যায় থেকে প্রশ্ন করুন।"
+)
+
+# AUD-A2-03 / A6-01: the one-shot regeneration instruction used when the first
+# answer fails the post-generation grounding check (citation overlap or an
+# arithmetic contradiction). Trusted app text, prepended ahead of the evidence,
+# same placement rule as the re-teach instruction. NEEDS NATIVE REVIEW.
+GROUNDING_RETRY_INSTRUCTION = (
+    "পূর্বের উত্তরটি <evidence> ব্লকের বাইরের তথ্য ব্যবহার করেছিল। এখন কেবল <evidence> "
+    "এর বাক্যগুলোর ভিত্তিতেই উত্তর লেখো। হিসাব থাকলে ধাপে ধাপে দেখাও এবং শেষে ফলাফল লেখো।"
 )
 
 # Canonical non-answer phrasing the SYSTEM_PROMPT (rule ৪) instructs the
@@ -122,6 +135,14 @@ SYSTEM_PROMPT = (
 )
 
 _EVIDENCE_CLOSE_RE = re.compile(r"</\s*evidence\s*>", re.IGNORECASE)
+
+#: Machine-derived prompt version (A5-02 / I-03): the digest of the exact
+#: system prompt text in this build. Deriving it instead of hand-maintaining a
+#: version string means a prompt edit can never leave a stale version behind
+#: in a trace record.
+PROMPT_VERSION = "sp-" + hashlib.sha256(SYSTEM_PROMPT.encode("utf-8")).hexdigest()[:12]
+
+
 _EVIDENCE_OPEN_RE = re.compile(r"<\s*evidence\s*>", re.IGNORECASE)
 _USER_QUESTION_RE = re.compile(r"<\s*/?\s*user_question\s*>", re.IGNORECASE)
 
@@ -237,6 +258,8 @@ class TutorService:
         self.min_score = min_score
         self.min_coverage = min_coverage
         self.top_k = top_k
+        # I-03: corpus identity for every trace record this instance emits.
+        self.index_version = index_fingerprint(index)
 
         # Circuit breaker + fallback for AI resilience
         self._breaker = circuit_breaker
@@ -268,6 +291,59 @@ class TutorService:
             if trigram_similarity(term, candidate) >= self.FUZZY_MATCH_SIMILARITY:
                 return True
         return False
+
+    def _trace_retrieval(
+        self,
+        hits: list,
+        *,
+        retrieval_ms: int,
+        coverage: float,
+        gate_pass: bool,
+        stream: bool = False,
+    ) -> None:
+        """Per-stage trace record for the retrieval stage (I-03).
+
+        Carries what an incident responder needs to reproduce a bad answer:
+        which corpus index served it, which chunks were retrieved and how the
+        gate voted. No question text (see the service's logging posture).
+        """
+        trace_event(
+            "retrieval",
+            stream=stream,
+            retrieval_ms=retrieval_ms,
+            evidence_chunks=len(hits),
+            top_score=(round(hits[0].score, 4) if hits else None),
+            coverage=round(float(coverage), 4),
+            gate="pass" if gate_pass else "refuse",
+            index_version=self.index_version,
+            retrieved_ids=[getattr(getattr(h, "chunk", None), "id", None) for h in hits],
+        )
+
+    def _trace_generation(
+        self,
+        *,
+        route: object,
+        provider: object,
+        prompt_text: str,
+        answer: str,
+        latency_ms: int,
+    ) -> None:
+        """Per-stage trace record for the generation stage (I-03).
+
+        Token counts use the same estimator as the cost ledger, so a trace,
+        a dashboard and a budget figure agree by construction.
+        """
+        trace_event(
+            "generation",
+            route=getattr(route, "value", str(route)),
+            model=getattr(provider, "model", None) or getattr(provider, "name", "unknown"),
+            prompt_version=PROMPT_VERSION,
+            index_version=self.index_version,
+            prompt_tokens=estimate_tokens(prompt_text),
+            completion_tokens=estimate_tokens(answer),
+            answer_chars=len(answer),
+            latency_ms=latency_ms,
+        )
 
     def _coverage_details(self, question: str, hits: list) -> tuple[float, bool]:
         """Weighted content-term coverage of the best chunk, plus the verdict.
@@ -571,6 +647,9 @@ class TutorService:
         # provider refusal without a log query (HighRAGRefusalRate alerts on
         # the insufficient_evidence label).
         RAG_GATE_REFUSALS_TOTAL.labels(reason=reason).inc()
+        # Business signal (I-02): same funnel as the per-reason counter, so
+        # "refusals per day" and "refusal rate" exist without a DB query.
+        record_tutor_answer("tutor", "refused")
         return AskResponse(
             answer=answer,
             grounded=False,
@@ -607,21 +686,59 @@ class TutorService:
                 f"AI provider unavailable (circuit OPEN for {provider.name}; no fallback configured)"
             ) from None
 
+    def _post_check(self, question: str, answer: str, hits: list) -> tuple[bool, str | None, str]:
+        """Post-generation grounding enforcement (AUD-A2-03 / A6-01, A6-04).
+
+        Returns ``(ok, refused_reason, numeric_verdict)``. Three checks run in
+        order of how strongly a failure contradicts the evidence:
+
+        1. arithmetic: an evaluable expression in the question whose stated
+           result is wrong is a ``numeric_mismatch`` -- the strongest signal;
+        2. citation overlap: an answer that leans on material outside the
+           retrieved evidence fails the citation check (metered, logged);
+        3. otherwise the answer passes and the numeric verdict is returned for
+           the response label (``verified`` / ``unverified`` / ``not_applicable``).
+
+        Callers never show a failed answer: the non-stream path regenerates
+        once then abstains, the stream path replaces the answer in the final
+        event (tokens already sent are superseded by that event).
+        """
+        from bangla_gpt_api.services.numeric_check import check_numeric_answer
+        from bangla_gpt_api.services.safety import verify_citation
+
+        numeric = check_numeric_answer(question, answer)
+        if numeric == "mismatch":
+            RAG_GATE_REFUSALS_TOTAL.labels(reason="numeric_mismatch").inc()
+            logger.warning("numeric_check_failed: stated result contradicts the question")
+            return False, "numeric_mismatch", numeric
+        citation_ok = verify_citation(answer, " ".join(h.chunk.text for h in hits))
+        RAG_CITATION_CHECKS_TOTAL.labels(result="pass" if citation_ok else "fail").inc()
+        if not citation_ok:
+            logger.warning(
+                "citation_check_failed: grounded answer leans on material "
+                "outside the retrieved evidence"
+            )
+            return False, "citation_unverified", numeric
+        return True, None, numeric
+
     def _assemble(
         self,
         answer: str,
         hits: list,
         *,
+        question: str,
         route: str,
         provider: LLMProvider,
         context_blocks: str,
         started: float,
     ) -> AskResponse:
-        """Verify the citation, attach sources, and derive confidence.
+        """Verify grounding, attach sources, and derive confidence.
 
-        A model refusal is handled here rather than at each call site so the
-        grounded/sources/confidence triple is always internally consistent."""
-        from bangla_gpt_api.services.safety import answer_confidence, verify_citation
+        A6-01/AUD-A2-03: the post-generation checks are enforced, not advisory
+        -- an answer that fails either check is replaced by the honest
+        non-answer. Every response is produced here so the
+        grounded/sources/confidence triple cannot drift between call sites."""
+        from bangla_gpt_api.services.safety import answer_confidence
 
         if self._router is not None:
             self._router.record_result(True)
@@ -639,29 +756,30 @@ class TutorService:
         refused = _model_refused(answer)
         if refused:
             RAG_GATE_REFUSALS_TOTAL.labels(reason="model_refused").inc()
-        else:
-            # Meter the post-generation honesty check and warn on failure: the
-            # docstring contract ("callers log a warning") was previously met
-            # by nothing -- a failed check used to vanish into the response
-            # payload. A model refusal is not citation-verified at all (same
-            # as the refusal paths above): there is no grounded answer to vet.
-            citation_ok = verify_citation(answer, " ".join(h.chunk.text for h in hits))
-            RAG_CITATION_CHECKS_TOTAL.labels(result="pass" if citation_ok else "fail").inc()
-            if not citation_ok:
-                logger.warning(
-                    "citation_check_failed: grounded answer leans on material "
-                    "outside the retrieved evidence"
-                )
+            record_tutor_answer("tutor", "refused")
+            return AskResponse(
+                answer=answer,
+                grounded=False,
+                sources=[],
+                citation_verified=None,
+                refused_reason="model_refused",
+                confidence=answer_confidence(False, "model_refused", []),
+            )
+        ok, fail_reason, numeric = self._post_check(question, answer, hits)
+        if not ok:
+            # The evidence does not support this answer (or its arithmetic
+            # contradicts the question): never shown. ask() has already spent
+            # its one regeneration attempt before this runs.
+            return self._refusal(INSUFFICIENT_EVIDENCE_ANSWER, fail_reason or "citation_unverified")
+        record_tutor_answer("tutor", "answered")
         return AskResponse(
             answer=answer,
-            grounded=not refused,
-            sources=[] if refused else refs,
-            citation_verified=None if refused else citation_ok,
-            refused_reason="model_refused" if refused else None,
+            grounded=True,
+            sources=refs,
+            citation_verified=True,
+            numeric_check=numeric,
             confidence=answer_confidence(
-                not refused,
-                "model_refused" if refused else None,
-                [] if refused else [float(getattr(r, "score", 0.0)) for r in refs],
+                True, None, [float(getattr(r, "score", 0.0)) for r in refs]
             ),
         )
 
@@ -724,6 +842,9 @@ class TutorService:
             coverage=coverage_value,
             gate="pass" if gate_pass else "refuse",
         )
+        self._trace_retrieval(
+            hits, retrieval_ms=retrieval_ms, coverage=coverage_value, gate_pass=gate_pass
+        )
         if not gate_pass:
             return self._refusal(INSUFFICIENT_EVIDENCE_ANSWER, "insufficient_evidence")
         context_blocks = self._prompt_blocks(
@@ -743,14 +864,77 @@ class TutorService:
         started = time.perf_counter()
 
         answer = await self._generate(context_blocks, image=image, provider=provider_for_call)
+        self._trace_generation(
+            route=route,
+            provider=provider_for_call,
+            prompt_text=context_blocks,
+            answer=answer,
+            latency_ms=int((time.perf_counter() - started) * 1000),
+        )
+        answer = await self._regenerate_if_ungrounded(
+            answer,
+            hits=hits,
+            question=question,
+            route=route,
+            provider=provider_for_call,
+            history=history,
+            context=context,
+            low_data=low_data,
+            image=image,
+        )
         return self._assemble(
             answer,
             hits,
+            question=question,
             route=route,
             provider=provider,
             context_blocks=context_blocks,
             started=started,
         )
+
+    async def _regenerate_if_ungrounded(
+        self,
+        answer: str,
+        *,
+        hits: list,
+        question: str,
+        route: Any,
+        provider: LLMProvider,
+        history: list[dict[str, str]] | None,
+        context: RequestContext | None,
+        low_data: bool,
+        image: dict | None,
+    ) -> str:
+        """One bounded regeneration when the first answer fails the checks.
+
+        A6-01/AUD-A2-03: the retry carries an explicit demand to stay inside
+        <evidence>; if it also fails, ``_assemble`` abstains instead of showing
+        it. A model refusal is not retried -- there is nothing to ground.
+        """
+        if _model_refused(answer):
+            return answer
+        first_ok, _, _ = self._post_check(question, answer, hits)
+        if first_ok:
+            return answer
+        RAG_CITATION_CHECKS_TOTAL.labels(result="retry").inc()
+        retry_blocks = self._prompt_blocks(
+            hits,
+            question,
+            history,
+            extra_instruction=GROUNDING_RETRY_INSTRUCTION,
+            context=context,
+            low_data=low_data,
+        )
+        retry_started = time.perf_counter()
+        retry_answer = await self._generate(retry_blocks, image=image, provider=provider)
+        self._trace_generation(
+            route=route,
+            provider=provider,
+            prompt_text=retry_blocks,
+            answer=retry_answer,
+            latency_ms=int((time.perf_counter() - retry_started) * 1000),
+        )
+        return retry_answer
 
     async def ask_stream(
         self,
@@ -783,6 +967,7 @@ class TutorService:
                 response=AskResponse(answer=refusal_copy, grounded=False, refused_reason=reason),
             )
             RAG_GATE_REFUSALS_TOTAL.labels(reason=reason).inc()
+            record_tutor_answer("tutor", "refused")
             return
 
         retrieval_query = search_query or self._conversation_retrieval_query(question, history)
@@ -806,9 +991,17 @@ class TutorService:
             coverage=coverage_value,
             gate="pass" if gate_pass else "refuse",
         )
+        self._trace_retrieval(
+            hits,
+            retrieval_ms=retrieval_ms,
+            coverage=coverage_value,
+            gate_pass=gate_pass,
+            stream=True,
+        )
         if not gate_pass:
             yield StreamEvent(type="token", text=INSUFFICIENT_EVIDENCE_ANSWER)
             RAG_GATE_REFUSALS_TOTAL.labels(reason="insufficient_evidence").inc()
+            record_tutor_answer("tutor", "refused")
             yield StreamEvent(
                 type="final",
                 response=AskResponse(
@@ -870,6 +1063,13 @@ class TutorService:
         # Record result for circuit breaker
         if self._router is not None:
             self._router.record_result(True)
+        self._trace_generation(
+            route=route,
+            provider=provider_for_stream,
+            prompt_text=context_blocks,
+            answer=answer,
+            latency_ms=int((time.perf_counter() - started) * 1000),
+        )
         json_log(
             logger,
             logging.INFO,
@@ -880,30 +1080,32 @@ class TutorService:
             prompt_chars=len(context_blocks),
             answer_chars=len(answer),
         )
-        from bangla_gpt_api.services.safety import verify_citation
-
-        # The citation check speaks to a grounded answer only: an outage notice
-        # (or an empty stream) is a service-level message, not evidence-based
-        # text, so verifying — let alone metering — it against the evidence
-        # would record a check that answers nothing.
-        if answer_is_grounded:
-            citation_ok = verify_citation(answer, " ".join(h.chunk.text for h in hits))
-            # Same metering contract as _assemble (non-stream path).
-            RAG_CITATION_CHECKS_TOTAL.labels(result="pass" if citation_ok else "fail").inc()
-            if not citation_ok:
-                logger.warning(
-                    "citation_check_failed: grounded answer leans on material "
-                    "outside the retrieved evidence"
-                )
-        else:
-            citation_ok = False
-        # Same honesty downgrade as the non-stream path: a "not in the
-        # textbook" reply is a refusal, not a grounded answer.
+        # Post-generation enforcement — same contract as _assemble
+        # (AUD-A2-03): an outage notice or an empty stream is never verified
+        # (there is no evidence-based text to vet); a grounded answer that
+        # fails the citation or numeric check is replaced by the honest
+        # non-answer in the final event. The client applies that event's
+        # answer, superseding the tokens already streamed.
+        numeric_verdict: str | None = None
+        citation_ok = False
+        refused_reason: str | None = None
         model_refused = _model_refused(answer)
         if answer_is_grounded and model_refused:
+            # A "not in the textbook" reply is a refusal, not a grounded
+            # answer (same honesty downgrade as the non-stream path).
             answer_is_grounded = False
         if model_refused:
             RAG_GATE_REFUSALS_TOTAL.labels(reason="model_refused").inc()
+            refused_reason = "model_refused"
+        elif answer_is_grounded:
+            ok, fail_reason, numeric_verdict = self._post_check(question, answer, hits)
+            if ok:
+                citation_ok = True
+            else:
+                answer = INSUFFICIENT_EVIDENCE_ANSWER
+                answer_is_grounded = False
+                refused_reason = fail_reason
+        record_tutor_answer("tutor", "answered" if answer_is_grounded else "refused")
         yield StreamEvent(
             type="final",
             response=AskResponse(
@@ -914,7 +1116,8 @@ class TutorService:
                 # tests): a refusal carries no citation verdict, not a False
                 # one -- None is the schema's documented "not applicable".
                 citation_verified=citation_ok if answer_is_grounded else None,
-                refused_reason="model_refused" if model_refused else None,
+                refused_reason=refused_reason,
+                numeric_check=numeric_verdict if answer_is_grounded else None,
             ),
         )
 

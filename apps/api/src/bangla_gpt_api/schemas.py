@@ -84,7 +84,14 @@ class AskResponse(BaseModel):
     refused_reason: str | None = None
     # Soft post-generation signal that the answer leans on the cited evidence.
     citation_verified: bool | None = None
-    # honest numeric confidence (formula in services/safety).
+    # Programmatic verdict on the question's arithmetic when one was evaluable:
+    # 'verified' | 'mismatch' | 'unverified' | 'not_applicable' (A6-04). An
+    # enforced 'mismatch' never reaches clients as an answer; the label exists
+    # so the UI can say "unverified" honestly instead of implying a check.
+    numeric_check: str | None = None
+    # Bounded internal grounding signal (breadth+depth of the retrieved
+    # sources; formula in services/safety.answer_confidence). It is NOT a
+    # calibrated probability: do not render it as a percentage (A6-05).
     confidence: float | None = None
 
 

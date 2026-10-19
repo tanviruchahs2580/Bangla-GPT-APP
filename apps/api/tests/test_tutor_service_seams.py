@@ -118,12 +118,29 @@ async def test_generate_uses_fallback_when_router_says_primary_is_unhealthy():
 
 
 # --------------------------------------------------------------- _assemble ---
+class _Chunk:
+    def __init__(self, text: str) -> None:
+        self.text = text
+        self.meta = type(
+            "Meta",
+            (),
+            {"book": "গণিত", "chapter": "কোষ", "section": "কোষ কী", "page": 3},
+        )()
+
+
+class _Hit:
+    def __init__(self, text: str, score: float = 0.8) -> None:
+        self.chunk = _Chunk(text)
+        self.score = score
+
+
 def test_assemble_downgrades_a_model_refusal():
     service = _service(_Stub())
     hits: list = []
     response = service._assemble(
         "এটি পাঠ্যবইয়ে নেই",
         hits,
+        question="কোষ কী?",
         route="simple",
         provider=_Stub(),
         context_blocks="blocks",
@@ -135,11 +152,12 @@ def test_assemble_downgrades_a_model_refusal():
     assert response.citation_verified is None
 
 
-def test_assemble_keeps_a_normal_answer_grounded():
+def test_assemble_keeps_a_grounded_answer():
     service = _service(_Stub())
     response = service._assemble(
-        "সাধারণ উত্তর",
-        [],
+        "কোষ হলো জীবের গঠনমূলক একক।",
+        [_Hit("কোষ হলো জীবের গঠনমূলক একক, যা কোষঝিল্লি দিয়ে ঘেরা।")],
+        question="কোষ কী?",
         route="simple",
         provider=_Stub(),
         context_blocks="blocks",
@@ -147,7 +165,47 @@ def test_assemble_keeps_a_normal_answer_grounded():
     )
     assert response.grounded is True
     assert response.refused_reason is None
-    assert response.answer == "সাধারণ উত্তর"
+    assert response.citation_verified is True
+    assert response.numeric_check == "not_applicable"
+
+
+def test_assemble_refuses_an_answer_outside_the_evidence():
+    """AUD-A2-03: the check is enforced -- the ungrounded answer is replaced."""
+    from bangla_gpt_api.services.tutor import INSUFFICIENT_EVIDENCE_ANSWER
+
+    service = _service(_Stub())
+    response = service._assemble(
+        "সম্পূর্ণ অসম্পর্কিত বক্তব্য যা উদ্ভিদের পাতার রঙ নিয়ে কথা বলে।",
+        [_Hit("কোষ হলো জীবের গঠনমূলক একক।")],
+        question="কোষ কী?",
+        route="simple",
+        provider=_Stub(),
+        context_blocks="blocks",
+        started=0.0,
+    )
+    assert response.grounded is False
+    assert response.answer == INSUFFICIENT_EVIDENCE_ANSWER
+    assert response.refused_reason == "citation_unverified"
+    assert response.sources == []
+
+
+def test_assemble_refuses_a_numeric_contradiction():
+    """A6-04: a computable result that contradicts the stated one abstains."""
+    from bangla_gpt_api.services.tutor import INSUFFICIENT_EVIDENCE_ANSWER
+
+    service = _service(_Stub())
+    response = service._assemble(
+        "যোগফল হবে ৩৫। উত্তর: ৩৫",
+        [_Hit("যোগ করার সময় ১২ ও ৩০ যোগ করলে ৪২ হয়।")],
+        question="১২ + ৩০ = কত?",
+        route="simple",
+        provider=_Stub(),
+        context_blocks="blocks",
+        started=0.0,
+    )
+    assert response.grounded is False
+    assert response.answer == INSUFFICIENT_EVIDENCE_ANSWER
+    assert response.refused_reason == "numeric_mismatch"
 
 
 # ----------------------------------------------------------- _prompt_blocks ---
