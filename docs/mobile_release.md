@@ -44,23 +44,41 @@ both web and APK logins when it dies — promote a named tunnel or a
 VM/PaaS domain and point both `API_ORIGIN` (Vercel) and `VITE_API_BASE`
 (APK build) at it.
 
-### 🖐 Human build/signing steps (NOT possible in this environment)
+### Signing and Play Store packaging (owner credentials)
+
+Release signing is now fail-closed in `apps/web/android/app/build.gradle`: the
+build reads `apps/web/android/keystore.properties` (gitignored, template at
+`keystore.properties.example`) or the `ANDROID_*` environment variables, and
+refuses to produce a release artifact without them (a debug-signed upload is
+rejected by Play anyway, and a stopped build is cheaper than a rejected one).
+`versionName` follows the web package version; `versionCode` comes from
+`-PversionCode` and must increase on every upload.
+
+```bash
+cd apps/web
+VITE_API_BASE=https://api.YOUR-DOMAIN/api npm run build
+npx cap sync android
+cd android && ./gradlew bundleRelease -PversionCode=2   # -> app-release.aab
+```
+
+CI builds the same artifact via `.github/workflows/android-release.yml`
+(tag `v*` or manual dispatch, signing secrets as repository secrets), and
+uploads the `.aab` + release `.apk`. The step-by-step owner runbook —
+Play Console setup, data safety, content rating, store listing copy, staged
+rollout — is **`docs/playstore/LAUNCH.md`**.
 
 This machine has no JDK or Android SDK (`java` absent, `ANDROID_HOME`
-unset), so no APK was produced — deliberately not faked. On a build
-machine:
+unset), so no APK/AAB is produced locally — deliberately not faked; the CI
+job is where the artifact comes from.
 
-1. Install JDK 21 + Android Studio (SDK 35). `cd apps/web/android &&
-./gradlew assembleDebug` for a test APK.
-2. Release signing: create a keystore (store it OUTSIDE the repo, never
-   in git/CI logs), set `keystore.properties` (git-ignored), then
-   `./gradlew assembleRelease` / `bundleRelease`. Play Store prefers
-   Play App Signing.
-3. App icon/label localization: replace `app_name` string with the
-   Bengali name "বাংলা GPT টিউটর" and feed `android/app/src/main/res`
-   mipmap icons (same artwork as the PWA icons).
+### App icon/label localization
 
-### 🖐 Push notifications (FCM) — intentionally not wired yet
+Done in the repo: the launcher label is Bengali via
+`android/app/src/main/res/values-bn/strings.xml` (`বাংলা GPT টিউটর`) with the
+English fallback in `values/strings.xml`, and the mipmap icon set is committed
+(adaptive icon + per-density mipmaps, same artwork as the PWA icons).
+
+### Push notifications (FCM) — intentionally not wired yet
 
 Push requires human/external work: a Firebase console project,
 `google-services.json` dropped into `android/app/`,

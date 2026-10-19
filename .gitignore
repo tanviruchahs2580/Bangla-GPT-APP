@@ -14,6 +14,10 @@
 *.p12
 *.pfx
 *.jks
+*.keystore
+# Android upload-key config (Play Store): the property file names the keystore
+# path and carries its passwords. The example file is the committed template.
+keystore.properties
 secrets.*
 credentials.*
 service-account*.json
