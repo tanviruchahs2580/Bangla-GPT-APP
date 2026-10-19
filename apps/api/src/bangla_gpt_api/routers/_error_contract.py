@@ -131,6 +131,7 @@ ERROR_CATALOG: Final[dict[str, ErrorSpec]] = {
     # Three sites share the code with different messages; the catalog records
     # the code and shape, the message is copy.
     "bad_mfa_token": ErrorSpec(401, ("code", "message"), "Not an MFA step-up token"),
+    "bad_refresh_token": ErrorSpec(401, ("code", "message"), "Invalid or expired refresh token"),
     "class_level_required": ErrorSpec(
         409, ("code", "message"), "class_level is required when role is 'student'"
     ),
@@ -158,11 +159,24 @@ ERROR_CATALOG: Final[dict[str, ErrorSpec]] = {
         422, ("code", "message"), "Image content does not match the declared mime type"
     ),
     "impersonation_forbidden": ErrorSpec(403, ("code", "message"), "admins cannot be impersonated"),
+    "impersonation_readonly": ErrorSpec(
+        403,
+        ("code", "message"),
+        "An impersonation session cannot change credentials or delete data",
+    ),
+    "idempotency_in_progress": ErrorSpec(
+        409,
+        ("code", "message"),
+        "A request with this Idempotency-Key is already being processed; retry shortly",
+    ),
     "index_unavailable": ErrorSpec(503, ("code", "message"), "Curriculum index unavailable"),
     "internal_error": ErrorSpec(500, ("code", "message"), "An unexpected error occurred"),
     "invalid_code": ErrorSpec(404, ("code", "message"), "Invalid invite code"),
     "invalid_explanation_style": ErrorSpec(
         422, ("code", "message"), "explanation_style must be simple|standard|detailed"
+    ),
+    "invalid_idempotency_key": ErrorSpec(
+        400, ("code", "message"), "Idempotency-Key must be 8-255 characters"
     ),
     "invalid_invite": ErrorSpec(400, ("code", "message"), "Invalid or expired invite code"),
     "invalid_subject_focus": ErrorSpec(
@@ -192,6 +206,11 @@ ERROR_CATALOG: Final[dict[str, ErrorSpec]] = {
     ),
     "password_unchanged": ErrorSpec(
         409, ("code", "message"), "New password must differ from the current one"
+    ),
+    "precondition_failed": ErrorSpec(
+        412,
+        ("code", "message"),
+        "The resource changed since you read it; refetch and retry",
     ),
     "provider_unavailable": ErrorSpec(503, ("code", "message"), "LLM provider not configured"),
     "rate_limited": ErrorSpec(429, ("code", "message"), "Rate limit exceeded"),

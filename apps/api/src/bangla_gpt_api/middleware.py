@@ -16,6 +16,7 @@ from time import perf_counter
 from typing import ClassVar
 
 from fastapi import Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -186,17 +187,21 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             try:
                 allowed = self.limiter.check(f"{path_prefix}|{key_source}", limit)
             except RateLimitBackendError:
-                return JSONResponse({"detail": "Rate limiter unavailable"}, status_code=503)
+                # C-10: one error shape everywhere -- middleware refusals are
+                # problem+json too, not a fourth envelope.
+                return problem_details(request, status=503, detail="Rate limiter unavailable")
             if not allowed:
                 # AUD-B-13: a 429 without a wait hint invites an immediate
                 # retry that deepens the limit. The hint is the backend's full
                 # window, so a client that honours it always succeeds; a
                 # client that retries earlier is simply refused again.
-                return JSONResponse(
-                    {"detail": {"code": "rate_limited", "message": "Rate limit exceeded"}},
-                    status_code=429,
-                    headers={"Retry-After": str(RATE_LIMIT_WINDOW_SECONDS)},
+                response = problem_details(
+                    request,
+                    status=429,
+                    detail={"code": "rate_limited", "message": "Rate limit exceeded"},
                 )
+                response.headers["Retry-After"] = str(RATE_LIMIT_WINDOW_SECONDS)
+                return response
         return await call_next(request)
 
 
@@ -237,8 +242,24 @@ class BodySizeLimitMiddleware:
         self.max_bytes = max_bytes
 
     @staticmethod
-    def _response(status: int, detail: str) -> Response:
-        return JSONResponse({"detail": detail}, status_code=status)
+    def _response(status: int, detail: str, scope: Scope) -> Response:
+        # C-10: same problem+json envelope as every other error, built by hand
+        # because this is an ASGI middleware with a scope, not a Request.
+        try:
+            title = HTTPStatus(status).phrase
+        except ValueError:  # pragma: no cover - all statuses here are standard
+            title = "Error"
+        return JSONResponse(
+            {
+                "type": "about:blank",
+                "title": title,
+                "status": status,
+                "detail": detail,
+                "instance": scope.get("path", ""),
+            },
+            status_code=status,
+            media_type=PROBLEM_MEDIA_TYPE,
+        )
 
     @staticmethod
     def _declared_length(scope: Scope) -> int | None:
@@ -260,7 +281,7 @@ class BodySizeLimitMiddleware:
         # single body byte is read.
         declared = self._declared_length(scope)
         if declared is not None and declared > self.max_bytes:
-            await self._response(413, "Request body too large")(scope, receive, send)
+            await self._response(413, "Request body too large", scope)(scope, receive, send)
             return
 
         total = 0
@@ -287,13 +308,13 @@ class BodySizeLimitMiddleware:
                 # The application already committed to a response; the only
                 # honest thing left is to let the error surface.
                 raise
-            await self._response(413, "Request body too large")(scope, receive, send)
+            await self._response(413, "Request body too large", scope)(scope, receive, send)
         except (OSError, MemoryError):
             # The stream failed mid-read. Forwarding would leave the endpoint
             # waiting on a body that will never arrive — fail clean instead.
             if response_started:
                 raise
-            await self._response(400, "Unable to read request body")(scope, receive, send)
+            await self._response(400, "Unable to read request body", scope)(scope, receive, send)
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -494,15 +515,17 @@ def unhandled_exception_response(request: Request, exc: Exception) -> JSONRespon
             "exc_type": type(exc).__name__,
         },
     )
-    body: dict[str, object] = {
-        "detail": {
+    # C-10: the 500 uses the same problem+json envelope as every other error
+    # (``detail`` and ``request_id`` unchanged, plus the RFC members).
+    response = problem_details(
+        request,
+        status=500,
+        detail={
             "code": "internal_error",
             "message": "An unexpected error occurred",
-        }
-    }
-    if request_id:
-        body["request_id"] = request_id
-    response = JSONResponse(body, status_code=500)
+        },
+        extra={"request_id": request_id} if request_id else None,
+    )
     if request_id:
         response.headers["X-Request-ID"] = request_id
     SecurityHeadersMiddleware.apply_baseline(response, request.url.path)
@@ -568,7 +591,16 @@ def http_exception_response(request: Request, exc: Exception) -> JSONResponse:
 
 
 def validation_exception_response(request: Request, exc: Exception) -> JSONResponse:
-    """RFC 9457 rendering of FastAPI's 422, preserving the error list."""
+    """RFC 9457 rendering of FastAPI's 422, preserving the error list.
+
+    ``exc.errors()`` is not guaranteed to be JSON-safe: a ``model_validator``
+    that raises leaves the raised object under ``ctx.error`` (the qpaper
+    review contract does exactly this), and serialising it raw turns every
+    such 422 into a 500. FastAPI's own handler runs the list through
+    ``jsonable_encoder`` first, so this handler mirrors that -- the documented
+    ``detail`` list keeps its ``loc``/``msg``/``type`` members and the
+    unencodable object is rendered the same way the framework would.
+    """
     if not isinstance(exc, RequestValidationError):  # pragma: no cover - registration guard
         raise exc
-    return problem_details(request, status=422, detail=exc.errors())
+    return problem_details(request, status=422, detail=jsonable_encoder(exc.errors()))

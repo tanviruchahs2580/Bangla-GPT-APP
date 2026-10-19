@@ -16,6 +16,10 @@ Two readings, deliberately:
   one (an HTTP ``Date`` header, a trace attribute, arithmetic across a DST
   boundary).
 
+:func:`utcnow` is the read used by production code; :func:`get_clock` is the
+accessor for a caller that wants the :class:`Clock` object itself (the seam
+round-trip set_clock/get_clock is pinned in ``tests/test_h2_time.py``).
+
 Scope note: this is the seam, not a sweeping rewrite. Callers migrate as they
 are touched for other reasons; the bulk migration of the ~90 direct
 ``datetime.now`` sites is tracked separately (AUD-EF-16).

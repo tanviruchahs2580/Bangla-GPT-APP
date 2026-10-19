@@ -4,6 +4,7 @@ Behavior-identical extraction: same paths, validation, status codes.
 Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 """
 
+import calendar
 import hashlib
 import logging
 import secrets
@@ -11,13 +12,16 @@ from datetime import UTC, datetime, timedelta
 
 import jwt as pyjwt
 from fastapi import APIRouter, HTTPException, Request, Response
+from pydantic import Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from bangla_gpt_api.auth.mfa import new_secret, otpauth_uri, verify_code
 from bangla_gpt_api.auth.security import (
+    REFRESH_TOKEN_TYP,
     _burn_password_check,
     create_access_token,
+    create_refresh_token,
     decode_token,
     hash_password,
     is_common_password,
@@ -46,13 +50,17 @@ from bangla_gpt_api.schemas import (
     ForgotPasswordRequest,
     LoginRequest,
     MfaChallengeIn,
+    MfaDisabledOut,
     MfaDisableIn,
+    MfaEnabledOut,
     MfaEnrollOut,
     MfaVerifyIn,
     RegisterRequest,
     RegisterResponse,
     ResendVerificationRequest,
     ResetPasswordRequest,
+    StatusAcceptedOut,
+    StrictIn,
     TokenResponse,
     VerifyEmailRequest,
 )
@@ -73,6 +81,56 @@ from .deps import (
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
+
+
+# --- B-02: rotating refresh tokens -------------------------------------------
+class SessionTokenResponse(TokenResponse):
+    """A full login response: access token + its rotating refresh successor.
+
+    Extra optional fields rather than a new response model for the wide
+    routes, so an old client that only reads ``access_token`` is unaffected;
+    a new client renews with ``refresh_token`` at POST /auth/refresh instead
+    of holding a long-lived access token.
+    """
+
+    refresh_token: str | None = None
+    expires_in: int | None = None  # access-token lifetime in seconds
+
+
+class RefreshRequest(StrictIn):
+    refresh_token: str = Field(min_length=10, max_length=4096)
+
+
+class LogoutRequest(StrictIn):
+    # Optional: a client that only holds an access token still logs out the
+    # way it always did; one that holds the refresh token hands it back so
+    # the session cannot be resumed from it either.
+    refresh_token: str | None = Field(default=None, max_length=4096)
+
+
+def _issue_session(
+    app_ctx: AppContext, user: User, *, family: str | None = None
+) -> SessionTokenResponse:
+    """Mint an access token and a fresh refresh token for one session.
+
+    The refresh family is preserved across rotations so replay detection can
+    revoke a whole login lineage; a new login starts a new family.
+    """
+    access = create_access_token(user, settings=app_ctx.settings)
+    refresh = create_refresh_token(user, settings=app_ctx.settings, family=family)
+    return SessionTokenResponse(
+        access_token=access,
+        refresh_token=refresh,
+        expires_in=app_ctx.settings.jwt_expire_minutes * 60,
+        must_change_password=user.must_change_password,
+    )
+
+
+#: Cache key prefixes for refresh-token rotation (B-02): a single-use claim
+#: per rotated jti, and a family revocation marker written when a rotated
+#: token is replayed (theft detection).
+_REFRESH_USED_PREFIX = "refresh_used:"
+_REFRESH_FAMILY_REVOKE_PREFIX = "refresh_fam_revoke:"
 
 # --- S-002: per-account failed-login lockout --------------------------------
 # The per-IP login rule can be defeated by IP rotation, so the ACCOUNT also
@@ -170,8 +228,8 @@ def register(
     return RegisterResponse(user_id=user.id, role=user.role, profile_id=profile.id)
 
 
-@router.post("/auth/verify-email", response_model=TokenResponse, responses=coded(400))
-def verify_email(app_ctx: Ctx, payload: VerifyEmailRequest, db: DbSession) -> TokenResponse:
+@router.post("/auth/verify-email", response_model=SessionTokenResponse, responses=coded(400))
+def verify_email(app_ctx: Ctx, payload: VerifyEmailRequest, db: DbSession) -> SessionTokenResponse:
     """Complete email verification with the token from the mail.
 
     On success the account is marked verified and a session is issued.
@@ -209,16 +267,16 @@ def verify_email(app_ctx: Ctx, payload: VerifyEmailRequest, db: DbSession) -> To
         )
     user.email_verified = True
     db.commit()
-    return TokenResponse(access_token=create_access_token(user, settings=app_ctx.settings))
+    return _issue_session(app_ctx, user)
 
 
-@router.post("/auth/resend-verification", status_code=202)
+@router.post("/auth/resend-verification", status_code=202, response_model=StatusAcceptedOut)
 def resend_verification(
     app_ctx: Ctx,
     db: DbSession,
     credentials: BearerCredentials,
     payload: ResendVerificationRequest | None = None,
-) -> dict:
+) -> StatusAcceptedOut:
     """Re-send the email-verification code.
 
     Reachable both with and without a session: login issues no token
@@ -228,20 +286,36 @@ def resend_verification(
     the account. Always answers 202 with a generic body so the endpoint
     cannot be used to enumerate registered addresses.
     """
-    target: User | None = None
+    target = _resend_target(app_ctx, db, credentials, payload)
+    if target is not None and smtp_configured(app_ctx.settings) and not target.email_verified:
+        send_verification_email(db, app_ctx.settings, target)
+    return StatusAcceptedOut(status="accepted")
+
+
+def _resend_target(
+    app_ctx: Ctx,
+    db: DbSession,
+    credentials: BearerCredentials,
+    payload: ResendVerificationRequest | None,
+) -> User | None:
+    """The account to re-send to: a valid bearer session wins, else the email.
+
+    A malformed or unusable bearer header falls through to the body email
+    rather than erroring: the endpoint's contract is the same 202 either way,
+    and refusing here would tell an attacker whether a token is valid.
+    """
     if credentials is not None and credentials.scheme.lower() == "bearer":
         try:
             claims = decode_token(credentials.credentials, settings=app_ctx.settings)
-            if claims.get("mfa") is not True:
-                target = db.get(User, int(claims["sub"]))
+            # B-02: a refresh token is not a session credential here either.
+            if claims.get("mfa") is not True and claims.get("typ") != REFRESH_TOKEN_TYP:
+                return db.get(User, int(claims["sub"]))
         except Exception:
-            target = None
-    if target is None and payload is not None and payload.email:
+            return None
+    if payload is not None and payload.email:
         email = payload.email.strip().lower()
-        target = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
-    if target is not None and smtp_configured(app_ctx.settings) and not target.email_verified:
-        send_verification_email(db, app_ctx.settings, target)
-    return {"status": "accepted"}
+        return db.execute(select(User).where(User.email == email)).scalar_one_or_none()
+    return None
 
 
 def _lockout_seconds(failed_count: int) -> int:
@@ -270,8 +344,10 @@ def _lock_remaining_seconds(user: User, now: datetime) -> int | None:
     return max(1, int(remaining))
 
 
-@router.post("/auth/login", response_model=TokenResponse, responses=coded(401, 403, 429))
-def login(app_ctx: Ctx, response: Response, payload: LoginRequest, db: DbSession) -> TokenResponse:
+@router.post("/auth/login", response_model=SessionTokenResponse, responses=coded(401, 403, 429))
+def login(
+    app_ctx: Ctx, response: Response, payload: LoginRequest, db: DbSession
+) -> SessionTokenResponse:
     email = payload.email.strip().lower()
     user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
 
@@ -357,9 +433,8 @@ def login(app_ctx: Ctx, response: Response, payload: LoginRequest, db: DbSession
         mfa_token = create_access_token(
             user, settings=app_ctx.settings, minutes=5, extra_claims={"mfa": True}
         )
-        return TokenResponse(access_token=mfa_token, token_type="mfa")  # noqa: S106 - a token type string, not a credential
-    token = create_access_token(user, settings=app_ctx.settings)
-    return TokenResponse(access_token=token, must_change_password=user.must_change_password)
+        return SessionTokenResponse(access_token=mfa_token, token_type="mfa")  # noqa: S106 - a token type string, not a credential
+    return _issue_session(app_ctx, user)
 
 
 def _hash_reset_token(token: str) -> str:
@@ -435,8 +510,125 @@ def _reject_common_password(password: str) -> None:
 _REVOKED_JTI_KEY_PREFIX = "token_revoke:"
 
 
+@router.post("/auth/refresh", response_model=SessionTokenResponse, responses={**coded(401, 503)})
+def refresh_session(app_ctx: Ctx, payload: RefreshRequest, db: DbSession) -> SessionTokenResponse:
+    """Rotate a refresh token into a new access token (B-02).
+
+    Security properties, in the order they are checked:
+
+    1. signature/iss/aud/expiry via ``decode_token`` and a ``typ=refresh``
+       check -- an access token cannot be replayed here, and a refresh token
+       cannot be used anywhere else (``get_current_user`` refuses it);
+    2. the login family is not revoked (a replay revoked it earlier);
+    3. the presented token was not already rotated -- the claim is one atomic
+       ``SET NX`` in the shared store, so two concurrent refreshes with one
+       token produce exactly one successor;
+    4. the account still exists, is verified, and the token is not older than
+       ``sessions_invalidated_at`` (password change/reset kills refresh tokens
+       the same second-precision way it kills access tokens).
+
+    A token that fails (3) is the classic stolen-refresh-token signal: the
+    whole family is revoked and 401 is returned, so neither the thief nor the
+    victim keeps a usable session -- a fresh login is the only way back in.
+    When the shared store is unreachable, rotation fails CLOSED with 503
+    (``revocation_unavailable``): an unverifiable claim cannot be recorded,
+    so issuing a successor would silently break replay detection.
+    """
+    claims = _refresh_claims(payload.refresh_token, app_ctx.settings)
+    jti = str(claims["jti"])
+    family = str(claims["fam"])
+    user_id = int(claims["sub"])
+    _claim_rotation(app_ctx, claims, jti=jti, family=family)
+    user = db.get(User, user_id)
+    if user is None or not user.email_verified:
+        raise _bad_refresh()
+    # F-05 token epoch, applied to refresh tokens too: a password change or
+    # reset must kill outstanding refresh tokens, else the leaked credential
+    # outlives the incident by up to jwt_refresh_expire_days.
+    if not _issued_after_epoch(user, claims):
+        raise _bad_refresh()
+    return _issue_session(app_ctx, user, family=family)
+
+
+def _refresh_claims(refresh_token: str, settings) -> dict:  # noqa: ANN001 - Settings
+    """Decode and structurally validate a refresh token (steps 1 and 4a)."""
+    try:
+        claims = decode_token(refresh_token, settings=settings)
+    except pyjwt.PyJWTError as exc:
+        raise _bad_refresh() from exc
+    if claims.get("typ") != REFRESH_TOKEN_TYP:
+        raise _bad_refresh()
+    jti = claims.get("jti")
+    family = claims.get("fam")
+    if not isinstance(jti, str) or not jti or not isinstance(family, str) or not family:
+        raise _bad_refresh()
+    try:
+        int(claims["sub"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise _bad_refresh() from exc
+    return claims
+
+
+def _claim_rotation(app_ctx: Ctx, claims: dict, *, jti: str, family: str) -> None:
+    """Revocation checks plus the atomic single-use claim (steps 2 and 3).
+
+    A failed claim is the stolen-refresh-token signal: the family is revoked
+    loudly and 401 returned. An unreachable store fails CLOSED with 503 -- an
+    unverifiable claim cannot be recorded, so issuing a successor would
+    silently break replay detection.
+    """
+    try:
+        if app_ctx.cache.get_json_strict(_REFRESH_FAMILY_REVOKE_PREFIX + family) is True:
+            raise _bad_refresh()
+        # Logout writes the presented token's jti here (same deny-list the
+        # access token uses), so a logged-out refresh token is refused.
+        if app_ctx.cache.get_json_strict(f"{_REVOKED_JTI_KEY_PREFIX}{jti}") is True:
+            raise _bad_refresh()
+        try:
+            remaining = max(1, int(claims.get("exp", 0)) - int(datetime.now(UTC).timestamp()))
+        except (TypeError, ValueError):
+            remaining = app_ctx.settings.jwt_refresh_expire_days * 86400
+        if not app_ctx.cache.set_json_nx_strict(_REFRESH_USED_PREFIX + jti, True, remaining):
+            # Replay of an already-rotated token: revoke the family loudly.
+            app_ctx.cache.set_json_strict(
+                _REFRESH_FAMILY_REVOKE_PREFIX + family,
+                True,
+                app_ctx.settings.jwt_refresh_expire_days * 86400,
+            )
+            json_log(logger, logging.WARNING, "refresh_token_replay_detected", family_revoked=True)
+            raise _bad_refresh()
+    except CacheUnavailable as exc:
+        raise revocation_store_unavailable() from exc
+
+
+def _issued_after_epoch(user: User, claims: dict) -> bool:
+    """True when the token was issued after the account's invalidation stamp."""
+    invalidated = user.sessions_invalidated_at
+    if invalidated is None:
+        return True
+    inv_ts = (
+        calendar.timegm(invalidated.timetuple())
+        if invalidated.tzinfo is None
+        else int(invalidated.timestamp())
+    )
+    iat = claims.get("iat")
+    return isinstance(iat, int) and iat >= inv_ts
+
+
+def _bad_refresh() -> HTTPException:
+    return HTTPException(
+        status_code=401,
+        detail={"code": "bad_refresh_token", "message": "Invalid or expired refresh token"},
+    )
+
+
 @router.post("/auth/logout", status_code=204, responses={**AUTH_GUARD_RESPONSES, **coded(503)})
-def logout(app_ctx: Ctx, request: Request, user: CurrentUser) -> Response:
+def logout(
+    app_ctx: Ctx,
+    request: Request,
+    user: CurrentUser,
+    payload: LogoutRequest | None = None,
+) -> Response:
     """Retire the caller's token server-side (AUD-B-04).
 
     Clearing client storage is not revocation: the bearer token stays valid
@@ -453,22 +645,58 @@ def logout(app_ctx: Ctx, request: Request, user: CurrentUser) -> Response:
     claims = getattr(request.state, "jwt_claims", None) or {}
     jti = claims.get("jti")
     if isinstance(jti, str) and jti:
-        try:
-            remaining = int(claims.get("exp", 0)) - int(datetime.now(UTC).timestamp())
-        except (TypeError, ValueError):
-            remaining = app_ctx.settings.jwt_expire_minutes * 60
-        try:
-            app_ctx.cache.set_json_strict(_REVOKED_JTI_KEY_PREFIX + jti, True, max(1, remaining))
-        except CacheUnavailable as exc:
-            raise revocation_store_unavailable() from exc
+        _revoke_jti(app_ctx, jti, claims, ttl_fallback=app_ctx.settings.jwt_expire_minutes * 60)
+    # B-02: a client that holds the refresh token returns it here, so the
+    # session cannot be resumed from it either. Best-effort validation: a
+    # malformed token is ignored (the access-token revocation above already
+    # landed), and only a VALID token's jti names a key that could matter.
+    if payload is not None and payload.refresh_token:
+        _retire_presented_refresh_token(app_ctx, payload.refresh_token, claims)
     # Structured, id-free: the deny-list entry already records the decision,
     # and a raw user id in a log line is exactly what AUD-HI-18 is removing.
     json_log(logger, logging.INFO, "logout_token_revoked", jti=jti is not None)
     return Response(status_code=204)
 
 
-@router.post("/auth/forgot", status_code=202)
-def forgot_password(app_ctx: Ctx, payload: ForgotPasswordRequest, db: DbSession) -> dict:
+def _revoke_jti(app_ctx: Ctx, jti: str, claims: dict, *, ttl_fallback: int) -> None:
+    """Deny-list one jti for its remaining life (strict: 503 when unreachable)."""
+    try:
+        remaining = int(claims.get("exp", 0)) - int(datetime.now(UTC).timestamp())
+    except (TypeError, ValueError):
+        remaining = ttl_fallback
+    try:
+        app_ctx.cache.set_json_strict(_REVOKED_JTI_KEY_PREFIX + jti, True, max(1, remaining))
+    except CacheUnavailable as exc:
+        raise revocation_store_unavailable() from exc
+
+
+def _retire_presented_refresh_token(app_ctx: Ctx, refresh_token: str, claims: dict) -> None:
+    """Deny-list a valid, same-subject refresh token presented at logout."""
+    try:
+        refresh_claims = decode_token(refresh_token, settings=app_ctx.settings)
+    except pyjwt.PyJWTError:
+        return
+    refresh_jti = refresh_claims.get("jti")
+    if (
+        refresh_claims.get("typ") != REFRESH_TOKEN_TYP
+        or str(refresh_claims.get("sub")) != str(claims.get("sub"))
+        or not isinstance(refresh_jti, str)
+        or not refresh_jti
+    ):
+        return
+    _revoke_jti(
+        app_ctx,
+        refresh_jti,
+        refresh_claims,
+        ttl_fallback=app_ctx.settings.jwt_refresh_expire_days * 86400,
+    )
+    json_log(logger, logging.INFO, "logout_refresh_token_revoked")
+
+
+@router.post("/auth/forgot", status_code=202, response_model=StatusAcceptedOut)
+def forgot_password(
+    app_ctx: Ctx, payload: ForgotPasswordRequest, db: DbSession
+) -> StatusAcceptedOut:
     """Start a password reset.
 
     Always returns 202 with a generic body so attackers cannot enumerate
@@ -478,7 +706,7 @@ def forgot_password(app_ctx: Ctx, payload: ForgotPasswordRequest, db: DbSession)
     email = payload.email.strip().lower()
     user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if user is None:
-        return {"status": "accepted"}
+        return StatusAcceptedOut(status="accepted")
 
     now = datetime.now(UTC).replace(tzinfo=None)
     pending = (
@@ -521,11 +749,13 @@ def forgot_password(app_ctx: Ctx, payload: ForgotPasswordRequest, db: DbSession)
             # Non-production convenience: the only place the raw token is
             # ever logged; never emitted when ENV=production.
             json_log_secret(logger, logging.INFO, "password_reset_token_console", token=token)
-    return {"status": "accepted"}
+    return StatusAcceptedOut(status="accepted")
 
 
-@router.post("/auth/reset", response_model=TokenResponse, responses=message(400))
-def reset_password(app_ctx: Ctx, payload: ResetPasswordRequest, db: DbSession) -> TokenResponse:
+@router.post("/auth/reset", response_model=SessionTokenResponse, responses=message(400))
+def reset_password(
+    app_ctx: Ctx, payload: ResetPasswordRequest, db: DbSession
+) -> SessionTokenResponse:
     now = datetime.now(UTC).replace(tzinfo=None)
     # Compare-and-set so a reset token cannot be redeemed twice under
     # concurrency: both a second password write and a token-epoch rotation
@@ -552,17 +782,17 @@ def reset_password(app_ctx: Ctx, payload: ResetPasswordRequest, db: DbSession) -
     # (PyJWT rejects future iat, so the boundary is second-precision).
     user.sessions_invalidated_at = datetime.now(UTC).replace(tzinfo=None)
     db.commit()
-    return TokenResponse(access_token=create_access_token(user, settings=app_ctx.settings))
+    return _issue_session(app_ctx, user)
 
 
 @router.post(
     "/auth/change-password",
-    response_model=TokenResponse,
+    response_model=SessionTokenResponse,
     responses={**AUTH_GUARD_RESPONSES, **message(400), **coded(409)},
 )
 def change_password(
     app_ctx: Ctx, payload: ChangePasswordRequest, db: DbSession, user: CurrentUser
-) -> TokenResponse:
+) -> SessionTokenResponse:
     if not verify_password(payload.current_password, user.password_hash):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     if payload.current_password == payload.new_password:
@@ -592,7 +822,7 @@ def change_password(
     ).scalars():
         reset.used_at = now
     db.commit()
-    return TokenResponse(access_token=create_access_token(user, settings=app_ctx.settings))
+    return _issue_session(app_ctx, user)
 
 
 # --- AUTH-001: TOTP multi-factor authentication -------------------------------
@@ -608,10 +838,12 @@ def mfa_enroll(app_ctx: Ctx, user: CurrentUser) -> MfaEnrollOut:
 
 @router.post(
     "/auth/mfa/verify",
-    response_model=dict,
+    response_model=MfaEnabledOut,
     responses={**AUTH_GUARD_RESPONSES, **message(409)},
 )
-def mfa_verify(app_ctx: Ctx, payload: MfaVerifyIn, db: DbSession, user: CurrentUser) -> dict:
+def mfa_verify(
+    app_ctx: Ctx, payload: MfaVerifyIn, db: DbSession, user: CurrentUser
+) -> MfaEnabledOut:
     if user.totp_secret:
         raise HTTPException(status_code=409, detail="MFA is already enabled")
     if not verify_code(payload.secret, payload.code):
@@ -621,26 +853,28 @@ def mfa_verify(app_ctx: Ctx, payload: MfaVerifyIn, db: DbSession, user: CurrentU
         )
     user.totp_secret = payload.secret
     db.commit()
-    return {"enabled": True}
+    return MfaEnabledOut(enabled=True)
 
 
 @router.post(
     "/auth/mfa/disable",
-    response_model=dict,
+    response_model=MfaDisabledOut,
     responses={**AUTH_GUARD_RESPONSES, **message(409)},
 )
-def mfa_disable(app_ctx: Ctx, payload: MfaDisableIn, db: DbSession, user: CurrentUser) -> dict:
+def mfa_disable(
+    app_ctx: Ctx, payload: MfaDisableIn, db: DbSession, user: CurrentUser
+) -> MfaDisabledOut:
     if not user.totp_secret:
         raise HTTPException(status_code=409, detail="MFA is not enabled")
     if not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Current password is incorrect")
     user.totp_secret = None
     db.commit()
-    return {"disabled": True}
+    return MfaDisabledOut(disabled=True)
 
 
-@router.post("/auth/mfa/challenge", response_model=TokenResponse, responses=coded(401))
-def mfa_challenge(app_ctx: Ctx, payload: MfaChallengeIn, db: DbSession) -> TokenResponse:
+@router.post("/auth/mfa/challenge", response_model=SessionTokenResponse, responses=coded(401))
+def mfa_challenge(app_ctx: Ctx, payload: MfaChallengeIn, db: DbSession) -> SessionTokenResponse:
     try:
         claims = decode_token(payload.mfa_token, settings=app_ctx.settings)
         user_id = int(claims["sub"])
@@ -683,5 +917,4 @@ def mfa_challenge(app_ctx: Ctx, payload: MfaChallengeIn, db: DbSession) -> Token
     # mistyped code does not cost the user their login.
     if isinstance(jti, str):
         _burn_mfa_token(app_ctx, jti, claims)
-    token = create_access_token(user, settings=app_ctx.settings)
-    return TokenResponse(access_token=token, must_change_password=user.must_change_password)
+    return _issue_session(app_ctx, user)

@@ -10,7 +10,7 @@ python scripts/gen_api_docs.py          # regenerate this file
 python scripts/gen_api_docs.py --check  # fail when it has drifted
 ```
 
-Schema: OpenAPI **3.1.0** · API version **0.9.2** · 135 operations across 117 paths (123 require authentication).
+Schema: OpenAPI **3.1.0** · API version **0.9.2** · 137 operations across 119 paths (124 require authentication).
 
 Interactive documentation (`/docs`, `/redoc`) and the machine-readable schema (`/openapi.json`) are served **outside production only**; a production deployment disables all three (`main.create_app`).
 
@@ -45,6 +45,7 @@ Three wire shapes, all of them declared in `routers/_error_contract.py`:
 | `bad_credentials` | 401 | code, message | Incorrect email or password |
 | `bad_mfa_code` | 401 | code, message | Invalid authenticator code |
 | `bad_mfa_token` | 401 | code, message | Not an MFA step-up token |
+| `bad_refresh_token` | 401 | code, message | Invalid or expired refresh token |
 | `class_level_required` | 409 | code, message | class_level is required when role is 'student' |
 | `code_used` | 409 | code, message | Invite already used |
 | `consent_not_accepted` | 400 | code, message | acceptance required |
@@ -58,13 +59,16 @@ Three wire shapes, all of them declared in `routers/_error_contract.py`:
 | `empty_roster` | 422 | code, message | Classroom has no students yet |
 | `feedback_not_found` | 404 | code, message | Feedback not found |
 | `guardian_consent_required` | 409 | code, message | guardian_consent is required when role is 'student' |
+| `idempotency_in_progress` | 409 | code, message | A request with this Idempotency-Key is already being processed; retry shortly |
 | `image_invalid` | 422 | code, message | Unsupported image mime type |
 | `image_type_mismatch` | 422 | code, message | Image content does not match the declared mime type |
 | `impersonation_forbidden` | 403 | code, message | admins cannot be impersonated |
+| `impersonation_readonly` | 403 | code, message | An impersonation session cannot change credentials or delete data |
 | `index_unavailable` | 503 | code, message | Curriculum index unavailable |
 | `internal_error` | 500 | code, message | An unexpected error occurred |
 | `invalid_code` | 404 | code, message | Invalid invite code |
 | `invalid_explanation_style` | 422 | code, message | explanation_style must be simple\|standard\|detailed |
+| `invalid_idempotency_key` | 400 | code, message | Idempotency-Key must be 8-255 characters |
 | `invalid_invite` | 400 | code, message | Invalid or expired invite code |
 | `invalid_subject_focus` | 422 | code, message | subject_focus must be a 1-60 character string or null to clear |
 | `invalid_token` | 400 | code, message | Invalid or expired verification code |
@@ -82,6 +86,7 @@ Three wire shapes, all of them declared in `routers/_error_contract.py`:
 | `other_school` | 403 | code, message | Student is outside your school |
 | `password_too_common` | 400 | code, message | That password is too common. Choose something harder to guess. |
 | `password_unchanged` | 409 | code, message | New password must differ from the current one |
+| `precondition_failed` | 412 | code, message | The resource changed since you read it; refetch and retry |
 | `provider_unavailable` | 503 | code, message | LLM provider not configured |
 | `rate_limited` | 429 | code, message | Rate limit exceeded |
 | `review_required` | 409 | code, unreviewed | (composed per call) |
@@ -158,20 +163,21 @@ Applied per client IP unless the scope column says `user` (an authenticated call
 
 | Method | Path | Auth | Summary | Request | 2xx | Errors |
 |---|---|---|---|---|---|---|
-| POST | `/auth/change-password` | bearer | Change Password | ChangePasswordRequest | 200: TokenResponse | 400, 401, 403, 409, 422, 429, 503 |
-| POST | `/auth/forgot` | none | Forgot Password | ForgotPasswordRequest | 202: object | 422, 429, 503 |
+| POST | `/auth/change-password` | bearer | Change Password | ChangePasswordRequest | 200: SessionTokenResponse | 400, 401, 403, 409, 422, 429, 503 |
+| POST | `/auth/forgot` | none | Forgot Password | ForgotPasswordRequest | 202: StatusAcceptedOut | 422, 429, 503 |
 | POST | `/auth/impersonate/exit` | bearer | Impersonate Exit | - | 204 | 401, 403, 429, 503 |
 | POST | `/auth/join-school` | none | Auth Join School | SchoolJoinIn | 201: TokenResponse | 401, 403, 404, 409, 410, 422, 429, 503 |
-| POST | `/auth/login` | none | Login | LoginRequest | 200: TokenResponse | 401, 403, 422, 429, 503 |
-| POST | `/auth/logout` | bearer | Logout | - | 204 | 401, 403, 429, 503 |
-| POST | `/auth/mfa/challenge` | none | Mfa Challenge | MfaChallengeIn | 200: TokenResponse | 401, 422, 429, 503 |
-| POST | `/auth/mfa/disable` | bearer | Mfa Disable | MfaDisableIn | 200: object | 401, 403, 409, 422, 429, 503 |
+| POST | `/auth/login` | none | Login | LoginRequest | 200: SessionTokenResponse | 401, 403, 422, 429, 503 |
+| POST | `/auth/logout` | bearer | Logout | LogoutRequest | null | 204 | 401, 403, 422, 429, 503 |
+| POST | `/auth/mfa/challenge` | none | Mfa Challenge | MfaChallengeIn | 200: SessionTokenResponse | 401, 422, 429, 503 |
+| POST | `/auth/mfa/disable` | bearer | Mfa Disable | MfaDisableIn | 200: MfaDisabledOut | 401, 403, 409, 422, 429, 503 |
 | POST | `/auth/mfa/enroll` | bearer | Mfa Enroll | - | 200: MfaEnrollOut | 401, 403, 429, 503 |
-| POST | `/auth/mfa/verify` | bearer | Mfa Verify | MfaVerifyIn | 200: object | 401, 403, 409, 422, 429, 503 |
+| POST | `/auth/mfa/verify` | bearer | Mfa Verify | MfaVerifyIn | 200: MfaEnabledOut | 401, 403, 409, 422, 429, 503 |
+| POST | `/auth/refresh` | none | Refresh Session | RefreshRequest | 200: SessionTokenResponse | 401, 422, 429, 503 |
 | POST | `/auth/register` | none | Register | RegisterRequest | 201: RegisterResponse | 409, 422, 429, 503 |
-| POST | `/auth/resend-verification` | none | Resend Verification | ResendVerificationRequest | null | 202: object | 422, 429, 503 |
-| POST | `/auth/reset` | none | Reset Password | ResetPasswordRequest | 200: TokenResponse | 400, 422, 429, 503 |
-| POST | `/auth/verify-email` | none | Verify Email | VerifyEmailRequest | 200: TokenResponse | 400, 422, 429, 503 |
+| POST | `/auth/resend-verification` | none | Resend Verification | ResendVerificationRequest | null | 202: StatusAcceptedOut | 422, 429, 503 |
+| POST | `/auth/reset` | none | Reset Password | ResetPasswordRequest | 200: SessionTokenResponse | 400, 422, 429, 503 |
+| POST | `/auth/verify-email` | none | Verify Email | VerifyEmailRequest | 200: SessionTokenResponse | 400, 422, 429, 503 |
 
 ### dashboard
 
@@ -239,8 +245,8 @@ Applied per client IP unless the scope column says `user` (an authenticated call
 
 | Method | Path | Auth | Summary | Request | 2xx | Errors |
 |---|---|---|---|---|---|---|
-| POST | `/parents/link` | bearer | Parent Link | ParentLinkRequest | 201: object | 401, 403, 404, 409, 410, 422, 429, 503 |
-| POST | `/parents/link/invite` | bearer | Link Via Invite | ParentInviteLinkRequest | 201: object | 400, 401, 403, 404, 409, 422, 429, 503 |
+| POST | `/parents/link` | bearer | Parent Link | ParentLinkRequest | 201: ParentLinkOut | 401, 403, 404, 409, 410, 422, 429, 503 |
+| POST | `/parents/link/invite` | bearer | Link Via Invite | ParentInviteLinkRequest | 201: ParentLinkOut | 400, 401, 403, 404, 409, 422, 429, 503 |
 | GET | `/parents/me/children` | bearer | Parent Children | - | 200: array[StudentBrief] | 401, 403, 429, 503 |
 | GET | `/parents/me/children/{student_id}/activity` | bearer | Parent Child Activity | - | 200: ActivitySummary | 401, 403, 422, 429, 503 |
 | GET | `/parents/me/children/{student_id}/progress` | bearer | Parent Child Progress | - | 200: StudentProgress | 401, 403, 422, 429, 503 |
@@ -307,7 +313,7 @@ Applied per client IP unless the scope column says `user` (an authenticated call
 
 | Method | Path | Auth | Summary | Request | 2xx | Errors |
 |---|---|---|---|---|---|---|
-| POST | `/students/me/invite-code` | bearer | Create Parent Invite | - | 201: object | 401, 403, 429, 503 |
+| POST | `/students/me/invite-code` | bearer | Create Parent Invite | - | 201: ParentInviteCodeOut | 401, 403, 429, 503 |
 | DELETE | `/students/me/memory` | bearer | Disable My Memory | - | 200: MemoryFactsOut | 401, 403, 429, 503 |
 | GET | `/students/me/memory` | bearer | Get My Memory | - | 200: MemoryFactsOut | 401, 403, 429, 503 |
 | GET | `/students/me/prefs` | bearer | Get My Prefs | - | 200: StudentPrefsOut | 401, 403, 429, 503 |
@@ -330,6 +336,7 @@ Applied per client IP unless the scope column says `user` (an authenticated call
 | GET | `/teacher/classrooms` | bearer | Teacher List Classrooms | - | 200: array[ClassRoomOut] | 401, 403, 429, 503 |
 | POST | `/teacher/classrooms` | bearer | Teacher Create Classroom | ClassRoomCreateIn | 201: ClassRoomOut | 401, 403, 422, 429, 503 |
 | POST | `/teacher/classrooms/{room_id}/import` | bearer | Classroom Import | ClassImportIn | 200: ClassImportOut | 401, 403, 422, 429, 503 |
+| POST | `/teacher/classrooms/{room_id}/import-file` | bearer | Classroom Import File | - | 200: ClassImportOut | 401, 403, 422, 429, 503 |
 | GET | `/teacher/classrooms/{room_id}/roster` | bearer | Classroom Roster | - | 200: array[RosterEntryOut] | 401, 403, 422, 429, 503 |
 | GET | `/teacher/content` | bearer | Teacher Content Get | - | 200: TeacherContentOut | 401, 403, 422, 429, 503 |
 | PUT | `/teacher/content` | bearer | Teacher Content Edit | ChapterContentEditIn | 200: TeacherContentOut | 401, 403, 422, 429, 503 |

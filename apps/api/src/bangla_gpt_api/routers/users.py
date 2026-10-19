@@ -66,9 +66,9 @@ from .deps import (
     CurrentUser,
     DbSession,
     NonImpersonatedUser,
-    _assert_student_in_school,
     _build_me_response,
     authorize_student_access,
+    load_student_for_tenant,
 )
 
 router = APIRouter(responses=AUTH_GUARD_RESPONSES)
@@ -869,10 +869,12 @@ def post_consent_reconfirm(
             status_code=400,
             detail={"code": "consent_not_accepted", "message": "acceptance required"},
         )
-    # align implementation with policy "student or linked guardian"
-    student = db.get(Student, student_id)
-    if student is None:
-        raise HTTPException(status_code=404, detail="Student not found")
+    # align implementation with policy "student or linked guardian".
+    # B-08: the load runs through the tenant helper, so a staff caller gets
+    # the documented 403 other_school for a student of another school (the
+    # central ORM filter would otherwise hide the row and produce a bare 404
+    # before this function's own role checks run).
+    student = load_student_for_tenant(db, student_id, user)
     allowed = False
     if user.role == "student" and student.user_id == user.id:
         allowed = True
@@ -889,10 +891,8 @@ def post_consent_reconfirm(
                 allowed = True
     elif user.role in ("admin", "teacher", "school_admin"):
         # Staff support path: teacher/school_admin stay behind the school
-        # tenancy wall (same gate as GET /students/{id}/consent); admin is
+        # tenancy wall (the helper above already applied it); admin is
         # platform-wide by design.
-        if user.role != "admin":
-            _assert_student_in_school(db, user, student)
         allowed = True
     if not allowed:
         raise HTTPException(status_code=403, detail="Not allowed to access this student")

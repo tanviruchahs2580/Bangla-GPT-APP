@@ -36,8 +36,30 @@ ExplanationStyle = Literal["simple", "standard", "detailed"]
 # both bounds to one name is what stops them drifting apart again.
 MAX_QUIZ_QUESTIONS = 25
 
+# The classroom CSV import takes the roster as text; one constant bounds both
+# the JSON path (this schema) and the uploaded-file path
+# (``routers/class_import.py``), so the two cannot drift apart (H-13).
+CLASS_IMPORT_MAX_CHARS = 20_000
 
-class QuizExplainContext(BaseModel):
+
+class StrictIn(BaseModel):
+    """Base for every request body: undeclared fields are a 422, not silence.
+
+    Pydantic's default (``extra="ignore"``) silently drops unknown keys, so a
+    client typo -- or a client newer than the deployed server -- used to get a
+    200 with the field quietly discarded (H-02 / AUD-HI-004). Every model a
+    route accepts as a request body inherits this base, so the served OpenAPI
+    marks each input object ``additionalProperties: false`` and
+    ``tests/test_r3_ws3_schema_strictness.py`` holds the line for new routes.
+
+    Response models deliberately do NOT inherit this base: they are built from
+    ORM rows, where "extra" attributes are expected and ignored.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class QuizExplainContext(StrictIn):
     """quiz review context handed to the tutor for a wrong item."""
 
     question: str = Field(min_length=3, max_length=500)
@@ -47,7 +69,7 @@ class QuizExplainContext(BaseModel):
     chapter: str | None = Field(default=None, max_length=200)
 
 
-class AskRequest(BaseModel):
+class AskRequest(StrictIn):
     question: str = Field(min_length=3, max_length=1000)
     class_level: int = Field(ge=1, le=12)
     # Bounded to the columns these are written to (subject VARCHAR(60),
@@ -95,11 +117,11 @@ class AskResponse(BaseModel):
     confidence: float | None = None
 
 
-class ConversationCreate(BaseModel):
+class ConversationCreate(StrictIn):
     title: str | None = Field(default=None, max_length=120)
 
 
-class ConversationUpdate(BaseModel):
+class ConversationUpdate(StrictIn):
     """rename a conversation."""
 
     title: str = Field(min_length=1, max_length=120)
@@ -125,7 +147,7 @@ class ConversationOut(BaseModel):
     message_count: int = 0
 
 
-class ChatSendRequest(BaseModel):
+class ChatSendRequest(StrictIn):
     message: str = Field(min_length=3, max_length=1000)
     class_level: int | None = Field(default=None, ge=1, le=12)
     subject: str | None = Field(default=None, max_length=60)
@@ -160,7 +182,7 @@ class ChatMessageOut(BaseModel):
     confidence: float | None = None
 
 
-class FeedbackRequest(BaseModel):
+class FeedbackRequest(StrictIn):
     # -1 = down, +1 = up, 0 = no verdict. 0 stays valid deliberately: the field
     # is required, so it is the only way to send a comment with no thumbs
     # answer, and an aggregate that counts only -1/+1 is then correct rather
@@ -179,7 +201,7 @@ class FeedbackOut(BaseModel):
     status: Literal["recorded"]
 
 
-class AnalyticsEvent(BaseModel):
+class AnalyticsEvent(StrictIn):
     """Privacy-safe product event; logged as structured JSON, never PII."""
 
     name: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9_.]+$")
@@ -189,7 +211,7 @@ class AnalyticsEvent(BaseModel):
 _EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 
 
-class RegisterRequest(BaseModel):
+class RegisterRequest(StrictIn):
     email: str = Field(min_length=5, max_length=255, pattern=_EMAIL_PATTERN)
     password: str = Field(min_length=8, max_length=128)
     name: str = Field(min_length=2, max_length=120)
@@ -212,7 +234,7 @@ class RegisterResponse(BaseModel):
     profile_id: int
 
 
-class LoginRequest(BaseModel):
+class LoginRequest(StrictIn):
     email: str = Field(min_length=5, max_length=255)
     password: str = Field(min_length=1, max_length=128)
 
@@ -223,22 +245,22 @@ class TokenResponse(BaseModel):
     must_change_password: bool = False
 
 
-class ForgotPasswordRequest(BaseModel):
+class ForgotPasswordRequest(StrictIn):
     email: str = Field(min_length=5, max_length=255)
 
 
-class ResetPasswordRequest(BaseModel):
+class ResetPasswordRequest(StrictIn):
     token: str = Field(min_length=16, max_length=256)
     new_password: str = Field(min_length=8, max_length=128)
 
 
-class VerifyEmailRequest(BaseModel):
+class VerifyEmailRequest(StrictIn):
     """Verification code only — no password fields (V1 fix)."""
 
     token: str = Field(min_length=16, max_length=256)
 
 
-class ResendVerificationRequest(BaseModel):
+class ResendVerificationRequest(StrictIn):
     """Unauthenticated resend for users stuck at login with email_unverified.
 
     The login endpoint issues no token for unverified accounts, so the
@@ -251,12 +273,18 @@ class ResendVerificationRequest(BaseModel):
     email: str | None = Field(default=None, min_length=5, max_length=255)
 
 
-class ChangePasswordRequest(BaseModel):
+class ChangePasswordRequest(StrictIn):
     current_password: str = Field(min_length=1, max_length=128)
     new_password: str = Field(min_length=8, max_length=128)
 
 
 # --- AUTH-001: TOTP multi-factor authentication -------------------------------
+class StatusAcceptedOut(BaseModel):
+    """Generic 202 body for the anti-enumeration endpoints (H-02: was ``dict``)."""
+
+    status: Literal["accepted"]
+
+
 class MfaEnrollOut(BaseModel):
     """Fresh (unstored) secret + authenticator URI. Nothing is enabled yet."""
 
@@ -264,16 +292,28 @@ class MfaEnrollOut(BaseModel):
     otpauth_uri: str
 
 
-class MfaVerifyIn(BaseModel):
+class MfaDisabledOut(BaseModel):
+    """Result of a verified MFA disable (H-02: typed, was ``dict``)."""
+
+    disabled: Literal[True]
+
+
+class MfaEnabledOut(BaseModel):
+    """Result of a verified MFA enrollment (H-02: typed, was ``dict``)."""
+
+    enabled: Literal[True]
+
+
+class MfaVerifyIn(StrictIn):
     secret: str = Field(min_length=16, max_length=64)
     code: str = Field(min_length=6, max_length=6)
 
 
-class MfaDisableIn(BaseModel):
+class MfaDisableIn(StrictIn):
     password: str = Field(min_length=1, max_length=128)
 
 
-class MfaChallengeIn(BaseModel):
+class MfaChallengeIn(StrictIn):
     mfa_token: str = Field(min_length=16, max_length=2048)
     code: str = Field(min_length=6, max_length=6)
 
@@ -332,7 +372,7 @@ class ChapterStat(BaseModel):
     accuracy: float
 
 
-class RevisionReviewIn(BaseModel):
+class RevisionReviewIn(StrictIn):
     """one revision attempt; -1 means 'I did not answer'."""
 
     chosen: int = Field(ge=-1, le=7)
@@ -396,7 +436,7 @@ class ConsentStatusOut(BaseModel):
     needs_reconfirm: bool
 
 
-class ConsentReconfirmIn(BaseModel):
+class ConsentReconfirmIn(StrictIn):
     accepted: bool
 
 
@@ -416,7 +456,7 @@ class ClassAnalytics(BaseModel):
     students_detail: list[StudentBrief]
 
 
-class QuizStartRequest(BaseModel):
+class QuizStartRequest(StrictIn):
     student_id: int
     class_level: int | None = Field(default=None, ge=1, le=12)
     subject: str | None = Field(default=None, max_length=60)
@@ -449,7 +489,7 @@ class QuizStarted(BaseModel):
     reteach: list[ReteachCardOut] = Field(default_factory=list)
 
 
-class QuizSubmitRequest(BaseModel):
+class QuizSubmitRequest(StrictIn):
     # Bounded by the same constant assignments generate from; see
     # MAX_QUIZ_QUESTIONS. A lower cap here makes an assignment unsubmittable.
     answers: list[int] = Field(min_length=1, max_length=MAX_QUIZ_QUESTIONS)
@@ -473,7 +513,7 @@ class QuizResult(BaseModel):
     reteach: list[ReteachCardOut] = Field(default_factory=list)
 
 
-class RoleUpdateRequest(BaseModel):
+class RoleUpdateRequest(StrictIn):
     # school_admin is a real role value now (plain string column, so
     # the migration stays green -- value round-trip is covered by tests).
     role: Literal["student", "teacher", "parent", "admin", "school_admin"]
@@ -506,7 +546,7 @@ class AdminAuditPage(BaseModel):
     offset: int
 
 
-class ImpersonateRequest(BaseModel):
+class ImpersonateRequest(StrictIn):
     reason: str = Field(min_length=3, max_length=200)
 
 
@@ -517,7 +557,7 @@ class ImpersonateOut(BaseModel):
     expires_in_min: int
 
 
-class TriageUpdate(BaseModel):
+class TriageUpdate(StrictIn):
     """feedback triage queue transition (admin-only).
 
     Note is free text written BY the admin, so its length is bounded and
@@ -581,11 +621,11 @@ class AdminOverview(BaseModel):
     avg_score_pct: float | None
 
 
-class ParentLinkRequest(BaseModel):
+class ParentLinkRequest(StrictIn):
     student_id: int = Field(ge=1)
 
 
-class ParentInviteLinkRequest(BaseModel):
+class ParentInviteLinkRequest(StrictIn):
     code: str = Field(min_length=8, max_length=128)
 
 
@@ -633,7 +673,7 @@ class DashboardSummary(BaseModel):
     progress: StudentProgress | None = None
 
 
-class ChapterProgressIn(BaseModel):
+class ChapterProgressIn(StrictIn):
     subject: str = Field(min_length=1, max_length=60)
     chapter: str = Field(min_length=1, max_length=200)
     class_level: int = Field(ge=1, le=12)
@@ -661,7 +701,7 @@ class ClassRoomOut(BaseModel):
     student_count: int
 
 
-class ClassRoomCreateIn(BaseModel):
+class ClassRoomCreateIn(StrictIn):
     class_level: int = Field(ge=1, le=12)
     section: str = Field(default="GEN", min_length=1, max_length=8)
 
@@ -678,10 +718,10 @@ class RosterEntryOut(BaseModel):
     avg_score_pct: float | None = None
 
 
-class ClassImportIn(BaseModel):
+class ClassImportIn(StrictIn):
     """pasted CSV text ('name,email' header) for bulk enrollment."""
 
-    csv_text: str = Field(min_length=1, max_length=20000)
+    csv_text: str = Field(min_length=1, max_length=CLASS_IMPORT_MAX_CHARS)
 
 
 class ClassImportRowOut(BaseModel):
@@ -697,7 +737,7 @@ class ClassImportOut(BaseModel):
     rows: list[ClassImportRowOut]
 
 
-class ChapterSections(BaseModel):
+class ChapterSections(StrictIn):
     """the seven generated sections of one chapter."""
 
     summary: str = Field(min_length=1, max_length=4000)
@@ -709,7 +749,7 @@ class ChapterSections(BaseModel):
     exam_tips: list[str] = Field(min_length=1, max_length=20)
 
 
-class ChapterContentKey(BaseModel):
+class ChapterContentKey(StrictIn):
     """identifies one chapter across the version chain."""
 
     class_level: int = Field(ge=1, le=12)
@@ -735,7 +775,7 @@ class ChapterContentVersionOut(ChapterContentKey):
     created_by: int | None = None
 
 
-class DifficultySplit(BaseModel):
+class DifficultySplit(StrictIn):
     """target share of easy/medium/hard questions; must sum to 100."""
 
     easy: int = Field(ge=0, le=100)
@@ -749,7 +789,7 @@ class DifficultySplit(BaseModel):
         return self
 
 
-class QPDraftIn(BaseModel):
+class QPDraftIn(StrictIn):
     """teacher request for a question-paper draft."""
 
     class_level: int = Field(ge=1, le=12)
@@ -789,7 +829,7 @@ class QPOut(BaseModel):
     created_at: datetime | None = None
 
 
-class QPReviewDecision(BaseModel):
+class QPReviewDecision(StrictIn):
     ref: str
     action: Literal["accept", "edit"]
     text: str | None = Field(default=None, min_length=1, max_length=2000)
@@ -803,11 +843,11 @@ class QPReviewDecision(BaseModel):
         return self
 
 
-class QPReviewIn(BaseModel):
+class QPReviewIn(StrictIn):
     decisions: list[QPReviewDecision] = Field(min_length=1)
 
 
-class QPReplaceIn(BaseModel):
+class QPReplaceIn(StrictIn):
     ref: str
     chapter: str | None = Field(default=None, min_length=1, max_length=200)
     difficulty: Literal["easy", "medium", "hard"] | None = None
@@ -816,7 +856,7 @@ class QPReplaceIn(BaseModel):
 # --- short tests (class + chapter ultra-fast classroom-wide test) -----
 
 
-class ShortTestIn(BaseModel):
+class ShortTestIn(StrictIn):
     classroom_id: int
     subject: str = Field(min_length=1, max_length=60)
     chapter: str = Field(min_length=1, max_length=200)
@@ -854,7 +894,7 @@ class ShortTestMineOut(BaseModel):
 # --- lesson plan copilot (8-section editable/printable plan) -----------
 
 
-class LessonPlanIn(BaseModel):
+class LessonPlanIn(StrictIn):
     class_level: int = Field(ge=1, le=12)
     subject: str = Field(min_length=1, max_length=60)
     chapter: str = Field(min_length=1, max_length=200)
@@ -903,7 +943,7 @@ class WeakMatrixOut(BaseModel):
     students: list[WeakStudent]
 
 
-class SupportPlanIn(BaseModel):
+class SupportPlanIn(StrictIn):
     student_id: int
 
 
@@ -917,7 +957,7 @@ class SupportPlanOut(BaseModel):
     created_at: datetime | None = None
 
 
-class AssignmentIn(BaseModel):
+class AssignmentIn(StrictIn):
     """pick students (single class), one shared quiz, a due date."""
 
     student_ids: list[int] = Field(min_length=1, max_length=200)
@@ -964,7 +1004,7 @@ class AssignmentMineOut(BaseModel):
 # --- school onboarding (admin -> school code -> staff invite) ---------
 
 
-class SchoolCreateIn(BaseModel):
+class SchoolCreateIn(StrictIn):
     name: str = Field(min_length=2, max_length=200)
 
 
@@ -975,7 +1015,7 @@ class SchoolOut(BaseModel):
     created_at: datetime
 
 
-class SchoolInviteIn(BaseModel):
+class SchoolInviteIn(StrictIn):
     role: Literal["teacher", "school_admin"] = "teacher"
 
 
@@ -988,7 +1028,7 @@ class SchoolInviteOut(BaseModel):
     expires_at: datetime
 
 
-class SchoolJoinIn(BaseModel):
+class SchoolJoinIn(StrictIn):
     """Redeem a school invite code to create the staff account."""
 
     invite_code: str = Field(min_length=4, max_length=64)
@@ -1222,7 +1262,7 @@ class NoteSourceRef(BaseModel):
         return {k: v for k, v in data.items() if v is not None}
 
 
-class SavedNoteIn(BaseModel):
+class SavedNoteIn(StrictIn):
     title: str | None = Field(default=None, max_length=200)
     body: str = Field(min_length=1, max_length=20000)
     source: Literal["tutor", "chapter", "other"] = "other"
@@ -1263,7 +1303,7 @@ class NotificationListOut(BaseModel):
 AI_JOB_KINDS: tuple[str, ...] = ("worksheet", "answer_key", "homework", "rubric", "lesson_plan")
 
 
-class AiJobIn(BaseModel):
+class AiJobIn(StrictIn):
     """Kind is NOT whitelisted at the door: unknown kinds are accepted into a
     queued job and fail in the runner (visible ``failed`` state + error is
     better product behavior than a bare 422 on a long-running API)."""
@@ -1302,7 +1342,7 @@ class WorkloadOut(BaseModel):
 # module because ChatSendRequest, defined much earlier, references them.)
 
 
-class ChatImageIn(BaseModel):
+class ChatImageIn(StrictIn):
     """Optional inline image on a chat turn. Validated in the route:
     mime must be in _IMAGE_MIME_ALLOWED, the base64 payload must decode and
     the decoded bytes must stay <= _IMAGE_MAX_BYTES; violations answer with
@@ -1441,12 +1481,27 @@ class AdminAiQualityOut(BaseModel):
 # --- student memory / learning preferences --------------------------------
 
 
+class ParentLinkOut(BaseModel):
+    """Result of a successful parent↔student link (H-02: typed, was ``dict``)."""
+
+    linked: bool
+    parent_id: int
+    student_id: int
+
+
+class ParentInviteCodeOut(BaseModel):
+    """A freshly generated single-use invite code (H-02: typed, was ``dict``)."""
+
+    code: str
+    expires_in_minutes: int
+
+
 class StudentPrefsOut(BaseModel):
     memory_enabled: bool
     learning_prefs: dict[str, Any] = {}
 
 
-class StudentPrefsPatch(BaseModel):
+class StudentPrefsPatch(StrictIn):
     """Partial update; learning_prefs keys are whitelisted in the route
     (explanation_style in EXPLANATION_STYLES, subject_focus a 1-60 character
     string, or null to clear it)."""

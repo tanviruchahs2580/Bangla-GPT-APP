@@ -7,9 +7,9 @@ Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 import asyncio
 import logging
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import func, select
 
 from bangla_gpt_api import ai_jobs, tracing
@@ -26,6 +26,7 @@ from bangla_gpt_api.db.models import (
 from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.metrics import AI_JOBS_TOTAL
 from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES
+from bangla_gpt_api.routers._pagination import ArchivePage
 from bangla_gpt_api.schemas import (
     AiJobIn,
     AiJobOut,
@@ -105,15 +106,14 @@ def create_note(payload: SavedNoteIn, db: DbSession, user: CurrentUser) -> Saved
 
 
 @router.get("/notes", response_model=list[SavedNoteOut])
-def list_notes(
-    db: DbSession, user: CurrentUser, limit: Annotated[int, Query(ge=1, le=100)] = 100
-) -> list[SavedNoteOut]:
+def list_notes(db: DbSession, user: CurrentUser, page: ArchivePage) -> list[SavedNoteOut]:
     rows = (
         db.execute(
             select(SavedNote)
             .where(SavedNote.user_id == user.id)
             .order_by(SavedNote.created_at.desc(), SavedNote.id.desc())
-            .limit(limit)
+            .offset(page.offset)
+            .limit(page.limit)
         )
         .scalars()
         .all()

@@ -9,9 +9,8 @@ import random
 import time
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -30,6 +29,7 @@ from bangla_gpt_api.db.models import (
 )
 from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES
+from bangla_gpt_api.routers._pagination import TaskListPage, WindowPage
 from bangla_gpt_api.schemas import (
     AssignmentIn,
     AssignmentMineOut,
@@ -69,8 +69,8 @@ from .deps import (
     DbSession,
     TeacherOrAdminUser,
     _assert_room_in_school,
-    _assert_student_in_school,
     _tenant_school_id,
+    load_student_for_tenant,
 )
 
 router = APIRouter(responses=AUTH_GUARD_RESPONSES)
@@ -211,9 +211,8 @@ def teacher_shorttest_create(
 def teacher_shorttest_list(
     db: DbSession,
     teacher: TeacherOrAdminUser,
+    page: TaskListPage,
     classroom_id: int | None = None,
-    limit: Annotated[int, Query(ge=1, le=200)] = 100,
-    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[ShortTestOut]:
     q = select(ShortTest)
     if teacher.role != "admin":
@@ -223,8 +222,8 @@ def teacher_shorttest_list(
     rows = (
         db.execute(
             q.order_by(ShortTest.created_at.desc(), ShortTest.id.desc())
-            .offset(offset)
-            .limit(limit)  # page the list (payload carries questions)
+            .offset(page.offset)
+            .limit(page.limit)  # page the list (payload carries questions)
         )
         .scalars()
         .all()
@@ -236,7 +235,7 @@ def teacher_shorttest_list(
 def shorttests_mine(
     db: DbSession,
     user: CurrentUser,
-    limit: Annotated[int, Query(ge=1, le=200)] = 100,
+    page: TaskListPage,
 ) -> list[ShortTestMineOut]:
     """Assigned short tests for the signed-in student (duration soft:
     ``expired`` is advisory; submitting after it is still allowed so no
@@ -258,7 +257,8 @@ def shorttests_mine(
             select(ShortTest)
             .where(ShortTest.classroom_id.in_(room_ids))
             .order_by(ShortTest.created_at.desc(), ShortTest.id.desc())
-            .limit(limit)  # cap per-request payload
+            .offset(page.offset)
+            .limit(page.limit)  # cap per-request payload
         )
         .scalars()
         .all()
@@ -492,11 +492,10 @@ def teacher_create_support_plan(
     payload: SupportPlanIn, db: DbSession, teacher: TeacherOrAdminUser
 ) -> SupportPlanOut:
     """Rule-based 3-week plan over the student's three weakest concepts."""
-    student = db.get(Student, payload.student_id)
-    if student is None:
-        raise HTTPException(status_code=404, detail="student not found")
-    # tenancy: plans can only be opened for own-school students.
-    _assert_student_in_school(db, teacher, student)
+    # tenancy: plans can only be opened for own-school students (B-08: load
+    # and check live in one central helper, so the ORM filter cannot turn the
+    # documented 403 other_school into a bare 404).
+    student = load_student_for_tenant(db, payload.student_id, teacher)
     cells = _answer_cells(db, [student.id]).get(student.id, {})
     scored = sorted(
         (
@@ -600,15 +599,17 @@ def teacher_assignment_create(
         )
     students: list[Student] = []
     for sid in dict.fromkeys(payload.student_ids):  # dedupe, keep order
-        student = db.get(Student, sid)
-        if student is None:
-            raise HTTPException(
-                status_code=404,
-                detail={"code": "unknown_student", "message": f"Student {sid} not found"},
-            )
-        # tenancy: never open an attempt for a student outside the
-        # actor's school (IDOR guard; no-op for school-less teachers/admins).
-        _assert_student_in_school(db, teacher, student)
+        # tenancy: never open an attempt for a student outside the actor's
+        # school (B-08: the helper loads through the ORM filter on purpose
+        # and applies the same check, so the refusal stays 403 other_school
+        # while an unknown id keeps the coded 404).
+        student = load_student_for_tenant(
+            db,
+            sid,
+            teacher,
+            missing_code="unknown_student",
+            missing_message=f"Student {sid} not found",
+        )
         students.append(student)
     levels = {st.class_level for st in students}
     if len(levels) > 1:
@@ -698,8 +699,7 @@ def teacher_assignment_create(
 def teacher_assignment_list(
     db: DbSession,
     teacher: TeacherOrAdminUser,
-    limit: Annotated[int, Query(ge=1, le=200)] = 100,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    page: TaskListPage,
 ) -> list[AssignmentOut]:
     # newest-first page (was every row the teacher ever created).
     q = select(Assignment)
@@ -708,8 +708,8 @@ def teacher_assignment_list(
     rows = (
         db.execute(
             q.order_by(Assignment.created_at.desc(), Assignment.id.desc())
-            .offset(offset)
-            .limit(limit)
+            .offset(page.offset)
+            .limit(page.limit)
         )
         .scalars()
         .all()
@@ -777,15 +777,18 @@ def teacher_assignment_progress(
 def assignments_mine(
     db: DbSession,
     user: CurrentUser,
-    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+    page: WindowPage,
 ) -> list[AssignmentMineOut]:
     """Assigned quizzes for the signed-in student. Due date is soft like
     short tests: ``overdue`` is advisory, submitting still grades the work.
 
     membership lives in the attempts JSON, so the candidate window is
-    the most recent `limit` assignments (was an unbounded full-table scan),
-    and attempt rows are fetched in ONE batched query (was 1 per item).
-    A membership link table is the proper long-term fix (documented).
+    the most recent ``limit`` assignments -- scrolled by ``offset`` -- (was an
+    unbounded full-table scan), and attempt rows are fetched in ONE batched
+    query (was 1 per item). Because the membership filter runs after the
+    window slice, ``offset`` skips candidates, not results; the returned list
+    can be shorter than ``limit`` while more matches exist further back. A
+    membership link table is the proper long-term fix (documented).
     """
     if user.role != "student":
         return []
@@ -797,7 +800,8 @@ def assignments_mine(
         db.execute(
             select(Assignment)
             .order_by(Assignment.created_at.desc(), Assignment.id.desc())
-            .limit(limit)
+            .offset(page.offset)
+            .limit(page.limit)
         )
         .scalars()
         .all()

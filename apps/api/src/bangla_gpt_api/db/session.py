@@ -243,7 +243,17 @@ def make_engine(settings: Settings) -> Engine:
 
 
 def make_session_factory(engine: Engine) -> sessionmaker[Session]:
-    return sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    # B-08: every factory carries the central tenancy read filter. It is
+    # inert until a request installs a tenant on its session
+    # (routers.deps.get_current_user does), so jobs, CLIs and tests keep the
+    # unscoped behaviour they had before.
+    from bangla_gpt_api.db.tenancy import install_tenant_filter
+
+    factory: sessionmaker[Session] = sessionmaker(
+        bind=engine, autoflush=False, expire_on_commit=False
+    )
+    install_tenant_filter(factory)
+    return factory
 
 
 def init_db(engine: Engine) -> None:
