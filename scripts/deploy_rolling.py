@@ -66,17 +66,13 @@ def orchestrator(args: argparse.Namespace) -> int:
         async with httpx.AsyncClient() as client:
             print(f"gating on {args.ready_url} (timeout {args.timeout}s) ...")
             if not await wait_ready(args.ready_url, args.timeout, client):
-                print(
-                    "GATE FAILED: /ready never went green -- old release keeps serving"
-                )
+                print("GATE FAILED: /ready never went green -- old release keeps serving")
                 return 1
             print("gate green: switching upstream")
             for cmd in (args.reload_cmd, args.drain_cmd):
                 if not cmd:
                     continue
-                proc = await asyncio.to_thread(
-                    subprocess.run, cmd, shell=True, check=False
-                )
+                proc = await asyncio.to_thread(subprocess.run, cmd, shell=True, check=False)
                 if proc.returncode != 0:
                     print(f"step failed ({proc.returncode}): {cmd}")
                     return 1
@@ -98,9 +94,7 @@ class Proxy:
         self.upstream = ""
         self.server: asyncio.Server | None = None
 
-    async def handle(
-        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
-    ) -> None:
+    async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         status, body = 502, b""
         try:
             request = await reader.readuntil(b"\r\n\r\n")
@@ -157,18 +151,12 @@ def _spawn_instance(port: int, db_file: str, log_file: str) -> subprocess.Popen:
     )
 
 
-def _dump_failure(
-    label: str, proc: subprocess.Popen[bytes] | None, log_name: str
-) -> None:
+def _dump_failure(label: str, proc: subprocess.Popen[bytes] | None, log_name: str) -> None:
     rc = proc.returncode if proc is not None else None
     tail = ""
     with contextlib.suppress(OSError):
-        tail = (API_DIR / log_name).read_text(encoding="utf-8", errors="replace")[
-            -2000:
-        ]
-    print(
-        f"DEMO FAILED: {label} (rc={rc})\n--- {log_name} tail ---\n{tail}", flush=True
-    )
+        tail = (API_DIR / log_name).read_text(encoding="utf-8", errors="replace")[-2000:]
+    print(f"DEMO FAILED: {label} (rc={rc})\n--- {log_name} tail ---\n{tail}", flush=True)
 
 
 def demo(args: argparse.Namespace) -> int:
@@ -193,9 +181,7 @@ def demo(args: argparse.Namespace) -> int:
             while not switching.is_set():
                 total += 1
                 try:
-                    r = await client.get(
-                        f"http://127.0.0.1:{proxy_port}/health", timeout=5.0
-                    )
+                    r = await client.get(f"http://127.0.0.1:{proxy_port}/health", timeout=5.0)
                     if r.status_code != 200:
                         failures += 1
                 except httpx.HTTPError:
@@ -209,19 +195,13 @@ def demo(args: argparse.Namespace) -> int:
             # alongside it (runbook sequence; concurrent cold boots of two
             # instances on one SQLite file race).
             if not await wait_ready(f"http://127.0.0.1:{old_port}/ready", 90, client):
-                _dump_failure(
-                    "old release never became ready", old_proc, "_deploy_demo_old.log"
-                )
+                _dump_failure("old release never became ready", old_proc, "_deploy_demo_old.log")
                 return 1
             print("old release serving; booting new release alongside ...", flush=True)
             loaders = [asyncio.create_task(load()) for _ in range(3)]
-            new_proc = _spawn_instance(
-                new_port, "_deploy_demo.db", "_deploy_demo_new.log"
-            )
+            new_proc = _spawn_instance(new_port, "_deploy_demo.db", "_deploy_demo_new.log")
             if not await wait_ready(f"http://127.0.0.1:{new_port}/ready", 120, client):
-                _dump_failure(
-                    "new release never became ready", new_proc, "_deploy_demo_new.log"
-                )
+                _dump_failure("new release never became ready", new_proc, "_deploy_demo_new.log")
                 return 1
             # Gate green -> flip upstream atomically -> drain old. On real hosts
             # this is `caddy reload` + graceful stop; here it is one assignment.
@@ -236,9 +216,7 @@ def demo(args: argparse.Namespace) -> int:
             # Keep load running briefly against the NEW upstream.
             for _ in range(20):
                 total += 1
-                r = await client.get(
-                    f"http://127.0.0.1:{proxy_port}/health", timeout=5.0
-                )
+                r = await client.get(f"http://127.0.0.1:{proxy_port}/health", timeout=5.0)
                 if r.status_code != 200:
                     failures += 1
                 await asyncio.sleep(0.05)
@@ -269,9 +247,7 @@ def demo(args: argparse.Namespace) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument(
-        "--demo", action="store_true", help="self-contained local proof"
-    )
+    parser.add_argument("--demo", action="store_true", help="self-contained local proof")
     parser.add_argument("--ready-url", help="new instance /ready URL to gate on")
     parser.add_argument("--timeout", type=float, default=90.0)
     parser.add_argument("--reload-cmd", help="proxy upstream switch command (graceful)")
@@ -280,9 +256,7 @@ def main() -> int:
     if args.demo:
         return demo(args)
     if not args.ready_url or not args.reload_cmd:
-        parser.error(
-            "orchestrator mode needs --ready-url and --reload-cmd (or use --demo)"
-        )
+        parser.error("orchestrator mode needs --ready-url and --reload-cmd (or use --demo)")
     return orchestrator(args)
 
 

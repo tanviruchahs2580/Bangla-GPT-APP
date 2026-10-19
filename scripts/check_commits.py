@@ -79,9 +79,7 @@ def check_subject(subject: str) -> tuple[list[str], list[str]]:
         return errors, warnings
 
     if match.group("type") not in TYPES:
-        errors.append(
-            f"unknown type {match.group('type')!r} (allowed: {', '.join(TYPES)})"
-        )
+        errors.append(f"unknown type {match.group('type')!r} (allowed: {', '.join(TYPES)})")
     description = match.group("description")
     if description.lower() in JUNK_SUBJECTS:
         errors.append(f"junk description {description!r} is forbidden by CONTRIBUTING.md")

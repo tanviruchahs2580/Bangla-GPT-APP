@@ -53,8 +53,14 @@ class Journey:
         # 2. register + login + me
         r = c.post(
             "/auth/register",
-            json={"email": self.email, "password": PASS, "name": "E2E",
-                  "role": "student", "class_level": 6, "guardian_consent": True},
+            json={
+                "email": self.email,
+                "password": PASS,
+                "name": "E2E",
+                "role": "student",
+                "class_level": 6,
+                "guardian_consent": True,
+            },
         )
         self.check("register 201", r.status_code == 201, r.text[:300])
         r = c.post("/auth/login", json={"email": self.email, "password": PASS})

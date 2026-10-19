@@ -23,6 +23,13 @@ repos:
     hooks:
       - id: check-added-large-files
         args: [--maxkb=512]
+        # Visual-regression baselines are pixels, not data: Playwright compares
+        # them byte-for-byte per run, so they cannot be compressed on the fly.
+        # The directory is the one justified exception to the size cap -- 60
+        # reviewed baselines, ~16 MB total, and the six login shots run
+        # 512-762 KB because the splash backdrop is a photograph. Everything
+        # else stays capped at 512 KB.
+        exclude: ^apps/web/e2e/__screenshots__/
       - id: check-merge-conflict
       - id: check-yaml
       - id: end-of-file-fixer
@@ -46,7 +53,11 @@ repos:
         args: [--fix, --exit-non-zero-on-fix]
         files: ^(apps/api/(src|tests|scripts)/|scripts/)
       - id: ruff-format
-        files: ^apps/api/(src|tests|scripts)/
+        # D-01: the formatter used to cover apps/api only, so the guard scripts
+        # under scripts/ were never format-checked even though the ruff *lint*
+        # hook above already ran over them. Same file set as that hook now; the
+        # root ruff.toml supplies the line length they are formatted to.
+        files: ^(apps/api/(src|tests|scripts)/|scripts/)
 
   # F-13: commit-message lint in front of the commit, not after the push. The
   # hook is local (not a published repo) because it calls the repository's own

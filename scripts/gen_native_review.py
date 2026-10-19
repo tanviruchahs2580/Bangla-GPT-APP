@@ -35,14 +35,12 @@ WEB = REPO / "apps" / "web" / "src"
 API = REPO / "apps" / "api" / "src" / "bangla_gpt_api"
 OUT = REPO / "docs" / "native-review" / "ui-strings.md"
 
-BANGLA = re.compile("[\u0980-\u09FF]")
+BANGLA = re.compile("[\u0980-\u09ff]")
 DICT_ENTRY = re.compile(
     r'^\s{2}([A-Za-z_][A-Za-z0-9_]*):\s*"((?:[^"\\]|\\.)*)",?\s*$', re.MULTILINE
 )
 TS_STRING = re.compile(r'"[^"\n]*[\u0980-\u09FF][^"\n]*"')
-PY_STRING = re.compile(
-    "[\"'][^\"'\\n]*[\u0980-\u09FF][^\"'\\n]*[\"']"
-)
+PY_STRING = re.compile("[\"'][^\"'\\n]*[\u0980-\u09ff][^\"'\\n]*[\"']")
 
 HEADER = """# Native-speaker review sheet - user-facing Bangla strings
 
@@ -90,9 +88,7 @@ def dict_rows() -> list[tuple[str, str, str]]:
     for match in DICT_ENTRY.finditer(block):
         key, value = match.groups()
         lineno = base_line + block[: match.start()].count("\n")
-        rows.append(
-            (f"{path.relative_to(REPO).as_posix()}:{lineno}", key, _unescape(value))
-        )
+        rows.append((f"{path.relative_to(REPO).as_posix()}:{lineno}", key, _unescape(value)))
     return rows
 
 
@@ -111,9 +107,7 @@ def _literal_rows(path: Path, pattern: re.Pattern[str]) -> list[tuple[str, str, 
         for match in pattern.finditer(line):
             text = match.group(0)[1:-1].strip()
             if _is_copy(text):
-                rows.append(
-                    (f"{path.relative_to(REPO).as_posix()}:{lineno}", "(literal)", text)
-                )
+                rows.append((f"{path.relative_to(REPO).as_posix()}:{lineno}", "(literal)", text))
     return rows
 
 
@@ -137,8 +131,7 @@ def build() -> str:
         body.append(f"| {i} | {loc} | {key} | {safe} | |")
     body.append("")
     body.append(
-        f"Total rows: {len(rows) + len(extra)} "
-        f"({len(rows)} dictionary, {len(extra)} literals)."
+        f"Total rows: {len(rows) + len(extra)} ({len(rows)} dictionary, {len(extra)} literals)."
     )
     body.append("")
     return "\n".join(body)

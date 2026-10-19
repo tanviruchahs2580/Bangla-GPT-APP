@@ -1,0 +1,25 @@
+# Ruff configuration for the repository-level Python surface (D-01).
+#
+# apps/api/pyproject.toml holds the rule set for the API package, its tests and
+# its own scripts. Everything else that is Python -- the guard scripts under
+# scripts/, the report tooling -- sits above that package and had no
+# configuration at all, so `ruff check` fell back to ruff's built-in defaults
+# and nothing ever ran the *formatter* over it (the pre-commit ruff-format hook
+# was scoped to apps/api). This file closes that hole: one documented rule set
+# for the root surface, matching the API package's line length so the two trees
+# read the same way.
+#
+# Deliberately minimal. Adding rule families here would be a new gate over
+# scripts/ that has to be satisfied at the same time as the rest of the
+# quality work; the families that matter for these files (unused imports and
+# undefined names) are in ruff's defaults and were already enforced by the
+# pre-commit ruff hook before this file existed.
+line-length = 100
+target-version = "py311"
+src = ["scripts"]
+
+[lint]
+# E501 stays off for the same reason as in apps/api/pyproject.toml: line
+# length is the formatter's job, and re-declaring it as a lint rule only
+# creates conflicts with `ruff format`.
+ignore = ["E501"]

@@ -5,7 +5,7 @@ name: bangla-gpt-app
 #   worker      — ARQ cron worker        (add --profile worker; set JOBS_BACKEND=arq)
 #   web         — static dashboard       (add --profile web)
 #   tls         — Caddy auto-HTTPS proxy (add --profile tls WITH --profile web;
-#                 Caddy reverse-proxies web:80, so `--profile tls` alone is an
+#                 Caddy reverse-proxies web:8080, so `--profile tls` alone is an
 #                 invalid project: "caddy depends on undefined service web".
 #                 Requires DOMAIN/ACME_EMAIL)
 #   postgres    — Postgres service       (add --profile postgres)
@@ -53,7 +53,8 @@ services:
       # DATA-001: 4 MB fits the wave-2 vision contract (~2 MB base64 image
       # JSON per chat turn); smaller values 413 valid image turns.
       MAX_BODY_BYTES: ${MAX_BODY_BYTES:-4000000}
-      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-60}
+      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-15}
+      JWT_REFRESH_EXPIRE_DAYS: ${JWT_REFRESH_EXPIRE_DAYS:-14}
       PASSWORD_RESET_TOKEN_MINUTES: ${PASSWORD_RESET_TOKEN_MINUTES:-30}
       FORCE_ADMIN_PASSWORD_CHANGE: ${FORCE_ADMIN_PASSWORD_CHANGE:-true}
       RATE_LIMIT_LOGIN_PER_MINUTE: ${RATE_LIMIT_LOGIN_PER_MINUTE:-10}
@@ -79,6 +80,26 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
+      # E-18: settings .env.production.example documents and the deployment
+      # guide requires, but this list never forwarded -- so a production boot
+      # had no PII_ENC_KEY (a hard boot refusal) and no metrics gate. Every one
+      # of these is read by the API process itself.
+      PII_ENC_KEY: ${PII_ENC_KEY:-}
+      TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-true}
+      METRICS_REQUIRE_AUTH: ${METRICS_REQUIRE_AUTH:-true}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      AI_MONTHLY_BUDGET_USD: ${AI_MONTHLY_BUDGET_USD:-0}
+      AI_MONTHLY_BUDGET_USD_PER_USER: ${AI_MONTHLY_BUDGET_USD_PER_USER:-0}
+      AI_DAILY_BUDGET_USD: ${AI_DAILY_BUDGET_USD:-0}
+      AI_DAILY_BUDGET_USD_PER_SCHOOL: ${AI_DAILY_BUDGET_USD_PER_SCHOOL:-0}
+      MAX_CONCURRENT_PER_USER: ${MAX_CONCURRENT_PER_USER:-0}
+      CONVERSATION_MESSAGE_CAP: ${CONVERSATION_MESSAGE_CAP:-0}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+      RETRIEVAL_MODE: ${RETRIEVAL_MODE:-hybrid}
+      ALLOW_MOCK_LLM_IN_PRODUCTION: ${ALLOW_MOCK_LLM_IN_PRODUCTION:-}
+      GEMINI_FAST_MODEL: ${GEMINI_FAST_MODEL:-}
+      LLM_MAX_OUTPUT_TOKENS: ${LLM_MAX_OUTPUT_TOKENS:-2048}
+      SENTRY_DSN: ${SENTRY_DSN:-}
     volumes:
       - api_data:/data
     # Host-side port. This is for a tunnel or proxy that runs ON THE HOST, not
@@ -171,6 +192,14 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # E-18: same settings surface as the api service (the worker builds the
+      # same Settings object for the jobs it runs).
+      PII_ENC_KEY: ${PII_ENC_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      ALLOW_MOCK_LLM_IN_PRODUCTION: ${ALLOW_MOCK_LLM_IN_PRODUCTION:-}
+      AI_DAILY_BUDGET_USD: ${AI_DAILY_BUDGET_USD:-0}
     volumes:
       - api_data:/data
     # AUD-B-07: same image and write paths as the api service (the /data
@@ -203,13 +232,15 @@ services:
     profiles: [web]
     restart: unless-stopped
     expose:
-      - "80"
-    # AUD-B-07: nginx needs to bind :80, chown its temp dirs and drop the
-    # workers to the nginx user -- nothing else. The image still starts its
-    # master as root (the stock nginx image cannot do otherwise); the root
-    # filesystem is read-only, /var/cache/nginx and /run live on tmpfs, and
-    # both master and workers run with no ambient capabilities and
-    # no-new-privileges (verified: page served 200 with exactly this set).
+      - "8080"
+    # AUD-B-24: the image is nginxinc/nginx-unprivileged -- master AND workers
+    # run as uid 101 and listen on 8080, so NO capability is needed. The root
+    # filesystem is read-only, /tmp (pid + temp paths in the unprivileged
+    # image) and /var/cache/nginx live on tmpfs, ALL capabilities are dropped
+    # and no-new-privileges blocks any re-grant. Verified by building and
+    # running this exact image on this host: page served 200 as uid 101 with
+    # this container configuration (evidence E-R3-ws4-b24-web-nonroot).
+    # Caddy proxies `web:8080` (deploy/caddy/Caddyfile).
     read_only: true
     tmpfs:
       - /var/cache/nginx
@@ -217,11 +248,6 @@ services:
       - /tmp
     cap_drop:
       - ALL
-    cap_add:
-      - CHOWN
-      - SETGID
-      - SETUID
-      - NET_BIND_SERVICE
     security_opt:
       - no-new-privileges:true
     depends_on:

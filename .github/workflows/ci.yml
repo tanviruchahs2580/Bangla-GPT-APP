@@ -550,6 +550,22 @@ jobs:
         # markdownlint release cannot silently change the gate.
         run: npx --yes markdownlint-cli2@0.23.3 "**/*.md"
 
+      - name: Relative links resolve (files and anchors)
+        # Handoff TAG=j2 Sec.1 (J-09): stdlib-only, offline; validates every
+        # relative link target AND `file.md#heading` anchors against GitHub's
+        # slug rules. It reads tracked files (git ls-files), so CI and the
+        # developer checkout behave identically. Covers **/*.md plus the docs
+        # that carry links outside that glob (README, security/contributing).
+        run: python3 scripts/check_links.py --anchors
+
+      - name: Spelling (English prose, project dictionary)
+        # Handoff TAG=j2 Sec.1 (J-10): English prose spell-check against the
+        # committed project word list (cspell.json). Bengali script is exempt
+        # by config and goes to native review instead. The major version is
+        # pinned like markdownlint's, so a new cspell cannot silently change
+        # the gate; 9.8.0 is the version the tree was verified against.
+        run: npx --yes cspell@9.8.0 --no-progress "**/*.md"
+
       - name: Version sources agree
         # AUD-JK-12 / J-11: apps/api/pyproject.toml [project].version is the
         # single source of truth; config.py, both web package fields, the

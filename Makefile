@@ -30,7 +30,7 @@ NPM_INSTALL ?= npm ci
 PY ?= $(if $(filter Windows_NT,$(OS)),$(CURDIR)/$(VENV)/Scripts/python.exe,$(CURDIR)/$(VENV)/bin/python)
 
 .PHONY: help setup setup-python setup-web dev test test-fast test-api test-web \
-        lint lint-api lint-web build check-version check-commits check-docs \
+        lint lint-api lint-scripts lint-web build check-version check-commits check-docs \
         ci-static ci
 
 help: ## Show this help
@@ -64,12 +64,16 @@ test-fast: ## Bounded guardrail subset (a few minutes): security, contract, gate
 		tests/test_corpus_qa_gate.py tests/test_changelog_scripts.py \
 		tests/test_lockfile_gate.py
 
-lint: lint-api lint-web ## Run every linter CI runs
+lint: lint-api lint-scripts lint-web ## Run every linter CI runs
 
 lint-api: ## API lint, format check, type check (CI: ruff + mypy)
 	cd apps/api && "$(PY)" -m ruff check .
 	cd apps/api && "$(PY)" -m ruff format --check .
 	cd apps/api && "$(PY)" -m mypy src
+
+lint-scripts: ## Root scripts lint + format check (CI: the ruff pre-commit hooks)
+	"$(PY)" -m ruff check --no-cache scripts/
+	"$(PY)" -m ruff format --check --no-cache scripts/
 
 lint-web: ## Web lint + format check (CI: eslint + prettier)
 	cd apps/web && npm run lint

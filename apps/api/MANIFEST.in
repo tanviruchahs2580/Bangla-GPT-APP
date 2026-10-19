@@ -1,0 +1,7 @@
+# Source distributions must carry the runtime prompt registry: services/tutor.py
+# reads prompts/manifest.json at import time (A5-02), and a registry without
+# the .md files beside it is a loud boot failure by design. The directory lives
+# outside the import package, so it cannot ride the wheel as package-data; the
+# Docker image ships it and sets BANGLA_GPT_PROMPTS_DIR (see ../Dockerfile),
+# and this manifest keeps sdists from losing it.
+recursive-include prompts *.md *.json

@@ -71,9 +71,7 @@ def dict_block(src: str, opener: str, closer: str | None) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument(
-        "--report", action="store_true", help="print findings, always exit 0"
-    )
+    ap.add_argument("--report", action="store_true", help="print findings, always exit 0")
     args = ap.parse_args()
 
     src = I18N.read_text(encoding="utf-8")
@@ -94,9 +92,7 @@ def main() -> int:
     for k in sorted(set(bn) & set(en)):
         pb, pe = set(PLACEHOLDER.findall(bn[k])), set(PLACEHOLDER.findall(en[k]))
         if pb != pe:
-            failures.append(
-                f"placeholder parity: {k!r} bn={sorted(pb)} en={sorted(pe)}"
-            )
+            failures.append(f"placeholder parity: {k!r} bn={sorted(pb)} en={sorted(pe)}")
 
     leaks = []
     for k, v in bn.items():

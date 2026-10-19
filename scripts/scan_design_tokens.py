@@ -96,7 +96,9 @@ def line_of(text: str, offset: int) -> int:
 
 def scan_colours(path: Path, css: str | None = None) -> list[str]:
     text = css if css is not None else path.read_text(encoding="utf-8")
-    allowed = outside(token_block_spans(text), len(text)) if css is not None else [False] * len(text)
+    allowed = (
+        outside(token_block_spans(text), len(text)) if css is not None else [False] * len(text)
+    )
     findings = []
     for regex in (COLOUR_HEX, COLOUR_FUNC):
         for match in regex.finditer(text):

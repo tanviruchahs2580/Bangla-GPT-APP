@@ -94,10 +94,12 @@ def deployment_frequency(since: dt.datetime) -> dict:
             continue
         if stamp >= since:
             tags.append({"tag": name, "created": stamp.isoformat()})
-    weeks = max((dt.datetime.now(dt.timezone.utc) - since).days / 7.0, 1 / 7.0)
-    main_pushes = git_ts("log", "--first-parent", "--since", since.isoformat(), "--format=%cI", "HEAD")
+    weeks = max((dt.datetime.now(dt.UTC) - since).days / 7.0, 1 / 7.0)
+    main_pushes = git_ts(
+        "log", "--first-parent", "--since", since.isoformat(), "--format=%cI", "HEAD"
+    )
     return {
-        "window_days": (dt.datetime.now(dt.timezone.utc) - since).days,
+        "window_days": (dt.datetime.now(dt.UTC) - since).days,
         "release_tags": tags,
         "release_tags_per_week": round(len(tags) / weeks, 2),
         "main_commits": len(main_pushes),
@@ -146,7 +148,14 @@ def merge_lead_times(limit: int) -> list[float]:
 
 def tag_lead_times() -> list[float]:
     """Hours from a tagged commit's author date to the tag's creation date."""
-    tags = run(["git", "for-each-ref", "--format=%(refname:short)\t%(creatordate:iso-strict)", "refs/tags/"])
+    tags = run(
+        [
+            "git",
+            "for-each-ref",
+            "--format=%(refname:short)\t%(creatordate:iso-strict)",
+            "refs/tags/",
+        ]
+    )
     lead: list[float] = []
     for line in (tags or "").splitlines():
         if "\t" not in line:
@@ -211,8 +220,10 @@ def change_failure_and_recovery(runs: list[dict] | None) -> dict:
         for later in executed[index + 1 :]:
             if later.get("conclusion") == "success":
                 try:
-                    failed_at = dt.datetime.fromisoformat(run_row["updatedAt"].replace("Z", "+00:00"))
-                    fixed_at = dt.datetime.fromisoformat(later["updatedAt"].replace("Z", "+00:00"))
+                    # fromisoformat accepts the trailing Z natively on the
+                    # interpreters this repo supports (>=3.11).
+                    failed_at = dt.datetime.fromisoformat(run_row["updatedAt"])
+                    fixed_at = dt.datetime.fromisoformat(later["updatedAt"])
                 except (KeyError, ValueError):
                     break
                 recoveries.append((fixed_at - failed_at).total_seconds() / 3600.0)
@@ -222,7 +233,9 @@ def change_failure_and_recovery(runs: list[dict] | None) -> dict:
         "completed_runs": len(completed),
         "executed_runs_excluding_cancelled": len(executed),
         "failed_runs": len(failures),
-        "change_failure_rate_pct": round(100.0 * len(failures) / len(executed), 1) if executed else None,
+        "change_failure_rate_pct": round(100.0 * len(failures) / len(executed), 1)
+        if executed
+        else None,
         "recovery_hours_median": round(statistics.median(recoveries), 1) if recoveries else None,
         "recovery_samples": len(recoveries),
     }
@@ -241,14 +254,16 @@ def summarise(values: list[float]) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--days", type=int, default=90, help="window for frequency metrics (default 90)")
+    parser.add_argument(
+        "--days", type=int, default=90, help="window for frequency metrics (default 90)"
+    )
     parser.add_argument("--limit", type=int, default=100, help="CI runs to read (default 100)")
     parser.add_argument("--json", default=None, help="also write the report as JSON to this path")
     args = parser.parse_args(argv)
 
-    since = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=args.days)
+    since = dt.datetime.now(dt.UTC) - dt.timedelta(days=args.days)
     report = {
-        "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+        "generated_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
         "repository": str(ROOT),
         "head": (run(["git", "rev-parse", "HEAD"]) or "unknown").strip(),
         "window_days": args.days,
@@ -276,18 +291,28 @@ def main(argv: list[str] | None = None) -> int:
     lead_tag = report["lead_time_tag_hours"]
     print(
         "| Lead time (commit to tag) | "
-        + (f"{lead_tag['median_hours']} h median, p90 {lead_tag['p90_hours']} h, n={lead_tag['samples']}" if lead_tag["samples"] else "no release tags yet")
+        + (
+            f"{lead_tag['median_hours']} h median, p90 {lead_tag['p90_hours']} h, n={lead_tag['samples']}"
+            if lead_tag["samples"]
+            else "no release tags yet"
+        )
         + " | `git log -1 --format=%aI` per tag |"
     )
     lead_merge = report["lead_time_merge_hours"]
     print(
         "| Lead time (branch to merge) | "
-        + (f"{lead_merge['median_hours']} h median, p90 {lead_merge['p90_hours']} h, n={lead_merge['samples']}" if lead_merge["samples"] else "no merge commits")
+        + (
+            f"{lead_merge['median_hours']} h median, p90 {lead_merge['p90_hours']} h, n={lead_merge['samples']}"
+            if lead_merge["samples"]
+            else "no merge commits"
+        )
         + " | newest branch commit to merge commit |"
     )
     ci = report["ci"]
     if ci["status"] == "BLOCKED":
-        print(f"| Change failure rate | BLOCKED -- {ci['reason']} | `gh run list --workflow {WORKFLOW}` |")
+        print(
+            f"| Change failure rate | BLOCKED -- {ci['reason']} | `gh run list --workflow {WORKFLOW}` |"
+        )
         print("| Recovery time | BLOCKED -- same cause | consecutive main runs |")
     else:
         cfr = ci["change_failure_rate_pct"]
@@ -296,13 +321,19 @@ def main(argv: list[str] | None = None) -> int:
             f"| Change failure rate | {cfr}% ({ci['failed_runs']}/{ci['executed_runs_excluding_cancelled']} executed runs on main) | `gh run list --workflow {WORKFLOW} --branch main` |"
         )
         print(
-            f"| Recovery time | "
-            + (f"{mttr} h median (n={ci['recovery_samples']})" if mttr is not None else "no failure-recovery pairs in the window")
+            "| Recovery time | "
+            + (
+                f"{mttr} h median (n={ci['recovery_samples']})"
+                if mttr is not None
+                else "no failure-recovery pairs in the window"
+            )
             + " | failed run to next successful run |"
         )
     print()
     print("Cancelled runs are excluded from the failure rate: a superseded run is not a failure.")
-    print("Data sources: git tags and history; GitHub Actions runs API where `gh` is authenticated.")
+    print(
+        "Data sources: git tags and history; GitHub Actions runs API where `gh` is authenticated."
+    )
 
     if args.json:
         Path(args.json).parent.mkdir(parents=True, exist_ok=True)

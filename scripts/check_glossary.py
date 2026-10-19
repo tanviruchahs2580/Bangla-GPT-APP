@@ -28,9 +28,7 @@ GLOSSARY = REPO / "docs" / "i18n-glossary.md"
 I18N = REPO / "apps" / "web" / "src" / "i18n.ts"
 
 ROW = re.compile(r"^\|(?P<cells>.+)\|\s*$", re.MULTILINE)
-ENTRY = re.compile(
-    r'^\s{2}([A-Za-z_][A-Za-z0-9_]*):\s*"((?:[^"\\]|\\.)*)",?\s*$', re.MULTILINE
-)
+ENTRY = re.compile(r'^\s{2}([A-Za-z_][A-Za-z0-9_]*):\s*"((?:[^"\\]|\\.)*)",?\s*$', re.MULTILINE)
 
 
 class GlossaryError(Exception):
@@ -39,7 +37,7 @@ class GlossaryError(Exception):
 
 def section(text: str, title: str) -> str:
     start = text.index(title)
-    rest = text[start + len(title):]
+    rest = text[start + len(title) :]
     end = rest.find("\n## ")
     return rest if end == -1 else rest[:end]
 

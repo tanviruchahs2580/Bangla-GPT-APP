@@ -198,6 +198,22 @@ ALLOW: tuple[Allow, ...] = (
         "changeme",
         "weak-password blocklist entry (security.py:82-85): the string is the control",
     ),
+    # "changeme1"/"changeme123" are literal rows of the offline
+    # breached-password denylist (same class as the security.py entry above):
+    # the strings are the control, not a value in use. The longer string comes
+    # first so the first-match rule gives each line its own entry.
+    Allow(
+        "apps/api/src/bangla_gpt_api/services/breached_passwords.py",
+        "placeholder-secret",
+        '"changeme123"',
+        "breached-password corpus row (breached_passwords.py): the reject-weak-passwords control",
+    ),
+    Allow(
+        "apps/api/src/bangla_gpt_api/services/breached_passwords.py",
+        "placeholder-secret",
+        '"changeme1"',
+        "breached-password corpus row (breached_passwords.py): the control, not a value in use",
+    ),
     Allow(
         "apps/web/src/api.ts",
         "fake-host",

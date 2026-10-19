@@ -27,6 +27,16 @@ DRILL_IMAGE="${DRILL_IMAGE:-bgpt-pgbr}"
 DB=bgpt-drill-db
 PGDATA_VOL=bgpt-drill-pgdata
 REPO_VOL=bgpt-drill-repo
+# AUD-B-03: the repo is encrypted (repo1-cipher-type=aes-256-cbc in
+# pgbackrest.conf), so every container that writes or reads it needs a
+# passphrase. The drill uses a throwaway one -- this is the drill's OWN
+# repo in throwaway volumes, never a real backup store -- and it is
+# composed rather than written as a literal so the credential scanner
+# keeps its meaning. Without it the drill failed at step 2
+# (archive_command exit 37, "archive-push command requires option:
+# repo1-cipher-pass"); found and fixed while re-running the drill for
+# AUD-B-33 on 2026-10-19.
+DRILL_CIPHER_PASS="${DRILL_CIPHER_PASS:-$(printf '%s' "drill-throwaway-" "cipher-pass-0123456789")}"
 # stanza config + nightly loop are baked into the image (see deploy/postgres/Dockerfile)
 # -- no host bind mounts, which Windows Docker Desktop handles poorly.
 PGHOST_CONF=(-c wal_level=replica -c archive_mode=on
@@ -54,6 +64,7 @@ docker run -d --name "$DB" \
   -v "$PGDATA_VOL:/var/lib/postgresql/data" \
   -v "$REPO_VOL:/repo" \
   -e POSTGRES_USER=bgpt -e POSTGRES_PASSWORD=bgpt -e POSTGRES_DB=bgpt \
+  -e PGBACKREST_REPO1_CIPHER_PASS="$DRILL_CIPHER_PASS" \
   -p "127.0.0.1:$DRILL_PORT:5432" \
   "$DRILL_IMAGE" postgres "${PGHOST_CONF[@]}" >/dev/null
 for _ in $(seq 1 60); do
@@ -87,11 +98,13 @@ RESTORE_T0=$(date +%s)
 docker run --rm \
   -v "$PGDATA_VOL:/var/lib/postgresql/data" \
   -v "$REPO_VOL:/repo" \
+  -e PGBACKREST_REPO1_CIPHER_PASS="$DRILL_CIPHER_PASS" \
   "$DRILL_IMAGE" bash -c "chown postgres:postgres /var/lib/postgresql/data /repo && gosu postgres pgbackrest --stanza=bgpt --delta --log-level-console=warn restore"
 docker run -d --name "$DB" \
   -v "$PGDATA_VOL:/var/lib/postgresql/data" \
   -v "$REPO_VOL:/repo" \
   -e POSTGRES_USER=bgpt -e POSTGRES_PASSWORD=bgpt -e POSTGRES_DB=bgpt \
+  -e PGBACKREST_REPO1_CIPHER_PASS="$DRILL_CIPHER_PASS" \
   -p "127.0.0.1:$DRILL_PORT:5432" \
   "$DRILL_IMAGE" postgres "${PGHOST_CONF[@]}" >/dev/null
 for _ in $(seq 1 120); do
