@@ -185,24 +185,38 @@ that require human/infra decisions remain exactly two: the embedding model +
 vector store, and an LLM faithfulness judge (see evaluation/metrics.py,
 `mode="local_overlap"` until then).
 
-## Measured baseline (real corpus, 2,508 chunks, this commit)
+## Measured baseline (real corpus, 1,390 served chunks, this commit)
 
 The committed `data/nctb/retrieval_eval.json` is the record of truth for
 these numbers: this table quotes it (any retrieval change regenerates the
-artifact locally, with the diff reviewed as retrieval evidence). Recall
-values reproduced across three runs on the audit host; latency values did
-not — p95 moved between 133 ms and 1,010 ms with host load, so treat the
-latency row as indicative and re-measure on a quiet host before using it.
+artifact locally, with the diff reviewed as retrieval evidence). The served
+corpus is 1,390 chunks, not the 2,504 of the pre-dedupe build: the loader now
+drops duplicate class-text pairs (`serve_stats.duplicates_dropped_at_load`
+1,026), legacy-Bijoy residue (77) and Latin-residue lines (2). Recall values
+carry seeded 95% bootstrap CIs in the artifact; latency values move with host
+load and are quoted as a range across runs.
 
 | Metric | Before rework | After rework (committed artifact) |
 |---|---|---|
-| Index build | 0.36 s (lexical only) | 64.4 s (lexical + vector + vocabulary; 15–64 s observed for the same corpus under different host load) |
-| Family A self-sentence recall@1 / @5 (n=100) | 0.38 / 1.00 | **0.51 / 0.99** |
-| Family A MRR | — (not computed) | 0.69 |
+| Index build | 0.36 s (lexical only) | 44.4 s on an idle host (382.3 s under the contention of the audit's parallel runs; the budget is 120 s) |
+| Family A self-sentence recall@1 / @5 (n=100) | 0.38 / 1.00 | **0.78 / 0.97** (CI95 r@1 0.70–0.86) |
+| Family A MRR / nDCG@10 | — (not computed) | 0.8624 / 0.8942 |
 | Family B chapter-title recall@1 / @5 (n=80) | 0.225 / 0.525 | **1.00 / 1.00** |
-| Family B MRR | — (not computed) | 1.00 |
-| Adversarial refusal rate | 1.00 | **1.00** |
-| Search latency p50 / p95 (hybrid, real corpus) | — | 337 ms / 829 ms (host-load dependent, see note above) |
+| Family B MRR / nDCG@10 | — (not computed) | 1.00 / 1.00 |
+| Family D Banglish recall@1 / @5 (n=100) | — (not measured) | 0.52 / 0.86 (CI95 r@1 0.43–0.62) |
+| **Adversarial refusal rate (family C, n=4)** | 1.00 | **0.25 — a REGRESSION against the served gate** |
+| Search latency p50 / p95 (hybrid, real corpus) | — | 613 ms / 1,620 ms on the audit host; lexical alone 65 / 301 ms, vector alone 46 / 229 ms |
+
+The family C row is the honest one: three of the four curated out-of-domain
+questions (a cricket-fixture question, Euclid's fifth postulate, a dollar
+exchange rate) now clear the coverage gate on the deduped corpus, because
+their question terms partly overlap surviving chunks. Measured abstention on
+the *golden* negatives is still 1.00 (they are generated to be lexically
+absent), which is exactly why the curated family exists: it is the harder
+probe, and it currently fails. The owner of the retrieval gate has the
+measured curve in `eval/targets_report.json` (`answerable_mean_coverage`
+0.9962 vs `adversarial_mean_coverage` 0.75 — the classes do not separate at
+any threshold 0.3–0.7), so the fix is a gate rule, not a threshold tweak.
 
 Recall@1 here is rank-1 membership only. An earlier revision of the harness
 appended `1.0 if matched[:1]` — a non-empty top-k membership list — so it
