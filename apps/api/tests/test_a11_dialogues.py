@@ -241,13 +241,19 @@ def test_strategy_chips_change_the_stored_answer_through_the_route(monkeypatch, 
 
 
 def test_live_strategy_ab_evidence_is_recorded_for_the_audit() -> None:
-    """The live A/B ran out-of-band (no CI key); this pins where its evidence is."""
+    """The live A/B ran out-of-band (no CI key); its numbers must be committed.
+
+    The raw capture lives in the audit scratch directory (`.audit/evidence/`),
+    which a clean checkout does not carry -- asserting on it made this test
+    fail on every CI run. The durable record is the tracked doc, so that is
+    what is pinned here: CI verifies the record exists and carries the measured
+    numbers, and the numbers themselves stay reviewable in git history.
+    """
     from pathlib import Path
 
-    evidence = (
-        Path(__file__).resolve().parents[3] / ".audit" / "evidence" / "R3-ws1-a11-live-ab.txt"
-    )
-    assert evidence.is_file(), "live A/B evidence file missing"
-    text = evidence.read_text(encoding="utf-8")
-    assert "distinct_answers=" in text
-    assert "evidence-sentence leak" in text
+    doc = Path(__file__).resolve().parents[3] / "docs" / "evaluation" / "pedagogy-ab.md"
+    assert doc.is_file(), "the pedagogy A/B record must be committed"
+    text = doc.read_text(encoding="utf-8")
+    assert "3/3 distinct answers" in text, "chip A/B result missing from the record"
+    assert "**0.00**" in text, "hint-first ON leak rate missing from the record"
+    assert "0.20" in text, "hint-first OFF leak rate missing from the record"
