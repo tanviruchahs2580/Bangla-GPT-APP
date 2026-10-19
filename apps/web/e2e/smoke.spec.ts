@@ -33,6 +33,14 @@ async function signIn(page: Page, email: string): Promise<void> {
   await page.locator('#email').fill(email)
   await page.locator('#password').fill(PASSWORD)
   await page.locator('form button[type="submit"]').click()
+  // Wait for the SESSION, not just the click. The role router leaves /login
+  // only after the token is stored; a test that navigates in the gap gets
+  // bounced by the auth guard -- the parent-invite journey raced exactly
+  // there in the first CI run of this suite (/login snapshot after signIn).
+  await expect(page).not.toHaveURL(/\/login$/)
+  await expect
+    .poll(() => page.evaluate(() => window.localStorage.getItem('bgpt_token')))
+    .toBeTruthy()
 }
 
 async function signOut(page: Page): Promise<void> {
