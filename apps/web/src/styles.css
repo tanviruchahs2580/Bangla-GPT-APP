@@ -799,6 +799,9 @@ p {
 
 .empty-sub {
   margin-top: 4px;
+  /* the global `p { margin: 0 0 0.8em }` reset would otherwise add 0.8em here
+     and shift the empty-state geometry; spacing stays with .empty-pad */
+  margin-bottom: 0;
 }
 
 .empty-action {

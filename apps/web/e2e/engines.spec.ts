@@ -186,7 +186,14 @@ test('Intl: bn-BD numbers, dates, plurals and collation behave in this engine', 
   expect(result.error, `[${browserName}] Intl threw: ${result.error}`).toBeUndefined()
   // Bengali digits ০-৯ for every number.
   expect(result.number, `[${browserName}] number`).toMatch(/^[\u09E6-\u09EF,০-৯]+$/)
-  expect(result.number, `[${browserName}] number 12345`).toContain('১২৩৪৫'.slice(0, 3))
+  // Grouping is locale-decided (bn-BD groups 2,2,3: "১২,৩৪৫"), so the check
+  // is that every digit was transliterated, not that they sit contiguously.
+  const BENGALI_DIGITS = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯']
+  for (const digit of '12345') {
+    expect(result.number, `[${browserName}] number digit ${digit}`).toContain(
+      BENGALI_DIGITS[Number(digit)],
+    )
+  }
   expect(result.grouping, `[${browserName}] grouping`).toContain(',')
   expect(result.date, `[${browserName}] date`).toMatch(/[\u09E6-\u09EF]/)
   expect(result.date, `[${browserName}] date year`).toContain('২০২৬')

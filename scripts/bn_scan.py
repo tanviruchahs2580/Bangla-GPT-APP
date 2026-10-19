@@ -55,6 +55,52 @@ CHECKS = {
 }
 
 
+#: Reviewed fixtures: files whose whole purpose is to CONTAIN the character the
+#: check looks for, or generated artifacts whose encoding is deliberate. Same
+#: pattern as scripts/check_placeholders.py's ALLOW: an explicit path, the
+#: check it is exempt from, and the reason. Anything not listed here still
+#: fails the gate.
+EXEMPT: tuple[tuple[str, str, str], ...] = (
+    (
+        "apps/api/tests/test_eval2_generation.py",
+        "ASSAMESE_LETTER",
+        "the mis-script detector's own test: U+09F0 must appear here for "
+        "mis_script() to have something to detect",
+    ),
+    (
+        "apps/api/tests/test_rag2_cache_scope.py",
+        "DEVANAGARI_NON_PUNCT",
+        "the cache-key test asserts a Devanagari query does not collide with "
+        "the Bengali one, so the input must be Devanagari",
+    ),
+    (
+        "apps/api/eval/review_sheets/synthetic_review_sheet.csv",
+        "BOM_INSIDE_TEXT",
+        "generated review sheet written UTF-8-BOM so Excel opens Bengali "
+        "correctly; the BOM is the compatibility marker, not stray text",
+    ),
+    (
+        "apps/api/eval/review_sheets/class_appropriateness_sheet.csv",
+        "BOM_INSIDE_TEXT",
+        "same exporter, same Excel reason",
+    ),
+    (
+        "apps/api/eval/review_sheets/synthetic_review_sheet.csv",
+        "NOT_NFC",
+        "the source text is quoted from the corpus verbatim (A2-03 keeps the "
+        "corpus form; normalisation happens at ingest), so the sheet carries "
+        "the corpus's own sequence",
+    ),
+)
+
+
+def _exempt(path: Path, check: str) -> bool:
+    as_posix = path.as_posix()
+    return any(
+        as_posix.endswith(allowed) and check == for_check for allowed, for_check, _ in EXEMPT
+    )
+
+
 def scan(path: Path, totals: Counter) -> None:
     if path.suffix.lower() not in TEXT_EXT or not path.is_file():
         return
@@ -64,10 +110,12 @@ def scan(path: Path, totals: Counter) -> None:
         return
     text = path.read_text(encoding="utf-8", errors="replace")
     for lineno, line in enumerate(text.splitlines(), 1):
-        if unicodedata.normalize("NFC", line) != line:
+        if unicodedata.normalize("NFC", line) != line and not _exempt(path, "NOT_NFC"):
             totals["NOT_NFC"] += 1
             print(f"{path}:{lineno}  NOT_NFC")
         for name, rx in CHECKS.items():
+            if _exempt(path, name):
+                continue
             for m in rx.finditer(line):
                 totals[name] += 1
                 label = ""

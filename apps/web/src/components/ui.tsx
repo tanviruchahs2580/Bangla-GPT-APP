@@ -200,7 +200,11 @@ export function EmptyState({
         <BrandMark size={56} />
       </div>
       <div className="empty-title">{title}</div>
-      {sub && <div className="muted empty-sub">{sub}</div>}
+      {/* A <p>, not a <div>: two adjacent generic elements collapse into one
+          text node in the accessibility tree, which merged the empty state's
+          title and subtitle into a single announcement. .empty-sub resets the
+          global `p` margin so the geometry is unchanged. */}
+      {sub && <p className="muted empty-sub">{sub}</p>}
       {action && <div className="empty-action">{action}</div>}
     </div>
   );

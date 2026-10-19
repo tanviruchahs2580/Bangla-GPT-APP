@@ -164,6 +164,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - ci: add CI-gated Vercel production deploy workflow
 - ci: add concurrency to api CI, fix eval-gate header, retire sanity workflow
 - ci: bound job runtimes and harden release/deploy workflows
+- ci: fetch tags in the make-parity job; record the last three commits in the CHANGELOG
 - ci: gate a release on a successful CI run for the tagged commit
 - ci: hermetic import-time settings patch + step-isolated migration DBs
 - ci: lint/scan/replay jobs, prompt packaging, packaging locks, release attestations

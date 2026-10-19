@@ -33,7 +33,13 @@ test('a token from a signed-out session is rejected by the API', async ({ page }
   expect(before.status(), 'the control request must succeed before sign-out').toBe(200)
 
   // Sign out through the shell, as the user does.
-  await page.locator('header').getByRole('button', { name: /Log out|লগ আউট|সাইন আউট/ }).click()
+  // The accessible name is the i18n key `logout` ("লগআউট" in Bengali, no
+  // space) -- a regex with a space never matched it, so this click used to
+  // time out rather than test anything.
+  await page
+    .locator('header')
+    .getByRole('button', { name: /লগআউট|লগ আউট|Log ?out|সাইন আউট/i })
+    .click()
   await expect(page).toHaveURL(/\/login$/)
   expect(await page.evaluate(() => window.localStorage.getItem('bgpt_token'))).toBeNull()
 
