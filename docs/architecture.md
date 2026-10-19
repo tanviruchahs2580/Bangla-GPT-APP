@@ -109,9 +109,17 @@ BanglaGptApp/
   `memory_cost=19 MiB`, `parallelism=1`) via the `argon2-cffi` dependency
   (`auth/security.py`). Legacy PBKDF2-HMAC-SHA256 hashes are still verified for
   existing accounts and re-hashed to Argon2id on the next successful login.
-- **Tokens**: HS256 JWT (`pyjwt`), `sub`=user id, `role`, `exp`
-  (`JWT_EXPIRE_MINUTES`). Secret from env (`JWT_SECRET`); the committed dev
-  default is documented as insecure-on-purpose in `.env.example`.
+- **Tokens** (B-02): pinned-algorithm HS256 JWT (`pyjwt`) with `iss`/`aud`
+  verified. Access tokens (`typ=access`) are short-lived
+  (`JWT_EXPIRE_MINUTES`, 15 min) and carry a `jti`; the session is kept alive
+  by a single-use **rotating refresh token** (`JWT_REFRESH_EXPIRE_DAYS`, 14
+  days) minted with every login and swapped at `POST /auth/refresh` — a
+  replayed refresh token revokes its whole login family. `POST /auth/logout`
+  retires the presented access token (and its refresh token when supplied)
+  server-side via the shared deny-list; a password change or reset rotates
+  the token epoch, killing both kinds of token. Secret from env
+  (`JWT_SECRET`); the committed dev default is documented as
+  insecure-on-purpose in `.env.example`.
 - **Authorization**: role gates (`student`, `teacher`; admin roles pending) +
   object-level ownership checks — students can only read/submit their own
   data; teachers have class-wide read access and may generate quizzes for
@@ -391,6 +399,74 @@ the wire and are frozen as-is:
 fails when a raised code is missing from the catalog, when a status or key set
 drifts, or when a fourth shape appears. Adding a code means adding one
 `ErrorSpec` row in the same commit.
+
+Pagination follows one convention, declared in
+`apps/api/src/bangla_gpt_api/routers/_pagination.py` (three named presets:
+archive 50/200, task list 100/200, window 200/200): every collection GET has a
+`limit` with `ge=1` and a maximum, plus an `offset` applied after an explicit
+stable sort, except the documented top-N queue and three deviations owned by
+other file sets. The policy for pagination, versioning/deprecation, the single
+error envelope, `Idempotency-Key` and `If-Match` lives in
+`docs/adr/ADR-0012-api-design-conventions.md`.
+
+### Upload surface (B-12)
+
+There is exactly one place user-supplied bytes enter the API, and it is
+**parse-and-discard**: no upload is ever persisted, so there are no storage
+paths to traverse and no stored files to name. The two accepting routes are
+
+* `POST /tutor/*` inline chat images — mime allowlist, strict base64, size
+  cap, magic-byte sniff, then re-encode through Pillow into a metadata-free
+  PNG/JPEG before anything reaches the provider (`providers/image_safety.py`;
+  EXIF/GPS, PNG text chunks and trailing bytes are dropped — pinned by
+  `tests/test_rag2_image_safety.py`);
+* `POST /teacher/classrooms/{id}/import-file` — the CSV roster as the raw
+  request body, read with an explicit byte bound (`routers/class_import.py`),
+  decoded as UTF-8 (BOM tolerated) or UTF-16-with-BOM, and turned into rows;
+  the bytes are never written anywhere and no filename is ever used.
+
+Consequences, recorded as a decision rather than left implicit:
+
+* **randomized storage names / path traversal**: not applicable — nothing is
+  stored, and no code path joins request data into a filesystem path
+  (`tests/test_r3_ws3_upload_surface.py` scans the upload modules for
+  filesystem writes and path joins);
+* **antivirus hook**: no hook is installed because there is no persisted file
+  to scan; the seam belongs at the storage layer if object storage is ever
+  introduced (ADR-0011 covers artifact storage), and the same test fails if a
+  storage SDK appears without one;
+* **CSV text is still hostile input**: it is parsed as data only — cells are
+  never interpreted as formulas, and names/emails are length-bounded by the
+  schemas before they reach the database.
+
+### Deletion and retention strategy (C-11)
+
+One strategy, stated once, because partial soft-deletion is worse than none:
+
+* **No soft delete anywhere.** A deleted row is gone; there is no
+  `is_deleted`/`deleted_at` column and no query that has to remember to filter
+  one out (`tests/test_r3_ws3_persistence_strategy.py` fails the day one
+  appears without this section and its cascade review being updated).
+* **Deletion is explicit and cascading, not incidental.** Account erasure runs
+  the documented cascade (the DPA/erasure path in `routers/users.py`), quiz
+  attempts and messages follow their parents, and feedback rows are detached
+  by the retention sweep rather than orphaned
+  (`services/retention.py::_detach_feedback_from_messages`).
+* **Time-based deletion is one policy point**: `services/retention.py` is the
+  only sweeper (conversations/messages past `chat_retention_days`, expired
+  tokens past their grace); the field-level inventory, the periods and what
+  the sweep does per table live in `docs/data_minimization.md`. The nightly
+  job and the admin endpoint both call it.
+* **Opt-out flags are preferences, not tombstones.** `memory_enabled=false` or
+  `digest_opt_out=true` change behaviour (what is stored or sent); they are not
+  deletion and never hide rows from the owner.
+
+Transaction boundaries, the unit of work and the lost-update guard are covered
+by `apps/api/tests/test_c2_uow_concurrency.py` (commit/rollback/close of
+`session_scope`, the atomic claim so two concurrent quiz submissions cannot
+both win, and statement-count ceilings per dashboard path proving no N+1).
+Optimistic concurrency at the HTTP layer (ETag/If-Match on
+`/students/me/prefs`) is in ADR-0012.
 
 ## Module design review and the complexity ratchet (C-05 / C-03)
 

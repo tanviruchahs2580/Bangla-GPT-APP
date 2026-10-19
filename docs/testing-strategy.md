@@ -45,7 +45,7 @@ CRUD service would be.
 | Contract | OpenAPI ↔ implementation: documented status codes, no undeclared public operation, API-reference drift | `apps/api/tests/test_openapi_contract.py`, `test_openapi_auth_matrix.py`, `apps/api/scripts/gen_api_docs.py --check` | < 1 min |
 | Database | Migrations up → check → down → up; seeded-data reversibility; model/migration drift | `apps/api/tests/test_migrations_match_models.py`, `test_school_model.py`, CI `postgres` job on PostgreSQL 16 | ≤ 10 min |
 | End-to-end (browser) | The five roles' critical journeys in a real browser against a real API | `apps/web/e2e/` (Playwright): `smoke.spec.ts` on PRs; the full project matrix nightly | smoke ≤ 10 min |
-| Evaluation (RAG) | Retrieval quality, abstention and safety on a frozen golden set | `bangla_gpt_api.evaluation.cli`, `scripts/evaluate_golden.py`, `.github/workflows/eval-gate.yml` | ≤ 15 min |
+| Evaluation (RAG) | Retrieval quality, abstention and safety on a frozen golden set | `bangla_gpt_api.evaluation.cli`, `apps/api/scripts/evaluate_golden.py`, `.github/workflows/eval-gate.yml` | ≤ 15 min |
 | Property-based | Invariants over generated inputs for parsers/normalizers | `apps/api/tests/test_e2_property_based.py` (hypothesis) | < 2 min |
 | Fault injection | Graceful degradation for LLM, DB and SMTP outages | `apps/api/tests/test_e2_fault_injection.py`, provider suites (`test_providers_*.py`), `test_circuit_breaker.py` | < 3 min |
 | Performance / load | Latency and throughput budgets, dashboard queries at scale | `load/`, `apps/api/scripts/bench_dashboards.py`, `docs/capacity_plan.md` | manual/scheduled (see §8) |

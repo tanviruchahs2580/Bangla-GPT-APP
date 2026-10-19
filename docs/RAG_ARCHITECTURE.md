@@ -315,8 +315,10 @@ rather than an assumed one.
    above is the input to that decision.
 2. **Chunking**: sentence-aware packing at 220 words with an opt-in overlap
    (`nctb/chunking.py`); the size/overlap/diversity comparison is the
-   ablation table below. Changing a size invalidates every committed eval
-   artifact — regenerate and read the diff, as this revision did.
+   ablation table in the artifact (`data/nctb/chunk_ablation.json`,
+   produced by `apps/api/scripts/ablate_nctb_chunking.py`). Changing a size
+   invalidates every committed eval artifact — regenerate and read the diff,
+   as this revision did.
 3. **Faithfulness judge**: `mode="local_overlap"` until an LLM provider is
    configured; `_JUDGE_INSTRUCTION` and the scoring contract are ready.
 4. **Index lifecycle**: full in-memory rebuild at boot, per worker; the

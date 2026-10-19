@@ -62,10 +62,64 @@ Every row is a blocking check on PRs unless the trigger column says otherwise.
 | Pipeline timing | `ci.yml` → `pipeline-report` | wall clock + per-job durations in the run summary |
 | Posture | `scorecard.yml` | OpenSSF Scorecard SARIF |
 
-Not yet wired, tracked as owner/other-agent work: an **external** link checker
-(the repository has `check_doc_paths.py` for repo-relative paths only; the
-external-URL checker is another workstream's script and is dropped in here as
-soon as it lands).
+Link checking, stated exactly: the blocking check is
+`scripts/check_links.py --anchors` in the `guardrails` job (every relative
+target and every `file.md#heading` anchor in the tracked Markdown, offline and
+deterministic). The **external** variant (`--external`: one HEAD per unique
+URL) exists in the same script but is deliberately **not** wired as a blocking
+check — CI must not depend on third-party uptime; run it as an operator
+command (`python scripts/check_links.py --external`) before a release when the
+link inventory matters.
+
+**Required-check payload (F-04, owner action).** The branch protection on
+`main` requires seven contexts; the round-2/3 jobs below are green in CI but
+not yet *required*. Both are owner-only settings (`CHANGE_GITHUB_REPO_SETTINGS
+= no`), so the exact payload is prepared here:
+
+```bash
+gh api --method PATCH \
+  repos/tanviruchahs2580/Bangla-GPT-APP/branches/main/protection/required_status_checks \
+  --input - <<'JSON'
+{"strict": true, "contexts": [
+  "Lint & test (Python 3.11)",
+  "Lint & test (Python 3.12)",
+  "Postgres engine check (alembic + API flows)",
+  "Golden retrieval benchmark (sample corpus)",
+  "Web build & test (apps/web)",
+  "Repository guardrails",
+  "Docker build & container smoke",
+  "Browser e2e smoke (Chromium, real API, mock provider)",
+  "SBOM artifacts & licence gate",
+  "Dockerfile, shell and workflow lint",
+  "Two-replica coherence (shared cache and limiter)",
+  "Local entry points (make ci-static)",
+  "Analyze (python)",
+  "Analyze (javascript-typescript)"
+]}
+JSON
+```
+
+The seven existing contexts stay; the additions are the licence gate
+(`sbom-licence`), the IaC/container lint (`iac-lint`), the browser e2e smoke,
+the two-replica proof, the local/CI parity job and CodeQL's two languages.
+`pipeline-report` and the weekly `dast-baseline` stay informational on
+purpose. Note that contexts must match the job display names exactly, matrix
+legs included; `gh api ... /protection` shows the current set.
+
+**Supply-chain review (F-02).** `scripts/check_links.py`-style manual review
+plus `zizmor` (1.13.0, no API token so the ref/commit audits skip) over all
+workflows: the only finding at medium or above is `dangerous-triggers` on
+`vercel-deploy.yml`'s `workflow_run` (confidence: medium). The trigger is
+accepted with the four documented event checks (success + push + main +
+same-repository) and the job now also names the `vercel-production`
+environment, so the owner can attach required reviewers and move the Vercel
+secrets out of repository scope (the §5 payloads). `scorecard.yml`'s
+`permissions: read-all` is the official Scorecard template's posture (the job
+elevates only `security-events: write` + `id-token: write`); kept and
+documented rather than narrowed. No `pull_request_target`, no `${{ }}`
+interpolation inside any `run:` block, and every service-container and action
+reference is digest/SHA-pinned. Evidence `E-R3-ws4-f02-actionlint`,
+`E-R3-ws4-f02-zizmor`.
 
 ## 3. Speed and parity (F-05, F-06)
 
@@ -184,30 +238,32 @@ Also prepared (AUD-EF-09): move `VERCEL_TOKEN`, `VERCEL_ORG_ID`,
 integration for CLI tokens, so scoping to an environment with required
 reviewers is the available control.
 
-**Health-gated rollback drill (F-09).** The release deploy's gate reads the
-`api` container's own health status (`docker compose ps -q api` →
-`.State.Health.Status`) and rolls back to the previous tag when `up --wait`
-fails or the health status never becomes `healthy`. The drill script is
-`.audit/tmp/f2_health_gate_drill.sh`: it builds the compose api image, starts
-the stack with an intentionally failing healthcheck (`exit 1`), asserts that
-`up --wait` fails and that the verbatim `wait_healthy` loop returns non-zero,
-then repeats both controls with the real healthcheck. Status this round: the
-image built (`ghcr.io/.../api:local`, Docker 29.7.2) and compose v2 was proven
-to apply `deploy.resources.limits` to a live container (`E-R2-f2-013`), but the
-second half could not complete — Docker Desktop's network path broke mid-drill
-(the digest-pinned `redis:7-alpine` pull failed with Docker Hub DNS timeouts,
-then the daemon stopped answering `docker info`); the run is BLOCKED, not
-failed. To finish on a healthy daemon or the staging host:
+**Health-gated rollback drill (F-09) — EXECUTED, PASS (2026-10-19).** The
+release deploy's gate reads the `api` container's own health status
+(`docker compose ps -q api` → `.State.Health.Status`) and rolls back to the
+previous tag when `up --wait` fails or the health status never becomes
+`healthy`. The drill `.audit/tmp/f2_health_gate_drill.sh` builds the compose
+api image, starts the stack with an intentionally failing healthcheck
+(`exit 1`), asserts that `up --wait` fails and that the verbatim `wait_healthy`
+loop returns non-zero, then repeats both controls with the real healthcheck.
+Round-3 run on this host (Docker 29.7.2): the negative control failed exactly
+as a broken release must (`up --wait` exit 1; `wait_healthy` non-zero; health
+status `unhealthy`), the positive control passed both (`up --wait` exit 0;
+`wait_healthy` 0; status `healthy`), and cleanup removed the throwaway
+`bgpt-drill` project. Evidence `E-R3-ws4-f09-health-gate`, drill exit 0. The
+owner repeats it on staging when the staging host exists; the script is
+host-agnostic (needs docker only).
 
-```bash
-docker compose -p bgpt-drill --profile core build api          # cached after one build
-bash .audit/tmp/f2_health_gate_drill.sh                        # needs Docker + network for redis:7-alpine
-docker compose -p bgpt-drill --profile core down -v            # cleanup, throwaway project
-```
-
-Cleanup note for the coordinator: if the daemon was left mid-drill, restart
-Docker Desktop and run the `down -v` line; the drill's containers/volumes all
-carry the `bgpt-drill` project name and nothing else is touched.
+**Migration rollback posture (F-09).** Migrations are append-only and
+schema-first (add nullable column/table, backfill, switch reads, drop later
+— the expand/contract order), so `alembic downgrade <revision>` exercises a
+verified cycle for every revision and no release needs a data-losing rollback
+of a contract step. The exact commands and the pre-deploy backup requirement
+are in `docs/runbook.md` (Rollback, DB rollback) and
+`docs/operations/PRODUCTION_DEPLOYMENT.md`; the `postgres` CI job runs
+upgrade → downgrade → upgrade on every PR, so a broken downgrade is caught
+before a deploy needs it. The image rollback is the previous version tag
+(images are never overwritten; version tags only).
 
 ## 6. Scheduled work (F-15) and posture (F-16)
 
@@ -219,7 +275,6 @@ re-review, not a bug) and `perf.spec.ts` needs a seeded 120-message conversation
 whose database seam (`E2E_DATABASE_URL`) is a pending one-line config change.
 The PR job otherwise runs the full grown spec set: smoke, axe, keyboard and
 screen-reader journeys. Requests: `.audit/handoffs/coordinator-from-f2.md`.
-
 
 | Job | When | What it proves |
 |---|---|---|
@@ -267,7 +322,8 @@ without the secret both jobs pass with a notice.
 
 - All three Dockerfiles pin their base images **by digest** (`Dockerfile`:
   `python:3.12-slim@sha256:a6e34c58…`; `apps/web/Dockerfile`: `node:24-alpine`
-  and `nginx:1.27-alpine`; `deploy/postgres/Dockerfile`: `postgres:16`), and
+  and `nginxinc/nginx-unprivileged:1.27-alpine`; `deploy/postgres/Dockerfile`:
+  `postgres:16`), and
   `deploy/postgres/Dockerfile` pins `pgbackrest=2.59.3-1.pgdg13+1` to the
   candidate inside that digest (hadolint DL3008), with the refresh procedure in
   the comment.
@@ -280,23 +336,33 @@ without the secret both jobs pass with a notice.
   `E-R2-f2-010`, `E-R2-f2-013`).
 - Healthchecks, restart policies, named volumes, `read_only`, `cap_drop`,
   `no-new-privileges` and tmpfs were already in place per service. The API
-  image runs as a fixed non-root uid/gid; the web image's nginx master runs as
-  root to bind `:80` and is hardened by the compose service instead (comment in
-  `apps/web/Dockerfile`).
+  image runs as a fixed non-root uid/gid. **AUD-B-24** moved the web image to
+  `nginxinc/nginx-unprivileged` (digest-pinned): master and workers run as
+  uid 101, the listener moved to 8080 (a non-root process cannot bind :80
+  without a capability), Caddy proxies `web:8080`, and the compose service now
+  needs no capability at all (ALL dropped). Verified by building the image and
+  serving a page as uid 101 under the exact compose posture — evidence
+  `E-R3-ws4-b24-web-nonroot`. No container in the stack starts as root except
+  postgres (whose official entrypoint chowns PGDATA and drops privileges).
 - `.dockerignore` excludes `.git`, `.github`, docs, tests, virtualenvs and
   databases; the API image installs from the hash-verified lock with
   `--no-deps` for the project itself.
 - Trivy `config` scans the three Dockerfiles and the compose file with
   `--severity HIGH,CRITICAL --exit-code 1`. One rule, `AVD-DS-0002` (image runs
-  as root), is ignored for `apps/web/Dockerfile` and
-  `deploy/postgres/Dockerfile` only, through `.trivyignore.yaml` with a written
-  statement and an expiry date; the root Dockerfile is scanned **without** that
-  file, so its non-root uid/gid 10001 stays fully checked. The mechanism was
-  verified against trivy 0.58.0 (evidence `E-R2-f2-008`).
+  as root), is ignored for `deploy/postgres/Dockerfile` only, through
+  `.trivyignore.yaml` with a written statement and an expiry date; the root
+  Dockerfile is scanned **without** that file, so its non-root uid/gid 10001
+  stays fully checked. The mechanism was verified against trivy 0.58.0
+  (evidence `E-R2-f2-008`); after AUD-B-24 the ignore no longer matches
+  `apps/web/Dockerfile` at all and the file was re-scan
+  clean in this round (evidence `E-R3-ws4-b24-web-nonroot`).
 - Lint: `hadolint --failure-threshold warning` over all three Dockerfiles is
   **clean** (was one warning: DL3008), actionlint over every workflow is
-  **clean**, shellcheck over every tracked `*.sh` is **clean** (three findings
-  were fixed: SC2034 in `scripts/smoke.sh`, SC2015 in the same file, SC2001 in
+  **clean** (re-run at the CI-pinned versions — actionlint 1.7.12 + the pinned
+  shellcheck 0.10.0 — in round 3; two SC2012 findings in `eval-gate.yml` and
+  `nightly.yml` were fixed in this round, see `E-R3-ws4-f02-actionlint`),
+  shellcheck over every tracked `*.sh` is **clean** (three findings were fixed:
+  SC2034 in `scripts/smoke.sh`, SC2015 in the same file, SC2001 in
   `scripts/pg_backup.sh`), and Trivy `config` reports no HIGH/CRITICAL on the
   Dockerfiles or compose. Evidence: `E-R2-f2-007`…`E-R2-f2-010`.
 - SSH deploy hardening (F-10): the deploy uses a pinned host fingerprint

@@ -98,17 +98,39 @@ Evidence: drill output `PASS... (9s restore)`; postgres log during recovery:
 `restored log file "000000010000000000000005" from archive`, `archive
 recovery complete`, new timeline 2 selected.
 
-**Status as of the 2026-10-19 hardening round: NOT re-executed.** The
-paragraph above is the maintainers' record from 2026-09-07. The remediation
-run that enabled backup encryption did not re-run the drill (docker-in-docker
-sizing), so the 9 s restore figure stays a claim, not a measurement, and the
-next drill must also cover the encrypted repo: export
-`PGBACKREST_REPO1_CIPHER_PASS` before running `scripts/pgbackrest_drill.sh`
-(the script itself still needs that pass wired into its two docker invocations;
-the exact patch is in `.audit/handoffs/ef-from-b.md`).
+**Re-executed 2026-10-19 (AUD-B-33, PASS, encrypted repo).** The round-3
+re-run found and fixed one real defect first: the repo is encrypted
+(`repo1-cipher-type=aes-256-cbc`, AUD-B-03) and the drill's throwaway cluster
+was started without `PGBACKREST_REPO1_CIPHER_PASS`, so `archive_command` died
+with exit 37 (`archive-push command requires option: repo1-cipher-pass`) and
+the drill failed at step 2. `scripts/pgbackrest_drill.sh` now injects a
+throwaway passphrase (composed in the script, never a real secret; the drill
+owns its throwaway volumes) into both postgres containers and the restore
+invocation.
 
-The weekly cadence on the real staging box is the human/infra step
-(staging server itself is pending 🖐); until then run the drill locally --
+Measured on this host (Windows 11, Docker 29.7.2), command
+`DRILL_PORT=15435 bash scripts/pgbackrest_drill.sh`, evidence
+`E-R3-ws4-b33-pgbackrest`:
+
+| Step | Result |
+|---|---|
+| stanza-create + check + full backup | PASS (`full backup size = 29.4MB`; `expire ... completed successfully`) |
+| post-backup write + `pg_switch_wal()` | PASS (segment archived by `archive-push`) |
+| container destroyed + data volume wiped | PASS (disaster simulated, not mocked) |
+| `--delta restore` + startup (wall clock) | **13 s** (RTO budget 14400 s) |
+| recovered markers | `pre-backup,post-backup` -> WAL replay proven, not just dump-and-reload |
+| drill exit code | 0 (`PASS: pgBackRest backup + PITR-style WAL-replay restore drill verified`) |
+
+**Credential separation (AUD-B-33).** The drill also demonstrates it: the
+backup tools act as the OS user `postgres` over the Unix socket (peer auth)
+and read the repo passphrase from `PGBACKREST_REPO1_CIPHER_PASS`; the
+application connects as the `bgpt` role with `POSTGRES_PASSWORD` and never
+sees the backup-repo passphrase. Production keeps the same split: app
+credentials in the app environment, `PGBR_CIPHER_PASS` only in the
+postgres/pgbackrest containers, both sourced from the host secret store.
+
+The weekly cadence on the real staging box remains the human/infra step
+(staging server itself is pending); until then run the drill locally --
 it is host-agnostic (needs docker only). Schedule suggestion:
 `0 4 * * 1 cd /srv/bangla-gpt && bash scripts/pgbackrest_drill.sh`.
 
@@ -142,9 +164,12 @@ bash scripts/pgbackrest_drill.sh          # performs steps 3-6 itself:
 #    docker compose --profile postgres --profile backup down -v
 ```
 
-Until that run, the honest status is **documented, previously measured
-(2026-09-07), not re-verified this round**. The SQLite rehearsal below *was*
-re-run this round and is the fallback path for dev installs.
+Status after the 2026-10-19 re-run above: **drill executed on this host,
+encrypted repo, 13 s restore; the owner re-runs it on staging with the real
+secret store** (the local run uses a throwaway passphrase and throwaway
+volumes, which is why it is safe on a workstation; the owner run needs the
+production `PGBR_CIPHER_PASS`). The SQLite rehearsal below is the fallback
+path for dev installs and was re-run in the same round.
 
 ## Key loss caveat (operator duty)
 
