@@ -12,7 +12,7 @@ name: Android release (Play Store AAB)
 #   ANDROID_KEY_ALIAS
 #   ANDROID_KEY_PASSWORD
 # Required repository variable (or the workflow_dispatch input):
-#   VITE_API_BASE              absolute HTTPS API origin, e.g. https://api.example.com/api
+#   VITE_API_BASE              absolute HTTPS API origin, e.g. https://api.<your-domain>/api
 # Without the API base the Capacitor WebView cannot reach the backend (its
 # origin is capacitor://localhost), so the job fails rather than shipping a
 # shell that cannot log in.
