@@ -210,6 +210,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - test(api): cover school admin fallbacks and tenant guards
 - test(api): make the injection-guard fixture grounded under the enforced contract
 - test(e2e): Playwright smoke scaffold and a sqlite boot-timeout regression test
+- test(e2e): scope the sign-out selector to the header
 - test(e2e): wait for the session in signIn, not just the submit click
 - test(school): cover the aggregation routes TST-04 flagged as unexercised
 - test(tenancy): cover school dashboard routes across two tenants

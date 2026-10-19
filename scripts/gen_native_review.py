@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """Generate the native-speaker review sheet for user-facing Bangla copy (AUD-G-06 / G-27).
 
 The audit cannot certify Bangla language quality (master prompt T14); it can

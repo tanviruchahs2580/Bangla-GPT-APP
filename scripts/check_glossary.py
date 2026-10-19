@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """Enforce the Bangla terminology glossary (AUD-G-05 / G-25).
 
 The glossary in ``docs/i18n-glossary.md`` is the single source of truth for

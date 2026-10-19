@@ -59,6 +59,8 @@ describe("parseServerDate", () => {
         day: "numeric",
         month: "short",
       }),
-    ).toBe(instant.toLocaleDateString(locale, { day: "numeric", month: "short" }));
+    ).toBe(
+      instant.toLocaleDateString(locale, { day: "numeric", month: "short" }),
+    );
   });
 });
