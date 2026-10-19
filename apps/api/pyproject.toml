@@ -266,7 +266,17 @@ exclude_lines = [
 #            apps/api/scripts/ imported through a sys.path insert (its own
 #            module, not a distribution). Add it to known_first_party if
 #            deptry is ever wired into CI.
-known_first_party = ["bangla_gpt_api"]
+known_first_party = ["bangla_gpt_api", "_changelog_common"]
+
+# Import-name to distribution-name mappings deptry cannot infer without the
+# project's environment installed. Locally the venv resolves them; in CI's
+# guardrails job (which installs only the ratchet tools) the same imports were
+# reported as DEP001 and their distributions as DEP002, so the mapping is
+# spelled out here and the deps gate behaves identically in both places.
+[tool.deptry.package_module_name_map]
+"pyjwt" = "jwt"
+"argon2-cffi" = "argon2"
+"fpdf2" = "fpdf"
 
 [tool.mypy]
 python_version = "3.11"
