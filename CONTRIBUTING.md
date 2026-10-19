@@ -9,10 +9,25 @@ only the rules that the CI cannot enforce for you.
   agreed before the work is done.
 - `main` is the integration branch. Branch from it, never commit to it
   directly.
+- One command sets the toolchain up (Python 3.12 + Node 24, pinned in
+  `.python-version`, `.nvmrc` and `.tool-versions`):
+
+  ```text
+  make setup     # venv + hash-verified Python deps + npm ci
+  make test      # the real test suites; make test-fast for the guardrail subset
+  make ci        # every CI check that needs no external service
+  ```
+
+  The same environment is described for editors in `.devcontainer/` and
+  `.editorconfig`. `make help` lists every target; a POSIX shell (Git Bash on
+  Windows) and GNU make are required.
+
+This project follows the [Code of Conduct](CODE_OF_CONDUCT.md) in every
+project space.
 
 ## Branches and commits
 
-```
+```sh
 git switch main && git pull
 git switch -c fix/short-description
 ```
@@ -25,6 +40,13 @@ git switch -c fix/short-description
   finding id when one exists (`Refs: #123`).
 - Do not commit secrets, `.env` files, real student data, or generated
   artefacts. `.env.example` is the template; copy it to `.env` locally.
+
+The 72-character limit and the Conventional Commits shape are checked by
+`scripts/check_commits.py` (`make check-commits`): structure violations fail,
+over-length subjects warn on history but fail in CI for a pull request's own
+commits (`--strict-length` over the PR range). The check arrived after most of
+the current history was written and history is not rewritten, so older commits
+legitimately do not satisfy the length rule; new commits must.
 
 ## Definition of done
 
@@ -61,7 +83,7 @@ builds the same dependency set.
 
 When you change `pyproject.toml`, regenerate the lock in the same pull request:
 
-```
+```sh
 pip install pip-tools
 cd apps/api
 pip-compile --generate-hashes --allow-unsafe --extra dev --strip-extras
@@ -92,7 +114,7 @@ The `Dockerfile` pins `python:3.12-slim` to a digest, and the two explicitly
 installed Debian packages to the versions that digest resolves to. To move the
 base, re-resolve both and change them together:
 
-```
+```sh
 docker run --rm --entrypoint sh python:3.12-slim@sha256:<digest> \
   -c "apt-get update -qq && apt-cache policy openssl libssl3t64"
 ```
@@ -112,7 +134,33 @@ the migration history disagree.
 - If you change a public API contract, update the OpenAPI-derived docs and the
   changelog in the same pull request.
 
-## Merge policy
+## Audit trail and traceability
+
+Reviews depend on being able to reconstruct *why* a change exists. Keep the
+trail in the pull request itself; external documents are not searchable from
+the change:
+
+- **Findings and issues.** Name the finding ids a change addresses
+  (`Refs: AUD-JK-07`, `Closes #42`) in the commit body and in the PR body's
+  "Findings addressed" section. A change that fixes something the tracker
+  does not name should say so explicitly.
+- **Evidence.** For a measurable claim, state the command and the before/after
+  numbers ("pytest 1106 passed, 6 skipped"; "recall@1 0.38 → 0.51,
+  `data/nctb/retrieval_eval.json`"). A number without a command and a date is
+  not evidence.
+- **Risk and rollback.** One short section per PR: what could go wrong, how it
+  is detected, and how to undo it (revert commit, flag, migration downgrade).
+- **Decisions.** A choice another engineer could reasonably have made
+  differently gets an ADR under `docs/adr/` (numbered, with Context / Decision
+  / Alternatives / Consequences / Status) or a paragraph in the PR body that
+  the ADR record can quote later.
+- **Deferred work.** Anything found but not fixed becomes an issue with
+  acceptance criteria, not a comment in a closed PR.
+
+The audit's own ledgers (`.audit/`, a work-in-progress artifact set from the
+2026-10 hardening round) are not the long-term tracker: the issue tracker is.
+
+## Branch model and merge policy
 
 Check the repository settings before relying on this section: merge methods
 and branch protection are configured on the server, not in the repository,
@@ -121,15 +169,28 @@ and this file can drift from them.
 The intended policy, and what CI enforces by review rather than by
 configuration:
 
+- `main` is the only long-lived branch and the only deployment source.
+- Feature work happens on topic branches (`fix/…`, `feat/…`, `chore/…`,
+  `docs/…`, `ci/…`) and lands through a pull request.
 - **Squash merge** for feature branches, so `main`'s history stays readable
   and each merge has one Conventional-Commits subject.
-- Delete the branch after merge.
+- Delete the branch after merge (the repository already sets
+  `delete_branch_on_merge`), and remove a stale branch once its commits are in
+  `main`.
 - Only maintainers merge to `main`, and production deploys only after the
   full gate is green on `main`.
 
-What is actually configured today is in `.github/` and in the repository
-settings, not here; see `docs/LAUNCH_READINESS_CHECKLIST.md` for the items
-that still need a maintainer with admin scope.
+What is actually configured today, verified 2026-10-18 at commit `0b7dfe6`: the
+repository allows merge commits, squash merges and rebase merges at the same
+time, and the history contains nine `Merge pull request #N` commits, so the
+squash-only intent above is *not* enforced by configuration. The remote
+carries 30 heads — 12 already merged into `main` (including
+`backup/pre-qa-2026-10-16`), 18 not, 14 of those Dependabot branches — and the
+local clone has 13. The full inventory is recorded at
+`.audit/evidence/E-FIX-JK-009-stale-branches.txt` as the pruning baseline.
+Changing repository settings or deleting remote branches needs maintainer
+admin scope — both are listed as owner actions in
+`.audit/handoffs/ef-from-jk.md`.
 
 Pull-request review is required for changes under `apps/api/src` and anything
 that touches authentication, PII handling, migrations, or CI configuration.

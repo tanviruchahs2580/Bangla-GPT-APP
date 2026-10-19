@@ -6,7 +6,7 @@ Bangla GPT APP is maintained by a small group. There is no support SLA.
 
 Open a public issue — that is the right channel for ordinary bugs:
 
-https://github.com/tanviruchahs2580/Bangla-GPT-APP/issues
+<https://github.com/tanviruchahs2580/Bangla-GPT-APP/issues>
 
 Please include the version or commit, what you did, what happened instead,
 and the relevant log lines. Redact real student names, emails and phone

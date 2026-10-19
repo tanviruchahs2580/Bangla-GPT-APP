@@ -13,7 +13,8 @@ next is written.
 | [API.md](API.md) | Hand-written endpoint reference (core surface; see `route_baseline.md` + `/openapi.json` for the full route list) |
 | [architecture.md](architecture.md) | System architecture and decisions |
 | [architecture/DATABASE_ARCHITECTURE.md](architecture/DATABASE_ARCHITECTURE.md) | Data model |
-| [adr/ADRs.md](adr/ADRs.md) | Architecture decision records |
+| [adr/ADRs.md](adr/ADRs.md) | Architecture decision records (0001–0010; 0011 is a standalone file below) |
+| [adr/ADR-0011-data-and-artifact-management.md](adr/ADR-0011-data-and-artifact-management.md) | What lives in git vs out-of-band (corpus, screenshots, evals) |
 | [runbook.md](runbook.md) | Operations runbook |
 | [route_baseline.md](route_baseline.md) | Route inventory captured 2026-09-11 from the running app — no in-repo generator; re-verify against `/openapi.json` when routes change |
 | [qa/QA_REPORT_2026-10-17.md](qa/QA_REPORT_2026-10-17.md) | Current QA record |
@@ -24,6 +25,9 @@ next is written.
 |---|---|
 | [RAG_ARCHITECTURE.md](RAG_ARCHITECTURE.md) | Retrieval + grounding design |
 | [NCTB_DATA_PIPELINE.md](NCTB_DATA_PIPELINE.md) | Corpus acquisition → retrieval pipeline |
+| [ai-system-card.md](ai-system-card.md) | AI system card: intended use, data sources, measured evaluation results, failure modes, oversight, update process |
+| [threat-model.md](threat-model.md) | STRIDE per trust boundary, OWASP LLM Top 10 (2025) mapping, LINDDUN-lite for minors' data |
+| [uiux_renovation_evidence/README.md](uiux_renovation_evidence/README.md) | Why the UI evidence screenshots are committed |
 
 ## Operations & compliance
 
@@ -41,4 +45,5 @@ next is written.
 | [dpa_template.md](dpa_template.md) | Data processing agreement template |
 | [mobile_release.md](mobile_release.md) | Android/Capacitor release process |
 | [hosting_decision.md](hosting_decision.md) | Hosting choices |
+| [openssf-self-assessment.md](openssf-self-assessment.md) | OpenSSF Best Practices (passing level) self-assessment with evidence pointers |
 | [LAUNCH_READINESS_CHECKLIST.md](LAUNCH_READINESS_CHECKLIST.md) | Owner launch gates |

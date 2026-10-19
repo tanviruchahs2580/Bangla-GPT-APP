@@ -1,0 +1,73 @@
+name: Maintenance task
+description: Concrete work with an acceptance criterion — a fix, a hardening step, a doc change
+title: "[TASK] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for work that is not a bug report: hardening, refactors,
+        documentation, CI and dependency work. One task per issue — an issue
+        that describes three changes cannot be closed by one pull request.
+
+        This project handles children's personal data: **redact real student
+        names, emails, phone numbers and conversation content** from anything
+        you paste here, and never paste a secret or a live credential.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or opportunity
+      description: What is wrong or missing today, and what it costs (incident risk, time, money).
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: How a reviewer will know this is done. Prefer observable checks ("pytest test_x passes", "the endpoint returns 409", "the doc names file:line") over intentions.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: approach
+    attributes:
+      label: Approach and alternatives
+      description: The intended change, and any approach you considered and rejected. A decision that needs an ADR should say so.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - API routes / services
+        - Database / migrations
+        - Web frontend
+        - CI / deployment / infrastructure
+        - Documentation
+        - Dependencies
+        - Retrieval / AI quality
+        - Security / privacy
+    validations:
+      required: true
+
+  - type: textarea
+    id: risk
+    attributes:
+      label: Risk and rollback
+      description: What could go wrong, how it would be detected, and how to undo the change.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmations
+      options:
+        - label: I searched existing issues and pull requests for this.
+          required: true
+        - label: This is not a security report (those go to SECURITY.md).
+          required: true
+        - label: This issue is scoped to one logical change.
+          required: true

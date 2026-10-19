@@ -1,0 +1,54 @@
+{
+  // markdownlint-cli2 configuration (audit finding AUD-JK-10).
+  //
+  // The repository's prose is written in long single-line paragraphs and
+  // tables (~150-260 chars), so the default MD013 line-length rule would flag
+  // almost every existing document and force a reformat with no reviewer
+  // value. The rule is off; the rules that catch real defects (bare URLs,
+  // unlabelled fences, heading structure, list indentation) stay on.
+  //
+  // Run: npx --yes markdownlint-cli2 "**/*.md" "#node_modules" "#CHANGELOG.md"
+  // CI wiring lives in .audit/handoffs/ef-from-jk.md (workflow files are owned
+  // by the ci tag).
+  "config": {
+    "default": true,
+    "MD013": false, // long prose lines are this repository's house style
+    "MD024": false, // CHANGELOG repeats "### Fixed" per release when generated
+    "MD029": false, // ordered lists restart in nested steps
+    "MD004": { "style": "dash" }, // repository list style: "- item"
+    // The repository writes tables with spaces around the pipes
+    // ("| --- | --- |"); this pins that style so a compact separator is a
+    // real error rather than a formatting preference.
+    "MD060": { "style": "leading_and_trailing" }
+  },
+  // Per-file rule exceptions, each with the reason it is not a defect.
+  "overrides": [
+    {
+      // One ADR per top-level heading in a single log file is the intended
+      // structure (docs/adr/ADRs.md carries ADR-0001..0010). Property names
+      // follow the markdownlint-cli2 override schema (filter/config/combine).
+      "filter": ["docs/adr/ADRs.md"],
+      "combine": "merge",
+      "config": { "MD025": false }
+    }
+  ],
+  // Files that are generated (CHANGELOG), vendored (node_modules, .venv) or
+  // an archive of superseded snapshots (docs/archive) are excluded.
+  "globs": ["**/*.md"],
+  "ignores": [
+    "node_modules/**",
+    ".venv/**",
+    "**/node_modules/**",
+    "CHANGELOG.md",
+    "docs/archive/**",
+    ".audit/**",
+    ".audit-work/**",
+    ".zcode/**",
+    ".qa-deploy/**",
+    "apps/api/src/bangla_gpt_api/data/sample_nctb/**",
+    // Issue forms: these files are YAML (front matter + body: schema), not
+    // markdown documents. Linting them as prose only produces false MD007/
+    // MD041 hits from the YAML indentation and the leading `name:` key.
+    ".github/pull_request_template.md"
+  ]
+}

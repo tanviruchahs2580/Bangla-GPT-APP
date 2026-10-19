@@ -2,7 +2,8 @@
 
 **Target (master prompt):** pagination/N+1 audit; k6: 500 RPS read, 50 RPS
 write, p95 < 400 ms on **non-AI** endpoints. PASS = targets met **on staging**
-+ this report saved. k6 is not installed on this machine, so the k6 script is
+
+- this report saved. k6 is not installed on this machine, so the k6 script is
 a deliverable and the local numbers below come from an equivalent Python
 harness (a scratch load script, not committed to the tree — see
 `load/tutor_load.js` for the k6 version that is).
