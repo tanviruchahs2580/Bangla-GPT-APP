@@ -1,6 +1,4 @@
 import asyncio
-import hashlib
-import json
 import logging
 import os
 import re
@@ -9,8 +7,6 @@ import unicodedata
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
-from functools import lru_cache
-from pathlib import Path
 from typing import Any
 
 from bangla_gpt_api import tracing
@@ -64,13 +60,19 @@ from bangla_gpt_api.services.context import (
 )
 from bangla_gpt_api.services.costs import estimate_tokens
 from bangla_gpt_api.services.pii import redact_pii
+from bangla_gpt_api.services.prompt_registry import (  # noqa: F401 (re-export)
+    PROMPTS_DIR_ENV,
+    PromptSpec,
+    load_prompt,
+    prompts_dir,
+)
 from bangla_gpt_api.services.router import (
     Route,
     classify,
     fast_eligible,
     set_current_route,
 )
-from bangla_gpt_api.services.safety import AGE_RULE_SENTENCE, refusal_for, screen_question
+from bangla_gpt_api.services.safety import refusal_for, screen_question
 from bangla_gpt_api.services.trace_meta import index_fingerprint
 
 logger = logging.getLogger("bangla_gpt_api.tutor")
@@ -78,77 +80,14 @@ logger = logging.getLogger("bangla_gpt_api.tutor")
 
 # --- prompt registry (AUD-A2-06 / A5-02) -----------------------------------
 #
-# Prompts are versioned files under ``apps/api/prompts/`` with an owner and a
-# changelog in ``prompts/manifest.json``, not inline constants. The loader
-# below is the SINGLE read path; a missing or malformed registry fails loudly
-# at import time (a silent fallback would ship a prompt nobody reviewed).
-#
-# ``{{age_rule}}`` is substituted from services/safety.AGE_RULE_SENTENCE so the
-# child-safety sentence keeps exactly one source. Changing a prompt means
-# editing the file, bumping its version and adding a changelog entry in the
-# same change -- see docs/operations/CHANGE_MANAGEMENT.md.
-
-PROMPTS_DIR_ENV = "BANGLA_GPT_PROMPTS_DIR"
-
-
-def prompts_dir() -> Path:
-    """Resolve the registry directory (env override, then the checkout)."""
-    override = os.environ.get(PROMPTS_DIR_ENV, "").strip()
-    if override:
-        return Path(override)
-    # tutor.py -> services -> bangla_gpt_api -> src -> apps/api <- prompts/
-    return Path(__file__).resolve().parents[3] / "prompts"
-
-
-@dataclass(frozen=True)
-class PromptSpec:
-    """One registered prompt: text plus the metadata a trace must carry."""
-
-    id: str
-    version: str
-    owner: str
-    text: str
-
-    @property
-    def digest(self) -> str:
-        """Content digest -- derivable, so a prompt edit cannot leave a stale
-        version behind in a trace record."""
-        return hashlib.sha256(self.text.encode("utf-8")).hexdigest()[:12]
-
-    @property
-    def trace_version(self) -> str:
-        """Trace-visible identity: registry version + content digest."""
-        return f"{self.id}@{self.version}+sp-{self.digest}"
-
-
-@lru_cache(maxsize=64)
-def _load_prompt_cached(prompt_id: str, directory: str | None) -> PromptSpec:
-    base = Path(directory) if directory else prompts_dir()
-    manifest_path = base / "manifest.json"
-    if not manifest_path.is_file():
-        raise RuntimeError(
-            f"prompt registry missing: {manifest_path} (set {PROMPTS_DIR_ENV} to the prompts directory)"
-        )
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    entry = next((p for p in manifest.get("prompts", []) if p.get("id") == prompt_id), None)
-    if entry is None:
-        raise RuntimeError(f"prompt id {prompt_id!r} is not in {manifest_path}")
-    body = (base / entry["file"]).read_text(encoding="utf-8")
-    # Exactly one trailing newline is the file's line ending, never prompt text.
-    if body.endswith("\n"):
-        body = body[:-1]
-    body = body.replace("{{age_rule}}", AGE_RULE_SENTENCE)
-    return PromptSpec(
-        id=prompt_id,
-        version=str(entry.get("version", "0")),
-        owner=str(entry.get("owner", "unowned")),
-        text=body,
-    )
-
-
-def load_prompt(prompt_id: str, *, directory: Path | None = None) -> PromptSpec:
-    """Load a registered prompt by id (see prompts/manifest.json)."""
-    return _load_prompt_cached(prompt_id, str(directory) if directory else None)
+# The loader lives in services/prompt_registry.py (A5-02/A1-04) so the
+# generators and answer_structure can read the registry without an import
+# cycle; it is re-exported here for the historic import path
+# (``services.tutor.load_prompt``). Prompts are versioned files under
+# ``apps/api/prompts/`` with an owner and a changelog in manifest.json; a
+# missing or malformed registry fails loudly at import time. Changing a
+# prompt means editing the file, bumping its version and adding a changelog
+# entry in the same change -- see docs/operations/CHANGE_MANAGEMENT.md.
 
 
 INSUFFICIENT_EVIDENCE_ANSWER = (
@@ -497,9 +436,23 @@ def hint_first_enabled(settings: object | None = None, *, default: bool = True) 
     return str(raw).strip().lower() not in _FALSEY
 
 
-def is_homework_like(question: str) -> bool:
-    """True when the question reads like a pasted assignment/homework."""
-    return bool(_HOMEWORK_CUE_RE.search(question))
+def is_homework_like(question: str, history: list[dict[str, str]] | None = None) -> bool:
+    """True when the question reads like a pasted assignment/homework.
+
+    A11-03: a homework dialogue is not one turn. The student pastes the task,
+    gets a hint, then replies "I tried" -- and that follow-up carries no cue
+    of its own, which used to let the hint-first guardrail expire exactly when
+    the model was about to be asked for the solution. The LAST user turn is
+    therefore part of the test: while the conversation is inside the same
+    homework exchange the guardrail stays. A fresh curriculum question becomes
+    the new last turn and the guardrail ends by itself.
+    """
+    if _HOMEWORK_CUE_RE.search(question):
+        return True
+    for turn in reversed(history or []):
+        if turn.get("role") == "user":
+            return bool(_HOMEWORK_CUE_RE.search(str(turn.get("content", ""))))
+    return False
 
 
 def sanitize_image_payload(image: dict | None) -> tuple[dict | None, str | None]:
@@ -1070,6 +1023,7 @@ class TutorService:
         *,
         context: RequestContext | None,
         extra_instruction: str | None,
+        history: list[dict[str, str]] | None = None,
     ) -> list[str]:
         """Trusted teaching instructions for this turn, in a fixed order.
 
@@ -1081,7 +1035,7 @@ class TutorService:
         instructions: list[str] = []
         if extra_instruction:
             instructions.append(extra_instruction)
-        if self.hint_first and is_homework_like(question):
+        if self.hint_first and is_homework_like(question, history):
             instructions.append(HINT_FIRST_INSTRUCTION)
         # getattr: seam tests pass minimal context stand-ins that only
         # implement render_block(); a missing goal means "not study mode".
@@ -1122,13 +1076,19 @@ class TutorService:
             evidence_ids=[p.source_id for p in selection.passages],
             evidence_tokens=selection.tokens,
             budget_tokens=selection.budget_tokens,
-            token_counter=selection.counter_name,
+            # Field name is `tokenizer`, not `token_counter`: the log redactor
+            # treats any key whose segment is `token` as a credential
+            # (logging_config._SENSITIVE_KEY_RE) and replaced this value with
+            # "[redacted]" in every prompt trace, which cost the A5-01 record
+            # the name of the counter that measured the budget. `tokenizer`
+            # survives redaction and says the same thing.
+            tokenizer=selection.counter_name,
             dropped_duplicates=len(selection.dropped_duplicates),
             dropped_over_budget=len(selection.dropped_over_budget),
             truncated=len(selection.truncated_passages),
         )
         instructions = self._pedagogy_instructions(
-            question, context=context, extra_instruction=extra_instruction
+            question, context=context, extra_instruction=extra_instruction, history=history
         )
         if low_data:
             instructions.append(SHORT_ANSWER_INSTRUCTION)
@@ -1444,6 +1404,7 @@ class TutorService:
             context=context,
             low_data=low_data,
             image=image,
+            extra_instruction=extra_instruction,
         )
         return self._assemble(
             answer,
@@ -1467,12 +1428,19 @@ class TutorService:
         context: RequestContext | None,
         low_data: bool,
         image: dict | None,
+        extra_instruction: str | None = None,
     ) -> str:
         """One bounded regeneration when the first answer fails the checks.
 
         A6-01/AUD-A2-03: the retry carries an explicit demand to stay inside
         <evidence>; if it also fails, ``_assemble`` abstains instead of showing
         it. A model refusal is not retried -- there is nothing to ground.
+
+        A11-04: the caller's instruction (an explicit student-chosen strategy
+        or the re-teach swap) SURVIVES the retry. The retry prompt used to
+        replace it, so a strategy-chip answer that failed the grounding check
+        came back as a strategy-less answer -- the chip silently stopped
+        applying exactly when the student asked for help.
         """
         if _model_refused(answer):
             return answer
@@ -1480,11 +1448,16 @@ class TutorService:
         if first_ok:
             return answer
         RAG_CITATION_CHECKS_TOTAL.labels(result="retry").inc()
+        retry_instruction = (
+            f"{GROUNDING_RETRY_INSTRUCTION}\n{extra_instruction}"
+            if extra_instruction
+            else GROUNDING_RETRY_INSTRUCTION
+        )
         retry_blocks = self._prompt_blocks(
             hits,
             question,
             history,
-            extra_instruction=GROUNDING_RETRY_INSTRUCTION,
+            extra_instruction=retry_instruction,
             context=context,
             low_data=low_data,
         )

@@ -31,14 +31,16 @@ one source and cannot drift between the prompt and the safety module.
    `id@version+sp-<content digest>`, so a stale version cannot survive.
 4. Commit the file, the manifest entry and the test/eval evidence together.
 
-## Migration state (updated 2026-10-19)
+## Migration state (updated 2026-10-19, migration COMPLETE)
 
-Prompts with a `module_constant` field in the manifest still live as constants
-in their module and are only *registered* here; `tests/test_rag2_prompt_registry.py`
-pins file content == constant content, so the two cannot drift while the
-handoff (switch the generator modules to `load_prompt`) is open. Once a module
-switches, its manifest entry loses `module_constant` and the file becomes the
-only copy.
+Every registered prompt is now loaded from its file via
+`services/prompt_registry.load_prompt()` -- the tutor prompts, the seven
+teacher/course generators and `answer_structure.SHORT_ANSWER_INSTRUCTION`
+alike. The `module_constant` manifest field is retired: there is exactly one
+copy of every prompt, the file. The byte-identity of the move is procedurally
+verified in `tests/test_rag2_prompt_registry.py` (loaded text == file text) and
+was proven against the pre-migration constants via AST evaluation when the
+last constants were removed (see `.audit/evidence/R3-ws1-prompt-registry-migration.txt`).
 
 ## Verification
 

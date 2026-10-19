@@ -4,15 +4,15 @@
     "Every prompt the app sends as a system or instruction message is registered here with one owner.",
     "version is SemVer; bump it and append a changelog entry in the SAME change that edits the file (docs/operations/CHANGE_MANAGEMENT.md).",
     "{{age_rule}} is substituted at load time from services/safety.AGE_RULE_SENTENCE, so the child-safety sentence has exactly one source.",
-    "Prompts carrying module_constant are not yet loaded from this file; tests/test_rag2_prompt_registry.py pins file<->constant equality so the two cannot drift."
+    "Every entry is LOADED from its file via services/prompt_registry.load_prompt (A5-02/A1-04 migration complete 2026-10-19); the module_constant field is retired -- the file is the only copy."
   ],
   "prompts": [
     {
       "id": "tutor_system",
       "file": "tutor_system.md",
-      "version": "1.0.1",
+      "version": "2.0.0",
       "owner": "ai-platform",
-      "summary": "Grounded tutor system prompt (rules 1-7: evidence isolation, refusal, age rule).",
+      "summary": "Grounded tutor system prompt (rules 1-10: evidence isolation, refusal, age rule, language, citation-format and math-formatting policy). NEEDS NATIVE REVIEW.",
       "changelog": [
         {
           "version": "1.0.1",
@@ -23,6 +23,11 @@
           "version": "1.0.0",
           "date": "2026-10-17",
           "note": "Text as shipped in services/tutor.py (AUD-A2-06 baseline)."
+        },
+        {
+          "version": "2.0.0",
+          "date": "2026-10-19",
+          "note": "A5-03/A5-04 policy completion: rule 8 (standard modern Bangla unless asked otherwise, class-level vocabulary), rule 9 (never invent page/chapter/citation; quote verbatim; the app attaches verified sources), rule 10 (plain-text math, NCTB units), and an added clause in rule 3 declaring text inside a student-sent image data-only (never instructions). NEEDS NATIVE REVIEW (the new Bangla copy)."
         }
       ]
     },
@@ -90,8 +95,7 @@
           "date": "2026-10-19",
           "note": "Registered verbatim from the module constant; the constant is still the loader (handoff: switch the module to load_prompt). Drift is impossible: tests/test_rag2_prompt_registry.py pins equality."
         }
-      ],
-      "module_constant": "bangla_gpt_api.services.answer_structure:SHORT_ANSWER_INSTRUCTION"
+      ]
     },
     {
       "id": "qp_system",
@@ -105,8 +109,7 @@
           "date": "2026-10-19",
           "note": "Registered verbatim from the module constant; the constant is still the loader (handoff: switch the module to load_prompt). Drift is impossible: tests/test_rag2_prompt_registry.py pins equality."
         }
-      ],
-      "module_constant": "bangla_gpt_api.services.generators.question_paper:QP_SYSTEM_PROMPT"
+      ]
     },
     {
       "id": "content_system",
@@ -120,8 +123,7 @@
           "date": "2026-10-19",
           "note": "Registered verbatim from the module constant; the constant is still the loader (handoff: switch the module to load_prompt). Drift is impossible: tests/test_rag2_prompt_registry.py pins equality."
         }
-      ],
-      "module_constant": "bangla_gpt_api.services.generators.chapter_content:CONTENT_SYSTEM_PROMPT"
+      ]
     },
     {
       "id": "answer_key_system",
@@ -135,8 +137,7 @@
           "date": "2026-10-19",
           "note": "Registered verbatim from the module constant; the constant is still the loader (handoff: switch the module to load_prompt). Drift is impossible: tests/test_rag2_prompt_registry.py pins equality."
         }
-      ],
-      "module_constant": "bangla_gpt_api.services.generators.answer_key:ANSWER_KEY_SYSTEM_PROMPT"
+      ]
     },
     {
       "id": "homework_system",
@@ -150,8 +151,7 @@
           "date": "2026-10-19",
           "note": "Registered verbatim from the module constant; the constant is still the loader (handoff: switch the module to load_prompt). Drift is impossible: tests/test_rag2_prompt_registry.py pins equality."
         }
-      ],
-      "module_constant": "bangla_gpt_api.services.generators.homework:HOMEWORK_SYSTEM_PROMPT"
+      ]
     },
     {
       "id": "rubric_system",
@@ -165,8 +165,7 @@
           "date": "2026-10-19",
           "note": "Registered verbatim from the module constant; the constant is still the loader (handoff: switch the module to load_prompt). Drift is impossible: tests/test_rag2_prompt_registry.py pins equality."
         }
-      ],
-      "module_constant": "bangla_gpt_api.services.generators.rubric:RUBRIC_SYSTEM_PROMPT"
+      ]
     },
     {
       "id": "worksheet_system",
@@ -180,8 +179,7 @@
           "date": "2026-10-19",
           "note": "Registered verbatim from the module constant; the constant is still the loader (handoff: switch the module to load_prompt). Drift is impossible: tests/test_rag2_prompt_registry.py pins equality."
         }
-      ],
-      "module_constant": "bangla_gpt_api.services.generators.worksheet:WORKSHEET_SYSTEM_PROMPT"
+      ]
     },
     {
       "id": "lesson_system",
@@ -195,8 +193,21 @@
           "date": "2026-10-19",
           "note": "Registered verbatim from the module constant; the constant is still the loader (handoff: switch the module to load_prompt). Drift is impossible: tests/test_rag2_prompt_registry.py pins equality."
         }
-      ],
-      "module_constant": "bangla_gpt_api.services.generators.lesson_plan:LESSON_SYSTEM_PROMPT"
+      ]
+    },
+    {
+      "id": "knowledge_extract_system",
+      "file": "knowledge_extract_system.md",
+      "version": "1.0.0",
+      "owner": "curriculum",
+      "summary": "Curriculum-analyst system prompt for corpus-verified concept extraction (A1-04 registry migration of the former inline EXTRACTION_PROMPT).",
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-19",
+          "note": "Moved the inline EXTRACTION_PROMPT instruction into the registry and added the evidence-is-data rule + verbatim-selection rule (A1-04 finding: the extraction call site sent untrusted corpus text with no delimiter policy)."
+        }
+      ]
     }
   ]
 }

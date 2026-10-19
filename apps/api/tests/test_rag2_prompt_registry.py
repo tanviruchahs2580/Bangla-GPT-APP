@@ -31,11 +31,14 @@ from bangla_gpt_api.services.safety import AGE_RULE_SENTENCE
 PROMPTS_DIR = Path(__file__).resolve().parents[1] / "prompts"
 MANIFEST = json.loads((PROMPTS_DIR / "manifest.json").read_text(encoding="utf-8"))
 
-#: Digest of SYSTEM_PROMPT as shipped inline in services/tutor.py before the
-#: registry migration (captured at HEAD eddd04c, evidence E-R2-rag2-001).
-#: The migration moved text, it did not change it -- if this digest moves, a
-#: prompt edit happened and the registry changelog must say so.
-BASELINE_SYSTEM_PROMPT_DIGEST = "54f3e1b19ebb"
+#: Digest of the current SYSTEM_PROMPT text.
+#: History: the registry migration moved the text verbatim out of
+#: services/tutor.py (digest 54f3e1b19ebb, captured at HEAD eddd04c, evidence
+#: E-R2-rag2-001). 2026-10-19 / tutor_system@2.0.0: the A5-03 policy
+#: completion appended rules 8-10 (language, citation format, math formatting)
+#: and the manifest changelog records it (rule 3 gained the image-data clause in the same change). If this digest moves again, a prompt
+#: edit happened and the registry changelog must say so.
+BASELINE_SYSTEM_PROMPT_DIGEST = "d9d60ad13384"
 
 
 def test_manifest_entries_are_complete() -> None:
@@ -98,22 +101,75 @@ def test_prompt_versions_in_the_registry_trace_value() -> None:
     assert spec.trace_version == f"tutor_hint_first@{spec.version}+sp-{spec.digest}"
 
 
+def test_every_prompt_is_loaded_from_its_file_not_a_module_constant() -> None:
+    """The migration is COMPLETE: no entry carries ``module_constant``.
+
+    Before 2026-10-19 the generator modules held system prompts as constants
+    and the manifest pinned file == constant so the two could not drift. The
+    generators (and answer_structure) now load from the registry; an entry
+    that reintroduces ``module_constant`` would recreate the second copy.
+    """
+    stragglers = [row["id"] for row in MANIFEST["prompts"] if row.get("module_constant")]
+    assert stragglers == [], f"prompts still shipped as module constants: {stragglers}"
+
+
 @pytest.mark.parametrize(
     "row",
-    [row for row in MANIFEST["prompts"] if row.get("module_constant")],
+    MANIFEST["prompts"],
     ids=lambda row: row["id"],
 )
-def test_unmigrated_prompts_match_their_registry_file(row: dict) -> None:
-    """Prompts not yet loaded from the registry must equal their file.
+def test_loaded_prompt_text_is_the_registry_file(row: dict) -> None:
+    """Every prompt constant the code imports equals its file, byte for byte.
 
-    The handoff (migrate generators/* and answer_structure to load_prompt)
-    stays open until every entry loses ``module_constant``; this test is what
-    makes the intermediate state safe -- file and constant cannot drift.
+    ``tutor_system.md`` carries the ``{{age_rule}}`` placeholder, which the
+    loader substitutes from services.safety; the comparison applies the same
+    substitution (the substituted sentence's single source stays pinned in
+    test_safety_v2).
     """
-    module_name, attr = row["module_constant"].split(":")
-    value = getattr(importlib.import_module(module_name), attr)
+    spec = tutor.load_prompt(row["id"])
     file_text = (PROMPTS_DIR / row["file"]).read_text(encoding="utf-8")
-    assert value == file_text[:-1]
+    assert spec.text == file_text[:-1].replace("{{age_rule}}", AGE_RULE_SENTENCE)
+
+
+@pytest.mark.parametrize(
+    "module_name, attr, prompt_id",
+    [
+        (
+            "bangla_gpt_api.services.answer_structure",
+            "SHORT_ANSWER_INSTRUCTION",
+            "tutor_short_answer",
+        ),
+        ("bangla_gpt_api.services.generators.question_paper", "QP_SYSTEM_PROMPT", "qp_system"),
+        (
+            "bangla_gpt_api.services.generators.chapter_content",
+            "CONTENT_SYSTEM_PROMPT",
+            "content_system",
+        ),
+        (
+            "bangla_gpt_api.services.generators.answer_key",
+            "ANSWER_KEY_SYSTEM_PROMPT",
+            "answer_key_system",
+        ),
+        (
+            "bangla_gpt_api.services.generators.homework",
+            "HOMEWORK_SYSTEM_PROMPT",
+            "homework_system",
+        ),
+        ("bangla_gpt_api.services.generators.rubric", "RUBRIC_SYSTEM_PROMPT", "rubric_system"),
+        (
+            "bangla_gpt_api.services.generators.worksheet",
+            "WORKSHEET_SYSTEM_PROMPT",
+            "worksheet_system",
+        ),
+        ("bangla_gpt_api.services.generators.lesson_plan", "LESSON_SYSTEM_PROMPT", "lesson_system"),
+    ],
+)
+def test_migrated_module_constants_come_from_the_registry(
+    module_name: str, attr: str, prompt_id: str
+) -> None:
+    """The module constants (kept as import names) ARE registry-loaded text."""
+    value = getattr(importlib.import_module(module_name), attr)
+    assert value == tutor.load_prompt(prompt_id).text
 
 
 def test_loader_fails_loudly_on_a_missing_registry(tmp_path: Path) -> None:

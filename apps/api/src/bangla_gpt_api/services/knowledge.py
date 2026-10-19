@@ -23,6 +23,7 @@ stay per class/subject/chapter.
 from __future__ import annotations
 
 import json
+import time
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,6 +33,7 @@ from sqlalchemy import CursorResult, delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from bangla_gpt_api.db.models import Concept, ConceptMastery, ConceptPrerequisite
+from bangla_gpt_api.services.prompt_registry import load_prompt
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Iterable, Mapping, Sequence
@@ -223,13 +225,20 @@ def resolve_gaps(
 
 
 # --- LLM extraction (corpus-verified) ----------------------------------------
+#
+# A1-04 finding fixed here: this call site used to send the raw corpus text
+# with an INLINE instruction and no system prompt, no delimiter policy, no
+# trace and no prompt-version record. It is admin-triggered
+# (``POST /admin/kg/rebuild?llm=true``) but it is still an LLM call: the
+# instruction now lives in the prompt registry, the corpus text is wrapped as
+# delimited data (it is untrusted too -- a poisoned textbook must not steer
+# the extractor), and every call emits a generation trace. Token accounting
+# for this route stays with its owner (routers/learn.py) -- see the handoff.
 
-EXTRACTION_PROMPT = (
-    "You are a curriculum analyst. From the Bangla chapter text below, list "
-    "3-6 key CONCEPT names (short word or phrase, exactly as spelled in the "
-    "text). Respond with a JSON array of strings only, no commentary.\n\n"
-    "Chapter: {chapter}\nText: {text}"
-)
+_EXTRACTION_SPEC = load_prompt("knowledge_extract_system")
+EXTRACTION_SYSTEM_PROMPT = _EXTRACTION_SPEC.text
+
+EXTRACTION_PROMPT_TEMPLATE = "Chapter: {chapter}\nText:\n<evidence>\n{text}\n</evidence>"
 
 
 def parse_concept_names(raw: str, *, chapter: str, text: str, limit: int = 6) -> list[str]:
@@ -268,12 +277,34 @@ async def extract_chapter_concepts(
     limit: int = 6,
 ) -> list[str]:
     """LLM chapter extraction, corpus-verified. Any failure -> [] (never raise
-    into a rebuild: the deterministic chapter roots always exist)."""
-    prompt = EXTRACTION_PROMPT.format(chapter=chapter, text=text[:4000])
+    into a rebuild: the deterministic chapter roots always exist).
+
+    A1-04: registry system prompt + delimited untrusted corpus text + one
+    generation trace per call, exactly like every other provider call site.
+    """
+    # trace_event lives in logging_config (the wave-1 helper every other
+    # stage uses); tracing.py imports logging_config lazily, so importing
+    # it back from there would close a cycle (c2 handoff).
+    from bangla_gpt_api.logging_config import trace_event
+    from bangla_gpt_api.services.costs import estimate_tokens
+    from bangla_gpt_api.services.tutor import sanitize_evidence
+
+    prompt = EXTRACTION_PROMPT_TEMPLATE.format(chapter=chapter, text=sanitize_evidence(text[:4000]))
+    started = time.perf_counter()
     try:
-        raw = await provider.generate(prompt)
+        raw = await provider.generate(prompt, system=EXTRACTION_SYSTEM_PROMPT)
     except Exception:
         return []
+    trace_event(
+        "generation",
+        route="knowledge_extraction",
+        model=getattr(provider, "model", None) or getattr(provider, "name", "unknown"),
+        prompt_version=_EXTRACTION_SPEC.trace_version,
+        prompt_tokens=estimate_tokens(prompt),
+        completion_tokens=estimate_tokens(raw),
+        answer_chars=len(raw),
+        latency_ms=int((time.perf_counter() - started) * 1000),
+    )
     return parse_concept_names(raw, chapter=chapter, text=text, limit=limit)
 
 

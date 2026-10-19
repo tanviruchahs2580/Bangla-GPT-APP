@@ -44,6 +44,12 @@ MODEL_COSTS_USD_PER_1K: dict[str, tuple[float, float]] = {
     "mock": (0.0, 0.0),
     # Gemini 3.1 Flash-Lite standard tier: $0.25 / $1.50 per 1M tokens.
     "gemini-3.1-flash-lite": (0.00025, 0.0015),
+    # Gemini 3.5 Flash-Lite standard tier: $0.30 / $2.50 per 1M tokens (read
+    # from the same vendor pricing page on 2026-10-19). The live evaluation runs
+    # on this model: without the row every live call would be metered at the
+    # "mock" fallback -- zero -- and the budget breakers above would never see
+    # the spend they exist to bound.
+    "gemini-3.5-flash-lite": (0.0003, 0.0025),
     # Gemini 2.5 Flash-Lite standard tier: $0.10 / $0.40 per 1M tokens.
     "gemini-2.5-flash-lite": (0.0001, 0.0004),
     "gemini-2.5-flash": (0.0003, 0.0025),

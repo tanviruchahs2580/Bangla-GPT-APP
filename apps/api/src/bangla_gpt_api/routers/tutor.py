@@ -7,9 +7,11 @@ Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 import contextlib
 import json
 import logging
-from collections.abc import AsyncIterator
+import os
+from collections.abc import AsyncIterator, Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -28,6 +30,11 @@ from bangla_gpt_api.db.models import (
 from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.providers import (
     ProviderError,
+)
+from bangla_gpt_api.ratelimit import (
+    ConcurrencyLimitExceeded,
+    build_concurrency_limiter,
+    concurrency_slot,
 )
 from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded
 from bangla_gpt_api.schemas import (
@@ -51,7 +58,13 @@ from bangla_gpt_api.services import teach_strategy as teach
 from bangla_gpt_api.services.activity import (
     record_activity,
 )
-from bangla_gpt_api.services.costs import check_ai_budget, record_ai_usage
+from bangla_gpt_api.services.costs import (
+    check_ai_budget,
+    check_conversation_cap,
+    check_daily_cost_breaker,
+    check_school_daily_budget,
+    record_ai_usage,
+)
 from bangla_gpt_api.services.quiz_explain import quiz_explain_instruction
 from bangla_gpt_api.services.tutor import VISION_UNSUPPORTED_ANSWER
 
@@ -92,6 +105,109 @@ router = APIRouter(responses=AUTH_GUARD_RESPONSES)
 logger = logging.getLogger(__name__)
 
 
+# --- A7-05 quotas: route-level call sites for the breaker set ----------------
+#
+# The controls themselves live in services/costs.py and ratelimit.py; this is
+# the route wiring for them (handoff: .audit/handoffs/api-rag2.md, 2): every
+# generation route consults the deployment-wide daily breaker, the per-school
+# daily breaker and, on the chat routes, the conversation cap, and the
+# generation call runs inside a per-identity in-flight slot.
+#
+# INFLIGHT_ENV_KEY is the interim switch for the in-flight caps until their
+# Settings fields land (same pattern as the breaker env fallbacks in
+# services/costs.py). The values are a policy choice, not a measurement: an
+# interactive chat allows two streams open (a slow answer on a second tab), a
+# single-shot question one request at a time. 0 disables the cap.
+INFLIGHT_ENV_KEY = "AI_MAX_INFLIGHT_PER_USER"
+DEFAULT_INFLIGHT_CHAT = 2
+DEFAULT_INFLIGHT_SINGLE = 1
+
+
+def _inflight_limit(settings: Any, *, default: int) -> int:
+    """Resolve the per-identity in-flight cap: settings field, env, default."""
+    raw = getattr(settings, "ai_max_inflight_per_user", None)
+    if raw is None:
+        raw = os.environ.get(INFLIGHT_ENV_KEY)
+    if raw is None or raw == "":
+        return default
+    try:
+        return max(0, int(float(raw)))
+    except (TypeError, ValueError):
+        logger.warning("invalid %s=%r; using %d", INFLIGHT_ENV_KEY, raw, default)
+        return default
+
+
+def _concurrency_limiter(app_ctx: Ctx) -> Any:
+    """Per-app in-flight limiter, built once on the rate-limit backend.
+
+    Built lazily and stored on the app context so every route (and every test
+    app instance) shares exactly one limiter -- the shared state is the cap.
+    """
+    limiter = getattr(app_ctx, "concurrency_limiter", None)
+    if limiter is None:
+        limiter = build_concurrency_limiter(app_ctx.settings)
+        app_ctx.concurrency_limiter = limiter
+    return limiter
+
+
+def _inflight_key(user: User) -> str:
+    return f"user:{user.id}"
+
+
+def _concurrency_refusal() -> HTTPException:
+    """429 for a saturated in-flight cap (declared 429 body: code rate_limited).
+
+    A distinct code (too_many_concurrent_requests) would need a new row in the
+    error catalog (routers/_error_contract.ERROR_CATALOG), which is owned by
+    another workstream; the message plus Retry-After carry the distinction
+    until that row lands.
+    """
+    return HTTPException(
+        status_code=429,
+        detail={
+            "code": "rate_limited",
+            "message": "Too many AI requests in flight for this account; retry shortly.",
+        },
+        headers={"Retry-After": "2"},
+    )
+
+
+@contextmanager
+def _inflight_slot(app_ctx: Ctx, user: User, *, default: int) -> Iterator[None]:
+    """Hold one in-flight slot around a generation call (A7-05).
+
+    The slot is released in a ``finally`` (concurrency_slot's contract), so a
+    failed or cancelled turn cannot leak capacity.
+    """
+    limit = _inflight_limit(app_ctx.settings, default=default)
+    if limit <= 0:
+        yield
+        return
+    try:
+        with concurrency_slot(_concurrency_limiter(app_ctx), _inflight_key(user), limit):
+            yield
+    except ConcurrencyLimitExceeded as exc:
+        raise _concurrency_refusal() from exc
+
+
+def _held_stream_slot(app_ctx: Ctx, user: User, *, default: int) -> tuple[Any, str, int]:
+    """Take one in-flight slot FOR A STREAM and return the release triple.
+
+    A streaming response has already started by the time generation begins, so
+    the slot is taken before the StreamingResponse is returned (a refusal here
+    is still a normal 429) and the caller releases it in the event stream's
+    ``finally`` -- which runs on client disconnect too.
+    """
+    limit = _inflight_limit(app_ctx.settings, default=default)
+    if limit <= 0:
+        return None, "", 0
+    limiter = _concurrency_limiter(app_ctx)
+    key = _inflight_key(user)
+    if not limiter.acquire(key, limit):
+        raise _concurrency_refusal()
+    return limiter, key, limit
+
+
 @router.post("/tutor/ask", response_model=AskResponse)
 async def ask(app_ctx: Ctx, payload: AskRequest, db: DbSession, user: CurrentUser) -> AskResponse:
     tutor = app_ctx.tutor
@@ -102,6 +218,10 @@ async def ask(app_ctx: Ctx, payload: AskRequest, db: DbSession, user: CurrentUse
         )
     # AI-002: budget gate before spending upstream tokens.
     check_ai_budget(db, user_id=user.id, settings=app_ctx.settings)
+    # A7-05: the platform-wide and per-school daily breakers bound spend that
+    # spreads across accounts (a per-user monthly budget cannot).
+    check_daily_cost_breaker(db, settings=app_ctx.settings)
+    check_school_daily_budget(db, school_id=user.school_id, settings=app_ctx.settings)
     try:
         explain_instruction = quiz_explain_instruction(payload.explain) if payload.explain else None
         # retrieve on the quiz topic itself — the generic
@@ -123,16 +243,17 @@ async def ask(app_ctx: Ctx, payload: AskRequest, db: DbSession, user: CurrentUse
             chapter=payload.chapter,
             goal="quiz_explain" if payload.explain else "question",
         )
-        response = await tutor.ask(
-            question,
-            payload.class_level,
-            canonical_subject(payload.subject),
-            chapter=payload.chapter,
-            extra_instruction=explain_instruction,
-            low_data=payload.low_data,
-            context=ctx,
-            search_query=search_query,
-        )
+        with _inflight_slot(app_ctx, user, default=DEFAULT_INFLIGHT_SINGLE):
+            response = await tutor.ask(
+                question,
+                payload.class_level,
+                canonical_subject(payload.subject),
+                chapter=payload.chapter,
+                extra_instruction=explain_instruction,
+                low_data=payload.low_data,
+                context=ctx,
+                search_query=search_query,
+            )
         # AI-002: ledger the generation (adds only; this commit persists it).
         record_ai_usage(
             db,
@@ -387,7 +508,12 @@ async def send_chat_message(
         raise HTTPException(status_code=503, detail="Tutor service unavailable")
     # AI-002: budget gate before spending upstream tokens.
     check_ai_budget(db, user_id=user.id, settings=app_ctx.settings)
+    # A7-05: platform and school daily breakers, then the conversation cap
+    # (extra_messages=1 counts the turn being written).
+    check_daily_cost_breaker(db, settings=app_ctx.settings)
+    check_school_daily_budget(db, school_id=user.school_id, settings=app_ctx.settings)
     conv = _own_conversation(db, conversation_id, user)
+    check_conversation_cap(db, conversation_id=conv.id, settings=app_ctx.settings, extra_messages=1)
     student = _student_profile(db, user)
     class_level = payload.class_level or student.class_level or 6
     history = _chat_history(app_ctx, db, conv.id)
@@ -423,26 +549,27 @@ async def send_chat_message(
         )
     else:
         try:
-            result = await tutor.ask(
-                payload.message,
-                class_level,
-                canonical_subject(payload.subject),
-                history,
-                chapter=payload.chapter,
-                extra_instruction=extra_instruction,
-                low_data=payload.low_data,
-                context=_request_context(
-                    db,
-                    user,
-                    class_level=class_level,
-                    subject=canonical_subject(payload.subject),
+            with _inflight_slot(app_ctx, user, default=DEFAULT_INFLIGHT_CHAT):
+                result = await tutor.ask(
+                    payload.message,
+                    class_level,
+                    canonical_subject(payload.subject),
+                    history,
                     chapter=payload.chapter,
-                    goal=goal,
-                    history=history,
-                    strategy=conv.last_strategy,
-                ),
-                image=image_payload,
-            )
+                    extra_instruction=extra_instruction,
+                    low_data=payload.low_data,
+                    context=_request_context(
+                        db,
+                        user,
+                        class_level=class_level,
+                        subject=canonical_subject(payload.subject),
+                        chapter=payload.chapter,
+                        goal=goal,
+                        history=history,
+                        strategy=conv.last_strategy,
+                    ),
+                    image=image_payload,
+                )
         except ProviderError as exc:
             db.rollback()
             raise HTTPException(
@@ -499,7 +626,17 @@ async def stream_chat_message(
         raise HTTPException(status_code=503, detail="Tutor service unavailable")
     # AI-002: budget gate before spending upstream tokens.
     check_ai_budget(db, user_id=user.id, settings=app_ctx.settings)
+    # A7-05: same breaker set as the non-stream chat route.
+    check_daily_cost_breaker(db, settings=app_ctx.settings)
+    check_school_daily_budget(db, school_id=user.school_id, settings=app_ctx.settings)
     conv = _own_conversation(db, conversation_id, user)
+    check_conversation_cap(db, conversation_id=conv.id, settings=app_ctx.settings, extra_messages=1)
+    # Read-only preparation and input validation run BEFORE the in-flight slot
+    # is taken: a turn refused for a bad image (422) or an unknown conversation
+    # (404) must not consume concurrency capacity. Taking the slot first made
+    # two rejected uploads hold the whole per-identity cap until the backend
+    # TTL expired, so the next legitimate turn answered 429 (R3/WS5 regression
+    # test: tests/test_r3_ws5_stream_slots.py).
     student = _student_profile(db, user)
     class_level = payload.class_level or student.class_level or 6
     history = _chat_history(app_ctx, db, conv.id)
@@ -518,13 +655,6 @@ async def stream_chat_message(
         conv.last_strategy = strategy_key
         goal = "reteach"
 
-    user_msg = ChatMessage(conversation_id=conv.id, role="user", content=payload.message)
-    db.add(user_msg)
-    # commit before streaming to release DB session/connection during LLM stream
-    # (was flush-only, holding transaction for up to 30s). User turn is persisted alone;
-    # assistant turn will be persisted in a short second transaction after stream.
-    db.commit()
-    db.refresh(user_msg)
     # build the context before streaming so the log line lands once.
     ctx = _request_context(
         db,
@@ -537,6 +667,31 @@ async def stream_chat_message(
         strategy=conv.last_strategy,
     )
     no_vision = image_payload is not None and _provider_lacks_vision(app_ctx)
+
+    # A7-05 in-flight cap: taken BEFORE the response starts (a refusal here is
+    # still an HTTP 429); released in event_stream's finally, which runs on
+    # client disconnect too.
+    stream_limiter, stream_slot_key, _stream_limit = _held_stream_slot(
+        app_ctx, user, default=DEFAULT_INFLIGHT_CHAT
+    )
+    # Everything between the acquire above and the StreamingResponse below runs
+    # with the slot held but WITHOUT the generator that normally releases it, so
+    # a failure here (a write error on the user turn) would leak the slot for
+    # the whole backend TTL. The guard releases it and lets the error surface;
+    # on the success path the generator owns the slot and releases it exactly
+    # once in its finally.
+    try:
+        user_msg = ChatMessage(conversation_id=conv.id, role="user", content=payload.message)
+        db.add(user_msg)
+        # commit before streaming to release DB session/connection during LLM stream
+        # (was flush-only, holding transaction for up to 30s). User turn is persisted alone;
+        # assistant turn will be persisted in a short second transaction after stream.
+        db.commit()
+        db.refresh(user_msg)
+    except BaseException:
+        if stream_limiter is not None:
+            stream_limiter.release(stream_slot_key)
+        raise
 
     async def event_stream() -> AsyncIterator[str]:
         try:
@@ -567,6 +722,29 @@ async def stream_chat_message(
                     if event.type == "token":
                         token_payload = json.dumps({"text": event.text}, ensure_ascii=False)
                         yield f"event: token\ndata: {token_payload}\n\n"
+                    elif event.type == "citation":
+                        # A6-08: validated sources before the final event, so
+                        # a client renders citations without waiting for done.
+                        yield (
+                            "event: citation\ndata: "
+                            + json.dumps(event.extra, ensure_ascii=False)
+                            + "\n\n"
+                        )
+                    elif event.type == "heartbeat":
+                        # A6-08: liveness while the provider is silent.
+                        yield (
+                            "event: heartbeat\ndata: "
+                            + json.dumps(event.extra, ensure_ascii=False)
+                            + "\n\n"
+                        )
+                    elif event.type == "error":
+                        # A6-08: mid-stream failure; the final event (if any)
+                        # still carries the honest replacement answer.
+                        yield (
+                            "event: error\ndata: "
+                            + json.dumps(event.extra, ensure_ascii=False)
+                            + "\n\n"
+                        )
                     elif event.response is not None:
                         final_response = event.response
             if final_response is None:  # never leak a naked 500 under -O
@@ -622,6 +800,11 @@ async def stream_chat_message(
                 + json.dumps({"code": "llm_unavailable"}, ensure_ascii=False)
                 + "\n\n"
             )
+        finally:
+            # A7-05: the in-flight slot spans the whole stream and is released
+            # on completion, failure and client disconnect alike.
+            if stream_limiter is not None:
+                stream_limiter.release(stream_slot_key)
 
     return StreamingResponse(
         event_stream(),

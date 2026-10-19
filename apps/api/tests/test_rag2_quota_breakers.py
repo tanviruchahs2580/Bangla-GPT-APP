@@ -20,6 +20,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from bangla_gpt_api.config import Settings
@@ -97,9 +98,9 @@ def test_daily_breaker_blocks_when_the_ceiling_is_reached(
     db = _session(tmp_path)
     user = _user(db, "d2@test.local")
     _usage(db, user, 3.0)
-    check_daily_cost_breaker(db, settings=_settings())  # default 0 = off
-    # The switch is the documented env fallback until the Settings field
-    # lands (handoff api-rag2.md); a settings object field takes precedence.
+    check_daily_cost_breaker(db, settings=_settings())  # field default 0 = off
+    # The Settings field takes precedence; the env fallback covers settings
+    # objects that do not carry the field (the pre-field wiring state).
     monkeypatch.setenv("AI_DAILY_BUDGET_USD", "2.5")
     with pytest.raises(HTTPException) as excinfo:
         check_daily_cost_breaker(db, settings=_settings())
@@ -111,8 +112,21 @@ def test_daily_breaker_blocks_when_the_ceiling_is_reached(
 
     with pytest.raises(HTTPException):
         check_daily_cost_breaker(db, settings=_Budgeted())
+
+    # A malformed env value is tolerated ONLY on the env-fallback path. A real
+    # Settings instance validates its own fields, so the same malformed env
+    # makes Settings() itself fail loudly -- pinned right here rather than
+    # assumed, because asserting it against Settings() is exactly what used to
+    # turn this test into a ValidationError (the committed version called
+    # _settings() with the malformed value in the environment).
     monkeypatch.setenv("AI_DAILY_BUDGET_USD", "not-a-number")
-    check_daily_cost_breaker(db, settings=_settings())  # malformed -> default off
+    with pytest.raises(ValidationError):
+        _settings()
+
+    class _NoField:
+        pass
+
+    check_daily_cost_breaker(db, settings=_NoField())  # malformed -> default off
 
 
 def test_day_cost_only_counts_today(tmp_path) -> None:
@@ -217,9 +231,16 @@ def test_memory_concurrency_slots_expire_after_the_safety_ttl() -> None:
     limiter = MemoryConcurrencyLimiter(slot_ttl=0.05)
     assert limiter.acquire("u1", 1) is True
     assert limiter.acquire("u1", 1) is False
-    time.sleep(0.06)
-    # the slot expired: a worker that died mid-turn cannot leak it forever
-    assert limiter.acquire("u1", 1) is True
+    # The property is "the slot expires", not "it expires in exactly 60 ms":
+    # time.monotonic() on Windows only advances in ~15 ms ticks, so a fixed
+    # sleep can read back as less elapsed time than it really was and flake
+    # (observed ~1 run in 5). Poll to a generous deadline instead.
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
+        if limiter.acquire("u1", 1) is True:
+            return  # the safety TTL released the crashed worker's slot
+        time.sleep(0.02)
+    raise AssertionError("the concurrency slot never expired within 5 s")
 
 
 def test_concurrency_slot_context_manager_releases_on_error() -> None:

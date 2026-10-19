@@ -62,6 +62,14 @@ class RequestContext:
 
         ASCII keys keep it stable for tests and provider-agnostic; the model
         sees structured education context, never raw user history.
+
+        A5-04/A5-05 defence in depth: ``memory_block`` is delimited data even
+        though it is app-composed (weak-chapter names come from the corpus,
+        style directives from a fixed vocabulary). A value that somehow
+        carried a prompt delimiter (``</education-context>``, ``<evidence>``,
+        an instruction-shaped tag) is neutralized here, so memory can never
+        close this block, open the evidence block, or smuggle instructions
+        into the trusted region.
         """
         mastery = (
             ",".join(f"{c}={p:.0f}" for c, p in sorted(self.mastery_snapshot.items()))
@@ -71,7 +79,9 @@ class RequestContext:
         # the personalization line renders ONLY when the caller put
         # content in memory_block (memory enabled). Byte-identical output
         # when empty -- existing consumers/tests are unaffected.
-        memory_line = f"\nmemory: {self.memory_block}" if self.memory_block else ""
+        memory_line = (
+            f"\nmemory: {_sanitize_block_text(self.memory_block)}" if self.memory_block else ""
+        )
         return (
             "[education-context]\n"
             f"role={self.role} class_level={self.class_level} subject={self.subject or 'any'}"
@@ -83,6 +93,18 @@ class RequestContext:
 
 
 # --- pure helpers (unit-tested) -------------------------------------------
+
+
+#: Delimiter-shaped sequences that must never appear inside a delimited block
+#: rendered by this module (see RequestContext.render_block).
+_BLOCK_DELIMITER_RE = re.compile(
+    r"<\s*/?\s*(?:education-context|evidence|user_question)\s*>", re.IGNORECASE
+)
+
+
+def _sanitize_block_text(text: str) -> str:
+    """Neutralize delimiter escapes inside a delimited data block."""
+    return _BLOCK_DELIMITER_RE.sub("", text)
 
 
 def history_summary(turns: int, strategy: str | None = None) -> str:

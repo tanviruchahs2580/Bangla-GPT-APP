@@ -42,6 +42,11 @@ _CHAT_ENDPOINT = "/chat/completions"
 _RETRYABLE_STATUS = frozenset({408, 429, 500, 502, 503, 504})
 
 
+#: finish_reason values that mean "the answer is cut off", not finished
+#: (platform.openai.com/docs/api-reference/chat: ``length``).
+_TRUNCATION_FINISH_REASONS = frozenset({"length"})
+
+
 def _extract_text(payload: dict) -> str:
     """Extract text from a Chat Completions response payload."""
     choices = payload.get("choices")
@@ -54,6 +59,18 @@ def _extract_text(payload: dict) -> str:
     if not text or not isinstance(text, str):
         finish = choices[0].get("finish_reason", "UNKNOWN") if isinstance(choices[0], dict) else "?"
         raise ProviderError(f"OpenAI returned no text (finishReason={finish})")
+    # A6-07: truncation is returned but never silent (same rule as Gemini).
+    finish = choices[0].get("finish_reason") if isinstance(choices[0], dict) else None
+    if finish in _TRUNCATION_FINISH_REASONS:
+        json_log(
+            logger,
+            logging.WARNING,
+            "provider_response_truncated",
+            provider="openai",
+            model=payload.get("model", ""),
+            finish_reason=finish,
+            chars=len(text),
+        )
     return text.strip()
 
 

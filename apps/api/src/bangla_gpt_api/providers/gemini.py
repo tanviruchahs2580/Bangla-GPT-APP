@@ -71,6 +71,12 @@ def _error_message(response: httpx.Response) -> str:
     return _error_detail(payload, str(response.status_code))
 
 
+#: Finish reasons that mean "the answer is cut off", not "the answer ended".
+#: MAX_TOKENS is the documented GenerationConfig truncation signal
+#: (ai.google.dev/api/generate-content).
+_TRUNCATION_FINISH_REASONS = frozenset({"MAX_TOKENS"})
+
+
 def _extract_text(payload: dict) -> str:
     candidates = payload.get("candidates")
     if not isinstance(candidates, list) or not candidates:
@@ -87,6 +93,20 @@ def _extract_text(payload: dict) -> str:
     if not answer:
         reason = candidate.get("finishReason", "UNKNOWN") if isinstance(candidate, dict) else "?"
         raise ProviderError(f"Gemini returned no text (finishReason={reason})")
+    # A6-07: a truncated completion is returned (the caller's post-checks and
+    # the generator repair loop decide what to do with it) but it is never
+    # SILENT -- hiding truncation is how a half-sentence reaches a student.
+    reason = candidate.get("finishReason") if isinstance(candidate, dict) else None
+    if reason in _TRUNCATION_FINISH_REASONS:
+        json_log(
+            logger,
+            logging.WARNING,
+            "provider_response_truncated",
+            provider="gemini",
+            model=payload.get("model", ""),
+            finish_reason=reason,
+            chars=len(answer),
+        )
     return answer
 
 
