@@ -19,7 +19,7 @@
 
 `db/session.py` pins every PostgreSQL session through libpq options:
 
-```
+```python
 connect_args = {"connect_timeout": 10,
                 "options": "-c timezone=utc -c statement_timeout=30000 -c lock_timeout=5000"}
 ```
@@ -39,7 +39,7 @@ represent an instant unambiguously to an external reader (a BI tool, a
 
 ## 3. Migration plan (deferred work, in order)
 
-**Preconditions**
+**Preconditions:**
 
 1. Owner go-ahead (schema rewrite on a live education system).
 2. A staging run against a production-sized dump, with row counts recorded.

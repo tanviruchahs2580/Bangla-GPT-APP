@@ -201,7 +201,7 @@ docker compose logs --tail 100 api
 **If the container refuses to start, it is telling you something.** The boot
 guard raises one combined `RuntimeError` naming every problem it found:
 
-```
+```text
 Refusing to start: insecure production configuration detected:
 - JWT_SECRET is too predictable: it uses only 2 distinct characters
 - PII_ENC_KEY is not a valid Fernet key (ValueError); generate one with ...

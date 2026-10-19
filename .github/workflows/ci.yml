@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # AUD-B-15: the weekly DAST baseline runs from this workflow (there is no
+  # other scheduled security scan); every job but dast-baseline skips the
+  # schedule event explicitly, so a weekly tick costs one ZAP job, not a full
+  # CI matrix.
+  schedule:
+    - cron: "17 3 * * 1" # weekly, Monday 03:17 UTC
   workflow_dispatch:
 
 concurrency:
@@ -18,6 +24,9 @@ jobs:
   api:
     name: Lint & test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    # The schedule trigger exists for dast-baseline only; without this guard a
+    # weekly tick would run the full CI matrix against an unchanged main.
+    if: github.event_name != 'schedule'
     # Size: pytest runs twice (plain + coverage) at ~8 min each on 3.12; the
     # two matrix legs run in parallel. 30 min leaves headroom, and a hung job
     # is otherwise billed for GitHub's 6-hour default.
@@ -146,9 +155,25 @@ jobs:
           DATABASE_URL: sqlite:////tmp/ci_smoke.db
         run: python -c "from bangla_gpt_api.main import create_app; app = create_app(); print(len(app.openapi()['paths']), 'openapi paths ok')"
 
+      - name: Dashboards and alerts only query exported metrics
+        # AUD-HI-03 / I-02: the committed Grafana panels queried series the
+        # exporter never registered (four panels rendered empty while looking
+        # correct in review). This renders the app's own registry in-process
+        # and fails when a panel or alert rule names an unexported bgpt_*
+        # series.
+        run: python scripts/check_dashboards.py
+
+      - name: API reference is not stale
+        # AUD-HI-05 / H-01: docs/API.md is generated from the app's own
+        # OpenAPI schema (135 operations); this regenerates in memory and
+        # diffs, so a contract change cannot land without the reference. No
+        # database is needed: the generator pins DATABASE_URL to a temp file.
+        run: python scripts/gen_api_docs.py --check
+
   postgres:
     name: Postgres engine check (alembic + API flows)
     runs-on: ubuntu-latest
+    if: github.event_name != 'schedule' # schedule is for dast-baseline only
     timeout-minutes: 60
     defaults:
       run:
@@ -248,6 +273,7 @@ jobs:
   golden-eval:
     name: Golden retrieval benchmark (sample corpus)
     runs-on: ubuntu-latest
+    if: github.event_name != 'schedule' # schedule is for dast-baseline only
     timeout-minutes: 15
     defaults:
       run:
@@ -288,6 +314,7 @@ jobs:
   web:
     name: Web build & test (apps/web)
     runs-on: ubuntu-latest
+    if: github.event_name != 'schedule' # schedule is for dast-baseline only
     timeout-minutes: 20
     defaults:
       run:
@@ -332,10 +359,85 @@ jobs:
       - name: Build (tsc + vite)
         run: npm run build
 
+  e2e-smoke:
+    name: Browser e2e smoke (Chromium, real API, mock provider)
+    # AUD-EF-02 / E-10: nothing in CI drove a real browser, so a broken route,
+    # auth guard or /api proxy could not fail a build. apps/web/e2e/smoke.spec.ts
+    # exercises the five role journeys against the real API (LLM_PROVIDER=mock)
+    # with no HTTP-level mocks; the Playwright config starts both servers
+    # itself and writes junit/html/traces under the gitignored coverage/e2e/.
+    # The author's local run took ~9.5 min for five journeys; 30 min leaves
+    # headroom for the web build and browser install on a loaded runner.
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule' # schedule is for dast-baseline only
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/api/constraints.txt
+
+      - name: Set up Node 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install the API (hash-verified lock)
+        # Same posture as every other job: third-party wheels from the verified
+        # lock, the project itself --no-deps. E2E_PYTHON below points the
+        # Playwright webServer at this interpreter (the config's CI contract).
+        working-directory: apps/api
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --require-hashes -r constraints.txt
+          python -m pip install --no-deps -e .
+
+      - name: Install web dependencies (npm ci)
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Install Chromium (with OS dependencies)
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+
+      - name: Smoke journeys (five roles, mock provider)
+        # The config seeds the four role accounts into a throwaway SQLite file,
+        # then starts uvicorn (127.0.0.1:8000) and `vite preview` (5173) --
+        # CI=true disables server reuse so a stale process on the runner can
+        # never satisfy the run.
+        working-directory: apps/web
+        env:
+          E2E_PYTHON: python
+        run: npx playwright test
+
+      - name: Upload Playwright report, junit and failure traces
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: playwright-e2e
+          path: |
+            apps/web/coverage/e2e/junit.xml
+            apps/web/coverage/e2e/html
+            apps/web/coverage/e2e/results
+          retention-days: 14
+
   guardrails:
     name: Repository guardrails
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    if: github.event_name != 'schedule' # schedule is for dast-baseline only
+    # 15 min covered the pre-commit and doc guards; the markdown lint, glossary
+    # and quality-ratchet steps added here (jscpd over ~270 files, radon/
+    # vulture/deptry over the API) need headroom on a loaded runner. A timeout
+    # is not a gate: this only prevents a false red.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -367,6 +469,72 @@ jobs:
           set -euo pipefail
           python -m pip install --quiet "pre-commit==${PRE_COMMIT_VERSION}"
           pre-commit run --all-files --show-diff-on-failure
+
+      - name: Markdown lint
+        # AUD-JK-10: .markdownlint-cli2.jsonc is the tuned config (long
+        # single-line prose allowed; generated CHANGELOG/docs/API.md and the
+        # point-in-time docs/audit, docs/qa records excluded). The CLI version
+        # is pinned to the one the tree was verified against, so a new
+        # markdownlint release cannot silently change the gate.
+        run: npx --yes markdownlint-cli2@0.23.3 "**/*.md"
+
+      - name: Version sources agree
+        # AUD-JK-12 / J-11: apps/api/pyproject.toml [project].version is the
+        # single source of truth; config.py, both web package fields, the
+        # README, the deployment guide and the newest CHANGELOG heading must
+        # state the same version. Read-only (no --tag here: tags are an owner
+        # action and legitimately lag HEAD).
+        run: python3 scripts/check_version.py
+
+      - name: Commit subjects (PR range)
+        # AUD-JK-07/08, K-02: a PR's own commits are held to the documented
+        # Conventional-Commits subject; structure errors and junk subjects
+        # ("wip", "update", ...) fail the run. The 72-char limit is reported
+        # as warnings, not errors: the hardening branch's own 13 commits are
+        # 73-104 chars and history cannot be rewritten, so --strict-length
+        # would pin this required job red for every PR opened from it (measured
+        # in .audit/evidence/E-FIX-EF-CI-006). Tighten to --strict-length once
+        # new work has been written to the limit. The SHAs travel through env,
+        # never interpolated into the shell, and the range needs the
+        # fetch-depth: 0 checkout above.
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 scripts/check_commits.py --range "$BASE_SHA..$HEAD_SHA"
+
+      - name: Bangla glossary holds
+        # AUD-G-05 / G-25: docs/i18n-glossary.md is the terminology source of
+        # truth; an "avoid" form returning through a copy edit fails here, and
+        # an approved term no string uses is reported without failing.
+        run: python3 scripts/check_glossary.py
+
+      - name: Install quality-ratchet tooling
+        # The ratchet script fails closed (exit 2) when a tool is absent, so
+        # the pins below are the versions the committed baselines in
+        # apps/api/quality-baselines were verified against. jscpd is installed
+        # into a runner-temp project (no global prefix, no repo pollution) and
+        # its bin directory is added to PATH: the script resolves it as bare
+        # `npx jscpd`, and npx finds a binary on PATH instead of fetching
+        # latest. zizmor flags the pinned npm install as adhoc-packages (low,
+        # accepted: a CLI tool has no lockfile to pin against).
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet "radon==6.0.1" "vulture==2.16" "deptry==0.25.1"
+          mkdir -p "$RUNNER_TEMP/qratchet"
+          cd "$RUNNER_TEMP/qratchet"
+          npm init -y > /dev/null
+          npm install --silent --save-exact "jscpd@5.4.1"
+          echo "$RUNNER_TEMP/qratchet/node_modules/.bin" >> "$GITHUB_PATH"
+
+      - name: Quality ratchet (complexity, file size, dead code, deps, duplication)
+        # AUD-C-03 / D-03 / D-04 / D-05: five quality dimensions were measured
+        # for the audit but enforced nowhere. Each existing violation is frozen
+        # in a committed baseline; a NEW violation, or growth of an existing
+        # one, fails here. The baseline may only move via a justified --update
+        # in the same commit.
+        working-directory: apps/api
+        run: python3 scripts/check_quality_ratchet.py --check
 
       - name: Lockfile satisfies pyproject.toml
         # The previous version of this step could not fail. It ran
@@ -484,6 +652,7 @@ jobs:
   docker:
     name: Docker build & container smoke
     runs-on: ubuntu-latest
+    if: github.event_name != 'schedule' # schedule is for dast-baseline only
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -525,3 +694,144 @@ jobs:
         run: |
           docker stop api-smoke || true
           docker rm api-smoke || true
+
+  sbom-licence:
+    name: SBOM artifacts & licence gate
+    # AUD-B-16: release.yml sets sbom: true / provenance: mode=max but no
+    # release has been cut, so no SBOM exists to inspect and licence checking
+    # was prose in THIRD_PARTY_NOTICES.md. This job is PR-safe (no registry
+    # push, no release) so a new dependency's licence fails the change that
+    # introduces it, not the release that ships it; THIRD_PARTY_NOTICES.md
+    # stays the human-readable inventory.
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule' # schedule is for dast-baseline only
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/api/constraints.txt
+
+      - name: Install the API (locked) and the SBOM/licence tooling
+        # The runtime dependency set is installed from the hash-verified lock
+        # into a dedicated venv; the tooling goes in afterwards, and the pins
+        # are the versions this job was verified against locally
+        # (cyclonedx-bom 7.5.0 produced a 1.6 spec with 111 components;
+        # pip-licenses 5.5.5 passes the fail-on list below).
+        run: |
+          set -euo pipefail
+          python -m venv .venv-sbom
+          .venv-sbom/bin/python -m pip install --quiet --upgrade pip
+          .venv-sbom/bin/python -m pip install --quiet --require-hashes -r apps/api/constraints.txt
+          .venv-sbom/bin/python -m pip install --quiet "cyclonedx-bom==7.5.0" "pip-licenses==5.5.5"
+
+      - name: CycloneDX SBOM (Python environment)
+        run: .venv-sbom/bin/cyclonedx-py environment -o sbom-python.json
+
+      - name: CycloneDX SBOM (web production tree)
+        # Built from the committed lock file (--package-lock-only), so no
+        # npm ci is needed and the SBOM describes exactly what the lock ships.
+        # The positional argument is the package manifest, not a directory.
+        run: >-
+          npx --yes @cyclonedx/cyclonedx-npm@4.1.1
+          --omit dev --package-lock-only
+          --output-file sbom-web.json
+          apps/web/package.json
+
+      - name: Licence gate (fail on strong copyleft / SSPL)
+        # LGPL-3.0 is allowed: the existing relink note in THIRD_PARTY_NOTICES.md
+        # covers it. The first command writes the human-readable inventory;
+        # the second re-reads the environment and fails on a listed licence.
+        run: |
+          set -euo pipefail
+          .venv-sbom/bin/pip-licenses --format=csv --with-license-file \
+            --ignore-packages bangla-gpt-api > licences-python.csv
+          .venv-sbom/bin/pip-licenses --format=csv \
+            --ignore-packages bangla-gpt-api \
+            --fail-on "GPL-2.0-only;GPL-3.0-only;AGPL-3.0-only;SSPL-1.0"
+
+      - name: Upload SBOM and licence inventory
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: sbom-licences
+          path: |
+            sbom-python.json
+            sbom-web.json
+            licences-python.csv
+          retention-days: 90
+
+  dast-baseline:
+    name: DAST baseline (ZAP, weekly)
+    # AUD-B-15: nothing in .github/workflows ran DAST; the only scan was ad hoc
+    # (ZAP against the test-mode container: FAIL-NEW 0 / WARN-NEW 1 / PASS 66).
+    # Weekly + manual only: ZAP needs the API running, which is too slow for
+    # every PR. The scan is unauthenticated by design -- the test-mode
+    # docs/metrics surfaces exist there and production disables them
+    # (AUD-B-18); authenticated surfaces stay covered by the authorization and
+    # tenancy negative suites.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Build and start the API (test mode, mock provider)
+        # ENV=test keeps the docs/metrics surfaces enabled (the production
+        # set is production/prod/staging); the mock provider means no LLM key
+        # and no outbound traffic. The JWT secret is a throwaway literal, not
+        # a credential.
+        run: |
+          set -euo pipefail
+          docker build -t bgpt-api:dast .
+          docker run -d --name dast-api -p 127.0.0.1:8000:8000 \
+            -e ENV=test -e LLM_PROVIDER=mock \
+            -e DATABASE_URL=sqlite:////data/app.db \
+            -e JWT_SECRET=ci-dast-secret-0123456789abcdef012345 \
+            bgpt-api:dast
+          healthy=0
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/health; then healthy=1; break; fi
+            sleep 2
+          done
+          if [ "$healthy" != 1 ]; then
+            echo "::error::the API container did not become healthy"
+            docker logs dast-api
+            exit 1
+          fi
+
+      - name: ZAP baseline (fail on FAIL rules, warn-level reported)
+        # The image is pinned to the digest of the "stable" tag resolved
+        # 2026-10-19 via the ghcr registry API: a scheduled security job must
+        # not run whatever build the tag points at that week. Re-resolve the
+        # digest (and re-run this job) when the ZAP rule pack should move.
+        env:
+          DAST_OUT: ${{ runner.temp }}/dast-out
+        run: |
+          set -euo pipefail
+          mkdir -p "$DAST_OUT"
+          # -I: do not fail on WARN; FAIL rules still exit non-zero.
+          docker run --rm --network host -v "$DAST_OUT:/zap/wrk:rw" \
+            ghcr.io/zaproxy/zaproxy@sha256:5ccfff9a411743ab2615136a2edd7416bec9ce41572fa94e935df38c14adb2b6 \
+            zap-baseline.py -t http://127.0.0.1:8000 \
+            -J zap-baseline.json -r zap-baseline.html -I
+
+      - name: Archive the report
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: zap-baseline
+          path: ${{ runner.temp }}/dast-out/
+          retention-days: 90
+
+      - name: Stop the API container
+        if: always()
+        run: docker rm -f dast-api || true

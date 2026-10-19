@@ -38,24 +38,24 @@ key-parity) or in the term table of the glossary, and re-run the two scripts.
 
 Covered:
 
-* every value of the Bangla dictionary in `apps/web/src/i18n.ts` (611 strings at
+- every value of the Bangla dictionary in `apps/web/src/i18n.ts` (611 strings at
   the time of writing);
-* Bangla string literals written directly in `apps/web/src` components;
-* Bangla literals in `apps/api/src/bangla_gpt_api` that read like sentences
+- Bangla string literals written directly in `apps/web/src` components;
+- Bangla literals in `apps/api/src/bangla_gpt_api` that read like sentences
   (refusals, safety copy, digests, digest/prompt templates). Single-word
   literals are skipped because they are stemmer/expansion lexicons, not copy.
 
 Not covered (stated so it is not mistaken for a clean bill of health):
 
-* text assembled at run time from several fragments, where the fragments are
+- text assembled at run time from several fragments, where the fragments are
   individually fine but the sentence is not;
-* date and number formatting produced by `Intl` (the policy is Bengali digits on
+- date and number formatting produced by `Intl` (the policy is Bengali digits on
   Bangla screens, see `apps/web/src/lib/digits.ts`);
-* generated questions, worksheets and answer keys — those come from the model
+- generated questions, worksheets and answer keys — those come from the model
   and from the corpus, and are covered by the RAG evaluation and by teacher
   review, not by this sheet;
-* NCTB textbook content itself;
-* English copy (the `en` dictionary), which is reviewed separately by whoever
+- NCTB textbook content itself;
+- English copy (the `en` dictionary), which is reviewed separately by whoever
   owns the English release.
 
 ## Review order that gets the most value first
