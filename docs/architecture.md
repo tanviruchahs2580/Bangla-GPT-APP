@@ -415,27 +415,27 @@ There is exactly one place user-supplied bytes enter the API, and it is
 **parse-and-discard**: no upload is ever persisted, so there are no storage
 paths to traverse and no stored files to name. The two accepting routes are
 
-* `POST /tutor/*` inline chat images — mime allowlist, strict base64, size
+- `POST /tutor/*` inline chat images — mime allowlist, strict base64, size
   cap, magic-byte sniff, then re-encode through Pillow into a metadata-free
   PNG/JPEG before anything reaches the provider (`providers/image_safety.py`;
   EXIF/GPS, PNG text chunks and trailing bytes are dropped — pinned by
   `tests/test_rag2_image_safety.py`);
-* `POST /teacher/classrooms/{id}/import-file` — the CSV roster as the raw
+- `POST /teacher/classrooms/{id}/import-file` — the CSV roster as the raw
   request body, read with an explicit byte bound (`routers/class_import.py`),
   decoded as UTF-8 (BOM tolerated) or UTF-16-with-BOM, and turned into rows;
   the bytes are never written anywhere and no filename is ever used.
 
 Consequences, recorded as a decision rather than left implicit:
 
-* **randomized storage names / path traversal**: not applicable — nothing is
+- **randomized storage names / path traversal**: not applicable — nothing is
   stored, and no code path joins request data into a filesystem path
   (`tests/test_r3_ws3_upload_surface.py` scans the upload modules for
   filesystem writes and path joins);
-* **antivirus hook**: no hook is installed because there is no persisted file
+- **antivirus hook**: no hook is installed because there is no persisted file
   to scan; the seam belongs at the storage layer if object storage is ever
   introduced (ADR-0011 covers artifact storage), and the same test fails if a
   storage SDK appears without one;
-* **CSV text is still hostile input**: it is parsed as data only — cells are
+- **CSV text is still hostile input**: it is parsed as data only — cells are
   never interpreted as formulas, and names/emails are length-bounded by the
   schemas before they reach the database.
 
@@ -443,21 +443,21 @@ Consequences, recorded as a decision rather than left implicit:
 
 One strategy, stated once, because partial soft-deletion is worse than none:
 
-* **No soft delete anywhere.** A deleted row is gone; there is no
+- **No soft delete anywhere.** A deleted row is gone; there is no
   `is_deleted`/`deleted_at` column and no query that has to remember to filter
   one out (`tests/test_r3_ws3_persistence_strategy.py` fails the day one
   appears without this section and its cascade review being updated).
-* **Deletion is explicit and cascading, not incidental.** Account erasure runs
+- **Deletion is explicit and cascading, not incidental.** Account erasure runs
   the documented cascade (the DPA/erasure path in `routers/users.py`), quiz
   attempts and messages follow their parents, and feedback rows are detached
   by the retention sweep rather than orphaned
   (`services/retention.py::_detach_feedback_from_messages`).
-* **Time-based deletion is one policy point**: `services/retention.py` is the
+- **Time-based deletion is one policy point**: `services/retention.py` is the
   only sweeper (conversations/messages past `chat_retention_days`, expired
   tokens past their grace); the field-level inventory, the periods and what
   the sweep does per table live in `docs/data_minimization.md`. The nightly
   job and the admin endpoint both call it.
-* **Opt-out flags are preferences, not tombstones.** `memory_enabled=false` or
+- **Opt-out flags are preferences, not tombstones.** `memory_enabled=false` or
   `digest_opt_out=true` change behaviour (what is stored or sent); they are not
   deletion and never hide rows from the owner.
 

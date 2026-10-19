@@ -18,7 +18,7 @@ and the coverage gate abstains instead of guessing.
 
 **পূর্ণ বিবরণ:**
 
-```
+```text
 বাংলা GPT টিউটর — ষষ্ঠ থেকে দশম শ্রেণির পাঠ্যবইভিত্তিক পড়াশোনার সহায়ক।
 
 যা করে:
@@ -36,7 +36,7 @@ and the coverage gate abstains instead of guessing.
 শর্তাবলি: https://<your-web-host>/terms
 
 এআই-নির্ধারিত উত্তর ভুল হতে পারে। গুরুত্বপূর্ণ ক্ষেত্রে শিক্ষকের সাথে মিলিয়ে নিন।
-```
+```text
 
 > **Native review gate.** The Bengali copy above is engineering-written and is
 > marked **NEEDS NATIVE REVIEW** by the repo's own rule
@@ -53,7 +53,7 @@ and the coverage gate abstains instead of guessing.
 
 **Full description:**
 
-```
+```text
 Bangla GPT Tutor helps students in classes 6-10 study from their own textbooks.
 
 What it does:
@@ -112,9 +112,9 @@ Answers to the two questions that decide whether a reviewer can use the app:
    one demo student account is enough for review, and the reviewer can browse the
    public pages without an account.
 
-```
-Student demo:  <demo-student-email> / <password>
-Teacher demo:  <demo-teacher-email> / <password>
+```text
+Student demo:  DEMO_STUDENT_EMAIL / DEMO_STUDENT_PASSWORD
+Teacher demo:  DEMO_TEACHER_EMAIL / DEMO_TEACHER_PASSWORD
 ```
 
 Do not commit real credentials here or anywhere else in the repository: create

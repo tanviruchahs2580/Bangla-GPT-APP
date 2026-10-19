@@ -38,15 +38,15 @@ A new query that forgets the helper can therefore only return the caller's
 school. What is deliberately out of scope, stated so nobody assumes more
 than the mechanism gives:
 
-* admin sessions are unscoped; student and parent sessions are unscoped and
+- admin sessions are unscoped; student and parent sessions are unscoped and
   rely on ownership/link checks;
-* writes are not rewritten — a missing write guard fails its own test
-  loudly instead of silently no-opping;
-* a `Session.get()` served from the identity map (the row was already
+- writes are not rewritten — a missing write guard fails its own test
+  loudly instead of skipping the check silently;
+- a `Session.get()` served from the identity map (the row was already
   loaded in this session) is not re-filtered. In a request the tenant is
   installed before any route code runs, so only `get_current_user`'s own
   `User`/`School` lookups precede it;
-* the sanctioned bypass `tenant_filter_bypassed()` exists for exactly one
+- the sanctioned bypass `tenant_filter_bypassed()` exists for exactly one
   caller — `load_student_for_tenant` — because the documented contract for
   a cross-school student is 403 `other_school`, and a filtered (invisible)
   row would answer a bare 404. The bypass is immediately followed by the

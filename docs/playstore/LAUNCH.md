@@ -68,9 +68,9 @@ The Capacitor WebView origin is `capacitor://localhost`, so a relative API base
 cannot work. Set an absolute HTTPS origin as the repository variable (or pass it
 to the workflow dispatch input):
 
-```
+```text
 VITE_API_BASE = https://api.<your-domain>/api
-```
+
 
 Two more requirements on the API side for the packaged app to work:
 

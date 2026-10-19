@@ -20,13 +20,13 @@ job-ledger test `tests/test_h2_jobs_single_run.py` (two processes, one run).
 
 ## Per-process state, and why each is safe
 
-* **Retrieval index**: each worker builds the in-memory corpus index at boot.
+- **Retrieval index**: each worker builds the in-memory corpus index at boot.
   The corpus artifact is identical across replicas (fingerprinted and
   versioned; see `docs/RAG_ARCHITECTURE.md` "known open items"), so the
   indexes are equivalent read-only copies -- memory cost is duplicated, not
   correctness. The replica check proves a RAG cache warmed on replica A is
   served by replica B.
-* **AiJob execution is IN-PROCESS on every replica** (the documented
+- **AiJob execution is IN-PROCESS on every replica** (the documented
   exception to "no shared state in process memory"): content generation is
   dispatched with `asyncio.create_task` from the request that created the
   job, and the startup recovery loop re-dispatches jobs abandoned by a dead
@@ -38,11 +38,11 @@ job-ledger test `tests/test_h2_jobs_single_run.py` (two processes, one run).
   `apps/api/tests/test_h2_jobs_single_run.py`, and
   `apps/api/tests/test_r3_ws4_statelessness.py` pins that the recovery loop is
   armed regardless of `JOBS_BACKEND` (any replica may run it).
-* **In-process scheduler loops** (parent digest, weakness rollup) run only
+- **In-process scheduler loops** (parent digest, weakness rollup) run only
   when `JOBS_BACKEND=inline`; with `arq` the external worker owns the
   schedule. Either way the `JobRun` claim is the single-run guarantee, so
   running the loops on every web replica is safe.
-* **The in-memory rate limiter/cache backends** exist for development and
+- **The in-memory rate limiter/cache backends** exist for development and
   single-process deployments only; production boot refuses them with multiple
   workers (`_validate_rate_limit_redis`, pinned by
   `tests/test_production_guards.py` and re-pinned in

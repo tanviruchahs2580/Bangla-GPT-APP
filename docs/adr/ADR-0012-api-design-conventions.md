@@ -44,22 +44,22 @@ hand-written `Query` literal:
 
 Rules that hold for every collection endpoint:
 
-* `limit` is `ge=1` with a maximum -- no endpoint is unbounded;
-* `offset` is `ge=0`, defaults to 0, and is applied after an explicit stable
+- `limit` is `ge=1` with a maximum -- no endpoint is unbounded;
+- `offset` is `ge=0`, defaults to 0, and is applied after an explicit stable
   sort (`created_at DESC, id DESC` or an equivalent unique tiebreak);
-* filters are typed and validated by the request contract, not parsed by hand.
+- filters are typed and validated by the request contract, not parsed by hand.
 
 Documented exceptions (pinned by
 `tests/test_r3_ws3_pagination_convention.py`):
 
-* **Top-N queue** -- `GET /revision/due` has no `offset` on purpose: it answers
+- **Top-N queue** -- `GET /revision/due` has no `offset` on purpose: it answers
   "what is due now" and reports `due_count` separately; paging a due queue is
   meaningless.
-* **Tracked deviations owned by other file sets** (fixed by their owners, the
+- **Tracked deviations owned by other file sets** (fixed by their owners, the
   test refuses any *new* deviation):
-  * `GET /teacher/students` (routers/teacher.py): cap 1000, no offset;
-  * `GET /teacher/documents` (routers/teacher_content.py): no offset;
-  * `GET /tutor/conversations/{id}/messages` (routers/tutor.py): cap 500, no
+  - `GET /teacher/students` (routers/teacher.py): cap 1000, no offset;
+  - `GET /teacher/documents` (routers/teacher_content.py): no offset;
+  - `GET /tutor/conversations/{id}/messages` (routers/tutor.py): cap 500, no
     offset.
 
 `WindowPage` endpoints must say so in their docstring: `offset` there walks
@@ -70,24 +70,24 @@ the membership link table already tracked as a gap.
 
 ### Versioning and deprecation (C-10)
 
-* **The OpenAPI document is the contract.** `docs/API.md` is generated from it
+- **The OpenAPI document is the contract.** `docs/API.md` is generated from it
   (`apps/api/scripts/gen_api_docs.py`, which the path guard verifies and which
   is run from `apps/api`; drift is checked in CI by
   `tests/test_hi_api_docs.py`);
   `info.version` is the API version and is bumped per release.
-* **No URL version prefix today**, deliberately. The single first-party client
+- **No URL version prefix today**, deliberately. The single first-party client
   (the SPA) ships from this repository and is deployed with the API, so the
   consumer population that URL-versioning protects does not exist
   (`docs/hosting_decision.md`). A `/v2` prefix will be introduced at the first
   breaking change, not pre-emptively.
-* **Within the current line, changes must be additive**: new optional fields,
+- **Within the current line, changes must be additive**: new optional fields,
   new endpoints, new response members. `detail` in errors may gain members but
   never lose or rename one (the C-06 rule).
-* **A breaking change requires, in one change set**: a new path or a new
+- **A breaking change requires, in one change set**: a new path or a new
   version prefix, a migration note in `CHANGELOG.md`, and the old path marked
   `deprecated=True` in FastAPI (so both the served OpenAPI and `/docs` show
   it) for at least one release before removal.
-* Removal is announced in `CHANGELOG.md` and the `docs/API.md` entry is
+- Removal is announced in `CHANGELOG.md` and the `docs/API.md` entry is
   regenerated in the removing commit.
 
 ### One error shape (C-06 / C-10)
@@ -104,7 +104,7 @@ against the source by `tests/test_cd_error_contract.py`.
 
 `apps/api/src/bangla_gpt_api/routers/_http_semantics.py` provides both, opt-in:
 
-* **`Idempotency-Key`** on a creating POST (`POST /teacher/classrooms/{id}/import-file`).
+- **`Idempotency-Key`** on a creating POST (`POST /teacher/classrooms/{id}/import-file`).
   The key is claimed atomically in the shared cache (`set_json_nx_strict`, the
   same primitive as refresh-token rotation), scoped by route + user id and
   hashed before use. A duplicate while the first call runs gets
@@ -113,7 +113,7 @@ against the source by `tests/test_cd_error_contract.py`.
   5xx or 429 leaves a 60-second claim so an immediate retry cannot duplicate a
   partially-committed side effect; a cache outage fails **open** (the request
   proceeds) because a dedupe cache must not become a write outage.
-* **`ETag` / `If-Match`** on the read-modify-write PATCH
+- **`ETag` / `If-Match`** on the read-modify-write PATCH
   (`GET`/`PATCH /students/me/prefs`). The GET serves a strong content-hash
   validator; a PATCH presenting a stale one gets `412 precondition_failed`
   and changes nothing; omitting `If-Match` keeps the legacy last-write-wins
