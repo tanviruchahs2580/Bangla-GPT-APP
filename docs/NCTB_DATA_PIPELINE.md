@@ -98,7 +98,7 @@ chunk for `not_nfc`, `zero_width`, `math_mojibake`, `replacement_char`,
 dominant passage that is an unconverted legacy line rather than English
 prose. `build_nctb_corpus.py` writes `<data-dir>/qa_report.json` and exits
 non-zero when any source exceeds the `DEFAULT_FLAGGED_THRESHOLD` of 2%
-flagged chunks. At load time `data/nctb_loader.py` strips private-use glyph
+flagged chunks. At load time `apps/api/src/bangla_gpt_api/data/nctb_loader.py` strips private-use glyph
 residue to spaces, drops chunks that are detectably legacy (signature or
 latin-residue verdict) and deduplicates identical `(class_level, text)`
 pairs, each with a warning/log count — QA-flagged artifacts reach neither the
@@ -112,7 +112,7 @@ Two more build outputs belong to the corpus:
   coverage claim is read against; gaps are listed rather than inferred from
   the absence of failures.
 - `<data-dir>/chunk_ablation.json` — the chunk-size/overlap/diversity
-  comparison produced by `scripts/ablate_nctb_chunking.py` (see
+  comparison produced by `apps/api/scripts/ablate_nctb_chunking.py` (see
   docs/RAG_ARCHITECTURE.md for the table).
 
 **Stale outputs are pruned.** The build iterates only the manifest's
@@ -164,7 +164,7 @@ python -m venv .venv && .venv/Scripts/pip install -e ".[dev]"
 Acquisition re-runs hit only official URLs and skip already-hashed files.
 Extraction can dominate a full rebuild on the HSC volumes (their PDFs fall
 back to pypdf's slow symbol-set decoding); the page artifacts are reusable
-for re-chunking experiments via `scripts/ablate_nctb_chunking.py`.
+for re-chunking experiments via `apps/api/scripts/ablate_nctb_chunking.py` (run from `apps/api`).
 
 ## 7. Rights / permission ledger
 

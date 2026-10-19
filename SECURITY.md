@@ -155,7 +155,8 @@ side-effecting GET fails CI and must be argued for.
 ### Historic secret in a deleted smoke script
 
 The full-history gitleaks scan found a hardcoded `jwt_secret` and a local
-admin password in the deleted `apps/api/scripts/smoke_verify.py`. The values
+admin password in a smoke-verification script that was deleted from the tree
+before this baseline (it is absent from the tracked files). The values
 appear nowhere in the tracked tree and in no live configuration (digest
 comparison over 121 literals; `.audit/evidence/E-B-159`). History rewriting
 is not authorized. **Owner action:** confirm the values were never used in a
