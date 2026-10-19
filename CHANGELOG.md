@@ -80,6 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(ci): unblock Dependabot PRs and name the Vercel credential failure (#9)
 - fix(ci): upgrade setuptools before pip-audit; refresh lock to current resolution
 - fix(db): reconcile ORM/migration drift so alembic check passes
+- fix(deps): declare packaging, the lockfile gate's own import
 - fix(deps): declare radon, the one ratchet tool the script imports
 - fix(deps): lock radon and make deptry's import mapping environment-independent
 - fix(encoding): add .gitattributes and repair three encoding defects
