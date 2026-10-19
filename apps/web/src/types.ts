@@ -14,7 +14,11 @@ export interface AskResponse {
   sources: SourceRef[];
   refused_reason?: string | null;
   citation_verified?: boolean | null;
-  // numeric grounding confidence 0-1 (null = pre-wave answer)
+  // Programmatic numeric verdict: verified | mismatch | unverified |
+  // not_applicable (A6-04). 'mismatch' never arrives as an answer.
+  numeric_check?: string | null;
+  // Internal grounding signal 0-1 (null = pre-wave answer). NOT a calibrated
+  // probability -- never render it as a percentage (A6-05).
   confidence?: number | null;
 }
 
@@ -94,7 +98,8 @@ export interface ChatMessage {
   grounded?: boolean | null;
   refused_reason?: string | null;
   sources: SourceRef[];
-  // numeric confidence from the SSE done event
+  // numeric verdict + internal confidence from the SSE done event
+  numeric_check?: string | null;
   confidence?: number | null;
   rating?: number | null;
   created_at?: string;

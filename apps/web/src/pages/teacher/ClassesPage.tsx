@@ -9,8 +9,10 @@ import type {
   WeakMatrix,
 } from "../../types";
 import { Badge, Button, Card, ProgressRing, Stat } from "../../components/ui";
+import { ClassLevelSelect } from "../../components/ClassLevelSelect";
 import { friendlyError } from "../../errors";
 import { t } from "../../i18n";
+import { compareBn } from "../../lib/text";
 
 const errText = (err: unknown): string =>
   friendlyError((err as { rawDetail?: unknown }).rawDetail)?.text ??
@@ -133,7 +135,7 @@ export default function ClassesPage() {
       setRooms((rs) =>
         [...rs, room].sort(
           (a, b) =>
-            a.class_level - b.class_level || a.section.localeCompare(b.section),
+            a.class_level - b.class_level || compareBn(a.section, b.section),
         ),
       );
       setRoomId(room.id);
@@ -263,7 +265,7 @@ export default function ClassesPage() {
   }, [wm]);
 
   return (
-    <main className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       <section className="section-head">
         <h1 className="page-title">{t("tNavClasses")}</h1>
         <Button variant="soft" size="sm" onClick={loadRooms}>
@@ -295,18 +297,7 @@ export default function ClassesPage() {
         </div>
         <form onSubmit={createRoom} className="row-flex gap-2 mt-2">
           <label htmlFor="ncls">{t("newClassroom")}</label>
-          <select
-            id="ncls"
-            className="select"
-            value={newLevel}
-            onChange={(e) => setNewLevel(Number(e.target.value))}
-          >
-            {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
+          <ClassLevelSelect id="ncls" value={newLevel} onChange={setNewLevel} />
           <input
             id="nsec"
             value={newSection}

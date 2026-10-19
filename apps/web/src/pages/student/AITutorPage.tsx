@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Bookmark,
   Check,
+  Copy,
   MessageSquarePlus,
   Paperclip,
   RefreshCcw,
@@ -26,13 +27,14 @@ import type {
   SourceRef,
 } from "../../types";
 import { useAuth } from "../../AuthContext";
-import { Badge, Button, Card } from "../../components/ui";
+import { Badge, Button, Card, Field, Modal } from "../../components/ui";
 import { ConversationChip } from "../../components/ConversationChip";
 import { AiSparkle, BrandMark } from "../../components/BrandMark";
 import { VoiceButton } from "../../components/VoiceButton";
 import { friendlyError } from "../../errors";
 import { t } from "../../i18n";
 import { getLowData } from "../../lib/lowData";
+import { copyText } from "../../lib/clipboard";
 import { toast } from "../../lib/toast";
 import { track } from "../../lib/analytics";
 import { explainMessage, type QuizExplainPayload } from "../../lib/quizExplain";
@@ -84,6 +86,11 @@ export default function AITutorPage() {
   const [announcement, setAnnouncement] = useState("");
   const [thanks, setThanks] = useState<number | null>(null);
   const [savedId, setSavedId] = useState<number | null>(null);
+  // AUD-G-10: copy confirmation and the thumbs-down reason dialog.
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [copyMsg, setCopyMsg] = useState<string | null>(null);
+  const [downTarget, setDownTarget] = useState<number | null>(null);
+  const [reason, setReason] = useState("");
   // explicit explanation strategy + image attachment.
   const [strategy, setStrategy] = useState<string | null>(null);
   // Both the attach handler and the <img> render below enforce this list:
@@ -248,11 +255,16 @@ export default function AITutorPage() {
             const final = {
               id: undone.message_id,
               role: "assistant" as const,
-              content: acc.text,
+              // AUD-A2-03: the final event is authoritative. When the server's
+              // post-generation checks replaced the answer (citation or
+              // numeric enforcement), the streamed tokens shown so far are
+              // superseded by that answer, exactly as the contract states.
+              content: undone.answer || acc.text,
               grounded: undone.grounded,
               refused_reason: undone.refused_reason,
               sources: undone.sources ?? [],
               confidence: undone.confidence ?? null,
+              numeric_check: undone.numeric_check ?? null,
             };
             if (li >= 0) copy[li] = { ...copy[li], ...final };
             else copy.push(final);
@@ -311,15 +323,43 @@ export default function AITutorPage() {
     void navigate(location.pathname, { replace: true, state: null });
   }, [location, navigate, send]);
 
-  const rate = async (messageId: number, rating: 1 | -1) => {
+  const rate = async (messageId: number, rating: 1 | -1, comment?: string) => {
     try {
-      await post("/feedback", { rating, message_id: messageId });
+      await post(
+        "/feedback",
+        comment
+          ? { rating, message_id: messageId, comment }
+          : { rating, message_id: messageId },
+      );
       setThanks(messageId);
-      track("tutor_feedback", { rating });
+      track("tutor_feedback", { rating, has_comment: !!comment });
       setTimeout(() => setThanks(null), 2000);
     } catch {
-      /* ignore */
+      // AUD-G-10: a dropped rating is invisible to the student, so it is said
+      // out loud instead of being swallowed.
+      toast(t("errorGeneric"));
     }
+  };
+
+  /** Thumbs-down first asks for the reason (AUD-G-10); the API takes it. */
+  const submitDown = async (withReason: boolean) => {
+    const id = downTarget;
+    setDownTarget(null);
+    if (id === null) return;
+    const comment = withReason ? reason.trim().slice(0, 500) : "";
+    setReason("");
+    await rate(id, -1, comment || undefined);
+    if (comment) toast(t("feedbackThanks"));
+  };
+
+  const copyAnswer = async (messageId: number, text: string) => {
+    const ok = await copyText(text);
+    setCopyMsg(ok ? t("copied") : t("copyFailed"));
+    if (ok) setCopiedId(messageId);
+    setTimeout(() => {
+      setCopiedId(null);
+      setCopyMsg(null);
+    }, 2000);
   };
 
   // Blueprint §26: any tutor answer can be kept in the student's saved notes.
@@ -403,7 +443,7 @@ export default function AITutorPage() {
   };
 
   return (
-    <main className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       <section className="section-head">
         <h2>{t("aiTutor")}</h2>
         <Button variant="soft" size="sm" onClick={newChat}>
@@ -532,6 +572,7 @@ export default function AITutorPage() {
           data-testid="tutor-announcer"
         >
           {announcement}
+          {copyMsg ? ` ${copyMsg}` : ""}
         </div>
         <div ref={viewportRef} className="chat-thread chat-viewport">
           {messages.length === 0 && !streaming && (
@@ -639,20 +680,24 @@ export default function AITutorPage() {
                       </button>
                     </div>
                   )}
-                {m.role === "assistant" && m.confidence != null && (
-                  <div className="confidence-row">
-                    <Badge tone={m.confidence >= 0.6 ? "ok" : "warn"}>
-                      {t("confidenceBadge", {
-                        pct: String(Math.round(m.confidence * 100)),
-                      })}
-                    </Badge>
-                    {/* low-confidence state: distinct, not alarming. */}
-                    {m.confidence < 0.6 && (
+                {m.role === "assistant" &&
+                  m.grounded &&
+                  m.confidence != null &&
+                  m.confidence < 0.6 && (
+                    <div className="confidence-row">
+                      {/* A6-05: the numeric "<pct>% confident" badge rendered an
+                          uncalibrated internal signal as a claim; it is gone.
+                          What remains is a behavioural hint, and only when the
+                          grounding signal is weak. */}
                       <p className="low-conf-hint" role="status">
                         {t("lowConfidenceHint")}
                       </p>
-                    )}
-                  </div>
+                    </div>
+                  )}
+                {m.role === "assistant" && m.numeric_check === "unverified" && (
+                  <p className="low-conf-hint" role="status">
+                    {t("numericUnverified")}
+                  </p>
                 )}
                 {m.role === "assistant" &&
                   m.sources &&
@@ -693,9 +738,24 @@ export default function AITutorPage() {
                           <button
                             className="icon-btn rate-btn"
                             aria-label={t("rateDown")}
-                            onClick={() => rate(m.id, -1)}
+                            aria-haspopup="dialog"
+                            onClick={() => {
+                              setReason("");
+                              setDownTarget(m.id);
+                            }}
                           >
                             <ThumbsDown size={16} aria-hidden />
+                          </button>
+                          <button
+                            className="icon-btn rate-btn"
+                            aria-label={t("copyAnswer")}
+                            onClick={() => void copyAnswer(m.id, m.content)}
+                          >
+                            {copiedId === m.id ? (
+                              <Check size={16} aria-hidden />
+                            ) : (
+                              <Copy size={16} aria-hidden />
+                            )}
                           </button>
                           {m.grounded && (
                             <button
@@ -887,6 +947,36 @@ export default function AITutorPage() {
         )}
       </Card>
 
+      {/* AUD-G-10: the rating is recorded either way; the note is optional. */}
+      <Modal
+        open={downTarget !== null}
+        onClose={() => setDownTarget(null)}
+        title={t("feedbackReasonTitle")}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => void submitDown(false)}>
+              {t("feedbackSkip")}
+            </Button>
+            <Button variant="primary" onClick={() => void submitDown(true)}>
+              {t("feedbackSend")}
+            </Button>
+          </>
+        }
+      >
+        <p className="muted">{t("feedbackReasonHint")}</p>
+        <Field label={t("feedbackReasonTitle")} htmlFor="feedback-reason">
+          <textarea
+            id="feedback-reason"
+            className="input"
+            rows={3}
+            maxLength={500}
+            value={reason}
+            placeholder={t("feedbackReasonPlaceholder")}
+            onChange={(e) => setReason(e.target.value)}
+          />
+        </Field>
+      </Modal>
+
       {evidence && (
         <EvidenceModal source={evidence} onClose={() => setEvidence(null)} />
       )}
@@ -894,7 +984,14 @@ export default function AITutorPage() {
   );
 }
 
-/** full sanitized textbook evidence behind the source chip. */
+/** Full sanitized textbook evidence behind the source chip.
+ *
+ * AUD-G-09: this used to hand-roll the backdrop, role="dialog", the Tab trap
+ * and the focus restore — a second dialog implementation that drifted from
+ * `Modal` (which also locks scroll and makes the backdrop keyboard-
+ * dismissible). It now renders the shared primitive and keeps only its own
+ * content.
+ */
 function EvidenceModal({
   source,
   onClose,
@@ -902,83 +999,19 @@ function EvidenceModal({
   source: SourceRef;
   onClose: () => void;
 }) {
-  const modalRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const prev = document.activeElement as HTMLElement | null;
-    modalRef.current?.querySelector("button")?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onClose();
-        return;
-      }
-      // Minimal focus trap: keep Tab inside the dialog.
-      if (e.key !== "Tab" || !modalRef.current) return;
-      const items = Array.from(
-        modalRef.current.querySelectorAll<HTMLElement>(
-          'button, [href], input, [tabindex]:not([tabindex="-1"])',
-        ),
-      ).filter((el) => !el.hasAttribute("disabled"));
-      if (items.length === 0) return;
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      prev?.focus?.();
-    };
-  }, [onClose]);
   const path = [source.book, source.chapter, source.section]
     .filter(Boolean)
     .join(" › ");
   return (
-    <div
-      className="modal-backdrop"
-      role="button"
-      tabIndex={0}
-      aria-label={t("close")}
-      onKeyDown={(e) => {
-        // Click closes the overlay; Escape must do the same for keyboard use.
-        if (e.key === "Escape") onClose();
-      }}
-      onClick={(e) => {
-        // Only a click on the backdrop itself closes; clicks inside bubble up.
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        ref={modalRef}
-        className="modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label={t("evidenceTitle")}
-      >
-        <div className="modal-head">
-          <h3 className="modal-title">{t("evidenceTitle")}</h3>
-          <button
-            className="icon-btn rate-btn"
-            onClick={onClose}
-            aria-label={t("close")}
-          >
-            <X size={16} aria-hidden />
-          </button>
-        </div>
-        <p className="muted evidence-path">
-          {path}
-          {source.page != null ? ` · ${t("page")} ${source.page}` : ""}
-        </p>
-        <blockquote className="evidence-quote">
-          {source.excerpt ?? source.chapter}
-        </blockquote>
-      </div>
-    </div>
+    <Modal open onClose={onClose} title={t("evidenceTitle")}>
+      <p className="muted evidence-path">
+        {path}
+        {source.page != null ? ` · ${t("page")} ${source.page}` : ""}
+      </p>
+      <blockquote className="evidence-quote">
+        {source.excerpt ?? source.chapter}
+      </blockquote>
+    </Modal>
   );
 }
 

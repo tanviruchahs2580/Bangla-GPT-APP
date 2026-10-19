@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Moon, Sun } from "lucide-react";
 import { useAuth } from "../../AuthContext";
 import { Avatar, Badge, Button, Card } from "../../components/ui";
+import { ClassLevelSelect } from "../../components/ClassLevelSelect";
 import { getLang, setLang, t } from "../../i18n";
 import { roleLabel } from "../../lib/roles";
 import { currentTheme, toggleTheme } from "../../lib/theme";
@@ -21,7 +22,7 @@ export default function TeacherProfilePage() {
   const [dark, setDark] = useState(currentTheme() === "dark");
 
   return (
-    <main className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       <section className="section-head">
         <h1 className="page-title">{t("tpTitle")}</h1>
       </section>
@@ -45,18 +46,11 @@ export default function TeacherProfilePage() {
         <p className="muted muted-sm m-0">{t("tpPrefsHint")}</p>
         <div className="field">
           <label htmlFor="tpclass">{t("tpDefaultClass")}</label>
-          <select
+          <ClassLevelSelect
             id="tpclass"
-            className="select"
             value={defaultClass}
-            onChange={(e) => setDefaultClass(Number(e.target.value))}
-          >
-            {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
+            onChange={setDefaultClass}
+          />
         </div>
         <div className="row-flex section-gap-top">
           <Button

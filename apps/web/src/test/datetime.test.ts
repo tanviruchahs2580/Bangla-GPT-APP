@@ -4,6 +4,7 @@ import {
   formatServerDateTime,
   parseServerDate,
 } from "../lib/datetime";
+import { localeFor } from "../lib/digits";
 
 describe("parseServerDate", () => {
   it("reads an offset-less API timestamp as UTC, not as local time", () => {
@@ -42,20 +43,22 @@ describe("parseServerDate", () => {
     expect(formatServerDate(null)).toBe("");
   });
 
-  it("formats in the viewer's locale zone", () => {
+  it("formats in the app locale, in the viewer's zone", () => {
     // Whatever the machine's zone, the instant must survive the round trip:
     // the formatted output has to equal the same instant formatted directly.
+    // AUD-G-15: the locale is the APP's (localeFor()), not the browser
+    // default -- a Bangla screen renders ১৮/১০/২০২৬ rather than 18/10/2026 --
+    // so the expectation formats with the same locale the component uses.
     const instant = new Date("2026-10-20T04:30:00Z");
+    const locale = localeFor();
     expect(formatServerDateTime("2026-10-20T04:30:00")).toBe(
-      instant.toLocaleString(),
+      instant.toLocaleString(locale),
     );
     expect(
       formatServerDate("2026-10-20T04:30:00", {
         day: "numeric",
         month: "short",
       }),
-    ).toBe(
-      instant.toLocaleDateString(undefined, { day: "numeric", month: "short" }),
-    );
+    ).toBe(instant.toLocaleDateString(locale, { day: "numeric", month: "short" }));
   });
 });
