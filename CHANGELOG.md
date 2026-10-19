@@ -54,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): repair the retrieval evaluation's coverage-gate call
 - fix(api): restore middleware_stack and circuit_breaker to last-green versions
 - fix(api): restore the documented build_limiter patch seam in create_app
+- fix(api): retry create_all on the schema race between booting workers
 - fix(api): rotate token epoch on password change/reset — sessions revoke (F-05)
 - fix(api): ruff format circuit_breaker
 - fix(api): ruff format middleware_stack
@@ -80,6 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(ci): upgrade setuptools before pip-audit; refresh lock to current resolution
 - fix(db): reconcile ORM/migration drift so alembic check passes
 - fix(deps): declare radon, the one ratchet tool the script imports
+- fix(deps): lock radon and make deptry's import mapping environment-independent
 - fix(encoding): add .gitattributes and repair three encoding defects
 - fix(i18n): put the parent digest and the printed papers in Bangla, and correct five copy defects
 - fix(ops): point the Grafana dashboard at the exported metric names

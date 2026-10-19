@@ -83,6 +83,10 @@ dev = [
   # CI. vulture and deptry are only ever shelled out to, so declaring them here
   # would trip the same gate from the other side; the CI step installs them.
   "radon>=6.0.1",
+  # scripts/check_lockfile.py compares declared specifiers against the pinned
+  # lock with packaging's Requirement/SpecifierSet; deptry flags the undeclared
+  # import wherever the project's own environment is not installed (CI).
+  "packaging>=24",
 ]
 
 [build-system]
