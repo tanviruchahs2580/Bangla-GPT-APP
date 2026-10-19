@@ -26,7 +26,14 @@ import pytest
 from sqlalchemy import inspect, text
 
 from bangla_gpt_api.config import Settings
-from bangla_gpt_api.db.clock import FrozenClock, SystemClock, reset_clock, set_clock, utcnow
+from bangla_gpt_api.db.clock import (
+    FrozenClock,
+    SystemClock,
+    get_clock,
+    reset_clock,
+    set_clock,
+    utcnow,
+)
 from bangla_gpt_api.db.models import EmailVerification, PasswordReset, User
 from bangla_gpt_api.db.session import init_db, make_engine, make_session_factory
 from bangla_gpt_api.services import retention
@@ -128,12 +135,17 @@ def test_postgres_columns_are_timestamptz_and_compare_natively() -> None:
 def test_clock_seam_is_swappable() -> None:
     frozen = FrozenClock(datetime(2026, 6, 1, 23, 59, 59))
     set_clock(frozen)
+    # The accessor, the naive reading and the aware reading all come from the
+    # installed clock -- the seam's public surface, not just its side effect.
+    assert get_clock() is frozen
     assert utcnow() == datetime(2026, 6, 1, 23, 59, 59)
     assert utcnow().tzinfo is None
+    assert get_clock().now_aware() == datetime(2026, 6, 1, 23, 59, 59, tzinfo=UTC)
     frozen.advance(seconds=1)
     assert utcnow() == datetime(2026, 6, 2, 0, 0, 0)
     reset_clock()
-    assert isinstance(SystemClock(), SystemClock)
+    assert isinstance(get_clock(), SystemClock)
+    assert get_clock().now_aware().tzinfo is UTC
     assert utcnow() - datetime.now(UTC).replace(tzinfo=None) < timedelta(seconds=5)
 
 

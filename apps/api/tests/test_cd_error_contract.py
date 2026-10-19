@@ -51,18 +51,56 @@ def _literal_int(node: ast.expr | None) -> int | None:
     return None
 
 
+def _literal_values(node: ast.expr) -> list[str] | None:
+    """String literals in a ``Literal[...]`` annotation, or None if not one.
+
+    ``None`` inside the union (``X | None``) contributes nothing; a non-Literal
+    part (``str``, a parameter) makes the whole thing unresolvable -- the scan
+    may only resolve an annotation that names exactly one possible code.
+    """
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+        left = _literal_values(node.left)
+        right = _literal_values(node.right)
+        if left is None and right is None:
+            return None
+        return (left or []) + (right or [])
+    if isinstance(node, ast.Subscript) and ast.unparse(node.value) == "Literal":
+        elements = node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
+        values: list[str] = []
+        for element in elements:
+            if isinstance(element, ast.Constant) and element.value is None:
+                continue
+            if isinstance(element, ast.Constant) and isinstance(element.value, str):
+                values.append(element.value)
+                continue
+            return None  # a Literal with a non-string member is not a code
+        return values
+    if isinstance(node, ast.Constant) and node.value is None:
+        return []
+    return None
+
+
 def _resolve_str(node: ast.expr, scopes: list[dict[str, ast.expr]]) -> str | None:
     """Resolve an expression the source uses for a code to its literal string.
 
     One hop is enough for this codebase: `LOGIN_LOCKED_CODE` is a module
-    constant. Anything unresolvable returns None and is reported by the test.
+    constant. A parameter annotated with a single-value ``Literal`` is a
+    typed code too (``missing_code: Literal["unknown_student"] | None``), so
+    a code passed through a parameter stays catalogued instead of becoming
+    invisible drift. Anything else unresolvable returns None and is reported.
     """
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return node.value
     if isinstance(node, ast.Name):
         for scope in reversed(scopes):
             if node.id in scope:
-                return _resolve_str(scope[node.id], scopes)
+                resolved = _resolve_str(scope[node.id], scopes)
+                if resolved is not None:
+                    return resolved
+                literals = _literal_values(scope[node.id])
+                if literals is not None and len(set(literals)) == 1:
+                    return next(iter(literals))
+                return None
     return None
 
 
@@ -80,6 +118,15 @@ def _shape_of(node: ast.expr, scopes: list[dict[str, ast.expr]]) -> Site:
         return Site(shape="coded", code=code, keys=keys)
     if isinstance(node, (ast.List, ast.ListComp)):
         return Site(shape="framework_validation")
+    if isinstance(node, ast.IfExp):
+        # A conditional body (for example ``missing_detail or "Not found"``) is
+        # one body shape only if both branches agree; otherwise it is exactly
+        # the drift this scan exists to catch.
+        branch = _shape_of(node.body, scopes)
+        other = _shape_of(node.orelse, scopes)
+        if branch.shape != other.shape or branch.code != other.code:
+            return Site(shape=f"unresolved:IfExp({branch.shape}|{other.shape})")
+        return branch
     if isinstance(node, ast.Name):
         for scope in reversed(scopes):
             if node.id in scope:

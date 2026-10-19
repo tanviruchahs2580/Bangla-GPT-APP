@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.data.loader import load_sample_corpus
 from bangla_gpt_api.main import create_app
+from bangla_gpt_api.providers.base import SamplingParams, sampling_for
 from bangla_gpt_api.providers.mock import MockLLMProvider
 from bangla_gpt_api.services import router
 from bangla_gpt_api.services.router import (
@@ -34,24 +35,48 @@ KOISH = "কোষ"
 
 
 class _NamedMock(MockLLMProvider):
-    """Mock that remembers its lane name + every prompt it served."""
+    """Mock that remembers its lane name + every prompt it served.
+
+    The signature mirrors the ``LLMProvider`` protocol exactly (A6-06): the
+    router spreads the task's ``sampling`` profile into every call to a
+    provider that declares ``supports_sampling``, and this double records it
+    so the tests can assert the router really passes the profile through
+    instead of silently dropping it.
+    """
 
     def __init__(self, lane: str) -> None:
         super().__init__()
         self.lane = lane
         self.prompts: list[str] = []
+        self.sampling: list[SamplingParams | None] = []
 
     @property
     def name(self) -> str:  # type: ignore[override]
         return self.lane
 
-    async def generate(self, prompt: str, *, system: str | None = None) -> str:
+    async def generate(
+        self,
+        prompt: str,
+        *,
+        system: str | None = None,
+        image: dict | None = None,
+        sampling: SamplingParams | None = None,
+    ) -> str:
         self.prompts.append(prompt)
-        return await super().generate(prompt, system=system)
+        self.sampling.append(sampling)
+        return await super().generate(prompt, system=system, image=image, sampling=sampling)
 
-    async def stream(self, prompt: str, *, system: str | None = None):
+    async def stream(
+        self,
+        prompt: str,
+        *,
+        system: str | None = None,
+        image: dict | None = None,
+        sampling: SamplingParams | None = None,
+    ):
         self.prompts.append(prompt)
-        async for delta in super().stream(prompt, system=system):
+        self.sampling.append(sampling)
+        async for delta in super().stream(prompt, system=system, image=image, sampling=sampling):
             yield delta
 
 
@@ -205,6 +230,9 @@ def test_simple_route_uses_fast_provider_and_logs_route(monkeypatch, tmp_path) -
     assert res.status_code == 200, res.text
     assert res.json()["grounded"] is True
     assert len(fast.prompts) == 1 and not main.prompts
+    # A6-06: the router hands the task's sampling profile to the lane it chose,
+    # because MockLLMProvider declares supports_sampling.
+    assert fast.sampling == [sampling_for("tutor_answer")]
     calls = handler.events("ai_call")
     assert len(calls) == 1
     line = calls[0]
@@ -234,6 +262,8 @@ def test_complex_route_stays_on_main(monkeypatch, tmp_path) -> None:
         logging.getLogger("bangla_gpt_api").removeHandler(handler)
     assert res.status_code == 200, res.text
     assert len(main.prompts) == 1 and not fast.prompts
+    # A6-06: same profile, different lane -- the complex path is still pinned.
+    assert main.sampling == [sampling_for("tutor_answer")]
     line = handler.events("ai_call")[-1]
     assert line["route"] == "complex" and line["model"] == "main"
 

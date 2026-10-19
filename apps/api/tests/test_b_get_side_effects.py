@@ -62,9 +62,9 @@ def test_every_documented_handler_is_still_scanned() -> None:
     """Guard the guard: a rename must not silently drop a handler from the scan."""
     found = _write_on_get_handlers()
     for module, handler, _route in DOCUMENTED_WRITE_ON_GET:
-        assert any(
-            entry[0] == module and entry[1] == handler for entry in found
-        ), f"{module}:{handler} is allowlisted but no longer found by the scan"
+        assert any(entry[0] == module and entry[1] == handler for entry in found), (
+            f"{module}:{handler} is allowlisted but no longer found by the scan"
+        )
 
 
 def test_no_undocumented_write_on_get_handler() -> None:

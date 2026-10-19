@@ -115,8 +115,12 @@ def test_fenced_code_and_external_urls_are_not_links(tmp_path: Path) -> None:
 
 
 def test_anchor_slug_follows_github_rules() -> None:
-    assert check_links.github_slug("Deploying a release (tag push)") == "deploying-a-release-tag-push"
-    assert check_links.github_slug("`alembic check` and the schema") == "alembic-check-and-the-schema"
+    assert (
+        check_links.github_slug("Deploying a release (tag push)") == "deploying-a-release-tag-push"
+    )
+    assert (
+        check_links.github_slug("`alembic check` and the schema") == "alembic-check-and-the-schema"
+    )
     assert check_links.github_slug("**Bold** heading") == "bold-heading"
 
 
@@ -146,7 +150,9 @@ def test_green_run_still_states_what_was_not_checked() -> None:
         text=True,
         cwd=REPO,
     )
-    summary = [line for line in result.stdout.splitlines() if line.startswith("relative links checked:")]
+    summary = [
+        line for line in result.stdout.splitlines() if line.startswith("relative links checked:")
+    ]
     assert len(summary) == 1
     checked = int(summary[0].split(":")[1].split("in")[0].strip())
     assert checked > 0

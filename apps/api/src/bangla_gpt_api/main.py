@@ -414,6 +414,10 @@ PUBLIC_OPERATIONS: frozenset[tuple[str, str]] = frozenset(
         ("post", "/auth/verify-email"),
         ("post", "/auth/join-school"),
         ("post", "/auth/mfa/challenge"),
+        # B-02: the refresh credential is the body's refresh_token, not an
+        # Authorization header, so the operation carries no security scheme.
+        # Possession of a valid, unrotated refresh token is the authentication.
+        ("post", "/auth/refresh"),
         # Optional auth: the route reads a bearer token when one is supplied
         # and works without it, so FastAPI emits a security requirement that
         # anonymous callers do not actually satisfy. Declared public here so the

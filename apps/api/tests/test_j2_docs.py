@@ -99,7 +99,9 @@ def test_readme_badges_point_at_workflows_that_exist() -> None:
     badges = re.findall(r"actions/workflows/([\w.-]+)/badge\.svg", readme)
     assert badges, "the README must carry live workflow badges (J-02)"
     for badge in badges:
-        assert (REPO / ".github" / "workflows" / badge).is_file(), f"no workflow file for badge {badge}"
+        assert (REPO / ".github" / "workflows" / badge).is_file(), (
+            f"no workflow file for badge {badge}"
+        )
 
 
 def test_readme_has_no_release_note_wall() -> None:

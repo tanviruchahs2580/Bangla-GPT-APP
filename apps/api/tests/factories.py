@@ -91,7 +91,8 @@ BN_SENTENCE = (
     "\u0986\u09b2\u09cb\u09b0 \u0989\u09aa\u09b8\u09cd\u09a5\u09bf\u09a4\u09bf\u09a4\u09c7 \u0995\u09be\u09b0\u09cd\u09ac\u09a8 "
     "\u09a1\u09be\u0987-\u0985\u0995\u09cd\u09b8\u09be\u0987\u09a1 \u0993 \u09aa\u09be\u09a8\u09bf \u09a5\u09c7\u0995\u09c7 "
     "\u0995\u09cd\u09b2\u09cb\u09b0\u09cb\u09ab\u09bf\u09b2\u09c7\u09b0 \u09b8\u09be\u09b9\u09be\u09af\u09cd\u09af\u09c7 "
-    "\u09a8\u09bf\u099c\u09c7\u09b0 \u0996\u09be\u09a6\u09cd\u09af \u09a4\u09c8\u09b0\u09bf \u0995\u09b0\u09c7" + BN["danda"]
+    "\u09a8\u09bf\u099c\u09c7\u09b0 \u0996\u09be\u09a6\u09cd\u09af \u09a4\u09c8\u09b0\u09bf \u0995\u09b0\u09c7"
+    + BN["danda"]
 )
 
 #: A student's question about that sentence (what the tutor is asked).
@@ -171,9 +172,7 @@ def make_student(
     return student
 
 
-def make_teacher(
-    db: Session, *, user: User | None = None, name: str | None = None
-) -> Teacher:
+def make_teacher(db: Session, *, user: User | None = None, name: str | None = None) -> Teacher:
     """Insert a ``Teacher`` profile, creating its ``User`` when omitted."""
     teacher = Teacher(
         user_id=(user or make_user(db, role="teacher")).id,
@@ -185,9 +184,7 @@ def make_teacher(
     return teacher
 
 
-def make_school(
-    db: Session, *, name: str | None = None, code: str | None = None
-) -> School:
+def make_school(db: Session, *, name: str | None = None, code: str | None = None) -> School:
     """Insert a tenancy root."""
     school = School(
         name=name or f"{BN['school']} {uuid4().hex[:6]}",

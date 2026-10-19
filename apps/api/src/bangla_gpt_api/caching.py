@@ -71,6 +71,17 @@ class Cache(Protocol):
         swallowing a backend write failure."""
         ...
 
+    def set_json_nx_strict(self, key: str, value: Any, ttl: float) -> bool:
+        """Set only when the key does not exist; True when this call set it.
+
+        The atomic claim primitive (B-02 refresh-token rotation): the
+        database/cache arbitrates the race, so two requests carrying one
+        single-use token cannot both win. Raises ``CacheUnavailable`` when
+        the backend cannot be reached — a rotation whose claim cannot be
+        confirmed must refuse, not guess.
+        """
+        ...
+
     def clear(self) -> None: ...
 
     def ping(self) -> bool:
@@ -116,6 +127,15 @@ class MemoryCache:
     # The memory backend has no "unreachable" state, so strict == regular.
     get_json_strict = get_json
     set_json_strict = set_json
+
+    def set_json_nx_strict(self, key: str, value: Any, ttl: float) -> bool:
+        """Set-if-absent under the same lock as every other memory op."""
+        with self._lock:
+            entry = self._data.get(key)
+            if entry is not None and time.monotonic() < entry[0]:
+                return False
+            self._data[key] = (time.monotonic() + ttl, copy.deepcopy(value))
+            return True
 
     def clear(self) -> None:
         with self._lock:
@@ -194,6 +214,16 @@ class RedisCache:
             raise CacheUnavailable("redis set failed") from exc
         # TypeError/ValueError (unserialisable value) are caller bugs: in
         # strict mode they propagate instead of pretending the write landed.
+
+    def set_json_nx_strict(self, key: str, value: Any, ttl: float) -> bool:
+        """Redis SET NX: the server arbitrates the single-use claim."""
+        import redis.exceptions
+
+        try:
+            return bool(self._redis.set(key, json.dumps(value), ex=max(1, int(ttl)), nx=True))
+        except redis.exceptions.RedisError as exc:
+            logger.warning("cache_backend_unreachable", extra={"op": "set_nx_strict"})
+            raise CacheUnavailable("redis set nx failed") from exc
 
     def clear(self) -> None:
         logger.warning("cache_clear_skipped_on_shared_backend", extra={"op": "clear"})

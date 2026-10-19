@@ -139,7 +139,7 @@ def test_public_status_page_reports_the_database_as_unreachable(tmp_path, monkey
 
     res = client.get("/status")
     assert res.status_code == 200
-    database = [c for c in res.json()["components"] if c["name"] == "database"][0]
+    database = next(c for c in res.json()["components"] if c["name"] == "database")
     assert database["ok"] is False
     assert database["detail"] == "unreachable"
 

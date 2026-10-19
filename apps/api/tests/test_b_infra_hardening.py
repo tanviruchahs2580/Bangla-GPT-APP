@@ -91,7 +91,25 @@ def test_read_only_services_have_tmpfs_for_their_writes() -> None:
     assert re.search(r"(?m)^\s+- /?tmp$", api), "gunicorn needs a writable temp dir"
     web = _effective_service(text, "web")
     assert "/var/cache/nginx" in web, "nginx writes its temp dirs under /var/cache/nginx"
-    assert "NET_BIND_SERVICE" in web, "nginx binds :80, which needs this capability"
+    # AUD-B-24: the web image is nginxinc/nginx-unprivileged -- master and
+    # workers run as uid 101 and listen on 8080 -- so with `cap_drop: ALL` the
+    # container can still bind, and no capability is granted. This used to
+    # assert `NET_BIND_SERVICE in web`, which was true of the earlier root nginx
+    # on :80 and is now a false failure. The invariant worth pinning is the
+    # pair: a privileged port (<1024) requires the capability back beside
+    # `cap_drop: ALL`, an unprivileged one forbids granting it.
+    ports = re.findall(r'(?m)^\s*- "?(\d{1,5})"?\s*$', web)
+    assert ports, "web: no port declared"
+    if any(int(port) < 1024 for port in ports):
+        assert "NET_BIND_SERVICE" in web, (
+            f"web binds a privileged port ({ports}): nginx cannot bind it with "
+            "cap_drop: ALL, so cap_add must restore NET_BIND_SERVICE"
+        )
+    else:
+        assert "NET_BIND_SERVICE" not in web, (
+            f"web listens on an unprivileged port ({ports}); NET_BIND_SERVICE must stay dropped"
+        )
+    assert "8080" in ports, "the unprivileged image listens on 8080; Caddy proxies web:8080"
 
 
 def test_pgbackrest_repo_is_encrypted_and_the_pass_is_injected() -> None:

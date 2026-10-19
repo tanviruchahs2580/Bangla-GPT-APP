@@ -32,7 +32,9 @@ from __future__ import annotations
 import time
 from collections import deque
 from datetime import timedelta
+
 import pytest
+from cryptography.fernet import Fernet
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
@@ -62,8 +64,6 @@ from bangla_gpt_api.security import decrypt_pii, encrypt_pii, write_audit
 from bangla_gpt_api.services import retention
 from bangla_gpt_api.services.quiz import ClozeQuizGenerator, dump_quiz
 from factories import BN, BN_SENTENCE, make_student, make_user, utcnow
-
-from cryptography.fernet import Fernet
 
 # ── fixtures ──────────────────────────────────────────────────────────────
 
@@ -171,9 +171,7 @@ def test_claim_on_the_expiry_boundary_second_is_accepted(db) -> None:
     user = make_user(db)
     boundary_hash = "e" * 64
     moment = utcnow()
-    db.add(
-        EmailVerification(user_id=user.id, token_hash=boundary_hash, expires_at=moment)
-    )
+    db.add(EmailVerification(user_id=user.id, token_hash=boundary_hash, expires_at=moment))
     db.commit()
 
     assert (
@@ -688,9 +686,7 @@ def test_sweep_deletes_old_analytics_events_and_keeps_recent_ones(db) -> None:
     now = utcnow()
     db.add_all(
         [
-            AnalyticsEventRow(
-                name="old", props={}, created_at=now - timedelta(days=200)
-            ),
+            AnalyticsEventRow(name="old", props={}, created_at=now - timedelta(days=200)),
             AnalyticsEventRow(name="new", props={}, created_at=now - timedelta(days=1)),
         ]
     )
@@ -713,9 +709,7 @@ def test_sweep_with_a_message_less_conversation_skips_the_feedback_detach(db) ->
     """
     student = make_student(db)
     now = utcnow()
-    empty = Conversation(
-        student_id=student.id, title="empty", created_at=now - timedelta(days=90)
-    )
+    empty = Conversation(student_id=student.id, title="empty", created_at=now - timedelta(days=90))
     db.add(empty)
     db.commit()
     empty_id = empty.id
@@ -723,9 +717,10 @@ def test_sweep_with_a_message_less_conversation_skips_the_feedback_detach(db) ->
     report = retention.run_retention_sweep(db, settings=_retention_settings(), now=now)
     assert report["conversations_deleted"] == 1
     assert report["chat_messages_deleted"] == 0
-    assert db.execute(
-        select(Conversation.id).where(Conversation.id == empty_id)
-    ).scalar_one_or_none() is None
+    assert (
+        db.execute(select(Conversation.id).where(Conversation.id == empty_id)).scalar_one_or_none()
+        is None
+    )
 
 
 def test_sweep_dry_run_is_a_pure_read_at_the_same_instant(db) -> None:
@@ -748,9 +743,10 @@ def test_sweep_dry_run_is_a_pure_read_at_the_same_instant(db) -> None:
 
     dry = retention.run_retention_sweep(db, settings=_retention_settings(), dry_run=True, now=now)
     assert dry["conversations_deleted"] == 1 and dry["chat_messages_deleted"] == 1
-    assert db.execute(
-        select(Conversation.id).where(Conversation.id == conversation_id)
-    ).scalar_one() == conversation_id
+    assert (
+        db.execute(select(Conversation.id).where(Conversation.id == conversation_id)).scalar_one()
+        == conversation_id
+    )
 
     real = retention.run_retention_sweep(db, settings=_retention_settings(), now=now)
     assert real["conversations_deleted"] == 1 and real["chat_messages_deleted"] == 1
@@ -765,9 +761,7 @@ def test_retention_report_counts_match_what_the_sweep_deletes(db) -> None:
     student = make_student(db)
     now = utcnow()
     old = Conversation(student_id=student.id, title="old", created_at=now - timedelta(days=90))
-    recent = Conversation(
-        student_id=student.id, title="recent", created_at=now - timedelta(days=2)
-    )
+    recent = Conversation(student_id=student.id, title="recent", created_at=now - timedelta(days=2))
     db.add_all([old, recent])
     db.commit()
 
@@ -803,7 +797,7 @@ def test_unused_student_invite_rows_are_out_of_scope(db) -> None:
     """``StudentInvite`` (class-import codes) is not swept: the handout may
     still be unused. Asserted so a future sweep cannot silently invalidate
     printed codes the school has not handed out yet."""
-    from bangla_gpt_api.db.models import ClassRoom, School, StudentInvite
+    from bangla_gpt_api.db.models import ClassRoom, School
 
     school = School(name="s", code="S-1")
     db.add(school)

@@ -133,7 +133,16 @@ class Settings(BaseSettings):
 
     # --- auth ---
     jwt_secret: str = DEFAULT_JWT_SECRET
-    jwt_expire_minutes: int = 60
+    # B-02: access tokens are SHORT-LIVED (15 minutes). A leaked access token
+    # is a credential for this window only; the session stays usable through
+    # the rotating refresh token (POST /auth/refresh), which is single-use
+    # and whose replay revokes the whole login family. 60 minutes was the
+    # old default -- one leaked bearer token stayed live for an hour with no
+    # recovery path beyond logout (which only works if the holder cooperates).
+    jwt_expire_minutes: int = 15
+    # B-02: refresh-token lifetime, the session length. Rotation makes the
+    # sliding window without ever extending a single token's life.
+    jwt_refresh_expire_days: int = 14
     # SEC-03: tokens are stamped with and verified against these so a token
     # minted for a different audience/issuer (e.g. a future service sharing the
     # signing key) cannot be replayed here.

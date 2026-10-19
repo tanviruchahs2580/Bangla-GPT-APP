@@ -201,6 +201,12 @@ def _verify_legacy_pbkdf2(password: str, stored: str) -> bool:
 #: (``imp``, ``mfa``, …) but never one of these.
 RESERVED_CLAIMS = frozenset({"sub", "role", "iss", "aud", "exp", "iat", "jti"})
 
+#: Token-purpose marker (B-02). ``get_current_user`` refuses ``refresh``
+#: tokens: a long-lived credential that only exists to mint access tokens
+#: must never be usable as an API credential itself.
+ACCESS_TOKEN_TYP = "access"  # noqa: S105 - a token type string, not a credential
+REFRESH_TOKEN_TYP = "refresh"  # noqa: S105 - a token type string, not a credential
+
 
 class CommonPasswordError(ValueError):
     """The candidate is a well-known guess (F-072)."""
@@ -246,8 +252,49 @@ def create_access_token(
             "exp": datetime.now(UTC) + expires_delta,
             "iat": issued_at if issued_at is not None else int(time.time()),
             "jti": jti or uuid4().hex,  # unique id per token for revocation
+            "typ": ACCESS_TOKEN_TYP,
         }
     )
+    return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
+
+
+def create_refresh_token(
+    user: User,
+    *,
+    settings: Settings,
+    family: str | None = None,
+    jti: str | None = None,
+    issued_at: int | None = None,
+    days: int | None = None,
+) -> str:
+    """Mint a refresh token (B-02): long-lived, single-use, family-bound.
+
+    The token carries no authorization claims (no ``role``): it cannot be
+    used as an API credential (``get_current_user`` refuses ``typ=refresh``)
+    and the access token it mints gets its role from the CURRENT database
+    row, so a role changed after the login is reflected on the next refresh
+    instead of being frozen for the refresh token's lifetime.
+
+    ``family`` is the login's rotation lineage. ``POST /auth/refresh`` claims
+    the token's ``jti`` atomically (SET NX) and issues a successor with the
+    same family; presenting an already-rotated token revokes the whole family
+    — the standard stolen-refresh-token response: the thief and the victim
+    are both logged out, and only a fresh login gets back in.
+
+    ``days`` overrides the configured lifetime (tests, and a future
+    remember-me policy); the default is ``jwt_refresh_expire_days``.
+    """
+    expires_delta = timedelta(days=settings.jwt_refresh_expire_days if days is None else days)
+    payload: dict[str, object] = {
+        "sub": str(user.id),
+        "iss": settings.jwt_issuer,
+        "aud": settings.jwt_audience,
+        "exp": datetime.now(UTC) + expires_delta,
+        "iat": issued_at if issued_at is not None else int(time.time()),
+        "jti": jti or uuid4().hex,
+        "typ": REFRESH_TOKEN_TYP,
+        "fam": family or uuid4().hex,
+    }
     return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 
 

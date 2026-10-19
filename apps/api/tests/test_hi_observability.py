@@ -290,7 +290,11 @@ def test_ask_emits_retrieval_and_generation_trace_records(tmp_path: Path) -> Non
 
     generation = next(r for r in records if r["stage"] == "generation")
     assert generation["trace_id"] == retrieval["trace_id"]
-    assert generation["prompt_version"].startswith("sp-")
+    # A5-02 registry contract: the trace value is "<id>@<semver>+sp-<digest>"
+    # (e.g. tutor_system@1.0.1+sp-...), not the bare digest the inline prompt
+    # constant used to carry; the digest half still pins the exact text.
+    assert generation["prompt_version"].startswith("tutor_system@")
+    assert "+sp-" in generation["prompt_version"]
     assert generation["prompt_tokens"] > 0
     assert generation["completion_tokens"] > 0
     assert generation["model"], "the model that answered must be in the trace"

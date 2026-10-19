@@ -193,10 +193,11 @@ def test_parent_link_flow(tmp_path):
     inv = c.post("/students/me/invite-code", headers=_auth(stu_tok))
     assert inv.status_code == 201, inv.text
     code = inv.json().get("invite_code") or inv.json().get("code")
-    # parent link via invite
-    link = c.post(
-        "/parents/link/invite", json={"invite_code": code, "code": code}, headers=_auth(par_tok)
-    )
+    # parent link via invite. The body field is the documented ``code`` (the
+    # SPA sends exactly that); since H-02 an undeclared key is a 422 instead
+    # of being silently ignored, so this characterization test no longer
+    # sends the legacy ``invite_code`` alias it used to include defensively.
+    link = c.post("/parents/link/invite", json={"code": code}, headers=_auth(par_tok))
     assert link.status_code in (200, 201), link.text
     # parent can see children
     ch = c.get("/parents/me/children", headers=_auth(par_tok))

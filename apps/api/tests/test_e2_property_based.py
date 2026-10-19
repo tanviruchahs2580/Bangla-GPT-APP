@@ -31,6 +31,7 @@ Bengali literals are ``\\uXXXX`` escapes only (repo rule for new files).
 
 from __future__ import annotations
 
+import itertools
 import unicodedata
 from collections import Counter
 
@@ -75,9 +76,7 @@ bangla_word = st.text(alphabet=CONSONANTS, min_size=3, max_size=10)
 bangla_sentence = st.lists(bangla_word, min_size=1, max_size=6).map(
     lambda words: " ".join(words) + DANDA
 )
-bangla_letters = st.text(
-    alphabet=CONSONANTS + "\u09c7\u09be\u09bf\u09c1", min_size=1, max_size=40
-)
+bangla_letters = st.text(alphabet=CONSONANTS + "\u09c7\u09be\u09bf\u09c1", min_size=1, max_size=40)
 any_text = st.text(max_size=120)
 pua_char = st.sampled_from([chr(0xE000), chr(0xE123), chr(0xF8FF), chr(0xF0000), chr(0x10FFFD)])
 junk_char = st.one_of(pua_char, st.sampled_from(sorted(ZERO_WIDTH_CHARS)), st.just("\ufffd"))
@@ -202,7 +201,10 @@ def test_detect_class_level_reads_one_unambiguous_class_word(word: str) -> None:
     """
     text = f"{word} \u09b6\u09cd\u09b0\u09c7\u09a3\u09bf"  # "<class> shreni"
     assert detect_class_level(text) == BENGALI_CLASS_WORDS[word]
-    assert detect_class_level(f"{word}\u09b6\u09cd\u09b0\u09c7\u09a3\u09bf") == BENGALI_CLASS_WORDS[word]
+    assert (
+        detect_class_level(f"{word}\u09b6\u09cd\u09b0\u09c7\u09a3\u09bf")
+        == BENGALI_CLASS_WORDS[word]
+    )
 
 
 @props()
@@ -224,7 +226,11 @@ def test_detect_class_level_refuses_ambiguous_front_matter(left: str, right: str
 @given(any_text)
 def test_detect_class_level_returns_none_when_absent(text: str) -> None:
     assume(not any(f"{word} " in text for word in BENGALI_CLASS_WORDS))
-    assume(not any(f"{word}\u09b6\u09cd\u09b0\u09c7\u09a3\u09bf" in text for word in BENGALI_CLASS_WORDS))
+    assume(
+        not any(
+            f"{word}\u09b6\u09cd\u09b0\u09c7\u09a3\u09bf" in text for word in BENGALI_CLASS_WORDS
+        )
+    )
     assert detect_class_level(text) is None
 
 
@@ -250,7 +256,11 @@ def test_tokenize_is_nfkc_stable(text: str) -> None:
 
 
 @props()
-@given(st.text(alphabet=CONSONANTS + "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ  0123456789"))
+@given(
+    st.text(
+        alphabet=CONSONANTS + "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ  0123456789"
+    )
+)
 def test_tokenize_folds_ascii_and_bangla_case(text: str) -> None:
     """Upper- and lower-case spellings of the same text are equivalent.
 
@@ -366,7 +376,7 @@ def test_pack_sentences_overlap_repeats_the_previous_tail(text: str, overlap: in
     Mutation that breaks it: ``current[-overlap_words:]`` -> ``current[:overlap_words]``.
     """
     pieces = pack_sentences(text, target_words=20, min_words=8, max_words=40, overlap_words=overlap)
-    for previous, following in zip(pieces, pieces[1:], strict=False):
+    for previous, following in itertools.pairwise(pieces):
         assert following.split(" ")[:overlap] == previous.split(" ")[-overlap:]
 
 

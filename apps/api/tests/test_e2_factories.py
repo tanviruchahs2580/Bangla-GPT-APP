@@ -26,13 +26,13 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 import bangla_gpt_api
+import factories
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db import clock as app_clock
 from bangla_gpt_api.db.base import Base
 from bangla_gpt_api.db.models import Conversation, Feedback
 from bangla_gpt_api.services import retention
 from conftest_clock import FixedClock, clock  # noqa: F401 - fixture re-export
-import factories
 from factories import (
     BN,
     BN_QUESTION,
@@ -44,7 +44,6 @@ from factories import (
     make_school,
     make_student,
     make_user,
-    unique_email,
 )
 
 JWT = "test-secret-0123456789abcdef0123456789"
@@ -75,9 +74,9 @@ def test_every_sample_word_is_nonempty_nfc_bangla() -> None:
         if name == "danda":
             assert word == "\u0964"
             continue
-        assert all(
-            "\u0980" <= char <= "\u09ff" or char == " " for char in word
-        ), f"{name}: {word!r} contains a character outside the Bangla block"
+        assert all("\u0980" <= char <= "\u09ff" or char == " " for char in word), (
+            f"{name}: {word!r} contains a character outside the Bangla block"
+        )
 
 
 def test_sample_sentence_is_verbatim_corpus_prose() -> None:
@@ -243,9 +242,12 @@ def test_retention_cutoff_follows_the_injected_clock(db) -> None:
         assert report["conversations_deleted"] == 1
 
         # Idempotent once swept: nothing left to delete at the same instant.
-        assert retention.run_retention_sweep(db, settings=settings, dry_run=True)[
-            "conversations_deleted"
-        ] == 0
+        assert (
+            retention.run_retention_sweep(db, settings=settings, dry_run=True)[
+                "conversations_deleted"
+            ]
+            == 0
+        )
 
     # Bulk DELETEs bypass the identity map, and ``db.get`` on an expired
     # instance whose row is gone raises ObjectDeletedError -- so read the
@@ -299,13 +301,19 @@ def test_analytics_retention_defaults_to_the_chat_window(db) -> None:
     db.commit()
 
     chat_only = SimpleNamespace(chat_retention_days=30)  # no analytics field
-    assert retention.run_retention_sweep(db, settings=chat_only, dry_run=True)[
-        "analytics_events_deleted"
-    ] == 1
+    assert (
+        retention.run_retention_sweep(db, settings=chat_only, dry_run=True)[
+            "analytics_events_deleted"
+        ]
+        == 1
+    )
 
     # An explicit, longer analytics window keeps the same row.
-    longer = Settings(env="test", jwt_secret=JWT, chat_retention_days=30, analytics_retention_days=90)
-    assert retention.run_retention_sweep(db, settings=longer, dry_run=True)[
-        "analytics_events_deleted"
-    ] == 0
+    longer = Settings(
+        env="test", jwt_secret=JWT, chat_retention_days=30, analytics_retention_days=90
+    )
+    assert (
+        retention.run_retention_sweep(db, settings=longer, dry_run=True)["analytics_events_deleted"]
+        == 0
+    )
     assert db.get(AnalyticsEventRow, event.id) is not None  # dry run deleted nothing
