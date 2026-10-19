@@ -83,12 +83,35 @@ async def _redteam(settings: Settings) -> int:
     return 0 if ok else 1
 
 
+def _select_split(items: list[dict], split: str) -> list[dict]:
+    """Restrict the run to the frozen dev/test split (A8-03/A8-07).
+
+    ``all`` keeps the gate's full-set semantics; anything else is a reporting
+    view of the same committed artifact.
+    """
+    if split == "all":
+        return items
+    selected = [it for it in items if it.get("split", "dev") == split]
+    print(f"SPLIT {split}: {len(selected)} of {len(items)} items")
+    return selected
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="eval-v2")
     parser.add_argument("--golden", default=None)
     parser.add_argument("--baseline", default=None)
     parser.add_argument("--write-baseline", action="store_true")
     parser.add_argument("--seed-bad", type=int, default=0)
+    parser.add_argument(
+        "--split",
+        choices=["all", "dev", "test"],
+        default="all",
+        help=(
+            "restrict the run to the frozen dev/test split (A8-03/A8-07: tune on "
+            "dev, report once on the held-out test split). The gate itself always "
+            "runs the full set."
+        ),
+    )
     parser.add_argument(
         "--redteam",
         action="store_true",
@@ -109,7 +132,7 @@ def main() -> int:
     baseline_path = Path(args.baseline) if args.baseline else root / "eval" / "baseline_v2.json"
 
     data = json.loads(golden_path.read_text(encoding="utf-8"))
-    items = data["items"]
+    items = _select_split(data["items"], args.split)
     if args.seed_bad:
         # The golden negatives are corpus-absence-VERIFIED at generation time
         # (gen_golden_v2.py asserts their tokens appear nowhere). Flipping
