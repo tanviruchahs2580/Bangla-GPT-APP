@@ -96,6 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(rag): runtime prompt-injection screening at the query boundary
 - fix(rag): strip symbol-font PUA residue and gate corpus quality at build and load
 - fix(rag): the chunk-ablation script crashed on the pages artifact
+- fix(scripts): compute the benchmark's throwaway JWT value instead of writing a literal
 - fix(sec): refuse unsafe production defaults at boot
 - fix(sec): stop serving the OpenAPI reference in production
 - fix(web): WCAG 2.2 fixes on the public routes
@@ -147,6 +148,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### CI/CD
 
+- ci(security): record the reviewed benchmark fixture in the gitleaks allowlist
 - ci: add CI-gated Vercel production deploy workflow
 - ci: add concurrency to api CI, fix eval-gate header, retire sanity workflow
 - ci: bound job runtimes and harden release/deploy workflows
