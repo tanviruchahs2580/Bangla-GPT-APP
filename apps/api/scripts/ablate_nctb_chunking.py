@@ -82,8 +82,12 @@ def _build_corpus(pages_dir: Path, report_src: Path, target: int, overlap: int, 
     for pages_path in sorted(pages_dir.glob("*.pages.json")):
         source_id = pages_path.name.removesuffix(".pages.json")
         payload = json.loads(pages_path.read_text(encoding="utf-8"))
-        pages = [PageText(**page) for page in payload["pages"]]
-        front_matter = "\n".join(page.text for page in payload["pages"][:12])
+        raw_pages = payload["pages"]
+        pages = [PageText(**page) for page in raw_pages]
+        # The pages artifact stores dicts; reading `.text` off them crashed the
+        # first run of this script (AUD-A1 coverage would have been "an
+        # ablation exists" with no artifact behind it).
+        front_matter = "\n".join(str(page["text"]) for page in raw_pages[:12])
         detected = detect_class_level(front_matter)
         stats: dict = {}
         chunks = chunk_pages(
