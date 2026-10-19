@@ -106,8 +106,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(rag): strip symbol-font PUA residue and gate corpus quality at build and load
 - fix(rag): the chunk-ablation script crashed on the pages artifact
 - fix(scripts): compute the benchmark's throwaway JWT value instead of writing a literal
+- fix(scripts): set the executable bit on the three new shebang scripts
 - fix(sec): refuse unsafe production defaults at boot
 - fix(sec): stop serving the OpenAPI reference in production
+- fix(tests): the live A/B assertion points at the committed record, not audit scratch
 - fix(web): WCAG 2.2 fixes on the public routes
 - fix(web): clear footer from bottom nav + cut a round-trip from login
 - fix(web): clear the two WCAG AA failures axe found on the tutor screen
@@ -175,6 +177,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(audit): final audit report (INCOMPLETE — BLOCKED) + changelog refresh
 - docs(audit): record the merge and live-production outcome
 - docs(audit): refresh the audit report for the second remediation pass (61.0/100)
+- docs(audit): wave-3 report — score 83.0/100, live evaluation closed, caps re-checked
 - docs(changelog): record the wave-3 commits
 - docs(compliance): record the provider's current terms, tier by tier (A7-04)
 - docs(dx): threat model, AI system card, OpenSSF self-assessment, devcontainer and Make targets
@@ -241,6 +244,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - test(tenancy): cover school dashboard routes across two tenants
 - test(web): assert the changed behaviour instead of the old literals
 - test(web): drop remaining plan-tracker tags from suite titles
+- test(web): the i18n key scan uses a build-time glob, not a filesystem walk
 
 ### Maintenance
 

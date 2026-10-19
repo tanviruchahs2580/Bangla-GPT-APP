@@ -1063,6 +1063,11 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+          # check_changelog.py verifies that every released version heading has
+          # a real tag. A default depth-1 checkout carries no tags, so this job
+          # reported all 13 releases as "no matching tag" while the guardrails
+          # job (full history) passed the same check.
+          fetch-depth: 0
 
       - name: Set up Python 3.12
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
