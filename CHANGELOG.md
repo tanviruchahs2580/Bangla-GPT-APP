@@ -17,14 +17,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - feat(api): logout token revocation, security headers, infra hardening and privacy docs
 - feat(api): production connection posture, truthful readiness, boot index metric; full-suite Postgres parity in CI (#29)
+- feat(api): render errors as RFC 9457 problem+json, additively
+- feat(api): strict schemas, idempotent writes, streamed CSV import, one pagination policy
+- feat(auth): rotating refresh tokens, impersonation limits, central tenancy filter
+- feat(eval): live model run with recorded responses, replayed in PR CI
 - feat(eval): reconstruct the golden set independently; widen red-team to 43 cases
+- feat(eval): variant matrix, held-out targets with CIs, index budget, ANN sweep, one rag-eval command
 - feat(i18n): land Bangla copy for the status and impersonation strings
+- feat(mobile): fail-closed Play Store signing, AAB build path, launch runbook
 - feat(obs): per-stage traces, business metrics, SLO/runbook, cost dashboard and generated API reference
 - feat(quality): complexity/file-size/dead-code/deps/duplication ratchet + as-built architecture map
 - feat(rag): event-loop hardening, hot-path observability, follow-up retrieval; gate CI on retrieval baselines + CodeQL SAST (#27)
 - feat(rag): rank-aware retrieval metrics, chunk-boundary rules, index lifecycle and corpus dedupe
 - feat(rag): retrieval-quality rework - fair gate, query lanes, measured rank lift
+- feat(rag): token-budgeted context, versioned prompts, hint-first pedagogy, wider safety sets
 - feat(web): Bangla i18n glossary, native-review sheet, offline quota, TTS controls and dialog unification
+- feat(web): a11y/perf/visual suites, shared settings components, consent-gated telemetry UI
 - feat(web): login page background image with dark/light theme sync
 - feat(web): student section background image with dark/light sync
 
@@ -154,6 +162,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - ci: bound job runtimes and harden release/deploy workflows
 - ci: gate a release on a successful CI run for the tagged commit
 - ci: hermetic import-time settings patch + step-isolated migration DBs
+- ci: lint/scan/replay jobs, prompt packaging, packaging locks, release attestations
 - ci: require a real 200 before calling a web deploy healthy
 - ci: run the skipped Redis and Postgres paths and enforce the hook set
 - ci: wire the handoff gates into workflows
@@ -179,6 +188,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: add 2026-10-06 QA audit and final certification reports
 - docs: add a CHANGELOG generated from git history, and a check that keeps it honest
 - docs: add final QA report for 2026-10-07 UAT completion
+- docs: audit wave-3 records, SBOM/DAST artefacts, tenancy and statelessness notes
 - docs: correct stale facts and move point-in-time reports to the archive
 - docs: fix the loader path named in the NCTB pipeline guide
 - docs: name only paths that exist in the corpus and security guides
@@ -199,6 +209,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate the CHANGELOG for the branch's final commits
 - docs: regenerate the CHANGELOG for the delivery record
 - docs: regenerate the CHANGELOG for the deployment record
+- docs: regenerate the CHANGELOG for the gitleaks allowlist entry
 - docs: regenerate the CHANGELOG for the injection screen
 - docs: regenerate the CHANGELOG for the key-prop fix
 - docs: regenerate the CHANGELOG for the locative reclassification fix
@@ -232,6 +243,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(security): allowlist the reviewed ASCII-art hit in the full-history secret scan
 - chore(web): repoint /api proxy to current tunnel host (quick-tunnel rotation)
 - chore: apply the repository's pre-commit hooks to the second-pass files
+- chore: checkpoint before switching to main
 - chore: code honesty - unused args, un-typed db params, inert suppressions, stale comments
 - chore: satisfy the two CI guardrails main added after this branch's baseline
 - fmt: ruff format teacher.py _room_counts
