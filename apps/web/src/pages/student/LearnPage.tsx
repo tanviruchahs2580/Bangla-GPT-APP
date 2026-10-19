@@ -34,8 +34,8 @@ import {
   TTS_PITCH,
   TTS_RATE,
   clampTtsValue,
-  pickBanglaVoice,
   readTtsPrefs,
+  resolveBanglaVoice,
   ttsSupport,
 } from "../../lib/tts";
 import { SafeMarkdownLazy as SafeMarkdown } from "../../lib/safeMarkdownLazy";
@@ -467,7 +467,7 @@ export function LearnChapterPage() {
     }
   };
 
-  const speak = () => {
+  const speak = async () => {
     // AUD-G-12 / G-26: the engine, the voice and the reader's controls are
     // three separate things. Speech only ever starts from this click handler
     // (no autoplay), and when no Bangla voice is installed the reader is told
@@ -486,7 +486,10 @@ export function LearnChapterPage() {
       setTtsNotice(null);
       return;
     }
-    const voice = pickBanglaVoice(engine.getVoices());
+    // Awaited, not read once: Chromium's voice list arrives asynchronously,
+    // and deciding in that window told readers their device cannot speak
+    // Bangla when it can (AUD-G-26).
+    const voice = await resolveBanglaVoice();
     try {
       const text = content.sections
         .map((s) => `${s.section} ${s.text}`)
@@ -601,7 +604,7 @@ export function LearnChapterPage() {
               <>
                 <button
                   className="btn btn-sm btn-ghost"
-                  onClick={speak}
+                  onClick={() => void speak()}
                   aria-label={t("listen")}
                   aria-pressed={speaking}
                   aria-describedby={ttsNotice ? "tts-notice" : undefined}

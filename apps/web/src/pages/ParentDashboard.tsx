@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { HeatGrid } from "../components/HeatGrid";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { get, getParentReport, post } from "../api";
 import { friendlyError } from "../errors";
@@ -268,31 +269,7 @@ export default function ParentDashboard() {
           <p className="muted m-0">
             {t("streakLabel", { days: activity.streak })} · {t("activityHint")}
           </p>
-          <div
-            className="heatmap"
-            aria-label={t("streakLabel", { days: activity.streak })}
-          >
-            {activity.days.map((d) => {
-              const total = d.questions + d.quizzes;
-              const lvl = total === 0 ? 0 : total <= 2 ? 1 : total <= 5 ? 2 : 3;
-              const title = [
-                d.date,
-                t(
-                  d.questions === 1 ? "activityQuestion" : "activityQuestions",
-                  { n: d.questions },
-                ),
-                t("activityQuizzes", { n: d.quizzes }),
-                t("activityMinutes", { n: d.minutes }),
-              ].join(" · ");
-              return (
-                <span
-                  key={d.date}
-                  className={`heat-cell lvl-${lvl}`}
-                  title={title}
-                />
-              );
-            })}
-          </div>
+          <HeatGrid days={activity.days} streak={activity.streak} />
         </div>
       )}
       {selected !== null && (

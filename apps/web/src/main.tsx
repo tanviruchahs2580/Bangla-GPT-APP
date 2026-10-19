@@ -2,15 +2,6 @@ import React, { lazy, Suspense, useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes, Link } from "react-router-dom";
-import * as Sentry from "@sentry/react";
-// Sentry — no-op when DSN absent
-if (import.meta.env.VITE_SENTRY_DSN) {
-  Sentry.init({
-    dsn: import.meta.env.VITE_SENTRY_DSN as string,
-    environment: import.meta.env.MODE,
-    tracesSampleRate: 0.1,
-  });
-}
 import "./styles.css";
 import "@fontsource/noto-sans-bengali/400.css";
 import "@fontsource/noto-sans-bengali/700.css";
@@ -29,6 +20,9 @@ import { PublicLanguageToggle } from "./components/PublicLanguageToggle";
 import { onLangChange, t } from "./i18n";
 import { initInstallPrompt } from "./lib/installPrompt";
 import { initLowData } from "./lib/lowData";
+// AUD-HI-07 / I-12: Sentry + web-vitals are consent-gated; nothing leaves the
+// device until the user opts in (see lib/telemetry.ts and the MePage toggle).
+import { initTelemetry } from "./lib/telemetry";
 
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const WelcomePage = lazy(() => import("./pages/WelcomePage"));
@@ -419,6 +413,8 @@ function Footer() {
 // apply the persisted low-data mode before first paint.
 initLowData();
 initInstallPrompt();
+// Consent-gated: a no-op unless the user opted in (AUD-HI-07).
+initTelemetry();
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     {/* Last-resort boundary for errors above the routes (providers, shell);

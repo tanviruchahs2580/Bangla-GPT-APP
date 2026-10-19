@@ -27,9 +27,16 @@ import type {
   SourceRef,
 } from "../../types";
 import { useAuth } from "../../AuthContext";
-import { Badge, Button, Card, Field, Modal } from "../../components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Field,
+  Modal,
+} from "../../components/ui";
 import { ConversationChip } from "../../components/ConversationChip";
-import { AiSparkle, BrandMark } from "../../components/BrandMark";
+import { AiSparkle } from "../../components/BrandMark";
 import { VoiceButton } from "../../components/VoiceButton";
 import { friendlyError } from "../../errors";
 import { t } from "../../i18n";
@@ -576,15 +583,20 @@ export default function AITutorPage() {
         </div>
         <div ref={viewportRef} className="chat-thread chat-viewport">
           {messages.length === 0 && !streaming && (
-            <div className="center empty-state">
-              <div className="empty-mark" aria-hidden>
-                <BrandMark size={56} />
-              </div>
-              <div className="empty-title">{t("emptyChatTitle")}</div>
-              <p className="muted">{t("emptyChatSub")}</p>
-              <div className="suggest-row">
-                {[t("suggestTeach"), t("suggestSolve"), t("suggestQuizMe")].map(
-                  (q) => (
+            // AUD-G-09 / G-02: this used to hand-roll the `.empty-state`
+            // markup (mark, title, sub) that `EmptyState` already ships, so a
+            // padding or typography change had to be made twice. The primitive
+            // owns the layout; only the suggestion chips are local content.
+            <EmptyState
+              title={t("emptyChatTitle")}
+              sub={t("emptyChatSub")}
+              action={
+                <div className="suggest-row">
+                  {[
+                    t("suggestTeach"),
+                    t("suggestSolve"),
+                    t("suggestQuizMe"),
+                  ].map((q) => (
                     <button
                       key={q}
                       type="button"
@@ -593,17 +605,17 @@ export default function AITutorPage() {
                     >
                       {q}
                     </button>
-                  ),
-                )}
-                <button
-                  type="button"
-                  className="suggest-chip suggest-chip-image"
-                  onClick={() => fileRef.current?.click()}
-                >
-                  {t("suggestImage")}
-                </button>
-              </div>
-            </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="suggest-chip suggest-chip-image"
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    {t("suggestImage")}
+                  </button>
+                </div>
+              }
+            />
           )}
           {messages.map((m, i) => {
             const prev = messages[i - 1];

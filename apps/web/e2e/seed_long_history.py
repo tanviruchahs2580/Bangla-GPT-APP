@@ -38,7 +38,7 @@ TITLE = "E2E long history"
 MESSAGES = 120
 
 #: Realistic lengths: an answer the tutor would actually produce (four short
-#: sections plus an evidence line), not "lorem ipsum" padding. Recycled with a
+#: sections plus an evidence line), not dummy filler text. Recycled with a
 #: counter so every message differs.
 USER_TURN = "কোষের গঠন ব্যাখ্যা করো? ({n})"
 ASSISTANT_TURN = (

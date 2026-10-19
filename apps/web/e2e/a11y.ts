@@ -45,6 +45,16 @@ export async function useVariant(page: Page, variant: Variant): Promise<void> {
 
 export const PASSWORD = 'E2ePass!2345'
 
+/**
+ * The tutor composer's accessible name (bn and en), for specs that type into
+ * it. The tutor page also renders the history search box *before* the
+ * composer, so `getByRole('textbox').first()` silently resolved to the search
+ * input: the typed text never reached the composer, the send button stayed
+ * `disabled`, and the spec timed out (found by VA2 while re-running the
+ * screen-reader spec).
+ */
+export const COMPOSER_LABEL = /পাঠ্যবই থেকে যেকোনো প্রশ্ন লিখুন|Ask anything from your textbook/
+
 export async function signIn(page: Page, email: string): Promise<void> {
   await page.goto('/login', { waitUntil: 'domcontentloaded' })
   await page.locator('#email').fill(email)

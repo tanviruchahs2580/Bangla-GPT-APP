@@ -63,6 +63,66 @@ export function ttsSupport(
 export const TTS_RATE = { min: 0.5, max: 1.5, step: 0.1, default: 0.9 };
 export const TTS_PITCH = { min: 0.5, max: 2, step: 0.1, default: 1 };
 
+/**
+ * The Bangla voice, waiting out Chromium's asynchronous voice list (AUD-G-26).
+ *
+ * Chromium and Edge return `[]` from `getVoices()` until the voice list has
+ * finished loading, then fire `voiceschanged`. A reader who clicks Listen in
+ * that window was told "no Bangla voice is installed on this device" — an
+ * incorrect statement about their device that also stops them using a voice
+ * they have. So: if the list is empty, wait for `voiceschanged` (bounded by
+ * `timeoutMs`, after which the best answer available is used) instead of
+ * deciding immediately. A non-empty list is authoritative: no Bangla voice in
+ * it means none is installed.
+ */
+export function resolveBanglaVoice(
+  host: TtsHost | undefined = typeof window !== "undefined"
+    ? window
+    : undefined,
+  timeoutMs = 1500,
+): Promise<SpeechSynthesisVoice | null> {
+  const support = ttsSupport(host);
+  if (!support.supported) return Promise.resolve(null);
+  if (support.banglaVoice) return Promise.resolve(support.banglaVoice);
+  const engine = host?.speechSynthesis;
+  let voices: SpeechSynthesisVoice[] = [];
+  try {
+    voices = engine?.getVoices?.() ?? [];
+  } catch {
+    voices = [];
+  }
+  if (voices.length > 0) return Promise.resolve(null); // loaded, and no bn voice
+  if (!engine?.addEventListener) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (voice: SpeechSynthesisVoice | null) => {
+      if (settled) return;
+      settled = true;
+      engine.removeEventListener?.("voiceschanged", onChange);
+      resolve(voice);
+    };
+    function onChange() {
+      let current: SpeechSynthesisVoice[] = [];
+      try {
+        current = engine?.getVoices?.() ?? [];
+      } catch {
+        current = [];
+      }
+      if (current.length > 0) finish(pickBanglaVoice(current));
+    }
+    engine.addEventListener("voiceschanged", onChange);
+    setTimeout(() => {
+      let current: SpeechSynthesisVoice[] = [];
+      try {
+        current = engine?.getVoices?.() ?? [];
+      } catch {
+        current = [];
+      }
+      finish(pickBanglaVoice(current));
+    }, timeoutMs);
+  });
+}
+
 /** Keep any stored or dragged value inside the engine's accepted range. */
 export function clampTtsValue(
   value: number,

@@ -174,8 +174,10 @@ const bn = {
   activityTitle: "প্রতিদিনের অনুশীলন",
   streakLabel: "{days} দিনের ধারাবাহিকতা",
   activityHint: "প্রতিদিন অন্তত একটি প্রশ্ন বা কুইজ স্ট্রিক ধরে রাখে",
-  activityQuestion: "{n}টি প্রশ্ন",
-  activityQuestions: "{n}টি প্রশ্ন",
+  // Bangla does not inflect the noun for plural; the plural arm keeps the two
+  // dictionaries structurally identical (scripts/check_i18n.py compares them)
+  // and states the rule where a translator will look for it.
+  activityQuestions: "{n, plural, =0 {কোনো প্রশ্ন নেই} other {#টি প্রশ্ন}}",
   activityQuizzes: "{n}টি কুইজ",
   activityMinutes: "{n} মিনিট",
   revisionTab: "রিভিশন",
@@ -199,6 +201,12 @@ const bn = {
     "ডিভাইসে জায়গা নেই — পুরোনো অফলাইন কপি মুছে আবার চেষ্টা করুন।",
   lowDataTitle: "কম ডেটা মোড",
   lowDataHint: "ছবি বাদ — উত্তর সংক্ষিপ্ত রাখুন",
+  // AUD-HI-07 / I-12: telemetry opt-in. PENDING native-speaker review before
+  // release, per the project's rule that an engineer does not certify Bangla
+  // copy (the handoff deliberately supplied no translation).
+  telemetryTitle: "সমস্যা ও গতির তথ্য পাঠান",
+  telemetryHint:
+    "শুধু ক্র্যাশ ও গতির মাপ পাঠানো হয় — আপনার প্রশ্ন, নাম বা ক্লাসের তথ্য নয়",
   installApp: "অ্যাপ ইনস্টল করুন",
   classrooms: "শ্রেণিসমূহ",
   newClassroom: "নতুন শ্রেণি",
@@ -835,8 +843,8 @@ const en: Dict = {
   activityTitle: "Daily practice",
   streakLabel: "{days}-day streak",
   activityHint: "One question or quiz a day keeps the streak alive",
-  activityQuestion: "{n} question",
-  activityQuestions: "{n} questions",
+  activityQuestions:
+    "{n, plural, =0 {No questions} one {# question} other {# questions}}",
   activityQuizzes: "{n} quizzes",
   activityMinutes: "{n} minutes",
   revisionTab: "Revision",
@@ -861,6 +869,11 @@ const en: Dict = {
     "The device is out of storage — free space or remove an old offline copy, then try again.",
   lowDataTitle: "Low-data mode",
   lowDataHint: "Skip images; keep answers short",
+  // AUD-HI-07 / I-12: telemetry consent, default off (server never sees a
+  // payload without this opt-in; see lib/telemetry.ts).
+  telemetryTitle: "Share crash and speed reports",
+  telemetryHint:
+    "Only crashes and speed measurements — never your messages, name or class data",
   installApp: "Install app",
   classrooms: "Classes",
   newClassroom: "New class",
@@ -1358,19 +1371,133 @@ export function tSubject(value: string | null | undefined): string {
   return v;
 }
 
-/** Translate a key; `{var}` placeholders are replaced positionally by named props. */
+/* ------------------------------------------------------------------ *
+ * Message formatting (G-20)
+ *
+ * Two gaps this closes:
+ *
+ *  1. `t()` was a plain `{var}` replaceAll, so a count had to be handled by
+ *     picking between two hand-written keys at the call site
+ *     (`d.questions === 1 ? "activityQuestion" : "activityQuestions"`). That
+ *     gets Bangla wrong for any language whose plural rules are not
+ *     "1 vs rest" the moment a third form is needed, and it puts grammar in
+ *     the component. Messages may now carry an ICU plural arm —
+ *     `{n, plural, =0 {…} one {# …} other {# …}}` — evaluated with
+ *     `Intl.PluralRules` for the active locale, with `#` replaced by the
+ *     count formatted in that locale's digits.
+ *  2. A missing key was silent: `t()` returned the key string and the screen
+ *     showed `streakLabel` to a child. Missing keys are now recorded (and
+ *     warned about once per key in a dev build) so a test — see
+ *     `src/test/i18nMessages.test.ts` — and an error reporter can see them.
+ *
+ * The supported ICU subset is deliberately small: `{name}` and
+ * `{name, plural, …}` with `=N`/`zero`/`one`/`two`/`few`/`many`/`other`
+ * arms. Nested braces inside an arm are not supported; `select` and
+ * `selectordinal` are not implemented. Anything not matching the plural
+ * shape is left untouched, so a literal `{` in copy still renders.
+ * ------------------------------------------------------------------ */
+
+const PLURAL_MESSAGE =
+  /\{(\w+),\s*plural,\s*((?:(?:=\d+|zero|one|two|few|many|other)\s*\{[^{}]*\}\s*)+)\}/;
+const PLURAL_ARM = /(=\d+|zero|one|two|few|many|other)\s*\{([^{}]*)\}/g;
+
+/** Keys asked for that are absent from the active dictionary. */
+const missingKeys = new Set<string>();
+
+/** The keys `t()` could not resolve since the last clear (G-20). */
+export function missingTranslationKeys(): string[] {
+  return [...missingKeys];
+}
+
+export function clearMissingTranslationKeys(): void {
+  missingKeys.clear();
+}
+
+function noteMissingKey(key: string): void {
+  if (missingKeys.has(key)) return;
+  missingKeys.add(key);
+  // A dev-build console line is the fastest feedback loop for a typo'd key;
+  // the recorded set is what CI/reporters read in any build.
+  if (import.meta.env.DEV) {
+    console.warn(`[i18n] missing ${current} string for key "${key}"`);
+  }
+}
+
+/** `bn` -> `bn-BD`, the locale `Intl` formats counts with. */
+function localeTag(lang: Lang): string {
+  return lang === "bn" ? "bn-BD" : "en-US";
+}
+
+/** The count as the reader's script writes it (`6` vs `৬`). */
+function formatCount(value: number, lang: Lang): string {
+  try {
+    return new Intl.NumberFormat(localeTag(lang)).format(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function pluralCategory(value: number, lang: Lang): Intl.LDMLPluralRule {
+  try {
+    return new Intl.PluralRules(localeTag(lang)).select(value);
+  } catch {
+    return value === 1 ? "one" : "other";
+  }
+}
+
+/**
+ * Fill `{name}` placeholders and evaluate a plural arm, if present.
+ * Exported so a message held outside the dictionary (a server-supplied
+ * template) goes through the same rules.
+ */
+export function formatMessage(
+  message: string,
+  vars?: Record<string, string | number>,
+  lang: Lang = current,
+): string {
+  let out = message;
+  if (!vars) return out;
+
+  const plural = out.match(PLURAL_MESSAGE);
+  if (plural && typeof vars[plural[1]] === "number") {
+    const name = plural[1];
+    const count = vars[name] as number;
+    const arms = new Map<string, string>();
+    for (const arm of plural[2].matchAll(PLURAL_ARM)) {
+      arms.set(arm[1], arm[2]);
+    }
+    const exact = arms.get(`=${count}`);
+    const branch =
+      exact ??
+      arms.get(pluralCategory(count, lang)) ??
+      // `other` is mandatory in ICU; a message without it is malformed, and
+      // leaving the source text visible is better than rendering "".
+      arms.get("other");
+    if (branch !== undefined) {
+      out = out.replace(
+        plural[0],
+        branch.replaceAll("#", formatCount(count, lang)),
+      );
+    }
+  }
+
+  for (const [k, v] of Object.entries(vars)) {
+    out = out.replaceAll(`{${k}}`, String(v));
+  }
+  return out;
+}
+
+/** Translate a key; `{var}` placeholders and ICU plural arms are filled from `vars`. */
 export function t(
   key: keyof Dict,
   vars?: Record<string, string | number>,
 ): string {
-  let out = DICTS[current][key];
+  const out = DICTS[current][key];
   // Unknown keys must never crash callers that pass vars (the dict lookup is
   // open to server-supplied codes); echoing the key keeps `t(...) || fallback` usable.
-  if (typeof out !== "string") return String(key);
-  if (vars) {
-    for (const [k, v] of Object.entries(vars)) {
-      out = out.replaceAll(`{${k}}`, String(v));
-    }
+  if (typeof out !== "string") {
+    noteMissingKey(String(key));
+    return String(key);
   }
-  return out;
+  return formatMessage(out, vars, current);
 }

@@ -242,4 +242,58 @@ describe("chapter reader TTS", () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /শুনুন/ })).toBeNull();
   });
+
+  it("waits out Chromium's async voice list instead of denying the device a Bangla voice", async () => {
+    // Chromium and Edge return [] from getVoices() until the list is loaded
+    // and then fire `voiceschanged`. Reading it once told a reader with a
+    // perfectly good Bangla voice that none was installed (AUD-G-26).
+    const voices: SpeechSynthesisVoice[] = [];
+    const emitter = new EventTarget();
+    class AsyncUtterance {
+      text: string;
+      lang = "";
+      rate = 1;
+      pitch = 1;
+      voice: SpeechSynthesisVoice | null = null;
+      onend: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      constructor(text: string) {
+        this.text = text;
+      }
+    }
+    Object.defineProperty(window, "SpeechSynthesisUtterance", {
+      configurable: true,
+      writable: true,
+      value: AsyncUtterance,
+    });
+    Object.defineProperty(window, "speechSynthesis", {
+      configurable: true,
+      writable: true,
+      value: {
+        speak: (u: unknown) => {
+          lastUtterance = u as typeof lastUtterance;
+          speak(u);
+        },
+        cancel,
+        getVoices: () => voices,
+        addEventListener: emitter.addEventListener.bind(emitter),
+        removeEventListener: emitter.removeEventListener.bind(emitter),
+      },
+    });
+
+    const user = userEvent.setup();
+    renderChapter();
+    const button = await screen.findByRole("button", { name: /শুনুন/ });
+
+    // The click happens while the list is still empty; the voice arrives a
+    // moment later, as it does in Chromium.
+    await user.click(button);
+    voices.push(voice("bn-BD", "Bangla (India)"));
+    emitter.dispatchEvent(new Event("voiceschanged"));
+
+    await waitFor(() => expect(speak).toHaveBeenCalledTimes(1));
+    expect(lastUtterance?.voice?.lang).toBe("bn-BD");
+    // The reader was never told their device cannot speak Bangla.
+    expect(screen.queryByText(/বাংলা কণ্ঠস্বর পাওয়া যায়নি/)).toBeNull();
+  });
 });

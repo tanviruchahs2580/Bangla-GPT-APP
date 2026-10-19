@@ -9,8 +9,6 @@ import {
   Flame,
   KeyRound,
   LogOut,
-  Moon,
-  Sun,
   Trash2,
 } from "lucide-react";
 import {
@@ -27,11 +25,13 @@ import { track } from "../../lib/analytics";
 import type { ActivitySummary } from "../../types";
 import { useAuth } from "../../AuthContext";
 import { Avatar, Badge, Button, Card, Segmented } from "../../components/ui";
+import { TelemetryToggle } from "../../components/TelemetryToggle";
+import { AppearanceSettings } from "../../components/AppearanceSettings";
+import { HeatGrid } from "../../components/HeatGrid";
 import { friendlyError } from "../../errors";
-import { getLang, setLang, t, tSubject } from "../../i18n";
+import { t, tSubject } from "../../i18n";
 import { roleLabel } from "../../lib/roles";
 import { getLowData, toggleLowData } from "../../lib/lowData";
-import { currentTheme, toggleTheme } from "../../lib/theme";
 
 // The memory panel shows what the tutor has stored — raw backend keys and
 // null values are noise for students, so map known keys to labels, localize
@@ -74,7 +74,6 @@ export default function MePage() {
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
-  const [dark, setDark] = useState(currentTheme() === "dark");
   // low-data mode (skip images + short tutor answers)
   const [lowData, setLowDataState] = useState(getLowData());
 
@@ -272,32 +271,11 @@ export default function MePage() {
               <div className="row-sub">{t("activityHint")}</div>
             </div>
           </div>
-          <div
-            className="heatmap"
-            data-testid="activity-heatmap"
-            aria-label={t("streakLabel", { days: activity.streak })}
-          >
-            {activity.days.map((d) => {
-              const total = d.questions + d.quizzes;
-              const lvl = total === 0 ? 0 : total <= 2 ? 1 : total <= 5 ? 2 : 3;
-              const title = [
-                d.date,
-                t(
-                  d.questions === 1 ? "activityQuestion" : "activityQuestions",
-                  { n: d.questions },
-                ),
-                t("activityQuizzes", { n: d.quizzes }),
-                t("activityMinutes", { n: d.minutes }),
-              ].join(" · ");
-              return (
-                <span
-                  key={d.date}
-                  className={`heat-cell lvl-${lvl}`}
-                  title={title}
-                />
-              );
-            })}
-          </div>
+          <HeatGrid
+            days={activity.days}
+            streak={activity.streak}
+            testId="activity-heatmap"
+          />
         </Card>
       )}
 
@@ -532,40 +510,7 @@ export default function MePage() {
 
       <Card>
         <div className="card-title">{t("settings")}</div>
-        <div className="field">
-          <label htmlFor="lang">{t("language")}</label>
-          <select
-            id="lang"
-            className="select"
-            value={getLang()}
-            onChange={(e) => {
-              const v = e.target.value as "bn" | "en";
-              setLang(v);
-              document.documentElement.setAttribute("lang", v);
-              // LangRoot remounts the tree in place — no page reload.
-            }}
-          >
-            <option value="bn">বাংলা</option>
-            <option value="en">English</option>
-          </select>
-        </div>
-        <div className="row-flex spread">
-          <div>
-            <div className="setting-label">{t("appearance")}</div>
-            <div className="muted text-sm">{t("darkMode")}</div>
-          </div>
-          <button
-            className="icon-btn"
-            aria-label={t("darkMode")}
-            onClick={() => setDark(toggleTheme() === "dark")}
-          >
-            {dark ? (
-              <Sun size={18} aria-hidden />
-            ) : (
-              <Moon size={18} aria-hidden />
-            )}
-          </button>
-        </div>
+        <AppearanceSettings idPrefix="me" />
         <div className="row-flex spread mt-3">
           <div>
             <div className="setting-label">{t("lowDataTitle")}</div>
@@ -579,6 +524,7 @@ export default function MePage() {
             onClick={() => setLowDataState(toggleLowData())}
           />
         </div>
+        <TelemetryToggle />
       </Card>
 
       <Card>

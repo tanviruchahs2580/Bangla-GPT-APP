@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { openRoute, signIn, useVariant } from './a11y'
+import { COMPOSER_LABEL, openRoute, signIn, useVariant } from './a11y'
 
 /**
  * AUD-G-12 / G-12: the strongest screen-reader evidence this environment can
@@ -71,11 +71,19 @@ test('a completed streamed answer is announced exactly once, in the live region'
   await signIn(page, 'student2@e2e.test')
   await openRoute(page, '/student/tutor')
   const announcer = page.locator('[data-testid="tutor-announcer"]')
-  const ask = page.getByRole('textbox').first()
+  // The composer by its own accessible name: the page also carries the history
+  // search box, and `getByRole('textbox').first()` resolved to that one, so the
+  // send button never left `disabled` and this test timed out (VA2).
+  const ask = page.getByRole('textbox', { name: COMPOSER_LABEL })
   await ask.fill('কোষ কী?')
   await page.getByRole('button', { name: 'পাঠান' }).first().click()
   const answer = page.locator('.bubble.assistant').last()
-  await expect(answer).toContainText('Simple explanation', { timeout: 60_000 })
+  // Both section headings: this test pins the Bangla UI (`useVariant`), where
+  // the structured answer's heading is `সহজ ব্যাখ্যা`. The English literal only
+  // ever matched because smoke.spec pins `bgpt_lang=en` (VA2).
+  await expect(answer).toContainText(/Simple explanation|সহজ ব্যাখ্যা/, {
+    timeout: 60_000,
+  })
   // The announcement is the whole completed answer, set once: no per-token
   // chatter while streaming, and no announcement left empty after it.
   await expect(announcer).not.toBeEmpty()

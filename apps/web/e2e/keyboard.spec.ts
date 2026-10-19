@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { openRoute, signIn, useVariant } from './a11y'
+import { COMPOSER_LABEL, openRoute, signIn, useVariant } from './a11y'
 
 /**
  * AUD-G-11 / G-11: keyboard-only operation of each role's primary flow.
@@ -114,7 +114,9 @@ test('student opens the tutor, sends with Enter and the evidence dialog traps an
   await expect(page.locator('.bubble.assistant').first()).toBeVisible({ timeout: 60_000 })
 
   // The composer is reachable by keyboard and Enter sends (IME-safe handler).
-  const ask = page.getByRole('textbox').first()
+  // Selected by its own accessible name: the history search box renders before
+  // it, so `.first()` was the wrong control (VA2).
+  const ask = page.getByRole('textbox', { name: COMPOSER_LABEL })
   await ask.focus()
   await page.keyboard.type('আরেকবার বুঝিয়ে দাও')
   await page.keyboard.press('Enter')

@@ -1,5 +1,41 @@
 apply plugin: 'com.android.application'
 
+// ---------------------------------------------------------------------------
+// Release signing (Play Store). Credentials are never committed:
+//   * locally: apps/web/android/keystore.properties (gitignored) -- see
+//     keystore.properties.example next to this project;
+//   * in CI:   ANDROID_KEYSTORE_PATH / ANDROID_KEYSTORE_PASSWORD /
+//     ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD (see .github/workflows/
+//     android-release.yml, which decodes the keystore from a base64 secret).
+// A release build with no credentials FAILS here (see the task-graph guard
+// below) instead of silently producing a debug-signed artifact: Play rejects
+// debug-signed uploads, and a stopped build is cheaper than a rejected one.
+// ---------------------------------------------------------------------------
+def keystorePropsFile = rootProject.file('keystore.properties')
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+
+def releaseStorePath = keystoreProps['storeFile'] ?: System.getenv('ANDROID_KEYSTORE_PATH')
+def releaseStorePassword = keystoreProps['storePassword'] ?: System.getenv('ANDROID_KEYSTORE_PASSWORD')
+def releaseKeyAlias = keystoreProps['keyAlias'] ?: System.getenv('ANDROID_KEY_ALIAS')
+def releaseKeyPassword = keystoreProps['keyPassword'] ?: System.getenv('ANDROID_KEY_PASSWORD')
+def hasReleaseSigning = releaseStorePath && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
+
+// versionName is the web app version (apps/api/pyproject.toml is the single
+// source of truth; scripts/check_version.py pins package.json to it). A
+// -PversionName override exists for the rare hotfix build; versionCode has no
+// sensible default to derive from -- Play requires it to increase on every
+// upload, so it comes from -PversionCode (CI passes the run number) and
+// defaults to 1 for local exploratory builds.
+def webPackageJson = new File(rootProject.projectDir, '../../package.json')
+def webVersion = webPackageJson.exists()
+        ? new groovy.json.JsonSlurper().parseText(webPackageJson.text).version
+        : '0.0.0'
+def appVersionName = project.findProperty('versionName') ?: webVersion
+def appVersionCode = (project.findProperty('versionCode') ?: '1') as Integer
+
 android {
     namespace "app.banglagpt.tutor"
     compileSdk rootProject.ext.compileSdkVersion
@@ -7,8 +43,8 @@ android {
         applicationId "app.banglagpt.tutor"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,11 +52,44 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile file(releaseStorePath)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
+            // Play's required shrinking is off by design for now: the payload
+            // is a Capacitor WebView shell, and enabling R8 without a reviewed
+            // keep-rule set is a launch risk, not a size win. Revisit as an
+            // owner decision with a tested proguard-rules.pro.
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
         }
+    }
+}
+
+// Fail loudly, before any packaging work, when a release task is asked for
+// without signing credentials. `assembleDebug` and unit tests are unaffected.
+gradle.taskGraph.whenReady { graph ->
+    def releaseTasks = graph.allTasks.findAll {
+        it.name in ['bundleRelease', 'assembleRelease', 'packageRelease', 'installRelease', 'publishReleaseBundle']
+    }
+    if (!releaseTasks.isEmpty() && !hasReleaseSigning) {
+        throw new GradleException(
+            "Release signing is not configured.\n" +
+            "  local: create apps/web/android/keystore.properties (see keystore.properties.example)\n" +
+            "  CI:    set ANDROID_KEYSTORE_PATH, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD\n" +
+            "Documented in docs/playstore/LAUNCH.md. Refusing to build a release artifact without a real key."
+        )
     }
 }
 

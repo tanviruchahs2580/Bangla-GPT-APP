@@ -109,4 +109,40 @@ describe("register screen verification step", () => {
     expect(apiMock.verifyEmail.mock.calls[0][0]).toBe("a".repeat(24));
     await waitFor(() => expect(apiMock.login).toHaveBeenCalledTimes(2));
   });
+
+  it("sends a Bangla name through unchanged (G-06)", async () => {
+    // "Bangla names accepted" was untested: the field is free text, and every
+    // step between it and the API (trim, validation, normalisation) is a place
+    // a conjunct could be mangled or rejected. The name typed in the form must
+    // be the name in the request body.
+    renderRegister();
+    await fillAndSubmit();
+
+    await waitFor(() => expect(apiMock.register).toHaveBeenCalledTimes(1));
+    const payload = apiMock.register.mock.calls[0][0] as { name: string };
+    expect(payload.name).toBe("পরীক্ষা শিক্ষার্থী");
+    // No whitespace collapsing and no transliteration: the code points are the
+    // ones a Bangla keyboard produced (18 code points for
+    // "পরীক্ষা শিক্ষার্থী" -- `[...s].length` counts code points, which is what
+    // a length validation on the API side would count).
+    expect([...payload.name].length).toBe(18);
+  });
+
+  it("keeps the typed values on screen when registration fails (G-06)", async () => {
+    apiMock.register.mockRejectedValueOnce(
+      Object.assign(new Error("taken"), { code: "email_taken" }),
+    );
+
+    renderRegister();
+    await fillAndSubmit();
+
+    // The error is announced...
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    // ...and nothing the teacher typed is thrown away: retyping a Bangla name
+    // after "this email is taken" is the failure mode.
+    expect(screen.getByLabelText(t("name"))).toHaveValue("পরীক্ষা শিক্ষার্থী");
+    expect(screen.getByLabelText(t("email"))).toHaveValue(
+      "qa.verify@example.com",
+    );
+  });
 });

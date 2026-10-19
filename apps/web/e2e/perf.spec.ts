@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { signIn, useVariant } from './a11y'
+import { COMPOSER_LABEL, signIn, useVariant } from './a11y'
 
 /**
  * AUD-G-19 / G-19: low-end-device behaviour. Chromium's CPU throttling emulates
@@ -109,7 +109,9 @@ test('tutor thread with 120 messages streams a new answer at 4x CPU throttle', a
   const bubbleCount = await page.locator('.bubble').count()
   expect(bubbleCount).toBeGreaterThan(100)
 
-  const ask = page.getByRole('textbox').first()
+  // The composer by its accessible name, not `.first()`: the history search
+  // box renders before it on the tutor page (VA2).
+  const ask = page.getByRole('textbox', { name: COMPOSER_LABEL })
   await ask.fill('আরেকবার বুঝিয়ে দাও')
   await mark(page, 'question-typed')
   await page
