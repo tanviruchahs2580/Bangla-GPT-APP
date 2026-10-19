@@ -194,6 +194,10 @@ ignore = [
 "src/bangla_gpt_api/evaluation/cli.py" = ["T201"]
 "scripts/*" = ["T201", "S101", "S603", "S311", "S607", "S404"]
 "tests/test_phase1_exploits.py" = ["B011"]
+# Vulture's de-facto whitelist format: bare names mark symbols as used, so
+# this file is undefined names and useless expressions by construction. It is
+# the input to the dead-code gate (check_quality_ratchet.py), not app code.
+"quality-baselines/vulture_whitelist.py" = ["B018", "F821"]
 "tests/*" = [
     "S101",    # assert used
     "S105",    # hardcoded password (fixture strings)

@@ -236,6 +236,219 @@ BanglaGptApp/
   Recall@K over self-sentence and chapter-title families plus adversarial
   refusal, writing `data/nctb/retrieval_eval.json`.
 
+## As-built architecture (C4 + RAG data flow)
+
+> Added 2026-10-18 (C-01/AUD-CD-01). Everything above is the phase-by-phase
+> build log; this section is the *as-built* view derived from the code, and it
+> is the one to read first. Every box names a file that exists in this
+> repository; a box that names a directory means every module under it.
+> Existence was checked with a scripted scan of this section
+> (C-01 verification, recorded in the audit evidence bundle). C4 level 2 and 3
+> are Mermaid, so GitHub renders them inline.
+
+### Level 1 — System context
+
+```mermaid
+flowchart LR
+  student["Student (minor)"] --> pwa
+  teacher["Teacher"] --> pwa
+  parent["Parent"] --> pwa
+  admin["School admin / platform admin"] --> pwa
+  pwa["React PWA — apps/web/src/main.tsx"] -->|"HTTPS: JSON + SSE under /api"| api
+  api["FastAPI app — apps/api/src/bangla_gpt_api/main.py"] -->|"grounded generation"| llm
+  llm["LLM providers — apps/api/src/bangla_gpt_api/providers/gemini.py, providers/mock.py"]
+  api -->|"users, school, chat, quiz"| pg
+  pg[("PostgreSQL 16 or SQLite — apps/api/src/bangla_gpt_api/db/models.py")]
+  api -->|"rate limits, scheduled jobs"| redis
+  redis[("Redis — apps/api/src/bangla_gpt_api/ratelimit.py, jobs.py")]
+  corpus["Offline corpus build — apps/api/scripts/build_nctb_corpus.py"] -->|"normalized chunks"| api
+  api -->|"metrics scrape"| prom
+  prom["Prometheus — apps/api/src/bangla_gpt_api/metrics.py"]
+```
+
+### Level 2 — Containers (docker-compose.yml)
+
+```mermaid
+flowchart TB
+  browser["Browser / installed PWA"] -->|"443"| caddy
+  caddy["Caddy TLS proxy — deploy/caddy/Caddyfile"] --> web
+  caddy -->|"/api/*"| api
+  web["Static web build — apps/web/Dockerfile"]
+  api["API container — Dockerfile"] --> pg
+  api --> redis
+  worker["Async worker — apps/api/worker.py"] --> pg
+  worker --> redis
+  pg[("postgres:16 + pgBackRest — deploy/postgres")]
+  redis[("redis:7-alpine — docker-compose.yml")]
+  prom["Prometheus — deploy/prometheus/prometheus.yml"] --> api
+  graf["Grafana dashboards — deploy/grafana/dashboards"]
+  backup["Backup / restore drills — scripts/pg_backup.sh, scripts/pgbackrest_drill.sh"]
+  migrations["Schema — apps/api/alembic/versions"] --> pg
+  ci["CI workflows — .github/workflows/ci.yml, eval-gate.yml, codeql.yml, release.yml, vercel-deploy.yml"]
+```
+
+### Level 3 — API components
+
+```mermaid
+flowchart TB
+  subgraph http["HTTP layer"]
+    routers["Routers — apps/api/src/bangla_gpt_api/routers (auth, tutor, learn, quiz via assessment, teacher, teacher_content, school, parent, admin, users, workspace, system)"]
+    deps["Auth/tenancy dependencies — routers/deps.py"]
+    errc["Error contract + code catalog — routers/_error_contract.py"]
+  end
+  subgraph app["Application services"]
+    tutor["Tutor orchestration — services/tutor.py"]
+    safety["Safety + citation verification — services/safety.py"]
+    gens["Generators — services/generators (question_paper, worksheet, homework, rubric, answer_key, chapter_content)"]
+    other["Domain services — services/coverage.py, services/learn.py, services/costs.py, services/mailer.py, services/retention.py, services/govt_report.py, services/pii.py"]
+  end
+  subgraph rag["Retrieval"]
+    index["Hybrid index — retrieval/hybrid_index.py"]
+    bm25["Lexical lane — retrieval/bm25.py"]
+    vec["Vector lane — retrieval/vector.py, retrieval/embedding.py"]
+    fuse["Fusion + rerank — retrieval/fusion.py"]
+    lang["Bangla query analysis — retrieval/query_analysis.py, retrieval/transliteration.py, retrieval/vocabulary.py"]
+  end
+  subgraph infra["Infrastructure"]
+    lifespan["Startup/shutdown — initialize/lifespan.py"]
+    mw["Middleware stack — initialize/middleware_stack.py, middleware.py, ratelimit.py"]
+    obs["Logging, metrics, request IDs — logging_config.py, metrics.py, initialize/observability.py"]
+    sec["Audit + PII — security.py, services/pii.py"]
+    db["Persistence — db/models.py, db/session.py"]
+    jobs["Scheduled jobs — jobs.py, initialize/schedulers.py"]
+    cache["Caches — caching.py, services/circuit_breaker.py"]
+  end
+  routers --> deps
+  routers --> tutor
+  routers --> gens
+  routers --> other
+  routers --> errc
+  tutor --> index
+  tutor --> safety
+  index --> bm25
+  index --> vec
+  index --> fuse
+  index --> lang
+  lifespan --> index
+  lifespan --> jobs
+  lifespan --> cache
+  mw --> obs
+  sec --> db
+  other --> db
+  jobs --> db
+```
+
+### RAG as-built data flow
+
+Offline ingestion (left) and the online query path (right); the pipeline is
+versioned by the corpus manifest written next to the chunks.
+
+```mermaid
+flowchart LR
+  subgraph offline["Offline: build (apps/api/scripts/build_nctb_corpus.py)"]
+    src["Source registry — nctb/sources.py, nctb/acquisition.py"] --> ext["PDF text extraction — nctb/extract.py, pypdf"]
+    ext --> bijoy["Legacy Bijoy to Unicode — nctb/bijoy.py"]
+    bijoy --> norm["NFC + zero-width normalization — nctb/normalize.py"]
+    norm --> chunk["Structure-aware chunking — nctb/chunking.py"]
+    chunk --> qa["Content QA gate — nctb/content_qa.py"]
+    qa --> manifest["Checksum manifest — nctb/manifest.py"]
+    qa --> jsonl["normalized/*.chunks.jsonl — data/nctb"]
+  end
+  subgraph online["Online: answer"]
+    req["POST /tutor/ask + /tutor/ask/stream — routers/tutor.py"] --> ctxbuild["Assistant context — services/context.py"]
+    ctxbuild --> qanalyze["Query analysis — retrieval/query_analysis.py"]
+    qanalyze --> load["Chunk load — data/nctb_loader.py, nctb/corpus.py"]
+    load --> hybrid["Hybrid retrieve — retrieval/hybrid_index.py"]
+    hybrid --> cov["Coverage / insufficiency gate — services/tutor.py, services/coverage.py"]
+    cov -->|"below threshold"| refuse["Explicit refusal payload — services/safety.py"]
+    cov -->|"grounded"| prompt["Prompt assembly — services/tutor.py"]
+    prompt --> provider["Provider call — providers/base.py, providers/mock.py or providers/gemini.py"]
+    provider --> verify["Citation + confidence check — services/safety.py verify_citation"]
+    verify --> sse["SSE token stream — routers/tutor.py StreamingResponse"]
+    sse --> persist["History persisted — db/models.py Conversation/ChatMessage"]
+    persist --> events["Metrics + audit — metrics.py, security.py write_audit"]
+  end
+  jsonl --> load
+  manifest --> load
+```
+
+### Error contract (C-06)
+
+The HTTP error surface is declared in one place:
+`apps/api/src/bangla_gpt_api/routers/_error_contract.py`. Three shapes exist on
+the wire and are frozen as-is:
+
+1. `{"detail": "<message>"}` — auth guards and single-message failures
+   (`MessageDetail`).
+2. `{"detail": {"code": ..., "message": ..., <declared extras>}}` — business
+   rules (`CodedDetail`); every `code` must be a row in `ERROR_CATALOG` with
+   its status and exact key set. `review_required` is the one legacy body
+   without a `message` key; its key set is recorded rather than "fixed".
+3. `{"detail": [{"loc": [...], "msg": ...}]}` — FastAPI's validation shape,
+   reproduced at exactly one site (`FRAMEWORK_VALIDATION_SITES`).
+
+`apps/api/tests/test_cd_error_contract.py` scans the source with `ast` and
+fails when a raised code is missing from the catalog, when a status or key set
+drifts, or when a fourth shape appears. Adding a code means adding one
+`ErrorSpec` row in the same commit.
+
+## Module design review and the complexity ratchet (C-05 / C-03)
+
+The audit found 20 files over 500 lines in the two `src` trees (worst 1464)
+and 67 functions at radon rank C or worse (11 at D or worse), with no gate and
+no review behind the backlog. The ratchet's baseline now records 29 files over
+500 lines across src, tests, scripts and the web app. This is the review, module by module, plus the enforcement that stops
+the backlog growing while the refactors land.
+
+| Module (current lines) | Worst functions (radon CC) | Decision |
+|---|---|---|
+| `schemas.py` (1464) | request/response models, worst `AnswerKeyIn` (7) | Keep one file for now: it is a flat catalogue with no logic; complexity is not the problem, volume is. Split by domain only when a schema change forces a merge conflict — tracked, not scheduled. |
+| `routers/school.py` (1060) | `school_health_overview` (26), `school_students` (16) | Refactor candidate #2: the health overview aggregates five queries in one function. Deferred to a dedicated change (needs school-scoped fixtures); frozen by the ratchet meanwhile. |
+| `services/tutor.py` (1039) | `_coverage_details` (26), `ask_stream` (25) | Refactor candidate #1 after `export_me`: `ask_stream` is the streaming path — it needs a failure-injection test first. Frozen by the ratchet meanwhile. |
+| `routers/users.py` (906) | `post_consent_reconfirm` (12) | **Refactored in this pass**: `export_me` was F(43) and is now A(2), split into `_export_identity_sections`, `_export_chat_sections`, `_export_user_tables`, `_export_teacher_tables`, `_export_plan_and_invite_tables`, `_export_credential_tables`, `_export_account_tables`, `_export_student_learning` (all rank ≤ B(9)). Behaviour unchanged; the export test suite stayed green. The file grew 835 → 906 lines because the extraction adds signatures and docstrings — the size baseline records that deliberately. |
+| `routers/teacher_content.py` (960) | `teacher_qp_replace` (30), `teacher_qp_review` (17) | Refactor candidate #3: both are question-paper review flows; extract a transition helper. Frozen by the ratchet meanwhile. |
+| `routers/assessment.py` (837) | `teacher_curriculum_coverage` (22) | Refactor candidate #4 (same shape as `school_health_overview`). Frozen. |
+| `routers/learn.py` (828) | `_build_dashboard_summary` (28), `global_search` (21) | Refactor candidate #5: dashboard summary is five independent aggregates; split when the student dashboard tests are extended. Frozen. |
+| `db/models.py` (811) | none above B (declarative models) | No action: size is column declarations, not logic. |
+| `routers/tutor.py` (813) | `send_chat_message` (14) | Watch: the streaming route belongs to the same refactor as `ask_stream`; no split before that. Frozen. |
+| `routers/common.py` (700) | `_generate_document` (23) | Refactor candidate #6: one function dispatches four generators; extract the per-kind branches. Frozen. |
+
+Frontend files over 500 lines — `apps/web/src/i18n.ts` (1370),
+`apps/web/src/api.ts` (1114), `apps/web/src/pages/student/AITutorPage.tsx`
+(1044), `apps/web/src/pages/student/LearnPage.tsx` (1044) — are covered by the
+file-size gate but not by the complexity gate: ESLint complexity rules for
+TypeScript are part of the CI backlog, and view code is better judged by render
+cost than by cyclomatic count.
+
+### The ratchet
+
+`apps/api/scripts/check_quality_ratchet.py` freezes today's violations in
+`apps/api/quality-baselines/` and fails on **new** ones:
+
+| Gate | Tool | Baseline | Fails when |
+|---|---|---|---|
+| `complexity` | radon | `complexity-baseline.json` | a function reaches rank C (CC ≥ 11) that is not recorded, or a recorded one grows |
+| `file-size` | stdlib | `file_size-baseline.json` | a file over 500 lines is not recorded, or a recorded one grows |
+| `dead-code` | vulture (`--min-confidence 80`) | `vulture_whitelist.py` | vulture reports a symbol the whitelist does not account for |
+| `deps` | deptry | `deps-baseline.json` | a new DEP001/DEP002/DEP003 finding appears |
+| `duplication` | jscpd (`--min-lines 6 --min-tokens 70`) | `duplication-baseline.json` | a duplicate block appears that was not in the baseline |
+
+Run it with the project's environment:
+
+```bash
+cd apps/api
+python scripts/check_quality_ratchet.py --check            # all gates
+python scripts/check_quality_ratchet.py --check complexity  # one gate
+python scripts/check_quality_ratchet.py --report           # current state only
+```
+
+Improvements need no baseline edit: a violation that no longer exists, or one
+that shrank, simply stops being reported. Adding a violation, or growing one,
+requires fixing it — or a deliberate `--update` in the same commit with the
+justification in the commit message. The tooling (radon, vulture, deptry, and
+`npx jscpd`) must be present; each gate exits 2 when its tool is missing rather
+than passing silently.
+
 ## Pending (explicitly NOT built yet)
 
 | Item | Blocker |

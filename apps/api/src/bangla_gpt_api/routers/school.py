@@ -64,6 +64,7 @@ from bangla_gpt_api.schemas import (
     SchoolTeacherRow,
     TokenResponse,
 )
+from bangla_gpt_api.security import write_audit
 from bangla_gpt_api.services import (
     atrisk,
     govt_report,
@@ -316,6 +317,29 @@ def admin_report_aggregate(
             categories=len(violations),
         )
         raise HTTPException(status_code=500, detail="aggregate report failed the PII safety check")
+    # AUD-B-06: B-11 requires export ACCESS to be audited. Only an export that
+    # passed the PII gate (above) writes a row, and the row lands in the same
+    # transaction as the response decision -- detail holds ids and counts
+    # only, never a district-level payload. A refused export is deliberately
+    # not recorded as a successful one; the refusal itself is a log event
+    # ("aggregate_report_pii_blocked") immediately above.
+    write_audit(
+        db,
+        action="govt_export",
+        actor_user_id=admin.id,
+        actor_role=admin.role,
+        target=f"district:{district or 'all'}",
+        detail={
+            "format": format,
+            "district": district or None,
+            "since_days": since_days,
+            "min_cell": min_cell,
+            "rows": len(export.rows),
+            "students_included": export.meta.total_students_included,
+            "suppressed_cells": export.meta.suppressed_cells,
+        },
+    )
+    db.commit()
     stamp = export.meta.generated_at[:10]
     if format == "pdf":
         content: bytes = govt_report.to_pdf(export)
