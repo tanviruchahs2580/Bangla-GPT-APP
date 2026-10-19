@@ -7,9 +7,11 @@ Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 import logging
 import secrets
 from datetime import UTC, datetime
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from pydantic import BaseModel
 from sqlalchemy import select
 
 from bangla_gpt_api.metrics import (
@@ -32,19 +34,52 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.get("/health")
-async def health() -> dict:
+# AUD-HI-13 (H-02): these four responses used to be declared as an untyped
+# free-form object, so a generated client had no schema for them and a rename
+# in the handler would have been invisible to the contract. They live here
+# rather than in schemas.py (a concurrently-owned module) so the fix stays
+# local to the router that serves them.
+class HealthOut(BaseModel):
+    """Liveness payload: a constant, deliberately without version or env."""
+
+    status: Literal["ok"] = "ok"
+
+
+class LiveOut(BaseModel):
+    """Process-alive payload."""
+
+    status: Literal["alive"] = "alive"
+
+
+class ReadyOut(BaseModel):
+    """Readiness payload: provider name is the only disclosure (no counts)."""
+
+    status: Literal["ready"] = "ready"
+    provider: str
+
+
+class SystemInfoOut(BaseModel):
+    """Authenticated build/version identification for operators."""
+
+    status: str
+    app: str
+    version: str
+    env: str
+
+
+@router.get("/health", response_model=HealthOut)
+async def health() -> HealthOut:
     # public payload minimal — version/env moved to authenticated endpoint
-    return {"status": "ok"}
+    return HealthOut()
 
 
-@router.get("/live")
-async def live() -> dict:
-    return {"status": "alive"}
+@router.get("/live", response_model=LiveOut)
+async def live() -> LiveOut:
+    return LiveOut()
 
 
-@router.get("/ready")
-async def ready(app_ctx: Ctx, db: DbSession) -> dict:
+@router.get("/ready", response_model=ReadyOut)
+async def ready(app_ctx: Ctx, db: DbSession) -> ReadyOut:
     if app_ctx.provider is None:
         detail = (
             f"LLM_PROVIDER={app_ctx.settings.llm_provider!r} is not implemented yet. "
@@ -61,7 +96,7 @@ async def ready(app_ctx: Ctx, db: DbSession) -> dict:
         db.execute(select(1))
     except Exception as exc:
         raise HTTPException(status_code=503, detail="Database unavailable") from exc
-    return {"status": "ready", "provider": app_ctx.provider.name}
+    return ReadyOut(provider=app_ctx.provider.name)
 
 
 @router.get("/status", response_model=StatusOut)
@@ -133,11 +168,11 @@ async def metrics(app_ctx: Ctx, request: Request) -> Response:
 
 
 # authenticated internal endpoint with version/env detail (health is now minimal)
-@router.get("/admin/system/info", responses=AUTH_GUARD_RESPONSES, response_model=dict)
-def system_info(app_ctx: Ctx, admin: AdminUser) -> dict:
-    return {
-        "status": "ok",
-        "app": app_ctx.settings.app_name,
-        "version": app_ctx.settings.version,
-        "env": app_ctx.settings.env,
-    }
+@router.get("/admin/system/info", responses=AUTH_GUARD_RESPONSES, response_model=SystemInfoOut)
+def system_info(app_ctx: Ctx, admin: AdminUser) -> SystemInfoOut:
+    return SystemInfoOut(
+        status="ok",
+        app=app_ctx.settings.app_name,
+        version=app_ctx.settings.version,
+        env=app_ctx.settings.env,
+    )

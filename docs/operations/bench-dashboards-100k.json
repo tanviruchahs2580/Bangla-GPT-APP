@@ -1,0 +1,59 @@
+{
+  "generated_at": "2026-10-18T19:20:26+00:00",
+  "engine": "sqlite",
+  "seed": {
+    "schools": 1,
+    "classrooms": 1,
+    "students": 400,
+    "quiz_attempts": 800,
+    "answer_log_rows": 100000,
+    "seed_seconds": 1.5
+  },
+  "endpoints": [
+    {
+      "endpoint": "GET /teacher/students?class_level=6",
+      "status": 403,
+      "wall_ms": 450.5,
+      "statements": 1,
+      "slowest_statement_preview": "SELECT users.id, users.email, users.password_hash, users.role, users.school_id, users.must_change_password, users.email_verified, users.totp_secret, users.sessions_invalidated_at, users.failed_login_count, users.locked_until, users.created_"
+    },
+    {
+      "endpoint": "GET /teacher/classes/6/analytics",
+      "status": 403,
+      "wall_ms": 59.8,
+      "statements": 1,
+      "slowest_statement_preview": "SELECT users.id, users.email, users.password_hash, users.role, users.school_id, users.must_change_password, users.email_verified, users.totp_secret, users.sessions_invalidated_at, users.failed_login_count, users.locked_until, users.created_"
+    },
+    {
+      "endpoint": "GET /dashboard/summary",
+      "status": 200,
+      "wall_ms": 59.0,
+      "statements": 1,
+      "slowest_statement_preview": "SELECT users.id, users.email, users.password_hash, users.role, users.school_id, users.must_change_password, users.email_verified, users.totp_secret, users.sessions_invalidated_at, users.failed_login_count, users.locked_until, users.created_"
+    },
+    {
+      "endpoint": "GET /school/overview",
+      "status": 200,
+      "wall_ms": 278.3,
+      "statements": 8,
+      "slowest_statement_preview": "SELECT students.id, students.user_id, students.name, students.class_level, students.learning_prefs, students.memory_enabled, students.consent_ip, students.consent_at, students.consent_version, students.created_at FROM students WHERE student"
+    },
+    {
+      "endpoint": "GET /school/students",
+      "status": 200,
+      "wall_ms": 67.1,
+      "statements": 8,
+      "slowest_statement_preview": "SELECT students.id, students.user_id, students.name, students.class_level, students.learning_prefs, students.memory_enabled, students.consent_ip, students.consent_at, students.consent_version, students.created_at FROM students WHERE student"
+    },
+    {
+      "endpoint": "GET /admin/analytics/overview",
+      "status": 200,
+      "wall_ms": 480.1,
+      "statements": 4,
+      "slowest_statement_preview": "SELECT users.id, users.email, users.password_hash, users.role, users.school_id, users.must_change_password, users.email_verified, users.totp_secret, users.sessions_invalidated_at, users.failed_login_count, users.locked_until, users.created_"
+    }
+  ],
+  "query_count_max": 8,
+  "wall_ms_median": 172.7,
+  "notes": "SQLite on developer hardware; query counts are the durable signal, wall time is host-dependent. Re-run with --rows 20000/100000 to see whether statement counts (not just time) grow with the row count."
+}

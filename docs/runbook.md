@@ -26,7 +26,7 @@ curl http://127.0.0.1:8000/ready
 > `JWT_SECRET`; the pytest suite already uses 39-char test secrets, so its
 > warnings come only from the shortest-lived dev-default cases.
 
-Web dashboard (dev): `cd apps/web && npm ci && npm run dev` → http://localhost:5173
+Web dashboard (dev): `cd apps/web && npm ci && npm run dev` → <http://localhost:5173>
 (dev server proxies `/api/*` to `http://127.0.0.1:8000`). Production build: `npm run build`.
 
 ## 2. Staging / production deployment (docker compose)
@@ -147,7 +147,6 @@ mix of inline workers plus an ARQ cron still sends each weekly digest (and
 runs each nightly rollup) **at most once**; losers skip with `already_ran`.
 The digest needs working SMTP (`SMTP_ENABLED` + relay, §2 production list);
 without SMTP it logs `skipped=smtp_not_configured` instead of failing.
-
 
 ## 3. Database migrations
 
@@ -325,6 +324,7 @@ Quarterly rotation procedure:
 ## 10. v0.3 additions (chat, invites, retention)
 
 ### Secrets rotation (expanded)
+
 - `JWT_SECRET`: rotate via `python -c "import secrets;print(secrets.token_urlsafe(48))"`.
   Rotation invalidates all sessions (users simply log in again); do it in a
   maintenance window. Update the compose `.env` and restart `api`.
@@ -363,6 +363,7 @@ at. Those are also repository secrets and neither has been rotated; if the Verce
 was ever recreated under a new team, rotate all three together rather than one at a time.
 
 ### Capacity plan & load testing
+
 - Baseline: 2 uvicorn workers handle ~120 concurrent quiz journeys at
   p95<300 ms (DB-bound). The LLM path is upstream-bound: budget ~2-8 s p95
   per ask at free-tier quota; scale by upgrading tier / adding keys, not
@@ -371,17 +372,20 @@ was ever recreated under a new team, rotate all three together rather than one a
   before each release; thresholds inside fail on SLO breach.
 
 ### Data retention (D20)
+
 - Conversations older than `CHAT_RETENTION_DAYS` (default 180) are purged by
   `POST /admin/maintenance/purge` (admin-only). Schedule it daily:
   `0 3 * * * curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" http://api:8000/admin/maintenance/purge`
   or trigger from the admin dashboard button weekly until automated.
 
 ### Email verification
+
 - With `SMTP_ENABLED=true`, registration requires email verification before
   first login (`email_unverified` code drives UI copy + resend link).
 - Without SMTP, accounts auto-verify (dev/small deployments only).
 
 ### Support ops & SLA
+
 - Public status page: the web app serves `/status` from `GET /status`
   (presence/booleans only -- safe to link publicly; never exposes counts).
   Check the API directly with `curl http://api:8000/status`; a `degraded`
@@ -398,3 +402,201 @@ was ever recreated under a new team, rotate all three together rather than one a
   ended with the banner's exit button (revokes the token server-side).
   Both start and exit land in `GET /admin/audit?action=impersonation`.
   Admin-role targets are rejected server-side (support never gets powers).
+
+## 11. Incident runbooks (top 10 classes)
+
+Each entry is deliberately one page: symptom → first five minutes → mitigation
+→ how to know it is over. Commands assume the `core` compose profile
+(`docs/operations/PRODUCTION_DEPLOYMENT.md`) and the container names from
+`docker-compose.yml`; substitute host paths on a VM deployment.
+
+### Incident 1 — LLM provider outage or quota exhausted
+
+- **Symptom:** `/tutor/ask` returns the `llm_unavailable` SSE error event or
+  503; `UnhandledExceptions` / 5xx burn alerts; provider 429/5xx in logs;
+  circuit breaker opens (`tutor: primary provider failed, using fallback`).
+- **First five minutes:**
+  1. `docker compose logs --since=10m api | grep -E "llm_unavailable|ProviderError|circuit"`
+  2. `curl -s localhost:8000/ready` — provider configured?
+  3. `curl -s localhost:8000/metrics | grep -E "bgpt_ai_answers_total|bgpt_http_requests_total.*5.."`
+  4. Check the provider status page and the key's quota in the provider console
+     (owner credentials).
+- **Mitigation:** if quota, ask the owner to raise it; temporarily switch
+  `LLM_PROVIDER` to the configured fallback (`LLM_FALLBACK_PROVIDER`) and
+  restart; students keep retrieval-only refusals meanwhile (the coverage gate
+  refuses rather than fabricating).
+- **Over when:** `bgpt_http_requests_total{status=~"5.."}` returns to baseline
+  and one live ask streams a grounded answer.
+
+### Incident 2 — Database outage or failover
+
+- **Symptom:** `/ready` 503 `Database unavailable`; 5xx burn alerts; pool
+  timeouts in logs; `pg_isready` failing.
+- **First five minutes:**
+  1. `docker compose exec postgres pg_isready -U $POSTGRES_USER`
+  2. `docker compose logs --since=10m postgres | tail -50`
+  3. Check disk: `df -h` (a full volume is the most common cause).
+  4. If managed Postgres: check the provider console for a failover event.
+- **Mitigation:** restart the DB container/instance; if the primary is lost,
+  promote the replica per the provider's procedure, then restore from
+  `docs/backup_dr.md` only if data is actually missing. Application workers
+  reconnect on the next request (pre-ping is on) — no app restart needed.
+- **Over when:** `/ready` is 200 and `bgpt_http_requests_total` has no new 5xx
+  for 10 minutes. **Declare data loss only after comparing row counts against
+  the last backup** (documented in `docs/backup_dr.md`).
+
+### Incident 3 — Retrieval index degraded / corpus mis-set
+
+- **Symptom:** `HighRAGRefusalRate` fires; answers all become
+  "not in the textbook"; `bgpt_rag_index_chunks{corpus="bundled-sample"}`
+  appears in production.
+- **First five minutes:**
+  1. `curl -s localhost:8000/metrics | grep bgpt_rag_index_chunks`
+  2. `docker compose logs api | grep rag_corpus_loaded` — which corpus, how many chunks?
+  3. Compare `NCTB_CORPUS_DIR` with the mounted data path; `ls` the corpus dir.
+- **Mitigation:** fix the path/env and restart the worker; the index rebuilds at
+  boot (`bgpt_rag_index_build_seconds` says how long). Never "fix" it by
+  lowering `MIN_COVERAGE` — that trades refusals for ungrounded answers.
+- **Over when:** `bgpt_rag_index_chunks` reports the NCTB corpus size and a
+  known-good question answers with citations.
+
+### Incident 4 — Generation job backlog or stuck jobs
+
+- **Symptom:** teachers report papers stuck in "Generating";
+  `bgpt_ai_jobs_total{status="failed"}` rising; `AIJobFailureRateHigh` fires.
+- **First five minutes:**
+  1. `curl -s -H "Authorization: Bearer $ADMIN_TOKEN" localhost:8000/admin/jobs?status=queued`
+     (or the admin Create-hub view)
+  2. `docker compose logs --since=15m api | grep -E "ai_job_(failed|ready)"`
+  3. `curl -s localhost:8000/ready` — a provider outage is the usual cause
+     (Incident 1).
+- **Mitigation:** fix the upstream cause first; queued jobs run inline on the
+  next worker tick, failed jobs need the teacher to re-queue (no automatic
+  retry today — recorded as a gap in `docs/operations/SLO.md` SLO-4).
+  Do not delete job rows: they are the teacher's audit trail.
+- **Over when:** the queue drains and new jobs reach `ready`.
+
+### Incident 5 — Authentication outage
+
+- **Symptom:** every login returns 500/503; `APIScrapeDown`; users cannot
+  register or reset.
+- **First five minutes:**
+  1. `curl -s -o /dev/null -w "%{http_code}\n" -X POST localhost:8000/auth/login -H 'Content-Type: application/json' -d '{"email":"x@example.com","password":"wrong"}`
+     — expect 401, not 5xx.
+  2. `docker compose logs --since=10m api | grep -E "auth|traceback" | tail -40`
+  3. If Redis is the rate-limit backend: `docker compose exec redis redis-cli ping`.
+     With `RATE_LIMIT_FAIL_OPEN=false` (default) a Redis outage answers **503**
+     on protected routes — that is the documented, deliberate behaviour.
+  4. A `JWT_SECRET` change invalidates every existing token by design
+     (`sessions_invalidated_at`); confirm with the owner before assuming a defect.
+- **Mitigation:** restore Redis or the database; if a bad `JWT_SECRET` was
+  deployed, roll back the secret and restart (all sessions from the bad epoch
+  stay invalid — they were never minted by the rolled-back secret).
+- **Over when:** `/auth/login` returns 200/401 (never 5xx) and the 5xx ratio is
+  back to baseline.
+
+### Incident 6 — Cost spike or AI budget exhaustion
+
+- **Symptom:** `AIMonthlyBudgetBurnRateHigh`; users get 429
+  `ai_budget_exceeded`; `bgpt_ai_cost_usd_total` climbing faster than traffic.
+- **First five minutes:**
+  1. `curl -s localhost:8000/metrics | grep -E "bgpt_ai_cost_usd_total|bgpt_ai_tokens_total"`
+  2. Find the route/model mix: `sum by (route, model) (rate(bgpt_ai_cost_usd_total[1h]))`
+     in Prometheus/Grafana.
+  3. Check for an abuse loop: `bgpt_http_requests_total` by path/status.
+- **Mitigation:** throttle (lower `AI_MONTHLY_BUDGET_USD_PER_USER`, tighten
+  `RATE_LIMIT_TUTOR_PER_MINUTE`), or point `GEMINI_MODEL` at the cheaper
+  flash-lite tier for the FAST routes; raise `AI_MONTHLY_BUDGET_USD` only with
+  the owner's approval. Figures are ledger estimates (list prices cited in
+  `services/costs.py`) — reconcile against the provider invoice.
+- **Over when:** the projected month-end spend is under budget.
+
+### Incident 7 — Data-deletion (erasure) request
+
+- **Symptom:** a written request (never a chat message) from a guardian, school
+  or user for erasure under the privacy policy.
+- **First five minutes:** confirm identity and scope — "delete my account" vs
+  "delete a class's data" vs a school-level request. Do not act on an
+  unverified request.
+- **Procedure:**
+  1. Self-service path exists for the account holder: `DELETE /users/me`
+     (removes profile, quiz attempts and answer logs, parent links).
+     Errors are coded (`last_admin`, …) and safe to surface.
+  2. School-scoped or otherwise out-of-band requests: the owner decides the
+     scope; export first (`GET /users/me/export`) if the requester asked for a
+     copy, then delete.
+  3. Record the request and the action in the audit log
+     (`GET /admin/audit`); do not paste the requester's personal data into
+     tickets beyond the minimum needed.
+- **Over when:** the deletion is confirmed by a fresh query and the request is
+  recorded.
+
+### Incident 8 — Suspected breach or credential leak
+
+- **Symptom:** a leaked `JWT_SECRET`, `METRICS_TOKEN`, SMTP password, provider
+  key, or evidence of cross-tenant access.
+- **First five minutes:**
+  1. Treat the credential as compromised: rotate it in the secret store,
+     restart the API, and record the time.
+  2. `JWT_SECRET` rotation logs out every user (expected); announce before
+     doing it if it is not urgent.
+  3. Preserve evidence: copy logs to a separate location before any restart
+     (restarts rotate nothing but a crash loop can lose the buffer).
+  4. Check `GET /admin/audit` for impersonation sessions and role changes in
+     the window.
+- **Do not:** delete the repository history, edit logs, or message students
+  directly. Notification and legal steps are owner decisions (I10).
+- **Over when:** rotation is complete, the audit window is reviewed, and the
+  owner has the incident write-up.
+
+### Incident 9 — Bad prompt or model rollout
+
+- **Symptom:** answers regress in tone, format, or grounding after a deploy;
+  `RAGCitationCheckFailures` or refusal-rate shift; teachers report quality.
+- **First five minutes:**
+  1. Identify the change: `git log --oneline -20` and the running image tag.
+  2. `TRACING_ENABLED=true` (staging) or grep `ai_call`/`tutor_retrieval` logs
+     for `prompt_version` and `index_version` before/after.
+  3. Compare the golden-eval summary artifact if the deploy included one.
+- **Mitigation:** roll back the deploy (`docs/runbook.md` §7) — for a prompt
+  change this is the fastest correct action; do not hand-edit production
+  prompts. If the change was a model swap, revert `GEMINI_MODEL`.
+- **Over when:** the regression is not reproducible on the rolled-back build
+  and the refusal/citation counters are back to baseline.
+
+### Incident 10 — Email delivery failure (SMTP)
+
+- **Symptom:** registration verification, password resets or parent digests do
+  not arrive; `send_mail` logs `False`; bounce/complaint reports from the
+  provider.
+- **First five minutes:**
+  1. `docker compose logs --since=15m api | grep -iE "smtp|send_mail|mail"`
+  2. Verify credentials and that the sending domain's SPF/DKIM still validate
+     (the provider console shows this).
+  3. Check the provider's suppression list — a hard-bounced address is silently
+     suppressed from then on, which looks like an application bug.
+- **Mitigation:** fix SMTP config and restart. Without SMTP, registration
+  auto-verifies (dev only) — do **not** flip `SMTP_ENABLED=false` in production
+  to "unblock" users: it silently drops the verification gate.
+- **Over when:** a test registration receives a verification mail.
+- **Known gap (owner action):** nothing consumes bounces or complaints
+  today (AUD-HI-17); a suppressed address is invisible to the application.
+
+## 12. Escalation contacts (OWNER ACTION — values required)
+
+The repository cannot know who is on call. Until the owner fills this table,
+every incident above escalates to whoever holds the deploy credentials, and
+the SLO policy in `docs/operations/SLO.md` §4 cannot be enforced.
+
+| Role | Responsibility | Contact | Filled in? |
+|---|---|---|---|
+| On-call API engineer | Incidents 1–5, 9 | _owner to provide_ | no |
+| Data/DB owner | Incident 2, restore decisions | _owner to provide_ | no |
+| Security lead | Incident 8, credential rotation | _owner to provide_ | no |
+| Privacy contact | Incident 7, data-subject requests | _owner to provide_ | no |
+| Product owner | Incident 6 budget decisions, SLO ratification | _owner to provide_ | no |
+| Provider support | Quota/outage escalation (LLM, SMTP, host) | account console only | no |
+
+Paging channel, escalation window and out-of-hours expectations are owner
+decisions (I10); Alertmanager routing is configured by the owner's
+deployment, not by this repository.

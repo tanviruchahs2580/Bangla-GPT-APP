@@ -6,9 +6,18 @@ Token counts are PLANNING ESTIMATES, not vendor-metered values:
   for mixed Bangla/English text (Bangla script tokenizes denser than ASCII;
   4 chars/token is conservative for cost control — it over-counts short
   ASCII and under-counts long Bangla, erring toward budget safety).
-* ``MODEL_COSTS_USD_PER_1K`` are list-price estimates reviewed 2026-09.
-  Re-check vendor pricing pages before procurement decisions; the table is
-  the single place to update.
+* ``MODEL_COSTS_USD_PER_1K`` are list prices read from the vendors' own
+  pricing pages on 2026-10-18 (AUD-HI-15 / I-11). The table is the single
+  place to update; the docstring is the citation:
+
+  - Google Gemini API pricing: https://ai.google.dev/gemini-api/docs/pricing
+    (page last updated 2026-10-16 UTC; values read 2026-10-18)
+  - OpenAI API pricing: https://platform.openai.com/docs/pricing
+
+  Owner action (I10): re-confirm the rows for the exact tier and region in
+  use before any procurement decision. This module is a *planning* control
+  (budgets, dashboards, burn-rate alerts), never a billing system: the
+  vendor invoice is authoritative.
 
 Budgets: ``ai_monthly_budget_usd_per_user`` (0 = unlimited, the default).
 When set, generation entry points refuse with 429 ``ai_budget_exceeded``
@@ -22,12 +31,17 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from bangla_gpt_api.db.models import AiUsage
+from bangla_gpt_api.metrics import AI_COST_USD_TOTAL, AI_TOKENS_TOTAL
 
-# (input USD per 1K tokens, output USD per 1K tokens). Estimates — see module doc.
+# (input USD per 1K tokens, output USD per 1K tokens). List prices as read
+# from the vendors' pricing pages on 2026-10-18 -- see the module docstring
+# for the URLs and the owner-confirmation note.
 MODEL_COSTS_USD_PER_1K: dict[str, tuple[float, float]] = {
     "mock": (0.0, 0.0),
-    "gemini-3.1-flash-lite": (0.000075, 0.0003),
-    "gemini-2.5-flash-lite": (0.000075, 0.0003),
+    # Gemini 3.1 Flash-Lite standard tier: $0.25 / $1.50 per 1M tokens.
+    "gemini-3.1-flash-lite": (0.00025, 0.0015),
+    # Gemini 2.5 Flash-Lite standard tier: $0.10 / $0.40 per 1M tokens.
+    "gemini-2.5-flash-lite": (0.0001, 0.0004),
     "gemini-2.5-flash": (0.0003, 0.0025),
     "gpt-4o-mini": (0.00015, 0.0006),
 }
@@ -57,18 +71,31 @@ def record_ai_usage(
     prompt_text: str | None,
     answer_text: str | None,
 ) -> AiUsage:
-    """Append one ledger row. Adds only — the CALLER's commit persists it."""
+    """Append one ledger row and export the token/cost counters.
+
+    Adds only -- the CALLER's commit persists the row. The Prometheus
+    counters are exported here (not at the provider call sites) because this
+    is the single funnel every AI-bearing route goes through, so the
+    dashboard and the budget alert cannot drift from the ledger.
+    """
     prompt_tokens = estimate_tokens(prompt_text)
     completion_tokens = estimate_tokens(answer_text)
+    cost_usd = estimate_cost_usd(model, prompt_tokens, completion_tokens)
     row = AiUsage(
         user_id=user_id,
         route=route[:40],
         model=(model or "mock")[:80],
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
-        estimated_cost_usd=estimate_cost_usd(model, prompt_tokens, completion_tokens),
+        estimated_cost_usd=cost_usd,
     )
     db.add(row)
+    safe_model = (model or "mock")[:80]
+    safe_route = route[:40]
+    AI_TOKENS_TOTAL.labels(model=safe_model, direction="prompt").inc(prompt_tokens)
+    AI_TOKENS_TOTAL.labels(model=safe_model, direction="completion").inc(completion_tokens)
+    if cost_usd > 0:
+        AI_COST_USD_TOTAL.labels(model=safe_model, route=safe_route).inc(cost_usd)
     return row
 
 

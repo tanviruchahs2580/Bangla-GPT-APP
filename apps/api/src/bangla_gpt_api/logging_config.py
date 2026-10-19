@@ -15,6 +15,12 @@ request_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "request_id", default=None
 )
 
+# Trace id for per-stage tracing events (AUD-HI-04 / I-03). One per request
+# (the request id, unless a caller sets its own), so every stage line of one
+# ask shares a single correlation key with the request id already in the
+# access log and the error responses.
+trace_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("trace_id", default=None)
+
 # --------------------------------------------------------------------------
 # Redaction (F-082)
 # --------------------------------------------------------------------------
@@ -206,6 +212,62 @@ def _utf8_stream(stream):
     with contextlib.suppress(ValueError, OSError):  # not reconfigurable
         reconfigure(encoding="utf-8", errors="replace")
     return stream
+
+
+# --------------------------------------------------------------------------
+# Per-stage tracing events (AUD-HI-04 / I-03)
+# --------------------------------------------------------------------------
+# The audit finding asks for distributed tracing. Full OpenTelemetry (SDK +
+# auto-instrumentation + an OTLP collector) is a deployment-level dependency
+# this pass deliberately does not add (the operator has no collector
+# endpoint; see docs/operations/TRACING.md). The gate's "equivalent" is
+# satisfied by structured per-stage trace records on the existing JSON log
+# sink: one line per pipeline stage, carrying the correlation id, the index
+# and prompt versions, token counts and the retrieved chunk ids. They are
+# behind TRACING_ENABLED so a deployment that later adds an OTLP exporter can
+# flip the same call sites over without touching the pipeline code.
+
+_tracing_enabled = False
+
+_trace_logger = logging.getLogger("bangla_gpt_api.trace")
+
+
+def set_tracing_enabled(value: bool) -> None:
+    """Called once per app build from :func:`bangla_gpt_api.main.create_app`."""
+    global _tracing_enabled
+    _tracing_enabled = bool(value)
+
+
+def tracing_enabled() -> bool:
+    return _tracing_enabled
+
+
+def new_trace_id() -> str:
+    """A fresh correlation id for work with no inbound request (jobs, scripts)."""
+    import uuid as _uuid
+
+    return _uuid.uuid4().hex[:16]
+
+
+def trace_event(stage: str, **fields: Any) -> None:
+    """Emit one structured trace record for a pipeline stage.
+
+    No-op unless tracing is enabled, so the call sites are always present and
+    the flag is the only switch. Fields are redacted by ``json_log`` like
+    every other structured line; the question text is never passed here (the
+    service keeps student wording out of logs).
+    """
+    if not _tracing_enabled:
+        return
+    tid = trace_id_var.get() or request_id_var.get()
+    json_log(
+        _trace_logger,
+        logging.INFO,
+        "trace",
+        stage=stage,
+        trace_id=tid,
+        **fields,
+    )
 
 
 def configure_logging(level: str = "INFO") -> None:
