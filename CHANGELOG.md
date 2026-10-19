@@ -67,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(auth): hash passwords with Argon2id and upgrade legacy hashes on login
 - fix(auth): redeem single-use codes with a compare-and-set, not a read-then-write
 - fix(auth): unblock login on web and APK (MFA step-up, unauth resend, proxy/APK errors)
+- fix(ci): drop the two out-of-convention shebangs; format the datetime test
 - fix(ci): exempt changelog-regenerating commits by changed paths, not subject text
 - fix(ci): make the commit-subject gate testable anywhere; lint fixes the CI run caught
 - fix(ci): make the doc-path guard cover the classes of path it claims to

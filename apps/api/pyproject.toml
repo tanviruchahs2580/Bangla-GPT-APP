@@ -78,6 +78,11 @@ dev = [
   "ruff>=0.6",
   "mypy>=1.11",
   "pip-audit>=2.7",
+  # The quality ratchet imports radon directly (scripts/check_quality_ratchet.py),
+  # and the dependency-hygiene gate correctly flagged the undeclared import in
+  # CI. vulture and deptry are only ever shelled out to, so declaring them here
+  # would trip the same gate from the other side; the CI step installs them.
+  "radon>=6.0.1",
 ]
 
 [build-system]
