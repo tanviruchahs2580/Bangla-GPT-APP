@@ -15,8 +15,6 @@
  * in both dictionaries, which is what "missing-key detection" has to mean to
  * be worth anything.
  */
-import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   clearMissingTranslationKeys,
@@ -87,36 +85,40 @@ describe("missing-key detection (G-20)", () => {
   });
 });
 
-/** Every literal key a `t("...")` call site asks for, across the source tree. */
-function literalTranslationKeys(root: string): Map<string, string> {
+/**
+ * Every literal key a `t("...")` call site asks for, across the source tree.
+ *
+ * The sources are pulled in through Vite's `?raw` glob rather than read with
+ * `node:fs`: the earlier `readdirSync`/`readFileSync` walk tripped CodeQL's
+ * dynamic-filesystem queries (a new high-severity alert on a test file with no
+ * untrusted input -- noise that would have hidden a real one), and the glob is
+ * both simpler and resolved at build time, so the scan cannot wander outside
+ * `src/`.
+ */
+const SOURCES: Record<string, string> = import.meta.glob("../**/*.{ts,tsx}", {
+  query: "?raw",
+  eager: true,
+  import: "default",
+});
+
+function literalTranslationKeys(): Map<string, string> {
   const keys = new Map<string, string>();
-  const walk = (dir: string): void => {
-    for (const entry of readdirSync(dir)) {
-      const path = join(dir, entry);
-      if (statSync(path).isDirectory()) {
-        // Tests may legitimately poke at the detection path with fake keys.
-        if (entry === "test") continue;
-        walk(path);
-        continue;
-      }
-      if (!/\.(ts|tsx)$/.test(entry)) continue;
-      const source = readFileSync(path, "utf8");
-      for (const match of source.matchAll(/\bt\(\s*"([A-Za-z0-9_]+)"/g)) {
-        keys.set(match[1], path);
-      }
-      for (const match of source.matchAll(/\bt\(\s*'([A-Za-z0-9_]+)'/g)) {
-        keys.set(match[1], path);
-      }
+  for (const [path, source] of Object.entries(SOURCES)) {
+    // Tests may legitimately poke at the detection path with fake keys.
+    if (path.includes("/test/")) continue;
+    for (const match of source.matchAll(/\bt\(\s*"([A-Za-z0-9_]+)"/g)) {
+      keys.set(match[1], path);
     }
-  };
-  walk(root);
+    for (const match of source.matchAll(/\bt\(\s*'([A-Za-z0-9_]+)'/g)) {
+      keys.set(match[1], path);
+    }
+  }
   return keys;
 }
 
 describe("every literal key used in the source exists (G-20)", () => {
   it("resolves in both dictionaries, and the scan really saw the codebase", () => {
-    // vitest runs with the web package as cwd (vite.config.ts lives there).
-    const keys = literalTranslationKeys(join(process.cwd(), "src"));
+    const keys = literalTranslationKeys();
     // A guard against a silently broken scan: the app asks for hundreds.
     expect(keys.size).toBeGreaterThan(200);
 
