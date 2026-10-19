@@ -230,7 +230,7 @@ export default function MePage() {
   };
 
   return (
-    <main className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       <section className="section-head">
         <h2>{t("me")}</h2>
       </section>

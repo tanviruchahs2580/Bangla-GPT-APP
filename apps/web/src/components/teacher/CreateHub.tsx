@@ -7,7 +7,7 @@ import type {
   TeacherDocument,
   TeacherWorkload,
 } from "../../api";
-import { Badge, Button, Card, Segmented } from "../ui";
+import { Badge, Button, Card, NumberInput, Segmented } from "../ui";
 import { friendlyError } from "../../errors";
 import { t } from "../../i18n";
 import { track } from "../../lib/analytics";
@@ -250,13 +250,12 @@ export function CreateHub({
       <div className="grid-2">
         <label className="field">
           <span className="lbl">{t("classLevel")}</span>
-          <input
-            className="input"
-            type="number"
+          <NumberInput
             min={1}
             max={12}
             value={level}
-            onChange={(e) => setLevel(Number(e.target.value) || 6)}
+            onValue={setLevel}
+            fallback={6}
           />
         </label>
         <label className="field">

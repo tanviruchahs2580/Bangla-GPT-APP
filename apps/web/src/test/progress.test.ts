@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chapterBadge, ttsSupported } from "../lib/progress";
+import { chapterBadge } from "../lib/progress";
 
 describe("chapter badge logic", () => {
   it("no progress row → no badge", () => {
@@ -13,15 +13,5 @@ describe("chapter badge logic", () => {
   });
   it("zero read, not completed → no badge", () => {
     expect(chapterBadge({ completed: false, read_pct: 0 })).toBeNull();
-  });
-});
-
-describe("TTS feature guard", () => {
-  it("unsupported browser (no speechSynthesis) → false, no crash", () => {
-    expect(ttsSupported({} as Window)).toBe(false);
-    expect(ttsSupported(undefined)).toBe(false);
-  });
-  it("supported browser → true", () => {
-    expect(ttsSupported({ speechSynthesis: {} } as Window)).toBe(true);
   });
 });

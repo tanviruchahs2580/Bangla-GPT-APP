@@ -29,10 +29,19 @@ import { useAuth } from "../../AuthContext";
 import { Card, LoadError } from "../../components/ui";
 import { t, tSubject } from "../../i18n";
 import { cn } from "../../lib/cn";
-import { chapterBadge, ttsSupported as ttsAvailable } from "../../lib/progress";
+import { chapterBadge } from "../../lib/progress";
+import {
+  TTS_PITCH,
+  TTS_RATE,
+  clampTtsValue,
+  pickBanglaVoice,
+  readTtsPrefs,
+  ttsSupport,
+} from "../../lib/tts";
 import { SafeMarkdownLazy as SafeMarkdown } from "../../lib/safeMarkdownLazy";
 import {
   fetchChapterWithOfflineFallback,
+  isQuotaExceeded,
   loadChapter,
   saveChapter,
 } from "../../lib/offlineStore";
@@ -113,7 +122,7 @@ export function LearnPage() {
   };
 
   return (
-    <main className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       <section className="section-head">
         <h2>{t("subjects")}</h2>
       </section>
@@ -325,6 +334,13 @@ export function LearnChapterPage() {
     }
   });
   const [speaking, setSpeaking] = useState(false);
+  // AUD-G-12: reader-controlled speech, persisted per device.
+  const [ttsPrefs, setTtsPrefs] = useState(() =>
+    readTtsPrefs(
+      typeof localStorage !== "undefined" ? localStorage : undefined,
+    ),
+  );
+  const [ttsNotice, setTtsNotice] = useState<string | null>(null);
   const [bookmarked, setBookmarked] = useState(false);
   // AUD-G-07: a rejected bookmark write is rolled back and reported here,
   // next to the control, without dropping the reader out of the chapter.
@@ -452,22 +468,39 @@ export function LearnChapterPage() {
   };
 
   const speak = () => {
+    // AUD-G-12 / G-26: the engine, the voice and the reader's controls are
+    // three separate things. Speech only ever starts from this click handler
+    // (no autoplay), and when no Bangla voice is installed the reader is told
+    // instead of silently hearing Bangla read by an English voice.
+    const engine =
+      typeof window !== "undefined" ? window.speechSynthesis : undefined;
+    if (
+      !engine ||
+      typeof window.SpeechSynthesisUtterance !== "function" ||
+      !content
+    )
+      return;
+    if (speaking) {
+      engine.cancel();
+      setSpeaking(false);
+      setTtsNotice(null);
+      return;
+    }
+    const voice = pickBanglaVoice(engine.getVoices());
     try {
-      if (!("speechSynthesis" in window) || !content) return;
-      if (speaking) {
-        window.speechSynthesis.cancel();
-        setSpeaking(false);
-        return;
-      }
       const text = content.sections
         .map((s) => `${s.section} ${s.text}`)
         .join(" ");
-      const utter = new SpeechSynthesisUtterance(text);
+      const utter = new window.SpeechSynthesisUtterance(text);
       utter.lang = "bn-BD";
+      utter.rate = ttsPrefs.rate;
+      utter.pitch = ttsPrefs.pitch;
+      if (voice) utter.voice = voice;
       utter.onend = () => setSpeaking(false);
       utter.onerror = () => setSpeaking(false);
       setSpeaking(true);
-      window.speechSynthesis.speak(utter);
+      setTtsNotice(voice ? null : t("ttsNoBanglaVoice"));
+      engine.speak(utter);
     } catch {
       setSpeaking(false);
     }
@@ -475,23 +508,45 @@ export function LearnChapterPage() {
 
   const content = query.data?.content;
   const offlineCopy = query.data?.offline === true;
-  const ttsSupported = ttsAvailable();
+  const ttsEngine = ttsSupport();
+
+  const updateTtsPref = (key: "rate" | "pitch", raw: number) => {
+    const bounds = key === "rate" ? TTS_RATE : TTS_PITCH;
+    const value = clampTtsValue(raw, bounds);
+    setTtsPrefs((prev) => ({ ...prev, [key]: value }));
+    try {
+      // Device preference, not user data: survives sign-out with theme and
+      // language (see USER_STORAGE_KEYS in api.ts).
+      localStorage.setItem(
+        key === "rate" ? "ttsRate" : "ttsPitch",
+        String(value),
+      );
+    } catch {
+      /* private mode: the in-memory value still applies for this session */
+    }
+  };
 
   const download = async () => {
     if (!content || !subject || !chapter) return;
     setSaving(true);
+    setError(null);
     try {
       await saveChapter(subject, chapter, offlineClass, content);
       setSaved(true);
-    } catch {
-      /* storage may be unavailable; the offline copy stays optional */
+    } catch (err) {
+      // AUD-G-17: a full device used to look exactly like a successful
+      // download. Name the failure next to the button that caused it.
+      setError(
+        isQuotaExceeded(err) ? t("offlineQuotaFull") : t("offlineSaveFailed"),
+      );
+      console.error("offline chapter save failed", err);
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <main className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       <button
         className="btn btn-ghost btn-sm chips-gap"
         onClick={() => navigate(-1)}
@@ -542,20 +597,62 @@ export function LearnChapterPage() {
               {t("bookmark")}
             </button>
             {error && <p className="error">{error}</p>}
-            {ttsSupported && (
-              <button
-                className="btn btn-sm btn-ghost"
-                onClick={speak}
-                aria-label={t("listen")}
-                aria-pressed={speaking}
+            {ttsEngine.supported ? (
+              <>
+                <button
+                  className="btn btn-sm btn-ghost"
+                  onClick={speak}
+                  aria-label={t("listen")}
+                  aria-pressed={speaking}
+                  aria-describedby={ttsNotice ? "tts-notice" : undefined}
+                >
+                  {speaking ? (
+                    <Square size={14} aria-hidden />
+                  ) : (
+                    <Volume2 size={14} aria-hidden />
+                  )}{" "}
+                  {speaking ? t("stop") : t("listen")}
+                </button>
+                <label className="tts-control">
+                  <span className="muted muted-sm">{t("ttsRate")}</span>
+                  <input
+                    type="range"
+                    min={TTS_RATE.min}
+                    max={TTS_RATE.max}
+                    step={TTS_RATE.step}
+                    value={ttsPrefs.rate}
+                    onChange={(e) =>
+                      updateTtsPref("rate", Number(e.target.value))
+                    }
+                  />
+                </label>
+                <label className="tts-control">
+                  <span className="muted muted-sm">{t("ttsPitch")}</span>
+                  <input
+                    type="range"
+                    min={TTS_PITCH.min}
+                    max={TTS_PITCH.max}
+                    step={TTS_PITCH.step}
+                    value={ttsPrefs.pitch}
+                    onChange={(e) =>
+                      updateTtsPref("pitch", Number(e.target.value))
+                    }
+                  />
+                </label>
+              </>
+            ) : (
+              // No engine: say so rather than showing a button that does
+              // nothing (AUD-G-12).
+              <span className="muted muted-sm">{t("ttsUnsupported")}</span>
+            )}
+            {ttsNotice && (
+              <p
+                id="tts-notice"
+                className="muted muted-sm tts-notice"
+                role="status"
               >
-                {speaking ? (
-                  <Square size={14} aria-hidden />
-                ) : (
-                  <Volume2 size={14} aria-hidden />
-                )}{" "}
-                {speaking ? t("stop") : t("listen")}
-              </button>
+                {ttsNotice}
+              </p>
             )}
             {offlineCopy && <span className="badge">{t("offlineBadge")}</span>}
             <button

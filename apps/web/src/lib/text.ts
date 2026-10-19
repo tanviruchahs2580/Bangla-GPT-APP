@@ -87,3 +87,38 @@ export function suggestionSentence(report: {
   }
   return report.suggestion_code;
 }
+
+/**
+ * Bangla-aware string comparison (AUD-G-23).
+ *
+ * `Array.prototype.sort`'s default order compares UTF-16 code units, which puts
+ * Bengali letters in code-point order rather than the order a Bangla reader
+ * expects (vowel signs and the reph are not letters at all, so "ক" then "কি"
+ * only sorts correctly once the collator looks at them). `Intl.Collator("bn")`
+ * implements the CLDR Bengali collation; runtimes without a Bengali collation
+ * fall back to a locale-aware comparison and finally to code units, never to a
+ * crash.
+ */
+let bnCollator: Intl.Collator | null | undefined;
+
+function collator(): Intl.Collator | null {
+  if (bnCollator === undefined) {
+    try {
+      bnCollator =
+        typeof Intl.Collator === "function" ? new Intl.Collator("bn") : null;
+    } catch {
+      bnCollator = null;
+    }
+  }
+  return bnCollator;
+}
+
+export function compareBn(a: string, b: string): number {
+  const collatorInstance = collator();
+  if (!collatorInstance) return a < b ? -1 : a > b ? 1 : 0;
+  try {
+    return collatorInstance.compare(a, b);
+  } catch {
+    return a < b ? -1 : a > b ? 1 : 0;
+  }
+}

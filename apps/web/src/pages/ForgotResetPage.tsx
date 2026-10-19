@@ -10,7 +10,7 @@ export default function ForgotResetPage() {
 
   return (
     // AUD-G-18: public routes had no main landmark; this is the page's.
-    <main className="card auth-card">
+    <main id="main-content" tabIndex={-1} className="card auth-card">
       <h2>{tab === "forgot" ? t("resetTitle") : t("verifyTitle")}</h2>
       <p className="muted">
         <button

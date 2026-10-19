@@ -87,12 +87,94 @@ export async function saveChapter(
     savedAt: new Date().toISOString(),
     content,
   };
-  if (hasIDB()) {
-    await tx<void>("readwrite", (s) => s.put(rec));
-  } else {
-    memory.set(rec.key, structuredClone(rec));
-  }
+  await writeWithQuotaRecovery(() =>
+    hasIDB()
+      ? tx<void>("readwrite", (s) => s.put(rec))
+      : // Map.set returns the map; the recovery helper expects Promise<void>.
+        Promise.resolve<void>(void memory.set(rec.key, structuredClone(rec))),
+  );
   return rec;
+}
+
+/** Copies kept when a full device forces a prune (newest first). */
+export const OFFLINE_KEEP_ON_QUOTA = 5;
+
+/**
+ * A chapter could not be stored because the device is out of room.
+ *
+ * AUD-G-17: this used to be indistinguishable from success — IndexedDB
+ * rejects the write, the caller swallowed it, and the reader saw "ডাউনলোড
+ * হয়েছে" for a chapter that was never stored. The UI turns this into an
+ * explicit message.
+ */
+export class OfflineQuotaError extends Error {
+  constructor(message = "offline storage quota exceeded") {
+    super(message);
+    this.name = "OfflineQuotaError";
+  }
+}
+
+/** True for the quota rejections browsers actually throw. */
+export function isQuotaExceeded(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const name = (err as { name?: string }).name ?? "";
+  const code = (err as { code?: number }).code;
+  const message = String((err as { message?: string }).message ?? "");
+  return (
+    name === "QuotaExceededError" ||
+    name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+    code === 22 ||
+    /quota|storage is full/i.test(message)
+  );
+}
+
+/** What the browser says is left, or null when it will not say. */
+export async function storageEstimate(): Promise<{
+  usage: number;
+  quota: number;
+} | null> {
+  try {
+    const estimate = await navigator.storage?.estimate?.();
+    if (!estimate?.quota) return null;
+    return { usage: estimate.usage ?? 0, quota: estimate.quota };
+  } catch {
+    return null;
+  }
+}
+
+/** Drop the oldest copies, keeping the newest `keep`. */
+export async function pruneOldestChapters(keep: number): Promise<number> {
+  const all = await downloadedChapters();
+  if (all.length <= keep) return 0;
+  const oldest = [...all]
+    .sort((a, b) => a.savedAt.localeCompare(b.savedAt))
+    .slice(0, all.length - keep);
+  for (const rec of oldest) {
+    await deleteChapter(rec.subject, rec.chapter, rec.classLevel);
+  }
+  return oldest.length;
+}
+
+/**
+ * Run a write; if storage is full, free the oldest copies and try once more.
+ * Exported so the recovery path is testable without filling a real disk.
+ */
+export async function writeWithQuotaRecovery<T>(
+  write: () => Promise<T>,
+  keep: number = OFFLINE_KEEP_ON_QUOTA,
+): Promise<T> {
+  try {
+    return await write();
+  } catch (err) {
+    if (!isQuotaExceeded(err)) throw err;
+    const freed = await pruneOldestChapters(keep);
+    if (freed === 0) throw new OfflineQuotaError();
+    try {
+      return await write();
+    } catch (retryErr) {
+      throw isQuotaExceeded(retryErr) ? new OfflineQuotaError() : retryErr;
+    }
+  }
 }
 
 export async function loadChapter(

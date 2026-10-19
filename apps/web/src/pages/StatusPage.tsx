@@ -41,7 +41,7 @@ export default function StatusPage() {
 
   return (
     // AUD-G-18: public routes had no main landmark; this is the page's.
-    <main className="card card-narrow">
+    <main id="main-content" tabIndex={-1} className="card card-narrow">
       <h2>{t("statusPage")}</h2>
       {error && (
         <p className="error" role="alert">

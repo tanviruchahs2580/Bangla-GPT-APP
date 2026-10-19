@@ -14,6 +14,8 @@
  * stays correct if the API ever starts sending aware timestamps.
  */
 
+import { localeFor } from "./digits";
+
 const OFFSETLESS_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
 
 export function parseServerDate(value: string | null | undefined): Date | null {
@@ -24,9 +26,14 @@ export function parseServerDate(value: string | null | undefined): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-/** `toLocaleString` for an API timestamp, with the UTC offset restored. */
+/** `toLocaleString` for an API timestamp, with the UTC offset restored.
+ *
+ * AUD-G-15: the locale is the app's, not the browser's. `undefined` meant a
+ * Bangla screen showed 18/10/2026 while the rest of the page was in Bangla —
+ * `bn-BD` renders the same instant as ১৮/১০/২০২৬, matching the numeral policy
+ * in `lib/digits.ts`. */
 export function formatServerDateTime(value: string | null | undefined): string {
-  return parseServerDate(value)?.toLocaleString() ?? "";
+  return parseServerDate(value)?.toLocaleString(localeFor()) ?? "";
 }
 
 /** `toLocaleDateString` for an API timestamp, with the UTC offset restored. */
@@ -34,5 +41,5 @@ export function formatServerDate(
   value: string | null | undefined,
   options?: Intl.DateTimeFormatOptions,
 ): string {
-  return parseServerDate(value)?.toLocaleDateString(undefined, options) ?? "";
+  return parseServerDate(value)?.toLocaleDateString(localeFor(), options) ?? "";
 }

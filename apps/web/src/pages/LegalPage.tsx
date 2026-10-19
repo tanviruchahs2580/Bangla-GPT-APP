@@ -44,7 +44,7 @@ export default function LegalPage({ kind }: { kind: "privacy" | "terms" }) {
   const isPrivacy = kind === "privacy";
   return (
     // AUD-G-18: public routes had no main landmark; this is the page's.
-    <main className="card card-legal">
+    <main id="main-content" tabIndex={-1} className="card card-legal">
       <h2>
         {isPrivacy
           ? "গোপনীয়তা নীতি / Privacy Policy"

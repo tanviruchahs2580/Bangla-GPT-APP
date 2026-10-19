@@ -117,7 +117,7 @@ export default function ParentDashboard() {
   }
 
   return (
-    <>
+    <main id="main-content" tabIndex={-1}>
       <h1 className="page-title">{t("parentDashboard")}</h1>
 
       <div className="card">
@@ -375,6 +375,6 @@ export default function ParentDashboard() {
           </p>
         </div>
       )}
-    </>
+    </main>
   );
 }

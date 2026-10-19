@@ -134,7 +134,11 @@ export default function LoginPage() {
 
   if (mfaToken) {
     return (
-      <main className="splash splash-login auth-shell">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="splash splash-login auth-shell"
+      >
         <Card className="auth-card">
           <h2>{t("mfaTitle")}</h2>
           <p className="muted">{t("mfaHint")}</p>
@@ -172,7 +176,11 @@ export default function LoginPage() {
 
   if (pendingMe) {
     return (
-      <main className="splash splash-login auth-shell">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="splash splash-login auth-shell"
+      >
         <Card className="auth-card">
           <h2>{t("forceChangeTitle")}</h2>
           <p className="muted">{t("forceChangeSub")}</p>
@@ -233,7 +241,11 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="splash splash-login auth-shell">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="splash splash-login auth-shell"
+    >
       <section className="auth-brand">
         <div className="auth-brand-head">
           <span className="auth-brand-logo" aria-hidden>
@@ -274,6 +286,11 @@ export default function LoginPage() {
               type="email"
               value={email}
               required
+              // AUD-G-11: a rejected sign-in names no field, so both
+              // credential inputs are marked invalid and pointed at the
+              // message that says why.
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? "login-error" : undefined}
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
@@ -285,6 +302,8 @@ export default function LoginPage() {
               name="password"
               autoComplete="current-password"
               type="password"
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? "login-error" : undefined}
               value={password}
               required
               minLength={8}
@@ -292,7 +311,7 @@ export default function LoginPage() {
             />
           </div>
           {error && (
-            <p className="error" role="alert">
+            <p className="error" role="alert" id="login-error">
               {error.text}
               {error.action === "resend-verification" && (
                 <>

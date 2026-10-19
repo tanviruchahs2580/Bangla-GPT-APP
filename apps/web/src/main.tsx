@@ -20,6 +20,7 @@ import { getToken, setLogoutCleanup } from "./api";
 import { AuthProvider, ROLE_HOME, useAuth } from "./AuthContext";
 import { AppShell } from "./AppShell";
 import { Skeleton } from "./components/ui";
+import { SkipLink } from "./components/SkipLink";
 import {
   AppErrorBoundary,
   RouteErrorBoundary,
@@ -92,7 +93,12 @@ function RequireAuth({
   if (!getToken()) return <Navigate to="/login" replace />;
   if (loading)
     return (
-      <main className="container" aria-live="polite">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="container"
+        aria-live="polite"
+      >
         <p className="muted">{t("loading")}</p>
         <div className="stack">
           <Skeleton w="60%" />
@@ -125,7 +131,12 @@ function RequireAuth({
  */
 function ApiUnreachable({ onRetry }: { onRetry: () => void }) {
   return (
-    <main className="container" aria-live="assertive">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="container"
+      aria-live="assertive"
+    >
       <div className="card stack">
         <h1>{t("apiUnreachableTitle")}</h1>
         <p className="muted">{t("apiUnreachableBody")}</p>
@@ -141,7 +152,12 @@ function ApiUnreachable({ onRetry }: { onRetry: () => void }) {
 
 function Loading() {
   return (
-    <main className="container" aria-live="polite">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="container"
+      aria-live="polite"
+    >
       <p className="muted">{t("loading")}</p>
       <div className="stack">
         <Skeleton w="70%" />
@@ -365,6 +381,9 @@ function App() {
   return (
     <BrowserRouter>
       <LangRoot>
+        {/* AUD-G-02: first focusable element on every screen, above both the
+            public routes and the authenticated shell. */}
+        <SkipLink />
         <Suspense fallback={<Loading />}>
           <RoutesSwitch />
           <Footer />

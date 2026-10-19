@@ -285,14 +285,41 @@ h2,
 h3,
 h4 {
   line-height: var(--lh-head);
-  font-weight: 800;
-  letter-spacing: -0.005em;
+  font-weight: 700;
   margin: 0 0 0.4em;
   text-wrap: balance;
 }
 
 h1 {
   font-size: var(--fs-2xl);
+}
+
+/* AUD-G-14 / G-21: negative tracking helps Latin text but collides Bangla
+   conjuncts and vowel signs. Every tightening is therefore scoped to English
+   UI, where the whole string is Latin script. */
+:lang(en) :is(h1, h2, h3, h4) {
+  letter-spacing: -0.005em;
+}
+
+:lang(en) .brand {
+  letter-spacing: -0.01em;
+}
+
+:lang(en) .hero h2 {
+  letter-spacing: -0.015em;
+}
+
+:lang(en) .quick-title {
+  letter-spacing: -0.01em;
+}
+
+:lang(en) .ring-inner {
+  letter-spacing: -0.02em;
+}
+
+:lang(en) .search-kind,
+:lang(en) .auth-brand-kicker {
+  letter-spacing: 0.02em;
 }
 
 h2 {
@@ -325,6 +352,28 @@ p {
 
 :focus:not(:focus-visible) {
   outline: none;
+}
+
+/* AUD-G-02: bypass-blocks link. Off-screen until it takes focus, then pinned
+   over the topbar so a keyboard user can jump past the chrome. */
+.skip-link {
+  position: fixed;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 1000;
+  transform: translateY(-200%);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  background: var(--brand);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: var(--elev-3);
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  transform: translateY(0);
 }
 
 ::selection {
@@ -428,10 +477,9 @@ p {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  font-weight: 800;
+  font-weight: 700;
   font-size: var(--fs-lg);
   color: var(--ink);
-  letter-spacing: -0.01em;
 }
 
 .brand:hover {
@@ -500,7 +548,7 @@ p {
 
 .bnav-item.active {
   color: var(--brand-strong);
-  font-weight: 800;
+  font-weight: 700;
 }
 
 /* WP-04: animated pill indicator (replaces 5px dot as primary affordance) */
@@ -607,7 +655,7 @@ p {
 
 .card-title {
   font-size: var(--fs-lg);
-  font-weight: 800;
+  font-weight: 700;
   margin-bottom: var(--space-2);
   line-height: var(--lh-head);
 }
@@ -1036,7 +1084,7 @@ p {
 
 .stat-value {
   font-size: var(--fs-2xl);
-  font-weight: 800;
+  font-weight: 700;
   color: var(--brand-strong);
   line-height: 1.1;
 }
@@ -1393,7 +1441,7 @@ p {
 
 .splash h1 {
   font-size: var(--fs-3xl);
-  font-weight: 800;
+  font-weight: 700;
   margin-bottom: 0;
   max-width: 100%;
   overflow-wrap: break-word;
@@ -1468,7 +1516,7 @@ p {
 }
 
 .empty-title {
-  font-weight: 800;
+  font-weight: 700;
   font-size: var(--fs-lg);
 }
 
@@ -1734,12 +1782,12 @@ form .btn[type="submit"] {
 
 .trend-up {
   color: var(--ok);
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .trend-down {
   color: var(--danger);
-  font-weight: 800;
+  font-weight: 700;
 }
 
 /* Error state (WP-11) */
@@ -1937,6 +1985,23 @@ form .btn[type="submit"] {
   margin-left: auto;
 }
 
+/* AUD-G-12: speech rate/pitch live next to the listen button, inside the
+   reader controls row. */
+.tts-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tts-control input[type="range"] {
+  width: 96px;
+}
+
+.tts-notice {
+  flex-basis: 100%;
+  margin: 0;
+}
+
 .workspace-tabs {
   margin: var(--space-3) 0 var(--space-4);
 }
@@ -2013,7 +2078,7 @@ form .btn[type="submit"] {
   gap: 6px;
   margin-bottom: 6px;
   font-size: var(--fs-xs);
-  font-weight: 800;
+  font-weight: 700;
   color: var(--ai);
 }
 
@@ -2393,7 +2458,7 @@ table.data thead th {
   position: sticky;
   top: 0;
   background: var(--card-2);
-  font-weight: 800;
+  font-weight: 700;
   color: var(--muted);
   z-index: 1;
 }
@@ -2809,7 +2874,6 @@ button.source-chip:hover {
   font-size: var(--fs-xs);
   color: var(--brand);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 .search-title {
   font-size: var(--fs-sm);
@@ -3126,7 +3190,7 @@ button.small {
 }
 .stat-row .num {
   font-size: var(--fs-xl);
-  font-weight: 800;
+  font-weight: 700;
   color: var(--brand-strong);
   font-variant-numeric: tabular-nums;
 }
@@ -3593,7 +3657,7 @@ button.small {
   border-radius: var(--radius-full);
   background: var(--brand-soft);
   color: var(--brand-strong);
-  font-weight: 800;
+  font-weight: 700;
   font-size: var(--fs-lg);
   flex-shrink: 0;
   user-select: none;
@@ -4143,7 +4207,6 @@ button.small {
 }
 
 .hero h2 {
-  letter-spacing: -0.015em;
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.22);
 }
 
@@ -4314,7 +4377,6 @@ button.small {
 
 .quick-title {
   font-size: var(--fs-md);
-  letter-spacing: -0.01em;
 }
 
 /* ── 6. Cards v2 ─────────────────────────────────────────────── */
@@ -4357,7 +4419,6 @@ button.small {
 
 .ring-inner {
   font-size: var(--fs-md);
-  letter-spacing: -0.02em;
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--card) 60%, transparent);
 }
 
@@ -4743,7 +4804,7 @@ button.small {
 
 .landing-stats strong {
   font-size: var(--fs-xl);
-  font-weight: 800;
+  font-weight: 700;
   color: var(--brand-strong);
   line-height: var(--lh-tight);
 }
@@ -4813,7 +4874,6 @@ button.small {
   margin: 0;
   font-size: var(--fs-xs);
   font-weight: 700;
-  letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--brand-strong);
 }
