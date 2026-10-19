@@ -75,34 +75,53 @@ maintained by hand — re-read it from the JSON before trusting a number:
 python -c "import json; r=json.load(open('data/nctb/quality_report.json', encoding='utf-8')); [print(v['subject_bn'], f\"{v['usable_pages']}/{v['total_pages']}\", v['bangla_char_ratio_on_usable'], v['chunks']) for v in r.values()]"
 ```
 
-| Source | usable pages | Bangla ratio (post-conversion) | chunks |
-|---|---|---|---|
-| বাংলা | 91/93 | 1.00 | 130 |
-| ইংরেজি (English book) | 91/93 | 0.04 (correctly low) | 122 |
-| গণিত ও উচ্চতর গণিত | 143/146 | 1.00 | 88 |
-| বিজ্ঞান শাখার বিষয়সমূহ | 239/241 | 1.00 | 81 |
-| আইসিটি ও ক্যারিয়ার এডুকেশন | 109/111 | 1.00 | 85 |
-| পদার্থবিদ্যা | 52/52 | 0.84 | 78 |
-| রসায়ন | 45/45 | 0.90 | 67 |
-| জীববিজ্ঞান | 46/46 | 0.83 | 69 |
-| উচ্চতর গণিত | 52/52 | 0.73 | 80 |
+The table is deliberately not repeated here as numbers: the report is the
+source of truth and its `chunks`/`built_at`/`content_version` keys change
+whenever the pipeline changes. Read it with the command above. Each row also
+carries `curriculum_year` and `edition` from the acquisition ledger (the
+loader serves the published edition year, e.g. 2012 for the secondary set,
+instead of the build year for sources whose edition is published) and a
+per-document `rights` block (`official-public-download`, `redistribution:
+not-granted-in-writing`) — see §7.
 
 Indexing gate: only pages that pass the corruption heuristic are chunked —
 `PageText.usable` (non-empty text that `looks_like_garbage()` does not flag,
 `nctb/extract.py`) is the filter `nctb/chunking.py` applies before a page
-becomes chunks, so unusable or mis-extracted pages never reach the tutor
-index. The report keeps a row for every page either way; nothing is silently
-dropped.
+becomes chunks. Pages that fail are reported per page; nothing is silently
+dropped. Blocks below `MIN_WORDS` are merged into a neighbouring chunk rather
+than dropped, and the count (`short_blocks_merged`) is on the report.
 
 **Per-chunk content QA gate (build time).** `nctb/content_qa.py` checks every
 chunk for `not_nfc`, `zero_width`, `math_mojibake`, `replacement_char`,
-`pua_char` and `legacy_bijoy`; `build_nctb_corpus.py` writes
-`<data-dir>/qa_report.json` and exits non-zero when any source exceeds the
-`DEFAULT_FLAGGED_THRESHOLD` of 2% flagged chunks. At load time
-`apps/api/src/bangla_gpt_api/data/nctb_loader.py` strips private-use glyph
-residue to spaces and drops chunks still matching legacy-Bijoy ASCII, with a
-warning count — QA-flagged artifacts reach neither the index nor a served
-answer.
+`pua_char`, `legacy_bijoy` and — for sources the report rates Bangla
+(`bangla_char_ratio_on_usable ≥ 0.5`) — `latin_residue`, an ASCII-Latin-
+dominant passage that is an unconverted legacy line rather than English
+prose. `build_nctb_corpus.py` writes `<data-dir>/qa_report.json` and exits
+non-zero when any source exceeds the `DEFAULT_FLAGGED_THRESHOLD` of 2%
+flagged chunks. At load time `data/nctb_loader.py` strips private-use glyph
+residue to spaces, drops chunks that are detectably legacy (signature or
+latin-residue verdict) and deduplicates identical `(class_level, text)`
+pairs, each with a warning/log count — QA-flagged artifacts reach neither the
+index nor a served answer.
+
+Two more build outputs belong to the corpus:
+
+- `<data-dir>/coverage_report.json` — class × subject × chapter counts and
+  chunk counts actually served, plus sources whose level could not be
+  assigned (`coverage_report()` in `nctb/corpus.py`). This is the artifact a
+  coverage claim is read against; gaps are listed rather than inferred from
+  the absence of failures.
+- `<data-dir>/chunk_ablation.json` — the chunk-size/overlap/diversity
+  comparison produced by `scripts/ablate_nctb_chunking.py` (see
+  docs/RAG_ARCHITECTURE.md for the table).
+
+**Stale outputs are pruned.** The build iterates only the manifest's
+currently `acquired` sources; `prune_outputs()` deletes the
+`normalized/*.chunks.jsonl`, `extracted/*.pages.json` and
+`quality_report.json` rows of sources that are no longer acquired, and a
+source whose raw PDF is missing or unreadable has its previous derived
+artifacts deleted (AUD-A1-07). A deleted or renamed source therefore cannot
+stay indexable.
 
 ## 5. Chunking & class metadata
 
@@ -110,10 +129,26 @@ answer.
   heading patterns cover both textbook ("অধ্যায়: X") and curriculum
   ("প্রথম অধ্যায়: X") formats; running-header gluing is un-wound before
   line matching.
+- **Sentence-aware packing**: the size target (220 words, default) is met by
+  packing whole sentences at Bangla danda/`?`/`!`; only a sentence longer
+  than MAX (400) is split, and on word boundaries. The old behaviour cut the
+  buffer at exactly 220 words regardless of punctuation (audit E-A1-006).
+  A 0-word default overlap is available (`overlap_words`) and measured in
+  the ablation; the served configuration does not use it.
+- Section metadata: `অনুশীলনী`/`সংক্ষিপ্ত প্রশ্ন` markers and short numbered
+  curriculum headings ("৪.১ …") start a section and are recorded on the
+  chunk's `section` field; the loader copies it into the served metadata and
+  types the chunk (`exercise`/`assessment`/`example`/`table`, else `nctb`
+  body text) from its opening line.
 - Class level is DERIVED from front matter only when unambiguous; these
   compilation volumes mention multiple classes, so detection correctly
   returns None and the loader falls back to the declared level range
   (secondary→6–10, hsc→11–12). Nothing is invented (master §75).
+- Chunk ids hash the full chunk text plus chapter sequence and page; a
+  rebuild from the same pages is deterministic (verified: two in-process
+  builds byte-identical). The normative artifact record is the committed
+  `quality_report.json` + `retrieval_eval.json`, not a remembered chunk
+  count.
 
 ## 6. Reproducing from clean environment
 
@@ -122,7 +157,25 @@ git clone <repo> && cd BanglaGptApp/apps/api
 python -m venv .venv && .venv/Scripts/pip install -e ".[dev]"
 .venv/Scripts/python scripts/build_nctb_corpus.py --data-dir ../../data/nctb --subset all
 .venv/Scripts/python scripts/evaluate_nctb_retrieval.py ../../data/nctb
+.venv/Scripts/python scripts/ablate_nctb_chunking.py ../../data/nctb
 # then run API with NCTB_CORPUS_DIR=../../data/nctb
 ```
 
 Acquisition re-runs hit only official URLs and skip already-hashed files.
+Extraction can dominate a full rebuild on the HSC volumes (their PDFs fall
+back to pypdf's slow symbol-set decoding); the page artifacts are reusable
+for re-chunking experiments via `scripts/ablate_nctb_chunking.py`.
+
+## 7. Rights / permission ledger
+
+`data/nctb/manifests/acquisition_manifest.jsonl` records, per artifact, the
+public download URL, the parent listing page, sha256, size and the licence
+note exactly as published. `SourceRecord` additionally carries
+`permission_status` (`official-public-download`) and `redistribution`
+(`not-granted-in-writing`) — the facts this project can establish from the
+official pages — and the build copies them into each source's `rights` block
+in `quality_report.json`. Derived artifacts (`data/nctb/raw|extracted|
+normalized`) are gitignored, so no NCTB text is redistributed in the
+repository; only metadata, reports and measured artifacts are committed.
+Written permission for redistribution, if the owner obtains it, replaces the
+`redistribution` value — it is an owner decision, not an inference.

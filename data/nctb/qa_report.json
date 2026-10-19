@@ -1,0 +1,591 @@
+{
+  "nctb-hsc-28d03c592c2c": {
+    "total_chunks": 86,
+    "flagged_chunks": 20,
+    "flagged_ratio": 0.2326,
+    "issues": {
+      "legacy_bijoy": 19,
+      "latin_residue": 20
+    },
+    "worst": [
+      {
+        "chunk_id": "ba704b65db73d6af",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "2bad999daf5c00a0",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "fdc6599f7b290c88",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "0a9228bb6ba5b8e5",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "57027ff03326d82f",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "181c1ee10afe98fb",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "f0a7820c577537fe",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "b433978c8b02eb0c",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "f71b8cbc176af262",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "6795869f2ab98c33",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "0427b3f4e2ef4304",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "38132096564a9d8c",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "3362356909b5056f",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "1b18619f2182e288",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "f7a799e468212c20",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "d59fd247aff021b0",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "25ded655256a0a80",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "846976c5cffa50fc",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "acdf14b841102428",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "c97353dfa0fc7bb8",
+        "issues": [
+          "latin_residue"
+        ]
+      }
+    ],
+    "pass": false,
+    "threshold": 0.02,
+    "duplicate_chunks": 0,
+    "duplicate_ratio": 0.0
+  },
+  "nctb-hsc-9c44bb8ff649": {
+    "total_chunks": 111,
+    "flagged_chunks": 54,
+    "flagged_ratio": 0.4865,
+    "issues": {
+      "legacy_bijoy": 42,
+      "latin_residue": 54
+    },
+    "worst": [
+      {
+        "chunk_id": "8d6aa27bf0c23191",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "cf63f86e393116f2",
+        "issues": [
+          "latin_residue"
+        ]
+      },
+      {
+        "chunk_id": "0d5691ec6f6c86aa",
+        "issues": [
+          "latin_residue"
+        ]
+      },
+      {
+        "chunk_id": "5f30cc452083c4ca",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "db746d303cacddf5",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "bb3450d4b299b2da",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "95e76a359674fc00",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "6f21d3d260851560",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "ddb872ef297bea35",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "20cecf1dd3f3a0c0",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "9ffe6b0bd05344d5",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "ac30d32c90385d2b",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "8b889cdecab50b6a",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "373783c4474074f7",
+        "issues": [
+          "latin_residue"
+        ]
+      },
+      {
+        "chunk_id": "ae29d98a320567e8",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "a2e373ed416ff674",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "22705e6250ebe157",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "b4204ec4a8f2ffd1",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "d74dbe90a8672672",
+        "issues": [
+          "latin_residue"
+        ]
+      },
+      {
+        "chunk_id": "a6dfb3c8c80aaf63",
+        "issues": [
+          "latin_residue"
+        ]
+      }
+    ],
+    "pass": false,
+    "threshold": 0.02,
+    "duplicate_chunks": 0,
+    "duplicate_ratio": 0.0
+  },
+  "nctb-hsc-a513203336f6": {
+    "total_chunks": 74,
+    "flagged_chunks": 9,
+    "flagged_ratio": 0.1216,
+    "issues": {
+      "legacy_bijoy": 9,
+      "latin_residue": 9
+    },
+    "worst": [
+      {
+        "chunk_id": "9176247791182d13",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "7ce0a5abb8e8b1cf",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "1385e716854583a5",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "0d3b3973ab50f2a7",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "a0de75cc95d6dce2",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "c8974711e19cf648",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "73f727821a936de5",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "699963695782d7c2",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "b8562fbc37266ccc",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      }
+    ],
+    "pass": false,
+    "threshold": 0.02,
+    "duplicate_chunks": 0,
+    "duplicate_ratio": 0.0
+  },
+  "nctb-hsc-ca39e5957513": {
+    "total_chunks": 81,
+    "flagged_chunks": 24,
+    "flagged_ratio": 0.2963,
+    "issues": {
+      "legacy_bijoy": 21,
+      "latin_residue": 24
+    },
+    "worst": [
+      {
+        "chunk_id": "b9eeb81f3f6f0395",
+        "issues": [
+          "latin_residue"
+        ]
+      },
+      {
+        "chunk_id": "ebb1bab915d5f776",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "d277a4a0f5087913",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "abba127da2cf5dcb",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "6a6511506e8d384c",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "5aaedd1ca854a0c0",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "6c6a157b7a1ffc9e",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "29e4a66a9b60d869",
+        "issues": [
+          "latin_residue"
+        ]
+      },
+      {
+        "chunk_id": "6b6fc408f70dff59",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "42c31d5b312bf549",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "082aee0d7bf2fb8c",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "b970da4e10db14e3",
+        "issues": [
+          "latin_residue"
+        ]
+      },
+      {
+        "chunk_id": "89005cf0b741026c",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "3eb5171c0ec57d96",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "50d771426086ce53",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "1891f53b4f439a39",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "4f92ba10db203c7d",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "cbf5f3e0b0075617",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "3cca3fc4c793cbed",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      },
+      {
+        "chunk_id": "1dbe4626777b31f9",
+        "issues": [
+          "latin_residue",
+          "legacy_bijoy"
+        ]
+      }
+    ],
+    "pass": false,
+    "threshold": 0.02,
+    "duplicate_chunks": 0,
+    "duplicate_ratio": 0.0
+  },
+  "nctb-secondary-3ce5065b7a32": {
+    "total_chunks": 133,
+    "flagged_chunks": 0,
+    "flagged_ratio": 0.0,
+    "issues": {},
+    "worst": [],
+    "pass": true,
+    "threshold": 0.02,
+    "duplicate_chunks": 0,
+    "duplicate_ratio": 0.0
+  },
+  "nctb-secondary-afda21d8556d": {
+    "total_chunks": 161,
+    "flagged_chunks": 0,
+    "flagged_ratio": 0.0,
+    "issues": {},
+    "worst": [],
+    "pass": true,
+    "threshold": 0.02,
+    "duplicate_chunks": 0,
+    "duplicate_ratio": 0.0
+  },
+  "nctb-secondary-be50d8aff8d5": {
+    "total_chunks": 88,
+    "flagged_chunks": 0,
+    "flagged_ratio": 0.0,
+    "issues": {},
+    "worst": [],
+    "pass": true,
+    "threshold": 0.02,
+    "duplicate_chunks": 0,
+    "duplicate_ratio": 0.0
+  },
+  "nctb-secondary-ca0d6bd886b7": {
+    "total_chunks": 85,
+    "flagged_chunks": 0,
+    "flagged_ratio": 0.0,
+    "issues": {},
+    "worst": [],
+    "pass": true,
+    "threshold": 0.02,
+    "duplicate_chunks": 0,
+    "duplicate_ratio": 0.0
+  },
+  "nctb-secondary-e39c58d35764": {
+    "total_chunks": 80,
+    "flagged_chunks": 0,
+    "flagged_ratio": 0.0,
+    "issues": {},
+    "worst": [],
+    "pass": true,
+    "threshold": 0.02,
+    "duplicate_chunks": 0,
+    "duplicate_ratio": 0.0
+  }
+}

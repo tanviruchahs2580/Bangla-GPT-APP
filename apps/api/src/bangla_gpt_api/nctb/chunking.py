@@ -4,9 +4,19 @@ Hierarchy implemented (master §16/§17):
     Chapter (parent unit, detected from Bangla headings)
       └── Section-sized child chunks (retrieval units)
 
-Blind fixed-size splitting is not used: boundaries prefer paragraph and
-heading lines; a max-size guard only splits when a single paragraph
-exceeds the budget. Chapter/page provenance is preserved on every chunk.
+Boundaries prefer paragraph/heading lines and then *sentences*: the size
+target is met by packing whole sentences (Bangla danda ``।``, ``?``, ``!``)
+up to TARGET_WORDS, never by cutting a sentence in half. A sentence longer
+than MAX_WORDS is the only case split on word boundaries (there is no
+punctuation left to respect) and a merge that would overshoot MAX_WORDS is
+split rather than truncated — the earlier implementation silently dropped
+the overflow tail. Chapter/section/page provenance is preserved on every
+chunk.
+
+Chunk-size units are whitespace words (the pipeline has no tokenizer
+dependency; §9 of docs/RAG_ARCHITECTURE.md records that decision). The
+quality report carries the word-length histogram of every build so a
+unit change is visible in the artifact, not only in this file.
 """
 
 from __future__ import annotations
@@ -32,6 +42,16 @@ SECTION_HINTS = ("অনুশীলনী", "অনুশীলন", "সংক
 _HEADING_BREAK = re.compile(r"\s+(?=\S{1,12}\s*অধ্যায়\s*[:：])")
 _SECTION_BREAK = re.compile(r"\s+(?=(?:অনুশীলনী|অনুশীলন|বহু\s*নির্বাচনি|সংক্ষিপ্ত\s*প্রশ্ন)\s*[?:।]?)")
 
+# Sentence boundary: Bangla danda / question mark / exclamation mark followed
+# by whitespace. ASCII '.' is deliberately NOT a boundary (the curriculum
+# documents carry English abbreviations such as "M.Sc." inside Bangla prose).
+_SENTENCE_SPLIT = re.compile(r"(?<=[।?!])\s+")
+
+# Numbered curriculum headings in the schools' curriculum volumes
+# ("৪.১ অবস্থা বিশ্লেষণ", "৬.৩ সাধারণ শিক্ষা ধারার …"), unlike textbook
+# chapters. They are section-level boundaries, not chapters.
+_NUMBERED_HEADING = re.compile(r"^[০-৯0-9]{1,2}(?:\.[০-৯0-9]{1,2})*[.)]?\s+\S")
+
 
 def _restore_line_breaks(text: str) -> str:
     text = _HEADING_BREAK.sub("\n", text)
@@ -41,6 +61,9 @@ def _restore_line_breaks(text: str) -> str:
 TARGET_WORDS = 220
 MIN_WORDS = 60
 MAX_WORDS = 400
+#: sentences carried from the tail of one piece into the next (0 = off);
+#: measured in the chunk-size ablation (scripts/ablate_nctb_chunking.py).
+DEFAULT_OVERLAP_WORDS = 0
 
 
 @dataclass
@@ -52,6 +75,7 @@ class RawChunk:
     chapter: str
     page_start: int
     page_end: int
+    section: str = ""  # section heading the chunk belongs to ("" = none)
 
 
 def _stable_id(*parts: object) -> str:
@@ -94,6 +118,66 @@ def _is_chapter_heading(line: str) -> str | None:
     return None
 
 
+def split_sentences(text: str) -> list[str]:
+    """Split on Bangla danda/``?``/``!``; whitespace-collapsed input expected."""
+    return [part for part in (p.strip() for p in _SENTENCE_SPLIT.split(text)) if part]
+
+
+def _word_window(text: str, size: int) -> list[str]:
+    """Hard word-boundary windowing, used only where no sentence fits."""
+    words = text.split(" ")
+    return [" ".join(words[i : i + size]) for i in range(0, len(words), size)]
+
+
+def pack_sentences(
+    text: str,
+    *,
+    target_words: int = TARGET_WORDS,
+    min_words: int = MIN_WORDS,
+    max_words: int = MAX_WORDS,
+    overlap_words: int = DEFAULT_OVERLAP_WORDS,
+) -> list[str]:
+    """Pack whole sentences up to ``target_words`` per piece.
+
+    * a sentence longer than ``max_words`` is split on word boundaries
+      (nothing left to respect inside it);
+    * a trailing piece below ``min_words`` merges into the previous piece;
+    * ``overlap_words`` repeats that many trailing words of each piece at
+      the start of the next (0 keeps the historical no-overlap behaviour);
+    * pieces larger than ``max_words`` are split, never truncated — the
+      pre-2026-10-18 implementation dropped the overflow tail silently.
+    """
+    sentences: list[str] = []
+    for sentence in split_sentences(text):
+        if len(sentence.split(" ")) > max_words:
+            sentences.extend(_word_window(sentence, target_words))
+        else:
+            sentences.append(sentence)
+
+    pieces: list[str] = []
+    current: list[str] = []
+    for sentence in sentences:
+        size = len(sentence.split(" "))
+        if current and len(current) + size > target_words and len(current) >= min_words:
+            pieces.append(" ".join(current))
+            current = current[-overlap_words:] if overlap_words > 0 else []
+        current.extend(sentence.split(" "))
+
+    if current:
+        if pieces and len(current) < min_words:
+            pieces[-1] = f"{pieces[-1]} {' '.join(current)}"
+        else:
+            pieces.append(" ".join(current))
+
+    bounded: list[str] = []
+    for piece in pieces:
+        if len(piece.split(" ")) > max_words:
+            bounded.extend(_word_window(piece, max_words))
+        else:
+            bounded.append(piece)
+    return bounded
+
+
 def chunk_pages(
     pages: list[PageText],
     *,
@@ -101,43 +185,61 @@ def chunk_pages(
     target_words: int = TARGET_WORDS,
     min_words: int = MIN_WORDS,
     max_words: int = MAX_WORDS,
+    overlap_words: int = DEFAULT_OVERLAP_WORDS,
+    stats: dict | None = None,
 ) -> list[RawChunk]:
-    """Build chapter-parented, section-aware chunks with page provenance."""
+    """Build chapter-parented, section-aware chunks with page provenance.
+
+    ``stats`` (optional, additive) receives ``short_blocks_merged`` and
+    ``chunk_word_lengths`` so the corpus report can carry the chunk-size
+    histogram without a second pass over the chunks.
+    """
     chunks: list[RawChunk] = []
     current_chapter = ""
+    current_section = ""
     buffer_lines: list[str] = []
     buffer_pages: set[int] = set()
+    buffer_section = ""
     chapter_seq = 0
+    short_blocks = 0
 
-    def flush() -> None:
-        nonlocal buffer_lines, buffer_pages
+    def flush(*, merge_forward: bool = False) -> None:
+        nonlocal buffer_lines, buffer_pages, buffer_section, short_blocks
         if not buffer_lines:
             return
         text = normalize_bangla(" ".join(buffer_lines))
         words = text.split(" ") if text else []
         if len(words) < min_words:
-            buffer_lines, buffer_pages = [], set()
+            # Too small to stand alone: hold it for the next block instead of
+            # dropping content (the old behaviour lost every short block).
+            short_blocks += 1
+            if merge_forward:
+                return
+            if not chunks:
+                buffer_lines, buffer_pages, buffer_section = [], set(), ""
+                return
+            tail = " ".join(buffer_lines)
+            last = chunks[-1]
+            merged = f"{last.text} {tail}".strip()
+            chunks[-1] = RawChunk(
+                chunk_id=last.chunk_id,
+                parent_id=last.parent_id,
+                text=merged,
+                original_text=last.original_text,
+                chapter=last.chapter,
+                page_start=last.page_start,
+                page_end=max(last.page_end, max(buffer_pages) if buffer_pages else last.page_end),
+                section=last.section,
+            )
+            buffer_lines, buffer_pages, buffer_section = [], set(), ""
             return
-        # Oversize guard: split on sentence-ish boundaries within the block.
-        pieces: list[str] = []
-        current: list[str] = []
-        count = 0
-        for word in words:
-            current.append(word)
-            count += 1
-            if count >= target_words:
-                pieces.append(" ".join(current))
-                current, count = [], 0
-        if current:
-            remainder = " ".join(current)
-            if pieces and len(current) < min_words:
-                pieces[-1] = f"{pieces[-1]} {remainder}"
-            else:
-                pieces.append(remainder)
-        for piece in pieces:
-            piece_words = piece.split(" ")
-            if len(piece_words) > max_words:
-                piece = " ".join(piece_words[:max_words])
+        for piece in pack_sentences(
+            text,
+            target_words=target_words,
+            min_words=min_words,
+            max_words=max_words,
+            overlap_words=overlap_words,
+        ):
             parent_id = (
                 _stable_id(source_id, "chapter", chapter_seq, current_chapter)
                 if current_chapter
@@ -155,9 +257,10 @@ def chunk_pages(
                     chapter=current_chapter,
                     page_start=min(buffer_pages),
                     page_end=max(buffer_pages),
+                    section=buffer_section,
                 )
             )
-        buffer_lines, buffer_pages = [], set()
+        buffer_lines, buffer_pages, buffer_section = [], set(), ""
 
     for page in pages:
         if not page.usable:
@@ -172,17 +275,32 @@ def chunk_pages(
                 flush()
                 chapter_seq += 1
                 current_chapter = heading
+                current_section = ""
                 continue
             normalized_line = normalize_bangla(stripped)
             is_section_marker = (
                 any(hint in normalized_line for hint in SECTION_HINTS) and len(normalized_line) < 60
             )
+            if not is_section_marker and _NUMBERED_HEADING.match(normalized_line):
+                # Numbered curriculum heading; only a break once the current
+                # block can stand alone, so numbered *lists* inside prose
+                # never fragment into sub-minimum fragments.
+                is_section_marker = sum(len(line.split()) for line in buffer_lines) >= min_words
             if is_section_marker:
-                flush()  # section boundary → start a fresh retrieval unit
+                flush(merge_forward=True)
+                if not buffer_lines:
+                    current_section = normalized_line[:80]
+            if not buffer_lines:
+                buffer_section = current_section
             buffer_lines.append(normalized_line)
             buffer_pages.add(page.page_number)
             projected = sum(len(line.split()) for line in buffer_lines)
             if projected >= target_words + 120:
                 flush()
     flush()
+    if stats is not None:
+        # Sub-minimum blocks were merged into a neighbouring chunk, never
+        # dropped; the count makes that visible in the corpus report.
+        stats["short_blocks_merged"] = short_blocks
+        stats["chunk_word_lengths"] = [len(chunk.text.split(" ")) for chunk in chunks]
     return chunks

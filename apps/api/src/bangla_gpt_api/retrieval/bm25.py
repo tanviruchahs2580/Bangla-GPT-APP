@@ -3,6 +3,7 @@ from collections import Counter
 from dataclasses import dataclass
 
 from bangla_gpt_api.curriculum.models import Chunk
+from bangla_gpt_api.retrieval.filters import chunk_matches_filters
 from bangla_gpt_api.retrieval.hybrid import (
     expand_query,
     light_stem,
@@ -96,6 +97,8 @@ class BM25Index:
         class_level: int | None = None,
         subject: str | None = None,
         chapter: str | None = None,
+        content_type: str | None = None,
+        version: str | None = None,
         top_k: int = 4,
         min_score: float = 0.0,
     ) -> list[Hit]:
@@ -107,11 +110,14 @@ class BM25Index:
         query_grams = trigram_ngrams(query)
         hits: list[Hit] = []
         for i, chunk in enumerate(self.chunks):
-            if class_level is not None and chunk.meta.class_level != class_level:
-                continue
-            if subject is not None and chunk.meta.subject != subject:
-                continue
-            if chapter is not None and chunk.meta.chapter != chapter:
+            if not chunk_matches_filters(
+                chunk,
+                class_level=class_level,
+                subject=subject,
+                chapter=chapter,
+                content_type=content_type,
+                version=version,
+            ):
                 continue
             score = self._score(query_terms, i)
             if score <= min_score:

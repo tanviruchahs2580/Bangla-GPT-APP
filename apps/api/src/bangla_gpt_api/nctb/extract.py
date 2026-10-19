@@ -15,6 +15,32 @@ from bangla_gpt_api.nctb.bijoy import convert_bijoy_text, is_likely_legacy_bijoy
 from bangla_gpt_api.nctb.normalize import bangla_char_ratio, looks_like_garbage
 
 
+def convert_legacy_lines(text: str) -> tuple[str, int]:
+    """Line-wise legacy conversion for pages that are not wholly legacy.
+
+    Whole-page conversion only runs when the page-level signature is
+    detected; a page mixing Unicode Bangla lines with legacy-Bijoy lines
+    (measured on the HSC volumes: 122 served chunks of raw Bijoy) used to
+    pass through untouched. Each line is converted only when the converted
+    form measurably improves the Bangla ratio, so Unicode and English lines
+    are returned verbatim. Returns ``(text, converted_line_count)``.
+    """
+    converted_lines = 0
+    out: list[str] = []
+    for line in text.splitlines():
+        if is_likely_legacy_bijoy(line):
+            try:
+                candidate = convert_bijoy_text(line)
+            except Exception:  # a malformed legacy line stays as-is, never lost
+                candidate = line
+            if bangla_char_ratio(candidate) > bangla_char_ratio(line):
+                out.append(candidate)
+                converted_lines += 1
+                continue
+        out.append(line)
+    return "\n".join(out), converted_lines
+
+
 @dataclass
 class PageText:
     page_number: int  # 1-based physical page
@@ -65,7 +91,11 @@ def extract_pdf(path: Path, *, max_pages: int | None = None) -> ExtractionResult
                     except Exception:  # one bad page never kills a book
                         encoding = "unusable"
                 elif bangla_char_ratio(raw) > 0.2:
-                    encoding = "unicode"
+                    try:
+                        raw, converted_lines = convert_legacy_lines(raw)
+                    except Exception:  # one bad page never kills a book
+                        converted_lines = 0
+                    encoding = "bijoy-converted" if converted_lines else "unicode"
             result.pages.append(PageText(page_number=index + 1, text=raw, encoding=encoding))
     except Exception as exc:  # corrupt PDF must not crash the pipeline
         result.error = f"{type(exc).__name__}: {exc}"

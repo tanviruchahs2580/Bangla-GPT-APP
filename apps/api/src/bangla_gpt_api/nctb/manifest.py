@@ -34,6 +34,13 @@ class SourceRecord:
         "Official NCTB public download; copyright NCTB/Government of Bangladesh. "
         "Use restricted to curriculum-grounded tutoring research/product."
     )
+    # Per-document permission/right status (AUD-A1-16). These are the facts
+    # this project can actually establish for the NCTB curriculum documents:
+    # an official public download page exists, and no written redistribution
+    # grant has been published. Anything beyond that is an owner decision
+    # (tracked in docs/NCTB_DATA_PIPELINE.md), never an inference here.
+    permission_status: str = "official-public-download"
+    redistribution: str = "not-granted-in-writing"
     processing_version: str = "v1"
     error: str | None = None
 

@@ -16,6 +16,7 @@ from collections.abc import Callable, Iterable
 
 from bangla_gpt_api.curriculum.models import Chunk
 from bangla_gpt_api.retrieval.bm25 import BM25Index, Hit, indexable_text, tokenize
+from bangla_gpt_api.retrieval.diversity import DEFAULT_LAMBDA, mmr_select
 from bangla_gpt_api.retrieval.embedding import Embedder, bengali_bigrams
 from bangla_gpt_api.retrieval.fusion import reciprocal_rank_fusion
 from bangla_gpt_api.retrieval.hybrid import light_stem, trigram_similarity
@@ -218,8 +219,12 @@ class HybridIndex:
         class_level: int | None = None,
         subject: str | None = None,
         chapter: str | None = None,
+        content_type: str | None = None,
+        version: str | None = None,
         top_k: int = 4,
         min_score: float = 0.0,
+        diversify: bool = False,
+        diversity_lambda: float = DEFAULT_LAMBDA,
     ) -> list[Hit]:
         candidate_k = max(top_k * _CANDIDATE_FACTOR, top_k + 1)
         bm25_hits = self.bm25.search(
@@ -227,6 +232,8 @@ class HybridIndex:
             class_level=class_level,
             subject=subject,
             chapter=chapter,
+            content_type=content_type,
+            version=version,
             top_k=candidate_k,
             min_score=0.0,
         )
@@ -235,6 +242,8 @@ class HybridIndex:
             class_level=class_level,
             subject=subject,
             chapter=chapter,
+            content_type=content_type,
+            version=version,
             top_k=candidate_k,
             min_score=0.0,
         )
@@ -273,6 +282,10 @@ class HybridIndex:
             if score > min_score
         ]
         ranked.sort(key=lambda hit: (-hit.score, hit.chunk.id))
+        if diversify:
+            # Opt-in MMR over the ranked candidates; off by default so the
+            # served ranking (and every committed number) is unchanged.
+            return mmr_select(ranked[:candidate_k], k=top_k, lambda_=diversity_lambda)
         return ranked[:top_k]
 
 

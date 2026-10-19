@@ -12,6 +12,17 @@ Served-text quality: private-use glyph residue (symbol-font bullets) is
 replaced by spaces, and chunks whose text is still detectably legacy-Bijoy
 ASCII are dropped with a count — an index must never serve either
 (AUD-A1-01/AUD-A1-03; content QA's ``qa_text`` is the contract).
+
+Load-time structure (AUD-A1-05/AUD-A1-06):
+
+* identical passages are deduplicated on ``(class_level, normalized text)``
+  — per-source dedupe cannot see the committee/front-matter pages the NCTB
+  documents share, and the class-range fallback copies each raw chunk into
+  every class of the level by construction;
+* ``section`` comes from the chunk artifact (chunker), ``content_type`` is
+  typed from the chunk's opening (exercise/assessment/example/table, else
+  the historical ``nctb`` body-text label), and ``curriculum_year`` comes
+  from the per-source report when the edition publishes one.
 """
 
 from __future__ import annotations
@@ -21,7 +32,7 @@ import logging
 from pathlib import Path
 
 from bangla_gpt_api.curriculum.models import Chunk, CurriculumMeta
-from bangla_gpt_api.nctb.bijoy import is_likely_legacy_bijoy
+from bangla_gpt_api.nctb.bijoy import has_latin_residue, is_likely_legacy_bijoy
 from bangla_gpt_api.nctb.normalize import strip_private_use
 from bangla_gpt_api.services.safety import strip_injections
 
@@ -53,16 +64,47 @@ def _subject_key(subject_bn: str) -> str:
     return SUBJECT_KEYS.get(subject_bn, "general")
 
 
+#: Opening-line signatures that type a chunk structurally. The marker must
+#: sit in the first 10 characters of the chunk: the chunker flushes at a
+#: section marker and appends it as the chunk's first line, while a
+#: mid-paragraph mention of "উদাহরণ" is prose, not structure.
+_CONTENT_TYPE_HINT_WINDOW = 10
+_CONTENT_TYPE_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("exercise", ("অনুশীলনী", "অনুশীলন", "নিজে করো")),
+    ("assessment", ("সংক্ষিপ্ত প্রশ্ন", "বহু নির্বাচনি", "সৃজনশীল প্রশ্ন", "মূল্যায়ন")),
+    ("example", ("উদাহরণ",)),
+    ("table", ("সারণি", "ছক", "টেবিল")),
+)
+
+
+def infer_content_type(text: str) -> str:
+    """Structural type of a chunk from its opening; ``nctb`` = untyped body.
+
+    The label was the constant ``nctb`` for every chunk before AUD-A1-05;
+    the fallback value is kept so untyped NCTB body text stays
+    distinguishable from sample-corpus ``text`` chunks.
+    """
+    head = text[:80]
+    for label, hints in _CONTENT_TYPE_HINTS:
+        if any(0 <= head.find(hint) < _CONTENT_TYPE_HINT_WINDOW for hint in hints):
+            return label
+    return "nctb"
+
+
 def _resolve_year(report: dict) -> int:
     """Resolve curriculum year honestly: recorded edition or a safe bucket.
 
-    The secondary listing page publishes 'প্রকাশকাল -২০১২'; HSC pages do not
-    state a year, so UNKNOWN years fall back to the acquisition year of the
-    artifact set (2026) purely as a versioning bucket — recorded as such.
+    The secondary listing page publishes 'প্রকাশকাল -২০১২' (stamped into the
+    per-source report by the build); HSC pages do not state a year, so
+    UNKNOWN editions fall back to the artifact set's build year purely as a
+    versioning bucket — recorded as such, never presented as the edition.
     """
     year_text = str(report.get("curriculum_year", "")).strip()
     if year_text.isdigit():
         return int(year_text)
+    built_at = str(report.get("built_at", ""))
+    if built_at[:4].isdigit():
+        return int(built_at[:4])
     return 2026
 
 
@@ -72,8 +114,13 @@ def load_nctb_corpus(
     *,
     multi_class_fallback: bool = True,
     version: str = "nctb-v1",
+    stats: dict | None = None,
 ) -> list[Chunk]:
-    """Convert pipeline chunk files into index-ready Chunks."""
+    """Convert pipeline chunk files into index-ready Chunks.
+
+    ``stats`` (optional, additive) receives ``duplicates_dropped``,
+    ``injection_drops`` and ``legacy_drops`` for observability/reporting.
+    """
     reports: dict[str, dict] = {}
     if quality_report_path is not None and quality_report_path.exists():
         reports = json.loads(quality_report_path.read_text(encoding="utf-8"))
@@ -81,6 +128,11 @@ def load_nctb_corpus(
     chunks: list[Chunk] = []
     injection_drops_total = 0
     legacy_drops_total = 0
+    residue_drops_total = 0
+    duplicates_dropped = 0
+    # (class_level, text) fingerprints: cross-source passages and the
+    # class-range fallback both produce identical served pairs otherwise.
+    seen_pairs: set[tuple[int, str]] = set()
     for path in sorted(chunks_dir.glob("*.chunks.jsonl")):
         source_id = path.name.removesuffix(".chunks.jsonl")
         report = reports.get(source_id, {})
@@ -105,6 +157,13 @@ def load_nctb_corpus(
                 if is_likely_legacy_bijoy(text):
                     legacy_drops_total += 1
                     continue
+                # This source already passed the Bangla-ratio gate above, so
+                # an ASCII-Latin-dominant chunk here is an unconverted legacy
+                # passage, not English prose — the same verdict content QA
+                # applies with bangla_source=True.
+                if has_latin_residue(text):
+                    residue_drops_total += 1
+                    continue
                 # Same ingest-time injection filter the sample corpus gets
                 # (services/safety.py documents it as the first of the two
                 # injection defenses) — without it the production corpus
@@ -113,16 +172,17 @@ def load_nctb_corpus(
                 injection_drops_total += injection_drops
                 if not text:
                     continue
+                section = str(data.get("section") or "").strip()
                 meta_kwargs = dict(
                     curriculum_year=year,
                     subject=_subject_key(subject_bn),
                     book=subject_bn,
                     chapter=data.get("chapter", ""),
-                    section=None,
+                    section=section or None,
                     page=data.get("page_start"),
                     language="bn",
                     version=version,
-                    content_type="nctb",
+                    content_type=infer_content_type(text),
                     source=source_id,
                 )
                 detected = data.get("detected_class")
@@ -133,7 +193,13 @@ def load_nctb_corpus(
                 )
                 if detected is None and not multi_class_fallback:
                     continue
+                fingerprint = " ".join(text.split())
                 for class_level in targets:
+                    pair = (class_level, fingerprint)
+                    if pair in seen_pairs:
+                        duplicates_dropped += 1
+                        continue
+                    seen_pairs.add(pair)
                     chunks.append(
                         Chunk(
                             id=f"{data['chunk_id']}-c{class_level}",
@@ -152,6 +218,24 @@ def load_nctb_corpus(
             "rebuild the affected sources with the conversion stage",
             legacy_drops_total,
         )
+    if residue_drops_total:
+        logger.warning(
+            "nctb_loader: dropped %d chunks dominated by ASCII-Latin letters in a "
+            "Bangla-rated source (unconverted legacy text); rebuild the affected "
+            "sources with the per-line conversion stage",
+            residue_drops_total,
+        )
+    if duplicates_dropped:
+        logger.info(
+            "nctb_loader: dropped %d duplicate (class_level, text) pairs at load time",
+            duplicates_dropped,
+        )
+    if stats is not None:
+        stats["duplicates_dropped"] = duplicates_dropped
+        stats["injection_drops"] = injection_drops_total
+        stats["legacy_drops"] = legacy_drops_total
+        stats["latin_residue_drops"] = residue_drops_total
+        stats["served_chunks"] = len(chunks)
     return chunks
 
 

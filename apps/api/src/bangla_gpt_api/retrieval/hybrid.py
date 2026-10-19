@@ -28,6 +28,14 @@ _BANGLA_WORD_RE = re.compile("[A-Za-z0-9" + chr(92) + "u0980-" + chr(92) + "u09F
 _BANGLA_RE = re.compile("[" + chr(92) + "u0980-" + chr(92) + "u09FF]")
 
 
+#: Canonical digit form for matching: Bengali digits fold to ASCII so that
+#: "১২৩" and "123" tokenize identically (AUD-A1-12). Applied inside
+#: :func:`tokenize`, i.e. to BOTH the indexed corpus and every query, which
+#: is what makes the equivalence hold on both sides; the stored/served text
+#: keeps the digits exactly as the source published them.
+_DIGIT_FOLD = str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789")
+
+
 def tokenize(text: str) -> list[str]:
     """Tokenize keeping Bangla graphemes intact.
 
@@ -37,13 +45,14 @@ def tokenize(text: str) -> list[str]:
     and digits.
 
     NFKC folds compatibility variants (e.g. mobile-keyboard precomposed vs
-    decomposed Bangla) so indexing and querying stay symmetric. Lives
+    decomposed Bangla) so indexing and querying stay symmetric, and Bengali
+    digits fold to ASCII so "১২৩" and "123" are the same token. Lives
     beside :func:`light_stem` rather than in :mod:`bm25` because both the
     lexical index and the query-side analysis need it, and the analysis
     layer must not depend on the index.
     """
     return [
-        match.group(0).lower()
+        match.group(0).lower().translate(_DIGIT_FOLD)
         for match in _BANGLA_WORD_RE.finditer(unicodedata.normalize("NFKC", text))
     ]
 
