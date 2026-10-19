@@ -66,6 +66,7 @@ from .deps import (
     Ctx,
     CurrentUser,
     DbSession,
+    revocation_store_unavailable,
 )
 
 router = APIRouter()
@@ -409,6 +410,44 @@ def _reject_common_password(password: str) -> None:
                 "message": "That password is too common. Choose something harder to guess.",
             },
         )
+
+
+#: Cache-key prefix for tokens retired by logout (AUD-B-04). The shared store
+#: is the one the impersonation deny-list already uses; the TTL is the token's
+#: own remaining life, so the keyspace prunes itself.
+_REVOKED_JTI_KEY_PREFIX = "token_revoke:"
+
+
+@router.post("/auth/logout", status_code=204, responses=AUTH_GUARD_RESPONSES)
+def logout(app_ctx: Ctx, request: Request, user: CurrentUser) -> Response:
+    """Retire the caller's token server-side (AUD-B-04).
+
+    Clearing client storage is not revocation: the bearer token stays valid
+    until ``exp`` (60 minutes by default), so a copy taken off the device
+    keeps working after a "logout". This endpoint writes the token's ``jti``
+    into the shared deny-list that ``get_current_user`` consults, for exactly
+    the token's remaining life.
+
+    The write is strict (same posture as impersonation revocation): when the
+    store is unreachable the caller gets 503 instead of a false "logged out".
+    A client should clear its local state either way -- the response is the
+    server-side half of the decision.
+    """
+    claims = getattr(request.state, "jwt_claims", None) or {}
+    jti = claims.get("jti")
+    if isinstance(jti, str) and jti:
+        try:
+            remaining = int(claims.get("exp", 0)) - int(datetime.now(UTC).timestamp())
+        except (TypeError, ValueError):
+            remaining = app_ctx.settings.jwt_expire_minutes * 60
+        try:
+            app_ctx.cache.set_json_strict(_REVOKED_JTI_KEY_PREFIX + jti, True, max(1, remaining))
+        except CacheUnavailable as exc:
+            raise revocation_store_unavailable() from exc
+    # Structured, id-free: the deny-list entry already records the decision,
+    # and a raw user id in a log line is exactly what AUD-HI-18 is removing.
+    json_log(logger, logging.INFO, "logout_token_revoked", jti=jti is not None)
+    return Response(status_code=204)
 
 
 @router.post("/auth/forgot", status_code=202)

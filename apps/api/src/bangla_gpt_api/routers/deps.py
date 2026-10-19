@@ -6,6 +6,7 @@ the domain routers; nothing in this package may import ``main`` or any router
 """
 
 import calendar
+import logging
 from collections.abc import Callable, Generator
 from typing import Annotated, Any
 
@@ -32,6 +33,8 @@ from bangla_gpt_api.retrieval.base import RankingIndex
 from bangla_gpt_api.schemas import MeResponse
 from bangla_gpt_api.security import decrypt_pii
 from bangla_gpt_api.services.tutor import TutorService
+
+logger = logging.getLogger(__name__)
 
 
 class AppContext:
@@ -163,6 +166,28 @@ def get_current_user(
             raise revocation_store_unavailable() from exc
         if revoked is True:
             raise _unauthorized("Impersonation session has ended")
+    # AUD-B-04: logout revocation. Every token carries a ``jti``, so POST
+    # /auth/logout retires exactly that token instead of leaving it live for
+    # the rest of its TTL (client storage is cleared, but a bearer token
+    # copied off the device would otherwise keep working). Unlike the
+    # impersonation list above, this read is FAIL-SOFT: locking every student
+    # out because a cache blipped is a worse failure than a logged-out token
+    # staying valid for the rest of its 60-minute TTL, and the primary
+    # revocation guarantees -- the TTL and the password-change epoch below --
+    # remain in force. The outage is logged, never silent (the documented
+    # cache posture: strict for privileged tokens, soft for everything else).
+    jti = payload.get("jti")
+    if isinstance(jti, str):
+        try:
+            revoked = ctx.cache.get_json_strict(f"token_revoke:{jti}")
+        except CacheUnavailable:
+            logger.warning(
+                "token revocation store unreachable; deny-list read skipped "
+                "(fail-soft posture; TTL and password epoch still apply)"
+            )
+            revoked = None
+        if revoked is True:
+            raise _unauthorized("Session ended; please log in again")
     # AUTH-001: MFA step-up tokens (mfa:true, token_type "mfa") are accepted
     # ONLY by POST /auth/mfa/challenge — never as API credentials.
     if payload.get("mfa") is True:

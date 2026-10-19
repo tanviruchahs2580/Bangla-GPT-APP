@@ -261,9 +261,19 @@ def classroom_import(
     returned exactly once -- only its SHA-256 hash is stored. The school
     supplies guardian consent on behalf of imported minors: consent
     is recorded with version 'CSV-IMPORT-1'.
+
+    Encoding contract (AUD-HI-16 / H-13): the field is UTF-8 **text**, not
+    bytes — Bangla names arrive as ordinary characters and are stored as
+    given. A leading UTF-8 BOM is tolerated and stripped (Excel's
+    "Save as CSV UTF-8" writes one, and it otherwise becomes part of the
+    first cell, which is how a column named ``\\ufeffname`` reached a real
+    import). CRLF line endings are tolerated. Size is bounded by the
+    request schema (20,000 characters) plus the row cap below; the demo
+    UI's file picker enforces the same bound client-side.
     """
     room = _assert_room_in_school(db, teacher, _classroom_or_404(db, room_id))
-    reader = csv.reader(payload.csv_text.splitlines())
+    csv_text = payload.csv_text.lstrip("\ufeff")
+    reader = csv.reader(csv_text.splitlines())
     data_rows: list[list[str]] = []
     for i, row in enumerate(reader):
         cells = [c.strip() for c in row]

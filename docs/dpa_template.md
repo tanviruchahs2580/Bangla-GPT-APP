@@ -12,9 +12,9 @@
 
 ## 1. Parties & roles
 
-* **Data Controller:** [SCHOOL NAME], determining the purposes of processing
+- **Data Controller:** [SCHOOL NAME], determining the purposes of processing
   student data ([ADDRESS], contact [NAME/EMAIL]).
-* **Data Processor:** [OPERATING ENTITY], operator of the Bangla GPT learning
+- **Data Processor:** [OPERATING ENTITY], operator of the Bangla GPT learning
   platform ([DEPLOYMENT URL], contact [DPO/EMAIL]).
 
 ## 2. Subject matter & data

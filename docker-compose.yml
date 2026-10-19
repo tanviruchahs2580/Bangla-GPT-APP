@@ -16,6 +16,17 @@ x-api-common: &api-common
   restart: unless-stopped
   expose:
     - "8000"
+  # AUD-B-07: the API image already runs as uid 10001 and needs no Linux
+  # capabilities. Its only writable paths are the /data volume and gunicorn's
+  # temp files, so the root filesystem can be read-only with a tmpfs for /tmp
+  # (verified: hardened container answers /health 200).
+  read_only: true
+  tmpfs:
+    - /tmp
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
 
 services:
   api:
@@ -100,6 +111,17 @@ services:
     restart: unless-stopped
     command: ["redis-server", "--save", "", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
     # Not exposed to the host on purpose.
+    # AUD-B-07: the image's entrypoint drops root via gosu, which needs
+    # exactly these three capabilities (verified: PONG with them, chown/SID
+    # failure without them). Everything else is dropped.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
 
   # S5.4: ARQ cron worker. Run INSTEAD of the in-process loops: set
   # JOBS_BACKEND=arq on the api service so its web workers stop scheduling,
@@ -125,6 +147,15 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     volumes:
       - api_data:/data
+    # AUD-B-07: same image and write paths as the api service (the /data
+    # volume plus temp files), so the same hardening applies.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       redis:
         condition: service_started
@@ -139,6 +170,26 @@ services:
     restart: unless-stopped
     expose:
       - "80"
+    # AUD-B-07: nginx needs to bind :80, chown its temp dirs and drop the
+    # workers to the nginx user -- nothing else. The image still starts its
+    # master as root (the stock nginx image cannot do otherwise); the root
+    # filesystem is read-only, /var/cache/nginx and /run live on tmpfs, and
+    # both master and workers run with no ambient capabilities and
+    # no-new-privileges (verified: page served 200 with exactly this set).
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /run
+      - /tmp
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       - api
 
@@ -146,6 +197,14 @@ services:
     image: caddy:2-alpine
     profiles: [tls]
     restart: unless-stopped
+    # AUD-B-07: Caddy needs exactly one capability -- binding the privileged
+    # ports 80/443 (verified: index served with this set).
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "80:80"
       - "443:443"
@@ -166,10 +225,27 @@ services:
     build: ./deploy/postgres
     profiles: [postgres]
     restart: unless-stopped
+    # AUD-B-07: the official entrypoint starts as root, chowns PGDATA and
+    # drops to the postgres user -- those four capabilities and nothing else
+    # (verified: `select 1` served with exactly this set).
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-bgpt}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
       POSTGRES_DB: ${POSTGRES_DB:-bgpt}
+      # AUD-B-03: archive-push must encrypt to the repo (repo1-cipher-type in
+      # deploy/postgres/pgbackrest.conf), so the passphrase is injected here
+      # too. Keep it in the host secret store; an empty value makes
+      # archive-push/backup fail loudly, never write plaintext.
+      PGBACKREST_REPO1_CIPHER_PASS: ${PGBR_CIPHER_PASS:-}
     command:
       [
         "postgres",
@@ -192,6 +268,11 @@ services:
     image: prom/prometheus:v2.53.0
     profiles: [monitoring]
     restart: unless-stopped
+    # AUD-B-07: runs as nobody with no capabilities needed.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./deploy/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
@@ -202,6 +283,11 @@ services:
     image: grafana/grafana:11.1.0
     profiles: [monitoring]
     restart: unless-stopped
+    # AUD-B-07: runs as the grafana uid; no capabilities needed.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "127.0.0.1:3000:3000"
     environment:
@@ -224,6 +310,15 @@ services:
       - api_data:/data:ro
       - backup_data:/backups
       - ./scripts:/srv/scripts:ro
+    # AUD-B-07: same image as the api service; writes only the /backups
+    # volume, so the root filesystem stays read-only.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
 
   pgbackrest:
     # S5.7: nightly pgBackRest full backups (WAL archiving runs continuously
@@ -233,6 +328,11 @@ services:
     profiles: [backup]
     restart: unless-stopped
     user: postgres  # peer auth against the shared socket as the postgres role
+    # AUD-B-07: already non-root; pgBackRest needs no capabilities.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       postgres:
         # `required: false` so `--profile backup` alone still parses; real
@@ -242,6 +342,7 @@ services:
     environment:
       PGBR_STANZA: ${PGBR_STANZA:-bgpt}
       BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      PGBACKREST_REPO1_CIPHER_PASS: ${PGBR_CIPHER_PASS:-}
     entrypoint: ["/usr/local/bin/pgbackrest_nightly.sh"]
     volumes:
       - pg_data:/var/lib/postgresql/data

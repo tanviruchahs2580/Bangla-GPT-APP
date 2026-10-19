@@ -71,6 +71,28 @@ class Settings(BaseSettings):
     # 0 (default) = unlimited. When set, generation entry points refuse with
     # 429 ai_budget_exceeded once the user's current-month ledger hits the cap.
     ai_monthly_budget_usd_per_user: float = 0.0
+    # I-11: global (whole-deployment) monthly AI budget in USD. 0 (default) =
+    # not configured, and the series bgpt_ai_monthly_budget_usd is NOT
+    # exported, so the burn-rate alert cannot fire on an unset budget. Set it
+    # with the provider figure you have actually budgeted; the alert compares
+    # the projected month-end spend against it.
+    ai_monthly_budget_usd: float = 0.0
+    # I-01: emit one structured JSON access line per request (method, route,
+    # status, latency_ms, pseudonymous user ref) next to the Prometheus
+    # counters, so metric-to-log correlation does not need the database.
+    access_log_enabled: bool = True
+    # I-03: emit per-stage trace records (retrieval, prompt, generation) as
+    # structured JSON events carrying the trace id, index/prompt versions,
+    # token counts and retrieved chunk ids. The no-collector equivalent of
+    # OpenTelemetry spans; see docs/operations/TRACING.md.
+    tracing_enabled: bool = False
+    # H-07: PostgreSQL per-session guards applied on every connection. A
+    # statement that runs past the timeout is cancelled by the server instead
+    # of holding one of the pool's connections until the client gives up;
+    # lock_timeout bounds how long a transaction waits on a contested lock.
+    # 0 disables the guard (not recommended in production).
+    db_statement_timeout_ms: int = 30_000
+    db_lock_timeout_ms: int = 5_000
     # Circuit breaker thresholds
     circuit_breaker_failure_threshold: int = 3  # failures before opening
     circuit_breaker_reset_timeout_seconds: float = 60.0  # seconds before half-open

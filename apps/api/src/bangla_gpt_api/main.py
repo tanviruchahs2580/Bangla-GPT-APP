@@ -40,7 +40,8 @@ from bangla_gpt_api.initialize.middleware_stack import build_middleware_stack
 from bangla_gpt_api.initialize.observability import (
     configure_observability_with_sentry,
 )
-from bangla_gpt_api.logging_config import set_secret_logging_allowed
+from bangla_gpt_api.logging_config import set_secret_logging_allowed, set_tracing_enabled
+from bangla_gpt_api.metrics import set_ai_budget_usd
 from bangla_gpt_api.middleware import unhandled_exception_response
 from bangla_gpt_api.providers import (
     ProviderNotConfigured,  # noqa: F401 (re-exported for tests)
@@ -476,6 +477,13 @@ def create_app(settings: Settings | None = None) -> object:
     # Decided here, centrally, so the guarantee does not rest on an `if` at
     # each call site (F-082).
     set_secret_logging_allowed(not settings.is_production)
+
+    # I-03 per-stage trace records, behind a flag so the call sites are always
+    # present and a later OTLP exporter can replace the sink only.
+    set_tracing_enabled(settings.tracing_enabled)
+    # I-11: publish the operator's global monthly AI budget (if any) so the
+    # burn-rate alert compares projected spend against a configured number.
+    set_ai_budget_usd(settings.ai_monthly_budget_usd)
 
     # Phase 2: Production safety gate (fail-fast)
     enforce_production_safety(settings)

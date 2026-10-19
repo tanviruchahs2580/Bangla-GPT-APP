@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import Field
 from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy.orm import Session
 
 from bangla_gpt_api.db.models import (
     AiJob,
@@ -271,14 +272,13 @@ def delete_me(db: DbSession, user: NonImpersonatedUser) -> Response:
     return Response(status_code=204)
 
 
-@router.get("/users/me/export", response_model=_DataExportV2)
-def export_me(response: Response, db: DbSession, user: CurrentUser) -> _DataExportV2:
-    """Self-service data portability: everything stored about this account."""
-    response.headers["Content-Disposition"] = 'attachment; filename="my-data-export.json"'
-    student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one_or_none()
-    teacher = db.execute(select(Teacher).where(Teacher.user_id == user.id)).scalar_one_or_none()
-    parent = db.execute(select(Parent).where(Parent.user_id == user.id)).scalar_one_or_none()
-
+def _export_identity_sections(
+    db: Session,
+    student: Student | None,
+    teacher: Teacher | None,
+    parent: Parent | None,
+) -> tuple[dict, list[dict], list[dict]]:
+    """Profile row, quiz attempts and parent links (the v1 sections)."""
     profile: dict
     attempt_rows: list[QuizAttempt] = []
     links: list[dict] = []
@@ -322,6 +322,14 @@ def export_me(response: Response, db: DbSession, user: CurrentUser) -> _DataExpo
         }
         for a in attempt_rows
     ]
+
+    return profile, attempts, links
+
+
+def _export_chat_sections(
+    db: Session, student: Student | None
+) -> tuple[list[dict], list[dict], list[dict]]:
+    """Conversations, chat messages and daily activity (F-063)."""
     # F-063: a student's export stopped at quiz scores. The conversations and
     # chat messages -- the largest body of personal data this product holds
     # about a child -- were not exported at all, so the "download everything
@@ -370,18 +378,11 @@ def export_me(response: Response, db: DbSession, user: CurrentUser) -> _DataExpo
             )
         ]
 
-    # audit event 2/5: data_export (self-service; only the fact is
-    # logged -- the payload itself never touches logs or audit rows).
-    write_audit(
-        db,
-        action="data_export",
-        actor_user_id=user.id,
-        actor_role=user.role,
-        target=f"user:{user.id}",
-        detail={"format": "json"},
-    )
-    db.commit()
+    return conversations, chat_messages, learning_activity
 
+
+def _export_user_tables(db: Session, user: User) -> dict[str, list[dict]]:
+    """Per-user tables that need no profile row (S-021)."""
     # --- S-021: the remaining per-user tables -------------------------------
     # Everything below is stored per user or per profile and was missing from
     # the export while DELETE /users/me removed it. Queried after the audit
@@ -464,6 +465,18 @@ def export_me(response: Response, db: DbSession, user: CurrentUser) -> _DataExpo
             select(AiJob).where(AiJob.user_id == user.id).order_by(AiJob.id)
         ).scalars()
     ]
+    return {
+        "notes": notes,
+        "notifications": notifications,
+        "ai_usage": ai_usage,
+        "analytics_events": analytics_events,
+        "feedback": feedback_rows,
+        "ai_jobs": ai_jobs,
+    }
+
+
+def _export_teacher_tables(db: Session, user: User) -> dict[str, list[dict]]:
+    """Teacher-owned rows (S-021)."""
     teacher_documents = [
         {
             "id": row.id,
@@ -545,6 +558,19 @@ def export_me(response: Response, db: DbSession, user: CurrentUser) -> _DataExpo
             select(Assignment).where(Assignment.teacher_id == user.id).order_by(Assignment.id)
         ).scalars()
     ]
+    return {
+        "teacher_documents": teacher_documents,
+        "question_papers": question_papers,
+        "question_bank": question_bank,
+        "short_tests": short_tests,
+        "assignments": assignments,
+    }
+
+
+def _export_plan_and_invite_tables(
+    db: Session, user: User, student: Student | None
+) -> dict[str, list[dict]]:
+    """Support plans and the invite rows this account created or received."""
     plan_filters = [SupportPlan.teacher_id == user.id]
     if student is not None:
         plan_filters.append(SupportPlan.student_id == student.id)
@@ -594,6 +620,15 @@ def export_me(response: Response, db: DbSession, user: CurrentUser) -> _DataExpo
         ]
     # Single-use credential rows: SHAPE only -- the token hashes are never
     # exported (they are derived secrets, not personal data).
+    return {
+        "support_plans": support_plans,
+        "parent_invites": parent_invites,
+        "student_invites": student_invites,
+    }
+
+
+def _export_credential_tables(db: Session, user: User) -> dict[str, list[dict]]:
+    """Single-use credential rows (shape only) and the audit trail."""
     password_resets = [
         {
             "id": row.id,
@@ -630,8 +665,27 @@ def export_me(response: Response, db: DbSession, user: CurrentUser) -> _DataExpo
             select(AuditLog).where(AuditLog.actor_user_id == user.id).order_by(AuditLog.id)
         ).scalars()
     ]
+    return {
+        "password_resets": password_resets,
+        "email_verifications": email_verifications,
+        "audit_events": audit_events,
+    }
 
-    # Student-scoped learning tables not covered by the v1 sections.
+
+def _export_account_tables(
+    db: Session, user: User, student: Student | None
+) -> dict[str, list[dict]]:
+    """Every S-021 table, merged for the export response."""
+    return {
+        **_export_user_tables(db, user),
+        **_export_teacher_tables(db, user),
+        **_export_plan_and_invite_tables(db, user, student),
+        **_export_credential_tables(db, user),
+    }
+
+
+def _export_student_learning(db: Session, student: Student | None) -> dict[str, list[dict]]:
+    """Student-scoped learning tables not covered by the v1 sections."""
     chapter_progress: list[dict] = []
     revision_items: list[dict] = []
     concept_mastery: list[dict] = []
@@ -717,6 +771,43 @@ def export_me(response: Response, db: DbSession, user: CurrentUser) -> _DataExpo
             ).scalars()
         ]
 
+    return {
+        "chapter_progress": chapter_progress,
+        "revision_items": revision_items,
+        "concept_mastery": concept_mastery,
+        "student_abilities": student_abilities,
+        "classrooms": classrooms,
+    }
+
+
+@router.get("/users/me/export", response_model=_DataExportV2)
+def export_me(response: Response, db: DbSession, user: CurrentUser) -> _DataExportV2:
+    """Self-service data portability: everything stored about this account.
+
+    The per-table assembly lives in the ``_export_*`` helpers below; this
+    function is the composition: look the caller's profiles up, collect the
+    sections, write the audit event, return.
+    """
+    response.headers["Content-Disposition"] = 'attachment; filename="my-data-export.json"'
+    student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one_or_none()
+    teacher = db.execute(select(Teacher).where(Teacher.user_id == user.id)).scalar_one_or_none()
+    parent = db.execute(select(Parent).where(Parent.user_id == user.id)).scalar_one_or_none()
+
+    profile, attempts, links = _export_identity_sections(db, student, teacher, parent)
+    conversations, chat_messages, learning_activity = _export_chat_sections(db, student)
+
+    # audit event 2/5: data_export (self-service; only the fact is
+    # logged -- the payload itself never touches logs or audit rows).
+    write_audit(
+        db,
+        action="data_export",
+        actor_user_id=user.id,
+        actor_role=user.role,
+        target=f"user:{user.id}",
+        detail={"format": "json"},
+    )
+    db.commit()
+
     return _DataExportV2(
         schema_version=EXPORT_SCHEMA_VERSION,
         user={
@@ -731,28 +822,8 @@ def export_me(response: Response, db: DbSession, user: CurrentUser) -> _DataExpo
         conversations=conversations,
         chat_messages=chat_messages,
         learning_activity=learning_activity,
-        notes=notes,
-        notifications=notifications,
-        chapter_progress=chapter_progress,
-        revision_items=revision_items,
-        concept_mastery=concept_mastery,
-        student_abilities=student_abilities,
-        classrooms=classrooms,
-        ai_usage=ai_usage,
-        analytics_events=analytics_events,
-        feedback=feedback_rows,
-        ai_jobs=ai_jobs,
-        teacher_documents=teacher_documents,
-        question_papers=question_papers,
-        question_bank=question_bank,
-        short_tests=short_tests,
-        assignments=assignments,
-        support_plans=support_plans,
-        parent_invites=parent_invites,
-        student_invites=student_invites,
-        password_resets=password_resets,
-        email_verifications=email_verifications,
-        audit_events=audit_events,
+        **_export_account_tables(db, user, student),
+        **_export_student_learning(db, student),
     )
 
 

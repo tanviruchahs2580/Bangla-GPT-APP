@@ -23,6 +23,7 @@ from bangla_gpt_api.db.models import (
     User,
 )
 from bangla_gpt_api.logging_config import json_log
+from bangla_gpt_api.metrics import AI_JOBS_TOTAL
 from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES
 from bangla_gpt_api.schemas import (
     AiJobIn,
@@ -225,6 +226,7 @@ async def _execute_ai_job(app_ctx: Ctx, job_id: str) -> None:
             )
             db.commit()
             json_log(logger, logging.INFO, "ai_job_ready", job_id=job_id, kind=job.kind)
+            AI_JOBS_TOTAL.labels(kind=job.kind, status="ready").inc()
         except Exception as exc:
             db.rollback()
             fresh = db.get(AiJob, job_id)
@@ -245,6 +247,7 @@ async def _execute_ai_job(app_ctx: Ctx, job_id: str) -> None:
                 kind=job.kind,
                 error_type=type(exc).__name__,
             )
+            AI_JOBS_TOTAL.labels(kind=job.kind, status="failed").inc()
     finally:
         db.close()
 
