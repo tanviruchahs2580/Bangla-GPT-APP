@@ -385,18 +385,16 @@ jobs:
           if-no-files-found: ignore
 
   live-eval:
-    name: Live-model evaluation (budget-capped placeholder)
-    # AUD-A8-05 / F-15: the live-model run is BLOCKED without a provider key,
-    # and the evaluation CLI is hermetic by construction today (it forces
-    # LLM_PROVIDER=mock; see apps/api/src/bangla_gpt_api/evaluation/cli.py
-    # `Settings(env="test", llm_provider="mock")`). This job is the scheduled
-    # hook for the live run: it validates the key and the budget cap, records
-    # the BLOCKED state in the run summary when no key exists, and calls the
-    # same entry point the deterministic gate uses. When the CLI grows a live
-    # mode, this job's last step is the only line to change.
+    name: Live-model evaluation (budget-capped, alert on regression)
+    # AUD-A8-05: the live-model run needs a provider key, so it lives on the
+    # schedule rather than the PR path. The key is validated and the spend cap
+    # enforced below; the run itself is scripts/evaluate_live.py, which records
+    # every real response so eval-gate.yml can replay it for free. A metric
+    # that drops by more than GATE_PP against the newest committed live report
+    # fails this job -- that failure is the regression alert.
     if: github.event_name == 'workflow_dispatch' || github.event.schedule == '41 4 * * 1'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -449,27 +447,91 @@ jobs:
           echo "run=1" >> "$GITHUB_OUTPUT"
           echo "budget=$budget" >> "$GITHUB_OUTPUT"
 
-      - name: Run the evaluation entry point (hermetic today)
+      - name: Run the live evaluation (spend-capped, recorded)
         if: steps.budget.outputs.run == '1'
         working-directory: apps/api
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           BUDGET_USD: ${{ steps.budget.outputs.budget }}
+          EVAL_MODEL: ${{ vars.LIVE_EVAL_MODEL || 'gemini-3.5-flash-lite' }}
         run: |
           set -euo pipefail
-          # The CLI forces the mock provider (hermetic by design), so this run
-          # is the same gate CI enforces on every PR; it exists here so the
-          # live key's presence and the budget check are exercised on a
-          # schedule. Live numbers stay BLOCKED until the CLI gains a live
-          # mode; the budget cap above is what will bound it.
-          python -m bangla_gpt_api.evaluation.cli --split test | tee live-eval-report.json
-          echo "live-eval ran with the hermetic provider inside budget ${BUDGET_USD} USD" >> "$GITHUB_STEP_SUMMARY"
+          # One entry point, the real provider, the cap enforced inside the
+          # script (it aborts before a call that would cross it) and the
+          # answers recorded for the replay gate.
+          python scripts/evaluate_live.py \
+            --split test \
+            --model "$EVAL_MODEL" \
+            --max-usd "$BUDGET_USD" \
+            --out-dir "eval/live/$(date -u +%F)" \
+            | tee live-eval-run.log
+          {
+            echo "### Live evaluation ran"
+            echo
+            echo "Model: $EVAL_MODEL, cap: \$$BUDGET_USD"
+            echo
+            echo '```'
+            cat "eval/live/$(date -u +%F)/summary.md"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload the evaluation report
+      - name: Compare against the newest committed live report (regression alert)
+        if: steps.budget.outputs.run == '1'
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          current="eval/live/$(date -u +%F)/live_generation_report.json"
+          # Newest committed run that is not today's: ISO dates sort lexically.
+          baseline=""
+          # SC2012: `find` (not `ls`) so a directory name with odd characters
+          # cannot break the parse; the date-named dirs sort lexically.
+          while IFS= read -r candidate_dir; do
+            candidate="${candidate_dir}/"
+            if [ -f "${candidate}live_generation_report.json" ] && [ "${candidate}live_generation_report.json" != "$current" ]; then
+              baseline="${candidate}live_generation_report.json"
+              break
+            fi
+          done < <(find eval/live -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -r)
+          if [ -z "$baseline" ]; then
+            echo "::warning title=No live baseline::No committed live_generation_report.json found; recording only, nothing to compare against."
+            exit 0
+          fi
+          python - "$baseline" "$current" <<'PY'
+          import json, sys
+          sys.path.insert(0, "src")
+          from bangla_gpt_api.evaluation.metrics import GATE_PP, compare_gate
+
+          KEYS = (
+              "citation_precision", "citation_precision_chapter", "citation_recall",
+              "abstention_precision", "abstention_recall", "false_refusal_rate",
+              "refusal_correctness_unsafe", "response_language_correctness", "format_validity",
+          )
+
+          def rates(path):
+              report = json.load(open(path, encoding="utf-8"))
+              return {k: float(report[k]) for k in KEYS if isinstance(report.get(k), (int, float))}
+
+          baseline, current = rates(sys.argv[1]), rates(sys.argv[2])
+          missing = sorted(set(baseline) - set(current))
+          passed, lines = compare_gate(baseline, current)
+          print("\n".join(lines))
+          print(f"baseline: {sys.argv[1]}")
+          if missing:
+              print(f"::error title=Missing metrics::no live value for {missing}")
+              raise SystemExit(1)
+          if not passed:
+              print(f"::error title=Live regression::a metric dropped by more than {GATE_PP} pp; see the table above")
+              raise SystemExit(1)
+          print(f"LIVE GATE: PASS (tolerance {GATE_PP} pp)")
+          PY
+
+      - name: Upload the live evaluation artifacts
         if: always() && steps.budget.outputs.run == '1'
         uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
         with:
           name: live-eval-report
-          path: apps/api/live-eval-report.json
+          path: |
+            apps/api/live-eval-run.log
+            apps/api/eval/live/
           retention-days: 90
           if-no-files-found: ignore
