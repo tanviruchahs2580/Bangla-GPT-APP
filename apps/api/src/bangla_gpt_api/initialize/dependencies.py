@@ -82,23 +82,75 @@ def validate_database_url(settings: Settings) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _safe_init_db(engine: Engine, settings: Settings) -> None:
-    """create_all tolerant of concurrent multi-worker boot (gunicorn -w N)."""
+#: SQLite/Postgres messages that mean "another worker changed the schema under
+#: you" -- the same boot race with different timing. Postgres raises its own
+#: unique-violation errors for the same situation.
+_DDL_RACE_MARKERS = (
+    "database schema has changed",
+    "database is locked",
+    "duplicate key value",
+    "already exists",
+)
+_DDL_RETRY_ATTEMPTS = 5
+_DDL_RETRY_DELAY_SECONDS = 0.5
+
+
+def _init_db_is_skipped(settings: Settings) -> bool:
+    """True when table creation is not this call's job (e.g. managed Postgres)."""
     try:
         from bangla_gpt_api.config import get_settings as _get_s
 
-        s = settings or _get_s()
-        if s.is_production and s.database_url.strip().startswith("postgresql"):
-            return
+        resolved = settings or _get_s()
+        return bool(
+            resolved.is_production and resolved.database_url.strip().startswith("postgresql")
+        )
     except Exception as exc:
         # Unresolvable settings must not stop table creation; the schema that
         # results is valid either way, so record why the check was skipped.
         logging.getLogger(__name__).debug("settings check skipped: %s", exc)
-    try:
-        init_db(engine)
-    except Exception as exc:
-        if "already exists" not in str(exc):
-            raise
+        return False
+
+
+def _init_db_failure_kind(exc: Exception) -> str:
+    """Classify a create_all failure: 'created' | 'retry' | 'raise'."""
+    text = str(exc)
+    if "already exists" in text:
+        return "created"  # a sibling won the race; its schema is what we wanted
+    if any(marker in text for marker in _DDL_RACE_MARKERS):
+        return "retry"
+    return "raise"
+
+
+def _safe_init_db(engine: Engine, settings: Settings) -> None:
+    """create_all tolerant of concurrent multi-worker boot (gunicorn -w N).
+
+    Boot-time DDL races between sibling workers are transient by nature: the
+    winner's schema is exactly what the loser wanted, and the collision is
+    reported differently depending on timing -- "database is locked" (addressed
+    once by the WAL posture) or "database schema has changed" (a prepared DDL
+    statement invalidated by a sibling's CREATE; this took the docker smoke
+    down after the first fix). Retryable failures get a bounded number of
+    attempts; anything else surfaces (AUD-EF-01).
+    """
+    if _init_db_is_skipped(settings):
+        return
+    for attempt in range(1, _DDL_RETRY_ATTEMPTS + 1):
+        try:
+            init_db(engine)
+            return
+        except Exception as exc:
+            kind = _init_db_failure_kind(exc)
+            if kind == "created":
+                return
+            if kind == "raise" or attempt >= _DDL_RETRY_ATTEMPTS:
+                raise
+            logging.getLogger(__name__).warning(
+                "init_db race with a sibling worker (attempt %d/%d): %s",
+                attempt,
+                _DDL_RETRY_ATTEMPTS,
+                str(exc).splitlines()[0] or exc.__class__.__name__,
+            )
+            time.sleep(_DDL_RETRY_DELAY_SECONDS * attempt)
 
 
 def _bootstrap_admin(session_factory: Callable[[], Session], settings: Settings) -> None:

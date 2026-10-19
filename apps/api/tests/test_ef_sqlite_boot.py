@@ -73,3 +73,55 @@ def test_file_database_still_ends_up_in_wal_mode(tmp_path: Path) -> None:
             assert str(mode).lower() == "wal"
     finally:
         engine.dispose()
+
+
+# --------------------------------------------------------------------------
+# AUD-EF-01 (second face): "database schema has changed" at boot
+# --------------------------------------------------------------------------
+def test_safe_init_db_retries_a_sibling_schema_race(monkeypatch) -> None:
+    """A DDL invalidated by a sibling worker's CREATE is retried, not fatal.
+
+    The docker smoke died with ``sqlite3.OperationalError: database schema has
+    changed`` after the WAL fix removed the "database is locked" variant: the
+    same two-worker boot race, different timing. Two failures then success --
+    the retry must absorb them, sleeping only between attempts.
+    """
+    from bangla_gpt_api.initialize import dependencies
+
+    calls = {"n": 0}
+
+    def flaky(_engine) -> None:  # noqa: ANN001 - test double
+        calls["n"] += 1
+        if calls["n"] <= 2:
+            raise RuntimeError("(sqlite3.OperationalError) database schema has changed")
+
+    monkeypatch.setattr(dependencies, "init_db", flaky)
+    monkeypatch.setattr(dependencies.time, "sleep", lambda _s: None)
+    dependencies._safe_init_db(object(), None)
+    assert calls["n"] == 3
+
+
+def test_safe_init_db_does_not_swallow_other_errors(monkeypatch) -> None:
+    """Only the known race signatures are retried; anything else surfaces."""
+    import pytest
+
+    from bangla_gpt_api.initialize import dependencies
+
+    def broken(_engine) -> None:  # noqa: ANN001 - test double
+        raise RuntimeError("disk I/O error")
+
+    monkeypatch.setattr(dependencies, "init_db", broken)
+    monkeypatch.setattr(dependencies.time, "sleep", lambda _s: None)
+    with pytest.raises(RuntimeError, match="disk I/O error"):
+        dependencies._safe_init_db(object(), None)
+
+
+def test_safe_init_db_treats_already_exists_as_success(monkeypatch) -> None:
+    """The losing worker's "already exists" means the winner created it."""
+    from bangla_gpt_api.initialize import dependencies
+
+    def created_by_sibling(_engine) -> None:  # noqa: ANN001 - test double
+        raise RuntimeError("(sqlite3.OperationalError) table users already exists")
+
+    monkeypatch.setattr(dependencies, "init_db", created_by_sibling)
+    dependencies._safe_init_db(object(), None)
