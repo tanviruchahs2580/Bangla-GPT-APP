@@ -47,7 +47,7 @@ existing, so treat this as an owner/counsel decision, not an engineering one:
 
 | Recipient | Data | Status to declare |
 |---|---|---|
-| Google Gemini API (LLM) | The redacted question, retrieved textbook passages, conversation history; an image when the student sends one (re-encoded, metadata-free) | Sent as a **service provider** for the tutoring answer. Redaction of phone/email/NID spans happens before the call (`services/tutor.py`, `bgpt_pii_redacted_total`), and the provider's current data-use/retention terms must be recorded with a date before launch — see `docs/dpa_template.md` and catalog item A7-04. |
+| Google Gemini API (LLM) | The redacted question, retrieved textbook passages, conversation history; an image when the student sends one (re-encoded, metadata-free) | Sent as a **service provider** for the tutoring answer. Redaction of phone/email/NID spans happens before the call (`services/tutor.py`, `bgpt_pii_redacted_total`), and the provider's current data-use/retention terms must be recorded with a date before launch — see `docs/dpa_template.md` catalog item A7-04 and `docs/compliance/provider-terms.md` — the terms are checked and recorded; the free tier uses submitted content to improve Google products, so **a paid-tier key is required before launch** (or a documented guardian-consent basis for free-tier use). |
 | SMTP provider | Recipient address + transactional email body | Service provider. |
 | Sentry (error/RUM) | Only after consent: error events and vitals, scrubbed as above | Service provider; **only if `VITE_SENTRY_DSN` is set in the build**. |
 

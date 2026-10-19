@@ -5,7 +5,7 @@ Two supported paths, in order of preference for schools with cheap phones:
 ## 1. PWA (zero download — works today)
 
 The web app is a full PWA: `public/manifest.webmanifest` (standalone,
-theme `#4353b8`, Bengali name, 192/512 + maskable icons) and `public/sw.js`
+theme `#166534`, Bengali name, 192/512 + maskable icons) and `public/sw.js`
 (app-shell cache-first, navigations network-first with offline fallback,
 **API responses are never cached** — child data must not sit in a shared
 device's cache). Chrome on Android shows "Add to Home screen"; iOS Safari

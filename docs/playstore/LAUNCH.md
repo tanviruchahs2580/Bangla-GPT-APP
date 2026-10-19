@@ -13,6 +13,7 @@ Companion documents:
 | `docs/playstore/listing.md` | Store listing copy (bn-BD + en-US), screenshot manifest, ASO notes |
 | `docs/playstore/data-safety.md` | Data safety form answers, each mapped to the code fact behind it |
 | `docs/playstore/content-rating.md` | IARC questionnaire answers |
+| `docs/compliance/provider-terms.md` | The provider-terms record: tier-by-tier data use, retention and the paid-tier requirement |
 | `docs/mobile_release.md` | The mobile build overview (PWA + Capacitor), CORS prerequisites |
 | `docs/LAUNCH_READINESS_CHECKLIST.md` | Product-side gates (legal/child-safety review, UAT with a school) |
 
