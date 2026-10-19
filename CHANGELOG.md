@@ -15,10 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- feat(api): logout token revocation, security headers, infra hardening and privacy docs
 - feat(api): production connection posture, truthful readiness, boot index metric; full-suite Postgres parity in CI (#29)
+- feat(eval): reconstruct the golden set independently; widen red-team to 43 cases
 - feat(i18n): land Bangla copy for the status and impersonation strings
+- feat(obs): per-stage traces, business metrics, SLO/runbook, cost dashboard and generated API reference
+- feat(quality): complexity/file-size/dead-code/deps/duplication ratchet + as-built architecture map
 - feat(rag): event-loop hardening, hot-path observability, follow-up retrieval; gate CI on retrieval baselines + CodeQL SAST (#27)
+- feat(rag): rank-aware retrieval metrics, chunk-boundary rules, index lifecycle and corpus dedupe
 - feat(rag): retrieval-quality rework - fair gate, query lanes, measured rank lift
+- feat(web): Bangla i18n glossary, native-review sheet, offline quota, TTS controls and dialog unification
 - feat(web): login page background image with dark/light theme sync
 - feat(web): student section background image with dark/light sync
 
@@ -31,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): derive the school analytics day window in Asia/Dhaka
 - fix(api): drop an unused variable the new RUF059 rule caught
 - fix(api): drop the unverified helpline number from self-harm support copy
+- fix(api): flush SSE streams through buffering proxies
 - fix(api): gate evals on hybrid retrieval, de-tautologize golden set, precompute BM25 trigrams, single-pass redteam (A13, A8, A18)
 - fix(api): harden authentication, session end and abuse limits
 - fix(api): impersonation revocation fails closed when cache is down (F-08)
@@ -75,12 +82,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(ops): point the Grafana dashboard at the exported metric names
 - fix(ops): stop publishing the API on a random host port, and make the release gate real
 - fix(pdf): enable Bengali complex-script shaping in PDF renderers
+- fix(rag): enforce post-generation grounding (citation + numeric) instead of warning
 - fix(rag): framing-plane coverage, cross-script gate resolution, in-corpus weighting
 - fix(rag): locative reclassification + short-token roman guard
 - fix(rag): report true recall@1 in retrieval evaluation
 - fix(rag): roman-lane floor, edit-similarity rank, MRR unit, trailing newline
 - fix(rag): runtime prompt-injection screening at the query boundary
 - fix(rag): strip symbol-font PUA residue and gate corpus quality at build and load
+- fix(rag): the chunk-ablation script crashed on the pages artifact
 - fix(sec): refuse unsafe production defaults at boot
 - fix(sec): stop serving the OpenAPI reference in production
 - fix(web): WCAG 2.2 fixes on the public routes
@@ -96,6 +105,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): let an anonymous visitor change the interface language
 - fix(web): localize consent/invite copy, theme icon sync, error states, icon cleanup
 - fix(web): make the register screen's email-verification step usable
+- fix(web): modal focus/backdrop defects, truthful grounding UI, shared test harness
 - fix(web): move the list key onto the element the map returns
 - fix(web): notification panel no longer clipped off the left edge
 - fix(web): raise three status tokens to the WCAG AA contrast minimum
@@ -141,7 +151,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Documentation
 
+- docs(adr): record the data and artifact management decision (K-05)
+- docs(audit): final audit report (INCOMPLETE — BLOCKED) + changelog refresh
 - docs(audit): record the merge and live-production outcome
+- docs(dx): threat model, AI system card, OpenSSF self-assessment, devcontainer and Make targets
 - docs(qa): publish the 2026-10-16 audit report; refresh the lockfile within its ranges
 - docs(qa): publish the 2026-10-17 QA record and archive its predecessor
 - docs(qa): record the 2026-10-17 deployment and how it was verified
@@ -158,6 +171,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: add final QA report for 2026-10-07 UAT completion
 - docs: correct stale facts and move point-in-time reports to the archive
 - docs: fix the loader path named in the NCTB pipeline guide
+- docs: name only paths that exist in the corpus and security guides
 - docs: phase-2 CI/CD pipeline execution record (v0.9.2 shipped through full pipeline)
 - docs: pin the deploy host key, make the quick starts real, and repair script hygiene
 - docs: purge session-report accumulation, rewrite README, add docs index
@@ -191,6 +205,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Tests
 
 - test(api): cover school admin fallbacks and tenant guards
+- test(api): make the injection-guard fixture grounded under the enforced contract
+- test(e2e): Playwright smoke scaffold and a sqlite boot-timeout regression test
 - test(school): cover the aggregation routes TST-04 flagged as unexercised
 - test(tenancy): cover school dashboard routes across two tenants
 - test(web): assert the changed behaviour instead of the old literals
