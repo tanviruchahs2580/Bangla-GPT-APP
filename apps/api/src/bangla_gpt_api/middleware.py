@@ -11,11 +11,14 @@ import logging
 import re
 import secrets
 import uuid
+from http import HTTPStatus
 from time import perf_counter
 from typing import ClassVar
 
 from fastapi import Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -504,3 +507,68 @@ def unhandled_exception_response(request: Request, exc: Exception) -> JSONRespon
         response.headers["X-Request-ID"] = request_id
     SecurityHeadersMiddleware.apply_baseline(response, request.url.path)
     return response
+
+
+# --------------------------------------------------------------------------- #
+# RFC 9457 problem details (C-06 / AUD-CD-04, additive)
+# --------------------------------------------------------------------------- #
+#: ``application/problem+json``. The media type is the RFC's, so a generic
+#: client can route on it; the members below are the five the RFC defines,
+#: with ``detail`` carrying exactly what it always carried (a string for auth
+#: guards, ``{code, message}`` for business rules, a list for validation) and
+#: ``code`` mirrored at the top level for the coded shape. Nothing that
+#: existed before is removed or renamed: every client that reads ``detail``
+#: keeps working, and a client that speaks problem+json gets the members it
+#: expects.
+PROBLEM_MEDIA_TYPE = "application/problem+json"
+
+
+def problem_details(
+    request: Request,
+    *,
+    status: int,
+    detail: object,
+    extra: dict[str, object] | None = None,
+) -> JSONResponse:
+    """Build one problem+json response from the existing detail contract."""
+    try:
+        title = HTTPStatus(status).phrase
+    except ValueError:  # non-standard status codes still get a usable title
+        title = "Error"
+    body: dict[str, object] = {
+        "type": "about:blank",
+        "title": title,
+        "status": status,
+        "detail": detail,
+        "instance": request.url.path,
+    }
+    if isinstance(detail, dict) and "code" in detail:
+        body["code"] = detail["code"]
+    if extra:
+        body.update(extra)
+    return JSONResponse(body, status_code=status, media_type=PROBLEM_MEDIA_TYPE)
+
+
+def http_exception_response(request: Request, exc: Exception) -> JSONResponse:
+    """RFC 9457 rendering of every HTTPException the app raises.
+
+    Typed ``Exception`` because that is Starlette's handler signature (the
+    same convention ``unhandled_exception_response`` follows); the isinstance
+    check is the narrowing, and re-raising keeps a handler registered for the
+    wrong type from silently mislabelling an error. Preserves ``detail``
+    verbatim and re-emits the exception's headers (the ``WWW-Authenticate`` on
+    a 401, ``Retry-After`` on a 429), which the default handler also did.
+    """
+    if not isinstance(exc, StarletteHTTPException):  # pragma: no cover - registration guard
+        raise exc
+    response = problem_details(request, status=exc.status_code, detail=exc.detail)
+    for name, value in (exc.headers or {}).items():
+        response.headers[name] = value
+    return response
+
+
+def validation_exception_response(request: Request, exc: Exception) -> JSONResponse:
+    """RFC 9457 rendering of FastAPI's 422, preserving the error list."""
+    if not isinstance(exc, RequestValidationError):  # pragma: no cover - registration guard
+        raise exc
+    return problem_details(request, status=422, detail=exc.errors())

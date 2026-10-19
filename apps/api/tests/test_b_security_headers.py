@@ -89,7 +89,13 @@ def test_error_envelope_is_coded_detail_json(tmp_path) -> None:
     )
     for res, expected in cases:
         assert res.status_code == expected, res.text
-        assert "application/json" in res.headers["content-type"]
+        # C-06/AUD-CD-04: errors render as RFC 9457 problem+json now. The
+        # envelope stays JSON and the `detail` contract is unchanged; only the
+        # media type gained its standard name.
+        assert res.headers["content-type"].split(";")[0] in {
+            "application/json",
+            "application/problem+json",
+        }, res.headers
         body = res.json()
         assert "detail" in body, f"error body is not the documented envelope: {body}"
     # Framework-level refusals carry a plain string in ``detail`` (FastAPI's

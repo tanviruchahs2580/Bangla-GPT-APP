@@ -109,6 +109,15 @@ ERROR_CATALOG: Final[dict[str, ErrorSpec]] = {
     "ai_budget_exceeded": ErrorSpec(
         429, ("code", "message"), "Monthly AI budget exhausted. Please try again next month."
     ),
+    "ai_daily_budget_exceeded": ErrorSpec(
+        429, ("code", "message"), "Deployment-wide daily AI budget exhausted; retry tomorrow"
+    ),
+    "ai_school_budget_exceeded": ErrorSpec(
+        429, ("code", "message"), "This school's daily AI budget exhausted; retry tomorrow"
+    ),
+    "conversation_limit_reached": ErrorSpec(
+        429, ("code", "message"), "Conversation reached its message cap; start a new one"
+    ),
     "already_used": ErrorSpec(409, ("code", "message"), "Invite already redeemed"),
     # The only body with the two numeric extras; clients read them to render
     # "you answered N of M".
