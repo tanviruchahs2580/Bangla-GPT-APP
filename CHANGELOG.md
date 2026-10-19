@@ -87,6 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(ci): serialise release and deploy runs per git ref
 - fix(ci): unblock Dependabot PRs and name the Vercel credential failure (#9)
 - fix(ci): upgrade setuptools before pip-audit; refresh lock to current resolution
+- fix(compose): writable HOME for gunicorn's control socket; drop the dead SettingsRegistry
 - fix(db): reconcile ORM/migration drift so alembic check passes
 - fix(deps): declare packaging, the lockfile gate's own import
 - fix(deps): declare radon, the one ratchet tool the script imports
@@ -156,6 +157,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### CI/CD
 
+- ci(mobile): avoid the reserved example domain in the android workflow comment
 - ci(security): record the reviewed benchmark fixture in the gitleaks allowlist
 - ci: add CI-gated Vercel production deploy workflow
 - ci: add concurrency to api CI, fix eval-gate header, retire sanity workflow
@@ -173,6 +175,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(audit): final audit report (INCOMPLETE — BLOCKED) + changelog refresh
 - docs(audit): record the merge and live-production outcome
 - docs(audit): refresh the audit report for the second remediation pass (61.0/100)
+- docs(changelog): record the wave-3 commits
+- docs(compliance): record the provider's current terms, tier by tier (A7-04)
 - docs(dx): threat model, AI system card, OpenSSF self-assessment, devcontainer and Make targets
 - docs(qa): publish the 2026-10-16 audit report; refresh the lockfile within its ranges
 - docs(qa): publish the 2026-10-17 QA record and archive its predecessor
@@ -185,6 +189,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(qa): record the registration-backdrop change and its deployment
 - docs(qa): record the role-based acceptance run and the live deployment
 - docs(rag): correct the measured-baseline table to the fixed harness
+- docs(rag): quote the current artifact instead of the pre-regeneration numbers
 - docs: add 2026-10-06 QA audit and final certification reports
 - docs: add a CHANGELOG generated from git history, and a check that keeps it honest
 - docs: add final QA report for 2026-10-07 UAT completion
@@ -220,6 +225,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate the CHANGELOG for the scripts commit
 - docs: regenerate the CHANGELOG for the test and QA-record commits
 - docs: regenerate the CHANGELOG for this branch's commits
+- docs: satisfy the markdown and spelling gates the wave's new docs tripped
 - docs: ship the bundled font's licence, third-party notices, contributing guide
 - docs: the AI system card cites current numbers and an artifact that exists
 - docs: truthful disclosure channel, corpus step, pipeline gate and PDF engine copy

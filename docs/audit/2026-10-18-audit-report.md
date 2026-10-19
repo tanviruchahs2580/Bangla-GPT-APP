@@ -1,3 +1,34 @@
+# Wave 3 update (2026-10-20) — supersedes the status below
+
+**Score: 83.0 / 100** (baseline 51.8 → wave 2 61.0 → wave 3 83.0), register
+**171 PASS / 86 PARTIAL / 2 FAIL / 1 N/A / 0 BLOCKED** of 260 items (was
+104/135/17/3/1). The wave-2 verdict below ("INCOMPLETE — BLOCKED") is kept for
+the record; three of its four blockers are now closed:
+
+- **G4 (live-model evaluation) — CLOSED.** A live run executed on the frozen
+  held-out split: 185 items + 43 red-team, 184 real provider calls, $0.0783
+  inside the $10 authorization, artifacts under `apps/api/eval/live/2026-10-19/`.
+  A PR-cheap replay gate (recorded responses, no key) and a scheduled live
+  re-run with a >2 pp regression alert landed in `eval-gate.yml` and
+  `nightly.yml`.
+- **G0 (reproducible build) — re-verified in-container**: the documented
+  production path (postgres profile → `alembic upgrade head` → `up`) boots and
+  serves `/health` 200, `/status` all-components-ok, 401 problem+json without a
+  token and 403 on `/metrics`.
+- **G3 (DAST/container scan)** — ZAP baseline report and dated CycloneDX SBOMs
+  plus the licence inventory are committed under `docs/security/`.
+- **G10 (acceptance breadth)** — the web suite (axe/keyboard/visual/perf/crawl/
+  reflow/offline/resilience/engines) and the five-role journeys were extended;
+  the remaining archetypes are named as PARTIAL rows rather than claimed.
+
+Caps: none applied; two conditions are documented judgment calls with their
+evidence (the historical dev secret, and the free-tier provider key), each
+flagged as an owner action in the wave-3 report. The full wave-3 report is
+`.audit/reports/FINAL-wave3.md` (audit-side) — this in-repo file keeps the
+wave-2 narrative below unchanged.
+
+---
+
 # INCOMPLETE — BLOCKED
 
 **Reason:** the remediation backlog from the first pass has largely landed (29 commits, one PR), and
