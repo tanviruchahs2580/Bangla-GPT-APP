@@ -111,6 +111,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(rag): strip symbol-font PUA residue and gate corpus quality at build and load
 - fix(rag): the chunk-ablation script crashed on the pages artifact
 - fix(scripts): compute the benchmark's throwaway JWT value instead of writing a literal
+- fix(scripts): satisfy the repo-wide hooks on the root scripts (PLC0206, formatting)
 - fix(scripts): set the executable bit on the three new shebang scripts
 - fix(sec): refuse unsafe production defaults at boot
 - fix(sec): stop serving the OpenAPI reference in production
@@ -195,6 +196,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(changelog): record the A8-08 citation selection and the A9-01 TTFT profile
 - docs(changelog): record the CI-fix commits
 - docs(changelog): record the e2e-evidence wave
+- docs(changelog): record the faithfulness-evidence fix and the embedding backend
 - docs(changelog): record the wave-3 commits
 - docs(changelog): record the wave-5 recovery, corpus and web batches
 - docs(compliance): record the provider's current terms, tier by tier (A7-04)
@@ -211,6 +213,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(qa): record the role-based acceptance run and the live deployment
 - docs(rag): correct the measured-baseline table to the fixed harness
 - docs(rag): quote the current artifact instead of the pre-regeneration numbers
+- docs(spelling): add the three words the operations docs need (promtool, unredacted, pseudonymised)
 - docs: add 2026-10-06 QA audit and final certification reports
 - docs: add a CHANGELOG generated from git history, and a check that keeps it honest
 - docs: add final QA report for 2026-10-07 UAT completion
@@ -257,6 +260,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - test(api): cover school admin fallbacks and tenant guards
 - test(api): make the injection-guard fixture grounded under the enforced contract
 - test(e2e): Playwright smoke scaffold and a sqlite boot-timeout regression test
+- test(e2e): drop the CI retry pattern; A4-02 backend tests and the ADR record
 - test(e2e): scope the sign-out selector to the header
 - test(e2e): wait for the session in signIn, not just the submit click
 - test(eval): commit the fresh live recording the replay gate reads
