@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ClassesPage from "../pages/teacher/ClassesPage";
+import { BULK_REQUEST_TIMEOUT_MS } from "../api";
 import { t } from "../i18n";
 
 const apiMock = vi.hoisted(() => ({
@@ -183,6 +184,9 @@ describe("classroom chips + roster + CSV import", () => {
         {
           csv_text: expect.stringContaining("a@school.edu"),
         },
+        // G-19: the import is O(rows) server work (one Argon2id hash per invite
+        // code), so the page asks for the bulk deadline instead of the default.
+        { timeoutMs: BULK_REQUEST_TIMEOUT_MS },
       ),
     );
     expect(

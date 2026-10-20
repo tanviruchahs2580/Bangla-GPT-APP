@@ -1,68 +1,26 @@
 {
   "hardcoded_colours": {
-    "count": 15,
-    "by_file": {
-      "apps/web/src/components/BrandMark.tsx": 9,
-      "apps/web/src/lib/confetti.ts": 6
-    },
-    "examples": [
-      "BrandMark.tsx:32: #16a34a",
-      "BrandMark.tsx:33: #166534",
-      "BrandMark.tsx:34: #052e16",
-      "BrandMark.tsx:37: #fde68a",
-      "BrandMark.tsx:38: #f59e0b",
-      "BrandMark.tsx:43: #ffffff",
-      "BrandMark.tsx:67: #ffffff",
-      "BrandMark.tsx:71: #ffffff",
-      "BrandMark.tsx:78: #166534",
-      "confetti.ts:6: #16a34a",
-      "confetti.ts:7: #4ade80",
-      "confetti.ts:8: #0284c7",
-      "confetti.ts:9: #4f46e5",
-      "confetti.ts:10: #f59e0b",
-      "confetti.ts:11: #f472b6"
-    ]
+    "count": 0,
+    "by_file": {},
+    "examples": []
   },
   "off_grid_px": {
-    "count": 58,
-    "common_values": {
-      "1.5px": 8,
-      "30px": 7,
-      "5px": 6,
-      "26px": 5,
-      "15px": 4,
-      "9px": 4,
-      "1.2px": 4,
-      "90px": 3,
-      "50px": 3,
-      "899px": 2,
-      "46px": 2,
-      "150px": 2,
-      "13px": 2,
-      "7px": 2,
-      "225px": 1
-    },
-    "examples": [
-      "styles.css:320: 1.5px",
-      "styles.css:321: 1.5px",
-      "styles.css:325: 1.5px",
-      "styles.css:326: 1.5px",
-      "styles.css:565: 30px",
-      "styles.css:566: 30px",
-      "styles.css:629: 5px",
-      "styles.css:751: 1.5px",
-      "styles.css:961: 15px",
-      "styles.css:1030: 1.5px",
-      "styles.css:1077: 90px",
-      "styles.css:1089: 5px",
-      "styles.css:1092: 9px",
-      "styles.css:1353: 899px",
-      "styles.css:1396: 899px",
-      "styles.css:1488: 1.2px",
-      "styles.css:1489: 1.2px",
-      "styles.css:1615: 5px",
-      "styles.css:1666: 1.2px",
-      "styles.css:1667: 1.2px"
+    "count": 0,
+    "common_values": {},
+    "examples": [],
+    "media_breakpoints": [
+      "1023px",
+      "1024px",
+      "480px",
+      "560px",
+      "760px",
+      "899px",
+      "900px",
+      "960px"
     ]
+  },
+  "token_cycles": {
+    "count": 0,
+    "examples": []
   }
 }

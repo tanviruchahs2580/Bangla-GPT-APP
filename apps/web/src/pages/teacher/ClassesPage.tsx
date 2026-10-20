@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { get, post } from "../../api";
+import { BULK_REQUEST_TIMEOUT_MS, get, post } from "../../api";
 import type {
   ClassAnalytics,
   ClassRoom,
@@ -10,6 +10,7 @@ import type {
 } from "../../types";
 import { Badge, Button, Card, ProgressRing, Stat } from "../../components/ui";
 import { ClassLevelSelect } from "../../components/ClassLevelSelect";
+import { ClassImportPanel } from "../../components/teacher/ClassImportPanel";
 import { friendlyError } from "../../errors";
 import { t } from "../../i18n";
 import { compareBn } from "../../lib/text";
@@ -152,9 +153,15 @@ export default function ClassesPage() {
     setImportBusy(true);
     setImportResult(null);
     try {
+      // G-19: a full 200-row roster is the API's documented ceiling and costs
+      // the server ~10 s (one Argon2id hash per invite code, measured), so this
+      // one call gets the bulk deadline instead of the 20 s default — under the
+      // default the client gave up first and reported "server isn't responding"
+      // for an import that completed anyway.
       const res = await post<ImportResult>(
         `/teacher/classrooms/${roomId}/import`,
         { csv_text: csvText },
+        { timeoutMs: BULK_REQUEST_TIMEOUT_MS },
       );
       setImportResult(res);
       setCsvText("");
@@ -578,54 +585,13 @@ export default function ClassesPage() {
       )}
 
       {selected && (
-        <Card title={t("csvImport")}>
-          <p className="muted">{t("csvHint")}</p>
-          <form onSubmit={runImport}>
-            <textarea
-              rows={5}
-              className="textarea mono-block"
-              value={csvText}
-              onChange={(e) => setCsvText(e.target.value)}
-              placeholder={"name,email"}
-            />
-            <Button
-              variant="primary"
-              type="submit"
-              loading={importBusy}
-              disabled={!csvText.trim()}
-            >
-              {t("importBtn")}
-            </Button>
-          </form>
-          {importResult && (
-            <div role="status">
-              <p>
-                <span>{t("importCreated", { n: importResult.created })}</span>
-                {" · "}
-                <span>{t("importFailed", { n: importResult.failed })}</span>
-              </p>
-              {importResult.rows.some((r) => r.invite_code) && (
-                <div className="table-wrap">
-                  <table className="data">
-                    <tbody>
-                      {importResult.rows
-                        .filter((r) => r.invite_code)
-                        .map((r) => (
-                          <tr key={r.email}>
-                            <td>{r.name}</td>
-                            <td>{r.email}</td>
-                            <td>
-                              {t("inviteCode")}: <code>{r.invite_code}</code>
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-        </Card>
+        <ClassImportPanel
+          csvText={csvText}
+          onCsvText={setCsvText}
+          importBusy={importBusy}
+          importResult={importResult}
+          onSubmit={runImport}
+        />
       )}
     </main>
   );

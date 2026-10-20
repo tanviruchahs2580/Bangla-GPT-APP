@@ -84,18 +84,29 @@ const AUTH_401_PATHS = [
   "/auth/resend-verification",
 ];
 
+import {
+  REQUEST_TIMEOUT_MS,
+  STREAM_CONNECT_TIMEOUT_MS,
+  STREAM_STALL_TIMEOUT_MS,
+  combineSignals,
+  isAbortError,
+  timeoutGuard,
+} from "./lib/requestTimeout";
+
 /**
- * Request timeouts (F-015/F-030). A proxy that accepts the connection and
- * then never answers used to hang the UI forever: a stalled GET left a
- * spinner running, and a stalled answer stream left the tutor in its
- * `streaming` state until the student pressed Stop. The stream is NOT
- * bounded as a whole — long generations are legitimate — it gets a
- * connect/first-byte deadline plus a stall deadline that resets on every
- * received chunk.
+ * Request deadlines and the abort plumbing every call shares live in
+ * `lib/requestTimeout.ts` (transport policy, split out for cohesion); they are
+ * re-exported here so callers and tests keep importing them from `api`.
  */
-export const REQUEST_TIMEOUT_MS = 20_000;
-export const STREAM_CONNECT_TIMEOUT_MS = 20_000;
-export const STREAM_STALL_TIMEOUT_MS = 45_000;
+export {
+  BULK_REQUEST_TIMEOUT_MS,
+  REQUEST_TIMEOUT_MS,
+  STREAM_CONNECT_TIMEOUT_MS,
+  STREAM_STALL_TIMEOUT_MS,
+  combineSignals,
+  isAbortError,
+  timeoutGuard,
+} from "./lib/requestTimeout";
 
 /** Machine-coded timeout error so `friendlyError` and tests can name it. */
 function timeoutError(): ApiError {
@@ -103,62 +114,6 @@ function timeoutError(): ApiError {
     code: "timeout",
     message: "request timed out",
   });
-}
-
-function isAbortError(e: unknown): boolean {
-  return (e as { name?: string } | null)?.name === "AbortError";
-}
-
-/**
- * First abort wins. `AbortSignal.any` where the runtime has it; a manual
- * controller elsewhere (older WebViews, jsdom) so Stop still works there.
- */
-function combineSignals(
-  signals: Array<AbortSignal | undefined>,
-): AbortSignal | undefined {
-  const list = signals.filter((s): s is AbortSignal => s !== undefined);
-  if (list.length === 0) return undefined;
-  if (list.length === 1) return list[0];
-  const anySignal = (
-    AbortSignal as unknown as {
-      any?: (s: AbortSignal[]) => AbortSignal;
-    }
-  ).any;
-  if (typeof anySignal === "function") return anySignal.call(AbortSignal, list);
-  const controller = new AbortController();
-  for (const s of list) {
-    if (s.aborted) {
-      controller.abort();
-      break;
-    }
-    s.addEventListener("abort", () => controller.abort(), { once: true });
-  }
-  return controller.signal;
-}
-
-/**
- * Hard per-request deadline. Implemented with `setTimeout` rather than
- * `AbortSignal.timeout` so tests can drive it with fake timers.
- */
-function timeoutGuard(
-  ms: number,
-  caller?: AbortSignal,
-): {
-  signal: AbortSignal | undefined;
-  timedOut: () => boolean;
-  clear: () => void;
-} {
-  const controller = new AbortController();
-  let timedOut = false;
-  const id = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, ms);
-  return {
-    signal: combineSignals([caller, controller.signal]),
-    timedOut: () => timedOut,
-    clear: () => clearTimeout(id),
-  };
 }
 
 /** True inside the Capacitor WebView (capacitor://localhost origin). */
@@ -301,6 +256,10 @@ export async function api<T>(
     /** Bearer to send instead of the stored one (sign-out revokes a token it
      *  has already deleted from storage — see `logout`). */
     token?: string | null;
+    /** Override the 20 s deadline for a bulk call (see
+     *  ``BULK_REQUEST_TIMEOUT_MS``). Callers that pass this must be able to
+     *  show a busy state for that long. */
+    timeoutMs?: number;
   },
 ): Promise<T> {
   const headers = new Headers(options.headers);
@@ -313,7 +272,7 @@ export async function api<T>(
   // F-015: every non-streaming request is bounded. A caller signal (the
   // tutor's Stop) is combined so either can end the request.
   const caller = opts?.signal ?? options.signal ?? undefined;
-  const guard = timeoutGuard(REQUEST_TIMEOUT_MS, caller);
+  const guard = timeoutGuard(opts?.timeoutMs ?? REQUEST_TIMEOUT_MS, caller);
   try {
     let res: Response;
     try {
@@ -383,7 +342,11 @@ export const get = <T>(path: string) => api<T>(path);
 export const post = <T>(
   path: string,
   body?: unknown,
-  opts?: { skipUnauthorized?: boolean; signal?: AbortSignal },
+  opts?: {
+    skipUnauthorized?: boolean;
+    signal?: AbortSignal;
+    timeoutMs?: number;
+  },
 ) =>
   api<T>(
     path,

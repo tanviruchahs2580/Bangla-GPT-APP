@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Modal } from "./ui";
 import { t } from "../i18n";
 import { SafeMarkdownLazy as SafeMarkdown } from "../lib/safeMarkdownLazy";
@@ -44,8 +45,22 @@ export function EvidenceModal({
   );
 }
 
-/** Renders the sectioned answer layout when present, plain markdown otherwise. */
-export function AssistantContent({ content }: { content: string }) {
+/**
+ * Renders the sectioned answer layout when present, plain markdown otherwise.
+ *
+ * G-19: memoized on `content`. The transcript re-renders on *every streamed
+ * token*, and before this the whole window (30 bubbles) re-ran
+ * react-markdown + remark-math + KaTeX each time -- measured as 400-500 ms
+ * main-thread tasks at 4x CPU throttle. An answer that has not changed cannot
+ * render differently, so React skips it now; only the streaming tail re-parses.
+ * A language switch remounts the tree (main.tsx), so the `t()` labels inside
+ * the markdown components cannot go stale behind the memo.
+ */
+export const AssistantContent = memo(function AssistantContent({
+  content,
+}: {
+  content: string;
+}) {
   const parsed = parseStructuredAnswer(content);
   if (!parsed.structured) return <SafeMarkdown content={content} />;
   return (
@@ -79,4 +94,4 @@ export function AssistantContent({ content }: { content: string }) {
       )}
     </div>
   );
-}
+});

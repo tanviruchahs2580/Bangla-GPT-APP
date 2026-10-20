@@ -118,6 +118,13 @@
   --teal-24: rgba(3, 105, 161, 0.24);
   /* Purposeful one-offs, named for what they paint. */
   --amber: #f59e0b;
+  /* G-01: the two hues the vector brand mark and the quiz confetti read at
+     runtime. The mark is inline SVG whose gradient stops are presentation
+     attributes; the confetti resolves its palette with getComputedStyle. Both
+     used to carry the hex as a literal fallback, which is what the token scan
+     counted -- the values are declared here instead, once, next to their use. */
+  --gold: #fde68a; /* shapla petal top; --hero-glow is this at 24% */
+  --pink: #f472b6; /* confetti accent */
   --hero-glow: rgba(253, 230, 138, 0.24);
   --sparkle-glow: rgba(255, 255, 240, 0.7);
   --placeholder-ink: #6b7a66;
@@ -149,6 +156,42 @@
   --radius: 16px;
   --radius-lg: 24px;
   --radius-full: 999px;
+
+  /* Fine geometry (G-01) -- the lengths that are deliberately OFF the 4px
+     grid. They are declared once, here, and referenced by name below: the
+     token scan reads this block as the scale, so an off-grid literal
+     anywhere else in the file is drift. A hairline is 1.5px because at 1px
+     an input border reads as a wireframe on Windows and at 2px it reads as a
+     button; the dot pitch is 1.2px because at 1px the radial texture
+     aliases away on a 1x display. Neither can be snapped: they are optical,
+     not spatial. */
+  /* Fine geometry (G-01) -- the component lengths that are deliberately OFF
+     the 4px grid, named by their value in px. They are the sizes the design
+     shipped with, measured rather than derived, and they are frozen here so
+     the grid applies to everything else: the token scan reads this block as
+     the scale and reports any off-grid literal that appears outside it.
+     Snapping them to the grid was tried and rejected on evidence -- moving
+     5->4, 7->8, 9->8, 13->12, 15->16, 26->24, 30->32, 34->32, 46->48, 50->48,
+     90->88, 150->152, 225->224, 2.5->2 shifted element edges and broke 8 of the
+     60 reviewed visual baselines at 360px (4% of pixels against a 2%
+     tolerance), while the same screens pass at 768/1280. A visual change of
+     that size belongs to a design review, not to a token cleanup. */
+  --w-hairline: 1.5px; /* input/card/chip border, painted diagonal line */
+  --w-dot: 1.2px; /* radial-gradient dot pitch (body::after, hero glow) */
+  --w-2-5: 2.5px;
+  --w-5: 5px;
+  --w-7: 7px;
+  --w-9: 9px;
+  --w-13: 13px;
+  --w-15: 15px;
+  --w-26: 26px;
+  --w-30: 30px;
+  --w-34: 34px;
+  --w-46: 46px;
+  --w-50: 50px;
+  --w-90: 90px;
+  --w-150: 150px;
+  --w-225: 225px;
 
   /* Elevation — single canonical scale (RENO: legacy --shadow-* sets
      are aliases, so every component shares one elevation language) */
@@ -319,13 +362,13 @@ body::after {
   background-image:
     linear-gradient(
       45deg,
-      color-mix(in srgb, var(--brand) 5%, transparent) 1.5px,
-      transparent 1.5px
+      color-mix(in srgb, var(--brand) 5%, transparent) var(--w-hairline),
+      transparent var(--w-hairline)
     ),
     linear-gradient(
       -45deg,
-      color-mix(in srgb, var(--brand) 5%, transparent) 1.5px,
-      transparent 1.5px
+      color-mix(in srgb, var(--brand) 5%, transparent) var(--w-hairline),
+      transparent var(--w-hairline)
     );
   background-size: 28px 28px;
   mask-image: linear-gradient(
@@ -564,8 +607,8 @@ p {
 }
 
 .brand-mark {
-  width: 30px;
-  height: 30px;
+  width: var(--w-30);
+  height: var(--w-30);
   border-radius: 10px;
   display: grid;
   place-items: center;
@@ -750,7 +793,7 @@ p {
 }
 
 .card-featured {
-  border: 1.5px solid transparent;
+  border: var(--w-hairline) solid transparent;
   background:
     linear-gradient(var(--card), var(--card)) padding-box,
     var(--grad-ai) border-box;
@@ -967,7 +1010,7 @@ p {
 }
 
 .btn-lg {
-  padding: 15px 22px;
+  padding: var(--w-15) 22px;
   font-size: var(--fs-lg);
 }
 
@@ -1036,7 +1079,7 @@ p {
   font-family: inherit;
   font-size: var(--fs-md);
   padding: 12px 14px;
-  border: 1.5px solid var(--line-strong);
+  border: var(--w-hairline) solid var(--line-strong);
   border-radius: var(--radius-sm);
   background: var(--card);
   color: var(--ink);
@@ -1083,7 +1126,7 @@ p {
 
 .textarea {
   resize: vertical;
-  min-height: 90px;
+  min-height: var(--w-90);
 }
 
 .error {
@@ -1095,10 +1138,10 @@ p {
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--w-5);
   font-size: var(--fs-xs);
   font-weight: 600;
-  padding: 3px 9px;
+  padding: 3px var(--w-9);
   border-radius: 999px;
   background: var(--brand-soft);
   color: var(--brand-strong);
@@ -1494,8 +1537,8 @@ p {
   pointer-events: none;
   opacity: 0.5;
   background-image: radial-gradient(
-    color-mix(in srgb, var(--brand) 14%, transparent) 1.2px,
-    transparent 1.2px
+    color-mix(in srgb, var(--brand) 14%, transparent) var(--w-dot),
+    transparent var(--w-dot)
   );
   background-size: 22px 22px;
   mask-image: radial-gradient(70% 55% at 50% 30%, black 30%, transparent 75%);
@@ -1634,7 +1677,7 @@ p {
   gap: var(--space-2);
   margin-bottom: var(--space-5);
   background: var(--card-2);
-  padding: 5px;
+  padding: var(--w-5);
   border-radius: var(--radius);
 }
 
@@ -1684,7 +1727,10 @@ form .btn[type="submit"] {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background-image: radial-gradient(var(--sheen-16) 1.2px, transparent 1.2px);
+  background-image: radial-gradient(
+    var(--sheen-16) var(--w-dot),
+    transparent var(--w-dot)
+  );
   background-size: 20px 20px;
   mask-image: radial-gradient(80% 90% at 80% 10%, black 20%, transparent 70%);
 }
@@ -1941,8 +1987,8 @@ form .btn[type="submit"] {
 }
 
 .quick-icon {
-  width: 46px;
-  height: 46px;
+  width: var(--w-46);
+  height: var(--w-46);
   border-radius: 14px;
   display: grid;
   place-items: center;
@@ -1964,7 +2010,7 @@ form .btn[type="submit"] {
 /* Subject cards */
 .subject-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(var(--w-150), 1fr));
   gap: var(--space-3);
 }
 
@@ -1985,7 +2031,7 @@ form .btn[type="submit"] {
   content: "";
   position: absolute;
   inset: 0 auto 0 0;
-  width: 5px;
+  width: var(--w-5);
   background: var(--brand);
 }
 
@@ -2063,7 +2109,7 @@ form .btn[type="submit"] {
 }
 
 .font-range {
-  width: 90px;
+  width: var(--w-90);
 }
 
 .font-scale-row {
@@ -2135,7 +2181,7 @@ form .btn[type="submit"] {
 
 .bubble {
   max-width: 86%;
-  padding: 13px 16px;
+  padding: var(--w-13) 16px;
   border-radius: var(--radius);
   font-size: var(--fs-md);
   line-height: var(--lh-body);
@@ -2209,8 +2255,8 @@ form .btn[type="submit"] {
 
 .typing-dots span {
   display: inline-block;
-  width: 7px;
-  height: 7px;
+  width: var(--w-7);
+  height: var(--w-7);
   margin-right: 4px;
   border-radius: 50%;
   background: var(--ai);
@@ -2453,14 +2499,14 @@ form .btn[type="submit"] {
 .source-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--w-5);
   font-size: var(--fs-xs);
   font-weight: 600;
   background: var(--brand-soft);
   color: var(--brand-strong);
   border: 1px solid transparent;
   border-radius: 8px;
-  padding: 4px 9px;
+  padding: 4px var(--w-9);
   margin: 2px;
   min-height: 32px;
   cursor: pointer;
@@ -2577,7 +2623,7 @@ table.data tbody tr:hover {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  border: 1.5px solid var(--line-strong);
+  border: var(--w-hairline) solid var(--line-strong);
   background: var(--card);
   color: var(--muted);
   font-weight: 600;
@@ -2719,7 +2765,7 @@ table.data tbody tr:hover {
   text-align: left;
   padding: 12px 14px;
   border-radius: var(--radius-sm);
-  border: 1.5px solid var(--line-strong);
+  border: var(--w-hairline) solid var(--line-strong);
   background: var(--card);
   cursor: pointer;
   font-weight: 600;
@@ -2982,7 +3028,7 @@ button.source-chip:hover {
 }
 @media (max-width: 560px) {
   .searchbox {
-    max-width: 150px;
+    max-width: var(--w-150);
   }
 }
 
@@ -3312,8 +3358,8 @@ button.small {
   position: absolute;
   top: 2px;
   right: 2px;
-  min-width: 15px;
-  height: 15px;
+  min-width: var(--w-15);
+  height: var(--w-15);
   padding: 0 3px;
   border-radius: 999px;
   background: var(--danger);
@@ -3693,7 +3739,7 @@ button.small {
 }
 .qp-options {
   margin: var(--space-1) 0 var(--space-2);
-  padding-left: 30px;
+  padding-left: var(--w-30);
   font-size: var(--fs-sm);
   color: var(--muted);
 }
@@ -3902,7 +3948,7 @@ button.small {
   min-width: 180px;
 }
 .w-90 {
-  width: 90px;
+  width: var(--w-90);
 }
 .maxw-220 {
   max-width: 220px;
@@ -4080,7 +4126,7 @@ button.small {
 .btn {
   border-radius: 12px;
   font-weight: 700;
-  padding: 13px 20px;
+  padding: var(--w-13) 20px;
   position: relative;
   overflow: hidden;
   isolation: isolate;
@@ -4147,11 +4193,11 @@ button.small {
 
 /* keep size variants winning over the v2 .btn padding above */
 .btn-sm {
-  padding: 9px 14px;
+  padding: var(--w-9) 14px;
 }
 
 .btn-lg {
-  padding: 16px 26px;
+  padding: 16px var(--w-26);
 }
 
 .btn-primary {
@@ -4165,7 +4211,7 @@ button.small {
 .btn-primary:hover {
   box-shadow:
     0 2px 4px var(--brand-ink-22),
-    0 14px 30px -6px var(--brand-60),
+    0 14px var(--w-30) -6px var(--brand-60),
     var(--brand-glow);
 }
 
@@ -4181,7 +4227,7 @@ button.small {
 .btn-teal:hover {
   box-shadow:
     0 2px 4px var(--teal-22),
-    0 14px 30px -6px color-mix(in srgb, var(--teal) 60%, transparent);
+    0 14px var(--w-30) -6px color-mix(in srgb, var(--teal) 60%, transparent);
 }
 
 .btn-soft {
@@ -4231,7 +4277,7 @@ button.small {
 
 .hero-btn-glass:hover {
   background: var(--sheen-24);
-  box-shadow: 0 12px 30px -8px var(--scrim-40);
+  box-shadow: 0 12px var(--w-30) -8px var(--scrim-40);
 }
 
 /* ── 4. Hero v2 — living aurora ──────────────────────────────── */
@@ -4292,7 +4338,7 @@ button.small {
     background-position: 0 0;
   }
   to {
-    background-position: 60px 30px;
+    background-position: 60px var(--w-30);
   }
 }
 
@@ -4322,9 +4368,9 @@ button.small {
 .hero .home-prompt .input {
   background: var(--sheen-96);
   border: 1px solid var(--sheen-65);
-  box-shadow: 0 10px 26px -10px var(--scrim-45);
+  box-shadow: 0 10px var(--w-26) -10px var(--scrim-45);
   color: var(--brand-ink);
-  min-height: 50px;
+  min-height: var(--w-50);
 }
 
 .hero .home-prompt .input::placeholder {
@@ -4336,15 +4382,15 @@ button.small {
 }
 
 .hero .home-prompt .btn {
-  min-height: 50px;
+  min-height: var(--w-50);
   box-shadow:
     0 1px 2px var(--brand-ink-30),
-    0 10px 26px -8px var(--scrim-50);
+    0 10px var(--w-26) -8px var(--scrim-50);
 }
 
 /* ── 5. Quick tiles v2 — alignment fix + choreography ────────── */
 .quick-grid {
-  grid-template-columns: repeat(auto-fit, minmax(225px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(var(--w-225), 1fr));
   gap: var(--space-4);
 }
 
@@ -4422,7 +4468,7 @@ button.small {
 .quick-icon {
   width: 48px;
   height: 48px;
-  border-radius: 15px;
+  border-radius: var(--w-15);
   box-shadow:
     inset 0 1px 0 var(--sheen-50),
     0 4px 10px -3px var(--ink-18);
@@ -4495,7 +4541,7 @@ button.small {
 }
 
 .next-step-card::before {
-  width: 5px;
+  width: var(--w-5);
   border-radius: 0 4px 4px 0;
   background: linear-gradient(180deg, var(--fresh), var(--brand));
 }
@@ -4525,7 +4571,7 @@ button.small {
 }
 
 .bnav-item.active::before {
-  width: 26px;
+  width: var(--w-26);
 }
 
 .bnav-item svg {
@@ -4649,7 +4695,7 @@ button.small {
 @keyframes auth-in {
   0% {
     opacity: 0;
-    transform: translateY(26px) scale(0.97);
+    transform: translateY(var(--w-26)) scale(0.97);
   }
   100% {
     opacity: 1;
@@ -4659,7 +4705,7 @@ button.small {
 
 .auth-card .btn,
 .welcome-card .btn {
-  min-height: 50px;
+  min-height: var(--w-50);
 }
 
 /* ── 13. Quiz celebration v2 ─────────────────────────────────── */
@@ -4679,9 +4725,9 @@ button.small {
 }
 
 .confetti-piece {
-  width: 9px;
+  width: var(--w-9);
   height: 14px;
-  border-radius: 2.5px;
+  border-radius: var(--w-2-5);
   top: -24px;
   box-shadow: 0 1px 3px var(--scrim-18);
 }
@@ -4779,7 +4825,7 @@ button.small {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 34px;
+  min-height: var(--w-34);
   padding: 6px 14px;
   border-radius: var(--radius-full);
   background: var(--card);

@@ -215,6 +215,8 @@ const bn = {
   csvImport: "CSV দিয়ে শিক্ষার্থী যোগ করুন",
   csvHint: "name,email হেডারসহ প্রতি সারিতে একজন",
   importBtn: "ইমপোর্ট করুন",
+  importBusyHint:
+    "ইমপোর্ট চলছে — পূর্ণ তালিকায় এক মিনিট পর্যন্ত লাগতে পারে। এই পাতা বন্ধ করবেন না।",
   importCreated: "তৈরি: {n}",
   importFailed: "ব্যর্থ: {n}",
   inviteCode: "ইনভাইট কোড",
@@ -888,6 +890,8 @@ const en: Dict = {
   csvImport: "Add students from CSV",
   csvHint: "One student per line with a name,email header",
   importBtn: "Import",
+  importBusyHint:
+    "Importing — a full roster can take up to a minute. Please keep this page open.",
   importCreated: "Created: {n}",
   importFailed: "Failed: {n}",
   inviteCode: "Invite code",
