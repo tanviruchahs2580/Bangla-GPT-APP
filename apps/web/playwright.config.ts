@@ -81,7 +81,10 @@ export default defineConfig({
   workers: 1,
   forbidOnly: !!process.env.CI,
   // One retry on CI: a second failure is real, the first may be runner noise.
-  retries: process.env.CI ? 1 : 0,
+  // E-17: no retries, in CI or locally. A flake must be visible on its first
+  // failure; a retry hides it and the audit counted the retry pattern itself
+  // as the defect. The suite is green without them (recorded full runs).
+  retries: 0,
   reporter: [
     ["list"],
     ["junit", { outputFile: "coverage/e2e/junit.xml" }],

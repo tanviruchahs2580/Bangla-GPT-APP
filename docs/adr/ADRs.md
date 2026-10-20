@@ -98,9 +98,46 @@ Implement hybrid retrieval (`RetrievalMode.hybrid`) combining:
 - **+** Configurable per deployment
 - **-** RRF weights need tuning per corpus size
 
+## Measured (2026-10-20, A4-02)
+
+The vector lane's default is still the deterministic hashing embedder
+(`EMBEDDING_MODEL` empty). The real model's backend is now wired behind the
+same `Embedder` protocol, so the decision below is a configuration change, not
+a code change:
+
+- **Backend**: `retrieval/gemini_embedder.py` speaks the Gemini API's
+  `batchEmbedContents` endpoint (model `gemini-embedding-001`, multilingual,
+  3 072 dimensions with Matryoshka truncation — requested at 768 — and a
+  2 048-token input ceiling per text; properties recorded with the retrieved
+  reference page and date in the module docstring). Terms: the same Gemini API
+  terms and tier rules the generation lane documents in
+  `docs/compliance/provider-terms.md`.
+- **Verified live**: the adapter returned 768-dimension vectors for Bangla text
+  (smoke call, 1.5 s, 2026-10-20) and a 72-request bounded probe (60 chunks +
+  12 queries) ran clean; on that sample both lanes reach recall@5 1.0, i.e. the
+  sample is too small to discriminate and is recorded as a smoke test, not a
+  quality measurement.
+- **Blocked, on the record**: the corpus-scale measurement (Recall@1/5, MRR for
+  the vector lane against the hashing baseline on the 1 565-chunk served corpus
+  and the golden query families) needs ~1 850 embedding requests, and the
+  free-tier key's daily embedding quota is ~1 000: the run stops with the
+  vendor's own 429 ("You exceeded your current quota…") after ~1 000 requests.
+  The adapter paces batches (65 s between batch starts) and honours the
+  vendor's retry hint, which is why the quota — not the code — is the limit.
+- **What unblocks it**: a paid tier for the same model, or a self-hosted
+  multilingual model (e.g. an ONNX/GGUF encoder), both of which are staging
+  decisions with cost and licence consequences this ADR leaves to the owner.
+  The measurement command is one line once a key with quota exists:
+  `EMBEDDING_MODEL=gemini-embedding-001 python scripts/evaluate_nctb_retrieval.py
+  ../../data/nctb --out ../../data/nctb/embedding_eval.json` (the harness reads
+  the embedder from configuration and records its name in the artifact).
+
 ## Status
 
-Accepted — Default mode in production.
+Accepted — Default mode in production. The vector lane serves the deterministic
+hashing embedder; swapping in a real multilingual model is a configuration
+change (`EMBEDDING_MODEL`) whose quality measurement is blocked by the
+free-tier embedding quota as recorded above.
 
 ---
 

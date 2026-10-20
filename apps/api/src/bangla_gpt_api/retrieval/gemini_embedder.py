@@ -30,6 +30,9 @@ from __future__ import annotations
 import os
 import time
 from collections.abc import Sequence
+from typing import Any
+
+import httpx
 
 from bangla_gpt_api.providers.base import ProviderError
 
@@ -67,7 +70,11 @@ class GeminiEmbedder:
         timeout_seconds: float = 60.0,
         max_retries: int = 1,
         min_interval_seconds: float | None = None,
+        transport: Any | None = None,
     ) -> None:
+        #: Caller-injected transport (tests, or a proxy): anything with an
+        #: httpx-compatible ``post(url, json=..., headers=..., timeout=...)``.
+        self._transport = transport
         if not api_key:
             raise ProviderError("GeminiEmbedder requires an API key")
         self._api_key = api_key
@@ -90,8 +97,6 @@ class GeminiEmbedder:
         caller must see, because a partly-embedded corpus would degrade the
         served index without any artifact saying so.
         """
-        import httpx
-
         prepared = [self._prepare(text) for text in texts]
         vectors: list[list[float]] = []
         for start in range(0, len(prepared), MAX_BATCH_SIZE):
@@ -111,7 +116,7 @@ class GeminiEmbedder:
             while True:
                 self._pace()
                 try:
-                    response = httpx.post(
+                    response = self._post(
                         url,
                         json=payload,
                         headers={"x-goog-api-key": self._api_key},
@@ -146,6 +151,13 @@ class GeminiEmbedder:
             vectors.extend([list(map(float, item.get("values") or [])) for item in embeddings])
         return vectors
 
+    def _post(self, url: str, **kwargs: Any) -> Any:
+        """One POST through the injected transport or httpx itself."""
+        post = getattr(self._transport, "post", None) or httpx.post
+        kwargs.setdefault("headers", {"x-goog-api-key": self._api_key})
+        kwargs.setdefault("timeout", self._timeout)
+        return post(url, **kwargs)
+
     def _pace(self) -> None:
         """Space the START of batch calls by the configured interval."""
         if self._min_interval <= 0:
@@ -156,7 +168,7 @@ class GeminiEmbedder:
         self._last_call = time.monotonic()
 
     @staticmethod
-    def _retry_delay(response: object) -> float:
+    def _retry_delay(response: Any) -> float:
         """The vendor's Retry-After when present, else the documented backoff."""
         headers = getattr(response, "headers", {}) or {}
         raw = str(headers.get("retry-after") or "").strip()
