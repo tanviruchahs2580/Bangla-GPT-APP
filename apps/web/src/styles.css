@@ -799,8 +799,12 @@ p {
 
 .empty-sub {
   margin-top: 4px;
-  /* the global `p { margin: 0 0 0.8em }` reset would otherwise add 0.8em here
-     and shift the empty-state geometry; spacing stays with .empty-pad */
+  /* The subtitle is a <p> (not a <div>) so the accessibility tree keeps it a
+     separate node from the title -- adjacent generic elements merge into one,
+     which merged the two lines into a single announcement. This reset keeps
+     the geometry identical to the <div> version, since the global
+     `p { margin: 0 0 0.8em }` would otherwise add 0.8em; vertical spacing
+     stays owned by .empty-pad and .empty-action. */
   margin-bottom: 0;
 }
 

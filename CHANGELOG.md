@@ -133,6 +133,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): stop rendering remote images in answers and announce each answer once
 - fix(web): stop showing failures as facts, and read API timestamps as UTC
 - fix(web): stop swallowing failed writes; roll back the bookmark toggle
+- fix(web,e2e,scripts): close the CI failures the wave introduced
 - fix: complete admin password-change flow, tutor typo gate, roster-scoped stats, quiz distractors, i18n
 - fix: land the verified remediation on current main (CORS-adjacent, budget, UI states)
 - fix: resolve mypy 2.4.0 type errors in teacher/school/common/weakness
@@ -265,6 +266,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - style(api): reformat SchoolInvite claim call
 - style(api): ruff format four test files (format-gate drift)
 - style(api): ruff format mock provider and lesson plan prompt
+- style(scripts): parenthesise the scanner's exemption reasons for ruff ISC004
 - style(web): give the registration screen login's photo backdrop
 - style: satisfy the repository's own pre-commit hooks
 
