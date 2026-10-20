@@ -78,6 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(auth): unblock login on web and APK (MFA step-up, unauth resend, proxy/APK errors)
 - fix(ci): drop the two out-of-convention shebangs; format the datetime test
 - fix(ci): exempt changelog-regenerating commits by changed paths, not subject text
+- fix(ci): formatting, generated-artifact newline, and one shellcheck warning
 - fix(ci): make the commit-subject gate testable anywhere; lint fixes the CI run caught
 - fix(ci): make the doc-path guard cover the classes of path it claims to
 - fix(ci): make the lockfile guardrail deterministic
@@ -95,6 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(e2e): raise the harness login rate limit above the suite's own login volume
 - fix(encoding): add .gitattributes and repair three encoding defects
 - fix(i18n): put the parent digest and the printed papers in Bangla, and correct five copy defects
+- fix(nctb): recover the chunker lost to a split truncation, fix two packing rules, regenerate the corpus
 - fix(ops): point the Grafana dashboard at the exported metric names
 - fix(ops): stop publishing the API on a random host port, and make the release gate real
 - fix(pdf): enable Bengali complex-script shaping in PDF renderers
@@ -131,6 +133,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): recover from page errors, report load failures, and never show another child's data
 - fix(web): report a dead API origin accurately, not as a busy server (#14)
 - fix(web): route /api/* explicitly to the edge proxy function
+- fix(web): split transport deadlines and the CSV import panel out of god-files
 - fix(web): stop rendering remote images in answers and announce each answer once
 - fix(web): stop showing failures as facts, and read API timestamps as UTC
 - fix(web): stop swallowing failed writes; roll back the bookmark toggle
@@ -252,6 +255,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - test(e2e): Playwright smoke scaffold and a sqlite boot-timeout regression test
 - test(e2e): scope the sign-out selector to the header
 - test(e2e): wait for the session in signIn, not just the submit click
+- test(eval): commit the fresh live recording the replay gate reads
 - test(school): cover the aggregation routes TST-04 flagged as unexercised
 - test(tenancy): cover school dashboard routes across two tenants
 - test(web): assert the changed behaviour instead of the old literals
