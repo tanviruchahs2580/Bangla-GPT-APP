@@ -64,20 +64,26 @@ EXEMPT: tuple[tuple[str, str, str], ...] = (
     (
         "apps/api/tests/test_eval2_generation.py",
         "ASSAMESE_LETTER",
-        "the mis-script detector's own test: U+09F0 must appear here for "
-        "mis_script() to have something to detect",
+        (
+            "the mis-script detector's own test: U+09F0 must appear here for "
+            "mis_script() to have something to detect"
+        ),
     ),
     (
         "apps/api/tests/test_rag2_cache_scope.py",
         "DEVANAGARI_NON_PUNCT",
-        "the cache-key test asserts a Devanagari query does not collide with "
-        "the Bengali one, so the input must be Devanagari",
+        (
+            "the cache-key test asserts a Devanagari query does not collide "
+            "with the Bengali one, so the input must be Devanagari"
+        ),
     ),
     (
         "apps/api/eval/review_sheets/synthetic_review_sheet.csv",
         "BOM_INSIDE_TEXT",
-        "generated review sheet written UTF-8-BOM so Excel opens Bengali "
-        "correctly; the BOM is the compatibility marker, not stray text",
+        (
+            "generated review sheet written UTF-8-BOM so Excel opens Bengali "
+            "correctly; the BOM is the compatibility marker, not stray text"
+        ),
     ),
     (
         "apps/api/eval/review_sheets/class_appropriateness_sheet.csv",
@@ -87,9 +93,11 @@ EXEMPT: tuple[tuple[str, str, str], ...] = (
     (
         "apps/api/eval/review_sheets/synthetic_review_sheet.csv",
         "NOT_NFC",
-        "the source text is quoted from the corpus verbatim (A2-03 keeps the "
-        "corpus form; normalisation happens at ingest), so the sheet carries "
-        "the corpus's own sequence",
+        (
+            "the source text is quoted from the corpus verbatim (A2-03 keeps "
+            "the corpus form; normalisation happens at ingest), so the sheet "
+            "carries the corpus's own sequence"
+        ),
     ),
 )
 
