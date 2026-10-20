@@ -13,7 +13,9 @@
   "DEP002:uharfbuzz:pyproject.toml": "'uharfbuzz' defined as a dependency but not used in the codebase",
   "DEP002:uvicorn-worker:pyproject.toml": "'uvicorn-worker' defined as a dependency but not used in the codebase",
   "DEP003:pypdfium2:scripts\\extraction_audit.py": "'pypdfium2' imported but it is a transitive dependency",
-  "DEP001:pypdfium2:scripts\\extraction_audit.py": "'pypdfium2' imported but missing from the dependency definitions"
+  "DEP001:pypdfium2:scripts\\extraction_audit.py": "'pypdfium2' imported but missing from the dependency definitions",
+  "DEP001:pypdfium2:scripts/extraction_audit.py": "'pypdfium2' imported but missing from the dependency definitions",
+  "DEP003:pypdfium2:scripts/extraction_audit.py": "'pypdfium2' imported but it is a transitive dependency"
  },
  "generated": "2026-10-20T12:25:45Z",
  "tool": "deptry"
