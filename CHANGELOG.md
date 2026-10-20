@@ -139,6 +139,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web,e2e,scripts): close the CI failures the wave introduced
 - fix: A7-05 per-role in-flight caps and A7-08 teacher AI disclaimer
 - fix: complete admin password-change flow, tutor typo gate, roster-scoped stats, quiz distractors, i18n
+- fix: corpus test skip on CI, AITutorPage pagination, and the loader split as final shape
 - fix: land the verified remediation on current main (CORS-adjacent, budget, UI states)
 - fix: resolve mypy 2.4.0 type errors in teacher/school/common/weakness
 - fix: wave-4 closing batch — ratchet baseline, brand tokens, loade split, role caps, env parity
