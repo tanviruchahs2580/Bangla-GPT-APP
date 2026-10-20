@@ -310,11 +310,19 @@ def _percentiles(values: list[float]) -> dict[str, float]:
     ordered = sorted(values)
     if not ordered:
         return {}
+
     def at(fraction: float) -> float:
         index = min(len(ordered) - 1, max(0, round(fraction * (len(ordered) - 1))))
         return round(ordered[index], 3)
-    return {"n": len(ordered), "p50": at(0.50), "p95": at(0.95), "p99": at(0.99),
-            "min": round(ordered[0], 3), "max": round(ordered[-1], 3)}
+
+    return {
+        "n": len(ordered),
+        "p50": at(0.50),
+        "p95": at(0.95),
+        "p99": at(0.99),
+        "min": round(ordered[0], 3),
+        "max": round(ordered[-1], 3),
+    }
 
 
 async def _run_ttft_profile(args: argparse.Namespace) -> int:
@@ -411,14 +419,16 @@ async def _run_ttft_profile(args: argparse.Namespace) -> int:
             "model": args.model,
             "pacing_seconds_between_call_starts": args.min_interval,
             "wall_seconds": round(elapsed, 1),
-            "calls": {"attempted": len(items), "succeeded": len(total_s),
-                      "failed": len(failures)},
+            "calls": {"attempted": len(items), "succeeded": len(total_s), "failed": len(failures)},
             "failure_samples": failures[:5],
             "ttft_seconds": _percentiles(ttft_s),
             "total_answer_seconds": _percentiles(total_s),
             "retrieval_only_ms": _percentiles(retrieval_ms),
-            "budgets": {"ttft_p95_seconds": 3.0, "total_p95_seconds": 12.0,
-                        "retrieval_p95_ms": 300.0},
+            "budgets": {
+                "ttft_p95_seconds": 3.0,
+                "total_p95_seconds": 12.0,
+                "retrieval_p95_ms": 300.0,
+            },
             "caveat": (
                 "TTFT and total include the free-tier pacing sleep, which sits "
                 "inside the provider call; the pacing is removed from the "

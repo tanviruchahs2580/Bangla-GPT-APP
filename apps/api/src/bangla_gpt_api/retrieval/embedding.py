@@ -103,9 +103,26 @@ def build_embedder(settings: object) -> Embedder:
     a configuration error, not a silent downgrade.
     """
     model = str(getattr(settings, "embedding_model", "") or "").strip()
-    if model:
+    if not model:
+        return HashingEmbedder()
+    # A4-02: a named model is a REAL backend now, not a configuration error --
+    # the Gemini adapter implements this protocol (see gemini_embedder.py for
+    # the model's retrieved properties: dimensions, input ceiling, terms).
+    from bangla_gpt_api.retrieval.gemini_embedder import (
+        SUPPORTED_EMBEDDING_MODELS,
+        GeminiEmbedder,
+    )
+
+    if not any(model.startswith(prefix) for prefix in SUPPORTED_EMBEDDING_MODELS):
         raise ProviderNotConfigured(
-            f"embedding model '{model}' requires the staging embedding backend "
-            "(human input, R8); leave EMBEDDING_MODEL empty for the local vector lane"
+            f"embedding model '{model}' has no backend wired; set EMBEDDING_MODEL "
+            f"to one of {', '.join(SUPPORTED_EMBEDDING_MODELS)} or leave it empty "
+            "for the deterministic local vector lane"
         )
-    return HashingEmbedder()
+    api_key = str(getattr(settings, "gemini_api_key", "") or "").strip()
+    if not api_key:
+        raise ProviderNotConfigured(
+            f"embedding model '{model}' needs GEMINI_API_KEY (the same key the "
+            "generation lane uses); leave EMBEDDING_MODEL empty for the local lane"
+        )
+    return GeminiEmbedder(api_key=api_key, model=model)
