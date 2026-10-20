@@ -1593,7 +1593,20 @@ p {
 
 .empty-mark {
   margin-bottom: 12px;
-  filter: drop-shadow(var(--shadow-sm));
+}
+/*
+ * The mark's shadow is a plain box-shadow on the <svg> element, NOT a
+ * `filter: drop-shadow`. The filter rasterized the gradient-filled mark
+ * intermittently before its resources were ready and toHaveScreenshot
+ * captured a ~12px sliver, while a live probe measured the paint correctly at
+ * 56x56 -- a screenshot-compositing race, not a layout defect. translateZ(0)
+ * did not fully settle it; dropping the filter did. The radius matches the
+ * logo's rounded square (`rx=16` on a 64x64 viewBox at 56px render = 14px).
+ */
+.empty-mark svg {
+  display: block;
+  box-shadow: var(--shadow-sm);
+  border-radius: 14px;
 }
 
 .empty-title {

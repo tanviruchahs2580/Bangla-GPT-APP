@@ -90,15 +90,51 @@ for (const lang of ["bn", "en"] as const) {
     // The Bangla face must be loaded, not merely declared: with
     // font-display: swap a missing subset renders in a fallback and the test
     // would otherwise pass while the user sees a different typeface.
-    const loaded = await page.evaluate(() =>
-      [...document.fonts]
-        .filter((face) => face.status === "loaded")
-        .map((face) => `${face.family}@${face.weight}`),
-    );
-    expect(
-      loaded.some((face) => face.startsWith("Noto Sans Bengali@400")),
-      `[${browserName}] Noto Sans Bengali 400 never loaded: ${loaded.join(", ")}`,
-    ).toBe(true);
+    //
+    // Detection uses fonts.load() + fonts.check(), the standard "would this
+    // family be used" API, rather than enumerating `[...document.fonts]`:
+    // WebKit leaves used faces in status "unloaded" (or names them
+    // differently) while check() reports them correctly, so the enumeration
+    // made this test a detection bug instead of a rendering bug.
+    // WebKit resolves fonts.load() while the fetch is still in flight (the
+    // faces can sit in status "unloaded" for a while), so a single check()
+    // right after is a coin flip between the bn and en variants. Polling
+    // keeps the claim as strong as before -- the family must become usable --
+    // without depending on load()'s timing.
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(async () => {
+            await document.fonts.load(
+              '16px "Noto Sans Bengali"',
+              "ক্ষ কোষ নিশ্চিত",
+            );
+            await document.fonts.ready;
+            return document.fonts.check(
+              '16px "Noto Sans Bengali"',
+              "ক্ষ কোষ নিশ্চিত",
+            );
+          }),
+        { timeout: 15_000 },
+      )
+      .toBe(true);
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(async () => {
+            await document.fonts.load(
+              '700 16px "Noto Sans Bengali"',
+              "ক্ষ কোষ নিশ্চিত",
+            );
+            await document.fonts.ready;
+            return document.fonts.check(
+              '700 16px "Noto Sans Bengali"',
+              "ক্ষ কোষ নিশ্চিত",
+            );
+          }),
+        { timeout: 15_000 },
+      )
+      .toBe(true);
 
     const probes = await probeOnPage(page);
     for (const probe of probes) {
