@@ -294,7 +294,7 @@ async def extract_chapter_concepts(
     # it back from there would close a cycle (c2 handoff).
     from bangla_gpt_api.logging_config import trace_event
     from bangla_gpt_api.services.costs import estimate_tokens, record_ai_usage
-    from bangla_gpt_api.services.tutor import sanitize_evidence
+    from bangla_gpt_api.services.safety import sanitize_evidence
 
     prompt = EXTRACTION_PROMPT_TEMPLATE.format(chapter=chapter, text=sanitize_evidence(text[:4000]))
     started = time.perf_counter()

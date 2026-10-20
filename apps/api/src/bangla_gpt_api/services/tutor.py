@@ -74,10 +74,16 @@ from bangla_gpt_api.services.router import (
 )
 from bangla_gpt_api.services.safety import (
     refusal_for,
-    render_image_text_block,  # noqa: F401 (re-exported for callers/tests)
-    sanitize_evidence,
-    sanitize_image_text,  # noqa: F401 (re-exported for callers/tests)
     screen_question,
+)
+from bangla_gpt_api.services.safety import (
+    render_image_text_block as render_image_text_block,
+)
+from bangla_gpt_api.services.safety import (
+    sanitize_evidence as sanitize_evidence,
+)
+from bangla_gpt_api.services.safety import (
+    sanitize_image_text as sanitize_image_text,
 )
 from bangla_gpt_api.services.trace_meta import index_fingerprint
 
@@ -94,6 +100,12 @@ logger = logging.getLogger("bangla_gpt_api.tutor")
 # missing or malformed registry fails loudly at import time. Changing a
 # prompt means editing the file, bumping its version and adding a changelog
 # entry in the same change -- see docs/operations/CHANGE_MANAGEMENT.md.
+
+
+#: A8-08: the coverage a retrieved passage must carry before it counts as a
+#: source the answer leans on (the floor `verify_citation` enforces over the
+#: whole evidence, applied per passage); see `_cited_sources` for the numbers.
+CITATION_SELECTION_FLOOR = 0.25
 
 
 INSUFFICIENT_EVIDENCE_ANSWER = (
@@ -620,49 +632,31 @@ class TutorService:
             latency_ms=latency_ms,
         )
 
-    def _coverage_details(self, question: str, hits: list) -> tuple[float, bool]:
-        """Weighted content-term coverage of the best chunk, plus the verdict.
+    def _gate_query_terms(self, question: str) -> tuple[str, ...]:
+        """The question's gate vocabulary, resolved across scripts.
 
-        Replaces raw token coverage, which measurably refused answerable
-        questions: "সালোকসংশ্লেষণ কী এবং কোথায় ঘটে?" scored 0.40 against its
-        own section because কোথায় / ঘটে / এবং are function words a textbook
-        passage cannot contain, and the gate counted them as must-cover terms
-        with equal weight. Three corrections, each measured:
+        Only **content terms** count (query_analysis: copulas, conjunctions,
+        question particles, pronouns, postpositions in Bangla, Banglish and
+        English) -- raw token coverage measurably refused answerable questions
+        ("সালোকসংশ্লেষণ কী এবং কোথায় ঘটে?" scored 0.40 against its own section
+        because কোথায় / ঘটে / এবং are function words a textbook passage cannot
+        contain and the gate counted them as must-cover terms with equal
+        weight). A question made only of function words falls back to every
+        stemmed token, the pre-stop-word behaviour, rather than scoring an
+        empty term set as instant groundability.
 
-        * only **content terms** count (query_analysis: copulas, conjunctions,
-          question particles, pronouns, postpositions in Bangla, Banglish and
-          English);
-        * the remaining terms are weighted by corpus document frequency --
-          missing a term the whole book repeats costs nearly nothing, missing
-          a one-of-a-kind curriculum term dominates the verdict;
-        * the evidence the gate reads is the text the lexical lane indexes
-          (heading + chapter + body), so a chapter-title question can be
-          satisfied by its own section heading;
-        * coverage is measured over the question's terms the corpus *knows*:
-          the student's own framing vocabulary ("explain করো", "৬ষ্ঠ শ্রেণির")
-          is absent from the textbook by construction, and weighting it at
-          the IDF maximum made user phrasing dilute coverage. A question
-          whose content terms are all absent from the corpus is
-          out-of-corpus, and still refuses.
-
-        The verdict passes when ANY retrieved chunk clears the threshold:
-        ranking noise between near-tied chunks must not flip a grounded
-        question into a refusal. Returns ``(best_coverage, passed)``.
+        Cross-script resolution: the retrieval lanes already widen a query
+        through the glossary (cell → কোষ) and the roman lane (bhognangsho →
+        ভগ্নাংশ); the gate must see the SAME resolved terms or it would refuse,
+        for script reasons, a question retrieval just answered. Graceful
+        degradation: statistics without the matching surfaces resolve nothing,
+        and the gate proceeds on the raw terms.
         """
         query_terms = content_terms(question)
         if not query_terms:
-            # a question made only of function words/punctuation: fall back to
-            # every stemmed token, the pre-stop-word behaviour, rather than
-            # scoring an empty term set as instant groundability.
             query_terms = tuple(
                 dict.fromkeys(light_stem(t) for t in tokenize(question) if len(t) >= 2)
             )
-        # Cross-script resolution: the retrieval lanes already widen a query
-        # through the glossary (cell → কোষ) and the roman lane (bhognangsho →
-        # ভগ্নাংশ); the gate must see the SAME resolved terms or it would
-        # refuse, for script reasons, a question retrieval just answered.
-        # Graceful degradation: statistics without the matching surfaces
-        # resolve nothing, and the gate proceeds on the raw terms.
         roman_matcher = getattr(self.term_stats, "match_roman", None)
         resolved: list[str] = []
         for term in query_terms:
@@ -675,61 +669,73 @@ class TutorService:
                     resolved.append(term)
             else:
                 resolved.append(term)
-        query_terms = tuple(dict.fromkeys(resolved))
-        if not query_terms or not hits:
-            return 0.0, False
+        return tuple(dict.fromkeys(resolved))
 
-        # Coverage is measured over the question's terms the corpus KNOWS
-        # about (df >= 1), weighted by ln(1 + N/df). Two documented reasons:
-        #
-        # * a term the corpus has never seen (ইউক্লিড, স্বতঃসিদ্ধ, ক্রিকেট)
-        #   is the question's subject world, not the textbook's: the evidence
-        #   cannot contain it, and its uncovered maximum weight is exactly
-        #   what refuses an out-of-corpus question (the out-of-domain matrix
-        #   row). A question whose content terms are ALL df=0 is therefore
-        #   out-of-corpus by definition and refuses here;
-        # * terms the corpus does know carry ln(1 + N/df): missing a
-        #   one-of-a-kind curriculum term dominates the verdict, while
-        #   missing a term the whole book repeats costs little -- which is
-        #   how "ভগ্নাংশ কী? explain করো" grounds on ভগ্নাংশ alone instead
-        #   of being vetoed by the instruction word.
-        if self.term_stats is not None and self.term_stats.total_documents > 0:
-            in_corpus = tuple(t for t in query_terms if self.term_stats.document_frequency(t) > 0)
-            absent = len(query_terms) - len(in_corpus)
-            # A4-06 out-of-domain rule (majority form): a question whose
-            # content terms are MOSTLY absent from the served index (more
-            # df==0 terms than known terms) is outside the textbook's world
-            # and refuses here, before weighting can answer it on its one
-            # lucky overlap. The strict ">= 2 absent" count from the
-            # divergence register was measured and declined: it refuses
-            # 37-38% of ANSWERABLE chapter-title/Banglish questions on the
-            # served corpus (probe 2026-10-19), while the majority form
-            # separates the classes cleanly (4/4 curated adversarial refuse,
-            # 0/317 answerable). Subsumes the all-terms-absent refusal that
-            # sat here before (absent > known includes known == 0).
-            if absent > len(in_corpus):
-                json_log(
-                    logger,
-                    logging.INFO,
-                    "tutor_retrieval",
-                    gate="out_of_domain",
-                    known_terms=len(in_corpus),
-                    absent_terms=absent,
-                    rule="majority_absent",
-                )
-                return 0.0, False
-            if not in_corpus:
-                # both counts zero: nothing measurable, refuse as before
-                json_log(
-                    logger,
-                    logging.INFO,
-                    "tutor_retrieval",
-                    gate="out_of_domain",
-                    out_of_corpus_terms=len(query_terms),
-                )
-                return 0.0, False
-            query_terms = in_corpus
+    def _in_corpus_gate_terms(self, query_terms: tuple[str, ...]) -> tuple[tuple[str, ...], bool]:
+        """Keep the terms the corpus knows; report when the question is OOD.
 
+        Coverage is measured over the question's terms the corpus KNOWS about
+        (df >= 1), weighted by ln(1 + N/df). Two documented reasons:
+
+        * a term the corpus has never seen (ইউক্লিড, স্বতঃসিদ্ধ, ক্রিকেট) is the
+          question's subject world, not the textbook's: the evidence cannot
+          contain it, and its uncovered maximum weight is exactly what refuses
+          an out-of-corpus question (the out-of-domain matrix row). A question
+          whose content terms are ALL df=0 is therefore out-of-corpus by
+          definition and refuses here;
+        * terms the corpus does know carry ln(1 + N/df): missing a
+          one-of-a-kind curriculum term dominates the verdict, while missing a
+          term the whole book repeats costs little -- which is how "ভগ্নাংশ কী?
+          explain করো" grounds on ভগ্নাংশ alone instead of being vetoed by the
+          instruction word.
+
+        The A4-06 out-of-domain rule (majority form): a question whose content
+        terms are MOSTLY absent from the served index (more df==0 terms than
+        known terms) is outside the textbook's world and refuses here, before
+        weighting can answer it on its one lucky overlap. The strict ">= 2
+        absent" count from the divergence register was measured and declined:
+        it refuses 37-38% of ANSWERABLE chapter-title/Banglish questions on the
+        served corpus (probe 2026-10-19), while the majority form separates the
+        classes cleanly (4/4 curated adversarial refuse, 0/317 answerable).
+        Subsumes the all-terms-absent refusal that sat here before (absent >
+        known includes known == 0). Returns ``(terms, refuse)``.
+        """
+        if self.term_stats is None or self.term_stats.total_documents <= 0:
+            return query_terms, False
+        in_corpus = tuple(t for t in query_terms if self.term_stats.document_frequency(t) > 0)
+        absent = len(query_terms) - len(in_corpus)
+        if absent > len(in_corpus):
+            json_log(
+                logger,
+                logging.INFO,
+                "tutor_retrieval",
+                gate="out_of_domain",
+                known_terms=len(in_corpus),
+                absent_terms=absent,
+                rule="majority_absent",
+            )
+            return (), True
+        if not in_corpus:
+            # both counts zero: nothing measurable, refuse as before
+            json_log(
+                logger,
+                logging.INFO,
+                "tutor_retrieval",
+                gate="out_of_domain",
+                out_of_corpus_terms=len(query_terms),
+            )
+            return (), True
+        return in_corpus, False
+
+    def _best_hit_coverage(self, query_terms: tuple[str, ...], hits: list) -> tuple[float, bool]:
+        """Weighted coverage of the best chunk, and whether any chunk passes.
+
+        The verdict passes when ANY retrieved chunk clears the threshold:
+        ranking noise between near-tied chunks must not flip a grounded
+        question into a refusal. The evidence read is the text the lexical
+        lane indexes (heading + chapter + body), so a chapter-title question
+        can be satisfied by its own section heading.
+        """
         if self.term_stats is not None and self.term_stats.total_documents > 0:
             weights = coverage_weights(
                 query_terms,
@@ -738,17 +744,38 @@ class TutorService:
             )
         else:
             weights = {t: 1.0 for t in query_terms}
-
         best_coverage = 0.0
         passed = False
         for hit in hits:
-            evidence_terms = {light_stem(t) for t in tokenize(indexable_text(hit.chunk))}
-            covered = [t for t in query_terms if self._term_covered(t, evidence_terms)]
-            coverage = weighted_coverage(query_terms, covered, weights)
+            coverage = self._hit_coverage(hit, query_terms, weights)
             best_coverage = max(best_coverage, coverage)
             if coverage >= self.min_coverage and hit.score > self.min_score:
                 passed = True
         return round(best_coverage, 4), passed
+
+    def _hit_coverage(self, hit: Any, query_terms: tuple[str, ...], weights: dict) -> float:
+        """Weighted coverage of one retrieved chunk over the gate terms."""
+        evidence_terms = {light_stem(t) for t in tokenize(indexable_text(hit.chunk))}
+        covered = [t for t in query_terms if self._term_covered(t, evidence_terms)]
+        return weighted_coverage(query_terms, covered, weights)
+
+    def _coverage_details(self, question: str, hits: list) -> tuple[float, bool]:
+        """Weighted content-term coverage of the best chunk, plus the verdict.
+
+        Three phases, each with its own rationale and its own test surface:
+        :meth:`_gate_query_terms` (what the question asks, resolved across
+        scripts), :meth:`_in_corpus_gate_terms` (which of those terms the
+        served corpus knows, and the A4-06 out-of-domain refusal) and
+        :meth:`_best_hit_coverage` (the weighted coverage verdict over the
+        retrieved chunks).
+        """
+        query_terms = self._gate_query_terms(question)
+        if not query_terms or not hits:
+            return 0.0, False
+        query_terms, refuse = self._in_corpus_gate_terms(query_terms)
+        if refuse:
+            return 0.0, False
+        return self._best_hit_coverage(query_terms, hits)
 
     async def _retrieve_with_timeout(
         self, query: str, class_level: int, subject: str | None, chapter: str | None = None
@@ -797,6 +824,18 @@ class TutorService:
         """
         _coverage_value, passed = self._coverage_details(question, hits)
         return passed
+
+    def retrieved_sources(
+        self, question: str, class_level: int, subject: str | None
+    ) -> list[SourceRef]:
+        """The passages retrieval returns for a question, as sources (A8-08).
+
+        The evaluation needs both readings of citation precision: the
+        passages the answer leaned on (which the response attaches) and the
+        passages retrieval returned. This exposes the second without adding a
+        field to the served response schema.
+        """
+        return self._sources(self._retrieve(question, class_level, subject))
 
     def _retrieve(
         self, question: str, class_level: int, subject: str | None, chapter: str | None = None
@@ -851,6 +890,31 @@ class TutorService:
         if not context_terms:
             return question
         return question + " " + " ".join(context_terms[: self._FOLLOWUP_CONTEXT_TERMS])
+
+    @staticmethod
+    def _cited_sources(answer: str, hits: list) -> list:
+        """The retrieved passages the answer actually leans on (A8-08).
+
+        Per-passage stem coverage of the answer — the same primitive
+        ``verify_citation`` thresholds over the concatenation — keeps the
+        passages at or above :data:`CITATION_SELECTION_FLOOR`, in retrieval
+        order. Measured on the frozen test set, the answer leans on 2 of the
+        3 retrieved passages on average, and the ones it does not lean on are
+        where the imprecise citations came from.
+
+        An answer whose overlap is thin on every passage keeps the full
+        retrieved set: the response must never lose its evidence because the
+        overlap measurement came out low (that failure mode is what the
+        post-generation citation check already guards).
+        """
+        from bangla_gpt_api.services.safety import citation_coverage
+
+        selected = [
+            hit
+            for hit in hits
+            if citation_coverage(answer, hit.chunk.text) >= CITATION_SELECTION_FLOOR
+        ]
+        return selected or hits
 
     @staticmethod
     def _sources(hits: list) -> list[SourceRef]:
@@ -1293,7 +1357,7 @@ class TutorService:
             prompt_chars=len(context_blocks),
             answer_chars=len(answer),
         )
-        refs = self._sources(hits)
+        refs = self._sources(self._cited_sources(answer, hits))
         refused = _model_refused(answer)
         if refused:
             RAG_GATE_REFUSALS_TOTAL.labels(reason="model_refused").inc()
@@ -1707,7 +1771,7 @@ class TutorService:
                 answer_is_grounded = False
                 refused_reason = fail_reason
         record_tutor_answer("tutor", "answered" if answer_is_grounded else "refused")
-        sources = self._sources(hits) if answer_is_grounded else []
+        sources = self._sources(self._cited_sources(answer, hits)) if answer_is_grounded else []
         if answer_is_grounded:
             # A6-08/AUD-A2-16: the citation event carries the VALIDATED
             # source list (the answer passed the post-generation check), so a

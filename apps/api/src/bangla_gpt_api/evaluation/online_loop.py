@@ -72,6 +72,44 @@ def _trace_keys(
     return keys
 
 
+def _is_ordered_subset(wanted: list, keys: list) -> bool:
+    """True when ``wanted`` appears, in order, inside ``keys`` (A8-08).
+
+    An answer attaches the passages it leans on, which is a subset of the
+    trace's retrieved set, in retrieval order. The join stays exact by
+    requiring uniqueness (see :func:`build_candidates`): a citation list that
+    fits several unused traces is not joined on this rule.
+    """
+    if len(wanted) > len(keys):
+        return False
+    iterator = iter(keys)
+    return all(any(key == item for key in iterator) for item in wanted)
+
+
+def _unique_citation_join(
+    wanted: list[tuple[str, str, Any]],
+    retrieval_traces: list[dict],
+    chunk_meta: dict[str, tuple[str, str, Any]],
+    used: set[int],
+) -> int | None:
+    """The one unused trace whose retrieved ids contain ``wanted`` in order.
+
+    ``None`` when no trace fits OR more than one does: the join is exact, so
+    an ambiguous fit is not a join (the caller falls through to the weaker,
+    labelled count rule).
+    """
+    if not wanted or not chunk_meta:
+        return None
+    matches = [
+        index
+        for index, trace in enumerate(retrieval_traces)
+        if index not in used
+        and (keys := _trace_keys(trace, chunk_meta)) is not None
+        and _is_ordered_subset(wanted, keys)
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
 def build_candidates(
     ratings: list[dict],
     traces: list[dict],
@@ -79,11 +117,14 @@ def build_candidates(
 ) -> tuple[list[dict], list[str]]:
     """Candidates + notes; the trace join is explicit and never invented.
 
-    Join order: (1) **citations** -- the evidence citation triples of the
-    trace's retrieved ids equal the rated answer's own citation list (requires
-    the corpus to map ids to metadata); (2) **count** -- a unique unused
-    retrieval trace with the same number of evidence chunks (weaker, labelled
-    as such); (3) **unmatched**, with ``trace: null``.
+    Join order: (1) **citations** -- the answer's citation triples appear, in
+    order, inside exactly one unused trace's retrieved ids (requires the
+    corpus to map ids to metadata; A8-08 made the answer attach only the
+    passages it leans on, so this is a subset rule with a uniqueness
+    requirement, not an equality that the selection would always break);
+    (2) **count** -- a unique unused retrieval trace with the same number of
+    evidence chunks (weaker, labelled as such); (3) **unmatched**, with
+    ``trace: null``.
     """
     chunk_meta = chunk_meta or {}
     retrieval_traces = [t for t in traces if t.get("stage") == "retrieval"]
@@ -97,15 +138,10 @@ def build_candidates(
         method = "unmatched"
         joined: dict | None = None
         wanted = _source_keys(row["sources"])
-        if wanted and chunk_meta:
-            for index, trace in enumerate(retrieval_traces):
-                if index in used:
-                    continue
-                keys = _trace_keys(trace, chunk_meta)
-                if keys is not None and keys == wanted:
-                    joined, method = trace, "citations"
-                    used.add(index)
-                    break
+        cited_index = _unique_citation_join(wanted, retrieval_traces, chunk_meta, used)
+        if cited_index is not None:
+            joined, method = retrieval_traces[cited_index], "citations"
+            used.add(cited_index)
         if joined is None and wanted:
             same_count = [
                 index

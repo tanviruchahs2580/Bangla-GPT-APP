@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import copy
 import json
+import os
+import time
 from pathlib import Path
 
 import pytest
@@ -128,9 +130,19 @@ def test_missing_and_stale_evidence_are_reported(tmp_path: Path) -> None:
     artifact = repo_root / "apps" / "api" / "eval" / "generation_report.json"
     artifact.write_text("{}", encoding="utf-8")
     assert th.missing_evidence("model", repo_root) == []
-    # an artifact older than the changed source is not evidence about it
+    # An artifact older than the changed source is not evidence about it. The
+    # mtimes are set explicitly: relying on write ORDER made this test flaky on
+    # filesystems whose timestamps are coarse enough for two writes to land in
+    # the same tick (measured on Windows: the artifact then read as fresh).
     changed = repo_root / "services.py"
     changed.write_text("# changed after the report was written", encoding="utf-8")
-    stale = th.stale_evidence("model", repo_root, [changed])
-    assert stale == ["apps/api/eval/generation_report.json"]
+    now = time.time()
+    os.utime(artifact, (now - 3600, now - 3600))
+    os.utime(changed, (now, now))
+    assert th.stale_evidence("model", repo_root, [changed]) == [
+        "apps/api/eval/generation_report.json"
+    ]
+    # ... and an artifact newer than every changed source is not stale.
+    os.utime(artifact, (now + 60, now + 60))
+    assert th.stale_evidence("model", repo_root, [changed]) == []
     assert th.stale_evidence("model", repo_root, []) == []

@@ -223,6 +223,25 @@ def refusal_for(reason: str) -> str:
     return SAFETY_ANSWER
 
 
+def citation_coverage(answer: str, evidence_text: str) -> float:
+    """Stem-level share of the answer's terms the evidence carries (A8-08).
+
+    The primitive :func:`verify_citation` thresholds over the concatenated
+    evidence, exposed per passage so a caller can tell WHICH retrieved
+    passages an answer leans on (services.tutor attaches only those). An
+    answer with no scoreable terms returns 1.0 — the same convention
+    ``verify_citation`` documents (nothing to contradict).
+    """
+    from bangla_gpt_api.retrieval.bm25 import tokenize
+    from bangla_gpt_api.retrieval.hybrid import light_stem
+
+    answer_terms = {light_stem(t) for t in tokenize(answer) if len(t) >= 3}
+    if not answer_terms:
+        return 1.0
+    evidence_terms = {light_stem(t) for t in tokenize(evidence_text)}
+    return sum(1 for t in answer_terms if t in evidence_terms) / len(answer_terms)
+
+
 def verify_citation(answer: str, evidence_text: str) -> bool:
     """Heuristic post-generation check: does the answer lean on the evidence?
 
@@ -230,15 +249,7 @@ def verify_citation(answer: str, evidence_text: str) -> bool:
     evidence. A grounded answer that invents unrelated material scores low.
     This is a soft signal — callers log a warning rather than discard.
     """
-    from bangla_gpt_api.retrieval.bm25 import tokenize
-    from bangla_gpt_api.retrieval.hybrid import light_stem
-
-    answer_terms = {light_stem(t) for t in tokenize(answer) if len(t) >= 3}
-    if not answer_terms:
-        return True
-    evidence_terms = {light_stem(t) for t in tokenize(evidence_text)}
-    coverage = sum(1 for t in answer_terms if t in evidence_terms) / len(answer_terms)
-    return coverage >= 0.25
+    return citation_coverage(answer, evidence_text) >= 0.25
 
 
 # ── prompt-injection filter for corpus ingest ───────────────────────

@@ -171,7 +171,7 @@ def _is_rejected_title(words: list[str]) -> bool:
         return True
     if any(any(marker in word for marker in _CELL_MARKERS) for word in words[:2]):
         return True
-    return unicodedata.combining(words[0][0])
+    return bool(unicodedata.combining(words[0][0]))
 
 
 def _chapter_name(words: list[str]) -> str:

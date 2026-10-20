@@ -68,13 +68,13 @@ from bangla_gpt_api.services.costs import (
 from bangla_gpt_api.services.quiz_explain import quiz_explain_instruction
 from bangla_gpt_api.services.tutor import VISION_UNSUPPORTED_ANSWER
 
+from ._image_contract import _validate_chat_image
 from ._pagination import WindowPage
 from .common import (
     _answer_confidence,
     _request_context,
     _sanitize_event_props,
     _student_profile,
-    _validate_chat_image,
     canonical_subject,
     source_scores,
 )

@@ -1,10 +1,25 @@
 {
  "abstention_precision": 1.0,
  "abstention_recall": 1.0,
- "citation_precision": 0.3337,
- "citation_precision_chapter": 0.5374,
- "citation_recall": 1.0,
- "citations_total": 1870,
+ "citation_precision": 0.5101,
+ "citation_precision_chapter": 0.734,
+ "citation_precision_chapter_retrieved": 0.5369,
+ "citation_precision_retrieved": 0.3337,
+ "citation_recall": 0.9679,
+ "citations_retrieved_total": 1870,
+ "citations_total": 1184,
+ "false_refusal_by_stratum": {
+  "contextual": {
+   "answerable": 576,
+   "rate": 0.0,
+   "refused": 0
+  },
+  "definition": {
+   "answerable": 48,
+   "rate": 0.0,
+   "refused": 0
+  }
+ },
  "false_refusal_rate": 0.0,
  "format_validity": 1.0,
  "grounded_items": 624,
@@ -29,12 +44,13 @@
  "refusals_total": 22,
  "response_language_correctness": 1.0,
  "run_conditions": {
-  "generated_at": "2026-10-19T08:59:32+00:00",
+  "generated_at": "2026-10-20T17:55:46+00:00",
   "index_fingerprint": "HybridIndex:78:aec05278706d",
   "items": 646,
   "judge": "disabled: local_overlap fallback only (no provider configured)",
   "provider": "mock (hermetic; live generation metrics require a key -- owner action)",
   "redteam_items": 43
  },
- "unsafe_items": 43
+ "unsafe_items": 43,
+ "vocabulary_probe_items": 576
 }

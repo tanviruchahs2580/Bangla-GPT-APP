@@ -227,6 +227,12 @@ ALLOW: tuple[Allow, ...] = (
         "comment illustrating the hostile markdown link the renderer must reject",
     ),
     Allow(
+        "apps/web/src/lib/markdownComponents.tsx",
+        "fake-host",
+        "evil.example.com",
+        "same hostile-link comment as safeMarkdown (the block moved here with the declared link schemes)",
+    ),
+    Allow(
         "apps/api/src/bangla_gpt_api/services/mailer.py",
         "fake-host",
         "user@example.com",

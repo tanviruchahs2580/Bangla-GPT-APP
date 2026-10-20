@@ -5,8 +5,7 @@
   "apps/api/scripts/replica_check.py": 555,
   "apps/api/scripts/soak.py": 507,
   "apps/api/src/bangla_gpt_api/db/models.py": 978,
-  "apps/api/src/bangla_gpt_api/evaluation/cli.py": 754,
-  "apps/api/src/bangla_gpt_api/evaluation/generation.py": 535,
+  "apps/api/src/bangla_gpt_api/evaluation/cli.py": 803,
   "apps/api/src/bangla_gpt_api/evaluation/targets_report.py": 512,
   "apps/api/src/bangla_gpt_api/main.py": 610,
   "apps/api/src/bangla_gpt_api/middleware.py": 620,
@@ -23,7 +22,7 @@
   "apps/api/src/bangla_gpt_api/schemas.py": 1532,
   "apps/api/src/bangla_gpt_api/services/breached_passwords.py": 631,
   "apps/api/src/bangla_gpt_api/services/knowledge.py": 549,
-  "apps/api/src/bangla_gpt_api/services/tutor.py": 1750,
+  "apps/api/src/bangla_gpt_api/services/tutor.py": 1815,
   "apps/api/tests/test_e2_coverage_gaps.py": 821,
   "apps/api/tests/test_product_v3.py": 585,
   "apps/api/tests/test_providers_openai.py": 541,
@@ -39,8 +38,8 @@
   "apps/web/src/pages/teacher/ClassesPage.tsx": 598,
   "apps/web/src/pages/teacher/CreatePage.tsx": 696,
   "apps/web/src/types.ts": 581,
-  "scripts/check_placeholders.py": 539
+  "scripts/check_placeholders.py": 545
  },
- "generated": "2026-10-20T16:48:08Z",
+ "generated": "2026-10-20T17:30:55Z",
  "max_lines": 500
 }

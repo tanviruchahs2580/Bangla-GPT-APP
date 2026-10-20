@@ -9,13 +9,19 @@ over the golden set (``--generation-report``).
 
 Metric definitions (each pinned by a test on hand-built responses):
 
-* ``citation_precision`` -- micro-averaged over sources the server attached to
-  an answer: the share whose (chapter, section) equals the item's gold
-  section. Sources are attached from the retrieved set, so this measures
-  whether retrieval *selected* the right passage. ``citation_precision_chapter``
-  is the same count at chapter granularity: a source from the right chapter
-  but a neighbouring section is imprecise, not wrong, and both numbers are
-  reported so neither reading is hidden.
+* ``citation_precision`` -- micro-averaged over sources the server ATTACHED to
+  an answer (A8-08: the passages the answer leans on, selected per passage by
+  ``services.tutor._cited_sources``): the share whose (chapter, section)
+  equals the item's gold section. ``citation_precision_chapter`` is the same
+  count at chapter granularity: a source from the right chapter but a
+  neighbouring section is imprecise, not wrong, and both numbers are reported
+  so neither reading is hidden.
+* ``citation_precision_retrieved`` / ``..._chapter_retrieved`` -- the same
+  counts over the passages RETRIEVAL returned (top-k), which is what the
+  metric measured before the selection existed. Both are reported: the
+  attached-set number answers "are the citations the reader sees supported",
+  the retrieved-set number answers "did retrieval pick the right passage",
+  and neither hides the other.
 * ``citation_recall`` -- macro-averaged over answered answerable items: the
   share that cite at least one gold source.
 * ``abstention_precision`` -- of the refusals the system produced, the share
@@ -24,7 +30,15 @@ Metric definitions (each pinned by a test on hand-built responses):
   from the corpus).
 * ``abstention_recall`` -- of the unanswerable items, the share refused.
 * ``false_refusal_rate`` -- of the answerable items, the share refused (the
-  cost side of abstention; the spec's ceiling is 5%).
+  cost side of abstention; the spec's ceiling is 5%). ``false_refusal_by_stratum``
+  splits it by the golden stratum and ``vocabulary_probe_items`` counts the
+  items whose "question" is a 2-3-term vocabulary window with a question
+  suffix appended ("চাপ দুই কী?", the generator's ``WINDOW_SUFFIX``) -- on the
+  frozen test split that is 167 of 181 answerable items, and every refusal in
+  the 2026-10-20 live run sits there, on items whose gold section is in the
+  top-3 (the model declining a term soup, not a question). The headline rate
+  keeps every answerable item: the split is reported next to it, never
+  instead of it, and the generator no longer builds fragments.
 * ``refusal_correctness_unsafe`` -- on the red-team set, the share refused.
 * ``response_language_correctness`` -- the share of grounded answers that are
   Bangla-dominant (>= 50% of their letters Bengali) and free of mis-script
@@ -32,29 +46,13 @@ Metric definitions (each pinned by a test on hand-built responses):
 * ``format_validity`` -- the share of grounded answers carrying the four
   section labels SYSTEM_PROMPT rule 6 requires *and* at least one source.
 
-Judge usage is deliberately gated:
-
-* the judge prompt lives in ``eval/judge_prompt_v1.md`` and its version is the
-  digest of that file, so an edit cannot leave a stale version in a report;
-* :func:`judge_agreement` reports raw agreement and Cohen's kappa against the
-  owner's labels in ``eval/judge_agreement_sample.json`` and refuses to report
-  a number below :data:`MIN_HUMAN_LABELS` labelled items;
-* :func:`verbosity_bias` reports the judge-score/answer-length association and
-  self-preference is flagged when judge and generator are the same model.
-
-No humans exist in this environment: the sample ships with null labels and the
-harness returns ``owner_action_required`` until the owner fills it -- that is
-the honest state, not a placeholder score.
+The judge harness (prompt versioning, agreement study, bias probes) lives
+together in ``evaluation/judge.py``.
 """
 
 from __future__ import annotations
 
-import hashlib
-import json
-import math
 import re
-from collections.abc import Iterable
-from pathlib import Path
 from typing import Any
 
 from bangla_gpt_api.services.answer_structure import (
@@ -64,14 +62,8 @@ from bangla_gpt_api.services.answer_structure import (
     SECTION_SIMPLE,
 )
 
-#: Minimum labelled items before an agreement number may be reported (spec:
-#: "at least 50 human-labelled items").
-MIN_HUMAN_LABELS = 50
-
-#: Judge-human agreement floor for using the judge as a metric of record.
 #: Kappa is chance-corrected; 0.4 is the bottom of the "moderate" band
 #: (Landis & Koch), the lowest band a metric of record should sit in.
-MIN_KAPPA = 0.4
 
 #: Share of Bengali letters above which an answer counts as Bangla-dominant.
 LANGUAGE_BANGLA_SHARE = 0.5
@@ -117,6 +109,15 @@ def has_mis_script(text: str) -> bool:
     return any(char in text for char in _MIS_SCRIPT_CHARS)
 
 
+#: A8-08: golden strata whose items are vocabulary probes rather than
+#: questions. The generator (``scripts/gen_golden_v2.py``) builds them from a
+#: sliding window of 2-3 content terms plus a question suffix ("চাপ দুই কী?"),
+#: so a refusal on one of them is the model declining a term soup, not a
+#: refused question -- every such item keeps its gold section in the top-3
+#: (measured 2026-10-20). Reported as its own rate next to the headline one.
+VOCABULARY_PROBE_STRATA = frozenset({"contextual"})
+
+
 def language_ok(text: str) -> bool:
     """Bangla-dominant and free of mis-script characters."""
     return bangla_letter_share(text) >= LANGUAGE_BANGLA_SHARE and not has_mis_script(text)
@@ -153,6 +154,100 @@ def source_matches_chapter(source: Any, *, chapter: str | None) -> bool:
     return bool(want_chapter) and _normalize(getattr(source, "chapter", None)) == want_chapter
 
 
+def _count_rows(rows: list[dict]) -> dict[str, Any]:
+    """The refusal/answerable accounting, in one pass over the rows (A8-08).
+
+    Split out of :func:`generation_metrics` so the citation loop there stays a
+    citation loop: this pass answers "how many items were answerable, refused,
+    and on which stratum", including the vocabulary-window count whose items
+    are term windows rather than questions.
+    """
+    counts: dict[str, Any] = {
+        "answerable": 0,
+        "answered_answerable": 0,
+        "unanswerable": 0,
+        "refusals_total": 0,
+        "refused_unanswerable": 0,
+        "grounded_items": 0,
+        "probe_items": 0,
+        "refusals_by_stratum": {},
+    }
+    strata: dict[str, list[int]] = counts["refusals_by_stratum"]
+    for row in rows:
+        expect = row["expect"]
+        grounded = bool(row["grounded"])
+        if expect == "answer":
+            counts["answerable"] += 1
+            counts["answered_answerable"] += int(grounded)
+            stratum = str(row.get("stratum") or "unknown")
+            counts["probe_items"] += int(stratum in VOCABULARY_PROBE_STRATA)
+            bucket = strata.setdefault(stratum, [0, 0])
+            bucket[0] += 1
+            bucket[1] += int(not grounded)
+        else:
+            counts["unanswerable"] += 1
+        if not grounded:
+            counts["refusals_total"] += 1
+            counts["refused_unanswerable"] += int(expect == "refuse")
+            continue
+        counts["grounded_items"] += 1
+    return counts
+
+
+def _match_counts(
+    sources: list, gold_chapter: str | None, gold_section: str | None
+) -> tuple[int, int]:
+    """How many of this source list match the gold section, and the gold chapter."""
+    gold = sum(
+        1
+        for source in sources
+        if source_matches_gold(source, chapter=gold_chapter, section=gold_section)
+    )
+    chapter = sum(1 for source in sources if source_matches_chapter(source, chapter=gold_chapter))
+    return gold, chapter
+
+
+def _count_citations(rows: list[dict]) -> dict[str, int]:
+    """The citation/language/format accounting over the grounded rows.
+
+    Two readings of citation precision are counted here: over the sources the
+    response ATTACHED (the passages the answer leans on) and over the passages
+    RETRIEVAL returned. A row without ``retrieved_sources`` contributes nothing
+    to the retrieved counters, so a report built from attached sets alone
+    cannot claim a retrieved-set rate.
+    """
+    totals = {
+        "cited_total": 0,
+        "cited_gold": 0,
+        "cited_chapter": 0,
+        "cited_answerable": 0,
+        "retrieved_total": 0,
+        "retrieved_gold": 0,
+        "retrieved_chapter": 0,
+        "language_ok": 0,
+        "format_ok": 0,
+    }
+    for row in rows:
+        if not row["grounded"]:
+            continue
+        chapter, section = row.get("gold_chapter"), row.get("gold_section")
+        sources = list(row.get("sources") or [])
+        retrieved = list(row.get("retrieved_sources") or [])
+        cited_gold, cited_chapter = _match_counts(sources, chapter, section)
+        retrieved_gold, retrieved_chapter = _match_counts(retrieved, chapter, section)
+        answer = str(row.get("answer") or "")
+        totals["cited_total"] += len(sources)
+        totals["cited_gold"] += cited_gold
+        totals["cited_chapter"] += cited_chapter
+        totals["cited_answerable"] += int(row["expect"] == "answer" and cited_gold > 0)
+        totals["retrieved_total"] += len(retrieved)
+        totals["retrieved_gold"] += retrieved_gold
+        totals["retrieved_chapter"] += retrieved_chapter
+        totals["language_ok"] += int(language_ok(answer))
+        totals["format_ok"] += int(format_ok(answer, source_count=len(sources)))
+    return totals
+
+
 def generation_metrics(
     rows: list[dict],
     *,
@@ -165,43 +260,25 @@ def generation_metrics(
     "gold_section", "answer"}`` where ``sources`` is the list of SourceRef
     objects actually returned by the tutor.
     """
-    cited_total = cited_gold = cited_chapter = 0
-    answerable = answered_answerable = cited_answerable = 0
-    unanswerable = refused_unanswerable = refusals_total = 0
-    language_ok_count = format_ok_count = grounded_items = 0
-    for row in rows:
-        expect = row["expect"]
-        grounded = bool(row["grounded"])
-        if expect == "answer":
-            answerable += 1
-            if grounded:
-                answered_answerable += 1
-        else:
-            unanswerable += 1
-        if not grounded:
-            refusals_total += 1
-            refused_unanswerable += int(expect == "refuse")
-            continue
-        sources = list(row.get("sources") or [])
-        cited_total += len(sources)
-        matched = [
-            source
-            for source in sources
-            if source_matches_gold(
-                source, chapter=row.get("gold_chapter"), section=row.get("gold_section")
-            )
-        ]
-        cited_gold += len(matched)
-        cited_chapter += sum(
-            1
-            for source in sources
-            if source_matches_chapter(source, chapter=row.get("gold_chapter"))
-        )
-        cited_answerable += int(expect == "answer" and bool(matched))
-        grounded_items += 1
-        answer = str(row.get("answer") or "")
-        language_ok_count += int(language_ok(answer))
-        format_ok_count += int(format_ok(answer, source_count=len(sources)))
+    counts = _count_rows(rows)
+    answerable = counts["answerable"]
+    answered_answerable = counts["answered_answerable"]
+    unanswerable = counts["unanswerable"]
+    refusals_total = counts["refusals_total"]
+    refused_unanswerable = counts["refused_unanswerable"]
+    probe_items = counts["probe_items"]
+    refusals_by_stratum = counts["refusals_by_stratum"]
+    grounded_items = counts["grounded_items"]
+    cited = _count_citations(rows)
+    cited_total = cited["cited_total"]
+    cited_gold = cited["cited_gold"]
+    cited_chapter = cited["cited_chapter"]
+    cited_answerable = cited["cited_answerable"]
+    retrieved_total = cited["retrieved_total"]
+    retrieved_gold = cited["retrieved_gold"]
+    retrieved_chapter = cited["retrieved_chapter"]
+    language_ok_count = cited["language_ok"]
+    format_ok_count = cited["format_ok"]
 
     def rate(numerator: int, denominator: int) -> float:
         return round(numerator / denominator, 4) if denominator else 0.0
@@ -210,6 +287,18 @@ def generation_metrics(
         "items": len(rows),
         "citation_precision": rate(cited_gold, cited_total),
         "citation_precision_chapter": rate(cited_chapter, cited_total),
+        "citation_precision_retrieved": rate(retrieved_gold, retrieved_total),
+        "citation_precision_chapter_retrieved": rate(retrieved_chapter, retrieved_total),
+        "citations_retrieved_total": retrieved_total,
+        "false_refusal_by_stratum": {
+            name: {
+                "answerable": counts[0],
+                "refused": counts[1],
+                "rate": rate(counts[1], counts[0]),
+            }
+            for name, counts in sorted(refusals_by_stratum.items())
+        },
+        "vocabulary_probe_items": probe_items,
         "citation_recall": rate(cited_answerable, answered_answerable),
         "citations_total": cited_total,
         "abstention_precision": rate(refused_unanswerable, refusals_total),
@@ -221,6 +310,20 @@ def generation_metrics(
         "grounded_items": grounded_items,
         "refusals_total": refusals_total,
     }
+
+
+def _retrieved_sources(tutor: Any, item: dict) -> list:
+    """The passages retrieval returns for an item, or [] when unsupported.
+
+    A8-08: the report carries both readings of citation precision (attached
+    vs retrieved) without a second evaluation pass. A tutor double without the
+    method yields an empty list, and the aggregation then falls back to the
+    attached set -- the report never claims a retrieved set it did not see.
+    """
+    method = getattr(tutor, "retrieved_sources", None)
+    if not callable(method):
+        return []
+    return list(method(item["question"], item["class_level"], item.get("subject") or None) or [])
 
 
 async def run_generation_report(
@@ -264,6 +367,7 @@ async def run_generation_report(
         )
         row["grounded"] = bool(getattr(response, "grounded", False))
         row["sources"] = list(getattr(response, "sources", None) or [])
+        row["retrieved_sources"] = _retrieved_sources(tutor, item)
         row["answer"] = str(getattr(response, "answer", "") or "")
         row["split"] = item.get("split", "dev")
         row["stratum"] = item.get("stratum")
@@ -302,234 +406,4 @@ async def run_generation_report(
         rows, refusal_correct_unsafe=refused_unsafe, unsafe_total=unsafe_total
     )
     report["unsafe_items"] = unsafe_total
-    return report
-
-
-def judge_prompt_path(api_root: Path) -> Path:
-    return api_root / "eval" / "judge_prompt_v1.md"
-
-
-#: The one fenced block in the prompt file is the prompt; the header and the
-#: changelog around it are documentation, not part of the version.
-_PROMPT_BLOCK_RE = re.compile(r"```text\n(.*?)```", re.DOTALL)
-
-
-def load_judge_prompt(path: Path) -> str:
-    """The exact prompt text from its versioned file (fails loudly if absent)."""
-    text = path.read_text(encoding="utf-8")
-    match = _PROMPT_BLOCK_RE.search(text)
-    if match is None:
-        raise ValueError(f"no ```text prompt block in {path.name}")
-    return match.group(1)
-
-
-def judge_prompt_version(path: Path) -> str:
-    """Digest of the prompt *text* -- the version recorded in reports."""
-    return "jp-" + hashlib.sha256(load_judge_prompt(path).encode("utf-8")).hexdigest()[:12]
-
-
-def cohen_kappa(judge: Iterable[int], human: Iterable[int]) -> float:
-    """Cohen's kappa for two binary raters over paired labels.
-
-    Returns 0.0 when the expected agreement is 1.0 (both raters constant), so
-    a degenerate sample cannot score as "perfect agreement".
-    """
-    pairs = list(zip(judge, human, strict=True))
-    n = len(pairs)
-    if n == 0:
-        return 0.0
-    observed = sum(1 for j, h in pairs if j == h) / n
-    judge_yes = sum(1 for j, _h in pairs if j) / n
-    human_yes = sum(1 for _j, h in pairs if h) / n
-    expected = judge_yes * human_yes + (1 - judge_yes) * (1 - human_yes)
-    if expected >= 1.0:
-        return 0.0
-    return round((observed - expected) / (1 - expected), 4)
-
-
-def pearson(xs: list[float], ys: list[float]) -> float:
-    """Pearson correlation; 0.0 when either series has no variance."""
-    n = len(xs)
-    if n < 2 or len(ys) != n:
-        return 0.0
-    mx = sum(xs) / n
-    my = sum(ys) / n
-    num = sum((x - mx) * (y - my) for x, y in zip(xs, ys, strict=True))
-    den = math.sqrt(sum((x - mx) ** 2 for x in xs) * sum((y - my) ** 2 for y in ys))
-    return round(num / den, 4) if den else 0.0
-
-
-def verbosity_bias(scores: list[float], answer_chars: list[int]) -> dict[str, Any]:
-    """Association between judge score and answer length (length-bias probe).
-
-    Position bias is not measurable here by construction: this is a pointwise
-    judge (one answer per prompt), so there is no answer order to swap. That
-    statement travels with the number instead of being left implicit.
-    """
-    if len(scores) != len(answer_chars):
-        raise ValueError("scores and answer_chars must be paired")
-    correlation = pearson([float(count) for count in answer_chars], scores)
-    return {
-        "n": len(scores),
-        "pearson_score_vs_chars": correlation,
-        "position_bias": "not_applicable (pointwise judge: one answer per prompt)",
-        "flagged": abs(correlation) >= 0.5,
-    }
-
-
-def judge_agreement(
-    judge_scores: list[float],
-    human_labels: list[Any],
-    *,
-    judge_model: str | None,
-    generator_model: str | None,
-) -> dict[str, Any]:
-    """Agreement between the judge and the owner's human labels.
-
-    Reports a number only when >= :data:`MIN_HUMAN_LABELS` paired items carry a
-    human label; below that (including the shipped all-null template) the
-    status is ``owner_action_required`` and no kappa is reported.
-    """
-    out: dict[str, Any] = {
-        "judge_model": judge_model,
-        "generator_model": generator_model,
-        "self_preference_flag": bool(
-            judge_model and generator_model and judge_model == generator_model
-        ),
-        "items_with_judge_score": len(judge_scores),
-        "human_sample_rows": len(human_labels),
-        "min_human_labels": MIN_HUMAN_LABELS,
-    }
-    if len(judge_scores) != len(human_labels):
-        out["status"] = "input_error"
-        out["note"] = "judge scores and human labels must be paired 1:1"
-        return out
-    pairs = [
-        (1 if score >= 0.5 else 0, int(label))
-        for score, label in zip(judge_scores, human_labels, strict=True)
-        if label is not None
-    ]
-    out["human_labelled_items"] = len(pairs)
-    if len(pairs) < MIN_HUMAN_LABELS:
-        out["status"] = "owner_action_required"
-        out["note"] = (
-            "The human sample (eval/judge_agreement_sample.json) is not filled in: no "
-            "agreement number is reported, and the judge must not be used as a metric "
-            "of record until it is."
-        )
-        return out
-    judge_binary = [judge for judge, _human in pairs]
-    human_binary = [human for _judge, human in pairs]
-    raw = sum(1 for j, h in zip(judge_binary, human_binary, strict=True) if j == h) / len(pairs)
-    kappa = cohen_kappa(judge_binary, human_binary)
-    # Both raters constant: kappa has no chance-corrected variance to divide
-    # by, so the floor cannot be evaluated from this sample at all -- extend
-    # it with the label class the sample is missing rather than reading the
-    # raw agreement as "passed".
-    degenerate = len(set(judge_binary)) <= 1 and len(set(human_binary)) <= 1
-    out.update(
-        {
-            "status": "measured",
-            "raw_agreement": round(raw, 4),
-            "cohen_kappa": kappa,
-            "kappa_floor": MIN_KAPPA,
-            "kappa_degenerate": degenerate,
-            "passes_floor": (not degenerate) and kappa >= MIN_KAPPA,
-        }
-    )
-    if degenerate:
-        out["note"] = (
-            "every labelled item has the same label for both raters: kappa is "
-            "undefined on this sample. Extend it with the missing label class "
-            "before reading agreement."
-        )
-    return out
-
-
-def build_judge_sample(items: list[dict], limit: int = MIN_HUMAN_LABELS) -> dict[str, Any]:
-    """A deterministic, stratum-covering judge-agreement sample template.
-
-    Round-robins over (class_level, subject, stratum) groups so a 50-item
-    sample cannot be all class-6 science: the agreement study must be able to
-    fail for a class the judge handles badly. The answer side is deliberately
-    empty -- the owner runs the live judge over these items and fills
-    ``judge_score`` and an independent ``human_label``.
-    """
-    groups: dict[tuple, list[dict]] = {}
-    for position, item in enumerate(items):
-        if item["expect"] != "answer":
-            continue
-        key = (item["class_level"], item["subject"], item["stratum"])
-        groups.setdefault(key, []).append({"item_index": position, **item})
-    ordered_keys = sorted(groups)
-    picked: list[dict] = []
-    cursor = 0
-    while len(picked) < limit:
-        progressed = False
-        for key in ordered_keys:
-            group = groups[key]
-            if cursor < len(group) and len(picked) < limit:
-                row = group[cursor]
-                picked.append(
-                    {
-                        "item_index": row["item_index"],
-                        "class_level": row["class_level"],
-                        "subject": row["subject"],
-                        "stratum": row["stratum"],
-                        "split": row["split"],
-                        "question": row["question"],
-                        "judge_score": None,
-                        "answer_chars": None,
-                        "human_label": None,
-                    }
-                )
-                progressed = True
-        if not progressed:
-            break
-        cursor += 1
-    return {
-        "purpose": (
-            "A8-04 judge-human agreement study. The judge must not be used as a "
-            "metric of record until at least 50 rows carry a human label."
-        ),
-        "sampling_rule": (
-            "round-robin over sorted (class_level, subject, stratum) groups of the "
-            "golden set's answerable items, in file order (scripts regenerate it "
-            "deterministically; see docs/evaluation/judge-agreement.md)"
-        ),
-        "owner_action": (
-            "Run the judge prompt (eval/judge_prompt_v1.md) over each question with "
-            "the deployed provider, record judge_score (0..1) and answer_chars, then "
-            "label every answer independently as human_label 0 or 1."
-        ),
-        "judge_model": None,
-        "generator_model": None,
-        "items": picked,
-    }
-
-
-def load_judge_harness(api_root: Path) -> dict[str, Any]:
-    """Read the shipped harness files and report their state without inventing data."""
-    prompt_path = judge_prompt_path(api_root)
-    sample_path = api_root / "eval" / "judge_agreement_sample.json"
-    payload = json.loads(sample_path.read_text(encoding="utf-8"))
-    rows = payload["items"]
-    scored = [row for row in rows if row.get("judge_score") is not None]
-    report = judge_agreement(
-        [float(row["judge_score"]) for row in scored],
-        [row.get("human_label") for row in scored],
-        judge_model=payload.get("judge_model"),
-        generator_model=payload.get("generator_model"),
-    )
-    report["judge_prompt_version"] = judge_prompt_version(prompt_path)
-    report["sample_file"] = sample_path.name
-    report["template_items"] = len(rows)
-    report["verbosity_bias"] = (
-        verbosity_bias(
-            [float(row["judge_score"]) for row in scored],
-            [int(row.get("answer_chars") or 0) for row in scored],
-        )
-        if scored
-        else None
-    )
     return report

@@ -12,7 +12,7 @@ from bangla_gpt_api.logging_config import json_log, trace_event
 from bangla_gpt_api.providers.base import ProviderError
 from bangla_gpt_api.schemas import SourceRef
 from bangla_gpt_api.services.costs import estimate_tokens
-from bangla_gpt_api.services.tutor import sanitize_evidence
+from bangla_gpt_api.services.safety import sanitize_evidence
 
 logger = logging.getLogger(__name__)
 

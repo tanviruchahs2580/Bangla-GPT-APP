@@ -28,74 +28,202 @@ build, so a unit change is visible in the artifact, not only in this file.
 
 from __future__ import annotations
 
-import hashlib
 import re
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from typing import Any
 
-from bangla_gpt_api.nctb.chunk_headings import (  # noqa: F401
-    _CELL_MARKERS,  # noqa: F401
-    _COLON_HEADING_BREAK,  # noqa: F401
-    _HEADING_BREAK,  # noqa: F401
-    _LABEL_TRIM,  # noqa: F401
-    _ORDINAL_ALT,  # noqa: F401
-    _ORDINAL_REPAIRS,  # noqa: F401
-    _PROSE_CONTINUATIONS,  # noqa: F401
-    _PROSE_TITLE_WORDS,  # noqa: F401
-    _SECTION_BREAK,  # noqa: F401
-    _TITLE_CUT,  # noqa: F401
-    CHAPTER_ORDINALS,  # noqa: F401
-    CHAPTER_PATTERNS,  # noqa: F401
-    MAX_CHAPTER_LABEL_CHARS,  # noqa: F401
-    MAX_CHAPTER_TITLE_WORDS,  # noqa: F401
-    SECTION_HINTS,  # noqa: F401
-    _clean_chapter_title,  # noqa: F401
-    _is_chapter_heading,
-    _truncate_at_marker,  # noqa: F401
+from bangla_gpt_api.nctb.chunk_headings import (
+    # noqa: F401
+    _CELL_MARKERS as _CELL_MARKERS,
 )
-from bangla_gpt_api.nctb.chunk_packing import (  # noqa: F401
-    _SENTENCE_SPLIT,  # noqa: F401
-    _buffer_units,
-    _join_units,
-    _pack_units,
-    _Unit,
-    pack_sentences,
-    split_sentences,
+from bangla_gpt_api.nctb.chunk_headings import (
+    _COLON_HEADING_BREAK as _COLON_HEADING_BREAK,
 )
-from bangla_gpt_api.nctb.chunk_sizing import (  # noqa: F401
-    DEFAULT_OVERLAP_WORDS,  # noqa: F401
-    FLUSH_AHEAD_RATIO,  # noqa: F401
-    MAX_TOKENS,
-    MAX_WORDS,  # noqa: F401
-    MIN_TOKENS,
-    MIN_WORDS,
-    TARGET_TOKENS,
-    TARGET_WORDS,  # noqa: F401
-    TOKENS_PER_WORD_MEASURED,  # noqa: F401
-    _resolve_sizing,
-    _Sizing,
-    _token_window,  # noqa: F401
-    _word_window,  # noqa: F401
+from bangla_gpt_api.nctb.chunk_headings import (
+    _HEADING_BREAK as _HEADING_BREAK,
 )
-from bangla_gpt_api.nctb.chunk_units import (  # noqa: F401
-    _COLUMN_GAP,  # noqa: F401
-    _FORMULA_CHARS,  # noqa: F401
-    _FORMULA_OPERATORS,  # noqa: F401
-    _NUMBER_TOKEN,  # noqa: F401
-    _WIDE_COLUMN_GAP,  # noqa: F401
-    FORMULA_MIN_CHARS,  # noqa: F401
-    FORMULA_MIN_OPERATORS,  # noqa: F401
-    NUMBER_ROW_MAX_TOKENS,  # noqa: F401
-    NUMBER_ROW_MIN_RATIO,  # noqa: F401
-    NUMBER_ROW_MIN_TOKENS,  # noqa: F401
-    TABLE_CELL_SEPARATOR,
-    TABLE_ROW_MIN_WIDE_GAPS,  # noqa: F401
-    TABLE_ROW_SEPARATOR,  # noqa: F401
-    _format_table_row,
-    _is_formula_line,
-    _is_number_row,  # noqa: F401
-    _is_table_row,
-    _restore_line_breaks,
+from bangla_gpt_api.nctb.chunk_headings import (
+    _LABEL_TRIM as _LABEL_TRIM,
+)
+from bangla_gpt_api.nctb.chunk_headings import (
+    _ORDINAL_ALT as _ORDINAL_ALT,
+)
+from bangla_gpt_api.nctb.chunk_headings import (
+    _ORDINAL_REPAIRS as _ORDINAL_REPAIRS,
+)
+from bangla_gpt_api.nctb.chunk_headings import (
+    _PROSE_CONTINUATIONS as _PROSE_CONTINUATIONS,
+)
+from bangla_gpt_api.nctb.chunk_headings import (
+    _PROSE_TITLE_WORDS as _PROSE_TITLE_WORDS,
+)
+from bangla_gpt_api.nctb.chunk_headings import (
+    _SECTION_BREAK as _SECTION_BREAK,
+)
+from bangla_gpt_api.nctb.chunk_headings import (
+    _TITLE_CUT as _TITLE_CUT,
+)
+from bangla_gpt_api.nctb.chunk_headings import (
+    CHAPTER_ORDINALS as CHAPTER_ORDINALS,
+)
+from bangla_gpt_api.nctb.chunk_headings import (
+    CHAPTER_PATTERNS as CHAPTER_PATTERNS,
+)
+from bangla_gpt_api.nctb.chunk_headings import (
+    MAX_CHAPTER_LABEL_CHARS as MAX_CHAPTER_LABEL_CHARS,
+)
+from bangla_gpt_api.nctb.chunk_headings import (
+    MAX_CHAPTER_TITLE_WORDS as MAX_CHAPTER_TITLE_WORDS,
+)
+from bangla_gpt_api.nctb.chunk_headings import (
+    SECTION_HINTS as SECTION_HINTS,
+)
+from bangla_gpt_api.nctb.chunk_headings import (
+    _clean_chapter_title as _clean_chapter_title,
+)
+from bangla_gpt_api.nctb.chunk_headings import (
+    _is_chapter_heading as _is_chapter_heading,
+)
+from bangla_gpt_api.nctb.chunk_headings import (
+    _truncate_at_marker as _truncate_at_marker,
+)
+from bangla_gpt_api.nctb.chunk_packing import (
+    # noqa: F401
+    _SENTENCE_SPLIT as _SENTENCE_SPLIT,
+)
+from bangla_gpt_api.nctb.chunk_packing import (
+    _buffer_units as _buffer_units,
+)
+from bangla_gpt_api.nctb.chunk_packing import (
+    _join_units as _join_units,
+)
+from bangla_gpt_api.nctb.chunk_packing import (
+    _pack_units as _pack_units,
+)
+from bangla_gpt_api.nctb.chunk_packing import (
+    _Unit as _Unit,
+)
+from bangla_gpt_api.nctb.chunk_packing import (
+    pack_sentences as pack_sentences,
+)
+from bangla_gpt_api.nctb.chunk_packing import (
+    split_sentences as split_sentences,
+)
+from bangla_gpt_api.nctb.chunk_records import (
+    RawChunk as RawChunk,
+)
+from bangla_gpt_api.nctb.chunk_records import (
+    _find_root as _find_root,
+)
+from bangla_gpt_api.nctb.chunk_records import (
+    _stable_id as _stable_id,
+)
+from bangla_gpt_api.nctb.chunk_records import (
+    _text_fingerprint as _text_fingerprint,
+)
+from bangla_gpt_api.nctb.chunk_records import (
+    _union_cross_source_pairs as _union_cross_source_pairs,
+)
+from bangla_gpt_api.nctb.chunk_records import (
+    dedupe_chunks as dedupe_chunks,
+)
+from bangla_gpt_api.nctb.chunk_records import (
+    near_duplicate_groups as near_duplicate_groups,
+)
+from bangla_gpt_api.nctb.chunk_sizing import (
+    # noqa: F401
+    DEFAULT_OVERLAP_WORDS as DEFAULT_OVERLAP_WORDS,
+)
+from bangla_gpt_api.nctb.chunk_sizing import (
+    FLUSH_AHEAD_RATIO as FLUSH_AHEAD_RATIO,
+)
+from bangla_gpt_api.nctb.chunk_sizing import (
+    MAX_TOKENS as MAX_TOKENS,
+)
+from bangla_gpt_api.nctb.chunk_sizing import (
+    MAX_WORDS as MAX_WORDS,
+)
+from bangla_gpt_api.nctb.chunk_sizing import (
+    MIN_TOKENS as MIN_TOKENS,
+)
+from bangla_gpt_api.nctb.chunk_sizing import (
+    MIN_WORDS as MIN_WORDS,
+)
+from bangla_gpt_api.nctb.chunk_sizing import (
+    TARGET_TOKENS as TARGET_TOKENS,
+)
+from bangla_gpt_api.nctb.chunk_sizing import (
+    TARGET_WORDS as TARGET_WORDS,
+)
+from bangla_gpt_api.nctb.chunk_sizing import (
+    TOKENS_PER_WORD_MEASURED as TOKENS_PER_WORD_MEASURED,
+)
+from bangla_gpt_api.nctb.chunk_sizing import (
+    _resolve_sizing as _resolve_sizing,
+)
+from bangla_gpt_api.nctb.chunk_sizing import (
+    _Sizing as _Sizing,
+)
+from bangla_gpt_api.nctb.chunk_sizing import (
+    _token_window as _token_window,
+)
+from bangla_gpt_api.nctb.chunk_sizing import (
+    _word_window as _word_window,
+)
+from bangla_gpt_api.nctb.chunk_units import (
+    # noqa: F401
+    _COLUMN_GAP as _COLUMN_GAP,
+)
+from bangla_gpt_api.nctb.chunk_units import (
+    _FORMULA_CHARS as _FORMULA_CHARS,
+)
+from bangla_gpt_api.nctb.chunk_units import (
+    _FORMULA_OPERATORS as _FORMULA_OPERATORS,
+)
+from bangla_gpt_api.nctb.chunk_units import (
+    _NUMBER_TOKEN as _NUMBER_TOKEN,
+)
+from bangla_gpt_api.nctb.chunk_units import (
+    _WIDE_COLUMN_GAP as _WIDE_COLUMN_GAP,
+)
+from bangla_gpt_api.nctb.chunk_units import (
+    FORMULA_MIN_CHARS as FORMULA_MIN_CHARS,
+)
+from bangla_gpt_api.nctb.chunk_units import (
+    FORMULA_MIN_OPERATORS as FORMULA_MIN_OPERATORS,
+)
+from bangla_gpt_api.nctb.chunk_units import (
+    NUMBER_ROW_MAX_TOKENS as NUMBER_ROW_MAX_TOKENS,
+)
+from bangla_gpt_api.nctb.chunk_units import (
+    NUMBER_ROW_MIN_RATIO as NUMBER_ROW_MIN_RATIO,
+)
+from bangla_gpt_api.nctb.chunk_units import (
+    NUMBER_ROW_MIN_TOKENS as NUMBER_ROW_MIN_TOKENS,
+)
+from bangla_gpt_api.nctb.chunk_units import (
+    TABLE_CELL_SEPARATOR as TABLE_CELL_SEPARATOR,
+)
+from bangla_gpt_api.nctb.chunk_units import (
+    TABLE_ROW_MIN_WIDE_GAPS as TABLE_ROW_MIN_WIDE_GAPS,
+)
+from bangla_gpt_api.nctb.chunk_units import (
+    TABLE_ROW_SEPARATOR as TABLE_ROW_SEPARATOR,
+)
+from bangla_gpt_api.nctb.chunk_units import (
+    _format_table_row as _format_table_row,
+)
+from bangla_gpt_api.nctb.chunk_units import (
+    _is_formula_line as _is_formula_line,
+)
+from bangla_gpt_api.nctb.chunk_units import (
+    _is_number_row as _is_number_row,
+)
+from bangla_gpt_api.nctb.chunk_units import (
+    _is_table_row as _is_table_row,
+)
+from bangla_gpt_api.nctb.chunk_units import (
+    _restore_line_breaks as _restore_line_breaks,
 )
 from bangla_gpt_api.nctb.extract import PageText
 from bangla_gpt_api.nctb.normalize import normalize_bangla
@@ -110,125 +238,6 @@ from bangla_gpt_api.services.context import TokenCounter, token_counter
 # ("৪.১ অবস্থা বিশ্লেষণ", "৬.৩ সাধারণ শিক্ষা ধারার …"), unlike textbook
 # chapters. They are section-level boundaries, not chapters.
 _NUMBERED_HEADING = re.compile(r"^[০-৯0-9]{1,2}(?:\.[০-৯0-9]{1,2})*[.)]?\s+\S")
-
-
-@dataclass
-class RawChunk:
-    chunk_id: str
-    parent_id: str | None
-    text: str  # normalized text used for indexing
-    original_text: str
-    chapter: str
-    page_start: int
-    page_end: int
-    section: str = ""  # section heading the chunk belongs to ("" = none)
-    #: A2-05: content-addressed hash of the final normalized chunk text,
-    #: stamped by dedupe_chunks (the last text-defining step of a build) so
-    #: every chunk record in *.chunks.jsonl carries its own checksum — the
-    #: per-chunk analogue of the manifest's per-document sha256.
-    content_hash: str = ""
-
-
-def _stable_id(*parts: object) -> str:
-    joined = "|".join(str(p) for p in parts)
-    return hashlib.sha1(joined.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
-
-
-def _text_fingerprint(text: str) -> str:
-    """Normalized content hash for cross-page/edition duplicate detection."""
-    return hashlib.sha256(" ".join(text.split()).encode("utf-8")).hexdigest()
-
-
-def dedupe_chunks(chunks: list[RawChunk]) -> tuple[list[RawChunk], int]:
-    """Drop byte-identical (post-normalization) chunks, keeping first wins.
-
-    Overlapping PDF pages and reprinted editions otherwise index the same
-    passage twice, diluting retrieval diversity. Every SURVIVOR carries its
-    content hash (A2-05), so the artifacts store a per-chunk checksum.
-    Returns ``(unique, removed)``.
-    """
-    seen: set[str] = set()
-    unique: list[RawChunk] = []
-    removed = 0
-    for chunk in chunks:
-        digest = _text_fingerprint(chunk.text)
-        if digest in seen:
-            removed += 1
-            continue
-        seen.add(digest)
-        chunk.content_hash = digest
-        unique.append(chunk)
-    return unique, removed
-
-
-def near_duplicate_groups(
-    records: list[tuple[str, str, str]],
-    *,
-    threshold: float = 0.9,
-    min_chars: int = 100,
-) -> list[list[tuple[str, str]]]:
-    """Cross-source near-duplicate detection over chunk texts (A2-05).
-
-    Input: ``(chunk_id, source_id, text)`` triples. Two texts are near
-    duplicates at character-trigram Jaccard >= ``threshold`` (identical
-    texts compare at 1.0, so exact cross-source reprints measure here too —
-    per-source exact dupes are already removed by dedupe_chunks). Short
-    texts (< ``min_chars``) never pair: section headings legitimately repeat
-    across books and carry too little content to judge. Cross-source only:
-    a near-duplicate WITHIN one source is a chunking artifact, not a
-    provenance/dedup finding. Groups with >= 2 members are returned with
-    transitive closure, members sorted by (source_id, chunk_id).
-    """
-    from bangla_gpt_api.retrieval.hybrid import trigram_ngrams
-
-    prepared = [
-        (chunk_id, source_id, len(text), trigram_ngrams(text))
-        for chunk_id, source_id, text in records
-    ]
-    parent = _union_cross_source_pairs(prepared, threshold=threshold, min_chars=min_chars)
-    groups: dict[int, list[tuple[str, str]]] = {}
-    for i, (chunk_id, source_id, _len, _grams) in enumerate(prepared):
-        groups.setdefault(_find_root(parent, i), []).append((source_id, chunk_id))
-    return [sorted(members) for members in groups.values() if len(members) >= 2]
-
-
-def _find_root(parent: list[int], i: int) -> int:
-    while parent[i] != i:
-        parent[i] = parent[parent[i]]
-        i = parent[i]
-    return i
-
-
-def _union_cross_source_pairs(
-    prepared: list[tuple[str, str, int, frozenset[str]]],
-    *,
-    threshold: float,
-    min_chars: int,
-) -> list[int]:
-    """Union-find pass over the cross-source trigram-Jaccard pairs."""
-    n = len(prepared)
-    parent = list(range(n))
-
-    def _find(i: int) -> int:
-        while parent[i] != i:
-            parent[i] = parent[parent[i]]
-            i = parent[i]
-        return i
-
-    for i in range(n):
-        _id_i, source_i, len_i, grams_i = prepared[i]
-        for j in range(i + 1, n):
-            _id_j, source_j, len_j, grams_j = prepared[j]
-            if source_i == source_j or not grams_i or not grams_j:
-                continue
-            if min(len_i, len_j) < min_chars:
-                continue  # short headings legitimately repeat; too little content
-            union = len(grams_i | grams_j)
-            if union and len(grams_i & grams_j) / union >= threshold:
-                ri, rj = _find(i), _find(j)
-                if ri != rj:
-                    parent[ri] = rj
-    return parent
 
 
 def _section_label(line: str, *, can_stand_alone: bool) -> str | None:

@@ -1,9 +1,9 @@
 # Live evaluation -- gemini-3.5-flash-lite
 
 - split: `test` (185 items), red-team: 43
-- provider calls: 183 (retried: 7); served from recording: 0; errors: 7
-- estimated spend: $0.0776 of the $1.00 cap
-- started 2026-10-20T09:47:16+00:00 / finished 2026-10-20T10:01:45+00:00
+- provider calls: 0 (retried: 0); served from recording: 183; errors: 0
+- estimated spend: $0.0000 of the $0.05 cap
+- started 2026-10-20T17:13:32+00:00 / finished 2026-10-20T17:13:35+00:00
 - partial: False
 
 ## Metrics
@@ -12,10 +12,13 @@
 |---|---|
 | abstention_precision | 0.2353 |
 | abstention_recall | 1.0 |
-| citation_precision | 0.3347 |
-| citation_precision_chapter | 0.5558 |
-| citation_recall | 1.0 |
-| citations_total | 502 |
+| citation_precision | 0.8743 |
+| citation_precision_chapter | 0.9727 |
+| citation_precision_chapter_retrieved | 0.5558 |
+| citation_precision_retrieved | 0.3347 |
+| citation_recall | 0.9524 |
+| citations_retrieved_total | 502 |
+| citations_total | 183 |
 | false_refusal_rate | 0.0718 |
 | format_validity | 1.0 |
 | grounded_items | 168 |
@@ -24,6 +27,7 @@
 | refusals_total | 17 |
 | response_language_correctness | 1.0 |
 | unsafe_items | 43 |
+| vocabulary_probe_items | 167 |
 
 Judge-human agreement is deliberately not reported: the sample carries no
 human labels (owner action), and an unmeasured agreement number would be a

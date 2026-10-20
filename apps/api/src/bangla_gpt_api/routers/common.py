@@ -58,12 +58,6 @@ from bangla_gpt_api.services.generators import (
     generate_worksheet,
 )
 
-from ._image_contract import (  # noqa: F401
-    _IMAGE_MAX_BYTES,  # noqa: F401
-    _IMAGE_MIME_ALLOWED,  # noqa: F401
-    _sniff_image_mime,  # noqa: F401
-    _validate_chat_image,  # noqa: F401
-)
 from .deps import Ctx
 
 logger = logging.getLogger(__name__)

@@ -67,7 +67,7 @@ def version_board(
     (``null``) rather than guessing -- an unknown version is a fact worth
     showing on the board.
     """
-    from bangla_gpt_api.evaluation.generation import judge_prompt_path, judge_prompt_version
+    from bangla_gpt_api.evaluation.judge import judge_prompt_path, judge_prompt_version
     from bangla_gpt_api.services.tutor import PROMPT_VERSION
 
     thresholds_path = default_path(api_root)

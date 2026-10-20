@@ -20,6 +20,7 @@ import argparse
 import asyncio
 import json
 import shutil
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -352,11 +353,11 @@ def _export_appropriateness_sheet(out_path: Path, root: Path, settings: Settings
 
 async def _generation_report(items: list[dict], settings: Settings) -> dict:
     """A8-04: run the golden set and the red-team set, aggregate every metric."""
-    from bangla_gpt_api.evaluation.generation import (
+    from bangla_gpt_api.evaluation.generation import run_generation_report
+    from bangla_gpt_api.evaluation.judge import (
         judge_prompt_path,
         judge_prompt_version,
         load_judge_harness,
-        run_generation_report,
     )
     from bangla_gpt_api.services.trace_meta import index_fingerprint
 
@@ -377,7 +378,130 @@ async def _generation_report(items: list[dict], settings: Settings) -> dict:
     return report
 
 
-def main() -> int:
+def _version_board_command(root: Path) -> int:
+    from bangla_gpt_api.evaluation.version_board import version_board
+
+    print(json.dumps(version_board(root), ensure_ascii=False, indent=1, sort_keys=True))
+    return 0
+
+
+def _count_tokens_audit_command(root: Path, args: argparse.Namespace) -> int:
+    from bangla_gpt_api.evaluation import token_audit
+
+    # The audit's provider settings: the audit only ever calls count_tokens (a
+    # free metadata endpoint) -- never generate.
+    audit_sample = 25
+    out_path = root / "eval" / "token_counter_calibration.json"
+    if args.count_tokens_audit:
+        raw = args.count_tokens_audit
+        if raw.isdigit():
+            audit_sample = int(raw)
+        else:
+            out_path = Path(raw)
+    payload = token_audit.build_audit(
+        settings=Settings(env="test"),
+        golden_path=root / "eval" / "golden_v2.json",
+        sample=audit_sample,
+        provider=None,
+    )
+    written = token_audit.write_audit(payload, out_path)
+    print(
+        json.dumps(
+            {
+                k: payload[k]
+                for k in (
+                    "provider",
+                    "counter",
+                    "vendor_endpoint",
+                    "note",
+                    "sample_size",
+                    "ratio_summary",
+                )
+            },
+            ensure_ascii=False,
+            indent=1,
+        )
+    )
+    print(f"token counter audit written: {written}")
+    return 0
+
+
+def _check_thresholds_command(root: Path, args: argparse.Namespace) -> int:
+    from bangla_gpt_api.evaluation import thresholds
+
+    path = Path(args.check_thresholds) if args.check_thresholds else thresholds.default_path(root)
+    try:
+        payload = thresholds.load_thresholds(path)
+        thresholds.validate_against_code(payload)
+    except thresholds.ThresholdError as exc:
+        print(f"THRESHOLDS: FAIL -- {exc}")
+        return 1
+    print(
+        f"THRESHOLDS: PASS -- version {payload['version']} "
+        f"({len(payload['changelog'])} changelog entries), "
+        f"tolerance {payload['gate']['tolerance_pp']}pp, "
+        f"primary metric {payload['primary_metric']!r} on split "
+        f"{payload['primary_split']!r}"
+    )
+    for kind in ("model", "prompt", "index", "embedding"):
+        missing = thresholds.missing_evidence(kind, root.parent.parent)
+        if missing:
+            print(f"  change '{kind}': MISSING required evidence {missing}")
+    return 0
+
+
+def _judge_agreement_command(root: Path) -> int:
+    from bangla_gpt_api.evaluation.judge import load_judge_harness
+
+    print(json.dumps(load_judge_harness(root), indent=1))
+    return 0
+
+
+def _generation_report_command(root: Path, args: argparse.Namespace, settings: Settings) -> int:
+    data = json.loads((root / "eval" / "golden_v2.json").read_text(encoding="utf-8"))
+    items = _select_split(data["items"], args.split or "all")
+    report = asyncio.run(_generation_report(items, settings))
+    out_path = (
+        Path(args.generation_report)
+        if args.generation_report
+        else (root / "eval" / "generation_report.json")
+    )
+    out_path.write_text(
+        json.dumps(report, ensure_ascii=False, indent=1, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(json.dumps(report, ensure_ascii=False, indent=1))
+    print(f"generation report written: {out_path}")
+    return 0
+
+
+def _export_appropriateness_command(
+    root: Path, args: argparse.Namespace, settings: Settings
+) -> int:
+    out_path = (
+        Path(args.export_appropriateness_sheet)
+        if args.export_appropriateness_sheet
+        else root / "eval" / "review_sheets" / "class_appropriateness_sheet.csv"
+    )
+    return _export_appropriateness_sheet(out_path, root, settings)
+
+
+#: Report flags whose handler is ``(root, args) -> exit code``, in dispatch
+#: order. A table instead of a twenty-branch chain: the flags are independent
+#: report generators, and the chain put the whole CLI at cyclomatic complexity
+#: 43 (D-03).
+_PATH_COMMANDS: tuple[tuple[str, Callable[[Path, argparse.Namespace], int]], ...] = (
+    ("rag_eval", _rag_eval),
+    ("variant_matrix", _variant_matrix),
+    ("targets_report", _targets_report),
+    ("stage_latency", _stage_latency),
+    ("index_budget", _index_budget),
+    ("ann_sweep", _ann_sweep),
+    ("reindex_drill", _reindex_drill),
+)
+
+
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="eval-v2")
     parser.add_argument("--golden", default=None)
     parser.add_argument("--baseline", default=None)
@@ -545,10 +669,15 @@ def main() -> int:
             "the tree."
         ),
     )
+    return parser
+
+
+def main() -> int:
+    parser = _build_parser()
     args = parser.parse_args()
 
     # HERMETIC: the gate must never hit an external model (CI has no secrets;
-    # a real LLM-judge is a human-input upgrade, ). Force mock even if the
+    # a real LLM-judge is a human-input upgrade). Force mock even if the
     # local.env sets LLM_PROVIDER=gemini.
     settings = Settings(env="test", llm_provider="mock")
 
@@ -557,122 +686,32 @@ def main() -> int:
 
     root = Path(__file__).resolve().parents[3]  # apps/api
 
-    if args.rag_eval is not None:
-        return _rag_eval(root, args)
-
-    if args.variant_matrix is not None:
-        return _variant_matrix(root, args)
-
-    if args.targets_report is not None:
-        return _targets_report(root, args)
-
-    if args.stage_latency is not None:
-        return _stage_latency(root, args)
-
-    if args.index_budget is not None:
-        return _index_budget(root, args)
-
-    if args.ann_sweep is not None:
-        return _ann_sweep(root, args)
-
-    if args.reindex_drill is not None:
-        return _reindex_drill(root, args)
+    for flag, handler in _PATH_COMMANDS:
+        if getattr(args, flag) is not None:
+            return handler(root, args)
 
     if args.version_board:
-        from bangla_gpt_api.evaluation.version_board import version_board
-
-        print(json.dumps(version_board(root), ensure_ascii=False, indent=1, sort_keys=True))
-        return 0
+        return _version_board_command(root)
 
     if args.count_tokens_audit is not None:
-        from bangla_gpt_api.evaluation import token_audit
-
-        # The audit's provider settings: the audit only ever calls
-        # count_tokens (a free metadata endpoint) -- never generate.
-        audit_sample = 25
-        out_path = root / "eval" / "token_counter_calibration.json"
-        if args.count_tokens_audit:
-            raw = args.count_tokens_audit
-            if raw.isdigit():
-                audit_sample = int(raw)
-            else:
-                out_path = Path(raw)
-        audit_settings = Settings(env="test")
-        payload = token_audit.build_audit(
-            settings=audit_settings,
-            golden_path=root / "eval" / "golden_v2.json",
-            sample=audit_sample,
-            provider=None,
-        )
-        written = token_audit.write_audit(payload, out_path)
-        print(
-            json.dumps(
-                {
-                    k: payload[k]
-                    for k in (
-                        "provider",
-                        "counter",
-                        "vendor_endpoint",
-                        "note",
-                        "sample_size",
-                        "ratio_summary",
-                    )
-                },
-                ensure_ascii=False,
-                indent=1,
-            )
-        )
-        print(f"token counter audit written: {written}")
-        return 0
+        return _count_tokens_audit_command(root, args)
 
     if args.check_thresholds is not None:
-        from bangla_gpt_api.evaluation import thresholds
-
-        path = (
-            Path(args.check_thresholds) if args.check_thresholds else thresholds.default_path(root)
-        )
-        try:
-            payload = thresholds.load_thresholds(path)
-            thresholds.validate_against_code(payload)
-        except thresholds.ThresholdError as exc:
-            print(f"THRESHOLDS: FAIL -- {exc}")
-            return 1
-        print(
-            f"THRESHOLDS: PASS -- version {payload['version']} "
-            f"({len(payload['changelog'])} changelog entries), "
-            f"tolerance {payload['gate']['tolerance_pp']}pp, "
-            f"primary metric {payload['primary_metric']!r} on split "
-            f"{payload['primary_split']!r}"
-        )
-        for kind in ("model", "prompt", "index", "embedding"):
-            missing = thresholds.missing_evidence(kind, root.parent.parent)
-            if missing:
-                print(f"  change '{kind}': MISSING required evidence {missing}")
-        return 0
+        return _check_thresholds_command(root, args)
 
     if args.judge_agreement:
-        from bangla_gpt_api.evaluation.generation import load_judge_harness
-
-        print(json.dumps(load_judge_harness(root), indent=1))
-        return 0
+        return _judge_agreement_command(root)
 
     if args.generation_report is not None:
-        data = json.loads((root / "eval" / "golden_v2.json").read_text(encoding="utf-8"))
-        items = _select_split(data["items"], args.split or "all")
-        report = asyncio.run(_generation_report(items, settings))
-        out_path = (
-            Path(args.generation_report)
-            if args.generation_report
-            else (root / "eval" / "generation_report.json")
-        )
-        out_path.write_text(
-            json.dumps(report, ensure_ascii=False, indent=1, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        print(json.dumps(report, ensure_ascii=False, indent=1))
-        print(f"generation report written: {out_path}")
-        return 0
+        return _generation_report_command(root, args, settings)
 
+    return _authoring_commands(root, args, settings, parser)
+
+
+def _authoring_commands(
+    root: Path, args: argparse.Namespace, settings: Settings, parser: argparse.ArgumentParser
+) -> int:
+    """Review-sheet commands, then the golden gate itself (the CLI's default)."""
     if args.export_synthetic_sheet is not None:
         return _export_synthetic_sheet(args, root)
 
@@ -683,53 +722,63 @@ def main() -> int:
         return _apply_review_sheet(Path(args.apply_review_sheet), root)
 
     if args.export_appropriateness_sheet is not None:
-        out_path = (
-            Path(args.export_appropriateness_sheet)
-            if args.export_appropriateness_sheet
-            else root / "eval" / "review_sheets" / "class_appropriateness_sheet.csv"
-        )
-        return _export_appropriateness_sheet(out_path, root, settings)
+        return _export_appropriateness_command(root, args, settings)
 
+    return _golden_gate(root, args, settings, parser)
+
+
+def _seed_bad_items(items: list[dict], count: int, parser: argparse.ArgumentParser) -> list[dict]:
+    """Inject deliberately-wrong expectations (``--seed-bad``, demo only).
+
+    The golden negatives are corpus-absence-VERIFIED at generation time
+    (gen_golden_v2.py asserts their tokens appear nowhere). Flipping
+    expect="refuse" -> "answer" states a deliberately-wrong expectation: the
+    correct system must REFUSE them, so each injected item is guaranteed to
+    register as a miss and drag grounded_rate down. Cycled with replacement so
+    N can exceed the negative count (the suite is 600+ items; ~14 injections
+    are needed to clear the 2pp gate).
+    """
+    negatives = [item for item in items if item["expect"] == "refuse"]
+    if not negatives:
+        parser.error("golden set has no negatives to seed from")
+    injected = [
+        {
+            **negatives[index % len(negatives)],
+            "expect": "answer",
+            "chapter": None,
+            "section": None,
+            "seeded_bad": True,
+        }
+        for index in range(count)
+    ]
+    print(f"SEED-BAD: injected {len(injected)} deliberately-wrong items (demo only)")
+    return items + injected
+
+
+def _print_failures(metrics: SuiteMetrics) -> None:
+    if not metrics.failures:
+        return
+    print(f"failures ({len(metrics.failures)}), first 10:")
+    for failure in metrics.failures[:10]:
+        print("  ", json.dumps(failure, ensure_ascii=True))
+
+
+def _golden_gate(
+    root: Path, args: argparse.Namespace, settings: Settings, parser: argparse.ArgumentParser
+) -> int:
+    """The default command: run the golden suite and compare to the baseline."""
     golden_path = Path(args.golden) if args.golden else root / "eval" / "golden_v2.json"
     baseline_path = Path(args.baseline) if args.baseline else root / "eval" / "baseline_v2.json"
 
     data = json.loads(golden_path.read_text(encoding="utf-8"))
     items = _select_split(data["items"], args.split or "all")
     if args.seed_bad:
-        # The golden negatives are corpus-absence-VERIFIED at generation time
-        # (gen_golden_v2.py asserts their tokens appear nowhere). Flipping
-        # expect="refuse" -> "answer" states a deliberately-wrong expectation:
-        # the correct system must REFUSE them, so each injected item is
-        # guaranteed to register as a miss and drag grounded_rate down.
-        # Cycled with replacement so N can exceed the negative count (the
-        # suite is 600+ items; ~14 injections are needed to clear the 2pp gate).
-        negatives = [it for it in items if it["expect"] == "refuse"]
-        if not negatives:
-            parser.error("golden set has no negatives to seed from")
-        bad = [
-            {
-                **negatives[i % len(negatives)],
-                "expect": "answer",
-                "chapter": None,
-                "section": None,
-                "seeded_bad": True,
-            }
-            for i in range(args.seed_bad)
-        ]
-        items = items + bad
-        print(f"SEED-BAD: injected {len(bad)} deliberately-wrong items (demo only)")
+        items = _seed_bad_items(items, args.seed_bad, parser)
 
-    # HERMETIC: the gate must never hit an external model (CI has no secrets;
-    # a real LLM-judge is a human-input upgrade, ). Force mock even if the
-    # local.env sets LLM_PROVIDER=gemini.
-    settings = Settings(env="test", llm_provider="mock")
     metrics = asyncio.run(_run(items, settings))
     current = metrics.as_dict()
     print(json.dumps(current, indent=1))
-    if metrics.failures:
-        print(f"failures ({len(metrics.failures)}), first 10:")
-        for f in metrics.failures[:10]:
-            print("  ", json.dumps(f, ensure_ascii=True))
+    _print_failures(metrics)
 
     if args.write_baseline:
         payload = {"recorded_by": "eval-v2 --write-baseline", "metrics": current}

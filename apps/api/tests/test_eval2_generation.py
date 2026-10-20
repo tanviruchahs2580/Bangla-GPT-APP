@@ -14,6 +14,7 @@ import pytest
 
 from bangla_gpt_api.data.loader import load_sample_corpus
 from bangla_gpt_api.evaluation import generation as gen
+from bangla_gpt_api.evaluation import judge as judge_mod
 from bangla_gpt_api.providers.mock import MockLLMProvider
 from bangla_gpt_api.retrieval.embedding import build_embedder
 from bangla_gpt_api.retrieval.hybrid_index import HybridIndex
@@ -109,15 +110,17 @@ def test_generation_metrics_count_every_defined_rate() -> None:
 
 
 def test_kappa_is_chance_corrected_and_degenerate_safe() -> None:
-    assert gen.cohen_kappa([1, 0, 1, 0, 1], [1, 0, 1, 0, 1]) == 1.0
+    assert judge_mod.cohen_kappa([1, 0, 1, 0, 1], [1, 0, 1, 0, 1]) == 1.0
     # observed 0.75, chance 0.5 -> kappa 0.5
-    assert gen.cohen_kappa([1, 0, 1, 0], [1, 0, 1, 1]) == 0.5
-    assert gen.cohen_kappa([1, 1, 1], [1, 1, 1]) == 0.0, "constant raters: no chance correction"
-    assert gen.cohen_kappa([], []) == 0.0
+    assert judge_mod.cohen_kappa([1, 0, 1, 0], [1, 0, 1, 1]) == 0.5
+    assert judge_mod.cohen_kappa([1, 1, 1], [1, 1, 1]) == 0.0, (
+        "constant raters: no chance correction"
+    )
+    assert judge_mod.cohen_kappa([], []) == 0.0
 
 
 def test_judge_agreement_refuses_to_report_below_the_floor() -> None:
-    small = gen.judge_agreement(
+    small = judge_mod.judge_agreement(
         [1.0] * 10, [1] * 10, judge_model="judge-x", generator_model="gen-y"
     )
     assert small["status"] == "owner_action_required"
@@ -126,60 +129,60 @@ def test_judge_agreement_refuses_to_report_below_the_floor() -> None:
     # a mixed 50-item sample with 45 agreements: kappa = (0.9-0.5)/0.5 = 0.8
     human = [1] * 25 + [0] * 25
     judge = [1.0] * 22 + [0.0] * 3 + [1.0] * 2 + [0.0] * 23
-    big = gen.judge_agreement(judge, human, judge_model="judge-x", generator_model="gen-y")
+    big = judge_mod.judge_agreement(judge, human, judge_model="judge-x", generator_model="gen-y")
     assert big["status"] == "measured"
     assert big["raw_agreement"] == 0.9
     assert big["cohen_kappa"] == 0.8
     assert big["passes_floor"] is True
     # both raters constant -> the floor is not evaluable on this sample
-    flat = gen.judge_agreement([1.0] * 50, [1] * 50, judge_model="j", generator_model="g")
+    flat = judge_mod.judge_agreement([1.0] * 50, [1] * 50, judge_model="j", generator_model="g")
     assert flat["kappa_degenerate"] is True
     assert flat["passes_floor"] is False
     assert "kappa is" in flat["note"]
-    same = gen.judge_agreement(judge, human, judge_model="same", generator_model="same")
+    same = judge_mod.judge_agreement(judge, human, judge_model="same", generator_model="same")
     assert same["self_preference_flag"] is True
 
 
 def test_verbosity_bias_flags_length_association() -> None:
     lengths = [10, 20, 30, 40, 50, 60]
-    perfect = gen.verbosity_bias([0.1, 0.2, 0.3, 0.4, 0.5, 0.6], lengths)
+    perfect = judge_mod.verbosity_bias([0.1, 0.2, 0.3, 0.4, 0.5, 0.6], lengths)
     assert perfect["flagged"] is True
     assert "pointwise" in perfect["position_bias"]
-    flat = gen.verbosity_bias([0.5] * len(lengths), lengths)
+    flat = judge_mod.verbosity_bias([0.5] * len(lengths), lengths)
     assert flat["pearson_score_vs_chars"] == 0.0 and flat["flagged"] is False
     with pytest.raises(ValueError, match="paired"):
-        gen.verbosity_bias([0.5], [1, 2])
+        judge_mod.verbosity_bias([0.5], [1, 2])
 
 
 def test_judge_prompt_version_tracks_only_the_prompt_block(tmp_path: Path) -> None:
     path = tmp_path / "prompt.md"
     path.write_text("# header\n\n```text\nscore it\n```\n", encoding="utf-8")
-    first = gen.judge_prompt_version(path)
-    assert gen.load_judge_prompt(path) == "score it\n"
+    first = judge_mod.judge_prompt_version(path)
+    assert judge_mod.load_judge_prompt(path) == "score it\n"
     path.write_text("# different header\n\n```text\nscore it\n```\n", encoding="utf-8")
-    assert gen.judge_prompt_version(path) == first, "documentation is not the prompt"
+    assert judge_mod.judge_prompt_version(path) == first, "documentation is not the prompt"
     path.write_text("# header\n\n```text\nscore it strictly\n```\n", encoding="utf-8")
-    assert gen.judge_prompt_version(path) != first
+    assert judge_mod.judge_prompt_version(path) != first
     path.write_text("no fenced block", encoding="utf-8")
     with pytest.raises(ValueError, match="no ```text prompt block"):
-        gen.load_judge_prompt(path)
+        judge_mod.load_judge_prompt(path)
 
 
 def test_shipped_harness_files_are_honest_about_missing_humans() -> None:
-    report = gen.load_judge_harness(API_ROOT)
+    report = judge_mod.load_judge_harness(API_ROOT)
     assert report["status"] == "owner_action_required"
-    assert report["template_items"] == gen.MIN_HUMAN_LABELS
+    assert report["template_items"] == judge_mod.MIN_HUMAN_LABELS
     assert report["human_labelled_items"] == 0
     assert report["verbosity_bias"] is None
-    assert report["judge_prompt_version"] == gen.judge_prompt_version(
-        gen.judge_prompt_path(API_ROOT)
+    assert report["judge_prompt_version"] == judge_mod.judge_prompt_version(
+        judge_mod.judge_prompt_path(API_ROOT)
     )
 
 
 def test_judge_sample_is_deterministic_and_stratum_covering() -> None:
     items = json.loads(GOLDEN.read_text(encoding="utf-8"))["items"]
-    first = gen.build_judge_sample(items, 50)
-    second = gen.build_judge_sample(items, 50)
+    first = judge_mod.build_judge_sample(items, 50)
+    second = judge_mod.build_judge_sample(items, 50)
     assert first == second
     assert len(first["items"]) == 50
     groups = {(row["class_level"], row["subject"]) for row in first["items"]}
