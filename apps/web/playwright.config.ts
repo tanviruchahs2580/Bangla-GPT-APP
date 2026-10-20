@@ -1,7 +1,7 @@
-import { defineConfig, devices } from '@playwright/test'
-import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { defineConfig, devices } from "@playwright/test";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /**
  * AUD-EF-02 / E-10 (issue #38): browser end-to-end smoke suite.
@@ -27,23 +27,24 @@ import { fileURLToPath } from 'node:url'
  * code).
  */
 
-const HERE = dirname(fileURLToPath(import.meta.url))
-const REPO_ROOT = join(HERE, '..', '..')
+const HERE = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = join(HERE, "..", "..");
 
 // The interpreter that can `import bangla_gpt_api`. CI exports E2E_PYTHON
 // (runner python + `pip install -e apps/api`); local default is the repo venv.
 const PYTHON =
-  process.env.E2E_PYTHON ?? (process.platform === 'win32' ? '.venv/Scripts/python.exe' : 'python')
+  process.env.E2E_PYTHON ??
+  (process.platform === "win32" ? ".venv/Scripts/python.exe" : "python");
 
 // One throwaway SQLite database per run, outside the repository: the seed
 // script and the API must agree on it, and no run may inherit another's rows.
-const DB_FILE = join(tmpdir(), `bgpt-e2e-${Date.now()}-${process.pid}.db`)
-const DATABASE_URL = `sqlite:///${DB_FILE.replace(/\\/g, '/')}`
+const DB_FILE = join(tmpdir(), `bgpt-e2e-${Date.now()}-${process.pid}.db`);
+const DATABASE_URL = `sqlite:///${DB_FILE.replace(/\\/g, "/")}`;
 
-const API_PORT = Number(process.env.E2E_API_PORT ?? 8000)
-const WEB_PORT = Number(process.env.E2E_WEB_PORT ?? 5173)
-const API_URL = `http://127.0.0.1:${API_PORT}`
-const WEB_URL = `http://127.0.0.1:${WEB_PORT}`
+const API_PORT = Number(process.env.E2E_API_PORT ?? 8000);
+const WEB_PORT = Number(process.env.E2E_WEB_PORT ?? 5173);
+const API_URL = `http://127.0.0.1:${API_PORT}`;
+const WEB_URL = `http://127.0.0.1:${WEB_PORT}`;
 
 // Default wiring, identical to CI: the app calls `/api/*` and the Vite dev
 // server proxies it to 127.0.0.1:8000 (vite.config.ts). E2E_API_PORT /
@@ -51,13 +52,13 @@ const WEB_URL = `http://127.0.0.1:${WEB_PORT}`
 // API port is overridden the proxy target cannot follow, so the dev server is
 // pointed straight at the API with VITE_API_BASE and the API's
 // ALLOWED_ORIGINS admits the dev-server origin.
-const DIRECT_API = API_PORT !== 8000
-const WEB_ORIGINS = `http://127.0.0.1:${WEB_PORT},http://localhost:${WEB_PORT}`
+const DIRECT_API = API_PORT !== 8000;
+const WEB_ORIGINS = `http://127.0.0.1:${WEB_PORT},http://localhost:${WEB_PORT}`;
 
 export default defineConfig({
-  testDir: './e2e',
+  testDir: "./e2e",
   // traces/screenshots/videos land under an already-ignored path (coverage/).
-  outputDir: './coverage/e2e/results',
+  outputDir: "./coverage/e2e/results",
   // Generous because the whole app is a lazy-loaded module graph: the first
   // navigation of a run pays for the compile/loading of every route chunk.
   // The per-assertion default stays tight so a broken selector still fails fast.
@@ -69,29 +70,33 @@ export default defineConfig({
     // below) and a 2% pixel-ratio difference is tolerated so cross-platform
     // text rasterisation does not fail the review it is meant to support.
     // The matrix and the review note live in e2e/visual.spec.ts.
-    toHaveScreenshot: { maxDiffPixelRatio: 0.02, animations: 'disabled', caret: 'hide' },
+    toHaveScreenshot: {
+      maxDiffPixelRatio: 0.02,
+      animations: "disabled",
+      caret: "hide",
+    },
   },
-  snapshotPathTemplate: '{testDir}/__screenshots__/{testFileName}/{arg}{ext}',
+  snapshotPathTemplate: "{testDir}/__screenshots__/{testFileName}/{arg}{ext}",
   fullyParallel: false,
   workers: 1,
   forbidOnly: !!process.env.CI,
   // One retry on CI: a second failure is real, the first may be runner noise.
   retries: process.env.CI ? 1 : 0,
   reporter: [
-    ['list'],
-    ['junit', { outputFile: 'coverage/e2e/junit.xml' }],
-    ['html', { outputFolder: 'coverage/e2e/html', open: 'never' }],
+    ["list"],
+    ["junit", { outputFile: "coverage/e2e/junit.xml" }],
+    ["html", { outputFolder: "coverage/e2e/html", open: "never" }],
   ],
   use: {
     baseURL: WEB_URL,
-    trace: 'retain-on-failure',
-    screenshot: 'only-on-failure',
-    video: 'off',
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
+    video: "off",
     // The app registers a service worker in production builds only; blocking
     // it keeps a stale cache from ever masking a regression.
-    serviceWorkers: 'block',
+    serviceWorkers: "block",
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
     {
       // Seed first (roles cannot be self-registered), then serve. One shell so
@@ -106,13 +111,22 @@ export default defineConfig({
       env: {
         DATABASE_URL,
         // mock provider: no API key, no network, deterministic answers.
-        ENV: 'ci',
-        LLM_PROVIDER: 'mock',
+        ENV: "ci",
+        LLM_PROVIDER: "mock",
         // jobs run inline in-process; no Redis/ARQ is needed for the smoke.
-        JOBS_BACKEND: 'inline',
+        JOBS_BACKEND: "inline",
         ALLOWED_ORIGINS: WEB_ORIGINS,
-        SMTP_HOST: '',
-        SENTRY_DSN: '',
+        SMTP_HOST: "",
+        SENTRY_DSN: "",
+        // The suite signs in dozens of times from one IP (every spec starts
+        // with `signIn`), which is what the per-IP login limiter exists to
+        // stop in production. Under the default 10/min the later specs -- a
+        // two-login test such as the parent-invite smoke -- got a 429, the UI
+        // stayed on /login and the spec failed on
+        // `expect(page).not.toHaveURL(/login/)`: a harness limit, not a
+        // product defect. Raised for the harness only; the limiter's own tests
+        // pin the production value.
+        RATE_LIMIT_LOGIN_PER_MINUTE: "240",
       },
     },
     {
@@ -133,4 +147,4 @@ export default defineConfig({
       ...(DIRECT_API ? { env: { VITE_API_BASE: API_URL } } : {}),
     },
   ],
-})
+});

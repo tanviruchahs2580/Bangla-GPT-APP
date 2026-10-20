@@ -133,6 +133,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): stop rendering remote images in answers and announce each answer once
 - fix(web): stop showing failures as facts, and read API timestamps as UTC
 - fix(web): stop swallowing failed writes; roll back the bookmark toggle
+- fix(web,e2e): bn plural expectation, empty-sub geometry, ratchet line budget
 - fix(web,e2e,scripts): close the CI failures the wave introduced
 - fix: complete admin password-change flow, tutor typo gate, roster-scoped stats, quiz distractors, i18n
 - fix: land the verified remediation on current main (CORS-adjacent, budget, UI states)
