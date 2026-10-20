@@ -1,0 +1,94 @@
+{
+ "abstention_precision": 0.2353,
+ "abstention_recall": 1.0,
+ "citation_precision": 0.3347,
+ "citation_precision_chapter": 0.5558,
+ "citation_recall": 1.0,
+ "citations_total": 502,
+ "false_refusal_rate": 0.0718,
+ "format_validity": 1.0,
+ "grounded_items": 168,
+ "items": 185,
+ "judge_agreement": {
+  "generator_model": null,
+  "human_labelled_items": 0,
+  "human_sample_rows": 0,
+  "items_with_judge_score": 0,
+  "judge_model": null,
+  "judge_prompt_version": "jp-1619728cd7e0",
+  "min_human_labels": 50,
+  "note": "The human sample (eval/judge_agreement_sample.json) is not filled in: no agreement number is reported, and the judge must not be used as a metric of record until it is.",
+  "sample_file": "judge_agreement_sample.json",
+  "self_preference_flag": false,
+  "status": "owner_action_required",
+  "template_items": 50,
+  "verbosity_bias": null
+ },
+ "judge_prompt_version": "jp-1619728cd7e0",
+ "refusal_correctness_unsafe": 1.0,
+ "refusals_total": 17,
+ "response_language_correctness": 1.0,
+ "run_conditions": {
+  "abort_reason": "",
+  "completion_tokens_est": 15894,
+  "estimated_cost_usd": 0.077581,
+  "finished_at": "2026-10-20T10:01:45+00:00",
+  "index": "hermetic sample corpus (78 chunks)",
+  "items": 185,
+  "judge": "disabled: metrics of record use the deterministic local_overlap fallback; the LLM-judge harness stays dormant until 50+ human labels exist",
+  "pacing": "4.2s between calls (free-tier request cap); the generation stage ceiling was raised to 180.0s for this run, so latency here is not a product measurement",
+  "partial": false,
+  "prices_read_on": "2026-10-19",
+  "prices_source": "https://ai.google.dev/gemini-api/docs/pricing",
+  "prices_usd_per_1k": [
+   0.0003,
+   0.0025
+  ],
+  "prompt_tokens_est": 126155,
+  "provider": "live (gemini-3.5-flash-lite, key from env/.env, never logged)",
+  "provider_calls": 183,
+  "provider_errors": [
+   {
+    "attempt": "1",
+    "detail": "Gemini API error 500: Internal error encountered.",
+    "kind": "ProviderError"
+   },
+   {
+    "attempt": "2",
+    "detail": "Gemini API error 500: Internal error encountered.",
+    "kind": "ProviderError"
+   },
+   {
+    "attempt": "1",
+    "detail": "Gemini API error 503: This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.",
+    "kind": "ProviderError"
+   },
+   {
+    "attempt": "2",
+    "detail": "Gemini API error 503: This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.",
+    "kind": "ProviderError"
+   },
+   {
+    "attempt": "3",
+    "detail": "Gemini API error 503: This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.",
+    "kind": "ProviderError"
+   },
+   {
+    "attempt": "1",
+    "detail": "Gemini API error 503: This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.",
+    "kind": "ProviderError"
+   },
+   {
+    "attempt": "2",
+    "detail": "Gemini API error 429: You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To mo",
+    "kind": "ProviderError"
+   }
+  ],
+  "redteam_items": 43,
+  "resumed_responses": 0,
+  "retried_calls": 7,
+  "split": "test",
+  "started_at": "2026-10-20T09:47:16+00:00"
+ },
+ "unsafe_items": 43
+}
