@@ -1,6 +1,8 @@
 {
   "seed": 20260825,
   "corpus_source": "..\\..\\data\\nctb\\extracted",
+  "served_config": "tokens-served-612",
+  "word_baseline_config": "target-220-served-words",
   "configs": [
     {
       "name": "target-160",
@@ -8,7 +10,7 @@
       "overlap_words": 0
     },
     {
-      "name": "target-220-served",
+      "name": "target-220-served-words",
       "target_words": 220,
       "overlap_words": 0
     },
@@ -21,6 +23,26 @@
       "name": "target-220-overlap-40",
       "target_words": 220,
       "overlap_words": 40
+    },
+    {
+      "name": "tokens-served-612",
+      "target_tokens": 612,
+      "overlap_words": 0
+    },
+    {
+      "name": "tokens-420",
+      "target_tokens": 420,
+      "overlap_words": 0
+    },
+    {
+      "name": "tokens-820",
+      "target_tokens": 820,
+      "overlap_words": 0
+    },
+    {
+      "name": "tokens-served-overlap-40",
+      "target_tokens": 612,
+      "overlap_words": 40
     }
   ],
   "results": {
@@ -30,80 +52,80 @@
         "target_words": 160,
         "overlap_words": 0
       },
-      "served_chunks": 1785,
-      "index_build_seconds": 49.275,
+      "served_chunks": 1979,
+      "index_build_seconds": 11.642,
       "family_A_self_sentence": {
         "n": 60,
-        "recall_at_1": 0.75,
+        "recall_at_1": 0.85,
         "recall_at_3": 1.0,
         "recall_at_5": 1.0,
         "recall_at_10": 1.0,
-        "mrr": 0.8667
+        "mrr": 0.9167
       },
       "family_B_chapter_title": {
         "n": 40,
-        "recall_at_1": 0.5,
-        "recall_at_3": 0.875,
-        "recall_at_5": 0.925,
-        "recall_at_10": 1.0,
-        "mrr": 0.672
+        "recall_at_1": 0.275,
+        "recall_at_3": 0.725,
+        "recall_at_5": 0.75,
+        "recall_at_10": 0.975,
+        "mrr": 0.4975
       }
     },
-    "target-220-served": {
+    "target-220-served-words": {
       "config": {
-        "name": "target-220-served",
+        "name": "target-220-served-words",
         "target_words": 220,
         "overlap_words": 0
       },
-      "served_chunks": 1390,
-      "index_build_seconds": 33.794,
+      "served_chunks": 1523,
+      "index_build_seconds": 10.931,
       "family_A_self_sentence": {
         "n": 60,
-        "recall_at_1": 0.75,
-        "recall_at_3": 0.9167,
-        "recall_at_5": 0.9667,
-        "recall_at_10": 0.9833,
-        "mrr": 0.8446
+        "recall_at_1": 0.8667,
+        "recall_at_3": 0.9833,
+        "recall_at_5": 1.0,
+        "recall_at_10": 1.0,
+        "mrr": 0.92
       },
       "family_B_chapter_title": {
         "n": 40,
-        "recall_at_1": 0.475,
-        "recall_at_3": 0.875,
-        "recall_at_5": 1.0,
+        "recall_at_1": 0.25,
+        "recall_at_3": 0.925,
+        "recall_at_5": 0.95,
         "recall_at_10": 1.0,
-        "mrr": 0.6854
+        "mrr": 0.558
       },
       "family_A_self_sentence_diversified": {
         "n": 60,
-        "recall_at_1": 0.75,
-        "recall_at_3": 0.9333,
-        "recall_at_5": 0.9667,
-        "recall_at_10": 0.9833,
-        "mrr": 0.846
+        "recall_at_1": 0.8667,
+        "recall_at_3": 0.9833,
+        "recall_at_5": 1.0,
+        "recall_at_10": 1.0,
+        "mrr": 0.92
       },
       "family_B_chapter_title_diversified": {
         "n": 40,
-        "recall_at_1": 0.475,
-        "recall_at_3": 0.875,
-        "recall_at_5": 1.0,
+        "recall_at_1": 0.25,
+        "recall_at_3": 0.925,
+        "recall_at_5": 0.95,
         "recall_at_10": 1.0,
-        "mrr": 0.6854
+        "mrr": 0.5594
       },
       "family_A_self_sentence_lexical": {
         "n": 60,
-        "recall_at_1": 0.75,
-        "recall_at_3": 0.9167,
-        "recall_at_5": 0.9667,
-        "recall_at_10": 0.9833,
-        "mrr": 0.845
+        "recall_at_1": 0.8333,
+        "recall_at_3": 0.9833,
+        "recall_at_5": 1.0,
+        "recall_at_10": 1.0,
+        "mrr": 0.9033
       },
       "family_B_chapter_title_lexical": {
         "n": 40,
-        "recall_at_1": 0.475,
-        "recall_at_3": 0.875,
-        "recall_at_5": 1.0,
+        "recall_at_1": 0.25,
+        "recall_at_3": 0.85,
+        "recall_at_5": 0.975,
         "recall_at_10": 1.0,
-        "mrr": 0.6854
+        "mrr": 0.5532
       }
     },
     "target-320": {
@@ -112,23 +134,23 @@
         "target_words": 320,
         "overlap_words": 0
       },
-      "served_chunks": 1061,
-      "index_build_seconds": 23.324,
+      "served_chunks": 1102,
+      "index_build_seconds": 11.078,
       "family_A_self_sentence": {
         "n": 60,
         "recall_at_1": 0.8667,
-        "recall_at_3": 0.95,
+        "recall_at_3": 0.9833,
         "recall_at_5": 1.0,
         "recall_at_10": 1.0,
-        "mrr": 0.9136
+        "mrr": 0.9236
       },
       "family_B_chapter_title": {
         "n": 40,
-        "recall_at_1": 0.55,
-        "recall_at_3": 0.825,
-        "recall_at_5": 0.95,
+        "recall_at_1": 0.35,
+        "recall_at_3": 0.85,
+        "recall_at_5": 1.0,
         "recall_at_10": 1.0,
-        "mrr": 0.7138
+        "mrr": 0.6088
       }
     },
     "target-220-overlap-40": {
@@ -137,24 +159,171 @@
         "target_words": 220,
         "overlap_words": 40
       },
-      "served_chunks": 1640,
-      "index_build_seconds": 23.482,
+      "served_chunks": 1778,
+      "index_build_seconds": 13.011,
       "family_A_self_sentence": {
         "n": 60,
-        "recall_at_1": 0.7167,
-        "recall_at_3": 0.9833,
-        "recall_at_5": 0.9833,
+        "recall_at_1": 0.6333,
+        "recall_at_3": 1.0,
+        "recall_at_5": 1.0,
         "recall_at_10": 1.0,
-        "mrr": 0.8417
+        "mrr": 0.8111
       },
       "family_B_chapter_title": {
         "n": 40,
-        "recall_at_1": 0.5,
-        "recall_at_3": 0.75,
+        "recall_at_1": 0.25,
+        "recall_at_3": 0.775,
+        "recall_at_5": 0.85,
+        "recall_at_10": 0.975,
+        "mrr": 0.5072
+      }
+    },
+    "tokens-served-612": {
+      "config": {
+        "name": "tokens-served-612",
+        "target_tokens": 612,
+        "overlap_words": 0
+      },
+      "served_chunks": 1565,
+      "index_build_seconds": 10.87,
+      "family_A_self_sentence": {
+        "n": 60,
+        "recall_at_1": 0.7833,
+        "recall_at_3": 0.9833,
+        "recall_at_5": 0.9833,
+        "recall_at_10": 1.0,
+        "mrr": 0.8799
+      },
+      "family_B_chapter_title": {
+        "n": 40,
+        "recall_at_1": 0.375,
+        "recall_at_3": 0.8,
+        "recall_at_5": 0.95,
+        "recall_at_10": 1.0,
+        "mrr": 0.6036
+      },
+      "family_A_self_sentence_diversified": {
+        "n": 60,
+        "recall_at_1": 0.7833,
+        "recall_at_3": 0.9833,
+        "recall_at_5": 0.9833,
+        "recall_at_10": 1.0,
+        "mrr": 0.8799
+      },
+      "family_B_chapter_title_diversified": {
+        "n": 40,
+        "recall_at_1": 0.375,
+        "recall_at_3": 0.8,
+        "recall_at_5": 0.95,
+        "recall_at_10": 1.0,
+        "mrr": 0.6036
+      },
+      "family_A_self_sentence_lexical": {
+        "n": 60,
+        "recall_at_1": 0.7667,
+        "recall_at_3": 0.9833,
+        "recall_at_5": 0.9833,
+        "recall_at_10": 1.0,
+        "mrr": 0.8715
+      },
+      "family_B_chapter_title_lexical": {
+        "n": 40,
+        "recall_at_1": 0.375,
+        "recall_at_3": 0.8,
+        "recall_at_5": 0.95,
+        "recall_at_10": 1.0,
+        "mrr": 0.6011
+      }
+    },
+    "tokens-420": {
+      "config": {
+        "name": "tokens-420",
+        "target_tokens": 420,
+        "overlap_words": 0
+      },
+      "served_chunks": 2113,
+      "index_build_seconds": 11.433,
+      "family_A_self_sentence": {
+        "n": 60,
+        "recall_at_1": 0.8333,
+        "recall_at_3": 0.9833,
+        "recall_at_5": 0.9833,
+        "recall_at_10": 1.0,
+        "mrr": 0.9056
+      },
+      "family_B_chapter_title": {
+        "n": 40,
+        "recall_at_1": 0.325,
+        "recall_at_3": 0.825,
+        "recall_at_5": 0.875,
+        "recall_at_10": 1.0,
+        "mrr": 0.5728
+      }
+    },
+    "tokens-820": {
+      "config": {
+        "name": "tokens-820",
+        "target_tokens": 820,
+        "overlap_words": 0
+      },
+      "served_chunks": 1236,
+      "index_build_seconds": 12.011,
+      "family_A_self_sentence": {
+        "n": 60,
+        "recall_at_1": 0.85,
+        "recall_at_3": 0.9833,
         "recall_at_5": 1.0,
         "recall_at_10": 1.0,
-        "mrr": 0.6717
+        "mrr": 0.9153
+      },
+      "family_B_chapter_title": {
+        "n": 40,
+        "recall_at_1": 0.375,
+        "recall_at_3": 0.825,
+        "recall_at_5": 0.95,
+        "recall_at_10": 1.0,
+        "mrr": 0.6058
+      }
+    },
+    "tokens-served-overlap-40": {
+      "config": {
+        "name": "tokens-served-overlap-40",
+        "target_tokens": 612,
+        "overlap_words": 40
+      },
+      "served_chunks": 1772,
+      "index_build_seconds": 11.338,
+      "family_A_self_sentence": {
+        "n": 60,
+        "recall_at_1": 0.5833,
+        "recall_at_3": 0.9333,
+        "recall_at_5": 1.0,
+        "recall_at_10": 1.0,
+        "mrr": 0.7631
+      },
+      "family_B_chapter_title": {
+        "n": 40,
+        "recall_at_1": 0.275,
+        "recall_at_3": 0.775,
+        "recall_at_5": 0.85,
+        "recall_at_10": 0.975,
+        "mrr": 0.5182
       }
     }
+  },
+  "deltas_vs_word_baseline": {
+    "baseline": "target-220-served-words",
+    "served": "tokens-served-612",
+    "served_chunks_delta": 42,
+    "family_A_self_sentence.recall_at_1": -0.0834,
+    "family_A_self_sentence.recall_at_3": 0.0,
+    "family_A_self_sentence.recall_at_5": -0.0167,
+    "family_A_self_sentence.recall_at_10": 0.0,
+    "family_A_self_sentence.mrr": -0.0401,
+    "family_B_chapter_title.recall_at_1": 0.125,
+    "family_B_chapter_title.recall_at_3": -0.125,
+    "family_B_chapter_title.recall_at_5": 0.0,
+    "family_B_chapter_title.recall_at_10": 0.0,
+    "family_B_chapter_title.mrr": 0.0456
   }
 }

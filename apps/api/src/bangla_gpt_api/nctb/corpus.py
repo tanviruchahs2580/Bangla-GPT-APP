@@ -16,7 +16,15 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 
-from bangla_gpt_api.nctb.chunking import RawChunk, chunk_pages, dedupe_chunks
+from bangla_gpt_api.nctb.chunking import (
+    MAX_TOKENS,
+    MIN_TOKENS,
+    TARGET_TOKENS,
+    TARGET_WORDS,
+    RawChunk,
+    chunk_pages,
+    dedupe_chunks,
+)
 from bangla_gpt_api.nctb.extract import ExtractionResult, extract_pdf, qc_pages
 from bangla_gpt_api.nctb.manifest import SourceRecord, load_manifest
 
@@ -87,6 +95,21 @@ def process_source(
     summary["duplicates_removed"] = duplicates_removed
     summary["short_blocks_merged"] = chunk_stats.get("short_blocks_merged", 0)
     summary["chunk_word_lengths"] = chunk_stats.get("chunk_word_lengths", [])
+    # A3-01: chunk sizing is measured in tokens with the configured counter;
+    # the artifact records the unit, the counter and the token histogram, so a
+    # sizing change is visible in the report and not only in chunking.py.
+    summary["chunk_token_lengths"] = chunk_stats.get("chunk_token_lengths", [])
+    summary["chunk_sizing"] = {
+        "unit": chunk_stats.get("sizing_unit", ""),
+        "token_counter": chunk_stats.get("token_counter", ""),
+        "target_tokens": TARGET_TOKENS,
+        "min_tokens": MIN_TOKENS,
+        "max_tokens": MAX_TOKENS,
+        "target_words_fallback": TARGET_WORDS,
+    }
+    # A2-04e: table rows and formula lines preserved verbatim as units.
+    summary["table_rows_preserved"] = chunk_stats.get("table_rows_preserved", 0)
+    summary["formula_units_preserved"] = chunk_stats.get("formula_units_preserved", 0)
     # A2-05: per-chunk content hashes live in the report row (the chunk
     # manual's per-chunk checksum analogue of the per-document sha256 the
     # acquisition manifest already carries) — every survivor of dedupe.

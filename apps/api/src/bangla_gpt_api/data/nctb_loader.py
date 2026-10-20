@@ -70,26 +70,81 @@ def _subject_key(subject_bn: str) -> str:
 #: section marker and appends it as the chunk's first line, while a
 #: mid-paragraph mention of "উদাহরণ" is prose, not structure.
 _CONTENT_TYPE_HINT_WINDOW = 10
+#: The catalog's content_type vocabulary (master prompt A2-04): every chunk is
+#: typed as one of these, or as the legacy ``nctb`` label for text that is
+#: neither prose nor a detected structure (see infer_content_type).
+CONTENT_TYPES = ("explanation", "example", "exercise", "table", "formula", "caption")
+#: Pre-2026-10-20 artifacts label all prose ``nctb``; the loader still accepts
+#: the value (filters use free strings) but no longer emits it for prose.
+LEGACY_CONTENT_TYPE = "nctb"
+
 _CONTENT_TYPE_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("exercise", ("অনুশীলনী", "অনুশীলন", "নিজে করো")),
+    ("exercise", ("অনুশীলনী", "অনুশীলন", "নিজে করো", "নিজে কর")),
     ("assessment", ("সংক্ষিপ্ত প্রশ্ন", "বহু নির্বাচনি", "সৃজনশীল প্রশ্ন", "মূল্যায়ন")),
     ("example", ("উদাহরণ",)),
     ("table", ("সারণি", "ছক", "টেবিল")),
+    ("caption", ("চিত্র", "ছবি", "লেখচিত্র", "ছকচিত্র")),
+    ("formula", ("সমীকরণ", "সূত্র")),
 )
+
+#: Separator the chunker uses for a preserved table row (A2-04e): a chunk that
+#: carries one holds tabular content even when its opening is not a "সারণি".
+TABLE_CELL_SEPARATOR = " | "
+#: Formula density: at least this share of the chunk's non-space characters
+#: must be digits/operators, with at least this many of them, before a chunk
+#: is typed ``formula`` without a marker. Measured conservatively: a prose
+#: passage with a number in it never reaches it, a worked calculation does.
+_FORMULA_DENSITY = 0.3
+_FORMULA_MIN_CHARS = 12
+_FORMULA_CHARS = frozenset(
+    "0123456789=+-×÷·∗√∑∫≤≥≠≈±°^%<>/\\"
+    "\u09e6\u09e7\u09e8\u09e9\u09ea\u09eb\u09ec\u09ed\u09ee\u09ef"
+    "\u00d7\u00f7\u2212\u2211\u222b\u2264\u2265\u2260\u2248\u00b1\u00b2\u00b3\u221a"
+)
+#: Prose needs at least this many letters (Bangla or Latin: the English
+#: curriculum volume is prose too) and one sentence ender before it is typed
+#: ``explanation``; anything shorter or thinner (number tables, stubs) stays
+#: untyped.
+_PROSE_MIN_LETTERS = 40
+_SENTENCE_ENDERS = ("।", "?", "!", ".")
+
+
+def _is_prose(text: str) -> bool:
+    letters = sum(1 for char in text if char.isalpha())
+    return letters >= _PROSE_MIN_LETTERS and any(ender in text for ender in _SENTENCE_ENDERS)
+
+
+def _formula_density(text: str) -> float:
+    compact = [char for char in text if not char.isspace()]
+    if not compact:
+        return 0.0
+    formula = sum(1 for char in compact if char in _FORMULA_CHARS)
+    if formula < _FORMULA_MIN_CHARS:
+        return 0.0
+    return formula / len(compact)
 
 
 def infer_content_type(text: str) -> str:
-    """Structural type of a chunk from its opening; ``nctb`` = untyped body.
+    """Structural type of a chunk in the catalog's content_type vocabulary.
 
-    The label was the constant ``nctb`` for every chunk before AUD-A1-05;
-    the fallback value is kept so untyped NCTB body text stays
-    distinguishable from sample-corpus ``text`` chunks.
+    Order (most specific first): an opening marker (exercise/assessment/
+    example/table/caption/formula), a preserved table row, formula density,
+    then prose — which is the catalog's ``explanation`` class, the body text of
+    a curriculum document. ``nctb`` is the legacy label, now emitted only for
+    text that is none of the above (administrative stubs, bare number tables),
+    so old artifacts and the sample corpus stay distinguishable.
     """
     head = text[:80]
     for label, hints in _CONTENT_TYPE_HINTS:
         if any(0 <= head.find(hint) < _CONTENT_TYPE_HINT_WINDOW for hint in hints):
             return label
-    return "nctb"
+    if TABLE_CELL_SEPARATOR in text:
+        return "table"
+    if _formula_density(text) >= _FORMULA_DENSITY:
+        return "formula"
+    if _is_prose(text):
+        return "explanation"
+    return LEGACY_CONTENT_TYPE
 
 
 def _resolve_year(report: dict) -> int:
@@ -257,13 +312,18 @@ def _chunk_meta(
     subject_bn = report.get("subject_bn", "")
     low, high = low_high
     section = str(data.get("section") or "").strip()
+    page_start = data.get("page_start")
+    page_end = data.get("page_end")
     meta_kwargs = dict(
         curriculum_year=_resolve_year(report),
         subject=_subject_key(subject_bn),
         book=subject_bn,
         chapter=data.get("chapter", ""),
         section=section or None,
-        page=data.get("page_start"),
+        page=page_start,
+        # A2-04c: the raw chunk's page range is carried whole. The loader used
+        # to drop page_end, so a chunk spanning pages 12-13 served only "12".
+        page_end=page_end if page_end is not None else page_start,
         language="bn",
         version=version,
         content_type=infer_content_type(text),

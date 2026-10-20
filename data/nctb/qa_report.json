@@ -1,6 +1,6 @@
 {
   "nctb-hsc-28d03c592c2c": {
-    "total_chunks": 67,
+    "total_chunks": 62,
     "flagged_chunks": 0,
     "flagged_ratio": 0.0,
     "issues": {},
@@ -33,7 +33,7 @@
     "duplicate_ratio": 0.0
   },
   "nctb-hsc-ca39e5957513": {
-    "total_chunks": 60,
+    "total_chunks": 57,
     "flagged_chunks": 0,
     "flagged_ratio": 0.0,
     "issues": {},
@@ -55,7 +55,7 @@
     "duplicate_ratio": 0.0
   },
   "nctb-secondary-afda21d8556d": {
-    "total_chunks": 161,
+    "total_chunks": 163,
     "flagged_chunks": 0,
     "flagged_ratio": 0.0,
     "issues": {},
@@ -66,7 +66,7 @@
     "duplicate_ratio": 0.0
   },
   "nctb-secondary-be50d8aff8d5": {
-    "total_chunks": 88,
+    "total_chunks": 100,
     "flagged_chunks": 0,
     "flagged_ratio": 0.0,
     "issues": {},
@@ -77,7 +77,7 @@
     "duplicate_ratio": 0.0
   },
   "nctb-secondary-ca0d6bd886b7": {
-    "total_chunks": 85,
+    "total_chunks": 90,
     "flagged_chunks": 0,
     "flagged_ratio": 0.0,
     "issues": {},
@@ -88,7 +88,7 @@
     "duplicate_ratio": 0.0
   },
   "nctb-secondary-e39c58d35764": {
-    "total_chunks": 80,
+    "total_chunks": 100,
     "flagged_chunks": 0,
     "flagged_ratio": 0.0,
     "issues": {},

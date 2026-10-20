@@ -323,3 +323,7 @@ build_evidence_prompt  # unused function (src\bangla_gpt_api\services\tutor.py:3
 _._concurrency  # unused attribute (src\bangla_gpt_api\services\tutor.py:560)
 tracing_active  # unused function (src\bangla_gpt_api\tracing.py:83)
 add_span_exporter  # unused function (src\bangla_gpt_api\tracing.py:194)
+CONTENT_TYPES  # unused variable (src\bangla_gpt_api\data\nctb_loader.py:76)
+ocr_image_to_prompt_block  # unused function (src\bangla_gpt_api\ingestion\ocr_ingester.py:121)
+TOKENS_PER_WORD_MEASURED  # unused variable (src\bangla_gpt_api\nctb\chunk_sizing.py:34)
+original_text  # unused variable (src\bangla_gpt_api\nctb\chunking.py:120)

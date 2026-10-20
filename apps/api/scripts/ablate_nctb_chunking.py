@@ -34,12 +34,23 @@ from typing import Any
 
 CONFIGS: tuple[dict[str, Any], ...] = (
     {"name": "target-160", "target_words": 160, "overlap_words": 0},
-    {"name": "target-220-served", "target_words": 220, "overlap_words": 0},
+    {"name": "target-220-served-words", "target_words": 220, "overlap_words": 0},
     {"name": "target-320", "target_words": 320, "overlap_words": 0},
     {"name": "target-220-overlap-40", "target_words": 220, "overlap_words": 40},
+    # A3-01: the served configuration is token-sized. "tokens-served" is the
+    # default (TARGET_TOKENS = 612 = 220 words at the measured 2.7812
+    # tokens/word); the neighbours measure the size effect in the served unit.
+    {"name": "tokens-served-612", "target_tokens": 612, "overlap_words": 0},
+    {"name": "tokens-420", "target_tokens": 420, "overlap_words": 0},
+    {"name": "tokens-820", "target_tokens": 820, "overlap_words": 0},
+    {"name": "tokens-served-overlap-40", "target_tokens": 612, "overlap_words": 40},
 )
 SEED = 20260825
 MAX_QUERIES = 60
+#: Config whose diversified/lexical variants are measured (the served one).
+SERVED_CONFIG = "tokens-served-612"
+#: Historical word-sized baseline the token rows are compared against.
+WORD_BASELINE_CONFIG = "target-220-served-words"
 
 
 def _ranks(index: Any, queries: list[tuple[str, str, int]], *, top_k: int = 10) -> list[int]:
@@ -71,11 +82,22 @@ def _block(ranks: list[int]) -> dict[str, float | int]:
     }
 
 
-def _build_corpus(pages_dir: Path, report_src: Path, target: int, overlap: int, dest: Path) -> Path:
-    """Re-chunk every extracted source into ``dest`` in the pipeline layout."""
+def _build_corpus(pages_dir: Path, report_src: Path, config: dict, dest: Path) -> Path:
+    """Re-chunk every extracted source into ``dest`` in the pipeline layout.
+
+    The config's sizing key decides the unit: ``target_words`` selects the
+    historical word sizing, ``target_tokens`` the served token sizing measured
+    with the configured TokenCounter (A3-01). Exactly one of them is passed —
+    the first run of this wave passed both, and ``_resolve_sizing`` then read
+    the token number as a WORD target (434 raw chunks instead of 832).
+    """
     from bangla_gpt_api.nctb.chunking import chunk_pages
     from bangla_gpt_api.nctb.extract import PageText
     from bangla_gpt_api.nctb.normalize import detect_class_level
+
+    word_target = config.get("target_words")
+    token_target = config.get("target_tokens")
+    overlap = int(config.get("overlap_words", 0))
 
     normalized = dest / "normalized"
     normalized.mkdir(parents=True, exist_ok=True)
@@ -93,7 +115,8 @@ def _build_corpus(pages_dir: Path, report_src: Path, target: int, overlap: int, 
         chunks = chunk_pages(
             pages,
             source_id=source_id,
-            target_words=target,
+            target_words=word_target,
+            target_tokens=token_target,
             overlap_words=overlap,
             stats=stats,
         )
@@ -150,13 +173,7 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="nctb-ablation-") as tmp:
         for config in CONFIGS:
             dest = Path(tmp) / config["name"]
-            _build_corpus(
-                pages_dir,
-                corpus_root / "quality_report.json",
-                config["target_words"],
-                config["overlap_words"],
-                dest,
-            )
+            _build_corpus(pages_dir, corpus_root / "quality_report.json", config, dest)
             chunks = load_nctb_corpus(dest / "normalized", dest / "quality_report.json")
             if not chunks:
                 print(f"{config['name']}: no indexable chunks")
@@ -172,7 +189,7 @@ def main() -> int:
                 "family_A_self_sentence": _block(_ranks(index, family_a)),
                 "family_B_chapter_title": _block(_ranks(index, family_b)),
             }
-            if config["name"] == "target-220-served":
+            if config["name"] in (SERVED_CONFIG, WORD_BASELINE_CONFIG):
                 row["family_A_self_sentence_diversified"] = _block(
                     _ranks(_DiversifyWrapper(index), family_a)
                 )
@@ -188,8 +205,11 @@ def main() -> int:
     report = {
         "seed": SEED,
         "corpus_source": str(pages_dir),
+        "served_config": SERVED_CONFIG,
+        "word_baseline_config": WORD_BASELINE_CONFIG,
         "configs": list(CONFIGS),
         "results": results,
+        "deltas_vs_word_baseline": _deltas(results, WORD_BASELINE_CONFIG, SERVED_CONFIG),
     }
     out = corpus_root / "chunk_ablation.json"
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + chr(10), encoding="utf-8")
@@ -199,6 +219,26 @@ def main() -> int:
     print("\nMarkdown for docs/RAG_ARCHITECTURE.md:\n")
     print(_markdown_table(report))
     return 0
+
+
+def _deltas(results: dict, baseline: str, served: str) -> dict:
+    """Deltas of the served (token-sized) config against the word baseline.
+
+    A3-01: the unit changed, so the artifact must say whether size and quality
+    moved. Recall deltas are absolute (served - baseline, percentage points).
+    """
+    if baseline not in results or served not in results:
+        return {}
+    base, new = results[baseline], results[served]
+    deltas: dict[str, Any] = {
+        "baseline": baseline,
+        "served": served,
+        "served_chunks_delta": new["served_chunks"] - base["served_chunks"],
+    }
+    for family in ("family_A_self_sentence", "family_B_chapter_title"):
+        for metric in ("recall_at_1", "recall_at_3", "recall_at_5", "recall_at_10", "mrr"):
+            deltas[f"{family}.{metric}"] = round(new[family][metric] - base[family][metric], 4)
+    return deltas
 
 
 def _markdown_table(report: dict) -> str:

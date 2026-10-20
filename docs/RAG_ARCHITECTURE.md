@@ -197,44 +197,53 @@ that require human/infra decisions remain exactly two: the embedding model +
 vector store, and an LLM faithfulness judge (see evaluation/metrics.py,
 `mode="local_overlap"` until then).
 
-## Measured baseline (real corpus, 1,390 served chunks, this commit)
+## Measured baseline (real corpus, 1,565 served chunks, this commit)
 
 The committed `data/nctb/retrieval_eval.json` is the record of truth for
 these numbers: this table quotes it (any retrieval change regenerates the
 artifact locally, with the diff reviewed as retrieval evidence). The served
-corpus is 1,390 chunks, not the 2,504 of the pre-dedupe build: the loader now
+corpus is 1,565 chunks, not the 2,504 of the pre-dedupe build: the loader
 drops duplicate class-text pairs (`serve_stats.duplicates_dropped_at_load`
-1,026), legacy-Bijoy residue (77) and Latin-residue lines (2). Recall values
-carry seeded 95% bootstrap CIs in the artifact; latency values move with host
-load and are quoted as a range across runs.
+1,034), and the regenerated corpus triggers none of the residue drops
+(`legacy_drops` 0, `latin_residue_drops` 0; the 2026-10-19 build still
+dropped 77 + 2). Recall values carry seeded 95% bootstrap CIs in the artifact;
+latency values move with host load and are quoted as a range across runs.
+The "after" column is the current artifact; the wave-5 corpus (A3-01 token
+sizing, A2-04 structure metadata) moved family A up and family B down against
+the wave-4 numbers that stood here before — both are recorded rather than
+smoothed over, and the size-attributable part is measured separately in
+`docs/evaluation/retrieval-variants.md`.
 
 | Metric | Before rework | After rework (committed artifact) |
 |---|---|---|
-| Index build | 0.36 s (lexical only) | 44.4 s on an idle host (382.3 s under the contention of the audit's parallel runs; the budget is 120 s) |
-| Family A self-sentence recall@1 / @5 (n=100) | 0.38 / 1.00 | **0.78 / 0.97** (CI95 r@1 0.70–0.86); unchanged by the 2026-10-19 unit-fold + header change |
-| Family A MRR / nDCG@10 | — (not computed) | 0.8624 / 0.8942 → **0.8628 / 0.8946** after A4-04/A3-03 (2026-10-19 artifact) |
-| Family B chapter-title recall@1 / @5 (n=80) | 0.225 / 0.525 | **1.00 / 1.00** |
-| Family B MRR / nDCG@10 | — (not computed) | 1.00 / 1.00 |
-| Family D Banglish recall@1 / @5 (n=100) | — (not measured) | 0.52 / 0.86 → **0.54 / 0.86** after A4-04 (2026-10-19 artifact; CI95 covers the shift) |
-| **Adversarial refusal rate (family C, n=4)** | 1.00 | 0.25 (regression introduced by the deduped corpus) → **1.00 — fixed 2026-10-19** by the majority-absent out-of-domain rule (A4-06) |
-| Search latency p50 / p95 (hybrid, real corpus) | — | 613 ms / 1,620 ms on the audit host; lexical alone 65 / 301 ms, vector alone 46 / 229 ms |
+| Index build | 0.36 s (lexical only) | 44.4 s on an idle host at the 1,390-chunk corpus (382.3 s under the audit's parallel runs; the budget is 120 s); 105.2 s under the wave-5 rebuild's host load at 1,565 chunks |
+| Family A self-sentence recall@1 / @5 (n=100) | 0.38 / 1.00 | **0.84 / 0.99** (CI95 r@1 0.77–0.91) |
+| Family A MRR / nDCG@10 | — (not computed) | **0.9129 / 0.9352** |
+| Family B chapter-title recall@1 / @5 (n=80) | 0.225 / 0.525 | **0.65 / 0.975** |
+| Family B MRR / nDCG@10 | — (not computed) | **0.8054 / 0.8548** |
+| Family D Banglish recall@1 / @5 (n=100) | — (not measured) | **0.57 / 0.92** |
+| Family D MRR / nDCG@10 | — (not computed) | **0.7191 / 0.7835** |
+| **Adversarial refusal rate (family C, n=4)** | 1.00 | **1.00** — the majority-absent out-of-domain rule (A4-06, fixed 2026-10-19) still refuses all four on the rebuilt corpus |
+| Search latency p50 / p95 (hybrid, real corpus) | — | 153.7 / 297.3 ms under the wave-5 rebuild's host load; lexical alone p95 65.8 ms, vector alone p95 24.4 ms, rerank-off p95 124.0 ms (per-variant numbers in the artifact) |
 
 The family C row is the honest one, and it now reads the other way: after the
 deduped corpus let three of the four curated out-of-domain questions (a
 cricket-fixture question, Euclid's fifth postulate, a dollar exchange rate)
 clear the coverage gate on partial term overlap, the **majority-absent
-out-of-domain rule** (2026-10-19) refuses all four again — while the
-answerable families hold (A 0.78/0.97, B 1.00/1.00, D 0.54/0.86 on the same
-run, and the absence probe measured **0 refusals out of 317 answerable
-questions** under the new rule). Measured abstention on the *golden*
-negatives stays 1.00. The rule's shape is deliberate: the strict
+out-of-domain rule** (2026-10-19) refuses all four again — and it still does
+on the wave-5 rebuild (refusal rate 1.00), with the answerable families at
+A 0.84/0.99, B 0.65/0.975, D 0.57/0.92 on the same run. Measured abstention on
+the *golden* negatives stays 1.00. The rule's shape is deliberate: the strict
 "≥ 2 absent terms" count from the original register was measured first and
 declined — it would refuse 37–38% of ANSWERABLE chapter-title/Banglish
 questions on this corpus (probe in the
 `.audit` R4 bundle; `gate_threshold_calibration` in the artifact remains the
 threshold-side evidence: `answerable_mean_coverage` 0.9962 vs
 `adversarial_mean_coverage` 0.75, classes not separated by any threshold
-0.3–0.7 — so the fix had to be a gate RULE, not a threshold tweak).
+0.3–0.7 — so the fix had to be a gate RULE, not a threshold tweak). The
+absence probe (0 refusals of 317 answerable questions) was measured on the
+2026-10-19 corpus; re-running it against the rebuilt corpus is part of the
+A8-08 pass, whose false-refusal measurement is the live-eval counterpart.
 
 Recall@1 here is rank-1 membership only. An earlier revision of the harness
 appended `1.0 if matched[:1]` — a non-empty top-k membership list — so it
@@ -280,10 +289,15 @@ a value here drifts from the code.
 
 | Tunable | Value | Where | Origin |
 |---|---|---|---|
-| `TARGET_WORDS` | 220 | `nctb/chunking.py` | measured (chunk-size ablation, `data/nctb/chunk_ablation.json`) |
-| `MIN_WORDS` | 60 | `nctb/chunking.py` | derived (keeps a definition with its example) |
-| `MAX_WORDS` | 400 | `nctb/chunking.py` | derived (hard guard; splits instead of truncating) |
-| `DEFAULT_OVERLAP_WORDS` | 0 | `nctb/chunking.py` | measured (overlap row of the ablation; 0 wins on precision) |
+| `TARGET_TOKENS` | 612 | `nctb/chunk_sizing.py` | derived (220 words × the measured 2.7812 tokens/word of the served artifact; A3-01) |
+| `MIN_TOKENS` | 167 | `nctb/chunk_sizing.py` | derived (60 words × 2.7812; the word floor below stays as an extra guard) |
+| `MAX_TOKENS` | 1112 | `nctb/chunk_sizing.py` | derived (400 words × 2.7812; hard guard, splits instead of truncating) |
+| `TOKENS_PER_WORD_MEASURED` | 2.7812 | `nctb/chunk_sizing.py` | measured (served 797-chunk artifact, heuristic-2.5cpt counter, 2026-10-20) |
+| `FLUSH_AHEAD_RATIO` | 1.545 | `nctb/chunk_sizing.py` | derived (the historical `target + 120` slack expressed as a ratio: 340 = 220 × 1.545) |
+| `TARGET_WORDS` | 220 | `nctb/chunk_sizing.py` | measured (chunk-size ablation, `data/nctb/chunk_ablation.json`); the documented word-sizing fallback (`target_words=…`) |
+| `MIN_WORDS` | 60 | `nctb/chunk_sizing.py` | derived (keeps a definition with its example) |
+| `MAX_WORDS` | 400 | `nctb/chunk_sizing.py` | derived (hard guard; splits instead of truncating) |
+| `DEFAULT_OVERLAP_WORDS` | 0 | `nctb/chunk_sizing.py` | measured (overlap row of the ablation; 0 wins on precision) |
 | `k1` | 1.5 | `retrieval/bm25.py` | default (standard Okapi range; untuned) |
 | `b` | 0.75 | `retrieval/bm25.py` | default (standard Okapi range; untuned) |
 | `_TRIGRAM_WEIGHT` | 2.0 | `retrieval/bm25.py` | default (soft-match fallback scale) |

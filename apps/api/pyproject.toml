@@ -340,6 +340,16 @@ exclude_lines = [
 #            Dockerfile CMD / SQLAlchemy driver URL / fpdf2 runtime shaping,
 #            never via an `import` deptry can see), and the dev tools
 #            (pytest*, ruff, mypy, pip-audit) that are executed, not imported.
+#   DEP003 - pypdfium2, the independent SECOND reader of the A2-02 extraction
+#            audit (scripts/extraction_audit.py imports it lazily, inside the
+#            read functions). Deliberately not a declared dependency: it ships
+#            native pdfium binaries per platform and only this audit script
+#            needs it, so every dev/CI install would carry ~10 MB per platform
+#            for a tool that runs on demand. The script fails with an
+#            actionable install message when it is absent, and the A2-02
+#            evidence records which reader produced it. Declaring it would
+#            also require regenerating the hash-pinned constraints.txt, a
+#            whole-lock rewrite for one audit tool.
 #   DEP001 - sibling modules of the scripts in apps/api/scripts/ imported
 #            through a sys.path insert (their own modules, not distributions):
 #            `_changelog_common` and `seed_demo` (imported by

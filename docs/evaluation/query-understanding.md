@@ -35,21 +35,21 @@ in-source comments — this document does not upgrade that into a citation.
 
 ### Over-stemming collision rate (measured, not estimated)
 
-`lexicon_audit` in `data/nctb/retrieval_eval.json` (real corpus, 1390 served
-chunks):
+`lexicon_audit` in `data/nctb/retrieval_eval.json` (real corpus, 1 565 served
+chunks, 2026-10-20 rebuild):
 
 | Measurement | Value |
 | --- | --- |
-| stem groups | 6 138 |
-| collision groups (one stem, >1 surface form) | 446 |
-| collision ratio | **0.0727** |
+| stem groups | 6 345 |
+| collision groups (one stem, >1 surface form) | 490 |
+| collision ratio | **0.0772** |
 | expansion targets curated | 42 distinct targets |
-| expansion targets absent from the served corpus | **26 of 42** (listed by term in the artifact) |
+| expansion targets absent from the served corpus | **25 of 42** (listed by term in the artifact) |
 
-The collision ratio rose from the audit's earlier 4.4% (425 / 9 690) because
-the corpus shrank from 2 504 to 1 390 served chunks (dedupe + legacy drops):
-the numerator is similar while the denominator halved, so the same stemming
-behaviour now looks worse. Both numbers are artifacts of their corpus, which
+The collision ratio rose from the audit's earlier 4.4% (425 / 9 690) through
+0.0727 (1 390 chunks, 2026-10-19) to 0.0772 today: the numerator is similar
+while the denominator shrank from 2 504 chunks (pre-dedupe) to the served
+1 390 then 1 565, so the same stemming behaviour reads worse per chunk. Both numbers are artifacts of their corpus, which
 is why the measurement is regenerated with every retrieval change rather than
 quoted from this page. Collisions are listed with examples in the artifact
 (e.g. অংশ → অংশ / অংশের / অংশটি / অংশগুলো) — they are the light stemmer's

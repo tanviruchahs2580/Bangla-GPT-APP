@@ -242,7 +242,9 @@ class TestCorpusLoader:
         assert chunks
         assert all(isinstance(c, Chunk) for c in chunks)
         assert {c.meta.class_level for c in chunks} == {6}
-        assert all(c.meta.content_type == "nctb" for c in chunks)
+        # A2-04b: prose body text is typed with the catalog's ``explanation``
+        # class (the label was the constant ``nctb`` before wave 5).
+        assert all(c.meta.content_type == "explanation" for c in chunks)
         assert all(c.meta.curriculum_year == 2012 for c in chunks)
 
     def test_unknown_level_sources_never_loaded(self, tmp_path: Path) -> None:

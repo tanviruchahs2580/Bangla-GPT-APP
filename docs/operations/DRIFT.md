@@ -64,7 +64,7 @@ fingerprint moved.
 | On corpus rebuild | run with `--previous`; the fingerprint change must be expected (a rebuild that changes the fingerprint without a corpus commit is an incident) |
 | On curriculum update (new NCTB edition) | `corpus_older_than_manifest: true` is the signal to re-acquire and rebuild; the answer quality is not trustworthy for the affected subjects until then |
 
-## Measured run (2026-10-19, real corpus)
+## Measured run (2026-10-20, real corpus)
 
 Command (writes nothing tracked by default):
 
@@ -73,7 +73,8 @@ cd apps/api
 python scripts/drift_report.py --out ../.audit/tmp/r3/drift_report.json     --markdown ../.audit/tmp/r3/drift_report.md
 ```
 
-Result on the served corpus (1 390 chunks, fingerprint `265566d6893b8d92`):
+Result on the served corpus (1 565 chunks, fingerprint `f6afeff2da39f36e`;
+the 2026-10-19 record was 1 390 chunks / `265566d6893b8d92`):
 
 - **Coverage grid**: every claimed class×subject cell (6–10 × bangla,
   mathematics, science; ICT as a bonus) carries chunks — the gaps section

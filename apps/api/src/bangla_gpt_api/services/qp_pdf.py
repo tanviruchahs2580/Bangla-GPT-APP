@@ -11,6 +11,23 @@ so every fpdf2 document MUST call ``set_text_shaping(True)`` after
 conjunct decomposed with detached vowel signs (ক্ষ -> কয়, জ্ঞান -> জুন্ঞেন),
 which no text-extraction test can detect. Both renderers below enable it, and
 tests/test_qp_pdf_shaping.py pins the behaviour.
+
+G-24 (measured 2026-10-20, wave-5 probe — evidence
+``.audit/evidence/R5-wsa-g24-text-layer-probe.txt``): shaping and a clean text
+layer cannot both be had from fpdf2 2.8.9. With shaping ON the text layer is
+CORRUPT for any cluster harfbuzz reorders or ligates — control characters are
+injected inside the word (বিজ্ঞান extracts as ``বি\x02জ্ঞান``, কার্যক্রম as
+``কার্য\x04 ক \x06 ্র ম``) because fpdf2 builds the glyph->Unicode map from
+harfbuzz cluster ids and drops the mapping for repeated (reordered) clusters
+(``fonts.py: shape_text``). With shaping OFF the text layer is exact but every
+conjunct decomposes. pypdf and pypdfium2 (PDFium) extract the SAME bytes, so
+this is written into the PDF by the engine, not an extractor artefact; the
+wave-4 note that called it a "MuPDF rendering property" is corrected by this
+probe. Consequences: the visual output is correct (the requirement the PDF is
+generated for), and copy/paste or screen-reader use of these PDFs is
+unreliable for the affected words. A future fpdf2 release that fixes the
+shaped-run ToUnicode map turns the non-strict xfail in
+tests/test_a5_qp_pdf_text_layer.py into an XPASS — revisit this note then.
 """
 
 from pathlib import Path

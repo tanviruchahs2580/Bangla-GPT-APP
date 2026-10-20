@@ -93,6 +93,10 @@ LAYERS: dict[str, int] = {
     # safety screens text with the retrieval vocabulary (tokenize/light_stem),
     # so despite living in services/ it is an infrastructure-layer consumer.
     f"{PACKAGE}.services.safety": 2,
+    # the malware-scan seam (A2-09) is a pure bytes-in/verdict-out adapter
+    # consumed by the OCR adapter and the image contract: infrastructure
+    # despite living in services/ (same shape as the safety note above).
+    f"{PACKAGE}.services.malware_scan": 2,
     # 3 -- application layer
     f"{PACKAGE}.ai_jobs": 3,
     f"{PACKAGE}.jobs": 3,

@@ -4,17 +4,17 @@
   "search_p95_ms": 1500.0
  },
  "build": {
-  "build_seconds": 44.397,
-  "chunks": 1390,
+  "build_seconds": 11.145,
+  "chunks": 1565,
   "definition": "build_seconds is a clean build of BM25 + vector + hybrid; index_peak_alloc_mb is a SECOND build under tracemalloc (which slows the build, so its time is not reported)",
-  "index_bytes_per_chunk": 105809.8,
-  "index_peak_alloc_mb": 140.26,
-  "load_seconds": 4.919,
-  "mean_chunk_text_bytes": 3626.8,
+  "index_bytes_per_chunk": 100566.5,
+  "index_peak_alloc_mb": 150.1,
+  "load_seconds": 1.966,
+  "mean_chunk_text_bytes": 3522.2,
   "search_latency": {
    "n": 6,
-   "p50_ms": 96.629,
-   "p95_ms": 434.004
+   "p50_ms": 51.45,
+   "p95_ms": 148.157
   },
   "within_budget": {
    "build_seconds": true,
@@ -22,18 +22,18 @@
   }
  },
  "cold_start": {
-  "cold_start_total_ms": 157567.383,
-  "cold_start_work_ms": 53039.477,
+  "cold_start_total_ms": 14934.583,
+  "cold_start_work_ms": 14615.823,
   "definition": "cold_start_total_ms = fresh `python -c` process wall time for imports + corpus load + index build; cold_start_work_ms is the in-child measurement of load+build only; interpreter_baseline_ms is `python -c pass` on the same machine. status=failed means the child process failed and every number beside it is null.",
-  "interpreter_baseline_ms": 262.518,
+  "interpreter_baseline_ms": 109.518,
   "status": "measured",
-  "stderr_tail": "nctb_loader: dropped 77 chunks with unreadable legacy-Bijoy ASCII; rebuild the affected sources with the conversion stage\nnctb_loader: dropped 2 chunks dominated by ASCII-Latin letters in a Bangla-rated source (unconverted legacy text); rebuild the affected sources with the per-line conversion stage"
+  "stderr_tail": null
  },
  "disk": {
-  "normalized_chunk_file_bytes": 7717613,
+  "normalized_chunk_file_bytes": 7411971,
   "normalized_chunk_file_count": 9,
-  "quality_report_bytes": 22035,
-  "total_artifact_bytes": 7739648
+  "quality_report_bytes": 97998,
+  "total_artifact_bytes": 7509969
  },
  "generated_by": "bangla_gpt_api.evaluation.index_budget",
  "run_conditions": {
