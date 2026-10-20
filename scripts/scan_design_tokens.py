@@ -177,11 +177,9 @@ def cycle_findings(css: str, name: str = "styles.css") -> list[str]:
             lines.setdefault(prop, line_of(css, offset + match.start()))
             refs = decls.setdefault(prop, [])
             refs.extend(ref for ref in VAR_REF.findall(value) if ref not in refs)
-        for prop in decls:
-            if prop in decls[prop]:
-                findings.append(
-                    f"{name}:{lines[prop]}: cycle --{prop[2:]} -> --{prop[2:]}"
-                )
+        for prop, referenced in decls.items():
+            if prop in referenced:
+                findings.append(f"{name}:{lines[prop]}: cycle --{prop[2:]} -> --{prop[2:]}")
         reported: set[frozenset[str]] = set()
         for start in decls:
             # Depth-first walk of the reference graph; every path that comes
@@ -252,7 +250,9 @@ def scan_px(css: str, declared: set[float]) -> tuple[list[str], Counter[str], li
             continue
         findings.append(f"styles.css:{line_of(clean, match.start())}: {match.group(0)}")
         histogram[f"{value:g}px"] += 1
-    breakpoints = sorted({match.group(0) for span in media for match in PX_VALUE.finditer(clean, *span)})
+    breakpoints = sorted(
+        {match.group(0) for span in media for match in PX_VALUE.finditer(clean, *span)}
+    )
     return findings, histogram, breakpoints
 
 
@@ -372,7 +372,9 @@ def main() -> int:
         for line in regressions:
             print(f"REGRESSION: {line}")
         return 1
-    print(f"self-referential token cycles: 0 (of {baseline.get('token_cycles', {}).get('count', '?')} in the baseline)")
+    print(
+        f"self-referential token cycles: 0 (of {baseline.get('token_cycles', {}).get('count', '?')} in the baseline)"
+    )
     print("design-token ratchet: OK")
     return 0
 
