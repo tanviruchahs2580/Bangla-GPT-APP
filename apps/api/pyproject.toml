@@ -340,9 +340,12 @@ exclude_lines = [
 #            Dockerfile CMD / SQLAlchemy driver URL / fpdf2 runtime shaping,
 #            never via an `import` deptry can see), and the dev tools
 #            (pytest*, ruff, mypy, pip-audit) that are executed, not imported.
-#   DEP003 - pypdfium2, the independent SECOND reader of the A2-02 extraction
-#            audit (scripts/extraction_audit.py imports it lazily, inside the
-#            read functions). Deliberately not a declared dependency: it ships
+#   DEP003/DEP001 - pypdfium2, the independent SECOND reader of the A2-02
+#            extraction audit (scripts/extraction_audit.py imports it lazily,
+#            inside the read functions). deptry names it DEP003 in a developer
+#            venv (installed transitively) and DEP001 in CI's guardrails job
+#            (project not installed), and both forms are recorded in the deps
+#            baseline for that reason. Deliberately not a declared dependency: it ships
 #            native pdfium binaries per platform and only this audit script
 #            needs it, so every dev/CI install would carry ~10 MB per platform
 #            for a tool that runs on demand. The script fails with an
@@ -355,7 +358,16 @@ exclude_lines = [
 #            `_changelog_common` and `seed_demo` (imported by
 #            scripts/backup_restore_drill.py). Listed as first party rather
 #            than silenced per finding.
-known_first_party = ["bangla_gpt_api", "_changelog_common", "seed_demo"]
+# A9-01/A4-02: the live runners import each other's sibling helpers through
+# the same scripts/ sys.path entry (`_live_common`, `ttft_profile`), so they
+# belong in this list beside `_changelog_common`.
+known_first_party = [
+    "bangla_gpt_api",
+    "_changelog_common",
+    "_live_common",
+    "seed_demo",
+    "ttft_profile",
+]
 
 # Import-name to distribution-name mappings deptry cannot infer without the
 # project's environment installed. Locally the venv resolves them; in CI's

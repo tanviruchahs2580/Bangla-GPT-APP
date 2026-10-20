@@ -126,3 +126,16 @@ def build_embedder(settings: object) -> Embedder:
             "generation lane uses); leave EMBEDDING_MODEL empty for the local lane"
         )
     return GeminiEmbedder(api_key=api_key, model=model)
+
+
+def embedder_for_evaluation() -> Embedder:
+    """The vector lane for an evaluation run: configuration decides (A4-02).
+
+    ``EMBEDDING_MODEL`` empty is the served hashing lane; a supported model name
+    is the real adapter (the key comes from the environment, as it does for the
+    generation lane). One call site, so an evaluation artifact cannot quietly
+    measure a different lane than the one its ``run_conditions.embedder`` says.
+    """
+    from bangla_gpt_api.config import Settings
+
+    return build_embedder(Settings(env="test"))

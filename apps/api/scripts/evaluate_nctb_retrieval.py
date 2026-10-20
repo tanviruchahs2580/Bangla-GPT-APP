@@ -297,10 +297,7 @@ def main() -> int:
 
     args = sys.argv[1:]
     out_path: Path | None = None
-    # ``--out PATH`` redirects the artifact (A8-10: the one-command harness
-    # writes into an untracked directory and must not dirty this committed
-    # file). Everything else keeps the historical positional form the tests
-    # and docs use.
+    # ``--out PATH`` redirects the artifact (the positional form is unchanged).
     if "--out" in args:
         index = args.index("--out")
         if index + 1 >= len(args):
@@ -322,19 +319,13 @@ def main() -> int:
         return 1
 
     from bangla_gpt_api.retrieval.bm25 import BM25Index
-    from bangla_gpt_api.retrieval.embedding import build_embedder
+    from bangla_gpt_api.retrieval.embedding import embedder_for_evaluation
     from bangla_gpt_api.retrieval.hybrid_index import HybridIndex
 
     tracemalloc.start()
     build_start = time.perf_counter()
     lexical = BM25Index(chunks)
-    # A4-02: the embedder comes from the configuration, so the same harness
-    # measures the deterministic hashing lane (EMBEDDING_MODEL empty, the
-    # served default) and a real multilingual model (a named model), on the
-    # same corpus and queries. The artifact records which one ran.
-    from bangla_gpt_api.config import Settings as _Settings
-
-    embedder = build_embedder(_Settings(env="test"))
+    embedder = embedder_for_evaluation()  # A4-02: configuration decides the lane
     served = HybridIndex(chunks, embedder)
     build_seconds = round(time.perf_counter() - build_start, 3)
     _current, peak_bytes = tracemalloc.get_traced_memory()
@@ -527,9 +518,6 @@ def main() -> int:
             "queries_family_d_banglish": len(queries_d),
             "top_k_evaluated": MAX_TOP_K,
             "bootstrap_resamples": BOOTSTRAP_RESAMPLES,
-            # A4-02: which vector lane produced this artifact -- the
-            # deterministic hashing stand-in (EMBEDDING_MODEL empty, the
-            # served default) or a named real model.
             "embedder": getattr(embedder, "name", type(embedder).__name__),
         },
         "serve_stats": {

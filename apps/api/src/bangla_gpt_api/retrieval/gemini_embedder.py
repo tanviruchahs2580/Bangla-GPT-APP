@@ -100,56 +100,63 @@ class GeminiEmbedder:
         prepared = [self._prepare(text) for text in texts]
         vectors: list[list[float]] = []
         for start in range(0, len(prepared), MAX_BATCH_SIZE):
-            batch = prepared[start : start + MAX_BATCH_SIZE]
-            payload = {
-                "requests": [
-                    {
-                        "model": f"models/{self._model}",
-                        "content": {"parts": [{"text": text}]},
-                        "outputDimensionality": self._dimensions,
-                    }
-                    for text in batch
-                ]
-            }
-            url = f"{_API_BASE}/models/{self._model}:batchEmbedContents"
-            attempt = 0
-            while True:
-                self._pace()
-                try:
-                    response = self._post(
-                        url,
-                        json=payload,
-                        headers={"x-goog-api-key": self._api_key},
-                        timeout=self._timeout,
-                    )
-                    if response.status_code == 429:
-                        # The free tier answers 429 with a retry hint; honour it
-                        # (or the documented backoff) instead of failing a run
-                        # that is making progress one batch at a time.
-                        if attempt >= MAX_RATE_LIMIT_RETRIES:
-                            raise ProviderError(
-                                "gemini embeddings rate-limited: "
-                                f"{MAX_RATE_LIMIT_RETRIES} retries exhausted ({response.text[:120]})"
-                            )
-                        attempt += 1
-                        time.sleep(self._retry_delay(response))
-                        continue
-                    response.raise_for_status()
-                    body = response.json()
-                    break
-                except httpx.HTTPError as exc:
-                    if attempt >= self._max_retries:
-                        raise ProviderError(
-                            f"gemini embeddings failed after {attempt + 1} attempt(s): {exc}"
-                        ) from exc
-                    attempt += 1
-            embeddings = body.get("embeddings") or []
-            if len(embeddings) != len(batch):
-                raise ProviderError(
-                    f"gemini embeddings returned {len(embeddings)} vectors for {len(batch)} texts"
-                )
-            vectors.extend([list(map(float, item.get("values") or [])) for item in embeddings])
+            vectors.extend(self._embed_batch(prepared[start : start + MAX_BATCH_SIZE]))
         return vectors
+
+    def _batch_request(self, text: str) -> dict[str, Any]:
+        """One entry of a batchEmbedContents request."""
+        return {
+            "model": f"models/{self._model}",
+            "content": {"parts": [{"text": text}]},
+            "outputDimensionality": self._dimensions,
+        }
+
+    def _embed_batch(self, batch: list[str]) -> list[list[float]]:
+        """Embed one batch (at most ``MAX_BATCH_SIZE`` texts), in input order.
+
+        Paces the call and delegates the transport+retry story to
+        :meth:`_post_batch`: a 429 is progress-not-failure, because a
+        corpus-sized run must keep making one batch at a time.
+        """
+        payload = {"requests": [self._batch_request(text) for text in batch]}
+        return self._post_batch(payload, len(batch))
+
+    def _post_batch(self, payload: dict[str, Any], expected: int) -> list[list[float]]:
+        """POST one batch, retrying 429s with the vendor hint; returns vectors.
+
+        Split out of :meth:`_embed_batch` so both stay readable: this is the
+        transport+retry story, the caller is the batching story.
+        """
+        url = f"{_API_BASE}/models/{self._model}:batchEmbedContents"
+        attempt = 0
+        while True:
+            self._pace()
+            try:
+                response = self._post(url, json=payload)
+                if response.status_code == 429:
+                    if attempt >= MAX_RATE_LIMIT_RETRIES:
+                        raise ProviderError(
+                            "gemini embeddings rate-limited: "
+                            f"{MAX_RATE_LIMIT_RETRIES} retries exhausted ({response.text[:120]})"
+                        )
+                    attempt += 1
+                    time.sleep(self._retry_delay(response))
+                    continue
+                response.raise_for_status()
+                body = response.json()
+                break
+            except httpx.HTTPError as exc:
+                if attempt >= self._max_retries:
+                    raise ProviderError(
+                        f"gemini embeddings failed after {attempt + 1} attempt(s): {exc}"
+                    ) from exc
+                attempt += 1
+        embeddings = body.get("embeddings") or []
+        if len(embeddings) != expected:
+            raise ProviderError(
+                f"gemini embeddings returned {len(embeddings)} vectors for {expected} texts"
+            )
+        return [list(map(float, item.get("values") or [])) for item in embeddings]
 
     def _post(self, url: str, **kwargs: Any) -> Any:
         """One POST through the injected transport or httpx itself."""
@@ -196,12 +203,3 @@ class GeminiEmbedder:
         words = clean.split(" ")
         keep = max(1, int(len(words) * MAX_INPUT_TOKENS / max(counter.count(clean), 1)))
         return " ".join(words[:keep])
-
-    def truncated_name(self) -> str:
-        """The name recorded when any text was truncated (artifact honesty)."""
-        return f"{self.name}:truncated"
-
-
-def gemini_api_key_from_env() -> str:
-    """The key from the environment, never from a logged/serialized source."""
-    return (os.environ.get("GEMINI_API_KEY") or "").strip()

@@ -166,6 +166,25 @@ class SuiteMetrics:
         }
 
 
+def _evidence_sources(tutor: Any, item: dict, response: Any) -> list:
+    """The evidence a faithfulness score is about (A8-08).
+
+    What the model RECEIVED (the retrieved passages), not the citations the
+    response chose to display: narrowing the displayed set must not move a
+    number that is about grounding. The tutor is asked for the retrieved set
+    when it exposes the seam; the attached sources remain the fallback (test
+    doubles, callers without a retrieval seam). SourceRef models carry
+    ``excerpt``; plain dicts are tolerated for doubles.
+    """
+    displayed = list(getattr(response, "sources", None) or [])
+    retrieved = getattr(tutor, "retrieved_sources", None)
+    if not callable(retrieved):
+        return displayed
+    return list(
+        retrieved(item["question"], item["class_level"], item.get("subject") or None) or displayed
+    )
+
+
 async def run_suite(
     tutor: Any,
     items: list[dict],
@@ -218,26 +237,9 @@ async def run_suite(
             )
         if resp.grounded:
             answered_total += 1
-            # A8-08: the evidence the metric reads is what the model RECEIVED
-            # (the retrieved passages), not the citations the response chose to
-            # display -- otherwise narrowing the displayed set would move a
-            # faithfulness number that is about grounding. The retrieved set is
-            # asked of the tutor when it exposes it, and the attached sources
-            # remain the fallback (test doubles, and any caller without the
-            # retrieval seam). Sources are SourceRef models (schemas.py,
-            # excerpt: str | None); plain dicts are tolerated for doubles.
-            retrieved = getattr(tutor, "retrieved_sources", None)
-            displayed = list(resp.sources or [])
-            if callable(retrieved):
-                evidence_sources = list(
-                    retrieved(item["question"], item["class_level"], item.get("subject") or None)
-                    or displayed
-                )
-            else:
-                evidence_sources = displayed
             evidence = [
                 (s.get("excerpt") or "") if isinstance(s, dict) else (s.excerpt or "")
-                for s in evidence_sources
+                for s in _evidence_sources(tutor, item, resp)
             ]
             faith = await faithfulness(resp.answer, item["question"], evidence, judge_provider)
             faith_sum += faith["score"]
