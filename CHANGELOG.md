@@ -95,6 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(deps): lock radon and make deptry's import mapping environment-independent
 - fix(e2e): raise the harness login rate limit above the suite's own login volume
 - fix(encoding): add .gitattributes and repair three encoding defects
+- fix(eval): read faithfulness against the retrieved evidence; format and keep the gate green
 - fix(i18n): put the parent digest and the printed papers in Bangla, and correct five copy defects
 - fix(nctb): recover the chunker lost to a split truncation, fix two packing rules, regenerate the corpus
 - fix(ops): point the Grafana dashboard at the exported metric names
@@ -191,6 +192,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(audit): record the merge and live-production outcome
 - docs(audit): refresh the audit report for the second remediation pass (61.0/100)
 - docs(audit): wave-3 report — score 83.0/100, live evaluation closed, caps re-checked
+- docs(changelog): record the A8-08 citation selection and the A9-01 TTFT profile
 - docs(changelog): record the CI-fix commits
 - docs(changelog): record the e2e-evidence wave
 - docs(changelog): record the wave-3 commits
