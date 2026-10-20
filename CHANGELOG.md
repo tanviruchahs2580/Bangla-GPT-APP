@@ -141,6 +141,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix: complete admin password-change flow, tutor typo gate, roster-scoped stats, quiz distractors, i18n
 - fix: land the verified remediation on current main (CORS-adjacent, budget, UI states)
 - fix: resolve mypy 2.4.0 type errors in teacher/school/common/weakness
+- fix: wave-4 closing batch — ratchet baseline, brand tokens, loade split, role caps, env parity
 - fix: wave-4 quality batch — C-10 pagination parity, G-24 PDF None-render, D-16 in-app confirm, tokenizer unit collision
 
 ### Security
