@@ -134,6 +134,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): stop rendering remote images in answers and announce each answer once
 - fix(web): stop showing failures as facts, and read API timestamps as UTC
 - fix(web): stop swallowing failed writes; roll back the bookmark toggle
+- fix(web): verified visual baselines, three-engine green, Play Store listing assets
 - fix(web,e2e): bn plural expectation, empty-sub geometry, ratchet line budget
 - fix(web,e2e,scripts): close the CI failures the wave introduced
 - fix: complete admin password-change flow, tutor typo gate, roster-scoped stats, quiz distractors, i18n
@@ -182,6 +183,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(audit): record the merge and live-production outcome
 - docs(audit): refresh the audit report for the second remediation pass (61.0/100)
 - docs(audit): wave-3 report — score 83.0/100, live evaluation closed, caps re-checked
+- docs(changelog): record the CI-fix commits
 - docs(changelog): record the wave-3 commits
 - docs(compliance): record the provider's current terms, tier by tier (A7-04)
 - docs(dx): threat model, AI system card, OpenSSF self-assessment, devcontainer and Make targets
