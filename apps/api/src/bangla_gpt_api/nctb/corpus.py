@@ -142,7 +142,7 @@ def prune_outputs(
                 if key not in pruned["sources"]:
                     pruned["sources"].append(key)
             report_path.write_text(
-                json.dumps(reports, ensure_ascii=False, indent=2), encoding="utf-8"
+                json.dumps(reports, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
             )
     return pruned
 
@@ -240,7 +240,9 @@ def _write_report(report_path: Path, summary: dict) -> None:
         reports = json.loads(report_path.read_text(encoding="utf-8"))
     key = summary.pop("source_id")
     reports[key] = summary
-    report_path.write_text(json.dumps(reports, ensure_ascii=False, indent=2), encoding="utf-8")
+    report_path.write_text(
+        json.dumps(reports, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
 
 
 def load_chunks_jsonl(path: Path) -> list[RawChunk]:

@@ -243,6 +243,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: ship the bundled font's licence, third-party notices, contributing guide
 - docs: the AI system card cites current numbers and an artifact that exists
 - docs: truthful disclosure channel, corpus step, pipeline gate and PDF engine copy
+- docs: wave-4 report (96.8/100) — register 241 PASS / 18 PARTIAL / 0 FAIL
 
 ### Tests
 

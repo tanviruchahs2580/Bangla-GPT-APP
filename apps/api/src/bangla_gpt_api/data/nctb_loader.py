@@ -139,23 +139,23 @@ def load_nctb_corpus(
     chunks: list[Chunk] = []
     totals = _LoadTotals()
     seen_pairs: set[tuple[int, str]] = set()
-    for path in sorted(chunks_dir.glob('*.chunks.jsonl')):
-        source_id = path.name.removesuffix('.chunks.jsonl')
+    for path in sorted(chunks_dir.glob("*.chunks.jsonl")):
+        source_id = path.name.removesuffix(".chunks.jsonl")
         if not _source_is_current(source_id, acquired_source_ids):
             totals.stale_sources += 1
             logger.warning(
-                'nctb_loader: skipped stale source %s (not acquired in the manifest)',
+                "nctb_loader: skipped stale source %s (not acquired in the manifest)",
                 source_id,
             )
             continue
         report: dict = reports.get(source_id, {})
-        level = report.get('level')
+        level = report.get("level")
         low_high = LEVEL_CLASS_RANGE.get(level) if level is not None else None
         if low_high is None:
             continue  # unknown provenance: never guess
-        if report.get('bangla_char_ratio_on_usable', 0.0) < 0.5:
+        if report.get("bangla_char_ratio_on_usable", 0.0) < 0.5:
             continue  # failed legacy-Bijoy conversion never reaches the index
-        with path.open(encoding='utf-8') as fh:
+        with path.open(encoding="utf-8") as fh:
             for line in fh:
                 ingested = _ingest_line(
                     line,
@@ -211,13 +211,25 @@ class _LoadTotals:
 
     def log(self) -> None:
         if self.injection_drops:
-            logger.warning("nctb_loader: dropped %d prompt-injection sentences at load time", self.injection_drops)
+            logger.warning(
+                "nctb_loader: dropped %d prompt-injection sentences at load time",
+                self.injection_drops,
+            )
         if self.legacy_drops:
-            logger.warning("nctb_loader: dropped %d legacy-Bijoy chunks; rebuild the affected sources", self.legacy_drops)
+            logger.warning(
+                "nctb_loader: dropped %d legacy-Bijoy chunks; rebuild the affected sources",
+                self.legacy_drops,
+            )
         if self.residue_drops:
-            logger.warning("nctb_loader: dropped %d Latin-residue chunks in Bangla-rated sources", self.residue_drops)
+            logger.warning(
+                "nctb_loader: dropped %d Latin-residue chunks in Bangla-rated sources",
+                self.residue_drops,
+            )
         if self.duplicates:
-            logger.info("nctb_loader: dropped %d duplicate (class_level, text) pairs at load time", self.duplicates)
+            logger.info(
+                "nctb_loader: dropped %d duplicate (class_level, text) pairs at load time",
+                self.duplicates,
+            )
 
     def as_stats(self, served: int) -> dict:
         return {
@@ -300,7 +312,12 @@ def _ingest_line(
     if not text:
         return None
     meta_kwargs, targets = _chunk_meta(
-        data, report, source_id, low_high, text, version,
+        data,
+        report,
+        source_id,
+        low_high,
+        text,
+        version,
         multi_class_fallback=multi_class_fallback,
     )
     if targets is None:
@@ -313,9 +330,14 @@ def _ingest_line(
             totals.duplicates += 1
             continue
         seen_pairs.add(pair)
-        out.append(Chunk(id=f"{data['chunk_id']}-c{class_level}", text=text, meta=CurriculumMeta(class_level=class_level, **meta_kwargs)))
+        out.append(
+            Chunk(
+                id=f"{data['chunk_id']}-c{class_level}",
+                text=text,
+                meta=CurriculumMeta(class_level=class_level, **meta_kwargs),
+            )
+        )
     return out
-
 
 
 def attach_detected_classes(pages_json_dir: Path, chunks_dir: Path) -> dict[str, int | None]:

@@ -198,7 +198,7 @@ jobs:
         run: |
           python -m uvicorn bangla_gpt_api.main:app --app-dir src \
             --host 127.0.0.1 --port 8000 &
-          for i in $(seq 1 60); do
+          for _ in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1; then
               echo "API is up"; exit 0
             fi

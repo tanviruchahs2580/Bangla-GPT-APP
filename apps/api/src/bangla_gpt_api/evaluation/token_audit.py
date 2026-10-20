@@ -122,8 +122,7 @@ def build_audit(
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "provider": getattr(provider, "name", "unknown"),
         "counter": counter.name,
-        "vendor_endpoint": _is_vendor(provider)
-        and not getattr(counter, "fell_back", False),
+        "vendor_endpoint": _is_vendor(provider) and not getattr(counter, "fell_back", False),
         "note": _counter_note(provider, counter, **_vendor_state(provider, counter)),
         "fallback_calls": int(getattr(counter, "fallback_calls", 0)),
         "vendor_calls": int(getattr(counter, "vendor_calls", 0)),
@@ -185,9 +184,7 @@ def _build_index(settings: Settings) -> Any:
     return HybridIndex(_load_corpus(settings), build_embedder(settings))
 
 
-def _counter_note(
-    provider: Any, counter: Any, *, has_count_tokens: bool, is_vendor: bool
-) -> str:
+def _counter_note(provider: Any, counter: Any, *, has_count_tokens: bool, is_vendor: bool) -> str:
     """Which honesty note the artifact carries, from the observed run state."""
     if not has_count_tokens:
         return getattr(provider, "reason", "no provider with count_tokens configured")
