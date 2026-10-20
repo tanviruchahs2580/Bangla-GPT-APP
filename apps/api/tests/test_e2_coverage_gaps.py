@@ -391,7 +391,7 @@ def test_memory_concurrency_limiter_sweeps_expired_slots() -> None:
     limiter = MemoryConcurrencyLimiter(slot_ttl=0.05)
     assert limiter.acquire("student", 1) is True
     assert limiter.acquire("student", 1) is False
-    time.sleep(0.06)
+    time.sleep(0.2)  # 3x TTL: 0.06 was a host-speed coin flip on Windows
     assert limiter.acquire("student", 1) is True, "the stale slot must be swept"
 
 

@@ -105,7 +105,9 @@ describe("history UI", () => {
 
     // The trash click opens the in-app dialog (S-11); DELETE fires on confirm.
     await screen.findByText(t("deleteChatConfirm"));
-    await user.click(screen.getByRole("button", { name: t("deleteChatConfirmShort") }));
+    await user.click(
+      screen.getByRole("button", { name: t("deleteChatConfirmShort") }),
+    );
     await waitFor(() =>
       expect(apiMock.del).toHaveBeenCalledWith("/tutor/conversations/5"),
     );

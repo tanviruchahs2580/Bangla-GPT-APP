@@ -139,6 +139,27 @@ def near_duplicate_groups(
         (chunk_id, source_id, len(text), trigram_ngrams(text))
         for chunk_id, source_id, text in records
     ]
+    parent = _union_cross_source_pairs(prepared, threshold=threshold, min_chars=min_chars)
+    groups: dict[int, list[tuple[str, str]]] = {}
+    for i, (chunk_id, source_id, _len, _grams) in enumerate(prepared):
+        groups.setdefault(_find_root(parent, i), []).append((source_id, chunk_id))
+    return [sorted(members) for members in groups.values() if len(members) >= 2]
+
+
+def _find_root(parent: list[int], i: int) -> int:
+    while parent[i] != i:
+        parent[i] = parent[parent[i]]
+        i = parent[i]
+    return i
+
+
+def _union_cross_source_pairs(
+    prepared: list[tuple[str, str, int, frozenset[str]]],
+    *,
+    threshold: float,
+    min_chars: int,
+) -> list[int]:
+    """Union-find pass over the cross-source trigram-Jaccard pairs."""
     n = len(prepared)
     parent = list(range(n))
 
@@ -152,9 +173,7 @@ def near_duplicate_groups(
         _id_i, source_i, len_i, grams_i = prepared[i]
         for j in range(i + 1, n):
             _id_j, source_j, len_j, grams_j = prepared[j]
-            if source_i == source_j:
-                continue
-            if not grams_i or not grams_j:
+            if source_i == source_j or not grams_i or not grams_j:
                 continue
             if min(len_i, len_j) < min_chars:
                 continue  # short headings legitimately repeat; too little content
@@ -163,10 +182,7 @@ def near_duplicate_groups(
                 ri, rj = _find(i), _find(j)
                 if ri != rj:
                     parent[ri] = rj
-    groups: dict[int, list[tuple[str, str]]] = {}
-    for i, (chunk_id, source_id, _len, _grams) in enumerate(prepared):
-        groups.setdefault(_find(i), []).append((source_id, chunk_id))
-    return [sorted(members) for members in groups.values() if len(members) >= 2]
+    return parent
 
 
 def _is_chapter_heading(line: str) -> str | None:

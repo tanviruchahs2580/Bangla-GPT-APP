@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 
 from bangla_gpt_api.curriculum.models import Chunk, CurriculumMeta
@@ -132,141 +133,189 @@ def load_nctb_corpus(
     prune_outputs removes the artifacts; the loader check covers a serving
     process restarted on a half-pruned data dir).
     """
-    reports: dict[str, dict] = {}
-    if quality_report_path is not None and quality_report_path.exists():
-        reports = json.loads(quality_report_path.read_text(encoding="utf-8"))
-
-    acquired_source_ids: set[str] | None = None
-    if manifest_path is not None and manifest_path.exists():
-        from bangla_gpt_api.nctb.manifest import load_manifest
-
-        acquired_source_ids = {
-            source_id
-            for source_id, record in load_manifest(manifest_path).items()
-            if record.source_status == "acquired"
-        }
+    reports = _load_quality_reports(quality_report_path)
+    acquired_source_ids = _acquired_source_ids(manifest_path)
 
     chunks: list[Chunk] = []
-    injection_drops_total = 0
-    legacy_drops_total = 0
-    residue_drops_total = 0
-    duplicates_dropped = 0
-    stale_sources = 0
-    # (class_level, text) fingerprints: cross-source passages and the
-    # class-range fallback both produce identical served pairs otherwise.
+    totals = _LoadTotals()
     seen_pairs: set[tuple[int, str]] = set()
-    for path in sorted(chunks_dir.glob("*.chunks.jsonl")):
-        source_id = path.name.removesuffix(".chunks.jsonl")
-        if acquired_source_ids is not None and source_id not in acquired_source_ids:
-            stale_sources += 1
+    for path in sorted(chunks_dir.glob('*.chunks.jsonl')):
+        source_id = path.name.removesuffix('.chunks.jsonl')
+        if not _source_is_current(source_id, acquired_source_ids):
+            totals.stale_sources += 1
             logger.warning(
-                "nctb_loader: skipped stale source %s (not 'acquired' in the manifest)",
+                'nctb_loader: skipped stale source %s (not acquired in the manifest)',
                 source_id,
             )
             continue
-        report = reports.get(source_id, {})
-        level = report.get("level")
-        if level not in LEVEL_CLASS_RANGE:
-            continue  # unknown provenance → never guess
-        # Safety gate: sources whose text is not predominantly Bangla Unicode
-        # (e.g., failed legacy-Bijoy conversion) never reach the tutor index.
-        if report.get("bangla_char_ratio_on_usable", 0.0) < 0.5:
-            continue
-        subject_bn = report.get("subject_bn", "")
-        year = _resolve_year(report)
-        low, high = LEVEL_CLASS_RANGE[level]
-        with path.open(encoding="utf-8") as fh:
+        report: dict = reports.get(source_id, {})
+        level = report.get('level')
+        low_high = LEVEL_CLASS_RANGE.get(level) if level is not None else None
+        if low_high is None:
+            continue  # unknown provenance: never guess
+        if report.get('bangla_char_ratio_on_usable', 0.0) < 0.5:
+            continue  # failed legacy-Bijoy conversion never reaches the index
+        with path.open(encoding='utf-8') as fh:
             for line in fh:
-                if not line.strip():
-                    continue
-                data = json.loads(line)
-                text = strip_private_use(data["text"])
-                if not text.strip():
-                    continue
-                if is_likely_legacy_bijoy(text):
-                    legacy_drops_total += 1
-                    continue
-                # This source already passed the Bangla-ratio gate above, so
-                # an ASCII-Latin-dominant chunk here is an unconverted legacy
-                # passage, not English prose — the same verdict content QA
-                # applies with bangla_source=True.
-                if has_latin_residue(text):
-                    residue_drops_total += 1
-                    continue
-                # Same ingest-time injection filter the sample corpus gets
-                # (services/safety.py documents it as the first of the two
-                # injection defenses) — without it the production corpus
-                # path would skip the filter entirely.
-                text, injection_drops = strip_injections(text)
-                injection_drops_total += injection_drops
-                if not text:
-                    continue
-                section = str(data.get("section") or "").strip()
-                meta_kwargs = dict(
-                    curriculum_year=year,
-                    subject=_subject_key(subject_bn),
-                    book=subject_bn,
-                    chapter=data.get("chapter", ""),
-                    section=section or None,
-                    page=data.get("page_start"),
-                    language="bn",
+                ingested = _ingest_line(
+                    line,
+                    report,
+                    source_id,
+                    low_high,
+                    totals,
+                    seen_pairs,
+                    multi_class_fallback=multi_class_fallback,
                     version=version,
-                    content_type=infer_content_type(text),
-                    source=source_id,
                 )
-                detected = data.get("detected_class")
-                targets = (
-                    [int(detected)]
-                    if detected is not None and low <= int(detected) <= high
-                    else list(range(low, high + 1))
-                )
-                if detected is None and not multi_class_fallback:
-                    continue
-                fingerprint = " ".join(text.split())
-                for class_level in targets:
-                    pair = (class_level, fingerprint)
-                    if pair in seen_pairs:
-                        duplicates_dropped += 1
-                        continue
-                    seen_pairs.add(pair)
-                    chunks.append(
-                        Chunk(
-                            id=f"{data['chunk_id']}-c{class_level}",
-                            text=text,
-                            meta=CurriculumMeta(class_level=class_level, **meta_kwargs),
-                        )
-                    )
-    if injection_drops_total:
-        logger.warning(
-            "nctb_loader: dropped %d prompt-injection sentences at load time",
-            injection_drops_total,
-        )
-    if legacy_drops_total:
-        logger.warning(
-            "nctb_loader: dropped %d chunks with unreadable legacy-Bijoy ASCII; "
-            "rebuild the affected sources with the conversion stage",
-            legacy_drops_total,
-        )
-    if residue_drops_total:
-        logger.warning(
-            "nctb_loader: dropped %d chunks dominated by ASCII-Latin letters in a "
-            "Bangla-rated source (unconverted legacy text); rebuild the affected "
-            "sources with the per-line conversion stage",
-            residue_drops_total,
-        )
-    if duplicates_dropped:
-        logger.info(
-            "nctb_loader: dropped %d duplicate (class_level, text) pairs at load time",
-            duplicates_dropped,
-        )
+                if ingested is not None:
+                    chunks.extend(ingested)
+    totals.log()
     if stats is not None:
-        stats["duplicates_dropped"] = duplicates_dropped
-        stats["injection_drops"] = injection_drops_total
-        stats["legacy_drops"] = legacy_drops_total
-        stats["latin_residue_drops"] = residue_drops_total
-        stats["stale_sources_skipped"] = stale_sources
-        stats["served_chunks"] = len(chunks)
+        stats.update(totals.as_stats(served=len(chunks)))
     return chunks
+
+
+def _load_quality_reports(path: Path | None) -> dict[str, dict]:
+    if path is not None and path.exists():
+        parsed: dict[str, dict] = json.loads(path.read_text(encoding="utf-8"))
+        return parsed
+    return {}
+
+
+def _acquired_source_ids(manifest_path: Path | None) -> set[str] | None:
+    """A2-06: the acquisition manifest is the ledger of what is served."""
+    if manifest_path is None or not manifest_path.exists():
+        return None
+    from bangla_gpt_api.nctb.manifest import load_manifest
+
+    return {
+        source_id
+        for source_id, record in load_manifest(manifest_path).items()
+        if record.source_status == "acquired"
+    }
+
+
+def _source_is_current(source_id: str, acquired: set[str] | None) -> bool:
+    return acquired is None or source_id in acquired
+
+
+@dataclass
+class _LoadTotals:
+    """Per-load drop counters, logged once and reported through `stats`."""
+
+    injection_drops: int = 0
+    legacy_drops: int = 0
+    residue_drops: int = 0
+    duplicates: int = 0
+    stale_sources: int = 0
+
+    def log(self) -> None:
+        if self.injection_drops:
+            logger.warning("nctb_loader: dropped %d prompt-injection sentences at load time", self.injection_drops)
+        if self.legacy_drops:
+            logger.warning("nctb_loader: dropped %d legacy-Bijoy chunks; rebuild the affected sources", self.legacy_drops)
+        if self.residue_drops:
+            logger.warning("nctb_loader: dropped %d Latin-residue chunks in Bangla-rated sources", self.residue_drops)
+        if self.duplicates:
+            logger.info("nctb_loader: dropped %d duplicate (class_level, text) pairs at load time", self.duplicates)
+
+    def as_stats(self, served: int) -> dict:
+        return {
+            "duplicates_dropped": self.duplicates,
+            "injection_drops": self.injection_drops,
+            "legacy_drops": self.legacy_drops,
+            "latin_residue_drops": self.residue_drops,
+            "stale_sources_skipped": self.stale_sources,
+            "served_chunks": served,
+        }
+
+
+def _chunk_meta(
+    data: dict,
+    report: dict,
+    source_id: str,
+    low_high: tuple[int, int],
+    text: str,
+    version: str,
+    *,
+    multi_class_fallback: bool,
+):
+    """Metadata kwargs plus the class targets for one chunk; targets None when
+    the class is undetected and the multi-class fallback is disabled."""
+    subject_bn = report.get("subject_bn", "")
+    low, high = low_high
+    section = str(data.get("section") or "").strip()
+    meta_kwargs = dict(
+        curriculum_year=_resolve_year(report),
+        subject=_subject_key(subject_bn),
+        book=subject_bn,
+        chapter=data.get("chapter", ""),
+        section=section or None,
+        page=data.get("page_start"),
+        language="bn",
+        version=version,
+        content_type=infer_content_type(text),
+        source=source_id,
+    )
+    detected = data.get("detected_class")
+    if detected is None and not multi_class_fallback:
+        return meta_kwargs, None
+    targets = (
+        [int(detected)]
+        if detected is not None and low <= int(detected) <= high
+        else list(range(low, high + 1))
+    )
+    return meta_kwargs, targets
+
+
+def _ingest_line(
+    line,
+    report,  # noqa: ANN001 - internal pipeline payloads are dict-shaped
+    source_id: str,
+    low_high: tuple[int, int],
+    totals: _LoadTotals,
+    seen_pairs: set[tuple[int, str]],
+    *,
+    multi_class_fallback: bool,
+    version: str,
+):
+    """Convert one chunk-file line into served Chunks; None when dropped."""
+    if not line.strip():
+        return None
+    data = json.loads(line)
+    text = strip_private_use(data["text"])
+    if not text.strip():
+        return None
+    if is_likely_legacy_bijoy(text):
+        totals.legacy_drops += 1
+        return None
+    # This source already passed the Bangla-ratio gate, so an ASCII-Latin
+    # dominant chunk is an unconverted legacy passage, not English prose.
+    if has_latin_residue(text):
+        totals.residue_drops += 1
+        return None
+    # Same ingest-time injection filter the sample corpus gets.
+    text, injection_drops = strip_injections(text)
+    totals.injection_drops += injection_drops
+    if not text:
+        return None
+    meta_kwargs, targets = _chunk_meta(
+        data, report, source_id, low_high, text, version,
+        multi_class_fallback=multi_class_fallback,
+    )
+    if targets is None:
+        return None
+    out = []
+    fingerprint = " ".join(text.split())
+    for class_level in targets:
+        pair = (class_level, fingerprint)
+        if pair in seen_pairs:
+            totals.duplicates += 1
+            continue
+        seen_pairs.add(pair)
+        out.append(Chunk(id=f"{data['chunk_id']}-c{class_level}", text=text, meta=CurriculumMeta(class_level=class_level, **meta_kwargs)))
+    return out
+
 
 
 def attach_detected_classes(pages_json_dir: Path, chunks_dir: Path) -> dict[str, int | None]:

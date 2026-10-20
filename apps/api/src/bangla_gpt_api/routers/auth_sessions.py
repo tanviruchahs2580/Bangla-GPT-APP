@@ -147,6 +147,24 @@ def _lock_remaining_seconds(user: User, now: datetime) -> int | None:
     return max(1, int(remaining))
 
 
+def _register_login_failure(db: DbSession, user: User, now: datetime) -> None:
+    """S-002: count the failure; crossing the threshold stamps a progressive
+    lock. The response body stays exactly the same as for an unknown address."""
+    user.failed_login_count = (user.failed_login_count or 0) + 1
+    if user.failed_login_count >= _LOGIN_LOCKOUT_THRESHOLD:
+        user.locked_until = now.replace(tzinfo=None) + timedelta(
+            seconds=_lockout_seconds(user.failed_login_count)
+        )
+    db.commit()
+
+
+def _clear_login_failure(db: DbSession, user: User) -> None:
+    if (user.failed_login_count or 0) > 0 or user.locked_until is not None:
+        user.failed_login_count = 0
+        user.locked_until = None
+        db.commit()
+
+
 @router.post("/auth/login", response_model=SessionTokenResponse, responses=coded(401, 403, 429))
 def login(
     app_ctx: Ctx, response: Response, payload: LoginRequest, db: DbSession
@@ -193,25 +211,14 @@ def login(
         )
 
     if not password_ok:
-        # S-002: count the failure; crossing the threshold stamps a
-        # progressive lock. The response body stays exactly the same as for
-        # an unknown address (and as before this change).
-        user.failed_login_count = (user.failed_login_count or 0) + 1
-        if user.failed_login_count >= _LOGIN_LOCKOUT_THRESHOLD:
-            user.locked_until = now.replace(tzinfo=None) + timedelta(
-                seconds=_lockout_seconds(user.failed_login_count)
-            )
-        db.commit()
+        _register_login_failure(db, user, now)
         raise HTTPException(
             status_code=401,
             detail={"code": "bad_credentials", "message": "Incorrect email or password"},
         )
 
     # A successful sign-in clears the account's failure state.
-    if (user.failed_login_count or 0) > 0 or user.locked_until is not None:
-        user.failed_login_count = 0
-        user.locked_until = None
-        db.commit()
+    _clear_login_failure(db, user)
 
     if not user.email_verified:
         raise HTTPException(

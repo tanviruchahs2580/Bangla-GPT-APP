@@ -139,11 +139,11 @@
   },
   "mrr_at_10": {
    "ci95": [
-    0.9309,
-    0.9761
+    0.9337,
+    0.9779
    ],
    "comparison": ">=",
-   "measured": 0.9549,
+   "measured": 0.9576,
    "meets": true,
    "note": "MRR@10 is macro over the split's answerable items",
    "scope": "test split, filtered (class+subject pre-filter, the tutor's lane), n=181, corpus=bundled-sample",

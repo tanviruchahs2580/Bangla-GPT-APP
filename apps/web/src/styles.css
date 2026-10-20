@@ -9,6 +9,9 @@
 :root {
   /* Brand — Bangladesh green primary (blueprint §7) */
   --brand: #166534;
+  --brand-600: #16a34a; /* BrandMark gradient stop 0 / confetti palette */
+  --brand-500: #4ade80; /* confetti highlight */
+  --brand-ink: #052e16;
   --brand-strong: #14532d;
   --brand-ink: #052e16;
   --brand-soft: #dcfce7;

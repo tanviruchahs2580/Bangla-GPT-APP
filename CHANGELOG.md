@@ -137,6 +137,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): verified visual baselines, three-engine green, Play Store listing assets
 - fix(web,e2e): bn plural expectation, empty-sub geometry, ratchet line budget
 - fix(web,e2e,scripts): close the CI failures the wave introduced
+- fix: A7-05 per-role in-flight caps and A7-08 teacher AI disclaimer
 - fix: complete admin password-change flow, tutor typo gate, roster-scoped stats, quiz distractors, i18n
 - fix: land the verified remediation on current main (CORS-adjacent, budget, UI states)
 - fix: resolve mypy 2.4.0 type errors in teacher/school/common/weakness
