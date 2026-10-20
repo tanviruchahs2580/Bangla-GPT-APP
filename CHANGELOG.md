@@ -92,6 +92,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(deps): declare packaging, the lockfile gate's own import
 - fix(deps): declare radon, the one ratchet tool the script imports
 - fix(deps): lock radon and make deptry's import mapping environment-independent
+- fix(e2e): raise the harness login rate limit above the suite's own login volume
 - fix(encoding): add .gitattributes and repair three encoding defects
 - fix(i18n): put the parent digest and the printed papers in Bangla, and correct five copy defects
 - fix(ops): point the Grafana dashboard at the exported metric names
