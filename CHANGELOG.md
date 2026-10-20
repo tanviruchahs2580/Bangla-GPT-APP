@@ -90,9 +90,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(ci): upgrade setuptools before pip-audit; refresh lock to current resolution
 - fix(compose): writable HOME for gunicorn's control socket; drop the dead SettingsRegistry
 - fix(db): reconcile ORM/migration drift so alembic check passes
+- fix(deps): bump certifi to 2026.10.19 for GHSA-6q48-6c7w-9gw2
 - fix(deps): declare packaging, the lockfile gate's own import
 - fix(deps): declare radon, the one ratchet tool the script imports
 - fix(deps): lock radon and make deptry's import mapping environment-independent
+- fix(deps): record the pypdfium2 finding under both path separators (CI reports forward slashes)
 - fix(e2e): raise the harness login rate limit above the suite's own login volume
 - fix(encoding): add .gitattributes and repair three encoding defects
 - fix(eval): read faithfulness against the retrieved evidence; format and keep the gate green
@@ -199,6 +201,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(changelog): record the e2e-evidence wave
 - docs(changelog): record the faithfulness-evidence fix and the embedding backend
 - docs(changelog): record the hook, spelling and retry-discipline commits
+- docs(changelog): record the ratchet-fix commit
 - docs(changelog): record the wave-3 commits
 - docs(changelog): record the wave-5 recovery, corpus and web batches
 - docs(compliance): record the provider's current terms, tier by tier (A7-04)
