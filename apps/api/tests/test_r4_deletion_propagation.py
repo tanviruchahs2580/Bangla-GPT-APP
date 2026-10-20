@@ -189,8 +189,16 @@ def test_load_without_manifest_keeps_the_historical_contract(tmp_path: Path) -> 
     reason="served NCTB corpus artifacts are not built on this checkout",
 )
 def test_served_corpus_loads_under_the_manifest_ledger() -> None:
-    """The real corpus: every served source is acquired in the manifest."""
+    """The real corpus: every served source is acquired in the manifest.
+
+    Skips on CI: the NCTB chunk files are derived artifacts (gitignored), so
+    the pipeline must have been run locally for this test to see them."""
     repo = Path(__file__).resolve().parents[3] / "data" / "nctb"
+    chunk_files = sorted((repo / "normalized").glob("*.chunks.jsonl"))
+    if not chunk_files:
+        import pytest
+
+        pytest.skip("NCTB corpus not built on this checkout (derived artifacts are gitignored)")
     load_stats: dict[str, int] = {}
     chunks = load_nctb_corpus(
         repo / "normalized",
