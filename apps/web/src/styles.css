@@ -2123,6 +2123,13 @@ form .btn[type="submit"] {
   margin-top: calc(var(--space-3) * -1 + 4px);
 }
 
+/* AUD-G-19: the transcript window's "load earlier" control, at the top of the
+   thread -- centred like the .chat-day marker it sits next to, so it does not
+   read as part of the conversation. */
+.load-earlier {
+  align-self: center;
+}
+
 .bubble {
   max-width: 86%;
   padding: 13px 16px;

@@ -29,16 +29,15 @@ _SRC = Path(__file__).resolve().parents[2] / "api" / "src"
 if _SRC.is_dir() and str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from sqlalchemy import select  # noqa: E402
-
-from bangla_gpt_api.auth.security import hash_password  # noqa: E402
-from bangla_gpt_api.config import Settings  # noqa: E402
-from bangla_gpt_api.db.models import Parent, School, Student, Teacher, User  # noqa: E402
-from bangla_gpt_api.db.session import (  # noqa: E402
+from bangla_gpt_api.auth.security import hash_password
+from bangla_gpt_api.config import Settings
+from bangla_gpt_api.db.models import Parent, School, Student, Teacher, User
+from bangla_gpt_api.db.session import (
     init_db,
     make_engine,
     make_session_factory,
 )
+from sqlalchemy import select
 
 #: Shared password for every seeded account. Test-only, never used elsewhere.
 PASSWORD = "E2ePass!2345"
@@ -66,7 +65,7 @@ READONLY_ACCOUNTS = {
 SCHOOL_CODE = "E2E-SCHOOL"
 
 
-def _upsert_user(db, email: str, role: str) -> User:  # noqa: ANN001 - Session
+def _upsert_user(db, email: str, role: str) -> User:
     user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if user is None:
         user = User(
@@ -93,7 +92,12 @@ def seed() -> None:
     db = make_session_factory(engine)()
     try:
         student_user = _upsert_user(db, ACCOUNTS["student"], "student")
-        if db.execute(select(Student).where(Student.user_id == student_user.id)).scalar_one_or_none() is None:
+        if (
+            db.execute(
+                select(Student).where(Student.user_id == student_user.id)
+            ).scalar_one_or_none()
+            is None
+        ):
             db.add(
                 Student(
                     user_id=student_user.id,
@@ -105,11 +109,19 @@ def seed() -> None:
             )
 
         teacher_user = _upsert_user(db, ACCOUNTS["teacher"], "teacher")
-        if db.execute(select(Teacher).where(Teacher.user_id == teacher_user.id)).scalar_one_or_none() is None:
+        if (
+            db.execute(
+                select(Teacher).where(Teacher.user_id == teacher_user.id)
+            ).scalar_one_or_none()
+            is None
+        ):
             db.add(Teacher(user_id=teacher_user.id, name="E2E Teacher"))
 
         parent_user = _upsert_user(db, ACCOUNTS["parent"], "parent")
-        if db.execute(select(Parent).where(Parent.user_id == parent_user.id)).scalar_one_or_none() is None:
+        if (
+            db.execute(select(Parent).where(Parent.user_id == parent_user.id)).scalar_one_or_none()
+            is None
+        ):
             db.add(Parent(user_id=parent_user.id, name="E2E Parent"))
 
         _upsert_user(db, ACCOUNTS["admin"], "admin")

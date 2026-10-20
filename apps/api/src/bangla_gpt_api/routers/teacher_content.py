@@ -70,6 +70,7 @@ from bangla_gpt_api.services.question_bank import (
     store_reviewed,
 )
 
+from ._pagination import TaskListPage
 from .common import (
     _doc_in_for,
     _generate_document,
@@ -892,8 +893,8 @@ async def teacher_generate_document(
 def teacher_documents_list(
     db: DbSession,
     teacher: TeacherOrAdminUser,
+    page: TaskListPage,
     kind: str | None = None,
-    limit: Annotated[int, Query(ge=1, le=200)] = 100,
 ) -> list[TeacherDocumentOut]:
     """Own library, newest first; optional kind filter (includes the
     lesson_plan kind persisted by POST /teacher/lesson-plans)."""
@@ -905,7 +906,9 @@ def teacher_documents_list(
         q = q.where(TeacherDocument.kind == kind)
     rows = (
         db.execute(
-            q.order_by(TeacherDocument.created_at.desc(), TeacherDocument.id.desc()).limit(limit)
+            q.order_by(TeacherDocument.created_at.desc(), TeacherDocument.id.desc())
+            .offset(page.offset)
+            .limit(page.limit)
         )
         .scalars()
         .all()

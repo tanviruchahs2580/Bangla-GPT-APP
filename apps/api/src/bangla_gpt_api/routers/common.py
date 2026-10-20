@@ -419,6 +419,7 @@ def _load_class_students(
     db: Session,
     class_level: int | None,
     limit: int | None = None,
+    offset: int = 0,
     school_id: int | None = None,
 ) -> list[Student]:
     # tenancy: when the caller is bound to a school, only students
@@ -433,6 +434,8 @@ def _load_class_students(
             .join(ClassRoom, ClassRoom.id == ClassStudent.classroom_id)
             .where(ClassRoom.school_id == school_id)
         )
+    if offset:
+        statement = statement.offset(offset)
     if limit is not None:
         statement = statement.limit(limit)
     return list(db.execute(statement).scalars().all())

@@ -6,6 +6,13 @@ the NEXT strategy in the cycle is chosen and a teacher-level instruction is
 injected into the tutor prompt so the same failed approach is never repeated.
 """
 
+# A5-02: the teacher-level instruction COPY lives in the prompt registry
+# (apps/api/prompts/, owner + SemVer + changelog in manifest.json), like every
+# other instruction message the app sends. The module keeps only the parameter
+# substitution; changing the wording means editing the file, bumping its
+# version and adding a changelog entry in the same change.
+from bangla_gpt_api.services.prompt_registry import load_prompt
+
 # (key, Bengali display name) — order defines the fallback cycle.
 STRATEGIES: tuple[tuple[str, str], ...] = (
     ("simple", "সহজ ভাষা"),
@@ -16,6 +23,10 @@ STRATEGIES: tuple[tuple[str, str], ...] = (
 )
 
 _NAMES: dict[str, str] = dict(STRATEGIES)
+
+_RETEACH_NAMED = load_prompt("teach_reteach_named").text
+_RETEACH_DEFAULT = load_prompt("teach_reteach_default").text
+_STRATEGY_EXPLICIT = load_prompt("teach_strategy_explicit").text
 
 
 def next_strategy(last: str | None) -> str:
@@ -35,16 +46,16 @@ def reteach_instruction(last: str | None) -> tuple[str, str]:
 
     Returns (strategy_key, instruction). The instruction explicitly names the
     failed approach so the model does not repeat it (spec 1.5 PASS-WHEN:
-    same question twice ⇒ a different strategy is injected).
+    same question twice ⇒ a different strategy is injected). Byte-identical
+    to the pre-migration f-strings (pinned by tests/test_rag2_prompt_registry).
     """
     key = next_strategy(last)
     if last is not None and last in _NAMES:
-        instruction = (
-            f"শিক্ষক-নির্দেশ: আগের পদ্ধতিতে ({strategy_name(last)}) বিষয়টি বোঝানো যায়নি — "
-            f"এবার অন্য পদ্ধতি ({strategy_name(key)}) ব্যবহার করে বোঝাও।"
+        instruction = _RETEACH_NAMED.replace("{{failed_strategy}}", strategy_name(last)).replace(
+            "{{next_strategy}}", strategy_name(key)
         )
     else:
-        instruction = f"শিক্ষক-নির্দেশ: পুরোপুরি সহজভাবে, {strategy_name(key)} পদ্ধতিতে বোঝাও।"
+        instruction = _RETEACH_DEFAULT.replace("{{next_strategy}}", strategy_name(key))
     return key, instruction
 
 
@@ -67,4 +78,4 @@ EXPLICIT_STRATEGY_NAMES: dict[str, str] = {
 def explicit_strategy_instruction(key: str) -> str:
     """Teacher instruction line for an explicitly requested strategy."""
     name = EXPLICIT_STRATEGY_NAMES.get(key, key)
-    return f"শিক্ষক-নির্দেশ: এবার {name} পদ্ধতিতে ব্যাখ্যা কর।"
+    return _STRATEGY_EXPLICIT.replace("{{strategy_name}}", name)

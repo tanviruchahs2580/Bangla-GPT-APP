@@ -516,7 +516,15 @@ async def kg_rebuild(
             status_code=503,
             detail={"code": "provider_unavailable", "message": "LLM provider not configured"},
         )
-    stats = await knowledge.rebuild_concepts(db, app_ctx.index.chunks, active_provider, llm=llm)
+    stats = await knowledge.rebuild_concepts(
+        db,
+        app_ctx.index.chunks,
+        active_provider,
+        llm=llm,
+        # A1-04: the extraction call site is now on the ai_usage ledger like
+        # every other AI route, attributed to the acting admin.
+        usage_user_id=user.id if llm else None,
+    )
     return KgRebuildOut(**stats)
 
 

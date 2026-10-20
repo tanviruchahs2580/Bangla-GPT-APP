@@ -523,6 +523,20 @@ def main() -> int:
         help="A10-03: print the version-identity payload the admin AI-quality board needs",
     )
     parser.add_argument(
+        "--count-tokens-audit",
+        nargs="?",
+        const="",
+        default=None,
+        help=(
+            "A5-01: measure the evidence token budget for a golden-set sample with "
+            "the provider's count_tokens endpoint (free metadata request; never a "
+            "generation call) against the calibrated heuristic upper bound, then "
+            "write eval/token_counter_calibration.json. Optional N (sample size, "
+            "default 25). With the mock provider the artifact reports that its "
+            "count IS the heuristic instead of pretending a vendor measurement."
+        ),
+    )
+    parser.add_argument(
         "--allow-artifact-write",
         action="store_true",
         help=(
@@ -568,6 +582,47 @@ def main() -> int:
         from bangla_gpt_api.evaluation.version_board import version_board
 
         print(json.dumps(version_board(root), ensure_ascii=False, indent=1, sort_keys=True))
+        return 0
+
+    if args.count_tokens_audit is not None:
+        from bangla_gpt_api.evaluation import token_audit
+
+        # The audit's provider settings: the audit only ever calls
+        # count_tokens (a free metadata endpoint) -- never generate.
+        audit_sample = 25
+        out_path = root / "eval" / "token_counter_calibration.json"
+        if args.count_tokens_audit:
+            raw = args.count_tokens_audit
+            if raw.isdigit():
+                audit_sample = int(raw)
+            else:
+                out_path = Path(raw)
+        audit_settings = Settings(env="test")
+        payload = token_audit.build_audit(
+            settings=audit_settings,
+            golden_path=root / "eval" / "golden_v2.json",
+            sample=audit_sample,
+            provider=None,
+        )
+        written = token_audit.write_audit(payload, out_path)
+        print(
+            json.dumps(
+                {
+                    k: payload[k]
+                    for k in (
+                        "provider",
+                        "counter",
+                        "vendor_endpoint",
+                        "note",
+                        "sample_size",
+                        "ratio_summary",
+                    )
+                },
+                ensure_ascii=False,
+                indent=1,
+            )
+        )
+        print(f"token counter audit written: {written}")
         return 0
 
     if args.check_thresholds is not None:

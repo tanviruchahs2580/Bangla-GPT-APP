@@ -160,6 +160,48 @@ def test_reranker_fallback_keeps_serving_when_the_reranker_raises() -> None:
     hybrid.reranker = original
 
 
+def test_serving_index_wraps_a_faulting_reranker_in_the_fallback() -> None:
+    """A4-08: the SERVING constructor degrades a raising reranker, never the answer.
+
+    Before the FallbackReranker wiring, a fault in the configured reranker
+    propagated straight out of ``search`` — every tutoring turn backed by that
+    index failed while the fusion-only ranking (the measured
+    ``hybrid_rerank_off`` fallback, 0.9006 recall@1) could still answer. The
+    wrapper degrades to exactly that ranking: same fused candidates, RRF +
+    lexical-base scores, deterministic order.
+
+    Swapping ``index.reranker`` in place (variant_matrix, stage_latency, the
+    NCTB script) bypasses the wrapper by design — evaluation faults must fail
+    their run loudly. This test pins the constructor-level serving behaviour.
+    """
+    from bangla_gpt_api.data.loader import load_sample_corpus
+    from bangla_gpt_api.retrieval.embedding import HashingEmbedder
+    from bangla_gpt_api.retrieval.hybrid_index import FallbackReranker, HybridIndex
+
+    chunks = load_sample_corpus()
+    calls: list[str] = []
+
+    def broken_reranker(_query: str, _candidates: list) -> list[float]:
+        calls.append("raised")
+        raise RuntimeError("reranker stage unavailable")
+
+    hybrid = HybridIndex(chunks, HashingEmbedder(), reranker=broken_reranker)
+    assert isinstance(hybrid.reranker, FallbackReranker)
+    hits = hybrid.search("কোষ কী?", class_level=6, top_k=3)
+    assert calls == ["raised"]
+    assert hits, "a reranker fault must still serve the fusion-only ranking"
+    assert all(h.score > 0 for h in hits)
+    # Deterministic degraded order (second search faults again, same ranking).
+    again = hybrid.search("কোষ কী?", class_level=6, top_k=3)
+    assert [h.chunk.id for h in again] == [h.chunk.id for h in hits]
+    # A healthy primary is passed through unchanged (wrapper adds no drift).
+    healthy = HybridIndex(chunks, HashingEmbedder())
+    hybrid.primary = healthy.reranker.primary
+    assert [h.chunk.id for h in hybrid.search("কোষ কী?", class_level=6, top_k=3)] == [
+        h.chunk.id for h in healthy.search("কোষ কী?", class_level=6, top_k=3)
+    ]
+
+
 def test_long_bangla_query_does_not_break_the_reranker() -> None:
     """Token-limit handling: the local reranker sees the whole query, bounded work."""
     from bangla_gpt_api.data.loader import load_sample_corpus

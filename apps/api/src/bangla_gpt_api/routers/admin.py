@@ -380,6 +380,7 @@ def admin_refusal_audit(db: DbSession, admin: AdminUser, days: int = 30) -> Refu
 
 @router.get("/admin/ai/quality", response_model=AdminAiQualityOut)
 def admin_ai_quality(
+    app_ctx: Ctx,
     db: DbSession,
     admin: AdminUser,
     days: Annotated[int, Query(ge=1, le=365)] = 30,
@@ -390,6 +391,11 @@ def admin_ai_quality(
 
     Audit finding reflected in the payload: ChatMessage has no model
     column, so ``by_model`` is honestly empty today (no fabricated split).
+    ``versions`` (A10-03) serialises the version identities behind these
+    counts -- prompt registry, index fingerprint, embedding model,
+    thresholds and golden-dataset hashes -- so "did the change ship?" is
+    answerable from the board (evaluation.version_board reads each identity
+    from the artifact that owns it; null = unknown, never guessed).
     """
     cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)
     rows = db.execute(
@@ -429,6 +435,20 @@ def admin_ai_quality(
         .group_by(AiUsage.model)
     ).all()
     cost_by_model = {str(model): round(float(total or 0.0), 6) for model, total in cost_rows}
+    # A10-03: the version payload rides on the same response. Built from the
+    # tracked artifacts (read-only); the live index fingerprint comes from the
+    # serving tutor when one is running, else null -- an unknown version is a
+    # fact worth showing, never a guess.
+    from pathlib import Path
+
+    from bangla_gpt_api.evaluation.version_board import version_board
+
+    tutor = app_ctx.tutor
+    versions = version_board(
+        Path(__file__).resolve().parents[3],  # apps/api (eval/, prompts/ live here)
+        index_fingerprint=getattr(tutor, "index_version", None),
+        embedding_model=app_ctx.settings.embedding_model,
+    )
     return AdminAiQualityOut(
         days=days,
         answers_total=len(rows),
@@ -442,6 +462,7 @@ def admin_ai_quality(
         by_model={},
         cost_usd_total=round(sum(cost_by_model.values()), 6),
         cost_usd_by_model=cost_by_model,
+        versions=versions,
     )
 
 

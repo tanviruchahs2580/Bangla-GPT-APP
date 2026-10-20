@@ -207,6 +207,8 @@ class GeminiProvider:
     #: 2026-10-19), so the seed stays out of the request until the owner
     #: verifies support for the configured model/version.
     supports_seed = False
+    #: A5-01: count_tokens talks to the vendor's real countTokens endpoint.
+    count_tokens_is_vendor = True
 
     def __init__(
         self,
@@ -233,6 +235,7 @@ class GeminiProvider:
         self._sampling = default_sampling or sampling_for("generation")
         self._transport = transport
         self._http: httpx.AsyncClient | None = None
+        self._sync_http: httpx.Client | None = None
 
     def _sampling_log_fields(self, sampling: SamplingParams | None) -> dict[str, object]:
         """Sampling controls actually sent -- proof for the determinism trace."""
@@ -251,10 +254,67 @@ class GeminiProvider:
             self._http = httpx.AsyncClient(timeout=self._timeout_seconds, transport=self._transport)
         return self._http
 
+    def _sync_client(self) -> httpx.Client:
+        """One pooled sync client for the free metadata endpoints (A5-01).
+
+        The serving path is async, but the context-budget counter is a sync
+        ``TokenCounter``; the vendor countTokens call is a small metadata
+        request, so it rides its own pooled sync client with the same timeout
+        policy. Never used for generation. A caller-injected transport is
+        reused only when it implements the sync interface (httpx.MockTransport
+        in tests does); the production client builds its own default pool.
+        """
+        if self._sync_http is None:
+            # The declared parameter type is the async interface, so mypy reads
+            # an isinstance test against the sync base as unreachable -- but a
+            # test-injected httpx.MockTransport implements BOTH interfaces and
+            # must be reused here (contract tests assert the request shape).
+            # The production transport is None: the sync client then builds its
+            # own pool and is never used for generation.
+            sync_transport = (
+                self._transport if type(self._transport) is httpx.MockTransport else None
+            )
+            self._sync_http = httpx.Client(timeout=self._timeout_seconds, transport=sync_transport)
+        return self._sync_http
+
     async def aclose(self) -> None:
         if self._http is not None:
             await self._http.aclose()
             self._http = None
+
+    def close(self) -> None:
+        if self._sync_http is not None:
+            self._sync_http.close()
+            self._sync_http = None
+
+    def count_tokens(self, text: str, *, system: str | None = None) -> int | None:
+        """Vendor token count via the REST ``countTokens`` endpoint (A5-01).
+
+        A free-tier metadata endpoint: no generation, no billing beyond the
+        request itself. Returns ``None`` on any failure (transport error,
+        non-200, malformed body) -- the caller (providers.token_counter.
+        ExactTokenCounter) falls back to the calibrated heuristic upper bound,
+        so a countTokens outage degrades to the safe-side estimate and never
+        breaks the tutor turn. No retry: a single attempt per count.
+        """
+        url = f"{_API_BASE}/models/{self.model}:countTokens"
+        payload: dict = {"contents": [{"role": "user", "parts": [{"text": text}]}]}
+        if system:
+            payload["systemInstruction"] = {"parts": [{"text": system}]}
+        try:
+            response = self._sync_client().post(
+                url, json=payload, headers={"x-goog-api-key": self._api_key}
+            )
+        except httpx.HTTPError:
+            return None
+        if response.status_code != 200:
+            return None
+        try:
+            body = response.json()
+        except ValueError:
+            return None
+        total = body.get("totalTokens") if isinstance(body, dict) else None
+        return int(total) if isinstance(total, (int, float)) else None
 
     async def stream(
         self,

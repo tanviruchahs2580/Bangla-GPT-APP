@@ -1476,6 +1476,12 @@ class AdminAiQualityOut(BaseModel):
     # AI-002: estimated LLM spend (USD) over the same window, from ai_usage.
     cost_usd_total: float = 0.0
     cost_usd_by_model: dict[str, float] = {}
+    # A10-03: the version identities behind these counts (prompt registry,
+    # index fingerprint, embedding model, thresholds version, golden hashes),
+    # read from the artifacts that own them by evaluation.version_board.
+    # ``{}`` means the caller could not build the payload; the board renders
+    # an explicit "unknown" rather than a blank.
+    versions: dict = {}
 
 
 # --- student memory / learning preferences --------------------------------

@@ -68,6 +68,7 @@ from bangla_gpt_api.services.costs import (
 from bangla_gpt_api.services.quiz_explain import quiz_explain_instruction
 from bangla_gpt_api.services.tutor import VISION_UNSUPPORTED_ANSWER
 
+from ._pagination import WindowPage
 from .common import (
     _answer_confidence,
     _request_context,
@@ -363,17 +364,19 @@ def conversation_messages(
     conversation_id: int,
     db: DbSession,
     user: CurrentUser,
-    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+    page: WindowPage,
 ) -> list[ChatMessageOut]:
     _own_conversation(db, conversation_id, user)
-    # cap the payload (was unbounded -- one row per message ever).
-    # Newest N are fetched but returned chronological, so existing clients
-    # see the same ordering.
+    # C-10: one pagination convention. The offsetwalks the newest-N candidate
+    # window (skip the most recent `offset`, return the next `limit`), and the
+    # selected slice is returned chronological, so existing clients see the
+    # same ordering.
     newest = (
         select(ChatMessage.id)
         .where(ChatMessage.conversation_id == conversation_id)
         .order_by(ChatMessage.id.desc())
-        .limit(limit)
+        .offset(page.offset)
+        .limit(page.limit)
         .subquery()
     )
     rows = (

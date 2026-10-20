@@ -14,12 +14,6 @@ AT_RISK_AVG = 40.0  # percent
 TREND_DROP = 10.0  # percentage points between halves to count as downward
 MIN_ATTEMPTS_FOR_TREND = 4
 
-WEEK_ACTIONS: tuple[tuple[str, str], ...] = (
-    ("week1", "concept"),
-    ("week2", "practice"),
-    ("week3", "assessment"),
-)
-
 
 def avg_pct(percents: list[float]) -> float | None:
     """Mean of the given percentages; None when there is nothing graded."""

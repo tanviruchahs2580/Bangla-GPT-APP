@@ -87,6 +87,10 @@ def process_source(
     summary["duplicates_removed"] = duplicates_removed
     summary["short_blocks_merged"] = chunk_stats.get("short_blocks_merged", 0)
     summary["chunk_word_lengths"] = chunk_stats.get("chunk_word_lengths", [])
+    # A2-05: per-chunk content hashes live in the report row (the chunk
+    # manual's per-chunk checksum analogue of the per-document sha256 the
+    # acquisition manifest already carries) — every survivor of dedupe.
+    summary["chunk_hashes_sha256"] = [chunk.content_hash for chunk in chunks]
     summary["content_version"] = f"{record.processing_version}:{record.content_hash[:12]}"
     summary["built_at"] = datetime.now(UTC).isoformat(timespec="seconds")
     _write_report(report_path, summary)

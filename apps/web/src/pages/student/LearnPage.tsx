@@ -46,6 +46,7 @@ import {
   saveChapter,
 } from "../../lib/offlineStore";
 import { getLowData } from "../../lib/lowData";
+import { toast } from "../../lib/toast";
 
 const SUBJECT_TONE: Record<string, string> = {
   science: "tile-teal",
@@ -77,8 +78,7 @@ export function LearnPage() {
     queryKey: ["learnProgressAll", selected],
     queryFn: () => getLearnProgress(undefined, selected),
   });
-  // A shared constant, not `?? []`: a fresh array identity on every render makes
-  // every effect that depends on `subjects` re-run forever.
+  // A shared constant: a fresh array identity here would re-run every effect forever.
   const subjects = subjectsQuery.data ?? EMPTY_SUBJECTS;
 
   // Chapter totals per subject (for the ring denominator), from the same
@@ -518,8 +518,7 @@ export function LearnChapterPage() {
     const value = clampTtsValue(raw, bounds);
     setTtsPrefs((prev) => ({ ...prev, [key]: value }));
     try {
-      // Device preference, not user data: survives sign-out with theme and
-      // language (see USER_STORAGE_KEYS in api.ts).
+      // Device preference, not user data: survives sign-out (USER_STORAGE_KEYS in api.ts).
       localStorage.setItem(
         key === "rate" ? "ttsRate" : "ttsPitch",
         String(value),
@@ -537,11 +536,12 @@ export function LearnChapterPage() {
       await saveChapter(subject, chapter, offlineClass, content);
       setSaved(true);
     } catch (err) {
-      // AUD-G-17: a full device used to look exactly like a successful
-      // download. Name the failure next to the button that caused it.
-      setError(
-        isQuotaExceeded(err) ? t("offlineQuotaFull") : t("offlineSaveFailed"),
-      );
+      // AUD-G-17: a full device must not look like success — inline + toast.
+      const message = isQuotaExceeded(err)
+        ? t("offlineQuotaFull")
+        : t("offlineSaveFailed");
+      setError(message);
+      toast(message);
       console.error("offline chapter save failed", err);
     } finally {
       setSaving(false);

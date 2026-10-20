@@ -170,6 +170,8 @@ const bn = {
   rename: "নাম পরিবর্তন করুন",
   deleteChat: "চ্যাট মুছুন",
   deleteChatConfirm: "এই চ্যাটটি মুছে ফেলবেন? নিশ্চিত?",
+  deleteChatTitle: "চ্যাট মুছুন",
+  deleteChatConfirmShort: "মুছুন",
   noResults: "কিছু পাওয়া যায়নি",
   activityTitle: "প্রতিদিনের অনুশীলন",
   streakLabel: "{days} দিনের ধারাবাহিকতা",
@@ -202,8 +204,7 @@ const bn = {
   lowDataTitle: "কম ডেটা মোড",
   lowDataHint: "ছবি বাদ — উত্তর সংক্ষিপ্ত রাখুন",
   // AUD-HI-07 / I-12: telemetry opt-in. PENDING native-speaker review before
-  // release, per the project's rule that an engineer does not certify Bangla
-  // copy (the handoff deliberately supplied no translation).
+  // release: an engineer does not certify Bangla copy on their own.
   telemetryTitle: "সমস্যা ও গতির তথ্য পাঠান",
   telemetryHint:
     "শুধু ক্র্যাশ ও গতির মাপ পাঠানো হয় — আপনার প্রশ্ন, নাম বা ক্লাসের তথ্য নয়",
@@ -220,6 +221,7 @@ const bn = {
   invitePending: "অপেক্ষমাণ",
   refreshBtn: "রিফ্রেশ করুন",
   newChat: "নতুন চ্যাট",
+  loadEarlier: "আগের বার্তাগুলো দেখুন",
   conversations: "চ্যাট",
   askPlaceholder: "পাঠ্যবই থেকে যেকোনো প্রশ্ন লিখুন…",
   thinking: "ভাবছি…",
@@ -839,6 +841,8 @@ const en: Dict = {
   rename: "Rename",
   deleteChat: "Delete chat",
   deleteChatConfirm: "Delete this chat for good? Are you sure?",
+  deleteChatTitle: "Delete chat",
+  deleteChatConfirmShort: "Delete",
   noResults: "Nothing found",
   activityTitle: "Daily practice",
   streakLabel: "{days}-day streak",
@@ -869,8 +873,7 @@ const en: Dict = {
     "The device is out of storage — free space or remove an old offline copy, then try again.",
   lowDataTitle: "Low-data mode",
   lowDataHint: "Skip images; keep answers short",
-  // AUD-HI-07 / I-12: telemetry consent, default off (server never sees a
-  // payload without this opt-in; see lib/telemetry.ts).
+  // AUD-HI-07 / I-12: telemetry consent, default off (see lib/telemetry.ts).
   telemetryTitle: "Share crash and speed reports",
   telemetryHint:
     "Only crashes and speed measurements — never your messages, name or class data",
@@ -887,6 +890,7 @@ const en: Dict = {
   invitePending: "Pending",
   refreshBtn: "Refresh",
   newChat: "New chat",
+  loadEarlier: "Load earlier messages",
   conversations: "Chats",
   askPlaceholder: "Ask anything from your textbook…",
   thinking: "Thinking…",

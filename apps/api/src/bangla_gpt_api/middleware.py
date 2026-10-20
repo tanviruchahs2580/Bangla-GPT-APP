@@ -48,18 +48,29 @@ RATE_LIMIT_WINDOW_SECONDS = 60
 _access_logger = logging.getLogger("bangla_gpt_api.access")
 
 
-def pseudonymous_user_ref(user_id: object, secret: str) -> str:
+def pseudonymous_user_ref(user_id: object, secret: str, prefix: str = "u_") -> str:
     """A stable, non-reversible handle for one account (I-01).
 
     ``sha256(user_id)`` would be trivially reversible over sequential integer
     ids, so the digest is keyed with the deployment's JWT secret: the same
     user keeps the same handle across requests (which is the whole point of
     the correlation), and the handle is useless to anyone without the secret.
+    The ``prefix`` separates the name spaces: ``u_`` for account handles,
+    ``s_`` for school (tenant) handles (I-01, R4-wsC).
     """
     digest = hmac.new(
         secret.encode("utf-8"), str(user_id).encode("utf-8"), hashlib.sha256
     ).hexdigest()
-    return f"u_{digest[:12]}"
+    return f"{prefix}{digest[:12]}"
+
+
+def pseudonymous_tenant_ref(school_id: object, secret: str) -> str | None:
+    """The access log's tenant handle (I-01): HMAC like user_ref, ``s_`` prefix,
+    so one school's traffic groups without leaking its id. ``None`` (unscoped
+    admin sessions, unauthenticated requests) stays None in the record."""
+    if school_id is None:
+        return None
+    return pseudonymous_user_ref(school_id, secret, prefix="s_")
 
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
@@ -453,6 +464,9 @@ class PrometheusMetricsMiddleware(BaseHTTPMiddleware):
             "status": status_code,
             "latency_ms": round(elapsed * 1000, 1),
             "user_ref": getattr(request.state, "user_ref", None),
+            # I-01 (R4-wsC): pseudonymous tenant handle, set by get_current_user
+            # (tenancy needs the DB-backed user; tokens carry no school claim).
+            "tenant_ref": getattr(request.state, "tenant_ref", None),
             "client_ip": request.client.host if request.client else None,
         }
         if request_id:

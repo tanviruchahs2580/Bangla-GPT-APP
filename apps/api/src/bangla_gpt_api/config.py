@@ -67,6 +67,17 @@ class Settings(BaseSettings):
     # provider payload (OpenAI max_tokens / Gemini maxOutputTokens). Bounds
     # the cost of a looping model; 0 disables the cap (key omitted).
     llm_max_output_tokens: int = 2048
+    # A5-01: measure the context/evidence token budget with the target
+    # model's own tokenizer (the vendor countTokens endpoint) instead of the
+    # calibrated heuristic upper bound. Default OFF: production keeps the
+    # safe upper bound (calibration: the heuristic counts 1.07x-1.20x the
+    # vendor count, mean 1.13x, artifact eval/token_counter_calibration.json;
+    # an earlier r3 sample measured 1.27x-1.58x), so a budget decision made
+    # on it can only be conservative. When True, the tutor's evidence
+    # selection counts with the provider's declared count_tokens (Gemini REST
+    # countTokens; mock = the same heuristic, honestly reported) and falls
+    # back per-call when the endpoint fails.
+    llm_exact_token_counting: bool = False
     # AI-002: monthly per-user AI budget (USD, estimated — see services/costs.py).
     # 0 (default) = unlimited. When set, generation entry points refuse with
     # 429 ai_budget_exceeded once the user's current-month ledger hits the cap.

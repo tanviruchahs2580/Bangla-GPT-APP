@@ -135,6 +135,34 @@ def test_email_seam_returns_false_when_unconfigured() -> None:
     )
 
 
+# C-15 seam upgrade: the transport is a typed Protocol with the SMTP relay as
+# the default binding. Structural (runtime_checkable), so an alternate relay
+# satisfies it by shape, not by inheritance.
+class _RecordingMailer:
+    """A second implementation that matches the Protocol by shape alone."""
+
+    def configured(self, settings: Settings) -> bool:
+        return True
+
+    def send(self, settings: Settings, *, to: str, subject: str, body: str) -> bool:
+        return True
+
+    def send_checked(
+        self, db: Any, settings: Settings, *, to: str, subject: str, body: str
+    ) -> bool:
+        return True
+
+
+def test_email_seam_is_a_typed_protocol_with_a_structural_default() -> None:
+    assert isinstance(mailer.DEFAULT_MAILER, mailer.Mailer)
+    assert isinstance(_RecordingMailer(), mailer.Mailer)
+    # The shipped default binds the module functions verbatim: same triples,
+    # same False-not-raise verdicts the tests above pin.
+    assert mailer.DEFAULT_MAILER.configured is mailer.smtp_configured
+    assert mailer.DEFAULT_MAILER.send is mailer.send_mail
+    assert mailer.DEFAULT_MAILER.send_checked is mailer.send_mail_checked
+
+
 # =========================================================================== #
 # 4. Queue seam
 

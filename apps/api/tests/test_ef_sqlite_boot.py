@@ -28,8 +28,13 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.session import make_engine
+
+# E-02 (R4-wsC): concurrency + WAL boot with real sleeps -- the slow tier.
+pytestmark = pytest.mark.integration
 
 
 def _settings(db_path: Path) -> Settings:

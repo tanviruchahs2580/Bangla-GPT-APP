@@ -316,6 +316,24 @@ class MockLLMProvider:
             ensure_ascii=False,
         )
 
+    def count_tokens(self, text: str, *, system: str | None = None) -> int:
+        """A5-01: the mock's "vendor" count IS the heuristic upper bound.
+
+        The exact-token-counting path (settings.llm_exact_token_counting)
+        needs a provider-side count_tokens; the mock has no vendor to ask, so
+        it reports the SAME calibrated heuristic the app uses by default --
+        the ceil-based context estimate (services.context), not the
+        floor-based cost estimate, so a calibration audit against the mock
+        measures exactly 1.0 instead of a floor/ceil artifact. Honestly, under
+        its own counter name, and ``count_tokens_is_vendor`` False makes the
+        non-vendor provenance visible.
+        """
+        from bangla_gpt_api.services.context import HeuristicTokenCounter
+
+        return HeuristicTokenCounter().count((system or "") + text)
+
+    count_tokens_is_vendor = False
+
     async def stream(
         self,
         prompt: str,

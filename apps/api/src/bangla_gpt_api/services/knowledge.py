@@ -275,18 +275,25 @@ async def extract_chapter_concepts(
     chapter: str,
     text: str,
     limit: int = 6,
+    usage: tuple[Session, int] | None = None,
 ) -> list[str]:
     """LLM chapter extraction, corpus-verified. Any failure -> [] (never raise
     into a rebuild: the deterministic chapter roots always exist).
 
     A1-04: registry system prompt + delimited untrusted corpus text + one
     generation trace per call, exactly like every other provider call site.
+
+    ``usage=(db, user_id)`` (A1-04) funnels the call into the same ai_usage
+    ledger every AI-bearing route writes via ``record_ai_usage`` -- spend is
+    spend even when the parsed result is empty (the admin kg/rebuild?llm=true
+    route was the one un-accounted call site). The row is added to the
+    caller's session; the rebuild's own commit persists it.
     """
     # trace_event lives in logging_config (the wave-1 helper every other
     # stage uses); tracing.py imports logging_config lazily, so importing
     # it back from there would close a cycle (c2 handoff).
     from bangla_gpt_api.logging_config import trace_event
-    from bangla_gpt_api.services.costs import estimate_tokens
+    from bangla_gpt_api.services.costs import estimate_tokens, record_ai_usage
     from bangla_gpt_api.services.tutor import sanitize_evidence
 
     prompt = EXTRACTION_PROMPT_TEMPLATE.format(chapter=chapter, text=sanitize_evidence(text[:4000]))
@@ -295,6 +302,16 @@ async def extract_chapter_concepts(
         raw = await provider.generate(prompt, system=EXTRACTION_SYSTEM_PROMPT)
     except Exception:
         return []
+    if usage is not None:
+        usage_db, usage_user_id = usage
+        record_ai_usage(
+            usage_db,
+            user_id=usage_user_id,
+            route="kg.rebuild",
+            model=getattr(provider, "model", None) or getattr(provider, "name", None),
+            prompt_text=prompt,
+            answer_text=raw,
+        )
     trace_event(
         "generation",
         route="knowledge_extraction",
@@ -349,10 +366,17 @@ async def rebuild_concepts(
     provider: LLMProvider | None = None,
     *,
     llm: bool = False,
+    usage_user_id: int | None = None,
 ) -> dict[str, int]:
     """Full re-seed. With llm=True AND a provider, also run corpus-verified
     LLM extraction per chapter (mock providers fail validation -> roots only,
-    which keeps local/dev honest)."""
+    which keeps local/dev honest).
+
+    ``usage_user_id`` (A1-04): when the caller can attribute the spend (the
+    admin route passes the acting admin's id), every LLM extraction call is
+    written to the ai_usage ledger with route ``kg.rebuild`` -- the last
+    provider call site that used to bypass token accounting.
+    """
     db.execute(delete(ConceptMastery))
     db.execute(delete(ConceptPrerequisite))
     db.execute(delete(Concept))
@@ -372,7 +396,13 @@ async def rebuild_concepts(
                 by_chapter.setdefault(key, []).append(chunk.text)
         for (class_level, subject, chapter), texts in sorted(by_chapter.items()):
             joined = "\n".join(texts)
-            names = await extract_chapter_concepts(provider, chapter=chapter, text=joined)
+            names = await extract_chapter_concepts(
+                provider,
+                chapter=chapter,
+                text=joined,
+                # A1-04: attribute the extraction spend to the acting admin.
+                usage=(db, usage_user_id) if usage_user_id is not None else None,
+            )
             existing = {
                 name
                 for (name,) in db.execute(

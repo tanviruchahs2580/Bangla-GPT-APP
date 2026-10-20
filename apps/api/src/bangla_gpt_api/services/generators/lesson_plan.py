@@ -37,8 +37,6 @@ LESSON_KEYS: tuple[str, ...] = (
     "homework",
 )
 
-LESSON_LEVELS: tuple[str, ...] = ("beginner", "average", "advanced")
-
 LESSON_SYSTEM_PROMPT_SPEC = load_prompt("lesson_system")
 LESSON_SYSTEM_PROMPT = LESSON_SYSTEM_PROMPT_SPEC.text
 

@@ -35,6 +35,7 @@ import {
   Field,
   Modal,
 } from "../../components/ui";
+import { AssistantContent, EvidenceModal } from "../../components/TutorAnswer";
 import { ConversationChip } from "../../components/ConversationChip";
 import { AiSparkle } from "../../components/BrandMark";
 import { VoiceButton } from "../../components/VoiceButton";
@@ -45,8 +46,6 @@ import { copyText } from "../../lib/clipboard";
 import { toast } from "../../lib/toast";
 import { track } from "../../lib/analytics";
 import { explainMessage, type QuizExplainPayload } from "../../lib/quizExplain";
-import { SafeMarkdownLazy as SafeMarkdown } from "../../lib/safeMarkdownLazy";
-import { parseStructuredAnswer } from "../../lib/structuredAnswer";
 
 // labels from i18n, evaluated per render (lang switch remounts).
 const subjectOptions = () => [
@@ -74,6 +73,14 @@ const STRAT_LABELS: Record<
   analogy: "stratAnalogy",
 };
 
+// AUD-G-19: the transcript renders a sliding window, not the whole thread.
+// A 120-message history painted in one commit produced 1,700+ ms main-thread
+// tasks at 4x CPU -- and then repeated the work on every streamed token,
+// because each token re-renders every bubble. Thirty messages cover a full
+// question-and-answer session on screen at once; older turns stay one click
+// away through the "load earlier messages" affordance.
+const MESSAGE_WINDOW = 30;
+
 export default function AITutorPage() {
   const { me } = useAuth();
   const navigate = useNavigate();
@@ -95,6 +102,7 @@ export default function AITutorPage() {
   const [savedId, setSavedId] = useState<number | null>(null);
   // AUD-G-10: copy confirmation and the thumbs-down reason dialog.
   const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
   const [downTarget, setDownTarget] = useState<number | null>(null);
   const [reason, setReason] = useState("");
@@ -121,7 +129,14 @@ export default function AITutorPage() {
   const [hits, setHits] = useState<MessageSearchHit[] | null>(null);
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  // AUD-G-19: how many trailing messages the transcript window renders.
+  const [windowSize, setWindowSize] = useState(MESSAGE_WINDOW);
   const viewportRef = useRef<HTMLDivElement>(null);
+  // While a "load earlier" expansion is in flight: the scrollHeight measured
+  // BEFORE the extra bubbles mounted, so the effect below can offset scrollTop
+  // by the inserted height and keep the reading position pinned to the same
+  // message instead of the auto-scroll rule yanking it to the bottom.
+  const expandAnchorRef = useRef<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   // Synchronous send guard (F-012). State (`streaming`) is only updated after
   // renders, so it cannot gate a second send fired while the conversation
@@ -137,15 +152,35 @@ export default function AITutorPage() {
   useEffect(() => () => abortRef.current?.abort(), []);
 
   useEffect(() => {
-    viewportRef.current?.scrollTo({
-      top: viewportRef.current.scrollHeight,
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    // A "load earlier" expansion just grew the transcript upwards: offset the
+    // scroll position by the inserted height so the student keeps looking at
+    // the same message. The normal rule (below) would otherwise yank the
+    // viewport to the bottom the moment the older bubbles mount.
+    if (expandAnchorRef.current != null) {
+      const before = expandAnchorRef.current;
+      expandAnchorRef.current = null;
+      viewport.scrollTop += viewport.scrollHeight - before;
+      return;
+    }
+    viewport.scrollTo({
+      top: viewport.scrollHeight,
       behavior: "smooth",
     });
-  }, [messages, streaming]);
+  }, [messages, streaming, windowSize]);
+
+  /** Reveal one more window of older messages, keeping the reading position. */
+  const showEarlier = useCallback(() => {
+    const viewport = viewportRef.current;
+    if (viewport) expandAnchorRef.current = viewport.scrollHeight;
+    setWindowSize((size) => size + MESSAGE_WINDOW);
+  }, []);
 
   const loadConversation = useCallback(async (id: number) => {
     setConversationId(id);
     setMessages([]);
+    setWindowSize(MESSAGE_WINDOW);
     setError(null);
     try {
       const msgs = await get<ChatMessage[]>(
@@ -435,8 +470,18 @@ export default function AITutorPage() {
     }
   };
 
-  const removeConversation = async (id: number) => {
-    if (!window.confirm(t("deleteChatConfirm"))) return;
+  const removeConversation = (id: number) => {
+    // D-16 / S-11: a native window.confirm is not stylable, is announced
+    // inconsistently by assistive tech, and returns before the spinner can
+    // start. The in-app dialog carries the same bn/en copy and posts through
+    // the same handler once confirmed.
+    setConfirmDelete(id);
+  };
+
+  const confirmDeleteConversation = async () => {
+    const id = confirmDelete;
+    setConfirmDelete(null);
+    if (id === null) return;
     try {
       await del(`/tutor/conversations/${id}`);
       if (conversationId === id) {
@@ -448,6 +493,12 @@ export default function AITutorPage() {
       /* ignore */
     }
   };
+
+  // AUD-G-19: everything below renders only `messages.slice(windowStart)`,
+  // so painting -- and every streamed token's re-render -- costs O(window),
+  // not O(history). Indexes stay absolute (reteach/regenerate look up the
+  // question above the answer in the full array).
+  const windowStart = Math.max(0, messages.length - windowSize);
 
   return (
     <main id="main-content" tabIndex={-1} className="shell-main">
@@ -582,6 +633,16 @@ export default function AITutorPage() {
           {copyMsg ? ` ${copyMsg}` : ""}
         </div>
         <div ref={viewportRef} className="chat-thread chat-viewport">
+          {windowStart > 0 && (
+            // AUD-G-19: the older turns are one click away, not deleted.
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm load-earlier"
+              onClick={showEarlier}
+            >
+              {t("loadEarlier")}
+            </button>
+          )}
           {messages.length === 0 && !streaming && (
             // AUD-G-09 / G-02: this used to hand-roll the `.empty-state`
             // markup (mark, title, sub) that `EmptyState` already ships, so a
@@ -617,8 +678,12 @@ export default function AITutorPage() {
               }
             />
           )}
-          {messages.map((m, i) => {
-            const prev = messages[i - 1];
+          {messages.slice(windowStart).map((m, k) => {
+            const i = windowStart + k;
+            // A group's visual predecessor must be on screen for the tighter
+            // grouping to apply: across the window edge a new bubble starts
+            // its own group (and its own day header).
+            const prev = k > 0 ? messages[i - 1] : undefined;
             const tight = prev && prev.role === m.role;
             const day = formatServerDate(m.created_at, {
               day: "numeric",
@@ -992,74 +1057,26 @@ export default function AITutorPage() {
       {evidence && (
         <EvidenceModal source={evidence} onClose={() => setEvidence(null)} />
       )}
+
+      {/* D-16 / S-11: in-app confirm (the native window.confirm is a11y-poor
+          and unstylable); copy is the same deleteChatConfirm key. */}
+      <Modal
+        open={confirmDelete !== null}
+        onClose={() => setConfirmDelete(null)}
+        title={t("deleteChatTitle")}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setConfirmDelete(null)}>
+              {t("cancel")}
+            </Button>
+            <Button onClick={() => void confirmDeleteConversation()}>
+              {t("deleteChatConfirmShort")}
+            </Button>
+          </>
+        }
+      >
+        <p className="muted">{t("deleteChatConfirm")}</p>
+      </Modal>
     </main>
-  );
-}
-
-/** Full sanitized textbook evidence behind the source chip.
- *
- * AUD-G-09: this used to hand-roll the backdrop, role="dialog", the Tab trap
- * and the focus restore — a second dialog implementation that drifted from
- * `Modal` (which also locks scroll and makes the backdrop keyboard-
- * dismissible). It now renders the shared primitive and keeps only its own
- * content.
- */
-function EvidenceModal({
-  source,
-  onClose,
-}: {
-  source: SourceRef;
-  onClose: () => void;
-}) {
-  const path = [source.book, source.chapter, source.section]
-    .filter(Boolean)
-    .join(" › ");
-  return (
-    <Modal open onClose={onClose} title={t("evidenceTitle")}>
-      <p className="muted evidence-path">
-        {path}
-        {source.page != null ? ` · ${t("page")} ${source.page}` : ""}
-      </p>
-      <blockquote className="evidence-quote">
-        {source.excerpt ?? source.chapter}
-      </blockquote>
-    </Modal>
-  );
-}
-
-/** renders the sectioned answer layout when present, plain markdown otherwise. */
-function AssistantContent({ content }: { content: string }) {
-  const parsed = parseStructuredAnswer(content);
-  if (!parsed.structured) return <SafeMarkdown content={content} />;
-  return (
-    <div className="structured-answer">
-      {parsed.simple && (
-        <section>
-          <h4 className="section-label">{t("saSimple")}</h4>
-          <SafeMarkdown content={parsed.simple} />
-        </section>
-      )}
-      {parsed.example && (
-        <section>
-          <h4 className="section-label">{t("saExample")}</h4>
-          <SafeMarkdown content={parsed.example} />
-        </section>
-      )}
-      {parsed.points.length > 0 && (
-        <section>
-          <h4 className="section-label">{t("saPoints")}</h4>
-          <ul>
-            {parsed.points.map((p, i) => (
-              <li key={i}>{p}</li>
-            ))}
-          </ul>
-        </section>
-      )}
-      {parsed.check && (
-        <section className="check-question">
-          <SafeMarkdown content={`${t("saCheck")} ${parsed.check}`.trim()} />
-        </section>
-      )}
-    </div>
   );
 }

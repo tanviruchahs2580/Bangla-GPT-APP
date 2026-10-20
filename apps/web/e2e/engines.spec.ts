@@ -263,9 +263,15 @@ test("Intl: bn-BD numbers, dates, plurals and collation behave in this engine", 
       out.collator = ["শ", "অ", "ক", "আ", "ম"]
         .sort(new Intl.Collator("bn").compare)
         .join("");
-      out.segmenter = [
-        ...new Intl.Segmenter("bn", { granularity: "grapheme" }).segment("ক্ষ"),
-      ].length;
+      // `ক্ষ` is one grapheme for a reader: ka + virama + ssa (kept a string
+      // so every probed value shares `Record<string, string>`'s shape).
+      out.segmenter = String(
+        [
+          ...new Intl.Segmenter("bn", { granularity: "grapheme" }).segment(
+            "ক্ষ",
+          ),
+        ].length,
+      );
     } catch (error) {
       out.error = String(error);
     }
@@ -302,7 +308,7 @@ test("Intl: bn-BD numbers, dates, plurals and collation behave in this engine", 
   // the reordered letters are where they diverge).
   expect(result.collator, `[${browserName}] collator`).toBe("অআকমশ");
   // `ক্ষ` is one grapheme for a reader: ka + virama + ssa.
-  expect(result.segmenter, `[${browserName}] grapheme count`).toBe(1);
+  expect(result.segmenter, `[${browserName}] grapheme count`).toBe("1");
 });
 
 test("the app formats API dates in the app language, not the browser language", async ({

@@ -255,13 +255,6 @@ def tracing_enabled() -> bool:
     return _tracing_enabled
 
 
-def new_trace_id() -> str:
-    """A fresh correlation id for work with no inbound request (jobs, scripts)."""
-    import uuid as _uuid
-
-    return _uuid.uuid4().hex[:16]
-
-
 def trace_event(stage: str, **fields: Any) -> None:
     """Emit one structured trace record for a pipeline stage.
 
@@ -283,6 +276,17 @@ def trace_event(stage: str, **fields: Any) -> None:
     )
 
 
+#: I-01 (R4-wsC): the level policy is one root level from ``LOG_LEVEL``
+#: (default INFO) plus exactly this override table. uvicorn's own access log
+#: stays quiet because every request already emits one structured access
+#: record (op=http_request) -- letting uvicorn.access through would double the
+#: per-request volume with an unredacted, unstructured duplicate. Everything
+#: else inherits the root. Documented in docs/operations/LOGGING.md.
+LOGGER_LEVEL_OVERRIDES: dict[str, int] = {
+    "uvicorn.access": logging.WARNING,
+}
+
+
 def configure_logging(level: str = "INFO") -> None:
     handler = logging.StreamHandler(_EncodingSafeStream(_utf8_stream(sys.stdout)))
     handler.setFormatter(RedactingFormatter("%(message)s"))
@@ -298,6 +302,8 @@ def configure_logging(level: str = "INFO") -> None:
     if resolved not in _VALID_LEVELS:
         resolved = "INFO"
     root.setLevel(getattr(logging, resolved))
+    for logger_name, logger_level in LOGGER_LEVEL_OVERRIDES.items():
+        logging.getLogger(logger_name).setLevel(logger_level)
 
 
 def json_log(logger: logging.Logger, level: int, event: str, **fields) -> None:

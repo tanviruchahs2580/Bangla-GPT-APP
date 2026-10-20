@@ -87,6 +87,14 @@ export async function saveChapter(
     savedAt: new Date().toISOString(),
     content,
   };
+  // Pre-flight (AUD-G-17): when the browser reports the device nearly full,
+  // make room before writing instead of gambling the whole save on the write
+  // rejection. `writeWithQuotaRecovery` below stays as the backstop for the
+  // storage that fills between the estimate and the put.
+  const estimate = await storageEstimate();
+  if (estimate && estimate.quota - estimate.usage < OFFLINE_MIN_FREE_BYTES) {
+    await pruneOldestChapters(OFFLINE_KEEP_ON_QUOTA);
+  }
   await writeWithQuotaRecovery(() =>
     hasIDB()
       ? tx<void>("readwrite", (s) => s.put(rec))
@@ -98,6 +106,15 @@ export async function saveChapter(
 
 /** Copies kept when a full device forces a prune (newest first). */
 export const OFFLINE_KEEP_ON_QUOTA = 5;
+
+/**
+ * Free space below which a save evicts first instead of failing first
+ * (AUD-G-17). The write path already recovers from a quota rejection, but a
+ * browser that reports the headroom lets us spend it on the newest copies:
+ * below this much free space the oldest chapter copies beyond
+ * OFFLINE_KEEP_ON_QUOTA are dropped before the write is attempted.
+ */
+export const OFFLINE_MIN_FREE_BYTES = 5 * 1024 * 1024;
 
 /**
  * A chapter could not be stored because the device is out of room.

@@ -184,6 +184,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(audit): refresh the audit report for the second remediation pass (61.0/100)
 - docs(audit): wave-3 report — score 83.0/100, live evaluation closed, caps re-checked
 - docs(changelog): record the CI-fix commits
+- docs(changelog): record the e2e-evidence wave
 - docs(changelog): record the wave-3 commits
 - docs(compliance): record the provider's current terms, tier by tier (A7-04)
 - docs(dx): threat model, AI system card, OpenSSF self-assessment, devcontainer and Make targets

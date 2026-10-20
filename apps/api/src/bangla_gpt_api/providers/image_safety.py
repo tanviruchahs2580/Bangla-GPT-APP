@@ -52,7 +52,6 @@ _EDGE_BORDER_PX = 2
 #: photographs; the point of the re-encode is metadata removal).
 JPEG_QUALITY = 92
 JPEG_MIMES = frozenset({"image/jpeg"})
-PNG_OUTPUT_MIMES = frozenset({"image/png", "image/webp"})
 SUPPORTED_MIMES = frozenset({"image/png", "image/jpeg", "image/webp"})
 
 

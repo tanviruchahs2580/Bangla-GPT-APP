@@ -39,12 +39,13 @@ import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any, TypeVar
 
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
+from bangla_gpt_api.db import clock
 from bangla_gpt_api.db.models import JobRun
 from bangla_gpt_api.providers.base import JITTER_FLOOR
 
@@ -56,7 +57,11 @@ T = TypeVar("T")
 
 def _utc_naive_now() -> datetime:
     # DB datetimes are stored naive-UTC throughout this codebase.
-    return datetime.now(UTC).replace(tzinfo=None)
+    # E-16 (H-14): the scheduled-period half of the job machinery reads time
+    # through the injectable clock seam, so tests can pin the cutoff second
+    # without monkeypatching datetime (retention.py and mailer.py are already
+    # on the same seam).
+    return clock.utcnow()
 
 
 # --------------------------------------------------------------------------- #
@@ -317,6 +322,9 @@ def _transaction_with_retry(
             extra={"op": "db", "retries": retries, "delay_seconds": round(delay, 3)},
         ),
     )
+    # mypy cannot see through the local closure: `attempt` assigns `result =
+    # work()` and only ever raises rather than returning early, so a
+    # non-raising retry_on_error proves result holds work()'s product, not None.
     return result  # type: ignore[return-value]
 
 

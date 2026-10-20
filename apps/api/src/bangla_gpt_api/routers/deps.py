@@ -29,6 +29,7 @@ from bangla_gpt_api.db.models import (
     User,
 )
 from bangla_gpt_api.db.tenancy import set_tenant_context, tenant_filter_bypassed
+from bangla_gpt_api.middleware import pseudonymous_tenant_ref
 from bangla_gpt_api.providers.base import LLMProvider
 from bangla_gpt_api.retrieval.base import RankingIndex
 from bangla_gpt_api.schemas import MeResponse
@@ -292,7 +293,18 @@ def get_current_user(
     # remembered the helper. Admin (None) and parent/student sessions stay
     # unscoped by design; see db/tenancy.py for the exact scope and the
     # documented Session.get() boundary.
-    set_tenant_context(db, _tenant_school_id(db, user))
+    tenant_school = _tenant_school_id(db, user)
+    set_tenant_context(db, tenant_school)
+    # I-01 (R4-wsC): the access record's tenant handle, resolved here (tenancy
+    # needs the DB-backed user; tokens carry no school claim). HMAC-pseudonymous
+    # like user_ref; follows the request's school even where tenancy filtering
+    # is deliberately unscoped (students carry their school on the user row,
+    # staff anchor to the default school per F-04); only the cross-tenant
+    # admin session and unauthenticated requests stay None.
+    request.state.tenant_ref = pseudonymous_tenant_ref(
+        tenant_school if tenant_school is not None else user.school_id,
+        ctx.settings.jwt_secret,
+    )
     return user
 
 

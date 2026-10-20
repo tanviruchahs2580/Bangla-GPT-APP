@@ -263,6 +263,51 @@ def test_access_log_is_stable_per_user_and_can_be_disabled(tmp_path: Path) -> No
     assert collector.payloads("access") == []
 
 
+def test_access_log_carries_pseudonymous_tenant_handle(tmp_path: Path) -> None:
+    """I-01 (R4-wsC): the access record names the school, pseudonymously.
+
+    The tenant handle only exists once tenancy is resolved -- which needs the
+    DB-backed user, so it is attached by get_current_user, not by the token --
+    and it is an HMAC pseudonym (``s_`` prefix) like the user handle, so the
+    log reader can group a school's traffic without seeing the school's id.
+    """
+    settings = _settings(tmp_path)
+    engine = make_engine(settings)
+    Base.metadata.create_all(engine)
+    factory = make_session_factory(engine)
+    client = _client(tmp_path)
+    headers = _register(client, "tenanted@example.com")
+
+    with factory() as session:
+        session.execute(
+            text(
+                "INSERT INTO schools (id, name, code, created_at)"
+                " VALUES (7, 'R4 Test School', 'R4WS', '2026-10-20 00:00:00')"
+            )
+        )
+        session.execute(text("UPDATE users SET school_id = 7 WHERE email = 'tenanted@example.com'"))
+        session.commit()
+
+    with _Collector("bangla_gpt_api.access") as collector:
+        assert client.get("/users/me", headers=headers).status_code == 200
+        assert client.get("/users/me", headers=headers).status_code == 200
+    lines = collector.payloads("access")
+    assert len(lines) == 2, collector.messages
+    refs = {line["tenant_ref"] for line in lines}
+    assert len(refs) == 1, "the tenant handle must be stable across requests"
+    tenant_ref = refs.pop()
+    assert tenant_ref is not None and tenant_ref.startswith("s_")
+    assert tenant_ref != "s_7" and tenant_ref != "7", "the handle must not be the raw id"
+    # Distinct name space: the tenant handle never collides with the user's.
+    assert tenant_ref[2:] != lines[0]["user_ref"][2:]
+    all_messages = "\n".join(collector.messages)
+    assert "tenanted@example.com" not in all_messages
+    # The health route (unauthenticated, endpoint-scoped) carries no tenant.
+    with _Collector("bangla_gpt_api.access") as collector2:
+        assert client.get("/health").status_code == 200
+    assert collector2.payloads("access")[0]["tenant_ref"] is None
+
+
 # --- I-03: a trace record per pipeline stage -------------------------------
 
 
@@ -287,6 +332,19 @@ def test_ask_emits_retrieval_and_generation_trace_records(tmp_path: Path) -> Non
     assert retrieval["index_version"], "the trace must name the corpus index"
     assert retrieval["retrieved_ids"], "retrieved chunk ids are the point of the record"
     assert retrieval["gate"] in ("pass", "refuse")
+    # A10-01: the retrieval trace carries the FILTER VALUES the router passed
+    # (class_level/subject/chapter — never the question text) and the
+    # PER-HIT scores, so an incident responder can reproduce the ranking
+    # decision instead of reasoning from the top score alone.
+    assert retrieval["filters"] == {
+        "class_level": 6,
+        "subject": "science",
+        "chapter": None,
+    }, retrieval
+    scores = retrieval["scores"]
+    assert isinstance(scores, list) and len(scores) == len(retrieval["retrieved_ids"])
+    assert scores == sorted(scores, reverse=True), "per-hit scores follow the served order"
+    assert all(isinstance(s, (int, float)) for s in scores)
 
     generation = next(r for r in records if r["stage"] == "generation")
     assert generation["trace_id"] == retrieval["trace_id"]

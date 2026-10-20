@@ -137,6 +137,9 @@ def install_tenant_filter(session_factory: sessionmaker[Session]) -> None:
     """
     if getattr(session_factory, "_bgpt_tenant_filter_installed", False):
         return
+    # The idempotence marker lives outside the typed sessionmaker interface on
+    # purpose (any factory object must carry it); it is read back via getattr
+    # two lines above and nowhere else.
     session_factory._bgpt_tenant_filter_installed = True  # type: ignore[attr-defined]
 
     @event.listens_for(session_factory, "do_orm_execute")

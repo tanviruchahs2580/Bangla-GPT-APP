@@ -197,13 +197,29 @@ def _build_tutor(
     circuit_breaker: CircuitBreaker | None,
     fallback_provider: LLMProvider | None,
     term_stats: TermStats | None = None,
+    settings: Settings | None = None,
 ) -> TutorService:
     """Construct the TutorService with optional circuit breaker + fallback.
 
     ``term_stats`` carries corpus document frequencies to the grounding gate
     (weighted content-term coverage). Optional: absence degrades the gate to
     uniform weights over content terms, never to a lie.
+
+    A5-01: with ``settings.llm_exact_token_counting`` the evidence token
+    budget is measured by the provider's own ``count_tokens`` (Gemini REST
+    countTokens; the mock reports the honest heuristic) instead of the
+    calibrated upper bound. Default off -- production keeps the safe bound;
+    a per-call failure of the vendor endpoint falls back to it too.
     """
+    token_counter = None
+    if settings is not None and settings.llm_exact_token_counting:
+        from bangla_gpt_api.providers.token_counter import (
+            ExactTokenCounter,
+            provider_supports_count_tokens,
+        )
+
+        if provider_supports_count_tokens(provider):
+            token_counter = ExactTokenCounter(provider)
     return TutorService(
         index=index,
         provider=provider,
@@ -211,6 +227,7 @@ def _build_tutor(
         circuit_breaker=circuit_breaker,
         fallback_provider=fallback_provider,
         term_stats=term_stats,
+        token_counter=token_counter,
     )
 
 
@@ -231,9 +248,15 @@ def _load_corpus_chunks(settings: Settings) -> tuple[list[Chunk], str]:
         from bangla_gpt_api.data.nctb_loader import load_nctb_corpus
 
         corpus_root = _Path(settings.nctb_corpus_dir)
+        # A2-06: deletion propagation to SERVING — the acquisition manifest
+        # is the ledger of what the pipeline currently acquires, so a source
+        # deleted (or re-acquired as failed) after the last build stops
+        # serving even without a rebuild.
+        manifest_path = corpus_root / "manifests" / "acquisition_manifest.jsonl"
         chunks = load_nctb_corpus(
             corpus_root / "normalized",
             quality_report_path=corpus_root / "quality_report.json",
+            manifest_path=manifest_path if manifest_path.exists() else None,
         )
         if chunks:
             return chunks, "nctb"
@@ -344,6 +367,7 @@ def build_dependencies(
             circuit_breaker,
             fallback_provider,
             term_stats=term_stats,
+            settings=settings,
         )
     else:
         tutor = None

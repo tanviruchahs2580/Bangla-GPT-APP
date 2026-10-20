@@ -115,26 +115,55 @@ def load_nctb_corpus(
     multi_class_fallback: bool = True,
     version: str = "nctb-v1",
     stats: dict | None = None,
+    manifest_path: Path | None = None,
 ) -> list[Chunk]:
     """Convert pipeline chunk files into index-ready Chunks.
 
     ``stats`` (optional, additive) receives ``duplicates_dropped``,
-    ``injection_drops`` and ``legacy_drops`` for observability/reporting.
+    ``injection_drops``, ``legacy_drops``, ``latin_residue_drops``,
+    ``stale_sources_skipped`` and ``served_chunks`` for observability/reporting.
+
+    ``manifest_path`` (A2-06/AUD-A1-07, optional for compatibility): the
+    acquisition manifest is the ledger of what the pipeline currently
+    acquires. When given, a chunk file whose source has no manifest row — or
+    whose LAST row is not ``acquired`` (failed/renamed/deleted raw PDF) — is
+    skipped and counted in ``stale_sources_skipped``: deleting a source must
+    propagate to serving, not only to the next build (the build script's
+    prune_outputs removes the artifacts; the loader check covers a serving
+    process restarted on a half-pruned data dir).
     """
     reports: dict[str, dict] = {}
     if quality_report_path is not None and quality_report_path.exists():
         reports = json.loads(quality_report_path.read_text(encoding="utf-8"))
+
+    acquired_source_ids: set[str] | None = None
+    if manifest_path is not None and manifest_path.exists():
+        from bangla_gpt_api.nctb.manifest import load_manifest
+
+        acquired_source_ids = {
+            source_id
+            for source_id, record in load_manifest(manifest_path).items()
+            if record.source_status == "acquired"
+        }
 
     chunks: list[Chunk] = []
     injection_drops_total = 0
     legacy_drops_total = 0
     residue_drops_total = 0
     duplicates_dropped = 0
+    stale_sources = 0
     # (class_level, text) fingerprints: cross-source passages and the
     # class-range fallback both produce identical served pairs otherwise.
     seen_pairs: set[tuple[int, str]] = set()
     for path in sorted(chunks_dir.glob("*.chunks.jsonl")):
         source_id = path.name.removesuffix(".chunks.jsonl")
+        if acquired_source_ids is not None and source_id not in acquired_source_ids:
+            stale_sources += 1
+            logger.warning(
+                "nctb_loader: skipped stale source %s (not 'acquired' in the manifest)",
+                source_id,
+            )
+            continue
         report = reports.get(source_id, {})
         level = report.get("level")
         if level not in LEVEL_CLASS_RANGE:
@@ -235,6 +264,7 @@ def load_nctb_corpus(
         stats["injection_drops"] = injection_drops_total
         stats["legacy_drops"] = legacy_drops_total
         stats["latin_residue_drops"] = residue_drops_total
+        stats["stale_sources_skipped"] = stale_sources
         stats["served_chunks"] = len(chunks)
     return chunks
 

@@ -33,9 +33,11 @@ from bangla_gpt_api.db.session import (
 
 PG_URL = os.environ.get("TEST_DATABASE_URL", "").strip()
 
-pytestmark = pytest.mark.skipif(
-    not PG_URL, reason="TEST_DATABASE_URL not set (Postgres CI job only)"
-)
+# E-02 (R4-wsC): engine-level proof runs only against a real Postgres.
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(not PG_URL, reason="TEST_DATABASE_URL not set (Postgres CI job only)"),
+]
 SECRET = "test-secret-0123456789abcdef0123456789"
 
 

@@ -164,9 +164,12 @@ _SENTENCE_SPLIT_RE = re.compile(r"(?<=[।!?\.\n])\s+")
 #: Bangla script tokenizes denser than ASCII in every multilingual tokenizer
 #: the repo has looked at; 2.5 chars/token is used as an UPPER BOUND (more
 #: tokens than the vendor reports) so a budget check cannot pass in planning
-#: and fail upstream. Vendor-tokenizer calibration needs a live key (the
-#: google-genai count_tokens call) and is BLOCKED without one; until then a
-#: real counter can be plugged in with ``register_token_counter``.
+#: and fail upstream. Calibrated against the vendor: the 2026-10-19 run
+#: (``eval/token_counter_calibration.json``, 20 golden items, 120 REST
+#: countTokens calls) measured this heuristic at 1.07x-1.20x the vendor
+#: count (mean 1.13x; an earlier r3 sample measured 1.27x-1.58x). The exact
+#: vendor counter is switchable: settings.llm_exact_token_counting wires
+#: providers.token_counter.ExactTokenCounter (A5-01).
 DEFAULT_CHARS_PER_TOKEN = 2.5
 TARGET_TOKENIZER_NOTE = (
     "Conservative Bangla-aware upper bound until a vendor tokenizer is registered; "

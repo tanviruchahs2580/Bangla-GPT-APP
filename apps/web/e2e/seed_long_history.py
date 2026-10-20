@@ -23,15 +23,14 @@ _SRC = Path(__file__).resolve().parents[2] / "api" / "src"
 if _SRC.is_dir() and str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from sqlalchemy import delete, select  # noqa: E402
-
-from bangla_gpt_api.config import Settings  # noqa: E402
-from bangla_gpt_api.db.models import ChatMessage, Conversation, Student, User  # noqa: E402
-from bangla_gpt_api.db.session import (  # noqa: E402
+from bangla_gpt_api.config import Settings
+from bangla_gpt_api.db.models import ChatMessage, Conversation, Student, User
+from bangla_gpt_api.db.session import (
     init_db,
     make_engine,
     make_session_factory,
 )
+from sqlalchemy import delete, select
 
 STUDENT_EMAIL = "student1@e2e.test"
 TITLE = "E2E long history"
@@ -59,9 +58,7 @@ def seed() -> None:
         user = db.execute(select(User).where(User.email == STUDENT_EMAIL)).scalar_one_or_none()
         if user is None:
             raise SystemExit(f"{STUDENT_EMAIL} is not seeded; run seed_e2e_users.py first")
-        student = db.execute(
-            select(Student).where(Student.user_id == user.id)
-        ).scalar_one_or_none()
+        student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one_or_none()
         if student is None:
             raise SystemExit(f"{STUDENT_EMAIL} has no student profile")
 
@@ -75,9 +72,7 @@ def seed() -> None:
             .all()
         )
         for conversation in previous:
-            db.execute(
-                delete(ChatMessage).where(ChatMessage.conversation_id == conversation.id)
-            )
+            db.execute(delete(ChatMessage).where(ChatMessage.conversation_id == conversation.id))
             db.delete(conversation)
         db.flush()
 

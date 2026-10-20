@@ -145,17 +145,6 @@ def _burn_password_check(password: str) -> None:
     verify_password(password, _DECOY_HASH)
 
 
-def reject_common_password(password: str) -> None:
-    """Raise the standard coded 400 for a well-known guess.
-
-    One place for the rule so registration, reset and change-password cannot
-    drift apart: a blocklist applied on registration alone is bypassed the
-    moment a user resets to "12345678".
-    """
-    if is_common_password(password):
-        raise CommonPasswordError
-
-
 def hash_password(password: str) -> str:
     """Hash a password with Argon2id at the OWASP parameters."""
     return _ARGON2.hash(password)
@@ -206,10 +195,6 @@ RESERVED_CLAIMS = frozenset({"sub", "role", "iss", "aud", "exp", "iat", "jti"})
 #: must never be usable as an API credential itself.
 ACCESS_TOKEN_TYP = "access"  # noqa: S105 - a token type string, not a credential
 REFRESH_TOKEN_TYP = "refresh"  # noqa: S105 - a token type string, not a credential
-
-
-class CommonPasswordError(ValueError):
-    """The candidate is a well-known guess (F-072)."""
 
 
 def create_access_token(

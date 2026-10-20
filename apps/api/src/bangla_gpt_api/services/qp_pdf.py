@@ -93,12 +93,25 @@ def render_qp_html(paper: dict, kind: str = "paper") -> str:
         "margin:2rem auto;line-height:1.7}"
         "@media print{body{margin:0}}"
         ".answer{font-weight:700}.marks{color:#666}</style></head><body>"
-        f"<h1>{_esc(paper['exam_type'])} ({paper['class_level']}) - {_esc(paper['subject'])}"
+        f"<h1>{_esc(paper['exam_type'])} ({_esc(str(paper['class_level']))}) - {_esc(paper['subject'])}"
         f"{' / উত্তরমালা' if kind == 'answer' else ''}</h1>"
-        f"<p>{paper['marks']} নম্বর | {paper['duration_min']} মিনিট | "
+        f"<p>{_esc(str(paper['marks']))} নম্বর | {_esc(str(paper['duration_min']))} মিনিট | "
         f"{_esc(', '.join(paper['chapters']))}</p>"
         f"<ol>{''.join(rows)}</ol></body></html>"
     )
+
+
+def _field(value: object) -> str:
+    """Render an optional generation field: absent means blank, never 'None'.
+
+    G-24: the answer-key PDF printed the literal string None when a generated
+    item had no detailed_solution / marking_guide fields (the generator omits
+    them on the not-enough-evidence path). Every render site formats optional
+    fields through this helper.
+    """
+    if value is None:
+        return ""
+    return str(value)
 
 
 def _esc(text: str) -> str:
@@ -197,14 +210,14 @@ def _answer_key_pdf(pdf: FPDF, payload: dict) -> None:
         pdf.multi_cell(
             w=0,
             h=6,
-            text=f"{a.get('ref')} ({a.get('marks')}): {a.get('answer')}",
+            text=f"{_field(a.get('ref'))} ({_field(a.get('marks'))}): {_field(a.get('answer'))}",
             new_x="LMARGIN",
             new_y="NEXT",
         )
         pdf.set_font("nbg", size=10)
         pdf.set_text_color(70, 70, 70)
         pdf.multi_cell(
-            w=0, h=5, text=f"  {a.get('detailed_solution')}", new_x="LMARGIN", new_y="NEXT"
+            w=0, h=5, text=f"  {_field(a.get('detailed_solution'))}", new_x="LMARGIN", new_y="NEXT"
         )
         pdf.set_text_color(0, 0, 0)
         pdf.set_font("nbg", size=11)
@@ -214,7 +227,7 @@ def _answer_key_pdf(pdf: FPDF, payload: dict) -> None:
     pdf.cell(
         w=0,
         h=8,
-        text=f"মূল্যায়ন নির্দেশিকা — মোট {guide.get('total_marks')}",
+        text=f"মূল্যায়ন নির্দেশিকা — মোট {_field(guide.get('total_marks'))}",
         new_x="LMARGIN",
         new_y="NEXT",
     )
@@ -258,11 +271,11 @@ def render_document_html(doc: dict) -> str:
     for tier in payload.get("tiers") or []:
         rows.append(f"<h2>{_esc(str(tier.get('tier')))}</h2>")
         for i, q in enumerate(tier.get("questions") or [], start=1):
-            rows.append(f"<p>{i}. {_esc(str(q.get('text')))} ({q.get('marks')})</p>")
+            rows.append(f"<p>{i}. {_esc(str(q.get('text')))} ({_esc(str(q.get('marks')))})</p>")
     for a in payload.get("answers") or []:
         rows.append(
-            f"<p><b>{_esc(str(a.get('ref')))}</b> {_esc(str(a.get('answer')))} "
-            f"({a.get('marks')})<br><i>{_esc(str(a.get('detailed_solution')))}</i></p>"
+            f"<p><b>{_esc(_field(a.get('ref')))}</b> {_esc(_field(a.get('answer')))} "
+            f"({_esc(_field(a.get('marks')))})<br><i>{_esc(_field(a.get('detailed_solution')))}</i></p>"
         )
     for row in payload.get("answer_sheet") or []:
         add(f"{row.get('ref')}: {row.get('answer')}")
@@ -271,7 +284,7 @@ def render_document_html(doc: dict) -> str:
         rows.append(f"<h2>{_esc(str(key))}</h2><p>{_esc(str(value))}</p>")
     guide = payload.get("marking_guide") or {}
     if guide:
-        add(f"Total marks: {guide.get('total_marks')}")
+        add(f"Total marks: {_esc(str(guide.get('total_marks')))}")
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
         f"<title>{_esc(str(doc.get('title') or ''))}</title><style>"

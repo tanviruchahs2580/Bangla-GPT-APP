@@ -40,7 +40,7 @@ from email import message_from_bytes, message_from_string
 from email.message import EmailMessage, Message
 from email.policy import default as default_policy
 from email.utils import parseaddr
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -252,6 +252,44 @@ def send_mail_checked(db: Session, settings: Settings, *, to: str, subject: str,
         logger.warning("email_suppressed", extra={"to_domain": to.split("@")[-1], "kind": "bulk"})
         return False
     return send_mail(settings, to=to, subject=subject, body=body)
+
+
+# ── email seam (C-15) ─────────────────────────────────────────────────
+#
+# The relay used to be reachable only as bare module functions, which is a
+# seam in prose but not in code: nothing forced a replacement to keep the
+# three-call shape, and callers could not hold a typed dependency. The
+# Protocol below is the seam the audit item asks for, with the real SMTP
+# transport bound as the first implementation. The module functions stay the
+# single definitions; the class only binds them, so no behaviour moved.
+
+
+@runtime_checkable
+class Mailer(Protocol):
+    """Swappable email transport (C-15): what every mail caller may depend on."""
+
+    def configured(self, settings: Settings) -> bool: ...
+
+    def send(self, settings: Settings, *, to: str, subject: str, body: str) -> bool: ...
+
+    def send_checked(
+        self, db: Session, settings: Settings, *, to: str, subject: str, body: str
+    ) -> bool: ...
+
+
+class SmtpMailer:
+    """The STARTTLS relay, bound to the :class:`Mailer` shape."""
+
+    configured = staticmethod(smtp_configured)
+    send = staticmethod(send_mail)
+    send_checked = staticmethod(send_mail_checked)
+
+
+#: The transport the app wires by default. A caller that wants another relay
+#: (outbox recorder, dry-run, provider client) takes ``mailer: Mailer =
+#: DEFAULT_MAILER`` as a parameter -- the dependency stays injectable and the
+#: contract tests below keep the shape structural, not nominal.
+DEFAULT_MAILER: Mailer = SmtpMailer()
 
 
 # ── bounce ingestion ──────────────────────────────────────────────────

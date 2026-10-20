@@ -143,12 +143,6 @@ def to_roman(text: str) -> str:
     return "".join(out).lower()
 
 
-def roman_initial(text: str) -> str:
-    """First roman letter of the transliteration, for bucketing."""
-    roman = to_roman(text)
-    return roman[0] if roman else ""
-
-
 def edit_budget(length: int) -> int:
     """Length-scaled tolerance: one edit for short tokens, two beyond six.
 

@@ -182,6 +182,94 @@ def test_loader_rejects_an_unknown_prompt_id() -> None:
         tutor.load_prompt("no_such_prompt")
 
 
+# --- A5-02 residual closure (2026-10-19): the teach-strategy and quiz-explain
+# instruction text moved into the registry. These pins hold the RENDERED text
+# byte-identical to the pre-migration module f-strings, so a registry edit
+# that changes what a student's tutor receives fails here first.
+
+
+def test_reteach_instruction_is_byte_identical_to_the_pre_migration_string() -> None:
+    from bangla_gpt_api.services import teach_strategy
+
+    key, instruction = teach_strategy.reteach_instruction("story")
+    assert key == "steps"
+    assert instruction == (
+        "শিক্ষক-নির্দেশ: আগের পদ্ধতিতে (গল্প আকারে) বিষয়টি বোঝানো যায়নি — "
+        "এবার অন্য পদ্ধতি (ধাপে ধাপে) ব্যবহার করে বোঝাও।"
+    )
+
+
+def test_reteach_default_instruction_is_byte_identical_to_the_pre_migration_string() -> None:
+    from bangla_gpt_api.services import teach_strategy
+
+    key, instruction = teach_strategy.reteach_instruction(None)
+    assert key == "simple"
+    assert instruction == "শিক্ষক-নির্দেশ: পুরোপুরি সহজভাবে, সহজ ভাষা পদ্ধতিতে বোঝাও।"
+
+
+def test_explicit_strategy_instruction_is_byte_identical_to_the_pre_migration_string() -> None:
+    from bangla_gpt_api.services import teach_strategy
+
+    assert teach_strategy.explicit_strategy_instruction("book_language") == (
+        "শিক্ষক-নির্দেশ: এবার পাঠ্যবইয়ের ভাষা পদ্ধতিতে ব্যাখ্যা কর।"
+    )
+
+
+def test_quiz_explain_instruction_is_byte_identical_to_the_pre_migration_string() -> None:
+    from bangla_gpt_api.schemas import QuizExplainContext
+    from bangla_gpt_api.services.quiz_explain import quiz_explain_instruction
+
+    ctx = QuizExplainContext(
+        question="ভূমির ভগ্নাংশ কোনটি?",
+        options=["১/২", "২/৩", "৩/৪"],
+        correct_index=1,
+        user_answer=0,
+        chapter="ভগ্নাংশ",
+    )
+    assert quiz_explain_instruction(ctx) == (
+        "শিক্ষার্থী একটি কুইজে এই প্রশ্নে ভুল করেছে। ব্যাখ্যা করে বোঝাও:\n"
+        "প্রশ্ন: ভূমির ভগ্নাংশ কোনটি?\n"
+        "  ক) ১/২\n"
+        "  খ) ২/৩\n"
+        "  গ) ৩/৪\n"
+        "শিক্ষার্থীর উত্তর: ক) ১/২\n"
+        "সঠিক উত্তর: খ) ২/৩\n"
+        "অধ্যায়: ভগ্নাংশ\n"
+        "কেন সঠিক উত্তরটা ঠিক আর শিক্ষার্থীর উত্তরটা ভুল, সহজ ভাষায় বুঝিয়ে বলো।"
+    )
+    # No chapter line when the quiz item carries none (pre-migration shape).
+    bare = QuizExplainContext(
+        question="another question here",
+        options=["a", "b", "c", "d"],
+        correct_index=2,
+        user_answer=-1,
+    )
+    assert "অধ্যায়" not in quiz_explain_instruction(bare)
+
+
+@pytest.mark.parametrize(
+    "prompt_id",
+    [
+        "teach_reteach_named",
+        "teach_reteach_default",
+        "teach_strategy_explicit",
+        "quiz_explain_instruction",
+    ],
+)
+def test_instruction_templates_are_registered_with_version_identity(prompt_id: str) -> None:
+    """The A5-02 closure: the strategy/quiz-explain text is registry-owned.
+
+    The instruction files carry {{placeholder}} tokens the services
+    substitute; the digest pins the exact template text so an edit without a
+    version bump is visible in every trace.
+    """
+    spec = tutor.load_prompt(prompt_id)
+    assert spec.owner == "ai-platform"
+    assert spec.version.count(".") == 2
+    assert spec.text and "{{" in spec.text, f"{prompt_id} must be the template, not rendered text"
+    assert spec.trace_version.startswith(f"{prompt_id}@{spec.version}+sp-")
+
+
 def test_generation_trace_carries_the_prompt_version(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every generation trace names the exact prompt that produced it."""
     events: list[tuple[str, dict]] = []

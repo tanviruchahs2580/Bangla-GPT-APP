@@ -43,7 +43,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Annotated, Any, TypeVar
 
-from fastapi import Header, HTTPException, Request
+from fastapi import Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -68,11 +68,6 @@ T = TypeVar("T")
 #: The header, declared as a FastAPI parameter so it appears in the served
 #: OpenAPI document (a client must be able to discover it).
 IdempotencyKeyHeader = Annotated[str | None, Header(alias=IDEMPOTENCY_HEADER)]
-
-
-def idempotency_key(request: Request) -> str | None:
-    """The validated ``Idempotency-Key`` header, or ``None`` when absent."""
-    return validate_idempotency_key(request.headers.get(IDEMPOTENCY_HEADER))
 
 
 def validate_idempotency_key(raw: str | None) -> str | None:

@@ -9,9 +9,8 @@ import logging
 import secrets
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -43,6 +42,7 @@ from bangla_gpt_api.schemas import (
 )
 from bangla_gpt_api.services import weakness
 
+from ._pagination import WindowPage
 from .common import (
     _classroom_or_404,
     _default_school,
@@ -69,13 +69,18 @@ IMPORT_MAX_ROWS = 200
 def teacher_roster(
     db: DbSession,
     teacher: TeacherOrAdminUser,
+    page: WindowPage,
     class_level: int | None = None,
-    limit: Annotated[int, Query(ge=1, le=1000)] = 200,
 ) -> list[StudentBrief]:
-    # capped (class_level omitted used to pull the whole student table).
-    # tenancy: school-bound teachers only ever see their own school.
+    # C-10: one pagination convention (offset + capped limit, stable order by
+    # Student.id inside the loader). tenancy: school-bound teachers only ever
+    # see their own school.
     students = _load_class_students(
-        db, class_level, limit=limit, school_id=_tenant_school_id(db, teacher)
+        db,
+        class_level,
+        limit=page.limit,
+        offset=page.offset,
+        school_id=_tenant_school_id(db, teacher),
     )
     return _student_briefs(db, students)
 
