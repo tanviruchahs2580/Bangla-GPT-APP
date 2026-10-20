@@ -98,34 +98,45 @@ precision-recall-shaped calibration of the served gate:
 | 0.60 | 1.00 | 0.75 |
 | 0.70 | 1.00 | 0.75 |
 
-The honest reading: on these four adversarial questions **no threshold in the
-calibrated range separates the classes** — the gate's coverage rule is not
-what refuses them (3 of 4 pass on the real corpus; the synthetic-corpus test
-refuses all 4). The gate's strength is that answerable coverage is ~1.0, so
-raising the threshold costs answerable questions nothing; its weakness is that
-out-of-corpus questions carrying one covered term slip through. The
-documented out-of-domain budget rule (≥2 absent content terms → refuse) is
-**not implemented** — that remains the open decision recorded in
-`docs/RAG_ARCHITECTURE.md`'s divergence register, now with numbers: it would
-refuse many answerable questions on a corpus this small, and the calibration
-curve is the evidence for whoever owns that change.
+The honest reading (recorded before the fix): on these four adversarial
+questions **no threshold in the calibrated range separates the classes** — the
+gate's coverage rule is not what refused them. That measurement is the
+evidence that closed the gap: the documented ≥2-absent-terms count was
+measured and declined (it refuses 37-38% of ANSWERABLE chapter-title and
+Banglish questions on this corpus), and the implemented rule is the
+**majority form** — a question whose content terms are MOSTLY absent from the
+served index (more df==0 terms than known terms) refuses outright, in
+`TutorService._coverage_details`, with the honest not-in-textbook answer.
+Pinned by `tests/test_r4_ood_gate.py` (unit tests on the gate + a
+served-corpus test on the 4 curated adversarial questions). The
+`threshold`-calibration table above stays as the evidence for why a
+threshold tweak alone could not do this.
 
 Empty and low-confidence retrieval behaviours are defined and exercised:
 `empty retrieval → refusal` (no hits ⇒ gate refuses), low coverage →
 refusal carrying `insufficient_evidence`, and family C's refusal rate is
-recorded per run (`family_C_adversarial_refusal_rate` = 0.25 on the real
-corpus, 1.0 on the synthetic test corpus). The **tests** on this behaviour
-are `tests/test_query_analysis.py` (coverage accounting), the eval gate's
+recorded per run (`family_C_adversarial_refusal_rate` = **1.0** on the real
+corpus after the majority-absent rule; 1.0 on the synthetic test corpus). The
+**tests** on this behaviour are `tests/test_query_analysis.py` (coverage
+accounting), `tests/test_r4_ood_gate.py` (the rule), the eval gate's
 refusal cases, and `tests/test_eval3_targets_report.py` for the report-side
-contract; the real-corpus weakness above is a finding, not a pass.
+contract.
 
 ## Residuals (owner-facing)
 
-1. **Unit normalization** is absent (A4-04's one unbuilt piece): "৩ কিলোমিটার"
-   does not match "3 km". Owner decision on scope (physics/maths units) before
-   the tokenizer grows a unit table.
-2. **Out-of-domain refusal on the real corpus** (0.25) — the ≥2-absent-terms
-   rule is the documented fix; the calibration table above is its evidence.
+1. ~~**Unit normalization** is absent (A4-04's one unbuilt piece)~~ — CLOSED
+   2026-10-19: the retrieval tokenizer folds the common curriculum units to
+   one canonical form (the full Bangla term), exact-token, both corpus and
+   query: "৩ km", "৩ কিমি", "3 kilometre" and "৩ কিলোমিটার" tokenize
+   identically (kilometre/metre/centimetre/kilogram/gram/litre/second/minute/
+   hour tables in `retrieval/hybrid.py:UNIT_ALIASES`, Bengali→ASCII digits
+   already folded by `_DIGIT_FOLD`). Pinned by `tests/test_r4_token_units.py`.
+2. ~~**Out-of-domain refusal on the real corpus** (0.25)~~ — CLOSED
+   2026-10-19: the majority-absent rule refuses all 4 curated adversarial
+   questions on the real corpus (`family_C_adversarial_refusal_rate` = 1.0)
+   with **zero new refusals** on answerable families (probe: 0/317 across
+   A/B/D). The divergence-register row in `docs/RAG_ARCHITECTURE.md` records
+   the decision.
 3. **Banglish recall gap of 11 points** is measured, not fixed: improving the
    roman lane or the pronunciation map is a retrieval change gated by the
    pre-registered tolerance.

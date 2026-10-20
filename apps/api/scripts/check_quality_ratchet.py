@@ -51,7 +51,12 @@ BASELINE_DIR = APP / "quality-baselines"
 
 CC_MIN = 11  # radon rank C and worse (A 1-5, B 6-10, C 11-20, D 21-30, E 31-40, F 41+)
 MAX_LINES = 500
-VULTURE_MIN_CONFIDENCE = 80
+# D-05 (R4-wsC): raised from 80 to 60 -- the whole 60-confidence surface was
+# triaged once (quality-baselines/vulture60-triage.csv holds the bucket and
+# reason per hit) and the confirmed-dead names were removed rather than
+# whitelisted, so the stronger threshold stays honest. Re-triage from scratch
+# (vulture --min-confidence=60 --make-whitelist) before ever loosening it.
+VULTURE_MIN_CONFIDENCE = 60
 JSCPD_MIN_LINES = 6
 JSCPD_MIN_TOKENS = 70
 JSCPD_ROOTS = ["apps/api/src", "apps/web/src", "scripts"]

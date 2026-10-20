@@ -1,0 +1,333 @@
+path:line,kind,name,bucket,reason
+src\bangla_gpt_api\ai_jobs.py:163,function,is_dead_lettered,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\auth\security.py:148,function,reject_common_password,GENUINE-DEAD?,no reference outside its own definition line anywhere on this tree
+src\bangla_gpt_api\auth\security.py:202,variable,RESERVED_CLAIMS,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\config.py:39,variable,model_config,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\config.py:84,variable,ai_daily_budget_usd,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\config.py:87,variable,ai_daily_budget_usd_per_school,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\config.py:91,variable,ai_max_conversation_messages,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\data\nctb_loader.py:242,function,attach_detected_classes,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\db\clock.py:41,method,now_aware,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\db\clock.py:53,class,FrozenClock,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\db\clock.py:64,method,now_aware,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\db\clock.py:67,method,advance,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\db\clock.py:76,function,get_clock,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\db\clock.py:86,function,reset_clock,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\db\models.py:256,variable,conversation,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\db\models.py:650,variable,times_reused,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\db\models.py:792,variable,started_at,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\db\models.py:793,variable,finished_at,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\db\models.py:976,variable,bounce_count,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\db\models.py:977,variable,first_bounced_at,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\db\models.py:978,variable,last_bounced_at,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\db\session.py:130,function,run_with_retry,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\db\session.py:174,function,_set_pragmas,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\db\tenancy.py:93,function,tenant_school_id,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\db\tenancy.py:142,function,_tenant_read_filter,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\db\types.py:37,variable,impl,GENUINE-DEAD?,no reference outside its own definition line anywhere on this tree
+src\bangla_gpt_api\db\types.py:40,method,load_dialect_impl,sqlalchemy-contract,SQLAlchemy TypeDecorator hook; called by the dialect machinery
+src\bangla_gpt_api\db\types.py:45,method,process_bind_param,sqlalchemy-contract,SQLAlchemy TypeDecorator hook; called by the dialect machinery
+src\bangla_gpt_api\db\types.py:56,method,process_result_value,sqlalchemy-contract,SQLAlchemy TypeDecorator hook; called by the dialect machinery
+src\bangla_gpt_api\evaluation\ann_sweep.py:55,variable,QUERIES,GENUINE-DEAD?,no reference outside its own definition line anywhere on this tree
+src\bangla_gpt_api\evaluation\cost_model.py:93,function,cost_per_1000_answers,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\evaluation\cost_model.py:121,function,verify_price_table,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\evaluation\cost_model.py:130,function,school_monthly_projection,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\evaluation\cost_model.py:176,function,budget_alert_state,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\evaluation\generation.py:449,function,build_judge_sample,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\evaluation\index_budget.py:283,function,load_artifact,GENUINE-DEAD?,no reference outside its own definition line anywhere on this tree
+src\bangla_gpt_api\evaluation\live_recorder.py:36,variable,PRICES_READ_ON,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\evaluation\live_recorder.py:51,class,BudgetedRecordingProvider,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\evaluation\live_recorder.py:90,attribute,resumed,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\evaluation\live_recorder.py:216,attribute,resumed,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\evaluation\live_recorder.py:245,attribute,resumed,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\evaluation\online_loop.py:36,function,load_trace_log,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\evaluation\online_loop.py:75,function,build_candidates,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\evaluation\online_loop.py:176,function,gap_backlog,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\evaluation\online_loop.py:227,function,triage_file,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\evaluation\online_loop.py:254,function,triage_candidates,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\evaluation\rag_eval.py:63,function,_git_sha,GENUINE-DEAD?,no reference outside its own definition line anywhere on this tree
+src\bangla_gpt_api\evaluation\rag_eval.py:123,function,_artifact_head,GENUINE-DEAD?,no reference outside its own definition line anywhere on this tree
+src\bangla_gpt_api\evaluation\retrieval_strata.py:213,function,strata_report,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\evaluation\runner.py:23,function,evaluate_questions,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\evaluation\stage_latency.py:60,variable,query_processing_ms,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\evaluation\stage_latency.py:62,variable,rerank_ms,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\evaluation\stage_latency.py:92,attribute,query_processing_ms,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\evaluation\stage_latency.py:176,attribute,rerank_ms,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\evaluation\targets_report.py:43,variable,DEFAULT_OUT,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\evaluation\thresholds.py:117,function,validate_revision,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\evaluation\variant_matrix.py:56,variable,DEFAULT_OUT,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\ingestion\ocr_ingester.py:79,function,ingest_pdf_via_ocr,GENUINE-DEAD?,no reference outside its own definition line anywhere on this tree
+src\bangla_gpt_api\initialize\lifespan.py:132,attribute,ai_job_recovery_task,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\jobs.py:274,attribute,finished_at,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\jobs.py:395,function,run_retention_job,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\logging_config.py:258,function,new_trace_id,GENUINE-DEAD?,no reference outside its own definition line anywhere on this tree
+src\bangla_gpt_api\logging_config.py:358,function,secret_logging_allowed,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\main.py:583,attribute,lifespan_context,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\nctb\acquisition.py:36,function,_sha256_of,GENUINE-DEAD?,no reference outside its own definition line anywhere on this tree
+src\bangla_gpt_api\nctb\acquisition.py:166,function,acquire_many,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\nctb\bijoy.py:127,function,conversion_quality,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\nctb\content_qa.py:104,method,to_dict,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\nctb\manifest.py:21,variable,retrieved_at,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\nctb\manifest.py:42,variable,permission_status,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\nctb\manifest.py:43,variable,redistribution,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\nctb\sources.py:140,function,find_artifact,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\providers\base.py:31,variable,RETRY_POLICY,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\providers\image_safety.py:55,variable,PNG_OUTPUT_MIMES,GENUINE-DEAD?,no reference outside its own definition line anywhere on this tree
+src\bangla_gpt_api\providers\image_safety.py:75,variable,bytes_in,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\providers\image_safety.py:76,variable,bytes_out,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\providers\image_safety.py:77,variable,edge_std,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\providers\replay.py:57,method,from_jsonl,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\retrieval\hybrid.py:142,function,_char_ngrams,GENUINE-DEAD?,no reference outside its own definition line anywhere on this tree
+src\bangla_gpt_api\retrieval\hybrid_index.py:170,function,lexical_rerank,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\retrieval\hybrid_index.py:332,function,iter_corpus_search,GENUINE-DEAD?,no reference outside its own definition line anywhere on this tree
+src\bangla_gpt_api\retrieval\lifecycle.py:64,variable,chunk_count,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\retrieval\lifecycle.py:107,method,build_and_publish,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\retrieval\transliteration.py:146,function,roman_initial,GENUINE-DEAD?,no reference outside its own definition line anywhere on this tree
+src\bangla_gpt_api\retrieval\vocabulary.py:128,method,term_frequencies,GENUINE-DEAD?,no reference outside its own definition line anywhere on this tree
+src\bangla_gpt_api\retrieval\vocabulary.py:225,method,vocabulary_size,GENUINE-DEAD?,no reference outside its own definition line anywhere on this tree
+src\bangla_gpt_api\retrieval\vocabulary.py:229,function,_trigrams_standalone,GENUINE-DEAD?,no reference outside its own definition line anywhere on this tree
+src\bangla_gpt_api\retrieval\vocabulary.py:233,function,merged_document_frequency,GENUINE-DEAD?,no reference outside its own definition line anywhere on this tree
+src\bangla_gpt_api\routers\_error_contract.py:105,variable,ERROR_CATALOG,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\routers\_error_contract.py:234,variable,FRAMEWORK_VALIDATION_SITES,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\routers\_http_semantics.py:73,function,idempotency_key,GENUINE-DEAD?,no reference outside its own definition line anywhere on this tree
+src\bangla_gpt_api\routers\admin.py:65,function,admin_list_users,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\admin.py:97,function,admin_update_role,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\admin.py:143,function,admin_impersonate,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\admin.py:208,function,admin_impersonate_end,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\admin.py:245,function,impersonate_exit,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\admin.py:291,function,admin_audit,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\admin.py:326,function,admin_overview,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\admin.py:348,function,admin_refusal_audit,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\admin.py:381,function,admin_ai_quality,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\admin.py:448,function,admin_purge_expired,GENUINE-DEAD?,only mentioned (comment/import string) inside src; no call or read site found on this tree
+src\bangla_gpt_api\routers\assessment.py:107,function,teacher_shorttest_create,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\assessment.py:210,function,teacher_shorttest_list,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\assessment.py:234,function,shorttests_mine,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\assessment.py:378,function,teacher_weak_matrix,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\assessment.py:392,function,teacher_curriculum_coverage,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\assessment.py:490,function,teacher_create_support_plan,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\assessment.py:545,function,teacher_list_support_plans,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\assessment.py:586,function,teacher_assignment_create,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\assessment.py:698,function,teacher_assignment_list,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\assessment.py:763,function,teacher_assignment_progress,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\assessment.py:776,function,assignments_mine,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\auth.py:97,variable,expires_in,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\routers\auth.py:148,function,register,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\auth.py:231,function,verify_email,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\auth.py:273,function,resend_verification,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\auth.py:513,function,refresh_session,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\auth.py:696,function,forgot_password,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\auth.py:755,function,reset_password,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\auth.py:788,function,change_password,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\auth.py:833,function,mfa_enroll,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\auth.py:839,function,mfa_verify,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\auth.py:859,function,mfa_disable,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\auth.py:876,function,mfa_challenge,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\class_import.py:100,function,classroom_import_file,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\learn.py:99,function,learn_subjects,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\learn.py:110,function,learn_subject_chapters,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\learn.py:123,function,learn_chapter_content,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\learn.py:149,function,start_quiz,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\learn.py:218,function,submit_quiz,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\learn.py:331,function,get_progress,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\learn.py:384,function,get_activity,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\learn.py:433,function,get_revision_due,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\learn.py:447,function,review_revision_item,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\learn.py:475,function,kg_gaps,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\learn.py:499,function,kg_rebuild,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\learn.py:528,function,global_search,GENUINE-DEAD?,only mentioned (comment/import string) inside src; no call or read site found on this tree
+src\bangla_gpt_api\routers\learn.py:615,function,dashboard_summary,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\routers\learn.py:748,function,get_learn_progress,GENUINE-DEAD?,only mentioned (comment/import string) inside src; no call or read site found on this tree
+src\bangla_gpt_api\routers\learn.py:778,function,upsert_learn_progress,GENUINE-DEAD?,only mentioned (comment/import string) inside src; no call or read site found on this tree
+src\bangla_gpt_api\routers\parent.py:81,function,parent_link,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\parent.py:152,function,create_parent_invite,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\parent.py:201,function,get_my_prefs,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\parent.py:214,function,patch_my_prefs,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\parent.py:280,function,get_my_memory,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\parent.py:320,function,disable_my_memory,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\parent.py:339,function,link_via_invite,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\parent.py:411,function,parent_children,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\parent.py:435,function,parent_child_progress,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\parent.py:517,function,parent_child_activity,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\parent.py:647,function,parent_child_report,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\parent.py:668,function,student_self_report,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\school\_admin.py:44,function,admin_school_create,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\school\_admin.py:55,function,admin_school_list,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\school\_admin.py:61,function,admin_school_stats,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\school\_admin.py:114,function,admin_school_invite_list,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\school\_admin.py:144,function,admin_school_invite_revoke,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\school\_admin.py:168,function,admin_content_versions,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\school\_admin.py:209,function,admin_report_aggregate,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\school\_analytics.py:94,function,school_coverage,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\school\_analytics.py:118,function,school_analytics,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\school\_health.py:103,function,school_health_overview,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\school\_onboarding.py:53,function,school_invite_create,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\school\_onboarding.py:93,function,auth_join_school,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\school\_onboarding.py:183,function,school_my_overview,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\school\_onboarding.py:249,function,school_class_register,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\school\_roster.py:81,function,school_students,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\school\_roster.py:116,function,school_teachers,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\school\_roster.py:156,function,school_classes,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\system.py:70,function,health,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\system.py:76,function,live,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\system.py:171,function,system_info,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\teacher.py:68,function,teacher_roster,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\teacher.py:83,function,teacher_analytics,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\teacher.py:153,function,teacher_list_classrooms,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\teacher.py:177,function,teacher_create_classroom,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\teacher.py:200,function,classroom_roster,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\teacher_content.py:164,function,teacher_content_generate,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\teacher_content.py:224,function,teacher_content_history,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\teacher_content.py:259,function,teacher_content_get,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\teacher_content.py:273,function,teacher_content_edit,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\teacher_content.py:379,function,teacher_qp_create,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\teacher_content.py:440,function,teacher_qp_list,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\teacher_content.py:463,function,teacher_qp_get,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\teacher_content.py:473,function,teacher_qp_regenerate,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\teacher_content.py:514,function,teacher_qp_shuffle,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\teacher_content.py:536,function,teacher_qp_review,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\teacher_content.py:589,function,teacher_qp_replace,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\teacher_content.py:620,attribute,times_reused,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\routers\teacher_content.py:689,function,teacher_qp_finalize,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\teacher_content.py:718,function,teacher_qp_pdf,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\teacher_content.py:748,function,teacher_lesson_plan,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\teacher_content.py:822,function,teacher_generate_document,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\teacher_content.py:891,function,teacher_documents_list,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\teacher_content.py:916,function,teacher_document_get,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\teacher_content.py:923,function,teacher_document_delete,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\teacher_content.py:936,function,teacher_document_pdf,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\tutor.py:305,function,create_conversation,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\tutor.py:325,function,list_conversations,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\tutor.py:361,function,conversation_messages,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\tutor.py:415,function,rename_conversation,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\tutor.py:439,function,delete_conversation,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\tutor.py:447,function,search_messages,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\tutor.py:501,function,send_chat_message,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\tutor.py:619,function,stream_chat_message,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\tutor.py:821,function,submit_feedback,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\tutor.py:891,function,admin_feedback_queue,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\tutor.py:936,function,admin_feedback_triage,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\tutor.py:969,function,record_event,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\users.py:106,variable,schema_version,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\routers\users.py:116,variable,feedback,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\routers\users.py:135,function,read_me,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\users.py:140,function,delete_me,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\users.py:787,function,export_me,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\users.py:834,function,get_student,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\users.py:840,function,get_consent_status,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\users.py:853,function,post_consent_reconfirm,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\workspace.py:92,function,create_note,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\workspace.py:108,function,list_notes,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\workspace.py:124,function,delete_note,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\workspace.py:149,function,notifications_list,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\workspace.py:170,function,notification_mark_read,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\workspace.py:341,function,teacher_job_create,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\workspace.py:360,function,teacher_jobs_list,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\workspace.py:375,function,teacher_job_get,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\routers\workspace.py:386,function,teacher_workload,framework-registered,"registered by decorator (FastAPI route/dependency, event listener); invoked by the framework, not by name"
+src\bangla_gpt_api\schemas.py:20,variable,CHAT_STRATEGIES,GENUINE-DEAD?,only mentioned (comment/import string) inside src; no call or read site found on this tree
+src\bangla_gpt_api\schemas.py:25,variable,ExplanationStyle,GENUINE-DEAD?,no reference outside its own definition line anywhere on this tree
+src\bangla_gpt_api\schemas.py:59,variable,model_config,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:108,variable,citation_verified,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:113,variable,numeric_check,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:134,variable,conversation_title,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:147,variable,message_count,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:243,variable,access_token,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:244,variable,token_type,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:298,variable,disabled,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:304,variable,enabled,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:334,variable,quiz_attempts,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:335,variable,parent_links,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:404,variable,subtitle,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:411,variable,ask_action,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:433,variable,current_version,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:434,variable,accepted_version,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:435,variable,accepted_at,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:436,variable,needs_reconfirm,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:456,variable,students_detail,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:554,variable,access_token,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:557,variable,expires_in_min,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:611,variable,checked_at,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:620,variable,quiz_attempts_graded,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:641,variable,total_refusals,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:644,variable,last_refusal_at,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:657,variable,icon,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:701,variable,student_count,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:716,variable,invite_pending,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:745,variable,key_points,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:746,variable,examples,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:747,variable,practice_qs,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:748,variable,homework,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:749,variable,exam_tips,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:785,method,_check_total,pydantic-hook,registered pydantic validator/computed field; called by the validation layer
+src\bangla_gpt_api\schemas.py:839,method,_edit_needs_text,pydantic-hook,registered pydantic validator/computed field; called by the validation layer
+src\bangla_gpt_api\schemas.py:990,variable,overdue,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1000,variable,overdue,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1045,variable,classroom_count,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1084,variable,strong_pct,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1085,variable,support_pct,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1086,variable,risk_pct,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1090,variable,capacity,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1136,variable,current_version,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1137,variable,versions_total,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1140,variable,updated_by_email,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1173,variable,llm_concepts,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1208,method,_questions_source,pydantic-hook,registered pydantic validator/computed field; called by the validation layer
+src\bangla_gpt_api\schemas.py:1247,variable,model_config,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1254,method,_drop_unset,pydantic-hook,registered pydantic validator/computed field; called by the validation layer
+src\bangla_gpt_api\schemas.py:1297,variable,unread_count,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1303,variable,AI_JOB_KINDS,GENUINE-DEAD?,no reference outside its own definition line anywhere on this tree
+src\bangla_gpt_api\schemas.py:1335,variable,total_minutes_saved,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1336,variable,estimate,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1337,variable,methodology,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1366,variable,last_active,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1367,variable,quiz_attempts,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1391,variable,quiz_attempts,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1393,variable,avg_quiz_accuracy,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1403,variable,asked_subjects,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1405,variable,uncovered_subjects,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1406,variable,chapters_available,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1428,variable,quiz_attempts,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1430,variable,avg_quiz_score_pct,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1444,variable,window_start,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1445,variable,window_end,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1446,variable,quizzes_taken,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1447,variable,quizzes_graded,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1454,variable,suggestion_code,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1455,variable,suggestion_params,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1465,variable,answers_total,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1469,variable,refusals_by_reason,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1473,variable,low_confidence_count,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1475,variable,by_model,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1477,variable,cost_usd_total,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1478,variable,cost_usd_by_model,serialized-field,"declared data field on a pydantic model / SQLAlchemy row / Settings object; read via serialization, ORM mapping or env binding"
+src\bangla_gpt_api\schemas.py:1487,variable,linked,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\schemas.py:1496,variable,expires_in_minutes,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\schemas.py:1519,variable,facts,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\schemas.py:1521,variable,on_disable_note_code,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\services\activity.py:26,function,now_dhaka,GENUINE-DEAD?,no reference outside its own definition line anywhere on this tree
+src\bangla_gpt_api\services\atrisk.py:17,variable,WEEK_ACTIONS,GENUINE-DEAD?,no reference outside its own definition line anywhere on this tree
+src\bangla_gpt_api\services\circuit_breaker.py:211,variable,exc_tb,GENUINE-DEAD?,no reference outside its own definition line anywhere on this tree
+src\bangla_gpt_api\services\circuit_breaker.py:211,variable,exc_val,GENUINE-DEAD?,no reference outside its own definition line anywhere on this tree
+src\bangla_gpt_api\services\circuit_breaker.py:239,property,active_provider_name,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\services\circuit_breaker.py:325,method,get_status,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\services\context.py:171,variable,TARGET_TOKENIZER_NOTE,GENUINE-DEAD?,no reference outside its own definition line anywhere on this tree
+src\bangla_gpt_api\services\context.py:203,function,register_token_counter,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\services\generators\lesson_plan.py:40,variable,LESSON_LEVELS,GENUINE-DEAD?,no reference outside its own definition line anywhere on this tree
+src\bangla_gpt_api\services\learn.py:55,variable,class_levels,GENUINE-DEAD?,only mentioned (comment/import string) inside src; no call or read site found on this tree
+src\bangla_gpt_api\services\learn.py:61,variable,section_count,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\services\mailer.py:239,attribute,bounce_count,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\services\mailer.py:240,attribute,last_bounced_at,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\services\mailer.py:360,function,ingest_bounces_via_imap,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\services\parent_digest.py:248,variable,opted_out,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\services\parent_digest.py:281,attribute,opted_out,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\services\pii.py:50,function,redacted_total,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\services\question_bank.py:35,function,is_duplicate,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\services\router.py:94,function,route_distribution,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\services\router.py:102,function,simple_share,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\services\safety.py:207,variable,SUPPORTIVE_REASONS,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\services\tutor.py:193,variable,STREAM_EVENT_TYPES,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\services\tutor.py:314,function,build_evidence_prompt,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\services\tutor.py:523,attribute,_concurrency,GENUINE-DEAD?,only mentioned (comment/import string) inside src; no call or read site found on this tree
+src\bangla_gpt_api\tracing.py:83,function,tracing_active,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code
+src\bangla_gpt_api\tracing.py:194,function,add_span_exporter,used-outside-src,referenced from tests/scripts (the vulture scan covers src only); live code

@@ -1,0 +1,221 @@
+{
+ "schema": "token_counter_calibration/v1",
+ "generated_at": "2026-10-20T05:08:34+00:00",
+ "provider": "gemini",
+ "counter": "gemini-countTokens",
+ "vendor_endpoint": true,
+ "note": "every measurement came from the provider's count_tokens endpoint",
+ "fallback_calls": 0,
+ "vendor_calls": 120,
+ "sample_size": 20,
+ "seed": 20260825,
+ "heuristic_chars_per_token": 2.5,
+ "ratio_summary": {
+  "mean": 1.1295,
+  "min": 1.0678,
+  "max": 1.199
+ },
+ "reading": "ratio > 1 means the heuristic upper bound over-counts relative to the vendor; the 2400-token budget planned on the heuristic therefore fits MORE vendor tokens than assumed -- the conservative direction",
+ "samples": [
+  {
+   "item_id": null,
+   "evidence_chars": 433,
+   "heuristic_tokens": 259,
+   "measured_tokens": 238,
+   "measured_by": "gemini-countTokens",
+   "passages_kept_heuristic": 3,
+   "passages_kept_measured": 3,
+   "ratio_heuristic_over_measured": 1.0882
+  },
+  {
+   "item_id": null,
+   "evidence_chars": 421,
+   "heuristic_tokens": 252,
+   "measured_tokens": 236,
+   "measured_by": "gemini-countTokens",
+   "passages_kept_heuristic": 3,
+   "passages_kept_measured": 3,
+   "ratio_heuristic_over_measured": 1.0678
+  },
+  {
+   "item_id": null,
+   "evidence_chars": 381,
+   "heuristic_tokens": 241,
+   "measured_tokens": 223,
+   "measured_by": "gemini-countTokens",
+   "passages_kept_heuristic": 3,
+   "passages_kept_measured": 3,
+   "ratio_heuristic_over_measured": 1.0807
+  },
+  {
+   "item_id": null,
+   "evidence_chars": 413,
+   "heuristic_tokens": 244,
+   "measured_tokens": 219,
+   "measured_by": "gemini-countTokens",
+   "passages_kept_heuristic": 3,
+   "passages_kept_measured": 3,
+   "ratio_heuristic_over_measured": 1.1142
+  },
+  {
+   "item_id": null,
+   "evidence_chars": 484,
+   "heuristic_tokens": 287,
+   "measured_tokens": 248,
+   "measured_by": "gemini-countTokens",
+   "passages_kept_heuristic": 3,
+   "passages_kept_measured": 3,
+   "ratio_heuristic_over_measured": 1.1573
+  },
+  {
+   "item_id": null,
+   "evidence_chars": 394,
+   "heuristic_tokens": 243,
+   "measured_tokens": 218,
+   "measured_by": "gemini-countTokens",
+   "passages_kept_heuristic": 3,
+   "passages_kept_measured": 3,
+   "ratio_heuristic_over_measured": 1.1147
+  },
+  {
+   "item_id": null,
+   "evidence_chars": 395,
+   "heuristic_tokens": 236,
+   "measured_tokens": 215,
+   "measured_by": "gemini-countTokens",
+   "passages_kept_heuristic": 3,
+   "passages_kept_measured": 3,
+   "ratio_heuristic_over_measured": 1.0977
+  },
+  {
+   "item_id": null,
+   "evidence_chars": 428,
+   "heuristic_tokens": 254,
+   "measured_tokens": 225,
+   "measured_by": "gemini-countTokens",
+   "passages_kept_heuristic": 3,
+   "passages_kept_measured": 3,
+   "ratio_heuristic_over_measured": 1.1289
+  },
+  {
+   "item_id": null,
+   "evidence_chars": 476,
+   "heuristic_tokens": 290,
+   "measured_tokens": 245,
+   "measured_by": "gemini-countTokens",
+   "passages_kept_heuristic": 3,
+   "passages_kept_measured": 3,
+   "ratio_heuristic_over_measured": 1.1837
+  },
+  {
+   "item_id": null,
+   "evidence_chars": 413,
+   "heuristic_tokens": 244,
+   "measured_tokens": 219,
+   "measured_by": "gemini-countTokens",
+   "passages_kept_heuristic": 3,
+   "passages_kept_measured": 3,
+   "ratio_heuristic_over_measured": 1.1142
+  },
+  {
+   "item_id": null,
+   "evidence_chars": 393,
+   "heuristic_tokens": 248,
+   "measured_tokens": 214,
+   "measured_by": "gemini-countTokens",
+   "passages_kept_heuristic": 3,
+   "passages_kept_measured": 3,
+   "ratio_heuristic_over_measured": 1.1589
+  },
+  {
+   "item_id": null,
+   "evidence_chars": 476,
+   "heuristic_tokens": 290,
+   "measured_tokens": 245,
+   "measured_by": "gemini-countTokens",
+   "passages_kept_heuristic": 3,
+   "passages_kept_measured": 3,
+   "ratio_heuristic_over_measured": 1.1837
+  },
+  {
+   "item_id": null,
+   "evidence_chars": 413,
+   "heuristic_tokens": 244,
+   "measured_tokens": 219,
+   "measured_by": "gemini-countTokens",
+   "passages_kept_heuristic": 3,
+   "passages_kept_measured": 3,
+   "ratio_heuristic_over_measured": 1.1142
+  },
+  {
+   "item_id": null,
+   "evidence_chars": 413,
+   "heuristic_tokens": 244,
+   "measured_tokens": 219,
+   "measured_by": "gemini-countTokens",
+   "passages_kept_heuristic": 3,
+   "passages_kept_measured": 3,
+   "ratio_heuristic_over_measured": 1.1142
+  },
+  {
+   "item_id": null,
+   "evidence_chars": 427,
+   "heuristic_tokens": 257,
+   "measured_tokens": 235,
+   "measured_by": "gemini-countTokens",
+   "passages_kept_heuristic": 3,
+   "passages_kept_measured": 3,
+   "ratio_heuristic_over_measured": 1.0936
+  },
+  {
+   "item_id": null,
+   "evidence_chars": 361,
+   "heuristic_tokens": 241,
+   "measured_tokens": 201,
+   "measured_by": "gemini-countTokens",
+   "passages_kept_heuristic": 3,
+   "passages_kept_measured": 3,
+   "ratio_heuristic_over_measured": 1.199
+  },
+  {
+   "item_id": null,
+   "evidence_chars": 413,
+   "heuristic_tokens": 244,
+   "measured_tokens": 219,
+   "measured_by": "gemini-countTokens",
+   "passages_kept_heuristic": 3,
+   "passages_kept_measured": 3,
+   "ratio_heuristic_over_measured": 1.1142
+  },
+  {
+   "item_id": null,
+   "evidence_chars": 387,
+   "heuristic_tokens": 240,
+   "measured_tokens": 211,
+   "measured_by": "gemini-countTokens",
+   "passages_kept_heuristic": 3,
+   "passages_kept_measured": 3,
+   "ratio_heuristic_over_measured": 1.1374
+  },
+  {
+   "item_id": null,
+   "evidence_chars": 361,
+   "heuristic_tokens": 241,
+   "measured_tokens": 201,
+   "measured_by": "gemini-countTokens",
+   "passages_kept_heuristic": 3,
+   "passages_kept_measured": 3,
+   "ratio_heuristic_over_measured": 1.199
+  },
+  {
+   "item_id": null,
+   "evidence_chars": 428,
+   "heuristic_tokens": 254,
+   "measured_tokens": 225,
+   "measured_by": "gemini-countTokens",
+   "passages_kept_heuristic": 3,
+   "passages_kept_measured": 3,
+   "ratio_heuristic_over_measured": 1.1289
+  }
+ ]
+}

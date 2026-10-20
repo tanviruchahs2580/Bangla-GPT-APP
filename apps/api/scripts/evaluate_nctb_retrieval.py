@@ -227,6 +227,70 @@ def _duplicate_class_text_pairs(chunks: list) -> int:
     return duplicates
 
 
+def _cross_source_near_duplicates(chunks: list) -> dict:
+    """A2-05: cross-source exact/near-duplicate groups over the served corpus.
+
+    Unique (source, text) records only — the loader already killed exact
+    (class, text) copies — matched at character-trigram Jaccard >= 0.9 with
+    transitive grouping (1.0 = exact reprint). The measured counts are the
+    honest size of the overlap the acquisition set carries between books;
+    the stored per-chunk content hashes split exact reprints from near ones.
+    """
+    from bangla_gpt_api.nctb.chunking import near_duplicate_groups
+
+    unique: dict[tuple[str, str], list[str]] = {}
+    for chunk in chunks:
+        key = (chunk.meta.source, " ".join(chunk.text.split()))
+        unique.setdefault(key, []).append(chunk.id)
+    records = [(chunk_ids[0], source_id, text) for (source_id, text), chunk_ids in unique.items()]
+    groups = near_duplicate_groups(records, threshold=0.9)
+    return {
+        "unique_source_text_records": len(records),
+        "groups": len(groups),
+        "members": sum(len(group) for group in groups),
+        "threshold": 0.9,
+        "definition": (
+            "cross-source (source, text) records at character-trigram Jaccard "
+            ">= 0.9, transitively grouped; Jaccard 1.0 = exact reprint"
+        ),
+    }
+
+
+def _content_hash_verification() -> dict:
+    """A2-05: verify every stored chunk content hash against its artifact text.
+
+    Reads the chunk artifacts directly (the served Chunk model does not carry
+    the hash); a record without the field counts as unhashed - builds older
+    than the A2-05 change report as unhashed instead of pretending.
+    """
+    import hashlib  # noqa: F401 - records the algorithm in use next to the check
+    from pathlib import Path
+
+    from bangla_gpt_api.nctb.chunking import _text_fingerprint
+
+    root = Path(__file__).resolve().parents[2] / "data" / "nctb" / "normalized"
+    total = 0
+    verified = 0
+    unhashed = 0
+    for path in sorted(root.glob("*.chunks.jsonl")):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            total += 1
+            stored = record.get("content_hash") or ""
+            if not stored:
+                unhashed += 1
+            elif stored == _text_fingerprint(record.get("text", "")):
+                verified += 1
+    return {
+        "records": total,
+        "verified": verified,
+        "mismatched": total - verified - unhashed,
+        "unhashed": unhashed,
+    }
+
+
 def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -459,10 +523,13 @@ def main() -> int:
         },
         "serve_stats": {
             "duplicates_dropped_at_load": load_stats.get("duplicates_dropped", 0),
+            "stale_sources_skipped": load_stats.get("stale_sources_skipped", 0),
             "latin_residue_drops": load_stats.get("latin_residue_drops", 0),
             "legacy_drops": load_stats.get("legacy_drops", 0),
             "served_duplicate_text_groups": _duplicate_text_groups(chunks),
             "served_duplicate_class_text_pairs": _duplicate_class_text_pairs(chunks),
+            "cross_source_near_duplicates": _cross_source_near_duplicates(chunks),
+            "content_hash_verification": _content_hash_verification(),
         },
         "family_A_self_sentence": _metric_block(ranks["hybrid"]["A"], seed=seed),
         "family_B_chapter_title": _metric_block(ranks["hybrid"]["B"], seed=seed),

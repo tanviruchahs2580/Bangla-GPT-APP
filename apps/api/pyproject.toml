@@ -115,8 +115,17 @@ dev = [
   "mutmut>=3.8.0,<4",
 ]
 
+# D-12: a console entry point so the API has one named launch command
+# (`bgpt-api`) alongside `python -m bangla_gpt_api`; both thin-wrap the
+# documented `uvicorn bangla_gpt_api.main:app` invocation.
+[project.scripts]
+bgpt-api = "bangla_gpt_api.__main__:main"
+
 [build-system]
-requires = ["setuptools>=68"]
+# D-12: the backend is pinned to a bounded range (>=68 for pyproject.toml
+# [tool.setuptools] support; <81 so a future major cannot silently change
+# editable-install semantics under us).
+requires = ["setuptools>=68,<81"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
@@ -285,7 +294,13 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 markers = [
     "skipif: conditional skip (pytest.mark.skipif)",
-    "integration: slow integration tests requiring external services",
+    # E-02 layer split (R4-wsC): default = unit (in-process, in-memory DB, no
+    # external service). integration marks the genuinely slow tier --
+    # subprocess/multi-process/migration/Postgres/eval-CLI tests -- so
+    # `pytest -m integration` times one layer and `-m "not integration"` times
+    # the other. An unannotated test is unit by construction.
+    "unit: fast in-process test (no external service, no subprocess); the default for unannotated tests",
+    "integration: slow tier: subprocesses, migrations, real Postgres, docker or the eval CLI",
 ]
 
 [tool.coverage.run]

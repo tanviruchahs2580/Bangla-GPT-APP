@@ -173,6 +173,24 @@ def _concurrency_refusal() -> HTTPException:
     )
 
 
+def effective_inflight_limit(settings: Any, role: str, *, default: int) -> int:
+    """A7-05: the per-role in-flight cap for one account.
+
+    Higher-privilege roles can be narrowed below the base cap (their turn
+    costs more), via TEACHER_INFLIGHT_CAP / ADMIN_INFLIGHT_CAP; 0 inherits the
+    base. The base itself resolves through _inflight_limit, so disabling the
+    base cap disables the role cap too.
+    """
+    limit = _inflight_limit(settings, default=default)
+    role_cap = {
+        "teacher": getattr(settings, "teacher_inflight_cap", 0) or 0,
+        "admin": getattr(settings, "admin_inflight_cap", 0) or 0,
+    }.get(role, 0)
+    if role_cap <= 0 or limit <= 0:
+        return limit
+    return min(limit, role_cap)
+
+
 @contextmanager
 def _inflight_slot(app_ctx: Ctx, user: User, *, default: int) -> Iterator[None]:
     """Hold one in-flight slot around a generation call (A7-05).
@@ -180,7 +198,7 @@ def _inflight_slot(app_ctx: Ctx, user: User, *, default: int) -> Iterator[None]:
     The slot is released in a ``finally`` (concurrency_slot's contract), so a
     failed or cancelled turn cannot leak capacity.
     """
-    limit = _inflight_limit(app_ctx.settings, default=default)
+    limit = effective_inflight_limit(app_ctx.settings, user.role, default=default)
     if limit <= 0:
         yield
         return

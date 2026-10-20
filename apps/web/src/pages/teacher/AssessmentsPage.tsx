@@ -263,6 +263,9 @@ export default function AssessmentsPage() {
                 <p className="muted">{t("noDocumentsYet")}</p>
               ) : (
                 <div className="stack">
+                  <p className="muted muted-sm" role="note">
+                    {t("teacherAiDisclaimer")}
+                  </p>
                   {qps.map((qp) => (
                     <div key={qp.id} className="row qp-review-row">
                       <span className="quick-icon tile-teal" aria-hidden>

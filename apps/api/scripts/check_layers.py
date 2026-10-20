@@ -104,6 +104,9 @@ LAYERS: dict[str, int] = {
     f"{PACKAGE}.initialize": 4,
     # 5 -- entrypoint
     f"{PACKAGE}.main": 5,
+    # R4-wsC: `python -m bangla_gpt_api` / bgpt-api console script (D-12),
+    # second thin entrypoint beside main.py, same downwards-only rule.
+    f"{PACKAGE}.__main__": 5,
 }
 
 #: (importer prefix, imported prefix) -> why this reverse edge is accepted.

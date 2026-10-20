@@ -208,6 +208,62 @@
           "note": "Moved the inline EXTRACTION_PROMPT instruction into the registry and added the evidence-is-data rule + verbatim-selection rule (A1-04 finding: the extraction call site sent untrusted corpus text with no delimiter policy)."
         }
       ]
+    },
+    {
+      "id": "teach_reteach_named",
+      "file": "teach_reteach_named.md",
+      "version": "1.0.0",
+      "owner": "ai-platform",
+      "summary": "Re-teach instruction after a failed strategy, naming the failed approach (placeholders {{failed_strategy}} and {{next_strategy}} are strategy display names substituted by services/teach_strategy.py).",
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-19",
+          "note": "Moved verbatim out of the services/teach_strategy.py f-strings (byte-identical render, pre-migration outputs captured in .audit/tmp/r4/before_migration.txt); A5-02 residual closure."
+        }
+      ]
+    },
+    {
+      "id": "teach_reteach_default",
+      "file": "teach_reteach_default.md",
+      "version": "1.0.0",
+      "owner": "ai-platform",
+      "summary": "First re-teach instruction when no strategy was used before (placeholder {{next_strategy}} is a strategy display name).",
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-19",
+          "note": "Moved verbatim out of the services/teach_strategy.py f-strings (byte-identical render); A5-02 residual closure."
+        }
+      ]
+    },
+    {
+      "id": "teach_strategy_explicit",
+      "file": "teach_strategy_explicit.md",
+      "version": "1.0.0",
+      "owner": "ai-platform",
+      "summary": "Teacher instruction line for a student-chosen explanation strategy (placeholder {{strategy_name}} is a strategy display name).",
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-19",
+          "note": "Moved verbatim out of the services/teach_strategy.py f-strings (byte-identical render); A5-02 residual closure."
+        }
+      ]
+    },
+    {
+      "id": "quiz_explain_instruction",
+      "file": "quiz_explain_instruction.md",
+      "version": "1.0.0",
+      "owner": "ai-platform",
+      "summary": "Quiz-explain skeleton: header + {{quiz_item}} data block (question/options/answers substituted from the QuizExplainContext) + closing explain demand.",
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-19",
+          "note": "Moved verbatim out of the services/quiz_explain.py inline block (byte-identical render); A5-02 residual closure. The quiz item itself is per-turn data, not prompt text, and stays out of the registry."
+        }
+      ]
     }
   ]
 }

@@ -50,14 +50,18 @@ repos:
     rev: v0.17.0
     hooks:
       - id: ruff
+        # D-01: apps/web/e2e/*.py are the Playwright seed/maintenance scripts
+        # maintained next to the TS specs; they have no other Python linter, so
+        # both ruff hooks include them (root ruff.toml supplies the rules and
+        # the line length they are formatted to).
         args: [--fix, --exit-non-zero-on-fix]
-        files: ^(apps/api/(src|tests|scripts)/|scripts/)
+        files: ^(apps/api/(src|tests|scripts)/|scripts/|apps/web/e2e/[^/]*\.py$)
       - id: ruff-format
         # D-01: the formatter used to cover apps/api only, so the guard scripts
         # under scripts/ were never format-checked even though the ruff *lint*
         # hook above already ran over them. Same file set as that hook now; the
         # root ruff.toml supplies the line length they are formatted to.
-        files: ^(apps/api/(src|tests|scripts)/|scripts/)
+        files: ^(apps/api/(src|tests|scripts)/|scripts/|apps/web/e2e/[^/]*\.py$)
 
   # F-13: commit-message lint in front of the commit, not after the push. The
   # hook is local (not a published repo) because it calls the repository's own

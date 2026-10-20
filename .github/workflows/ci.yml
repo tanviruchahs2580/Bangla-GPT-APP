@@ -116,6 +116,17 @@ jobs:
           --cov-branch
           --cov-report=term-missing
           --cov-report=xml
+          --cov-report=json
+        working-directory: apps/api
+
+      # E-03 (R4-wsC): on top of the single overall fail_under, the six audit
+      # critical paths (auth+authorization, tenancy, scoring/grading,
+      # retention/purge, grounding/abstention) carry per-module BRANCH floors
+      # at measured-minus-2pp. The floors live with their measurement basis in
+      # scripts/check_coverage_floors.py; recalibrate from a fresh measurement
+      # run, never by hand-raising above what was measured.
+      - name: Critical-path coverage floors
+        run: python scripts/check_coverage_floors.py coverage.json
         working-directory: apps/api
 
       - name: Upload coverage report
@@ -590,6 +601,18 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: python3 scripts/check_commits.py --range "$BASE_SHA..$HEAD_SHA"
+
+      - name: PR title lint
+        # K-02 (R4-wsC): the PR title gets the same rule function as the
+        # commit subjects above -- one implementation (scripts/check_pr_title.py
+        # reuses check_commits.check_subject), three entry points that cannot
+        # drift. Over-length is an error here deliberately: a commit subject
+        # cannot be rewritten in history, but a PR title can be edited before
+        # the merge, so strict is the honest gate at this end of the funnel.
+        # Runs only on pull_request events (exit 2, "nothing to lint", would
+        # otherwise be the push-event answer).
+        if: github.event_name == 'pull_request'
+        run: python3 scripts/check_pr_title.py --strict-length
 
       - name: Bangla glossary holds
         # AUD-G-05 / G-25: docs/i18n-glossary.md is the terminology source of

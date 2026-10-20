@@ -118,6 +118,25 @@ jobs:
             npx playwright test --project="$project" --grep-invert "visual:|CPU throttle"
           done
 
+      - name: WebKit and Firefox under the engines config
+        # E-10 / E-13: the journeys above only ever ran on Chromium because
+        # playwright.config.ts defines exactly one project, so the detection
+        # step could never enable the other two engines. The engines config
+        # (playwright.engines.config.ts) defines all three and exercises the
+        # Bangla typography / Intl journeys (G-21/G-22) in each -- this is the
+        # "WebKit and Firefox at least nightly" half of E-10.
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '23 19 * * *'
+        working-directory: apps/web
+        env:
+          E2E_PYTHON: python
+          # 5173 is not guaranteed free on hosted runners either; a dedicated
+          # port keeps parallel jobs from colliding.
+          E2E_WEB_PORT: "5199"
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps firefox webkit
+          npx playwright test -c playwright.engines.config.ts --reporter=list
+
       - name: Upload Playwright report, junit and failure traces
         if: always()
         uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
@@ -128,6 +147,89 @@ jobs:
             apps/web/coverage/e2e/html
             apps/web/coverage/e2e/results
           retention-days: 30
+          if-no-files-found: ignore
+
+  load-nightly:
+    name: Load smoke (k6 profiles, thresholds enforced)
+    # E-14: the k6 profiles under load/ carried thresholds but nothing ever
+    # executed them (no k6 in any workflow; load/README records "NOT RUN").
+    # This scheduled job is the wiring: the tutor smoke and the dashboards
+    # profile against the real API (mock LLM provider, inline jobs, fresh
+    # seeded database), at modest VU counts so the nightly stays bounded --
+    # their per-run thresholds (p95, error rate) still gate red. Archived
+    # summaries are the "results archived" half of the item.
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '23 19 * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/api/constraints.txt
+
+      - name: Install k6 (pinned action)
+        uses: grafana/setup-k6-action@43b9fc21641a76002687994433dd586f56e791b1 # v1.2.2
+
+      - name: Install the API (hash-verified lock)
+        working-directory: apps/api
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --require-hashes -r constraints.txt
+          python -m pip install --no-deps -e .
+
+      - name: Start the API (mock provider, throwaway database)
+        working-directory: apps/api
+        env:
+          DATABASE_URL: "sqlite:///./load-nightly.db"
+          ENV: ci
+          LLM_PROVIDER: mock
+          JOBS_BACKEND: inline
+          SMTP_HOST: ""
+          SENTRY_DSN: ""
+          # The profiles self-register and their setup phase logs in; the
+          # per-IP login limiter must not 429 the run itself.
+          RATE_LIMIT_LOGIN_PER_MINUTE: "240"
+        run: |
+          python -m uvicorn bangla_gpt_api.main:app --app-dir src \
+            --host 127.0.0.1 --port 8000 &
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1; then
+              echo "API is up"; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::API did not become healthy within 60s"; exit 1
+
+      - name: k6 tutor smoke (error < 1%, p95 < 800 ms)
+        run: |
+          # ci: the profiles' own threshold blocks gate this step.
+          k6 run -e BASE_URL=http://127.0.0.1:8000 -e VUS=5 -e DURATION=30s \
+            load/k6-tutor.js | tee k6-tutor-summary.txt
+
+      - name: k6 dashboards profile (per-path p95 gates, errors < 1%)
+        run: |
+          # The registered teacher starts with no classroom rows, so this run
+          # proves the mechanism and the empty-path tail latencies; the
+          # seeded-shape precondition (bench_dashboards.py) for the load-bearing
+          # numbers is documented in load/README.md.
+          k6 run -e BASE_URL=http://127.0.0.1:8000 -e VUS=5 -e DURATION=60s \
+            load/k6-dashboards.js | tee k6-dashboards-summary.txt
+
+      - name: Upload the load summaries
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: load-smoke-summaries
+          path: |
+            k6-tutor-summary.txt
+            k6-dashboards-summary.txt
+          retention-days: 90
           if-no-files-found: ignore
 
   lighthouse:

@@ -111,6 +111,17 @@ Two more build outputs belong to the corpus:
   assigned (`coverage_report()` in `nctb/corpus.py`). This is the artifact a
   coverage claim is read against; gaps are listed rather than inferred from
   the absence of failures.
+
+  **What the current artifact states (2026-10-20 build) — the sentence any
+  coverage claim must match:** 9 subjects across classes 6–12, 33 class ×
+  subject cells serving chunks: the NCTB secondary range (science,
+  mathematics, ICT, Bangla, English for classes 6–10, 400/440/425/665/805
+  chunks respectively) plus the HSC science group (physics, chemistry,
+  higher mathematics, biology for classes 11–12). Chapter headings are
+  extracted for 23 of the 33 cells; the 10 cells without chapter headings
+  (Bangla and English across the classes) are listed in the artifact itself
+  — a coverage claim quotes those numbers and the gaps, not a range in
+  prose.
 - `<data-dir>/chunk_ablation.json` — the chunk-size/overlap/diversity
   comparison produced by `apps/api/scripts/ablate_nctb_chunking.py` (see
   docs/RAG_ARCHITECTURE.md for the table).
@@ -122,6 +133,17 @@ currently `acquired` sources; `prune_outputs()` deletes the
 source whose raw PDF is missing or unreadable has its previous derived
 artifacts deleted (AUD-A1-07). A deleted or renamed source therefore cannot
 stay indexable.
+
+**Deletion propagates to SERVING too (A2-06, 2026-10-19).** The serving load
+path (`data/nctb_loader.load_nctb_corpus`, the call the app makes at boot)
+now takes the acquisition manifest as the ledger: a chunk file whose source
+has no manifest row — or whose last row is not `acquired` — is skipped and
+counted in `load_stats["stale_sources_skipped"]`, so a source deleted (or
+re-acquired as failed) after the last build stops serving even without a
+rebuild. The build's own prune removes the artifacts; the loader check
+covers a serving process restarted on a half-pruned data dir. Pinned by
+`tests/test_r4_deletion_propagation.py` (fixture: flip/delete a manifest
+row, prune, reload — the chunk does not survive a rebuild).
 
 ## 5. Chunking & class metadata
 
@@ -174,8 +196,14 @@ note exactly as published. `SourceRecord` additionally carries
 `permission_status` (`official-public-download`) and `redistribution`
 (`not-granted-in-writing`) — the facts this project can establish from the
 official pages — and the build copies them into each source's `rights` block
-in `quality_report.json`. Derived artifacts (`data/nctb/raw|extracted|
-normalized`) are gitignored, so no NCTB text is redistributed in the
-repository; only metadata, reports and measured artifacts are committed.
-Written permission for redistribution, if the owner obtains it, replaces the
-`redistribution` value — it is an owner decision, not an inference.
+in `quality_report.json`. **Per-chunk content hashes (A2-05, 2026-10-19):**
+every chunk record in `normalized/*.chunks.jsonl` carries `content_hash`
+(sha256 of the normalized text), stamped by `dedupe_chunks`, and each
+source's report row carries `chunk_hashes_sha256` — the per-chunk analogue
+of the per-document checksum, verified per run by the retrieval eval
+(`serve_stats.content_hash_verification`). Derived artifacts
+(`data/nctb/raw|extracted|normalized`) are gitignored, so no NCTB text is
+redistributed in the repository; only metadata, reports and measured
+artifacts are committed. Written permission for redistribution, if the owner
+obtains it, replaces the `redistribution` value — it is an owner decision,
+not an inference.

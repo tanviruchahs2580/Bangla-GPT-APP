@@ -280,6 +280,8 @@ const bn = {
   qpFinalize: "চূড়ান্ত করুন",
   qpReplace: "বদলান",
   qpNeedsReview: "অনুমোদন বাকি",
+  teacherAiDisclaimer:
+    "এআই-নির্ধারিত খসড়া — শ্রেণিতে দেওয়ার আগে প্রতিটি প্রশ্ন যাচাই করুন",
   qpFinalized: "চূড়ান্ত হয়েছে",
   qpDraftReady: "খসড়া প্রস্তুত",
   stTitle: "সংক্ষিপ্ত পরীক্ষা",
@@ -842,6 +844,8 @@ const en: Dict = {
   deleteChat: "Delete chat",
   deleteChatConfirm: "Delete this chat for good? Are you sure?",
   deleteChatTitle: "Delete chat",
+  teacherAiDisclaimer:
+    "AI-generated draft — review every question before classroom use",
   deleteChatConfirmShort: "Delete",
   noResults: "Nothing found",
   activityTitle: "Daily practice",

@@ -96,6 +96,11 @@ class Settings(BaseSettings):
     # Per-school daily AI budget in USD. 0 (default) = disabled.
     # Env fallback: AI_DAILY_BUDGET_USD_PER_SCHOOL.
     ai_daily_budget_usd_per_school: float = 0.0
+    # A7-05: per-role in-flight cap multipliers on the tutor routes (the base
+    # cap stays the concurrency policy; a role multiplier narrows it for
+    # higher-privilege accounts whose actions cost more). 0 = inherit base.
+    teacher_inflight_cap: int = 1
+    admin_inflight_cap: int = 1
     # Maximum stored messages per conversation before a new turn is refused
     # with 429 conversation_limit_reached. 0 = disabled. Default 200.
     # Env fallback: AI_MAX_CONVERSATION_MESSAGES.
