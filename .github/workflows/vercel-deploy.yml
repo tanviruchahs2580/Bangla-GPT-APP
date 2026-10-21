@@ -113,7 +113,34 @@ jobs:
       - name: Deploy (production, prebuilt)
         run: npx --yes vercel@63.1.0 deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN"
 
+      - name: Post-deploy smoke check (production alias serves the prerendered build)
+        # AUD-G-15: a 200 on /login is not enough -- the SPA shell answers 200
+        # too, and that is exactly what ships when the prerender step did not
+        # run (Vercel's own build image, before this workflow prebuilt on the
+        # runner). The prerendered `/login` document carries its markup and the
+        # inlined first-paint stylesheet, so it is an order of magnitude bigger
+        # than the shell; both facts are asserted, not assumed.
+        run: |
+          set -e
+          shell_size=$(curl -s -o /dev/null -w "%{size_download}" https://bangla-gpt-app.vercel.app/ || true)
+          ok=0
+          for _ in $(seq 1 12); do
+            body=$(curl -s https://bangla-gpt-app.vercel.app/login || true)
+            code=$(curl -s -o /dev/null -w "%{http_code}" https://bangla-gpt-app.vercel.app/login || true)
+            size=${#body}
+            if [ "$code" = "200" ] && [ "$size" -gt 20000 ] && printf '%s' "$body" | grep -q 'data-inlined-stylesheet'; then
+              echo "production alias /login -> 200, ${size} bytes, first-paint stylesheet inlined (shell is ${shell_size} bytes)"
+              ok=1
+              break
+            fi
+            echo "waiting for the prerendered alias (status ${code}, ${size} bytes)"; sleep 5
+          done
+          [ "$ok" = "1" ] || { echo "::error title=Prerender missing::/login is not serving the prerendered document (a shell-sized response means scripts/prerender.mjs did not run in this build); check the 'Install web dependencies and Chromium' step."; exit 1; }
+
       - name: Post-deploy smoke check (production alias, /api/health)
+        # Runs last on purpose: the prerender check above is about the artifact
+        # this workflow just shipped and stays meaningful when the API origin is
+        # down, while this one fails whenever the origin is unreachable.
         # F-048: this used to GET /login. That is a static SPA route served by
         # Vercel's CDN with no origin behind it, so it answered 200 through
         # the entire outage this repository is currently in -- every API call
@@ -153,27 +180,3 @@ jobs:
           done
           echo "::error title=Post-deploy smoke failed::$url never returned 200 after ${max_attempts} attempts (~4 min). Last status: ${code}. A 502 here means the /api proxy could not reach API_ORIGIN (the API origin is down or unreachable); any other status means the alias is not serving the deployed app. The deployment is NOT healthy -- see docs/runbook.md."
           exit 1
-
-      - name: Post-deploy smoke check (production alias serves the prerendered build)
-        # AUD-G-15: a 200 on /login is not enough -- the SPA shell answers 200
-        # too, and that is exactly what ships when the prerender step did not
-        # run (Vercel's own build image, before this workflow prebuilt on the
-        # runner). The prerendered `/login` document carries its markup and the
-        # inlined first-paint stylesheet, so it is an order of magnitude bigger
-        # than the shell; both facts are asserted, not assumed.
-        run: |
-          set -e
-          shell_size=$(curl -s -o /dev/null -w "%{size_download}" https://bangla-gpt-app.vercel.app/ || true)
-          ok=0
-          for _ in $(seq 1 12); do
-            body=$(curl -s https://bangla-gpt-app.vercel.app/login || true)
-            code=$(curl -s -o /dev/null -w "%{http_code}" https://bangla-gpt-app.vercel.app/login || true)
-            size=${#body}
-            if [ "$code" = "200" ] && [ "$size" -gt 20000 ] && printf '%s' "$body" | grep -q 'data-inlined-stylesheet'; then
-              echo "production alias /login -> 200, ${size} bytes, first-paint stylesheet inlined (shell is ${shell_size} bytes)"
-              ok=1
-              break
-            fi
-            echo "waiting for the prerendered alias (status ${code}, ${size} bytes)"; sleep 5
-          done
-          [ "$ok" = "1" ] || { echo "::error title=Prerender missing::/login is not serving the prerendered document (a shell-sized response means scripts/prerender.mjs did not run in this build); check the 'Install web dependencies and Chromium' step."; exit 1; }

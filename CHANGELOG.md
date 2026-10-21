@@ -186,6 +186,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### CI/CD
 
+- ci(deploy): ship the prerendered build from CI, and prove it shipped
 - ci(mobile): avoid the reserved example domain in the android workflow comment
 - ci(security): record the reviewed benchmark fixture in the gitleaks allowlist
 - ci: add CI-gated Vercel production deploy workflow
