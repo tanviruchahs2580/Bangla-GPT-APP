@@ -1,6 +1,6 @@
 # Data-Minimization Review
 
-Scope: every table in `apps/api/src/bangla_gpt_api/db/models.py` plus the
+Scope: every table in `apps/api/src/bangla_gpt_api/db/models/` plus the
 log surfaces. Reviewer: engineering (self-review). **Bangladesh legal
 review is a human step and is NOT done here — see
 [`archive/PROGRESS.md`](archive/PROGRESS.md).**

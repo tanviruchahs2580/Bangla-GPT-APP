@@ -124,7 +124,7 @@ docker run --rm --entrypoint sh python:3.12-slim@sha256:<digest> \
 
 Never replace the digest with the tag.
 
-If you change `apps/api/src/bangla_gpt_api/db/models.py`, add a migration in
+If you change `apps/api/src/bangla_gpt_api/db/models/`, add a migration in
 the same pull request. CI runs `alembic check`, which fails when the models and
 the migration history disagree.
 

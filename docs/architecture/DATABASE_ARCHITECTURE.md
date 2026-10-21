@@ -80,7 +80,7 @@ cd apps/api && alembic heads        # prints "<revision> (head)"
 
 ### Core Tables (from `db/models.py`)
 
-Curated overview; `apps/api/src/bangla_gpt_api/db/models.py` is authoritative and
+Curated overview; `apps/api/src/bangla_gpt_api/db/models/` is authoritative and
 also defines the remaining domain tables (assignments, question banks,
 short tests, question papers, chapter content, revision queue, notifications,
 AI jobs/usage, …).

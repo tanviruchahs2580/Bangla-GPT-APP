@@ -280,6 +280,10 @@
     "workstream",
     "zaproxy",
     "zizmor",
-    "zstd"
+    "zstd",
+    "modulepreload",
+    "prerender",
+    "prerendered",
+    "prerendering"
   ]
 }

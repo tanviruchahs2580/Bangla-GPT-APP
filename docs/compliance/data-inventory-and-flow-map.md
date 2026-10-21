@@ -6,7 +6,7 @@ honest gaps); this document adds the **flow map** the audit register found
 missing and restates the inventory with the schema/code anchor for each store.
 
 Method: every table below is a `__tablename__` in
-`apps/api/src/bangla_gpt_api/db/models.py` (the drift test
+`apps/api/src/bangla_gpt_api/db/models/` (the drift test
 `apps/api/tests/test_b2_docs_compliance.py::test_every_table_appears_in_the_inventory`
 fails when a new table is not added here). Flow arrows are read from the
 routers/services named in the last column.
