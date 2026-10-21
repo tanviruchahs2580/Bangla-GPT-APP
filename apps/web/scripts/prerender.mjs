@@ -195,8 +195,14 @@ async function renderRoot(page, baseUrl, route) {
     if (!root) throw new Error('#root is missing from the served document')
     // An error state is not a prerender: a page that failed to boot must fail
     // the build rather than ship a snapshot of its own error message.
-    if (root.querySelector('[role="alert"], .error')) {
-      throw new Error(`the page rendered an error state: ${where}`)
+    const problem = root.querySelector('[role="alert"], .error')
+    if (problem) {
+      // Name what was found: "an error state" costs a reproduction to diagnose,
+      // and this guard has fired on a loaded build host before (2026-10-21).
+      throw new Error(
+        `the page rendered an error state: ${where} -- ` +
+          `${problem.className || problem.tagName}: ${problem.textContent.slice(0, 160)}`,
+      )
     }
     return window.__prerenderSerialize(root)
   }, route.path)

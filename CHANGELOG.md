@@ -95,6 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(compose): writable HOME for gunicorn's control socket; drop the dead SettingsRegistry
 - fix(db)!: track the db/models package; narrow the /models/ ignore rule
 - fix(db): reconcile ORM/migration drift so alembic check passes
+- fix(deps)+test(e2e): pypdf 6.21.2 for CVE-2026-113786; diagnose the focus flake
 - fix(deps): bump certifi to 2026.10.19 for GHSA-6q48-6c7w-9gw2
 - fix(deps): bump pillow to 13.0.0 for the 2026-11xx CVE cluster
 - fix(deps): bump pypdf to 6.20.1 for the 2026-11xxx advisory pair
@@ -236,6 +237,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(qa): record the role-based acceptance run and the live deployment
 - docs(rag): correct the measured-baseline table to the fixed harness
 - docs(rag): quote the current artifact instead of the pre-regeneration numbers
+- docs(runbook): the prebuilt deploy path, and what a dead API_ORIGIN looks like live
 - docs(spelling): add the three words the operations docs need (promtool, unredacted, pseudonymised)
 - docs: add 2026-10-06 QA audit and final certification reports
 - docs: add a CHANGELOG generated from git history, and a check that keeps it honest
