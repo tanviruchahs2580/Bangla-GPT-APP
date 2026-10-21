@@ -283,9 +283,37 @@ ignore = [
 # `pytest_add_cli_args_test_selection` together.
 # ---------------------------------------------------------------------------
 [tool.mutmut]
-source_paths = ["src/bangla_gpt_api/auth/single_use.py"]
-pytest_add_cli_args_test_selection = ["tests/test_single_use_tokens.py"]
-also_copy = ["tests/", "pyproject.toml"]
+# E-04 names three areas -- authorization, grounding and abstention, quiz
+# scoring -- so the sample mutates one module per area: the single-use claim
+# primitive (the race the authorization layer rests on), the quiz scorer, and
+# the tutor's grounding/abstention gate. One module per area keeps a weekly run
+# bounded; the per-area scores are in .audit/evidence/R5-e04-mutation-score.md.
+source_paths = [
+  "src/bangla_gpt_api/auth/single_use.py",
+  "src/bangla_gpt_api/services/quiz.py",
+  "src/bangla_gpt_api/services/tutor/retrieval.py",
+]
+pytest_add_cli_args_test_selection = [
+  "tests/test_single_use_tokens.py",
+  "tests/test_quiz_progress.py",
+  "tests/test_r5_citation_selection.py",
+  "tests/test_corpus_qa_gate.py",
+]
+# E-04: the mutants tree must be importable IN FULL. `source_paths` copies only
+# the mutated file, so without `src/` the copy holds a partial
+# `mutants/src/bangla_gpt_api` package that shadows the complete one for the
+# copied conftest: pytest then dies with
+# `ModuleNotFoundError: No module named 'bangla_gpt_api.config'` before a single
+# mutant runs (measured in the container recipe, 2026-10-21). `prompts/` is the
+# same requirement one layer up: the registry loads prompts/manifest.json at
+# import time, so a copy without it fails every test that touches the app with
+# `RuntimeError: prompt registry missing` (measured 2026-10-21, quiz area).
+# `eval/` is the third: the eval-shape tests read the golden set (and its
+# siblings) by path, and a copy without them fails collection (measured
+# 2026-10-21, grounding area: FileNotFoundError: mutants/eval/golden_v2.json --
+# a single-file entry in also_copy is not enough, mutmut 3 copies a file
+# list but the tests resolve sibling artifacts too).
+also_copy = ["tests/", "prompts/", "eval/", "pyproject.toml", "src/"]
 use_git_change_detection = false
 mutate_only_covered_lines = true
 

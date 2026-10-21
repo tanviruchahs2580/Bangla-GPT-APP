@@ -162,6 +162,58 @@ def test_expired_code_cannot_be_claimed(file_db):
         )
 
 
+def test_code_at_its_expiry_instant_is_still_claimable(file_db):
+    """The boundary is inclusive (`expires_at >= now`): a code whose expiry is
+    exactly the claim instant is valid, one second later is not.
+
+    E-04/`mutmut` found this unpinned: flipping `>=` to `>` survived the whole
+    suite, because every existing expiry test sits a minute away from the
+    boundary. A one-second slack either side of the instant pins it.
+    """
+    expiry = datetime.now(UTC).replace(tzinfo=None)
+    with Session(file_db) as s:
+        user, token_hash = _seed(s)
+        s.add(
+            EmailVerification(
+                user_id=user.id,
+                token_hash=token_hash,
+                expires_at=expiry,
+            )
+        )
+        s.commit()
+        assert (
+            claim_single_use(
+                s,
+                EmailVerification,
+                hash_column=EmailVerification.token_hash,
+                hash_value=token_hash,
+                now=expiry,
+            )
+            is True
+        ), "a code claimed at its exact expiry instant must be accepted"
+
+    with Session(file_db) as s:
+        user, token_hash = _seed(s)
+        s.add(
+            EmailVerification(
+                user_id=user.id,
+                token_hash=token_hash,
+                expires_at=expiry,
+            )
+        )
+        s.commit()
+        assert (
+            claim_single_use(
+                s,
+                EmailVerification,
+                hash_column=EmailVerification.token_hash,
+                hash_value=token_hash,
+                now=expiry + timedelta(seconds=1),
+            )
+            is False
+        ), "one second past the expiry must be rejected"
+
+
 def test_unknown_hash_cannot_be_claimed(file_db):
     with Session(file_db) as s:
         now = datetime.now(UTC).replace(tzinfo=None)

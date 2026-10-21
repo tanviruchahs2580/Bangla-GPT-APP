@@ -105,12 +105,17 @@ async def run_ttft_profile(args: argparse.Namespace) -> int:
     from bangla_gpt_api.retrieval.hybrid_index import HybridIndex
 
     index = HybridIndex(load_sample_corpus(), build_embedder(settings))
+    # A9-01 measurement correctness: the free-tier pacing is HARNESS overhead,
+    # not product latency, so it belongs outside the timed window. The pacer
+    # below spaces call starts; the recorder must not also sleep, or the sleep
+    # lands inside the measurement and reports a product number the product
+    # does not have.
     recorder = BudgetedRecordingProvider(
         provider,
         model=args.model,
         max_usd=args.max_usd,
         resume=[],
-        min_interval=args.min_interval,
+        min_interval=0.0,
         sink_path=out_dir / "ttft_recorded_responses.jsonl",
     )
     tutor = TutorService(index=index, provider=recorder, fast_provider=None)
@@ -133,6 +138,7 @@ async def run_ttft_profile(args: argparse.Namespace) -> int:
     pacer = _StartPacer(args.min_interval)
     ttft_s: list[float] = []
     total_s: list[float] = []
+    prompt_chars: list[int] = []
 
     failures: list[str] = []
 
@@ -140,12 +146,15 @@ async def run_ttft_profile(args: argparse.Namespace) -> int:
         """One streamed answer; a failed call is recorded, never aborts the run.
 
         A latency profile that dies on the first 429 describes nothing: the
-        failures are counted and reported next to the percentiles.
+        failures are counted and reported next to the percentiles. The clock
+        starts AFTER the pacer's wait, so the per-call numbers are the
+        pipeline's own latency and not the harness's throttle.
         """
         async with gate:
             await pacer.wait()
             started = time.perf_counter()
             ttft: float | None = None
+            prompt_chars.append(len(str(item.get("question") or "")))
             try:
                 async for event in tutor.ask_stream(
                     item["question"], item["class_level"], item.get("subject") or None
@@ -177,16 +186,20 @@ async def run_ttft_profile(args: argparse.Namespace) -> int:
             "ttft_seconds": _percentiles(ttft_s),
             "total_answer_seconds": _percentiles(total_s),
             "retrieval_only_ms": _percentiles(retrieval_ms),
+            "question_chars": _percentiles([float(value) for value in prompt_chars]),
             "budgets": {
                 "ttft_p95_seconds": 3.0,
                 "total_p95_seconds": 12.0,
                 "retrieval_p95_ms": 300.0,
             },
             "caveat": (
-                "TTFT and total include the free-tier pacing sleep, which sits "
-                "inside the provider call; the pacing is removed from the "
-                "product path, so these are upper bounds. Retrieval-only is "
-                "measured without a provider call."
+                "Per-call timings start AFTER the harness pacer's wait: the "
+                "free-tier pacing is harness overhead, not product latency, and "
+                "it is excluded by construction (the recorder is built with "
+                "min_interval=0 so nothing sleeps inside the measured window). "
+                "What remains is the pipeline plus the free-tier model's own "
+                "queueing on this host. Retrieval-only is measured without a "
+                "provider call."
             ),
             "recordings": str(out_dir / "ttft_recorded_responses.jsonl"),
         },

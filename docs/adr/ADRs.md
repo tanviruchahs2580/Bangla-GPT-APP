@@ -132,6 +132,27 @@ a code change:
   ../../data/nctb --out ../../data/nctb/embedding_eval.json` (the harness reads
   the embedder from configuration and records its name in the artifact).
 
+### Cache and resume (2026-10-21)
+
+The quota no longer costs the whole measurement. The adapter caches every
+vector on disk (`EMBEDDING_CACHE_PATH`) and the harness reads that cache before
+calling the provider, so a run the vendor cuts off at the daily ceiling banks
+everything it fetched and the next run resumes from there:
+
+- second live probe: **OK**, 768-dimension vectors for Bangla text (2026-10-21);
+- the corpus-scale attempt the same day ended in the same vendor 429
+  (`gemini embeddings rate-limited: 6 retries exhausted`), and the cache file
+  recorded **825 vectors** (it grew 7,247,403 → 8,727,403 bytes) — a partial
+  run is progress, not a loss;
+- pacing is configurable (`EMBEDDING_MIN_INTERVAL_SECONDS`) and 429 responses
+  are retried with the vendor's own retry hint, so the day's budget is spent
+  rather than thrown away on a burst.
+
+The remaining gap is therefore *only* the tier: with quota, the same command
+finishes and the lane comparison with the real model lands in
+`retrieval-variants.md`. Full record:
+`.audit/evidence/R5-a402-embedding-lane.md`.
+
 ## Status
 
 Accepted — Default mode in production. The vector lane serves the deterministic

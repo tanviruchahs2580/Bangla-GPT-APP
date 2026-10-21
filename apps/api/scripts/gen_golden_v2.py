@@ -37,10 +37,17 @@ from pathlib import Path
 
 from bangla_gpt_api.data.loader import load_sample_corpus
 from bangla_gpt_api.retrieval.bm25 import tokenize
+from bangla_gpt_api.retrieval.hybrid import light_stem
+from bangla_gpt_api.retrieval.query_analysis import is_framing_term, is_stop_word
 
 # gloss question "<heading> \u0995\u09c0?"
 T_GLOSS = "{} \u0995\u09c0?"
-WINDOW_SUFFIX = " \u0995\u09c0?"
+#: A8-08 (2026-10-21): the contextual frame. The window's terms are the topic;
+#: the frame asks for an explanation of them, which is what a curriculum
+#: question does. The frame's words are instruction-frame vocabulary
+#: (query_analysis.QUESTION_FRAMING_WORDS), so they never enter a coverage
+#: account -- the answerability criterion still reads the WINDOW itself.
+WINDOW_SUFFIX = " \u09ac\u09b2\u09a4\u09c7 \u0995\u09c0 \u09ac\u09cb\u099d\u09be\u09df?"
 KI = "\u0995\u09c0"  # "কী"
 MAX_ITEMS_PER_SECTION = 8
 MIN_CONTAINMENT = 0.8  # fraction of the question's content terms in the section
@@ -60,9 +67,76 @@ def _clean_term(section: str) -> str:
     return term
 
 
+def _gloss_question(section: str) -> str:
+    """The definition-stratum question for a section heading.
+
+    A heading that is already a question ("কোষ কী") must not be asked twice:
+    appending the frame produced "কোষ কী কী?" (measured on the sample corpus,
+    2026-10-21), which is a malformed item of the same family the contextual
+    fix removes. The heading is used as the question when it already asks one,
+    and only the frame's *content* words matter for containment, so this
+    changes the item's wording, never its answerability criterion.
+    """
+    term = _clean_term(section)
+    if not term:
+        return ""
+    if term.rstrip().endswith(("?", "؟")) or term.split()[-1] in (KI, "কি"):
+        return term
+    return T_GLOSS.format(term)
+
+
+#: Bangla number words: a closed class whose window form is the fragment
+#: "চাপ দুই কী?". Digits are handled separately (grade markers, \u09e6-\u09ef).
+BANGLA_NUMERALS = frozenset(
+    {
+        "\u098f\u0995",  # এক
+        "\u09a6\u09c1\u0987",  # দুই
+        "\u09a4\u09bf\u09a8",  # তিন
+        "\u099a\u09be\u09b0",  # চার
+        "\u09aa\u09be\u0981\u099a",  # পাঁচ
+        "\u099b\u09df",  # ছয়
+        "\u09b8\u09be\u09a4",  # সাত
+        "\u0986\u099f",  # আট
+        "\u09a8\u09df",  # নয়
+        "\u09a6\u09b6",  # দশ
+    }
+)
+
+
+def _is_question_shape_term(token: str) -> bool:
+    """True for a token that must not be used to build a generated question.
+
+    A8-08 (2026-10-21): the contextual stratum used to take a window of any
+    three-or-more-character tokens, so windows landed mid-clause and the item
+    read as a fragment ("থাকলে হলো কী?", "চাপ দুই কী?", "নেই বিন্দু কী?"). The
+    live model refused such items -- correctly, they are not questions -- and
+    those refusals were scored as the system's false refusals (0.0718 live).
+    The filter is the app's own closed-class vocabulary, not a curated list of
+    exceptions: function words and instruction framing from
+    ``retrieval.query_analysis``, numerals, grade-numeric tokens, and anything
+    shorter than ``MIN_TERM_LEN``.
+    """
+    stemmed = light_stem(token)
+    return (
+        len(token) < MIN_TERM_LEN
+        or token in BANGLA_NUMERALS
+        or stemmed in BANGLA_NUMERALS
+        or token[0] in "0123456789\u09e6\u09e7\u09e8\u09e9\u09ea\u09eb\u09ec\u09ed\u09ee\u09ef"
+        or is_stop_word(token)
+        or is_stop_word(stemmed)
+        or is_framing_term(token)
+        or is_framing_term(stemmed)
+    )
+
+
 def _content_terms(text: str) -> list[str]:
-    """Consecutive content terms of a text, in order (len >= MIN_TERM_LEN)."""
-    return [t for t in tokenize(text) if len(t) >= MIN_TERM_LEN]
+    """Consecutive content terms of a text, in order (surface forms kept).
+
+    Content = not a function word, not instruction framing, not a numeral, not
+    a grade marker (see :func:`_is_question_shape_term`). Surface forms are
+    kept, so a generated question reads as the textbook's own wording.
+    """
+    return [t for t in tokenize(text) if not _is_question_shape_term(t)]
 
 
 def _containment(question: str, section_terms: set[str]) -> float:
@@ -71,6 +145,16 @@ def _containment(question: str, section_terms: set[str]) -> float:
     if not q_terms:
         return 0.0
     return sum(1 for t in q_terms if t in section_terms) / len(q_terms)
+
+
+#: Clause boundaries: Bangla sentence enders and the separators a printed
+#: curriculum paragraph uses between clauses. A window never crosses one.
+_CLAUSE_SPLIT = re.compile(r"[\u0964?!\u0965,;:\u2013\u2014\n]+")
+
+
+def _clauses(text: str) -> list[str]:
+    """The text's clauses, in order (see :data:`_CLAUSE_SPLIT`)."""
+    return [part for part in (p.strip() for p in _CLAUSE_SPLIT.split(text)) if part]
 
 
 def _split_of(question: str) -> str:
@@ -221,16 +305,21 @@ def main() -> int:
         section_terms = set(_content_terms(chunk.text))
 
         candidates: list[tuple[str, str]] = []  # (question, stratum)
-        term = _clean_term(meta.section)
-        if term:
-            candidates.append((T_GLOSS.format(term), "definition"))
-        cterms = _content_terms(chunk.text)
-        for size in (2, 3):
-            for i in range(len(cterms) - size + 1):
-                window = cterms[i : i + size]
-                if all(t == KI for t in window):
-                    continue
-                candidates.append((" ".join(window) + WINDOW_SUFFIX, "contextual"))
+        gloss = _gloss_question(meta.section)
+        if gloss:
+            candidates.append((gloss, "definition"))
+        # A8-08: windows are taken INSIDE one clause. A sliding window over the
+        # whole section pairs the end of one clause with the start of the next
+        # ("একককে কোষ", "থাকলে হলো"), which is how the fragments the live model
+        # refused were built.
+        for clause in _clauses(chunk.text):
+            cterms = _content_terms(clause)
+            for size in (2, 3):
+                for i in range(len(cterms) - size + 1):
+                    window = cterms[i : i + size]
+                    if all(t == KI for t in window):
+                        continue
+                    candidates.append((" ".join(window) + WINDOW_SUFFIX, "contextual"))
 
         kept = 0
         for question, stratum in candidates:
@@ -299,9 +388,12 @@ def main() -> int:
         "rule": (
             "positives: section-heading glosses and 2/3-term content windows kept "
             "when the section text itself contains >=80% of the question's content "
-            "terms (len>=3) -- the tutor, its gate and the retrieval index are NOT "
-            "consulted (independence, AUD-A2-02); negatives: tokens asserted absent "
-            "from the whole corpus; split: sha256(question) 70/30 dev/test"
+            "terms -- the tutor, its gate and the retrieval index are NOT "
+            "consulted (independence, AUD-A2-02); a window is a run of CONTENT "
+            "terms inside one clause (closed-class words, numerals and grade "
+            "markers never enter a question: A8-08 revision, 2026-10-21); "
+            "negatives: tokens asserted absent from the whole corpus; split: "
+            "sha256(question) 70/30 dev/test"
         ),
         "counts": {
             "items": len(items),

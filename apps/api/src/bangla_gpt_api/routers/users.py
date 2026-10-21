@@ -173,10 +173,14 @@ def delete_me(db: DbSession, user: NonImpersonatedUser) -> Response:
             .where(ParentInvite.used_by_parent_id == parent.id)
             .values(used_by_parent_id=None)
         )
-        db.delete(parent)
+        # Core delete, not db.delete(): the unit of work orders the profile
+        # deletes by the model's module path, so an ORM delete here can be
+        # emitted AFTER the users delete below and the parent FK aborts the
+        # erasure (C-03 regression). Executed order is written order.
+        db.execute(delete(Parent).where(Parent.id == parent.id))
     if teacher is not None:
         db.execute(delete(ClassTeacher).where(ClassTeacher.teacher_id == teacher.id))
-        db.delete(teacher)
+        db.execute(delete(Teacher).where(Teacher.id == teacher.id))
     if student is not None:
         attempt_ids = (
             db.execute(select(QuizAttempt.id).where(QuizAttempt.student_id == student.id))
@@ -228,7 +232,9 @@ def delete_me(db: DbSession, user: NonImpersonatedUser) -> Response:
         db.execute(delete(SupportPlan).where(SupportPlan.student_id == student.id))
         db.execute(delete(ConceptMastery).where(ConceptMastery.student_id == student.id))
         db.execute(delete(StudentAbility).where(StudentAbility.student_id == student.id))
-        db.delete(student)
+        # Same reason as the parent profile above: explicit Core delete, so the
+        # students row is gone before the users row in the same transaction.
+        db.execute(delete(Student).where(Student.id == student.id))
 
     # User-scoped rows (any role), removed before the users row itself.
     db.execute(delete(PasswordReset).where(PasswordReset.user_id == user.id))

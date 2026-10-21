@@ -22,7 +22,6 @@ from pathlib import Path
 
 import pytest
 
-from bangla_gpt_api.services import tutor
 from bangla_gpt_api.services.tutor import TutorService
 
 REPO_REAL_CORPUS = Path(__file__).resolve().parents[3] / "data" / "nctb"
@@ -95,7 +94,10 @@ def test_majority_absent_terms_refuse() -> None:
 
 def test_all_terms_absent_refuses_and_keeps_the_out_of_domain_label() -> None:
     events: list[tuple[str, dict]] = []
-    import bangla_gpt_api.services.tutor as tutor_module
+    # C-03: `_coverage_details` — the method under test — lives in the tutor
+    # package's retrieval seam, and that is the module whose `json_log` the
+    # gate writes through.
+    from bangla_gpt_api.services.tutor import retrieval as tutor_module
 
     original = tutor_module.json_log
 
@@ -192,8 +194,14 @@ class _MockNoopProvider:
 
 
 def test_gate_rule_documented_number_is_recorded() -> None:
-    """The module documents the measured numbers the rule came from."""
+    """The module documents the measured numbers the rule came from.
+
+    C-03: the gate moved into the tutor package's retrieval seam, so the
+    documentation being pinned lives there, not at the package root.
+    """
     import inspect
 
-    source = inspect.getsource(tutor)
+    from bangla_gpt_api.services.tutor import retrieval as gate_module
+
+    source = inspect.getsource(gate_module)
     assert "mostly absent" in source or "majority" in source

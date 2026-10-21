@@ -125,6 +125,12 @@ Two findings this table makes unavoidable, and neither is papered over:
    vector lane's latency is paid for one family's 2 pp in these families.
    That is the measured case for the embedding-model work (A4-02), and the
    reason the ADR is an owner decision rather than a claim.
+   **The real model is wired** (`retrieval/gemini_embedder.py`, 768 dims behind
+   the same `Embedder` protocol, licence/limits in ADR-0003): the same command
+   with `EMBEDDING_MODEL=gemini-embedding-001` swaps the lane, and the run
+   resumes off `EMBEDDING_CACHE_PATH` after the free tier's daily 429 — the
+   cache held 825 vectors after the 2026-10-21 attempt. Until a key with quota
+   runs it to the end, the numbers above stay the hashing lane's.
 2. **The reranker's measurable gain on the golden split is +1.65 points of
    Recall@1** (0.9171 served vs 0.9006 rerank-off). On the real corpus the
    two differ by that same 2 pp on family A and are identical on B/D. Its

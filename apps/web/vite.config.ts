@@ -1,4 +1,6 @@
 import { defineConfig, type Plugin } from 'vite'
+import { existsSync, statSync } from 'node:fs'
+import { extname, join } from 'node:path'
 import react from '@vitejs/plugin-react'
 
 /**
@@ -33,15 +35,24 @@ function cacheControl(): Plugin {
  * AUD-G-03 (G-15): the webfonts that paint the first screen must not wait for
  * the stylesheet to arrive and be parsed. Lighthouse measured the LCP element
  * on /welcome and /login as text whose font request only started ~500 ms after
- * the CSS was already in the browser; the two faces below are the ones that
- * first paint needs (body 400 and heading 700 of the primary family, Bengali
- * subset -- the Latin subsets stay on demand so they do not compete with the
- * entry bundle). The URLs are content-hashed, so they are read out of the
+ * the CSS was already in the browser; the faces below are the ones that first
+ * paint needs (body 400 and heading 700 of the primary family, Bengali and
+ * Latin subsets). The URLs are content-hashed, so they are read out of the
  * emitted CSS instead of being hard-coded here.
+ *
+ * AUD-G-15 follow-up: the Latin subsets used to stay on demand "so they do not
+ * compete with the entry bundle", but the prerendered public routes now paint
+ * their text at first paint, so a request that only starts at the first layout
+ * lands on already-painted text: on /privacy the Latin 400/700 faces arrived
+ * 142 ms after the HTML (the preloaded Bengali faces arrived at 20 ms) and the
+ * swap moved every section, CLS 0.1367 -- 81 px of document growth measured on
+ * the built app. 21 kB of woff2 preloaded with the Bengali faces removes it.
  */
 const FIRST_PAINT_FACES = [
   'noto-sans-bengali-bengali-400-normal',
   'noto-sans-bengali-bengali-700-normal',
+  'noto-sans-bengali-latin-400-normal',
+  'noto-sans-bengali-latin-700-normal',
 ]
 
 function preloadFirstPaintFonts(): Plugin {
@@ -79,8 +90,39 @@ function preloadFirstPaintFonts(): Plugin {
   }
 }
 
+/**
+ * AUD-G-15: `npm run build` writes the prerendered public routes to
+ * `dist/<route>/index.html`. Production resolves those URL forms without a
+ * trailing slash (nginx `try_files $uri $uri/ /index.html`, Vercel's
+ * filesystem handler), but Vite 5's preview fallback only looks for
+ * `dist/<route>.html` and then `/index.html`, so `/welcome` got the empty SPA
+ * shell that the prerender exists to remove -- and it is `vite preview` the
+ * Playwright suite drives. Rewrite a directory-index request to the file that
+ * is actually there; everything else keeps falling through untouched.
+ */
+function previewRouteIndex(): Plugin {
+  return {
+    name: 'bgpt-preview-route-index',
+    configurePreviewServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const path = (req.url ?? '/').split('?')[0]
+        const file = join(server.config.root, 'dist', path, 'index.html')
+        if (
+          path !== '/' &&
+          !extname(path) &&
+          existsSync(file) &&
+          statSync(file).isFile()
+        ) {
+          req.url = `${path}/index.html`
+        }
+        next()
+      })
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [react(), cacheControl(), preloadFirstPaintFonts()],
+  plugins: [react(), cacheControl(), previewRouteIndex(), preloadFirstPaintFonts()],
   server: {
     port: 5173,
     proxy: {

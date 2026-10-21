@@ -97,11 +97,11 @@ async def _run(args: argparse.Namespace) -> int:
         sink_path=recordings_path,
     )
 
-    from bangla_gpt_api.evaluation.generation import (
+    from bangla_gpt_api.evaluation.generation import run_generation_report
+    from bangla_gpt_api.evaluation.judge import (
         judge_prompt_path,
         judge_prompt_version,
         load_judge_harness,
-        run_generation_report,
     )
     from bangla_gpt_api.retrieval.embedding import build_embedder
     from bangla_gpt_api.retrieval.hybrid_index import HybridIndex

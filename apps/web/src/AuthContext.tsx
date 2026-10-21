@@ -7,6 +7,7 @@ import {
 } from "react";
 import {
   fetchMe,
+  getToken,
   logout,
   setUnauthorizedHandler,
   type MeResponse,
@@ -30,13 +31,21 @@ const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<MeResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  // AUD-G-15: with no stored token there is no session to verify — fetchMe()
+  // answers "unauthenticated" without a request — so an anonymous visitor's
+  // first render is the real public page, which is the state the prerendered
+  // HTML hydrated against. Starting in `loading` made the first commit a
+  // skeleton that the real page then replaced (the pending-shell flash).
+  const [loading, setLoading] = useState(() => getToken() !== null);
   const [apiUnreachable, setApiUnreachable] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    // Re-entering the pending state is only meaningful when there is a token
+    // to probe (a retry after an outage); `setLoading(false)` is a no-op on
+    // the anonymous path, so it cannot reintroduce the flash.
+    setLoading(getToken() !== null);
     fetchMe()
       .then((result) => {
         if (cancelled) return;

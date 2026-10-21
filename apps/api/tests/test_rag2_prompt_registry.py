@@ -27,6 +27,7 @@ import pytest
 
 from bangla_gpt_api.services import tutor
 from bangla_gpt_api.services.safety import AGE_RULE_SENTENCE
+from bangla_gpt_api.services.tutor import generation as tutor_generation
 
 PROMPTS_DIR = Path(__file__).resolve().parents[1] / "prompts"
 MANIFEST = json.loads((PROMPTS_DIR / "manifest.json").read_text(encoding="utf-8"))
@@ -277,7 +278,9 @@ def test_generation_trace_carries_the_prompt_version(monkeypatch: pytest.MonkeyP
     def _capture(event: str, **fields: object) -> None:
         events.append((event, fields))
 
-    monkeypatch.setattr(tutor, "trace_event", _capture)
+    # C-03: `_trace_generation` moved into the generation seam of the tutor
+    # package, so the trace sink is patched where that method reads it.
+    monkeypatch.setattr(tutor_generation, "trace_event", _capture)
     service = tutor.TutorService.__new__(tutor.TutorService)
     service.index_version = "corpus-fp"
     service._trace_generation(

@@ -62,10 +62,10 @@ def _roster_signals(db: DbSession, ids: list[int]) -> tuple[dict[int, str], dict
         .group_by(QuizAttempt.student_id)
     ).all():
         if ts is None:
-            # Unreachable per the model (created_at is NOT NULL), but
-            # legacy SQLite rows may predate that constraint; skipping is
-            # the safe response if one appears.
-            continue  # type: ignore[unreachable]  # model says NOT NULL, but legacy SQLite rows can still carry NULL; skip defensively.
+            # Unreachable per the model (created_at is NOT NULL), but legacy
+            # SQLite rows may predate that constraint; skipping is the safe
+            # response if one appears.
+            continue  # type: ignore[unreachable]
         iso = str(ts)[:10]
         if sid not in last_day or iso > last_day[sid]:
             last_day[sid] = iso

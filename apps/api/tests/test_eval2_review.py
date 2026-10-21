@@ -35,7 +35,9 @@ def _items() -> list[dict]:
 def test_synthetic_rows_cover_every_synthetic_item_with_blank_human_columns() -> None:
     items = _items()
     rows = review_sheet.build_synthetic_rows(items)
-    assert len(rows) == sum(1 for item in items if item["synthetic"]) == 646
+    # the count is the artifact's, not a constant: the golden set is
+    # versioned and a revision changes it (A8-08, 2026-10-21: 646 -> 643)
+    assert len(rows) == sum(1 for item in items if item["synthetic"])
     ids = [row["item_id"] for row in rows]
     assert len(set(ids)) == len(ids), "item ids must be unique"
     for row in rows:
@@ -111,7 +113,7 @@ def test_export_queue_skips_decided_items_and_orders_by_priority(
         == 0
     )
     exported = review_sheet.read_sheet(sheet)
-    assert len(exported) == 645, "the one reviewed item must leave the queue"
+    assert len(exported) == len(items) - 1, "the one reviewed item must leave the queue"
     assert rows[0]["item_id"] not in {row["item_id"] for row in exported}
     assert exported[0]["expected"] == "refuse", "must-refuse items are worked first"
 
@@ -127,7 +129,7 @@ def test_queue_priority_is_stable_and_documented() -> None:
         for item in ordered
     ]
     assert ranks == sorted(ranks)
-    assert len(ordered) == 646
+    assert len(ordered) == len(_items())
 
 
 def test_appropriateness_sample_is_stratified_and_deterministic() -> None:

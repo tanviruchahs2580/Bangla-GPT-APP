@@ -14,8 +14,9 @@
  *      and starts uvicorn with the deterministic `mock` LLM provider.
  *   3. If http://127.0.0.1:5183/ already answers 200, that web server is
  *      reused (that is `vite preview`, which mirrors the production caching
- *      policy); otherwise a static server starts here: `dist/` with SPA
- *      fallback, `/api` proxied the way `vite.config.ts` proxies it, and
+ *      policy); otherwise a static server starts here: `dist/` with the
+ *      prerendered route indexes, SPA fallback, `/api` proxied the way
+ *      `vite.config.ts` proxies it, and
  *      `Cache-Control: immutable` on `/assets/*`.
  *   4. Prints `audit stack ready` (the readiness line lighthouserc.json
  *      waits for) and stays alive until killed, so the audit sees a stable
@@ -151,8 +152,14 @@ function serveStatic(req, res) {
     res.writeHead(403).end('forbidden')
     return
   }
-  const file =
-    existsSync(candidate) && statSync(candidate).isFile() ? candidate : join(DIST, 'index.html')
+  // Directory-index resolution (AUD-G-15): `/welcome` serves the prerendered
+  // `dist/welcome/index.html` that `npm run build` writes. Production resolves
+  // it the same way (nginx `try_files $uri $uri/ /index.html`, Vercel's
+  // filesystem handler), so this server must not fall through to the SPA
+  // shell for a route that has its own document.
+  const file = [candidate, join(candidate, 'index.html')].find(
+    (each) => existsSync(each) && statSync(each).isFile(),
+  ) ?? join(DIST, 'index.html')
   res.setHeader(
     'Cache-Control',
     rawPath.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache',

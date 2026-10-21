@@ -23,12 +23,20 @@ import { initLowData } from "./lib/lowData";
 // AUD-HI-07 / I-12: Sentry + web-vitals are consent-gated; nothing leaves the
 // device until the user opts in (see lib/telemetry.ts and the MePage toggle).
 import { initTelemetry } from "./lib/telemetry";
+// AUD-G-15: the seven prerendered routes are static imports on purpose. A
+// lazy() route suspends on its first client render, and during hydration that
+// suspension replaced the prerendered document with the pending shell --
+// measured CLS 0.1227 on /welcome, i.e. the exact shift the prerender exists
+// to remove (the fallback's main is short, so the footer drops when the real
+// page commits). Static imports make the first client render the tree that
+// was shipped. Every other route stays lazy.
+import LoginPage from "./pages/LoginPage";
+import WelcomePage from "./pages/WelcomePage";
+import RegisterPage from "./pages/RegisterPage";
+import ForgotResetPage from "./pages/ForgotResetPage";
+import LegalPage from "./pages/LegalPage";
+import StatusPage from "./pages/StatusPage";
 
-const LoginPage = lazy(() => import("./pages/LoginPage"));
-const WelcomePage = lazy(() => import("./pages/WelcomePage"));
-const RegisterPage = lazy(() => import("./pages/RegisterPage"));
-const ForgotResetPage = lazy(() => import("./pages/ForgotResetPage"));
-const LegalPage = lazy(() => import("./pages/LegalPage"));
 const HomePage = lazy(() => import("./pages/student/HomePage"));
 const AITutorPage = lazy(() => import("./pages/student/AITutorPage"));
 const QuizPage = lazy(() => import("./pages/student/QuizPage"));
@@ -60,7 +68,6 @@ const TeacherProfilePage = lazy(
 const ParentDashboard = lazy(() => import("./pages/ParentDashboard"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const SchoolDashboard = lazy(() => import("./pages/SchoolDashboard"));
-const StatusPage = lazy(() => import("./pages/StatusPage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -113,7 +120,18 @@ function RequireAuth({
   // error keeps the nav/sidebar alive and clears when the route changes.
   return (
     <AppShell>
-      <RouteErrorBoundary>{children}</RouteErrorBoundary>
+      <RouteErrorBoundary>
+        {/* AUD-G-15: the boundary belongs here, per signed-in route, not around
+            the whole route switch. A prerendered public page is captured from a
+            client render, so it carries none of React's `<!--$-->` suspense
+            markers, and hydrating a tree that contains a boundary without them
+            fails outright (React #418) -- the audit's crawl watches exactly
+            that error. Loading a signed-in route's chunk now also leaves the
+            shell and the footer mounted, which is the same CLS fix as above.
+            Every `lazy()` route in this file is reached through RequireAuth,
+            so no lazy component is left without a boundary. */}
+        <Suspense fallback={<Loading />}>{children}</Suspense>
+      </RouteErrorBoundary>
     </AppShell>
   );
 }
@@ -378,10 +396,16 @@ function App() {
         {/* AUD-G-02: first focusable element on every screen, above both the
             public routes and the authenticated shell. */}
         <SkipLink />
-        <Suspense fallback={<Loading />}>
-          <RoutesSwitch />
-          <Footer />
-        </Suspense>
+        {/* AUD-G-15: no Suspense boundary wraps this switch. Every route the
+            prerender writes (the seven public ones) is a static import and
+            renders synchronously, and a boundary here would put a `<Suspense>`
+            in the hydrating tree of every prerendered page -- which React only
+            accepts with the `<!--$-->` markers its own server renderer emits.
+            The lazy signed-in routes carry their own boundary inside
+            RequireAuth, and the footer stays mounted for both, which is what
+            the CLS fix (footer.footer moving) was about. */}
+        <RoutesSwitch />
+        <Footer />
       </LangRoot>
     </BrowserRouter>
   );
@@ -415,7 +439,8 @@ initLowData();
 initInstallPrompt();
 // Consent-gated: a no-op unless the user opted in (AUD-HI-07).
 initTelemetry();
-ReactDOM.createRoot(document.getElementById("root")!).render(
+const container = document.getElementById("root")!;
+const app = (
   <React.StrictMode>
     {/* Last-resort boundary for errors above the routes (providers, shell);
         per-route recovery lives in RouteErrorBoundary (F-001). */}
@@ -426,8 +451,19 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         </AuthProvider>
       </QueryClientProvider>
     </AppErrorBoundary>
-  </React.StrictMode>,
+  </React.StrictMode>
 );
+// AUD-G-15: `scripts/prerender.mjs` ships the seven public routes with this
+// markup already rendered, so the first paint is the real page and hydration
+// keeps those nodes instead of repainting them. Two cases take the client
+// render: an empty #root (a route that was not prerendered) and a stored
+// token (the shipped markup is always the anonymous page, so it is not the
+// tree this session renders).
+if (container.hasChildNodes() && !getToken()) {
+  ReactDOM.hydrateRoot(container, app);
+} else {
+  ReactDOM.createRoot(container).render(app);
+}
 
 // PWA: register the service worker in production builds only — in dev the
 // cache-first strategy would serve stale Vite modules and break HMR.

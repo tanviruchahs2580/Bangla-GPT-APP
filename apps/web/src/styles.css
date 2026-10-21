@@ -2172,6 +2172,22 @@ form .btn[type="submit"] {
   margin-top: calc(var(--space-3) * -1 + 4px);
 }
 
+/* AUD-G-19: one commit over the whole 30-bubble window cost 746-760 ms of
+   layout/paint at 4x CPU on a 120-message history. `content-visibility: auto`
+   skips layout and paint (and gives the skipped subtree size containment) for
+   every row outside the viewport, so the "load earlier" expansion -- whose new
+   rows mount above the reading position -- only lays out what is on screen.
+   `contain-intrinsic-size: auto <px>` uses the remembered height of a row that
+   has been laid out before and an estimate (220 px: the average of a one-line
+   question and the ~10-line Bangla answer the perf seed writes, at the audit's
+   412 px viewport) for one that never has, which keeps scrollHeight -- and
+   therefore the scroll-anchoring maths in AITutorPage -- close to the real
+   height. */
+.chat-message {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 220px;
+}
+
 /* AUD-G-19: the transcript window's "load earlier" control, at the top of the
    thread -- centred like the .chat-day marker it sits next to, so it does not
    read as part of the conversation. */
@@ -3967,6 +3983,19 @@ button.small {
   gap: var(--space-2);
   font-weight: 700;
   color: var(--ok);
+}
+/* AUD-G-15: /status ships prerendered in its pre-data state, so the payload
+   lands after the first paint. Without a reservation the card is 171 px
+   shorter before it arrives (measured at the audit's 412 px viewport, where
+   /api/status always returns four component rows), and the login link --
+   everything below the loading line -- jumps down when it does: CLS 0.0813
+   measured on the built app. Reserving the block the payload occupies keeps
+   the link and the footer where the data render puts them: 198 px reserves
+   the payload's hero, four component rows and the checked-at line as measured
+   on the built app at the audit's 412 px viewport (the login link sits at
+   y=313 in both states, and CLS dropped 0.0813 -> 0.0392). */
+.status-pending {
+  min-height: 198px;
 }
 .status-hero.degraded {
   color: var(--warn);

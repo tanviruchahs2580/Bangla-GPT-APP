@@ -34,6 +34,7 @@ src/
                      theme.ts, tts.ts, voice.ts, analytics.ts, ...
   test/              vitest + Testing Library suites
 e2e/                 Playwright specs (smoke, axe, keyboard, perf, visual)
+scripts/prerender.mjs  writes dist/<route>/index.html for the public routes
 scripts/gen-icons.mjs  PWA icon generation (see note below)
 deploy/nginx.conf    production static-server config
 android/             Capacitor Android project (generated; edit src/, not here)
@@ -55,12 +56,12 @@ proxy, so a built bundle can log in locally too.
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | Vite dev server with the `/api` proxy. |
-| `npm run build` | `tsc` then `vite build` — the type check gates the build. |
+| `npm run build` | `tsc`, `vite build`, then `node scripts/prerender.mjs` — the type check gates the build, and the last step writes `dist/<route>/index.html` for the seven public routes (see below). |
 | `npm test` | Vitest unit/component suite (`vitest run`). |
 | `npm run lint` | ESLint (type-aware, `--max-warnings 0`). CI fails on warnings. |
 | `npm run format:check` | Prettier check (`npm run format` writes). |
-| `npx playwright test` | Browser e2e smoke; the config starts a seeded API and the built app itself (Chromium; WebKit/Firefox nightly). `E2E_PYTHON` selects the API interpreter. |
-| `npm run audit:serve` | Starts the stack Lighthouse CI audits: seeded API (mock provider) plus `dist/` served with the production caching policy and the `/api` proxy; prints `audit stack ready`. |
+| `npx playwright test` | Browser e2e smoke; the config starts a seeded API and the built app itself (Chromium; WebKit/Firefox nightly). `E2E_PYTHON` selects the API interpreter, `E2E_WEB_PORT`/`E2E_API_PORT` move the ports when the defaults are taken. |
+| `npm run audit:serve` | Starts the stack Lighthouse CI audits: seeded API (mock provider) plus `dist/` served with the production caching policy (prerendered route indexes included) and the `/api` proxy; prints `audit stack ready`. |
 | `npx size-limit` | Bundle-size budgets (config in `package.json`); needs a prior `npm run build`. |
 | `npm run cap:sync` | Build and sync the Capacitor Android project. |
 
@@ -69,6 +70,21 @@ CI runs exactly these (`ci.yml`: web job; `e2e-smoke` job) plus
 
 ## Things a contributor will trip over
 
+- **The seven public routes are prerendered** (`/welcome`, `/login`, `/register`,
+  `/forgot`, `/privacy`, `/terms`, `/status`). `scripts/prerender.mjs` drives the
+  built `dist/` in Chromium after `vite build` and writes `dist/<route>/index.html`;
+  `src/main.tsx` hydrates that markup when `#root` already has children and there
+  is no stored token. Three rules keep hydration clean, and the e2e crawl fails
+  on the React errors when one is broken: the routes are static imports (a
+  `lazy()` route suspends and the pending shell replaces the shipped markup),
+  no `<Suspense>` boundary may sit in their tree (React only hydrates a boundary
+  with the `<!--$-->` markers its own server renderer emits — the lazy
+  signed-in routes carry their boundary inside `RequireAuth`), and the
+  prerender serializer separates adjacent text-node children with `<!-- -->`
+  exactly like React's SSR (`{a} · {b}` is two text nodes on the client).
+  The build step needs a browser: run `npx playwright install chromium` once, or
+  the build prints a warning and ships the SPA-only bundle (`dist/index.html`
+  serves every route as before).
 - **The API sends naive UTC timestamps.** Never pass one to `new Date(...)`
   directly — use `parseServerDate` from `lib/datetime.ts`, or users outside UTC
   see times off by their whole offset. The file explains the failure it fixes.

@@ -131,7 +131,7 @@ named some steps and not the persistence/feedback ones (AUD-A1-18).
 
 ```mermaid
 flowchart TD
-  Q["Student question (Bangla / Banglish / English)"] --> ROUTE["POST /tutor/ask — JWT + rate limit<br/>bangla_gpt_api/routers/tutor.py ask()"]
+  Q["Student question (Bangla / Banglish / English)"] --> ROUTE["POST /tutor/ask — JWT + rate limit<br/>bangla_gpt_api/routers/tutor/_ask.py ask()"]
   ROUTE --> NORM["query normalisation: NFKC + zero-width strip + digit fold<br/>bangla_gpt_api/retrieval/hybrid.py tokenize()"]
   NORM --> SAFE["injection + safety screen<br/>bangla_gpt_api/services/safety.py screen_question()"]
   SAFE --> QA["content terms, framing/grade removal, gloss + roman lanes<br/>bangla_gpt_api/retrieval/query_analysis.py content_terms()"]
@@ -143,14 +143,14 @@ flowchart TD
   FUSE --> RERANK["deterministic rerank: IDF coverage + proximity + trigram<br/>bangla_gpt_api/retrieval/hybrid_index.py make_lexical_rerank()"]
   RERANK --> DIV["optional MMR diversity (opt-in)<br/>bangla_gpt_api/retrieval/diversity.py mmr_select()"]
   DIV --> CACHE["cache decorator (corpus-fingerprint key)<br/>bangla_gpt_api/caching.py CachedRankingIndex.search()"]
-  CACHE --> GATE["grounding gate: IDF-weighted coverage >= 0.5<br/>bangla_gpt_api/services/tutor.py _coverage_details()"]
-  GATE -->|refuse| ABSTAIN["INSUFFICIENT_EVIDENCE_ANSWER, grounded=false<br/>bangla_gpt_api/services/tutor.py"]
+  CACHE --> GATE["grounding gate: IDF-weighted coverage >= 0.5<br/>bangla_gpt_api/services/tutor/retrieval.py _coverage_details()"]
+  GATE -->|refuse| ABSTAIN["INSUFFICIENT_EVIDENCE_ANSWER, grounded=false<br/>bangla_gpt_api/services/tutor/prompts.py"]
   GATE -->|pass| CTX["context assembly top_k=3 + PII redaction<br/>bangla_gpt_api/services/context.py + bangla_gpt_api/services/pii.py"]
   CTX --> LLM["provider.generate() with circuit breaker + fallback<br/>bangla_gpt_api/providers/base.py LLMProvider"]
-  LLM --> CIT["citation check + confidence + persistence of the turn<br/>bangla_gpt_api/services/tutor.py + bangla_gpt_api/db/"]
+  LLM --> CIT["citation check + confidence + persistence of the turn<br/>bangla_gpt_api/services/tutor/assembly.py + bangla_gpt_api/routers/tutor/_chat.py"]
   CIT --> OUT["AskResponse{answer, grounded, sources[], citation_verified}"]
   OUT --> MET["metrics + structured logs<br/>bangla_gpt_api/metrics.py + bgpt_rag_* series"]
-  OUT --> FB["learner feedback + AI job ledger<br/>bangla_gpt_api/routers/teacher_content.py + bangla_gpt_api/routers/common.py"]
+  OUT --> FB["learner feedback + AI job ledger<br/>bangla_gpt_api/routers/tutor/_feedback.py + bangla_gpt_api/routers/common.py"]
   INDEX["index lifecycle: versioned snapshot, atomic swap, rollback<br/>bangla_gpt_api/retrieval/lifecycle.py IndexRegistry"] -.-> RETR
   LOADER["corpus load: dedupe (class,text), structure metadata, QA drop<br/>bangla_gpt_api/data/nctb_loader.py load_nctb_corpus()"] -.-> INDEX
 ```
@@ -310,9 +310,9 @@ a value here drifts from the code.
 | `_MIN_STEM_LEN` | 3 | `retrieval/hybrid.py` | derived (never strip a 2-letter stem) |
 | `QUERY_EXPANSIONS` | 19 keys | `retrieval/hybrid.py` | curated; coverage audited per build (`lexicon_audit`) |
 | `DEFAULT_LAMBDA` (MMR) | 0.7 | `retrieval/diversity.py` | measured (ablation: diversity row) |
-| `top_k` | 3 | `services/tutor.py` | measured (context budget; ablation top-k rows) |
-| `min_coverage` | 0.5 | `services/tutor.py` | measured (gate calibration in `retrieval_eval.json`) |
-| `FUZZY_MATCH_SIMILARITY` | 0.6 | `services/tutor.py` | measured (single-keystroke slips) |
+| `top_k` | 3 | `services/tutor/state.py` | measured (context budget; ablation top-k rows) |
+| `min_coverage` | 0.5 | `services/tutor/state.py` | measured (gate calibration in `retrieval_eval.json`) |
+| `FUZZY_MATCH_SIMILARITY` | 0.6 | `services/tutor/state.py` | measured (single-keystroke slips) |
 | `DEFAULT_FLAGGED_THRESHOLD` | 0.02 | `nctb/content_qa.py` | default (QA gate; corpus currently 0 flagged) |
 | embed dim / n-grams | 384 / 2–4 | `retrieval/embedding.py` | default (hashing stand-in) |
 

@@ -97,7 +97,12 @@ def test_version_board_reads_every_identity_from_its_artifact() -> None:
     assert board["prompt"]["judge_prompt_version"]
     assert board["index"]["fingerprint"] == "fp-123"
     assert board["embedding"]["model"] == ""
-    assert board["evaluation"]["thresholds_version"] == 1
+    # the register is versioned and moves with a documented revision; assert
+    # the board reads the LIVE version rather than pinning today's number
+    from bangla_gpt_api.evaluation import thresholds as thresholds_mod
+
+    live = thresholds_mod.load_thresholds(thresholds_mod.default_path(API_ROOT))
+    assert board["evaluation"]["thresholds_version"] == live["version"]
     assert board["evaluation"]["primary_metric"] == "recall_at_5"
     assert board["evaluation"]["golden"]["test_split_hash"]
     assert board["prompt_registry"]["prompt_count"] > 0

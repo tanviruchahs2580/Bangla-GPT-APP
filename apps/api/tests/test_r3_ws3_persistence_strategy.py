@@ -18,17 +18,23 @@ SOFT_DELETE_NAMES = {"is_deleted", "deleted_at", "deleted", "trashed_at", "is_re
 
 
 def _model_columns() -> dict[str, set[str]]:
-    """Column names declared per mapped class in db/models.py."""
-    tree = ast.parse((SRC / "db" / "models.py").read_text(encoding="utf-8"))
+    """Column names declared per mapped class in the db/models package.
+
+    The classes live in the package the former 978-line ``db/models.py`` was
+    split into (C-03); every module of it is walked, so a soft-delete column
+    cannot hide by moving to a sibling module.
+    """
     out: dict[str, set[str]] = {}
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.ClassDef):
-            continue
-        columns: set[str] = set()
-        for statement in node.body:
-            if isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name):
-                columns.add(statement.target.id)
-        out[node.name] = columns
+    for path in sorted((SRC / "db" / "models").rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            columns: set[str] = set()
+            for statement in node.body:
+                if isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name):
+                    columns.add(statement.target.id)
+            out[node.name] = columns
     return out
 
 

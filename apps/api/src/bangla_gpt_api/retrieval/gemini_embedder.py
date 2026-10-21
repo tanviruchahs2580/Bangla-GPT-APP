@@ -27,9 +27,12 @@ configuration error, not a silent downgrade.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import time
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -51,6 +54,8 @@ MAX_BATCH_SIZE = 100
 #: from the environment so the evaluation harness can pace without a code
 #: change; 0 disables it (paid tiers).
 MIN_INTERVAL_ENV = "EMBEDDING_MIN_INTERVAL_SECONDS"
+#: Optional on-disk vector cache (append-only JSONL). Unset means no cache.
+CACHE_PATH_ENV = "EMBEDDING_CACHE_PATH"
 #: Seconds to wait after a 429 when the response carries no Retry-After.
 RATE_LIMIT_BACKOFF_SECONDS = 30.0
 #: How many times a single batch is retried on 429 before the run fails.
@@ -71,6 +76,7 @@ class GeminiEmbedder:
         max_retries: int = 1,
         min_interval_seconds: float | None = None,
         transport: Any | None = None,
+        cache_path: Path | None = None,
     ) -> None:
         #: Caller-injected transport (tests, or a proxy): anything with an
         #: httpx-compatible ``post(url, json=..., headers=..., timeout=...)``.
@@ -88,6 +94,46 @@ class GeminiEmbedder:
         self._min_interval = max(0.0, float(min_interval_seconds))
         self._last_call = 0.0
         self.name = f"gemini:{model}"
+        # A4-02: an append-only cache keyed by (model, dimensions, text hash).
+        # The free tier's daily embedding quota is smaller than the served
+        # corpus, and a corpus run that loses its work to a 429 cannot be
+        # completed within one day without it; the cache also makes a re-run
+        # after a corpus change cost only the changed texts.
+        if cache_path is None:
+            env_path = (os.environ.get(CACHE_PATH_ENV) or "").strip()
+            cache_path = Path(env_path) if env_path else None
+        self._cache_path = Path(cache_path) if cache_path is not None else None
+        self._cache: dict[str, list[float]] = {}
+        self.cache_hits = 0
+        self.cache_misses = 0
+        self._load_cache()
+
+    # ── cache ────────────────────────────────────────────────────────────────
+    def _cache_key(self, text: str) -> str:
+        raw = f"{self._model}|{self._dimensions}|{text}"
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    def _load_cache(self) -> None:
+        if self._cache_path is None or not self._cache_path.is_file():
+            return
+        with self._cache_path.open(encoding="utf-8") as handle:
+            for line in handle:
+                if not line.strip():
+                    continue
+                try:
+                    row = json.loads(line)
+                    self._cache[row["key"]] = [float(value) for value in row["values"]]
+                except (ValueError, KeyError, TypeError):
+                    continue  # a torn tail line is skipped, never fatal
+
+    def _store(self, rows: list[tuple[str, list[float]]]) -> None:
+        if self._cache_path is None or not rows:
+            return
+        self._cache_path.parent.mkdir(parents=True, exist_ok=True)
+        with self._cache_path.open("a", encoding="utf-8") as handle:
+            for key, values in rows:
+                handle.write(json.dumps({"key": key, "values": values}) + "\n")
+                self._cache[key] = values
 
     # ── protocol ─────────────────────────────────────────────────────────────
     def embed(self, texts: Sequence[str]) -> list[list[float]]:
@@ -95,12 +141,30 @@ class GeminiEmbedder:
 
         No silent fallback: a failed embedding call is a provider error the
         caller must see, because a partly-embedded corpus would degrade the
-        served index without any artifact saying so.
+        served index without any artifact saying so. Cached vectors are served
+        from the cache and never re-requested.
         """
         prepared = [self._prepare(text) for text in texts]
         vectors: list[list[float]] = []
-        for start in range(0, len(prepared), MAX_BATCH_SIZE):
-            vectors.extend(self._embed_batch(prepared[start : start + MAX_BATCH_SIZE]))
+        pending: list[tuple[int, str, str]] = []  # (index, cache key, text)
+        for position, text in enumerate(prepared):
+            key = self._cache_key(text)
+            cached = self._cache.get(key)
+            if cached is not None:
+                self.cache_hits += 1
+                vectors.append(cached)
+                continue
+            self.cache_misses += 1
+            vectors.append([])  # placeholder, filled below
+            pending.append((position, key, text))
+        for start in range(0, len(pending), MAX_BATCH_SIZE):
+            chunk = pending[start : start + MAX_BATCH_SIZE]
+            fetched = self._embed_batch([text for _index, _key, text in chunk])
+            self._store(
+                [(key, vec) for (_index, key, _text), vec in zip(chunk, fetched, strict=True)]
+            )
+            for (position, _key, _text), vector in zip(chunk, fetched, strict=True):
+                vectors[position] = vector
         return vectors
 
     def _batch_request(self, text: str) -> dict[str, Any]:

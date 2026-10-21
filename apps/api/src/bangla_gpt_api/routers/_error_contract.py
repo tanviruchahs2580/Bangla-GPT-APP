@@ -231,6 +231,8 @@ ERROR_CATALOG: Final[dict[str, ErrorSpec]] = {
 # The single site that raises FastAPI's own validation-error list shape (it
 # mirrors what RequestValidationError would have produced for the response
 # model). Registered so the shape test can tell "documented" from "drifted".
+# C-03: `teacher_generate_document` moved into the teacher_content package's
+# documents seam; the site is the same function, at its new path.
 FRAMEWORK_VALIDATION_SITES: Final[frozenset[str]] = frozenset(
-    {"routers/teacher_content.py:teacher_generate_document"}
+    {"routers/teacher_content/_documents.py:teacher_generate_document"}
 )

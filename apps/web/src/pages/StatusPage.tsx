@@ -48,7 +48,13 @@ export default function StatusPage() {
           {error}
         </p>
       )}
-      {data === null && !error && <p className="muted">{t("loading")}</p>}
+      {data === null && !error && (
+        // AUD-G-15: `.status-pending` reserves the height of the payload's
+        // hero + component rows (see styles.css) -- the class is what keeps
+        // the pre-data render, which is also the prerendered one, from being
+        // shorter than the data render that replaces it.
+        <p className="muted status-pending">{t("loading")}</p>
+      )}
       {data && (
         <>
           <div

@@ -119,7 +119,12 @@ def test_contract_documents_every_policy() -> None:
     assert {"token", "citation", "heartbeat", "error", "final"} == set(STREAM_EVENT_TYPES)
     import inspect
 
-    file_text = inspect.getsource(tutor_module)
+    # C-03: the streaming contract block documents the constants that live in
+    # the tutor package's `signals` seam, so that is the file pinned here (the
+    # package root only re-exports them).
+    from bangla_gpt_api.services.tutor import signals as contract_module
+
+    file_text = inspect.getsource(contract_module)
     contract = file_text
     for phrase in (
         "Event schema",

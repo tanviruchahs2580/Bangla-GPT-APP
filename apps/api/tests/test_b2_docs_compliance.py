@@ -14,24 +14,28 @@ import pathlib
 import re
 
 REPO = pathlib.Path(__file__).resolve().parents[3]
-MODELS = REPO / "apps" / "api" / "src" / "bangla_gpt_api" / "db" / "models.py"
+# The mapped classes live in the db/models package (C-03 split of the former
+# 978-line module); every module of it is walked, which is a superset of the
+# single file this used to parse.
+MODELS = REPO / "apps" / "api" / "src" / "bangla_gpt_api" / "db" / "models"
 INVENTORY = REPO / "docs" / "compliance" / "data-inventory-and-flow-map.md"
 LAW_MAP = REPO / "docs" / "compliance" / "bangladesh-law-mapping.md"
 
 
 def _table_names() -> list[str]:
-    tree = ast.parse(MODELS.read_text(encoding="utf-8"))
     names: list[str] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.ClassDef):
-            continue
-        for stmt in node.body:
-            if (
-                isinstance(stmt, ast.Assign)
-                and getattr(stmt.targets[0], "id", "") == "__tablename__"
-                and isinstance(stmt.value, ast.Constant)
-            ):
-                names.append(stmt.value.value)
+    for path in sorted(MODELS.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            for stmt in node.body:
+                if (
+                    isinstance(stmt, ast.Assign)
+                    and getattr(stmt.targets[0], "id", "") == "__tablename__"
+                    and isinstance(stmt.value, ast.Constant)
+                ):
+                    names.append(stmt.value.value)
     return names
 
 

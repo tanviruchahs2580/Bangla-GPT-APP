@@ -695,9 +695,16 @@ export default function AITutorPage() {
             });
             const showDay = day && day !== prevDay;
             return (
+              // AUD-G-19: `chat-message` carries the CSS containment that
+              // skips layout/paint for the bubbles outside the viewport (see
+              // styles.css). A "load earlier" expansion inserts its window
+              // *above* the reading position, so the rows it adds are
+              // off-screen at the moment they mount.
               <div
                 key={m.id || i}
-                className={tight ? "chat-group-tight" : undefined}
+                className={
+                  tight ? "chat-message chat-group-tight" : "chat-message"
+                }
               >
                 {showDay && (
                   <div className="chat-day" aria-hidden>

@@ -132,3 +132,32 @@ def test_token_ceiling_constant_matches_the_documented_reference() -> None:
     # The module docstring cites the reference's 2 048-token ceiling; the
     # constant is what the truncation uses, so the two cannot drift.
     assert MAX_INPUT_TOKENS == 2048
+
+
+def test_cache_serves_a_repeat_text_without_another_request(tmp_path) -> None:
+    """The free tier's daily quota is smaller than the served corpus: a cached
+    vector must never cost a second request, and the cache must survive the
+    process (append-only JSONL)."""
+    transport = _Transport(sizes=[2])
+    cache = tmp_path / "embedding_cache.jsonl"
+    first = GeminiEmbedder(api_key="k", transport=transport, cache_path=cache)
+    assert first.embed(["এক", "দুই"]) == [[0.1, 0.2, 0.3]] * 2
+    assert transport.calls == 1 and first.cache_misses == 2 and first.cache_hits == 0
+
+    # a second run (fresh instance, same file) answers from the cache
+    second_transport = _Transport(sizes=[2])
+    second = GeminiEmbedder(api_key="k", transport=second_transport, cache_path=cache)
+    assert second.embed(["এক", "দুই"]) == [[0.1, 0.2, 0.3]] * 2
+    assert second_transport.calls == 0, "a cached text must not be re-requested"
+    assert second.cache_hits == 2 and second.cache_misses == 0
+    # ... and a new text still goes to the provider
+    second_transport.sizes = [1]
+    assert second.embed(["তিন"]) == [[0.1, 0.2, 0.3]]
+    assert second_transport.calls == 1
+
+
+def test_cache_survives_a_torn_tail_line(tmp_path) -> None:
+    cache = tmp_path / "embedding_cache.jsonl"
+    cache.write_text('{"key": "x", "values": [1.0]}\n{"key": "y"', encoding="utf-8")
+    embedder = GeminiEmbedder(api_key="k", transport=_Transport(sizes=[1]), cache_path=cache)
+    assert embedder.embed(["এক"]) == [[0.1, 0.2, 0.3]]

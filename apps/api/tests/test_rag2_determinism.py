@@ -263,7 +263,9 @@ async def test_retrieval_stage_overrun_abstains_instead_of_hanging(monkeypatch) 
     provider = _CapturingProvider()
     service = TutorService(index=SlowIndex(), provider=provider, min_coverage=0.0, min_score=0.0)
     monkeypatch.setattr(
-        "bangla_gpt_api.services.tutor.stage_timeout_seconds",
+        # C-03: the tutor service is a package now, and each seam imports the
+        # knob into its own namespace, so the patch names the seam under test.
+        "bangla_gpt_api.services.tutor.retrieval.stage_timeout_seconds",
         lambda stage: 0.01 if stage == "retrieval" else 45.0,
     )
     response = await service.ask("কোষ কী?", 6, "science")
@@ -285,7 +287,8 @@ async def test_generation_stage_overrun_surfaces_as_provider_error(monkeypatch) 
 
     service = _service(HangingProvider())
     monkeypatch.setattr(
-        "bangla_gpt_api.services.tutor.stage_timeout_seconds",
+        # C-03: the generation stage's ceiling is read in the generation seam.
+        "bangla_gpt_api.services.tutor.generation.stage_timeout_seconds",
         lambda stage: 0.05 if stage == "generation" else 5.0,
     )
     with pytest.raises(ProviderError, match="timed out"):

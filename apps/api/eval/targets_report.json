@@ -33,19 +33,19 @@
  "preregistration": {
   "primary_metric": "recall_at_5",
   "primary_split": "test",
-  "recorded_at": "2026-10-19",
+  "recorded_at": "2026-10-21",
   "split_hashes": {
-   "dataset": "3500ef2a0f464278",
-   "test": "20acce69c7812ca9"
+   "dataset": "3f48ecccee6f84c3",
+   "test": "8204848d17461138"
   },
   "thresholds_file": "thresholds_v1.json",
-  "thresholds_version": 1
+  "thresholds_version": 2
  },
  "run_conditions": {
   "bootstrap_resamples": 1000,
-  "generation_items": 646,
-  "golden_dataset_hash": "3500ef2a0f464278",
-  "golden_test_split_hash": "20acce69c7812ca9",
+  "generation_items": 643,
+  "golden_dataset_hash": "3f48ecccee6f84c3",
+  "golden_test_split_hash": "8204848d17461138",
   "provider": "mock (hermetic; no live model in this environment)",
   "redteam_items": 43,
   "seed": 20261019,
@@ -69,11 +69,11 @@
   },
   "citation_precision": {
    "ci95": [
-    0.3333,
-    0.3371
+    0.5043,
+    0.5347
    ],
    "comparison": ">=",
-   "measured": 0.3346,
+   "measured": 0.5193,
    "meets": false,
    "note": "the mock provider quotes its evidence verbatim, so this is a retrieval-breadth property under the mock, not a model claim",
    "scope": "held-out test split, n=185 items",
@@ -83,11 +83,11 @@
   },
   "citation_recall": {
    "ci95": [
-    1.0,
-    1.0
+    0.9392,
+    0.989
    ],
    "comparison": ">=",
-   "measured": 1.0,
+   "measured": 0.9669,
    "meets": true,
    "note": "tautological for a quoting provider; reported because the definition must exist",
    "scope": "held-out test split, n=185 items",
@@ -97,11 +97,11 @@
   },
   "faithfulness": {
    "ci95": [
-    0.8532,
-    0.8555
+    0.8116,
+    0.8375
    ],
    "comparison": ">=",
-   "measured": 0.8544,
+   "measured": 0.8554,
    "meets": false,
    "note": "the gate's deterministic evidence-overlap score, not an LLM judgement; with a live provider the judge mode replaces this value and the mode field changes with it",
    "scope": "held-out test split, n=185 items",
@@ -139,11 +139,11 @@
   },
   "mrr_at_10": {
    "ci95": [
-    0.9337,
-    0.9779
+    0.9438,
+    0.9807
    ],
    "comparison": ">=",
-   "measured": 0.9576,
+   "measured": 0.9632,
    "meets": true,
    "note": "MRR@10 is macro over the split's answerable items",
    "scope": "test split, filtered (class+subject pre-filter, the tutor's lane), n=181, corpus=bundled-sample",
@@ -192,11 +192,11 @@
   },
   "unsupported_claim_rate": {
    "ci95": [
-    0.1445,
-    0.1468
+    0.1625,
+    0.1884
    ],
    "comparison": "<=",
-   "measured": 0.1456,
+   "measured": 0.1446,
    "meets": false,
    "note": "derivation documented here; the metric has no separate implementation",
    "scope": "held-out test split, n=185 items",

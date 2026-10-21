@@ -137,6 +137,38 @@ BANGLA_STOP_WORDS: frozenset[str] = frozenset(
         "এখন",
         "পরে",
         "আবার",
+        # A8-08 (2026-10-21): postpositions, pronouns and the highest-frequency
+        # verb/auxiliary forms. The list already carried "থাকে", "করে",
+        # "দেয়", "হয়", "হলো"; these are the same class and were the tokens
+        # that made golden-set windows read as fragments ("নেই বিন্দু কী?",
+        # "থাকলে হলো কী?", "আয়তন বের কী?"). They are function words in
+        # coverage terms: the evidence can neither contain the student's verb
+        # frame nor be expected to restate it.
+        "দিয়ে",
+        "নিয়ে",
+        "তাকে",
+        "তারা",
+        "এদের",
+        "এসব",
+        "যায়",
+        "যেতে",
+        "বলে",
+        "করলে",
+        "করতে",
+        "থাকলে",
+        "হলে",
+        "নেওয়া",
+        "আসে",
+        "আসতে",
+        "রাখা",
+        "রাখতে",
+        "বের",
+        "দেখতে",
+        "দেখা",
+        "লিখতে",
+        "হিসেবে",
+        "মতো",
+        "পর্যন্ত",
     }
 )
 
@@ -299,6 +331,19 @@ QUESTION_FRAMING_WORDS: frozenset[str] = frozenset(
         "দ্বাদশ",
         "ক্লাস",
         "অধ্যায়",
+        # A8-08 (2026-10-21): the "what is meant by" frame. "প্রান্তের বিভব
+        # বলতে কী বোঝায়?" asks for an explanation exactly as "ব্যাখ্যা করো"
+        # does, and the words that carry the asking are not subject matter --
+        # the textbook cannot be expected to contain them. Measured while
+        # repairing the golden set's contextual stratum: its windows had paired
+        # these with topic terms and produced fragments the live model refused
+        # ("চাপ দুই কী?", false-refusal rate 0.0718).
+        "বলতে",
+        "বোঝায়",
+        "বোঝা",
+        "বোঝানো",
+        "বোঝাও",
+        "জানতে হয়",
         # roman forms of the same
         "koro",
         "korun",
@@ -311,6 +356,8 @@ QUESTION_FRAMING_WORDS: frozenset[str] = frozenset(
         "din",
         "jante",
         "chai",
+        "bolte",
+        "bojhay",
     }
 )
 
