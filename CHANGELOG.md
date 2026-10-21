@@ -108,6 +108,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(ops): stop publishing the API on a random host port, and make the release gate real
 - fix(pdf): enable Bengali complex-script shaping in PDF renderers
 - fix(quality): close every ratchet finding CI reported (each fixed at the source)
+- fix(quality): keep the CI-only deptry entries and record the sweep's growth
 - fix(rag): attach the citations an answer leans on; measure TTFT live (A8-08, A9-01)
 - fix(rag): enforce post-generation grounding (citation + numeric) instead of warning
 - fix(rag): framing-plane coverage, cross-script gate resolution, in-corpus weighting
@@ -210,6 +211,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(changelog): record the wave-3 commits
 - docs(changelog): record the wave-5 recovery, corpus and web batches
 - docs(changelog): regenerate for the wave-6 commit
+- docs(changelog): regenerate for the wave-6 follow-up commits
 - docs(ci): refresh the lighthouse and mutation-sample rows to the measured state
 - docs(compliance): record the provider's current terms, tier by tier (A7-04)
 - docs(dx): threat model, AI system card, OpenSSF self-assessment, devcontainer and Make targets
