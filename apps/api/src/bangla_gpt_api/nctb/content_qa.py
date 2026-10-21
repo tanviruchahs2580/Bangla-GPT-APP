@@ -21,6 +21,11 @@ Issue codes:
 - ``replacement_char``: U+FFFD present
 - ``pua_char``: private-use-area glyphs (custom-font residue)
 - ``legacy_bijoy``: unconverted Bijoy ASCII signatures present
+- ``latin_residue``: a Bangla-rated source passage that is ≥60% ASCII Latin
+  letters (unconverted legacy lines the signature test missed); only
+  reported when the caller declares the source Bangla-rated
+  (``bangla_source=True``), because English curriculum volumes are
+  legitimately Latin
 """
 
 from __future__ import annotations
@@ -31,15 +36,13 @@ import unicodedata
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
-from bangla_gpt_api.nctb.bijoy import is_likely_legacy_bijoy
-from bangla_gpt_api.nctb.normalize import ZERO_WIDTH_CHARS
+from bangla_gpt_api.nctb.bijoy import has_latin_residue, is_likely_legacy_bijoy
+from bangla_gpt_api.nctb.normalize import ZERO_WIDTH_CHARS, in_private_use_area
 
 # Classic double-encoded math symbols: a multi-byte UTF-8 lead byte (C2/C3/E2)
 # followed by a raw C1/Latin-1-supplement byte. Legitimate Bangla text
 # never contains C1 control characters, so this pattern is safe.
 _MATH_MOJIBAKE = re.compile("[\u00c2\u00c3\u00e2][\u0080-\u00bf]")
-
-_PUA_RANGES = ((0xE000, 0xF8FF), (0xF0000, 0xFFFFD), (0x100000, 0x10FFFD))
 
 ISSUE_CODES = (
     "not_nfc",
@@ -48,6 +51,7 @@ ISSUE_CODES = (
     "replacement_char",
     "pua_char",
     "legacy_bijoy",
+    "latin_residue",
 )
 
 # Default gate: index rebuilds are blocked when more than this fraction of
@@ -56,12 +60,16 @@ DEFAULT_FLAGGED_THRESHOLD = 0.02
 
 
 def _in_pua(char: str) -> bool:
-    cp = ord(char)
-    return any(lo <= cp <= hi for lo, hi in _PUA_RANGES)
+    return in_private_use_area(char)
 
 
-def qa_text(text: str) -> list[str]:
-    """Return the sorted list of QA issue codes found in one text."""
+def qa_text(text: str, *, bangla_source: bool = False) -> list[str]:
+    """Return the sorted list of QA issue codes found in one text.
+
+    ``bangla_source`` additionally applies the ``latin_residue`` verdict; it
+    is opt-in because the same ASCII-Latin-dominant passage is a defect in a
+    Bangla volume and expected in the English one.
+    """
     issues: list[str] = []
     if unicodedata.normalize("NFC", text) != text:
         issues.append("not_nfc")
@@ -75,6 +83,8 @@ def qa_text(text: str) -> list[str]:
         issues.append("pua_char")
     if is_likely_legacy_bijoy(text):
         issues.append("legacy_bijoy")
+    if bangla_source and has_latin_residue(text):
+        issues.append("latin_residue")
     return sorted(issues)
 
 
@@ -110,6 +120,7 @@ def qa_chunks(
     *,
     threshold: float = DEFAULT_FLAGGED_THRESHOLD,
     worst_limit: int = 20,
+    bangla_source: bool = False,
 ) -> ChunkQAReport:
     """Run QA over chunk mappings (needs ``chunk_id`` and ``text`` keys)."""
     total = 0
@@ -128,7 +139,7 @@ def qa_chunks(
             duplicates += 1
         else:
             seen_texts.add(fingerprint)
-        issues = qa_text(text)
+        issues = qa_text(text, bangla_source=bangla_source)
         if not issues:
             continue
         flagged += 1

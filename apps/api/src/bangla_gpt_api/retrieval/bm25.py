@@ -3,6 +3,7 @@ from collections import Counter
 from dataclasses import dataclass
 
 from bangla_gpt_api.curriculum.models import Chunk
+from bangla_gpt_api.retrieval.filters import chunk_matches_filters
 from bangla_gpt_api.retrieval.hybrid import (
     expand_query,
     light_stem,
@@ -31,21 +32,28 @@ class Hit:
 def indexable_text(chunk: Chunk) -> str:
     """What the lexical index (and the grounding gate) sees for a chunk.
 
-    The section heading is indexed with double weight and the chapter with
-    single weight, ahead of the body. This closes a measured defect: five of
-    the golden chapter-title questions pointed at text that existed *only in
-    the heading* ("সূচক কী" → section "সূচকের নিয়ম"), and the heading was
-    invisible to the lexical lane, so those questions refused or mis-ranked
-    while the evidence existed. Prominence comes from repetition — BM25 has no
-    field model, and repeating rare heading terms is the cheapest way to give
-    a title the same influence a body paragraph earns by length.
+    A3-03 contextual header: the chunk's class › subject identity rides at
+    the front, followed by the section heading (double weight) and the
+    chapter, both pre-existing. The keyword labels ("class"/"subject") are
+    uniform across the corpus — BM25 idf makes them inert — while the VALUES
+    (the class number, the subject key) give a chapter-title or class-framed
+    question real matches against the chunk that actually belongs to that
+    class and book. Section fill is measured, not assumed: the NCTB chunker
+    stamps a section wherever the PDF carries a section marker (67% of the
+    served chunks), and chunks without one carry the chapter + class/subject
+    header instead — recorded in docs/RAG_ARCHITECTURE.md rather than
+    invented.
 
     The evidence *displayed* to the student stays ``chunk.text`` — indexing
     text and showing text are different obligations, deliberately separated.
     """
     section = chunk.meta.section or ""
     chapter = chunk.meta.chapter or ""
-    parts = [section, section, chapter, chunk.text]
+    header_parts = ["class", str(chunk.meta.class_level)]
+    if chunk.meta.subject:
+        header_parts.extend(("subject", chunk.meta.subject))
+    header = " ".join(header_parts)
+    parts = [header, section, section, chapter, chunk.text]
     return "\n".join(part for part in parts if part)
 
 
@@ -96,6 +104,8 @@ class BM25Index:
         class_level: int | None = None,
         subject: str | None = None,
         chapter: str | None = None,
+        content_type: str | None = None,
+        version: str | None = None,
         top_k: int = 4,
         min_score: float = 0.0,
     ) -> list[Hit]:
@@ -107,11 +117,14 @@ class BM25Index:
         query_grams = trigram_ngrams(query)
         hits: list[Hit] = []
         for i, chunk in enumerate(self.chunks):
-            if class_level is not None and chunk.meta.class_level != class_level:
-                continue
-            if subject is not None and chunk.meta.subject != subject:
-                continue
-            if chapter is not None and chunk.meta.chapter != chapter:
+            if not chunk_matches_filters(
+                chunk,
+                class_level=class_level,
+                subject=subject,
+                chapter=chapter,
+                content_type=content_type,
+                version=version,
+            ):
                 continue
             score = self._score(query_terms, i)
             if score <= min_score:

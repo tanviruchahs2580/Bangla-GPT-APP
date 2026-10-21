@@ -9,6 +9,9 @@
 :root {
   /* Brand — Bangladesh green primary (blueprint §7) */
   --brand: #166534;
+  --brand-600: #16a34a; /* BrandMark gradient stop 0 / confetti palette */
+  --brand-500: #4ade80; /* confetti highlight */
+  --brand-ink: #052e16;
   --brand-strong: #14532d;
   --brand-ink: #052e16;
   --brand-soft: #dcfce7;
@@ -49,6 +52,17 @@
   --ok: #166534; /* A11Y-04: #15803d on --ok-soft measured 4.45:1; this is 6.32:1 */
   --ok-soft: #e3f6e9;
 
+  /* Foreground for accent surfaces (AUD-G-10, measured by the browser axe
+     sweep). Every accent hue flips lightness between themes -- --brand is
+     dark green (#166534) in light and light green (#4ade80) in dark -- so the
+     text that sits on an accent has to flip with it. A hard-coded #fff is
+     what made the /forgot primary button (and the skip link, the offline and
+     impersonation banners, the user chat bubble) 1.4:1-1.7:1 in dark mode. */
+  --on-brand: #ffffff;
+  --on-teal: #ffffff;
+  --on-ai: #ffffff;
+  --on-danger: #ffffff;
+
   /* Surfaces — warm paper background */
   --bg: #f5f1e8;
   --bg-elev: #fffdf8;
@@ -58,6 +72,69 @@
   --muted: #5d6b57;
   --line: #e5e0d2;
   --line-strong: #d1cbb8;
+
+  /* Accent-surface tints (AUD-G-08 / G-01). The hero, the coloured buttons and
+     the quick tiles paint glass fills, hairline highlights and ink-tinted
+     shadows ON TOP of their own fixed gradients, so these values are
+     theme-invariant and are declared only here. Before this block they were
+     ~60 colour literals spread across the rules below; the alpha is part of
+     the name because the ladder itself is the design (a 0.14 and a 0.15 white
+     are not interchangeable in a review diff). */
+  --sheen-12: rgba(255, 255, 255, 0.12);
+  --sheen-14: rgba(255, 255, 255, 0.14);
+  --sheen-15: rgba(255, 255, 255, 0.15);
+  --sheen-16: rgba(255, 255, 255, 0.16);
+  --sheen-18: rgba(255, 255, 255, 0.18);
+  --sheen-24: rgba(255, 255, 255, 0.24);
+  --sheen-35: rgba(255, 255, 255, 0.35);
+  --sheen-40: rgba(255, 255, 255, 0.4);
+  --sheen-45: rgba(255, 255, 255, 0.45);
+  --sheen-50: rgba(255, 255, 255, 0.5);
+  --sheen-65: rgba(255, 255, 255, 0.65);
+  --sheen-96: rgba(255, 255, 255, 0.96);
+  --white: #ffffff;
+  --scrim-06: rgba(0, 0, 0, 0.06);
+  --scrim-18: rgba(0, 0, 0, 0.18);
+  --scrim-22: rgba(0, 0, 0, 0.22);
+  --scrim-35: rgba(0, 0, 0, 0.35);
+  --scrim-40: rgba(0, 0, 0, 0.4);
+  --scrim-45: rgba(0, 0, 0, 0.45);
+  --scrim-50: rgba(0, 0, 0, 0.5);
+  --scrim-55: rgba(0, 0, 0, 0.55);
+  --scrim-modal: rgba(14, 18, 38, 0.55);
+  /* Ink-tinted shadows: --ink (#1f291c) and --brand-ink (#052e16) as rgba. */
+  --ink-06: rgba(31, 41, 28, 0.06);
+  --ink-18: rgba(31, 41, 28, 0.18);
+  --ink-28: rgba(31, 41, 28, 0.28);
+  --brand-ink-20: rgba(5, 46, 22, 0.2);
+  --brand-ink-22: rgba(5, 46, 22, 0.22);
+  --brand-ink-24: rgba(5, 46, 22, 0.24);
+  --brand-ink-28: rgba(5, 46, 22, 0.28);
+  --brand-ink-30: rgba(5, 46, 22, 0.3);
+  --brand-ink-50: rgba(5, 46, 22, 0.5);
+  --brand-55: rgba(22, 101, 52, 0.55);
+  --brand-60: rgba(22, 101, 52, 0.6);
+  --teal-22: rgba(3, 105, 161, 0.22);
+  --teal-24: rgba(3, 105, 161, 0.24);
+  /* Purposeful one-offs, named for what they paint. */
+  --amber: #f59e0b;
+  /* G-01: the two hues the vector brand mark and the quiz confetti read at
+     runtime. The mark is inline SVG whose gradient stops are presentation
+     attributes; the confetti resolves its palette with getComputedStyle. Both
+     used to carry the hex as a literal fallback, which is what the token scan
+     counted -- the values are declared here instead, once, next to their use. */
+  --gold: #fde68a; /* shapla petal top; --hero-glow is this at 24% */
+  --pink: #f472b6; /* confetti accent */
+  --hero-glow: rgba(253, 230, 138, 0.24);
+  --sparkle-glow: rgba(255, 255, 240, 0.7);
+  --placeholder-ink: #6b7a66;
+  --print-ink: #000;
+  --on-dark-accent: #ffffff;
+  --tile-teal: #38bdf8;
+  --tile-warn: #fbbf24;
+  --tile-warn-strong: #d97706;
+  --tile-warn-shadow: rgba(217, 119, 6, 0.5);
+  --tile-ai: #818cf8;
 
   /* Typography — fluid scale (WP-01/WP-03: clamp, Bangla-safe) */
   --font:
@@ -80,10 +157,46 @@
   --radius-lg: 24px;
   --radius-full: 999px;
 
+  /* Fine geometry (G-01) -- the lengths that are deliberately OFF the 4px
+     grid. They are declared once, here, and referenced by name below: the
+     token scan reads this block as the scale, so an off-grid literal
+     anywhere else in the file is drift. A hairline is 1.5px because at 1px
+     an input border reads as a wireframe on Windows and at 2px it reads as a
+     button; the dot pitch is 1.2px because at 1px the radial texture
+     aliases away on a 1x display. Neither can be snapped: they are optical,
+     not spatial. */
+  /* Fine geometry (G-01) -- the component lengths that are deliberately OFF
+     the 4px grid, named by their value in px. They are the sizes the design
+     shipped with, measured rather than derived, and they are frozen here so
+     the grid applies to everything else: the token scan reads this block as
+     the scale and reports any off-grid literal that appears outside it.
+     Snapping them to the grid was tried and rejected on evidence -- moving
+     5->4, 7->8, 9->8, 13->12, 15->16, 26->24, 30->32, 34->32, 46->48, 50->48,
+     90->88, 150->152, 225->224, 2.5->2 shifted element edges and broke 8 of the
+     60 reviewed visual baselines at 360px (4% of pixels against a 2%
+     tolerance), while the same screens pass at 768/1280. A visual change of
+     that size belongs to a design review, not to a token cleanup. */
+  --w-hairline: 1.5px; /* input/card/chip border, painted diagonal line */
+  --w-dot: 1.2px; /* radial-gradient dot pitch (body::after, hero glow) */
+  --w-2-5: 2.5px;
+  --w-5: 5px;
+  --w-7: 7px;
+  --w-9: 9px;
+  --w-13: 13px;
+  --w-15: 15px;
+  --w-26: 26px;
+  --w-30: 30px;
+  --w-34: 34px;
+  --w-46: 46px;
+  --w-50: 50px;
+  --w-90: 90px;
+  --w-150: 150px;
+  --w-225: 225px;
+
   /* Elevation — single canonical scale (RENO: legacy --shadow-* sets
      are aliases, so every component shares one elevation language) */
   --elev-1: 0 1px 3px rgba(31, 41, 28, 0.08), 0 1px 2px rgba(31, 41, 28, 0.05);
-  --elev-2: 0 4px 12px rgba(31, 41, 28, 0.1), 0 2px 4px rgba(31, 41, 28, 0.06);
+  --elev-2: 0 4px 12px rgba(31, 41, 28, 0.1), 0 2px 4px var(--ink-06);
   --elev-3:
     0 12px 32px rgba(31, 41, 28, 0.14), 0 4px 8px rgba(31, 41, 28, 0.08);
   --shadow-sm: var(--elev-1);
@@ -155,6 +268,13 @@
   --ok: #34d399;
   --ok-soft: #163527;
 
+  /* AUD-G-10: white measured 1.4:1-2.7:1 on these light dark-theme accents;
+     the on-colours below keep each accent's hue and measure 6.0:1-10.6:1. */
+  --on-brand: #052e16;
+  --on-teal: #06283d;
+  --on-ai: #14103a;
+  --on-danger: #3b0d16;
+
   --bg: #12140e;
   --bg-elev: #1a1c14;
   --card: #1b1e14;
@@ -166,8 +286,8 @@
 
   /* RENO: only the canonical --elev-* trio needs dark values; the
      legacy --shadow-* aliases from :root resolve through them. */
-  --elev-1: 0 1px 3px rgba(0, 0, 0, 0.4);
-  --elev-2: 0 4px 12px rgba(0, 0, 0, 0.45);
+  --elev-1: 0 1px 3px var(--scrim-40);
+  --elev-2: 0 4px 12px var(--scrim-45);
   --elev-3: 0 12px 32px rgba(0, 0, 0, 0.55);
 
   /* WP-01 dark parity for new tokens */
@@ -176,7 +296,7 @@
   --grad-ai: linear-gradient(135deg, #818cf8, #6366f1);
   --grad-cta: linear-gradient(135deg, #4ade80, #22c55e);
   --brand-glow: 0 0 24px rgba(74, 222, 128, 0.22);
-  --shadow-brand: 0 4px 14px rgba(0, 0, 0, 0.45);
+  --shadow-brand: 0 4px 14px var(--scrim-45);
   --shadow-brand-lg: 0 6px 20px rgba(0, 0, 0, 0.55);
   --glass-bg: color-mix(in srgb, var(--bg-elev) 88%, transparent);
 
@@ -242,25 +362,25 @@ body::after {
   background-image:
     linear-gradient(
       45deg,
-      color-mix(in srgb, var(--brand) 5%, transparent) 1.5px,
-      transparent 1.5px
+      color-mix(in srgb, var(--brand) 5%, transparent) var(--w-hairline),
+      transparent var(--w-hairline)
     ),
     linear-gradient(
       -45deg,
-      color-mix(in srgb, var(--brand) 5%, transparent) 1.5px,
-      transparent 1.5px
+      color-mix(in srgb, var(--brand) 5%, transparent) var(--w-hairline),
+      transparent var(--w-hairline)
     );
   background-size: 28px 28px;
   mask-image: linear-gradient(
     to bottom,
     black 0%,
-    rgba(0, 0, 0, 0.45) 38%,
+    var(--scrim-45) 38%,
     transparent 82%
   );
   -webkit-mask-image: linear-gradient(
     to bottom,
     black 0%,
-    rgba(0, 0, 0, 0.45) 38%,
+    var(--scrim-45) 38%,
     transparent 82%
   );
 }
@@ -285,14 +405,41 @@ h2,
 h3,
 h4 {
   line-height: var(--lh-head);
-  font-weight: 800;
-  letter-spacing: -0.005em;
+  font-weight: 700;
   margin: 0 0 0.4em;
   text-wrap: balance;
 }
 
 h1 {
   font-size: var(--fs-2xl);
+}
+
+/* AUD-G-14 / G-21: negative tracking helps Latin text but collides Bangla
+   conjuncts and vowel signs. Every tightening is therefore scoped to English
+   UI, where the whole string is Latin script. */
+:lang(en) :is(h1, h2, h3, h4) {
+  letter-spacing: -0.005em;
+}
+
+:lang(en) .brand {
+  letter-spacing: -0.01em;
+}
+
+:lang(en) .hero h2 {
+  letter-spacing: -0.015em;
+}
+
+:lang(en) .quick-title {
+  letter-spacing: -0.01em;
+}
+
+:lang(en) .ring-inner {
+  letter-spacing: -0.02em;
+}
+
+:lang(en) .search-kind,
+:lang(en) .auth-brand-kicker {
+  letter-spacing: 0.02em;
 }
 
 h2 {
@@ -325,6 +472,28 @@ p {
 
 :focus:not(:focus-visible) {
   outline: none;
+}
+
+/* AUD-G-02: bypass-blocks link. Off-screen until it takes focus, then pinned
+   over the topbar so a keyboard user can jump past the chrome. */
+.skip-link {
+  position: fixed;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 1000;
+  transform: translateY(-200%);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  background: var(--brand);
+  color: var(--on-brand);
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: var(--elev-3);
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  transform: translateY(0);
 }
 
 ::selection {
@@ -428,10 +597,9 @@ p {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  font-weight: 800;
+  font-weight: 700;
   font-size: var(--fs-lg);
   color: var(--ink);
-  letter-spacing: -0.01em;
 }
 
 .brand:hover {
@@ -439,8 +607,8 @@ p {
 }
 
 .brand-mark {
-  width: 30px;
-  height: 30px;
+  width: var(--w-30);
+  height: var(--w-30);
   border-radius: 10px;
   display: grid;
   place-items: center;
@@ -500,7 +668,7 @@ p {
 
 .bnav-item.active {
   color: var(--brand-strong);
-  font-weight: 800;
+  font-weight: 700;
 }
 
 /* WP-04: animated pill indicator (replaces 5px dot as primary affordance) */
@@ -607,7 +775,7 @@ p {
 
 .card-title {
   font-size: var(--fs-lg);
-  font-weight: 800;
+  font-weight: 700;
   margin-bottom: var(--space-2);
   line-height: var(--lh-head);
 }
@@ -625,7 +793,7 @@ p {
 }
 
 .card-featured {
-  border: 1.5px solid transparent;
+  border: var(--w-hairline) solid transparent;
   background:
     linear-gradient(var(--card), var(--card)) padding-box,
     var(--grad-ai) border-box;
@@ -677,6 +845,13 @@ p {
 
 .empty-sub {
   margin-top: 4px;
+  /* The subtitle is a <p> (not a <div>) so the accessibility tree keeps it a
+     separate node from the title -- adjacent generic elements merge into one,
+     which merged the two lines into a single announcement. This reset keeps
+     the geometry identical to the <div> version, since the global
+     `p { margin: 0 0 0.8em }` would otherwise add 0.8em; vertical spacing
+     stays owned by .empty-pad and .empty-action. */
+  margin-bottom: 0;
 }
 
 .empty-action {
@@ -780,7 +955,7 @@ p {
 
 .btn-primary {
   background: var(--grad-brand);
-  color: #fff;
+  color: var(--on-brand);
   box-shadow: var(--shadow-brand);
 }
 
@@ -791,7 +966,7 @@ p {
 
 .btn-teal {
   background: linear-gradient(135deg, var(--teal), var(--teal-strong));
-  color: #fff;
+  color: var(--on-teal);
   box-shadow: 0 4px 14px color-mix(in srgb, var(--teal) 30%, transparent);
 }
 
@@ -835,7 +1010,7 @@ p {
 }
 
 .btn-lg {
-  padding: 15px 22px;
+  padding: var(--w-15) 22px;
   font-size: var(--fs-lg);
 }
 
@@ -904,7 +1079,7 @@ p {
   font-family: inherit;
   font-size: var(--fs-md);
   padding: 12px 14px;
-  border: 1.5px solid var(--line-strong);
+  border: var(--w-hairline) solid var(--line-strong);
   border-radius: var(--radius-sm);
   background: var(--card);
   color: var(--ink);
@@ -951,7 +1126,7 @@ p {
 
 .textarea {
   resize: vertical;
-  min-height: 90px;
+  min-height: var(--w-90);
 }
 
 .error {
@@ -963,10 +1138,10 @@ p {
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--w-5);
   font-size: var(--fs-xs);
   font-weight: 600;
-  padding: 3px 9px;
+  padding: 3px var(--w-9);
   border-radius: 999px;
   background: var(--brand-soft);
   color: var(--brand-strong);
@@ -1036,7 +1211,7 @@ p {
 
 .stat-value {
   font-size: var(--fs-2xl);
-  font-weight: 800;
+  font-weight: 700;
   color: var(--brand-strong);
   line-height: 1.1;
 }
@@ -1148,7 +1323,7 @@ p {
   font-weight: 700;
   font-size: var(--fs-sm);
   background: var(--brand);
-  color: #fff;
+  color: var(--on-brand);
   padding: 8px 16px;
   display: flex;
   gap: 12px;
@@ -1319,7 +1494,7 @@ p {
   background:
     radial-gradient(
       30rem 22rem at 82% 18%,
-      color-mix(in srgb, #f59e0b 12%, transparent),
+      color-mix(in srgb, var(--amber) 12%, transparent),
       transparent 62%
     ),
     radial-gradient(
@@ -1362,8 +1537,8 @@ p {
   pointer-events: none;
   opacity: 0.5;
   background-image: radial-gradient(
-    color-mix(in srgb, var(--brand) 14%, transparent) 1.2px,
-    transparent 1.2px
+    color-mix(in srgb, var(--brand) 14%, transparent) var(--w-dot),
+    transparent var(--w-dot)
   );
   background-size: 22px 22px;
   mask-image: radial-gradient(70% 55% at 50% 30%, black 30%, transparent 75%);
@@ -1393,7 +1568,7 @@ p {
 
 .splash h1 {
   font-size: var(--fs-3xl);
-  font-weight: 800;
+  font-weight: 700;
   margin-bottom: 0;
   max-width: 100%;
   overflow-wrap: break-word;
@@ -1464,11 +1639,24 @@ p {
 
 .empty-mark {
   margin-bottom: 12px;
-  filter: drop-shadow(var(--shadow-sm));
+}
+/*
+ * The mark's shadow is a plain box-shadow on the <svg> element, NOT a
+ * `filter: drop-shadow`. The filter rasterized the gradient-filled mark
+ * intermittently before its resources were ready and toHaveScreenshot
+ * captured a ~12px sliver, while a live probe measured the paint correctly at
+ * 56x56 -- a screenshot-compositing race, not a layout defect. translateZ(0)
+ * did not fully settle it; dropping the filter did. The radius matches the
+ * logo's rounded square (`rx=16` on a 64x64 viewBox at 56px render = 14px).
+ */
+.empty-mark svg {
+  display: block;
+  box-shadow: var(--shadow-sm);
+  border-radius: 14px;
 }
 
 .empty-title {
-  font-weight: 800;
+  font-weight: 700;
   font-size: var(--fs-lg);
 }
 
@@ -1489,7 +1677,7 @@ p {
   gap: var(--space-2);
   margin-bottom: var(--space-5);
   background: var(--card-2);
-  padding: 5px;
+  padding: var(--w-5);
   border-radius: var(--radius);
 }
 
@@ -1527,7 +1715,7 @@ form .btn[type="submit"] {
 .hero {
   border-radius: var(--radius-lg);
   padding: var(--space-6);
-  color: #fff;
+  color: var(--on-dark-accent);
   background: var(--grad-hero);
   position: relative;
   overflow: hidden;
@@ -1540,8 +1728,8 @@ form .btn[type="submit"] {
   inset: 0;
   pointer-events: none;
   background-image: radial-gradient(
-    rgba(255, 255, 255, 0.16) 1.2px,
-    transparent 1.2px
+    var(--sheen-16) var(--w-dot),
+    transparent var(--w-dot)
   );
   background-size: 20px 20px;
   mask-image: radial-gradient(80% 90% at 80% 10%, black 20%, transparent 70%);
@@ -1554,16 +1742,8 @@ form .btn[type="submit"] {
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(
-      22rem 15rem at 88% -18%,
-      rgba(253, 230, 138, 0.24),
-      transparent 62%
-    ),
-    radial-gradient(
-      30rem 20rem at -12% 125%,
-      rgba(255, 255, 255, 0.12),
-      transparent 55%
-    );
+    radial-gradient(22rem 15rem at 88% -18%, var(--hero-glow), transparent 62%),
+    radial-gradient(30rem 20rem at -12% 125%, var(--sheen-12), transparent 55%);
 }
 
 .hero h2 {
@@ -1594,18 +1774,18 @@ form .btn[type="submit"] {
 }
 
 .hero-actions .btn {
-  color: #fff;
+  color: var(--on-dark-accent);
 }
 
 .hero-btn-glass {
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: var(--sheen-15);
+  color: var(--on-dark-accent);
+  border: 1px solid var(--sheen-35);
   backdrop-filter: blur(6px);
 }
 
 .hero-btn-glass:hover {
-  background: rgba(255, 255, 255, 0.24);
+  background: var(--sheen-24);
   transform: translateY(-1px);
 }
 
@@ -1734,12 +1914,12 @@ form .btn[type="submit"] {
 
 .trend-up {
   color: var(--ok);
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .trend-down {
   color: var(--danger);
-  font-weight: 800;
+  font-weight: 700;
 }
 
 /* Error state (WP-11) */
@@ -1807,8 +1987,8 @@ form .btn[type="submit"] {
 }
 
 .quick-icon {
-  width: 46px;
-  height: 46px;
+  width: var(--w-46);
+  height: var(--w-46);
   border-radius: 14px;
   display: grid;
   place-items: center;
@@ -1830,7 +2010,7 @@ form .btn[type="submit"] {
 /* Subject cards */
 .subject-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(var(--w-150), 1fr));
   gap: var(--space-3);
 }
 
@@ -1851,7 +2031,7 @@ form .btn[type="submit"] {
   content: "";
   position: absolute;
   inset: 0 auto 0 0;
-  width: 5px;
+  width: var(--w-5);
   background: var(--brand);
 }
 
@@ -1929,12 +2109,29 @@ form .btn[type="submit"] {
 }
 
 .font-range {
-  width: 90px;
+  width: var(--w-90);
 }
 
 .font-scale-row {
   gap: 6px;
   margin-left: auto;
+}
+
+/* AUD-G-12: speech rate/pitch live next to the listen button, inside the
+   reader controls row. */
+.tts-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tts-control input[type="range"] {
+  width: 96px;
+}
+
+.tts-notice {
+  flex-basis: 100%;
+  margin: 0;
 }
 
 .workspace-tabs {
@@ -1975,9 +2172,32 @@ form .btn[type="submit"] {
   margin-top: calc(var(--space-3) * -1 + 4px);
 }
 
+/* AUD-G-19: one commit over the whole 30-bubble window cost 746-760 ms of
+   layout/paint at 4x CPU on a 120-message history. `content-visibility: auto`
+   skips layout and paint (and gives the skipped subtree size containment) for
+   every row outside the viewport, so the "load earlier" expansion -- whose new
+   rows mount above the reading position -- only lays out what is on screen.
+   `contain-intrinsic-size: auto <px>` uses the remembered height of a row that
+   has been laid out before and an estimate (220 px: the average of a one-line
+   question and the ~10-line Bangla answer the perf seed writes, at the audit's
+   412 px viewport) for one that never has, which keeps scrollHeight -- and
+   therefore the scroll-anchoring maths in AITutorPage -- close to the real
+   height. */
+.chat-message {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 220px;
+}
+
+/* AUD-G-19: the transcript window's "load earlier" control, at the top of the
+   thread -- centred like the .chat-day marker it sits next to, so it does not
+   read as part of the conversation. */
+.load-earlier {
+  align-self: center;
+}
+
 .bubble {
   max-width: 86%;
-  padding: 13px 16px;
+  padding: var(--w-13) 16px;
   border-radius: var(--radius);
   font-size: var(--fs-md);
   line-height: var(--lh-body);
@@ -2013,14 +2233,14 @@ form .btn[type="submit"] {
   gap: 6px;
   margin-bottom: 6px;
   font-size: var(--fs-xs);
-  font-weight: 800;
+  font-weight: 700;
   color: var(--ai);
 }
 
 .bubble.user {
   align-self: flex-end;
   background: var(--grad-brand);
-  color: #fff;
+  color: var(--on-brand);
   border-top-right-radius: var(--radius-sm);
   box-shadow: var(--shadow-sm);
 }
@@ -2051,8 +2271,8 @@ form .btn[type="submit"] {
 
 .typing-dots span {
   display: inline-block;
-  width: 7px;
-  height: 7px;
+  width: var(--w-7);
+  height: var(--w-7);
   margin-right: 4px;
   border-radius: 50%;
   background: var(--ai);
@@ -2228,7 +2448,7 @@ form .btn[type="submit"] {
 }
 
 .conv-icon-action:hover {
-  background: var(--danger-soft, rgba(220, 38, 38, 0.1));
+  background: var(--danger-soft);
 }
 
 .search-hit-btn {
@@ -2295,14 +2515,14 @@ form .btn[type="submit"] {
 .source-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--w-5);
   font-size: var(--fs-xs);
   font-weight: 600;
   background: var(--brand-soft);
   color: var(--brand-strong);
   border: 1px solid transparent;
   border-radius: 8px;
-  padding: 4px 9px;
+  padding: 4px var(--w-9);
   margin: 2px;
   min-height: 32px;
   cursor: pointer;
@@ -2393,7 +2613,7 @@ table.data thead th {
   position: sticky;
   top: 0;
   background: var(--card-2);
-  font-weight: 800;
+  font-weight: 700;
   color: var(--muted);
   z-index: 1;
 }
@@ -2419,7 +2639,7 @@ table.data tbody tr:hover {
   display: inline-flex;
   align-items: center;
   border-radius: 999px;
-  border: 1.5px solid var(--line-strong);
+  border: var(--w-hairline) solid var(--line-strong);
   background: var(--card);
   color: var(--muted);
   font-weight: 600;
@@ -2458,7 +2678,7 @@ table.data tbody tr:hover {
   position: fixed;
   inset: 0;
   z-index: var(--z-modal);
-  background: rgba(14, 18, 38, 0.55);
+  background: var(--scrim-modal);
   display: grid;
   place-items: center;
   padding: var(--space-4);
@@ -2561,7 +2781,7 @@ table.data tbody tr:hover {
   text-align: left;
   padding: 12px 14px;
   border-radius: var(--radius-sm);
-  border: 1.5px solid var(--line-strong);
+  border: var(--w-hairline) solid var(--line-strong);
   background: var(--card);
   cursor: pointer;
   font-weight: 600;
@@ -2784,7 +3004,7 @@ button.source-chip:hover {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  box-shadow: 0 12px 32px rgb(0 0 0 / 18%);
+  box-shadow: 0 12px 32px var(--scrim-18);
   max-height: 60vh;
   overflow-y: auto;
 }
@@ -2809,7 +3029,6 @@ button.source-chip:hover {
   font-size: var(--fs-xs);
   color: var(--brand);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 .search-title {
   font-size: var(--fs-sm);
@@ -2825,7 +3044,7 @@ button.source-chip:hover {
 }
 @media (max-width: 560px) {
   .searchbox {
-    max-width: 150px;
+    max-width: var(--w-150);
   }
 }
 
@@ -2899,7 +3118,7 @@ button.source-chip:hover {
     background: transparent;
     resize: none;
     overflow: hidden;
-    color: #000;
+    color: var(--print-ink);
     font-size: 12pt;
   }
   .lesson-print .lp-no-print {
@@ -2995,8 +3214,23 @@ button.source-chip:hover {
 }
 
 .consent-check {
-  width: auto;
-  margin-top: 3px;
+  /* AUD-G-01 (WCAG 2.2 SC 2.5.8): the native box measured ~13 px with a
+     mouse — under the 24 px minimum — and 22 px on touch. The box is drawn at
+     24 px everywhere; on coarse pointers F-110's generic 44 px floor applies. */
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  flex: none;
+}
+
+/* AUD-G-01 (WCAG 1.4.1): links that sit inside a sentence — the register
+   consent row and the forgot/reset footer — were distinguishable from the
+   surrounding text by colour alone; Lighthouse's link-in-text-block flagged
+   them. Underline is the non-colour cue. */
+.inline-link {
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .link-row-center {
@@ -3020,13 +3254,11 @@ button.source-chip:hover {
    the v2/v3 design system (parent / teacher / admin / forgot) use
    a shorter class vocabulary; map it onto the token system so
    those pages render with the real design instead of unstyled
-   defaults. New markup should prefer the .btn-*/
-.stat-*/.table-wrap
-  names
-  above.
-  ------------------------------------------------------------
-  */
-  .page-title {
+   defaults. New markup should prefer the `.btn-*` and
+   `.table-wrap` names above.
+   ------------------------------------------------------------
+   */
+.page-title {
   font-size: var(--fs-2xl);
   font-weight: 700;
   margin: 0 0 var(--space-4);
@@ -3051,7 +3283,7 @@ button.secondary {
 }
 button.primary {
   background: var(--brand);
-  color: #fff;
+  color: var(--on-brand);
 }
 button.primary:hover {
   background: var(--brand-strong);
@@ -3111,7 +3343,7 @@ button.small {
 }
 .stat-row .num {
   font-size: var(--fs-xl);
-  font-weight: 800;
+  font-weight: 700;
   color: var(--brand-strong);
   font-variant-numeric: tabular-nums;
 }
@@ -3142,12 +3374,12 @@ button.small {
   position: absolute;
   top: 2px;
   right: 2px;
-  min-width: 15px;
-  height: 15px;
+  min-width: var(--w-15);
+  height: var(--w-15);
   padding: 0 3px;
   border-radius: 999px;
   background: var(--danger);
-  color: #fff;
+  color: var(--on-danger);
   font-size: 10px;
   font-weight: 700;
   display: inline-flex;
@@ -3523,7 +3755,7 @@ button.small {
 }
 .qp-options {
   margin: var(--space-1) 0 var(--space-2);
-  padding-left: 30px;
+  padding-left: var(--w-30);
   font-size: var(--fs-sm);
   color: var(--muted);
 }
@@ -3578,7 +3810,7 @@ button.small {
   border-radius: var(--radius-full);
   background: var(--brand-soft);
   color: var(--brand-strong);
-  font-weight: 800;
+  font-weight: 700;
   font-size: var(--fs-lg);
   flex-shrink: 0;
   user-select: none;
@@ -3732,7 +3964,7 @@ button.small {
   min-width: 180px;
 }
 .w-90 {
-  width: 90px;
+  width: var(--w-90);
 }
 .maxw-220 {
   max-width: 220px;
@@ -3751,6 +3983,19 @@ button.small {
   gap: var(--space-2);
   font-weight: 700;
   color: var(--ok);
+}
+/* AUD-G-15: /status ships prerendered in its pre-data state, so the payload
+   lands after the first paint. Without a reservation the card is 171 px
+   shorter before it arrives (measured at the audit's 412 px viewport, where
+   /api/status always returns four component rows), and the login link --
+   everything below the loading line -- jumps down when it does: CLS 0.0813
+   measured on the built app. Reserving the block the payload occupies keeps
+   the link and the footer where the data render puts them: 198 px reserves
+   the payload's hero, four component rows and the checked-at line as measured
+   on the built app at the audit's 412 px viewport (the login link sits at
+   y=313 in both states, and CLS dropped 0.0813 -> 0.0392). */
+.status-pending {
+  min-height: 200px;
 }
 .status-hero.degraded {
   color: var(--warn);
@@ -3805,15 +4050,15 @@ button.small {
   --grad-shine: linear-gradient(
     115deg,
     transparent 30%,
-    rgba(255, 255, 255, 0.35) 48%,
-    rgba(255, 255, 255, 0.12) 52%,
+    var(--sheen-35) 48%,
+    var(--sheen-12) 52%,
     transparent 70%
   );
   --ring-glow:
     0 0 0 4px color-mix(in srgb, var(--fresh) 18%, transparent),
     0 6px 18px color-mix(in srgb, var(--brand) 30%, transparent);
   --quick-shadow:
-    0 1px 2px rgba(31, 41, 28, 0.06), 0 6px 16px -6px rgba(31, 41, 28, 0.12);
+    0 1px 2px var(--ink-06), 0 6px 16px -6px rgba(31, 41, 28, 0.12);
   --quick-shadow-hover:
     0 2px 4px rgba(31, 41, 28, 0.08), 0 14px 28px -8px rgba(31, 41, 28, 0.22);
   --aurora-1: rgba(34, 197, 94, 0.35);
@@ -3823,15 +4068,15 @@ button.small {
 
 [data-theme="dark"] {
   --quick-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.5), 0 6px 16px -6px rgba(0, 0, 0, 0.55);
+    0 1px 2px var(--scrim-50), 0 6px 16px -6px rgba(0, 0, 0, 0.55);
   --quick-shadow-hover:
-    0 2px 4px rgba(0, 0, 0, 0.5), 0 14px 28px -8px rgba(0, 0, 0, 0.65);
+    0 2px 4px var(--scrim-50), 0 14px 28px -8px rgba(0, 0, 0, 0.65);
   --aurora-1: rgba(74, 222, 128, 0.24);
   --aurora-2: rgba(56, 189, 248, 0.2);
   --aurora-3: rgba(129, 140, 248, 0.22);
   --ring-glow:
     0 0 0 4px color-mix(in srgb, var(--fresh) 22%, transparent),
-    0 6px 18px rgba(0, 0, 0, 0.5);
+    0 6px 18px var(--scrim-50);
 }
 
 /* ── 2. Page transition: every route mounts its own .shell-main ── */
@@ -3910,7 +4155,7 @@ button.small {
 .btn {
   border-radius: 12px;
   font-weight: 700;
-  padding: 13px 20px;
+  padding: var(--w-13) 20px;
   position: relative;
   overflow: hidden;
   isolation: isolate;
@@ -3929,7 +4174,7 @@ button.small {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 1px 0 var(--sheen-18);
   pointer-events: none;
   z-index: 1;
 }
@@ -3977,42 +4222,41 @@ button.small {
 
 /* keep size variants winning over the v2 .btn padding above */
 .btn-sm {
-  padding: 9px 14px;
+  padding: var(--w-9) 14px;
 }
 
 .btn-lg {
-  padding: 16px 26px;
+  padding: 16px var(--w-26);
 }
 
 .btn-primary {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(0, 0, 0, 0.06)),
-    var(--grad-cta);
+    linear-gradient(180deg, var(--sheen-14), var(--scrim-06)), var(--grad-cta);
   box-shadow:
-    0 1px 2px rgba(5, 46, 22, 0.24),
-    0 8px 20px -6px rgba(22, 101, 52, 0.55);
+    0 1px 2px var(--brand-ink-24),
+    0 8px 20px -6px var(--brand-55);
 }
 
 .btn-primary:hover {
   box-shadow:
-    0 2px 4px rgba(5, 46, 22, 0.22),
-    0 14px 30px -6px rgba(22, 101, 52, 0.6),
+    0 2px 4px var(--brand-ink-22),
+    0 14px var(--w-30) -6px var(--brand-60),
     var(--brand-glow);
 }
 
 .btn-teal {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(0, 0, 0, 0.06)),
+    linear-gradient(180deg, var(--sheen-14), var(--scrim-06)),
     linear-gradient(135deg, var(--teal), var(--teal-strong));
   box-shadow:
-    0 1px 2px rgba(3, 105, 161, 0.24),
+    0 1px 2px var(--teal-24),
     0 8px 20px -6px color-mix(in srgb, var(--teal) 55%, transparent);
 }
 
 .btn-teal:hover {
   box-shadow:
-    0 2px 4px rgba(3, 105, 161, 0.22),
-    0 14px 30px -6px color-mix(in srgb, var(--teal) 60%, transparent);
+    0 2px 4px var(--teal-22),
+    0 14px var(--w-30) -6px color-mix(in srgb, var(--teal) 60%, transparent);
 }
 
 .btn-soft {
@@ -4054,23 +4298,23 @@ button.small {
 
 /* glass buttons inside dark heroes */
 .hero-btn-glass {
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: var(--sheen-14);
+  border: 1px solid var(--sheen-40);
   backdrop-filter: blur(8px);
-  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 8px 24px -8px var(--scrim-35);
 }
 
 .hero-btn-glass:hover {
-  background: rgba(255, 255, 255, 0.24);
-  box-shadow: 0 12px 30px -8px rgba(0, 0, 0, 0.4);
+  background: var(--sheen-24);
+  box-shadow: 0 12px var(--w-30) -8px var(--scrim-40);
 }
 
 /* ── 4. Hero v2 — living aurora ──────────────────────────────── */
 .hero {
   isolation: isolate;
   box-shadow:
-    0 2px 4px rgba(5, 46, 22, 0.2),
-    0 18px 44px -14px rgba(5, 46, 22, 0.5);
+    0 2px 4px var(--brand-ink-20),
+    0 18px 44px -14px var(--brand-ink-50);
   animation: hero-in 560ms var(--ease-soft) both;
 }
 
@@ -4123,20 +4367,19 @@ button.small {
     background-position: 0 0;
   }
   to {
-    background-position: 60px 30px;
+    background-position: 60px var(--w-30);
   }
 }
 
 .hero h2 {
-  letter-spacing: -0.015em;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.22);
+  text-shadow: 0 2px 12px var(--scrim-22);
 }
 
 .hero-sparkle {
   display: inline-block;
   animation: sparkle-twinkle 2.6s ease-in-out infinite;
   transform-origin: center;
-  filter: drop-shadow(0 0 6px rgba(255, 255, 240, 0.7));
+  filter: drop-shadow(0 0 6px var(--sparkle-glow));
 }
 
 @keyframes sparkle-twinkle {
@@ -4152,15 +4395,15 @@ button.small {
 }
 
 .hero .home-prompt .input {
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.65);
-  box-shadow: 0 10px 26px -10px rgba(0, 0, 0, 0.45);
+  background: var(--sheen-96);
+  border: 1px solid var(--sheen-65);
+  box-shadow: 0 10px var(--w-26) -10px var(--scrim-45);
   color: var(--brand-ink);
-  min-height: 50px;
+  min-height: var(--w-50);
 }
 
 .hero .home-prompt .input::placeholder {
-  color: #6b7a66;
+  color: var(--placeholder-ink);
 }
 
 .hero .home-prompt {
@@ -4168,15 +4411,15 @@ button.small {
 }
 
 .hero .home-prompt .btn {
-  min-height: 50px;
+  min-height: var(--w-50);
   box-shadow:
-    0 1px 2px rgba(5, 46, 22, 0.3),
-    0 10px 26px -8px rgba(0, 0, 0, 0.5);
+    0 1px 2px var(--brand-ink-30),
+    0 10px var(--w-26) -8px var(--scrim-50);
 }
 
 /* ── 5. Quick tiles v2 — alignment fix + choreography ────────── */
 .quick-grid {
-  grid-template-columns: repeat(auto-fit, minmax(225px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(var(--w-225), 1fr));
   gap: var(--space-4);
 }
 
@@ -4187,7 +4430,7 @@ button.small {
   padding: var(--space-4);
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--card) 92%, #fff),
+    color-mix(in srgb, var(--card) 92%, var(--white)),
     var(--card)
   );
   border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
@@ -4254,10 +4497,10 @@ button.small {
 .quick-icon {
   width: 48px;
   height: 48px;
-  border-radius: 15px;
+  border-radius: var(--w-15);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.5),
-    0 4px 10px -3px rgba(31, 41, 28, 0.18);
+    inset 0 1px 0 var(--sheen-50),
+    0 4px 10px -3px var(--ink-18);
 }
 
 .quick-tile:hover .quick-icon {
@@ -4266,40 +4509,43 @@ button.small {
 
 /* gradient icon tiles per tone */
 .tile-teal {
-  background: linear-gradient(140deg, #38bdf8, var(--teal-strong));
-  color: #fff !important;
+  background: linear-gradient(140deg, var(--tile-teal), var(--teal-strong));
+  color: var(--on-teal) !important;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 1px 0 var(--sheen-45),
     0 6px 14px -4px color-mix(in srgb, var(--teal) 55%, transparent);
 }
 
 .tile-warn {
-  background: linear-gradient(140deg, #fbbf24, #d97706);
-  color: #fff !important;
+  background: linear-gradient(
+    140deg,
+    var(--tile-warn),
+    var(--tile-warn-strong)
+  );
+  color: var(--on-dark-accent) !important;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.45),
-    0 6px 14px -4px rgba(217, 119, 6, 0.5);
+    inset 0 1px 0 var(--sheen-45),
+    0 6px 14px -4px var(--tile-warn-shadow);
 }
 
 .tile-ai {
-  background: linear-gradient(140deg, #818cf8, var(--ai));
-  color: #fff !important;
+  background: linear-gradient(140deg, var(--tile-ai), var(--ai));
+  color: var(--on-ai) !important;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 1px 0 var(--sheen-45),
     0 6px 14px -4px color-mix(in srgb, var(--ai) 55%, transparent);
 }
 
 .quick-icon:not(.tile-teal):not(.tile-warn):not(.tile-ai) {
   background: var(--grad-cta);
-  color: #fff;
+  color: var(--on-brand);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 1px 0 var(--sheen-45),
     0 6px 14px -4px color-mix(in srgb, var(--brand) 55%, transparent);
 }
 
 .quick-title {
   font-size: var(--fs-md);
-  letter-spacing: -0.01em;
 }
 
 /* ── 6. Cards v2 ─────────────────────────────────────────────── */
@@ -4324,7 +4570,7 @@ button.small {
 }
 
 .next-step-card::before {
-  width: 5px;
+  width: var(--w-5);
   border-radius: 0 4px 4px 0;
   background: linear-gradient(180deg, var(--fresh), var(--brand));
 }
@@ -4342,7 +4588,6 @@ button.small {
 
 .ring-inner {
   font-size: var(--fs-md);
-  letter-spacing: -0.02em;
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--card) 60%, transparent);
 }
 
@@ -4355,7 +4600,7 @@ button.small {
 }
 
 .bnav-item.active::before {
-  width: 26px;
+  width: var(--w-26);
 }
 
 .bnav-item svg {
@@ -4397,9 +4642,9 @@ button.small {
 .chip.active {
   background: var(--grad-cta);
   border-color: transparent;
-  color: #fff;
+  color: var(--on-brand);
   box-shadow:
-    0 1px 2px rgba(5, 46, 22, 0.28),
+    0 1px 2px var(--brand-ink-28),
     0 6px 16px -6px color-mix(in srgb, var(--brand) 60%, transparent);
 }
 
@@ -4471,15 +4716,15 @@ button.small {
 .welcome-card {
   animation: auth-in 620ms var(--ease-spring) both;
   box-shadow:
-    0 2px 4px rgba(31, 41, 28, 0.06),
-    0 24px 60px -18px rgba(31, 41, 28, 0.28);
-  border: 1px solid color-mix(in srgb, #fff 60%, var(--line));
+    0 2px 4px var(--ink-06),
+    0 24px 60px -18px var(--ink-28);
+  border: 1px solid color-mix(in srgb, var(--white) 60%, var(--line));
 }
 
 @keyframes auth-in {
   0% {
     opacity: 0;
-    transform: translateY(26px) scale(0.97);
+    transform: translateY(var(--w-26)) scale(0.97);
   }
   100% {
     opacity: 1;
@@ -4489,7 +4734,7 @@ button.small {
 
 .auth-card .btn,
 .welcome-card .btn {
-  min-height: 50px;
+  min-height: var(--w-50);
 }
 
 /* ── 13. Quiz celebration v2 ─────────────────────────────────── */
@@ -4509,11 +4754,11 @@ button.small {
 }
 
 .confetti-piece {
-  width: 9px;
+  width: var(--w-9);
   height: 14px;
-  border-radius: 2.5px;
+  border-radius: var(--w-2-5);
   top: -24px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 1px 3px var(--scrim-18);
 }
 
 /* quiz option chips — tactile press */
@@ -4609,7 +4854,7 @@ button.small {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 34px;
+  min-height: var(--w-34);
   padding: 6px 14px;
   border-radius: var(--radius-full);
   background: var(--card);
@@ -4728,7 +4973,7 @@ button.small {
 
 .landing-stats strong {
   font-size: var(--fs-xl);
-  font-weight: 800;
+  font-weight: 700;
   color: var(--brand-strong);
   line-height: var(--lh-tight);
 }
@@ -4798,7 +5043,6 @@ button.small {
   margin: 0;
   font-size: var(--fs-xs);
   font-weight: 700;
-  letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--brand-strong);
 }
@@ -5067,9 +5311,8 @@ button.small {
    F-110: tap-target floor for a product used on cheap Android phones by
    children. WCAG 2.5.8 asks for 24 px; 44 px is the figure platform
    guidelines use for touch, and the audience makes the difference. These
-   rules raise the measured offenders without changing layout: where a
-   control must stay visually small (a checkbox beside its label) the hit
-   area grows around it rather than the glyph.
+   rules raise the measured offenders, sizing the controls themselves so the
+   hit area matches what is drawn (AUD-G-01).
    --------------------------------------------------------------------------- */
 
 @media (pointer: coarse) {
@@ -5079,15 +5322,10 @@ button.small {
     min-height: 44px;
   }
 
-  /* Keep the visual box small but the target large. */
-  input[type="checkbox"].consent-check {
-    appearance: none;
-    width: 22px;
-    height: 22px;
-    min-width: 22px;
-    min-height: 22px;
-    margin: -11px;
-  }
+  /* The consent box used to opt out of the 44 px floor with
+     `appearance: none` and a 22 px box, which made it 22 px *and* invisible
+     on touch — below the SC 2.5.8 minimum and unreadable (AUD-G-01). It now
+     keeps the generic 44 px target and the box it draws. */
 
   select,
   .rate-btn,

@@ -1,0 +1,286 @@
+{
+ "budget_checks": [
+  {
+   "concurrency": 1,
+   "full_answer_budget_ms": 12000,
+   "full_answer_p95_ms": 21.637,
+   "full_answer_within_budget": true,
+   "retrieval_budget_ms": 300,
+   "retrieval_p95_ms": 15.921,
+   "retrieval_within_budget": true,
+   "ttft_budget_ms": 3000,
+   "ttft_p95_ms": null,
+   "ttft_within_budget": null
+  },
+  {
+   "concurrency": 8,
+   "full_answer_budget_ms": 12000,
+   "full_answer_p95_ms": 150.067,
+   "full_answer_within_budget": true,
+   "retrieval_budget_ms": 300,
+   "retrieval_p95_ms": 144.336,
+   "retrieval_within_budget": true,
+   "ttft_budget_ms": 3000,
+   "ttft_p95_ms": null,
+   "ttft_within_budget": null
+  },
+  {
+   "concurrency": 1,
+   "full_answer_budget_ms": 12000,
+   "full_answer_p95_ms": 19.666,
+   "full_answer_within_budget": true,
+   "retrieval_budget_ms": 300,
+   "retrieval_p95_ms": 14.268,
+   "retrieval_within_budget": true,
+   "ttft_budget_ms": 3000,
+   "ttft_p95_ms": 15.128,
+   "ttft_within_budget": true
+  }
+ ],
+ "budgets": {
+  "full_answer_p95_ms": 12000,
+  "llm_ttft_p95_ms": 3000,
+  "retrieval_p95_ms": 300
+ },
+ "generated_by": "bangla_gpt_api.evaluation.stage_latency",
+ "levels": [
+  {
+   "concurrency": 1,
+   "full_answer": {
+    "wall_ms": {
+     "mean_ms": 19.611,
+     "n": 30,
+     "p50_ms": 16.413,
+     "p95_ms": 21.637,
+     "p99_ms": 118.33
+    }
+   },
+   "grounded_rate": 0.8333,
+   "iterations": 30,
+   "mode": "ask",
+   "stages": {
+    "context_build_ms": {
+     "mean_ms": 0.268,
+     "n": 25,
+     "p50_ms": 0.225,
+     "p95_ms": 0.413,
+     "p99_ms": 0.973
+    },
+    "llm_total_ms": {
+     "mean_ms": 2.101,
+     "n": 25,
+     "p50_ms": 0.235,
+     "p95_ms": 0.78,
+     "p99_ms": 46.06
+    },
+    "llm_ttft_ms": {
+     "mean_ms": 0.0,
+     "n": 0,
+     "p50_ms": 0.0,
+     "p95_ms": 0.0,
+     "p99_ms": 0.0
+    },
+    "post_process_ms": {
+     "mean_ms": 2.646,
+     "n": 25,
+     "p50_ms": 2.512,
+     "p95_ms": 3.682,
+     "p99_ms": 4.469
+    },
+    "provider_select_ms": {
+     "mean_ms": 0.005,
+     "n": 25,
+     "p50_ms": 0.005,
+     "p95_ms": 0.01,
+     "p99_ms": 0.011
+    },
+    "query_processing_ms": {
+     "mean_ms": 2.425,
+     "n": 30,
+     "p50_ms": 2.38,
+     "p95_ms": 4.015,
+     "p99_ms": 9.425
+    },
+    "rerank_ms": {
+     "mean_ms": 4.394,
+     "n": 30,
+     "p50_ms": 4.325,
+     "p95_ms": 6.562,
+     "p99_ms": 7.616
+    },
+    "retrieval_ms": {
+     "mean_ms": 13.002,
+     "n": 30,
+     "p50_ms": 11.417,
+     "p95_ms": 15.921,
+     "p99_ms": 57.393
+    }
+   },
+   "throughput_rps": 50.36,
+   "wall_seconds": 0.596
+  },
+  {
+   "concurrency": 8,
+   "full_answer": {
+    "wall_ms": {
+     "mean_ms": 109.336,
+     "n": 30,
+     "p50_ms": 105.234,
+     "p95_ms": 150.067,
+     "p99_ms": 153.425
+    }
+   },
+   "grounded_rate": 0.8333,
+   "iterations": 30,
+   "mode": "ask",
+   "stages": {
+    "context_build_ms": {
+     "mean_ms": 0.234,
+     "n": 25,
+     "p50_ms": 0.207,
+     "p95_ms": 0.478,
+     "p99_ms": 0.482
+    },
+    "llm_total_ms": {
+     "mean_ms": 0.23,
+     "n": 25,
+     "p50_ms": 0.219,
+     "p95_ms": 0.274,
+     "p99_ms": 0.311
+    },
+    "llm_ttft_ms": {
+     "mean_ms": 0.0,
+     "n": 0,
+     "p50_ms": 0.0,
+     "p95_ms": 0.0,
+     "p99_ms": 0.0
+    },
+    "post_process_ms": {
+     "mean_ms": 3.075,
+     "n": 25,
+     "p50_ms": 2.681,
+     "p95_ms": 5.609,
+     "p99_ms": 5.883
+    },
+    "provider_select_ms": {
+     "mean_ms": 0.005,
+     "n": 25,
+     "p50_ms": 0.004,
+     "p95_ms": 0.006,
+     "p99_ms": 0.006
+    },
+    "query_processing_ms": {
+     "mean_ms": 3.572,
+     "n": 30,
+     "p50_ms": 2.796,
+     "p95_ms": 11.331,
+     "p99_ms": 16.077
+    },
+    "rerank_ms": {
+     "mean_ms": 6.178,
+     "n": 30,
+     "p50_ms": 4.466,
+     "p95_ms": 18.303,
+     "p99_ms": 19.0
+    },
+    "retrieval_ms": {
+     "mean_ms": 102.811,
+     "n": 30,
+     "p50_ms": 98.416,
+     "p95_ms": 144.336,
+     "p99_ms": 152.987
+    }
+   },
+   "throughput_rps": 52.28,
+   "wall_seconds": 0.574
+  },
+  {
+   "concurrency": 1,
+   "full_answer": {
+    "wall_ms": {
+     "mean_ms": 14.267,
+     "n": 30,
+     "p50_ms": 13.906,
+     "p95_ms": 19.666,
+     "p99_ms": 23.351
+    }
+   },
+   "grounded_rate": 0.8333,
+   "iterations": 30,
+   "mode": "stream",
+   "stages": {
+    "context_build_ms": {
+     "mean_ms": 0.224,
+     "n": 25,
+     "p50_ms": 0.205,
+     "p95_ms": 0.287,
+     "p99_ms": 0.495
+    },
+    "llm_total_ms": {
+     "mean_ms": 14.267,
+     "n": 30,
+     "p50_ms": 13.906,
+     "p95_ms": 19.666,
+     "p99_ms": 23.351
+    },
+    "llm_ttft_ms": {
+     "mean_ms": 11.735,
+     "n": 30,
+     "p50_ms": 11.296,
+     "p95_ms": 15.128,
+     "p99_ms": 20.933
+    },
+    "post_process_ms": {
+     "mean_ms": 0.0,
+     "n": 0,
+     "p50_ms": 0.0,
+     "p95_ms": 0.0,
+     "p99_ms": 0.0
+    },
+    "provider_select_ms": {
+     "mean_ms": 0.005,
+     "n": 25,
+     "p50_ms": 0.004,
+     "p95_ms": 0.006,
+     "p99_ms": 0.006
+    },
+    "query_processing_ms": {
+     "mean_ms": 0.0,
+     "n": 30,
+     "p50_ms": 0.0,
+     "p95_ms": 0.0,
+     "p99_ms": 0.0
+    },
+    "rerank_ms": {
+     "mean_ms": 4.0,
+     "n": 30,
+     "p50_ms": 4.152,
+     "p95_ms": 5.628,
+     "p99_ms": 6.734
+    },
+    "retrieval_ms": {
+     "mean_ms": 10.716,
+     "n": 30,
+     "p50_ms": 10.203,
+     "p95_ms": 14.268,
+     "p99_ms": 19.965
+    }
+   },
+   "throughput_rps": 69.26,
+   "wall_seconds": 0.433
+  }
+ ],
+ "notes": "Stages are wrapped instance methods of the real TutorService; query_processing_ms is the measured remainder (wall minus the instrumented stages). rerank_ms is a sub-stage of retrieval_ms, not an extra cost. Latency is host-dependent; compare within one run.",
+ "run_conditions": {
+  "corpus": "bundled-sample",
+  "corpus_fingerprint": "HybridIndex:78:aec05278706d",
+  "host": "DESKTOP-GET9GA6",
+  "iterations_per_level": 30,
+  "mode_mix": "ask at [1, 8] + stream at 1",
+  "platform": "Windows-11-10.0.26300-SP0",
+  "provider": "mock -- llm_ttft is pipeline TTFT, NOT model TTFT",
+  "python": "3.12.10",
+  "questions": 6,
+  "workers": 1
+ }
+}

@@ -1,0 +1,375 @@
+{
+ "generated_by": "bangla_gpt_api.evaluation.variant_matrix",
+ "not_measured": {
+  "cross_encoder_rerank": "no cross-encoder weights exist offline and none may be fetched in this environment; the shipped reranker is the deterministic local feature ranker (hybrid_served). A cross-encoder row would be a fabricated number, so it is reported as not measured.",
+  "real_multilingual_embedding_model": "the dense lane is the deterministic hashing embedder; model weights are an owner/infra download decision (A4-02)."
+ },
+ "paired_mde_vs_served": {
+  "hybrid_served_vs_dense": 0.0,
+  "hybrid_served_vs_hybrid_mmr": 0.0,
+  "hybrid_served_vs_hybrid_rerank_off": 0.0,
+  "hybrid_served_vs_lexical": 0.0
+ },
+ "primary_metric": "recall_at_5",
+ "queries": {
+  "n": 181,
+  "stratified": "the same items the stratified report uses, filtered lane only"
+ },
+ "run_conditions": {
+  "corpus": "bundled-sample",
+  "corpus_fingerprint": "HybridIndex:78:aec05278706d",
+  "gold_unmatched_items": 0,
+  "golden_dataset_hash": "3f48ecccee6f84c3",
+  "golden_file": "golden_v2.json",
+  "golden_test_split_hash": "8204848d17461138",
+  "latency_note": "p50/p95 are wall-clock on this host and load; the metric values are deterministic under the sample corpus, the latency is not. Compare latency only within one run.",
+  "positive_items": 181,
+  "provider": "none -- retrieval only, no LLM call",
+  "seed": 20261019,
+  "split": "test",
+  "top_k": 10
+ },
+ "top_k_curve": {
+  "chosen_top_k": 3,
+  "curve": {
+   "1": {
+    "mean_context_chars": 131.0,
+    "mean_context_tokens_est": 32.3,
+    "recall": 0.9282
+   },
+   "10": {
+    "mean_context_chars": 993.8,
+    "mean_context_tokens_est": 245.2,
+    "recall": 1.0
+   },
+   "2": {
+    "mean_context_chars": 265.6,
+    "mean_context_tokens_est": 65.5,
+    "recall": 0.9945
+   },
+   "3": {
+    "mean_context_chars": 399.9,
+    "mean_context_tokens_est": 98.7,
+    "recall": 1.0
+   },
+   "4": {
+    "mean_context_chars": 531.3,
+    "mean_context_tokens_est": 131.2,
+    "recall": 1.0
+   },
+   "5": {
+    "mean_context_chars": 653.2,
+    "mean_context_tokens_est": 161.2,
+    "recall": 1.0
+   },
+   "6": {
+    "mean_context_chars": 774.7,
+    "mean_context_tokens_est": 191.2,
+    "recall": 1.0
+   },
+   "7": {
+    "mean_context_chars": 854.3,
+    "mean_context_tokens_est": 210.9,
+    "recall": 1.0
+   },
+   "8": {
+    "mean_context_chars": 912.4,
+    "mean_context_tokens_est": 225.2,
+    "recall": 1.0
+   },
+   "9": {
+    "mean_context_chars": 953.4,
+    "mean_context_tokens_est": 235.3,
+    "recall": 1.0
+   }
+  },
+  "variant": "hybrid_served"
+ },
+ "variants": {
+  "dense": {
+   "bootstrap_resamples": 1000,
+   "hit_rate_at_10": 1.0,
+   "hit_rate_at_10_ci95": [
+    1.0,
+    1.0
+   ],
+   "latency": {
+    "n": 181,
+    "p50_ms": 1.3,
+    "p95_ms": 2.56
+   },
+   "mde_absolute": 0.0,
+   "mde_basis": "recall_at_5",
+   "mde_by_metric": {
+    "hit_rate_at_10": 0.0,
+    "mrr_at_10": 0.0408,
+    "ndcg_at_10": 0.0305,
+    "recall_at_1": 0.0695,
+    "recall_at_10": 0.0,
+    "recall_at_3": 0.0218,
+    "recall_at_5": 0.0
+   },
+   "mde_degenerate_ceiling": true,
+   "misses": 0,
+   "mrr_at_10": 0.9267,
+   "mrr_at_10_ci95": [
+    0.8971,
+    0.953
+   ],
+   "n": 181,
+   "ndcg_at_10": 0.9453,
+   "ndcg_at_10_ci95": [
+    0.9234,
+    0.9652
+   ],
+   "recall_at_1": 0.8729,
+   "recall_at_10": 1.0,
+   "recall_at_10_ci95": [
+    1.0,
+    1.0
+   ],
+   "recall_at_1_ci95": [
+    0.8232,
+    0.9171
+   ],
+   "recall_at_3": 0.989,
+   "recall_at_3_ci95": [
+    0.9724,
+    1.0
+   ],
+   "recall_at_5": 1.0,
+   "recall_at_5_ci95": [
+    1.0,
+    1.0
+   ]
+  },
+  "hybrid_mmr": {
+   "bootstrap_resamples": 1000,
+   "hit_rate_at_10": 1.0,
+   "hit_rate_at_10_ci95": [
+    1.0,
+    1.0
+   ],
+   "latency": {
+    "n": 181,
+    "p50_ms": 8.03,
+    "p95_ms": 14.65
+   },
+   "mde_absolute": 0.0,
+   "mde_basis": "recall_at_5",
+   "mde_by_metric": {
+    "hit_rate_at_10": 0.0,
+    "mrr_at_10": 0.0278,
+    "ndcg_at_10": 0.0205,
+    "recall_at_1": 0.0539,
+    "recall_at_10": 0.0,
+    "recall_at_3": 0.0,
+    "recall_at_5": 0.0
+   },
+   "mde_degenerate_ceiling": true,
+   "misses": 0,
+   "mrr_at_10": 0.9632,
+   "mrr_at_10_ci95": [
+    0.9438,
+    0.9807
+   ],
+   "n": 181,
+   "ndcg_at_10": 0.9728,
+   "ndcg_at_10_ci95": [
+    0.9578,
+    0.9857
+   ],
+   "recall_at_1": 0.9282,
+   "recall_at_10": 1.0,
+   "recall_at_10_ci95": [
+    1.0,
+    1.0
+   ],
+   "recall_at_1_ci95": [
+    0.8895,
+    0.9613
+   ],
+   "recall_at_3": 1.0,
+   "recall_at_3_ci95": [
+    1.0,
+    1.0
+   ],
+   "recall_at_5": 1.0,
+   "recall_at_5_ci95": [
+    1.0,
+    1.0
+   ]
+  },
+  "hybrid_rerank_off": {
+   "bootstrap_resamples": 1000,
+   "hit_rate_at_10": 1.0,
+   "hit_rate_at_10_ci95": [
+    1.0,
+    1.0
+   ],
+   "latency": {
+    "n": 181,
+    "p50_ms": 2.93,
+    "p95_ms": 5.75
+   },
+   "mde_absolute": 0.0,
+   "mde_basis": "recall_at_5",
+   "mde_by_metric": {
+    "hit_rate_at_10": 0.0,
+    "mrr_at_10": 0.0295,
+    "ndcg_at_10": 0.0218,
+    "recall_at_1": 0.0576,
+    "recall_at_10": 0.0,
+    "recall_at_3": 0.0,
+    "recall_at_5": 0.0
+   },
+   "mde_degenerate_ceiling": true,
+   "misses": 0,
+   "mrr_at_10": 0.9576,
+   "mrr_at_10_ci95": [
+    0.9355,
+    0.9779
+   ],
+   "n": 181,
+   "ndcg_at_10": 0.9687,
+   "ndcg_at_10_ci95": [
+    0.9537,
+    0.9837
+   ],
+   "recall_at_1": 0.9171,
+   "recall_at_10": 1.0,
+   "recall_at_10_ci95": [
+    1.0,
+    1.0
+   ],
+   "recall_at_1_ci95": [
+    0.8785,
+    0.9558
+   ],
+   "recall_at_3": 1.0,
+   "recall_at_3_ci95": [
+    1.0,
+    1.0
+   ],
+   "recall_at_5": 1.0,
+   "recall_at_5_ci95": [
+    1.0,
+    1.0
+   ]
+  },
+  "hybrid_served": {
+   "bootstrap_resamples": 1000,
+   "hit_rate_at_10": 1.0,
+   "hit_rate_at_10_ci95": [
+    1.0,
+    1.0
+   ],
+   "latency": {
+    "n": 181,
+    "p50_ms": 6.02,
+    "p95_ms": 11.1
+   },
+   "mde_absolute": 0.0,
+   "mde_basis": "recall_at_5",
+   "mde_by_metric": {
+    "hit_rate_at_10": 0.0,
+    "mrr_at_10": 0.0278,
+    "ndcg_at_10": 0.0205,
+    "recall_at_1": 0.0539,
+    "recall_at_10": 0.0,
+    "recall_at_3": 0.0,
+    "recall_at_5": 0.0
+   },
+   "mde_degenerate_ceiling": true,
+   "misses": 0,
+   "mrr_at_10": 0.9632,
+   "mrr_at_10_ci95": [
+    0.9438,
+    0.9807
+   ],
+   "n": 181,
+   "ndcg_at_10": 0.9728,
+   "ndcg_at_10_ci95": [
+    0.9578,
+    0.9857
+   ],
+   "recall_at_1": 0.9282,
+   "recall_at_10": 1.0,
+   "recall_at_10_ci95": [
+    1.0,
+    1.0
+   ],
+   "recall_at_1_ci95": [
+    0.8895,
+    0.9613
+   ],
+   "recall_at_3": 1.0,
+   "recall_at_3_ci95": [
+    1.0,
+    1.0
+   ],
+   "recall_at_5": 1.0,
+   "recall_at_5_ci95": [
+    1.0,
+    1.0
+   ]
+  },
+  "lexical": {
+   "bootstrap_resamples": 1000,
+   "hit_rate_at_10": 1.0,
+   "hit_rate_at_10_ci95": [
+    1.0,
+    1.0
+   ],
+   "latency": {
+    "n": 181,
+    "p50_ms": 1.07,
+    "p95_ms": 1.82
+   },
+   "mde_absolute": 0.0,
+   "mde_basis": "recall_at_5",
+   "mde_by_metric": {
+    "hit_rate_at_10": 0.0,
+    "mrr_at_10": 0.0295,
+    "ndcg_at_10": 0.0218,
+    "recall_at_1": 0.0576,
+    "recall_at_10": 0.0,
+    "recall_at_3": 0.0,
+    "recall_at_5": 0.0
+   },
+   "mde_degenerate_ceiling": true,
+   "misses": 0,
+   "mrr_at_10": 0.9576,
+   "mrr_at_10_ci95": [
+    0.9355,
+    0.9779
+   ],
+   "n": 181,
+   "ndcg_at_10": 0.9687,
+   "ndcg_at_10_ci95": [
+    0.9537,
+    0.9837
+   ],
+   "recall_at_1": 0.9171,
+   "recall_at_10": 1.0,
+   "recall_at_10_ci95": [
+    1.0,
+    1.0
+   ],
+   "recall_at_1_ci95": [
+    0.8785,
+    0.9558
+   ],
+   "recall_at_3": 1.0,
+   "recall_at_3_ci95": [
+    1.0,
+    1.0
+   ],
+   "recall_at_5": 1.0,
+   "recall_at_5_ci95": [
+    1.0,
+    1.0
+   ]
+  }
+ }
+}

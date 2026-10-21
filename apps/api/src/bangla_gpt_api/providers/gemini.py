@@ -24,12 +24,12 @@ import httpx
 
 from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.providers.base import (
-    MAX_BACKOFF_SECONDS as _MAX_BACKOFF_SECONDS,
-)
-from bangla_gpt_api.providers.base import (
     ProviderError,
     ProviderSettings,
+    SamplingParams,
     fit_timeout,
+    retry_delay_seconds,
+    sampling_for,
 )
 from bangla_gpt_api.services.context import get_current_context
 
@@ -71,6 +71,12 @@ def _error_message(response: httpx.Response) -> str:
     return _error_detail(payload, str(response.status_code))
 
 
+#: Finish reasons that mean "the answer is cut off", not "the answer ended".
+#: MAX_TOKENS is the documented GenerationConfig truncation signal
+#: (ai.google.dev/api/generate-content).
+_TRUNCATION_FINISH_REASONS = frozenset({"MAX_TOKENS"})
+
+
 def _extract_text(payload: dict) -> str:
     candidates = payload.get("candidates")
     if not isinstance(candidates, list) or not candidates:
@@ -87,6 +93,20 @@ def _extract_text(payload: dict) -> str:
     if not answer:
         reason = candidate.get("finishReason", "UNKNOWN") if isinstance(candidate, dict) else "?"
         raise ProviderError(f"Gemini returned no text (finishReason={reason})")
+    # A6-07: a truncated completion is returned (the caller's post-checks and
+    # the generator repair loop decide what to do with it) but it is never
+    # SILENT -- hiding truncation is how a half-sentence reaches a student.
+    reason = candidate.get("finishReason") if isinstance(candidate, dict) else None
+    if reason in _TRUNCATION_FINISH_REASONS:
+        json_log(
+            logger,
+            logging.WARNING,
+            "provider_response_truncated",
+            provider="gemini",
+            model=payload.get("model", ""),
+            finish_reason=reason,
+            chars=len(answer),
+        )
     return answer
 
 
@@ -122,8 +142,42 @@ def _error_message_text(body: bytes) -> str:
         return body[:200].decode(errors="replace")
 
 
+def _generation_config(
+    max_output_tokens: int | None, sampling: SamplingParams | None, *, supports_seed: bool
+) -> dict | None:
+    """``generationConfig`` for this request (A6-06/AUD-A2-08).
+
+    Field support is documented per provider:
+    * ``maxOutputTokens``, ``temperature``, ``topP`` are GenerationConfig
+      fields in the Gemini API reference (ai.google.dev/api/generate-content,
+      retrieved 2026-10-19; the REST sample carries ``temperature``/``topP``).
+    * ``seed`` is NOT documented there as of that date, so it is only emitted
+      when the provider declares support (``supports_seed``); sending an
+      undocumented field risks a request rejection.
+    * The text-generation page (retrieved 2026-10-19) states that Gemini 4
+      and 3.6+ models ignore custom ``temperature``/``top_p``/``top_k``; the
+      configured models here are below that line, so the values apply.
+    """
+    config: dict = {}
+    if max_output_tokens:
+        config["maxOutputTokens"] = max_output_tokens
+    if sampling is not None:
+        config["temperature"] = sampling.temperature
+        if sampling.top_p is not None:
+            config["topP"] = sampling.top_p
+        if sampling.seed is not None and supports_seed:
+            config["seed"] = sampling.seed
+    return config or None
+
+
 def _build_payload(
-    prompt: str, system: str | None, image: dict | None, max_output_tokens: int | None = None
+    prompt: str,
+    system: str | None,
+    image: dict | None,
+    max_output_tokens: int | None = None,
+    sampling: SamplingParams | None = None,
+    *,
+    supports_seed: bool = False,
 ) -> dict:
     """One user message: the text prompt plus, when given, the validated
     inline image part (vision contract: ``{"inline_data":
@@ -134,9 +188,12 @@ def _build_payload(
     payload: dict = {"contents": [{"role": "user", "parts": parts}]}
     if system:
         payload["systemInstruction"] = {"parts": [{"text": system}]}
-    # A9: bound generation size so a looping model cannot run up the ledger.
-    if max_output_tokens:
-        payload["generationConfig"] = {"maxOutputTokens": max_output_tokens}
+    # A9/A6-06: bound generation size and pin the sampling profile so a
+    # looping model cannot run up the ledger and two identical calls do not
+    # drift.
+    config = _generation_config(max_output_tokens, sampling, supports_seed=supports_seed)
+    if config:
+        payload["generationConfig"] = config
     return payload
 
 
@@ -144,6 +201,14 @@ class GeminiProvider:
     name = "gemini"
     # Gemini accepts inline_data image parts (see _build_payload).
     supports_vision = True
+    # A6-06: this provider consumes SamplingParams (see _generation_config).
+    supports_sampling = True
+    #: ``seed`` is not in the Gemini GenerationConfig reference (retrieved
+    #: 2026-10-19), so the seed stays out of the request until the owner
+    #: verifies support for the configured model/version.
+    supports_seed = False
+    #: A5-01: count_tokens talks to the vendor's real countTokens endpoint.
+    count_tokens_is_vendor = True
 
     def __init__(
         self,
@@ -154,6 +219,7 @@ class GeminiProvider:
         max_retries: int,
         max_output_tokens: int | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
+        default_sampling: SamplingParams | None = None,
     ) -> None:
         self._api_key = api_key
         self.model = model
@@ -164,8 +230,22 @@ class GeminiProvider:
         # worker (F-080).
         self._timeout_seconds = fit_timeout(timeout_seconds, self._max_retries)
         self._max_output_tokens = max_output_tokens
+        # Callers that do not name a task (the teacher generators) get the
+        # structured-generation profile, never the vendor default.
+        self._sampling = default_sampling or sampling_for("generation")
         self._transport = transport
         self._http: httpx.AsyncClient | None = None
+        self._sync_http: httpx.Client | None = None
+
+    def _sampling_log_fields(self, sampling: SamplingParams | None) -> dict[str, object]:
+        """Sampling controls actually sent -- proof for the determinism trace."""
+        if sampling is None:
+            return {}
+        return {
+            "temperature": sampling.temperature,
+            "top_p": sampling.top_p,
+            "seed": sampling.seed if self.supports_seed else None,
+        }
 
     def _client(self) -> httpx.AsyncClient:
         # One pooled client per provider instance instead of a new
@@ -174,13 +254,75 @@ class GeminiProvider:
             self._http = httpx.AsyncClient(timeout=self._timeout_seconds, transport=self._transport)
         return self._http
 
+    def _sync_client(self) -> httpx.Client:
+        """One pooled sync client for the free metadata endpoints (A5-01).
+
+        The serving path is async, but the context-budget counter is a sync
+        ``TokenCounter``; the vendor countTokens call is a small metadata
+        request, so it rides its own pooled sync client with the same timeout
+        policy. Never used for generation. A caller-injected transport is
+        reused only when it implements the sync interface (httpx.MockTransport
+        in tests does); the production client builds its own default pool.
+        """
+        if self._sync_http is None:
+            # The declared parameter type is the async interface, so mypy reads
+            # an isinstance test against the sync base as unreachable -- but a
+            # test-injected httpx.MockTransport implements BOTH interfaces and
+            # must be reused here (contract tests assert the request shape).
+            # The production transport is None: the sync client then builds its
+            # own pool and is never used for generation.
+            sync_transport = (
+                self._transport if type(self._transport) is httpx.MockTransport else None
+            )
+            self._sync_http = httpx.Client(timeout=self._timeout_seconds, transport=sync_transport)
+        return self._sync_http
+
     async def aclose(self) -> None:
         if self._http is not None:
             await self._http.aclose()
             self._http = None
 
+    def close(self) -> None:
+        if self._sync_http is not None:
+            self._sync_http.close()
+            self._sync_http = None
+
+    def count_tokens(self, text: str, *, system: str | None = None) -> int | None:
+        """Vendor token count via the REST ``countTokens`` endpoint (A5-01).
+
+        A free-tier metadata endpoint: no generation, no billing beyond the
+        request itself. Returns ``None`` on any failure (transport error,
+        non-200, malformed body) -- the caller (providers.token_counter.
+        ExactTokenCounter) falls back to the calibrated heuristic upper bound,
+        so a countTokens outage degrades to the safe-side estimate and never
+        breaks the tutor turn. No retry: a single attempt per count.
+        """
+        url = f"{_API_BASE}/models/{self.model}:countTokens"
+        payload: dict = {"contents": [{"role": "user", "parts": [{"text": text}]}]}
+        if system:
+            payload["systemInstruction"] = {"parts": [{"text": system}]}
+        try:
+            response = self._sync_client().post(
+                url, json=payload, headers={"x-goog-api-key": self._api_key}
+            )
+        except httpx.HTTPError:
+            return None
+        if response.status_code != 200:
+            return None
+        try:
+            body = response.json()
+        except ValueError:
+            return None
+        total = body.get("totalTokens") if isinstance(body, dict) else None
+        return int(total) if isinstance(total, (int, float)) else None
+
     async def stream(
-        self, prompt: str, *, system: str | None = None, image: dict | None = None
+        self,
+        prompt: str,
+        *,
+        system: str | None = None,
+        image: dict | None = None,
+        sampling: SamplingParams | None = None,
     ) -> AsyncIterator[str]:
         """Stream tokens via ``streamGenerateContent`` SSE transport.
 
@@ -190,7 +332,15 @@ class GeminiProvider:
         """
         url = f"{_API_BASE}/models/{self.model}:streamGenerateContent?alt=sse"
         headers = {"x-goog-api-key": self._api_key}
-        payload = _build_payload(prompt, system, image, self._max_output_tokens)
+        effective = sampling or self._sampling
+        payload = _build_payload(
+            prompt,
+            system,
+            image,
+            self._max_output_tokens,
+            effective,
+            supports_seed=self.supports_seed,
+        )
 
         attempt = 0
         emitted_any = False
@@ -223,6 +373,7 @@ class GeminiProvider:
                                 answer_chars=chars,
                                 chunks=emitted,
                                 retries=attempt,
+                                **self._sampling_log_fields(effective),
                                 **_context_log_fields(),
                             )
                             return
@@ -241,23 +392,36 @@ class GeminiProvider:
                         else f"Gemini stream failed: {exc}"
                     )
                     raise ProviderError(detail) from exc
-                await asyncio.sleep(min(0.5 * (2**attempt), _MAX_BACKOFF_SECONDS))
+                await asyncio.sleep(retry_delay_seconds(attempt))
                 attempt += 1
                 continue
 
             retryable = status in _RETRYABLE_STATUS
             if retryable and attempt < self._max_retries:
-                await asyncio.sleep(min(0.5 * (2**attempt), _MAX_BACKOFF_SECONDS))
+                await asyncio.sleep(retry_delay_seconds(attempt))
                 attempt += 1
                 continue
             raise ProviderError(f"Gemini API error {status}: {_error_message_text(body)}")
 
     async def generate(
-        self, prompt: str, *, system: str | None = None, image: dict | None = None
+        self,
+        prompt: str,
+        *,
+        system: str | None = None,
+        image: dict | None = None,
+        sampling: SamplingParams | None = None,
     ) -> str:
         url = f"{_API_BASE}/models/{self.model}:generateContent"
         headers = {"x-goog-api-key": self._api_key}
-        payload = _build_payload(prompt, system, image, self._max_output_tokens)
+        effective = sampling or self._sampling
+        payload = _build_payload(
+            prompt,
+            system,
+            image,
+            self._max_output_tokens,
+            effective,
+            supports_seed=self.supports_seed,
+        )
 
         attempt = 0
         start = time.perf_counter()
@@ -274,7 +438,7 @@ class GeminiProvider:
                         else f"Gemini request failed: {exc}"
                     )
                     raise ProviderError(detail) from exc
-                await asyncio.sleep(min(0.5 * (2**attempt), _MAX_BACKOFF_SECONDS))
+                await asyncio.sleep(retry_delay_seconds(attempt))
                 attempt += 1
                 continue
 
@@ -292,6 +456,7 @@ class GeminiProvider:
                         prompt_chars=len(prompt),
                         answer_chars=len(text),
                         retries=attempt,
+                        **self._sampling_log_fields(effective),
                         **_context_log_fields(),
                     )
                     return text
@@ -300,7 +465,7 @@ class GeminiProvider:
 
             retryable = response.status_code in _RETRYABLE_STATUS
             if retryable and attempt < self._max_retries:
-                await asyncio.sleep(min(0.5 * (2**attempt), _MAX_BACKOFF_SECONDS))
+                await asyncio.sleep(retry_delay_seconds(attempt))
                 attempt += 1
                 continue
             raise ProviderError(

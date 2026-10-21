@@ -23,6 +23,16 @@ const SECTIONS: {
       "Guardian consent is mandatory for student accounts. We never sell data to advertisers and do not use children’s data for targeted advertising.",
   },
   {
+    // AUD-B-30: students and parents must be able to see, in the product,
+    // that answers come from an external model.
+    titleBn: "AI ব্যবহার ও তৃতীয় পক্ষের মডেল",
+    titleEn: "AI use & third-party models",
+    bodyBn:
+      "উত্তর তৈরি করতে আমাদের AI টিউটর একটি তৃতীয় পক্ষের মডেল (Google Gemini) ব্যবহার করতে পারে। পাঠানো হয় আপনার প্রশ্ন ও পাঠ্যবইয়ের প্রাসঙ্গিক অংশ; আপনার নাম, ইমেইল বা ফোন নম্বর পাঠানো হয় না।",
+    bodyEn:
+      "To write answers, our AI tutor may use a third-party model (Google Gemini). We send the question and the relevant textbook passage; your name, email and phone number are not sent.",
+  },
+  {
     titleBn: "আপনার নিয়ন্ত্রণ",
     titleEn: "Your controls",
     bodyBn:
@@ -34,16 +44,17 @@ const SECTIONS: {
     titleBn: "ডেটা নিরাপত্তা",
     titleEn: "Data security",
     bodyBn:
-      "পাসওয়ার্ড PBKDF2 দিয়ে হ্যাশ করা হয়, সেশন JWT টোকেন দিয়ে চলে, এবং রিসেট টোকেন শুধু হ্যাশ আকারে সংরক্ষিত হয়।",
+      "পাসওয়ার্ড Argon2id দিয়ে হ্যাশ করা হয়, সেশন JWT টোকেন দিয়ে চলে, এবং রিসেট টোকেন শুধু হ্যাশ আকারে সংরক্ষিত হয়।",
     bodyEn:
-      "Passwords are hashed with PBKDF2, sessions use JWT tokens, and password-reset tokens are stored only as hashes.",
+      "Passwords are hashed with Argon2id, sessions use JWT tokens, and password-reset tokens are stored only as hashes.",
   },
 ];
 
 export default function LegalPage({ kind }: { kind: "privacy" | "terms" }) {
   const isPrivacy = kind === "privacy";
   return (
-    <div className="card card-legal">
+    // AUD-G-18: public routes had no main landmark; this is the page's.
+    <main id="main-content" tabIndex={-1} className="card card-legal">
       <h2>
         {isPrivacy
           ? "গোপনীয়তা নীতি / Privacy Policy"
@@ -106,6 +117,6 @@ export default function LegalPage({ kind }: { kind: "privacy" | "terms" }) {
         <a href="/login">{t("login")}</a> ·{" "}
         <a href="/register">{t("register")}</a>
       </p>
-    </div>
+    </main>
   );
 }

@@ -12,7 +12,8 @@ import {
 } from "lucide-react";
 import { get, post } from "../../api";
 import type { LessonPlan, QPaper, ShortTest } from "../../types";
-import { Button, Card, Field } from "../../components/ui";
+import { Button, Card, Field, NumberInput } from "../../components/ui";
+import { ClassLevelSelect } from "../../components/ClassLevelSelect";
 import { CreateHub } from "../../components/teacher/CreateHub";
 import { QPaperReviewPanel } from "../../components/teacher/QPaperReviewPanel";
 import { friendlyError } from "../../errors";
@@ -168,18 +169,7 @@ function QuestionPaperFlow() {
             label={t("className").replace(/\s*\(.*\)/, "")}
             htmlFor="qplvl"
           >
-            <select
-              id="qplvl"
-              className="select"
-              value={level}
-              onChange={(e) => setLevel(Number(e.target.value))}
-            >
-              {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
+            <ClassLevelSelect id="qplvl" value={level} onChange={setLevel} />
           </Field>
           <Field label={t("subject")} htmlFor="qpsubj">
             <select
@@ -208,58 +198,48 @@ function QuestionPaperFlow() {
           {advanced && (
             <>
               <Field label={t("qpMarks")} htmlFor="qpmarks">
-                <input
+                <NumberInput
                   id="qpmarks"
-                  className="input"
-                  type="number"
                   min={5}
                   max={100}
                   value={marks}
-                  onChange={(e) => setMarks(Number(e.target.value))}
+                  onValue={setMarks}
                 />
               </Field>
               <Field label={t("qpDuration")} htmlFor="qpdur">
-                <input
+                <NumberInput
                   id="qpdur"
-                  className="input"
-                  type="number"
                   min={5}
                   max={300}
                   value={duration}
-                  onChange={(e) => setDuration(Number(e.target.value))}
+                  onValue={setDuration}
                 />
               </Field>
               <Field label={t("qpEasy")} htmlFor="qpeasy">
-                <input
+                <NumberInput
                   id="qpeasy"
-                  className="input"
-                  type="number"
                   min={0}
                   max={100}
                   value={easy}
-                  onChange={(e) => setEasy(Number(e.target.value))}
+                  onValue={setEasy}
                 />
               </Field>
               <Field label={t("qpMedium")} htmlFor="qpmedium">
-                <input
+                <NumberInput
                   id="qpmedium"
-                  className="input"
-                  type="number"
                   min={0}
                   max={100}
                   value={medium}
-                  onChange={(e) => setMedium(Number(e.target.value))}
+                  onValue={setMedium}
                 />
               </Field>
               <Field label={t("qpHard")} htmlFor="qphard">
-                <input
+                <NumberInput
                   id="qphard"
-                  className="input"
-                  type="number"
                   min={0}
                   max={100}
                   value={hard}
-                  onChange={(e) => setHard(Number(e.target.value))}
+                  onValue={setHard}
                 />
               </Field>
             </>
@@ -312,12 +292,18 @@ export function ShortTestFlow() {
         setRooms(rs ?? []);
         setRoomId(rs[0]?.id ?? null);
       })
-      .catch(() => {});
+      .catch((err) => {
+        // AUD-CD-07: the classroom picker went silently empty; the teacher
+        // could not tell "no classes" from "the request failed".
+        console.error("teacher classrooms load failed", err);
+      });
     get<ShortTest[]>("/teacher/shorttests")
       .then((rows) => {
         if (live) setTests(rows ?? []);
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error("short tests load failed", err);
+      });
     return () => {
       live = false;
     };
@@ -404,14 +390,14 @@ export function ShortTestFlow() {
                 htmlFor="stnum"
                 className="field-inline"
               >
-                <input
+                <NumberInput
                   id="stnum"
-                  className="input w-num"
-                  type="number"
+                  className="w-num"
                   min={1}
                   max={10}
                   value={num}
-                  onChange={(e) => setNum(Number(e.target.value) || 1)}
+                  onValue={setNum}
+                  fallback={1}
                 />
               </Field>
               <Field
@@ -419,14 +405,14 @@ export function ShortTestFlow() {
                 htmlFor="stdur"
                 className="field-inline"
               >
-                <input
+                <NumberInput
                   id="stdur"
-                  className="input w-num"
-                  type="number"
+                  className="w-num"
                   min={1}
                   max={60}
                   value={duration}
-                  onChange={(e) => setDuration(Number(e.target.value) || 1)}
+                  onValue={setDuration}
+                  fallback={1}
                 />
               </Field>
             </>
@@ -479,7 +465,11 @@ export function LessonPlanFlow() {
       .then((rs) => {
         if (live) setRooms(rs ?? []);
       })
-      .catch(() => {});
+      .catch((err) => {
+        // AUD-CD-07: generate() then threw a bare "no classroom" with no
+        // explanation of why the list was empty.
+        console.error("teacher classrooms load failed (lesson plan)", err);
+      });
     return () => {
       live = false;
     };
@@ -548,14 +538,14 @@ export function LessonPlanFlow() {
               htmlFor="lpmmin"
               className="field-inline"
             >
-              <input
+              <NumberInput
                 id="lpmmin"
-                className="input w-num-lg"
-                type="number"
+                className="w-num-lg"
                 min={5}
                 max={180}
                 value={minutes}
-                onChange={(e) => setMinutes(Number(e.target.value) || 5)}
+                onValue={setMinutes}
+                fallback={5}
               />
             </Field>
             <Field
@@ -638,16 +628,15 @@ export default function CreatePage() {
   const active = (params.get("kind") as CreateEntry | null) ?? null;
 
   return (
-    <main className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       <section className="section-head">
         <h1 className="page-title">{t("tNavCreate")}</h1>
       </section>
 
       <div className="create-grid" role="list" aria-label={t("cGridTitle")}>
         {ENTRIES.map(({ kind, label, sub, icon: Icon }) => (
-          <div role="listitem">
+          <div role="listitem" key={kind}>
             <button
-              key={kind}
               className={`create-tile${active === kind ? " active" : ""}`}
               aria-pressed={active === kind}
               onClick={() => setParams({ kind })}

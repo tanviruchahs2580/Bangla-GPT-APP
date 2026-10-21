@@ -1,0 +1,19 @@
+# Issue chooser configuration (audit finding AUD-JK-08 / work item K-07).
+#
+# The bug form and the PR template reference labels ("needs-triage",
+# "needs-review") that do not exist in this repository, so GitHub silently
+# drops them. Creating labels needs write access to repository metadata, which
+# the audit token does not have: the exact `gh api` calls are in
+# .audit/handoffs/ef-from-jk.md. Until they run, keep new templates free of
+# label references.
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability (private)
+    url: https://github.com/tanviruchahs2580/Bangla-GPT-APP/blob/main/SECURITY.md
+    about: Do not open a public issue for a vulnerability. SECURITY.md documents the private channel, the response targets and the scope.
+  - name: Support and how to ask for help
+    url: https://github.com/tanviruchahs2580/Bangla-GPT-APP/blob/main/SUPPORT.md
+    about: What is in scope for support, what is not, and how to report an ordinary bug.
+  - name: Documentation index
+    url: https://github.com/tanviruchahs2580/Bangla-GPT-APP/blob/main/docs/README.md
+    about: Architecture, operations, ADRs, threat model and the AI system card.

@@ -1,11 +1,16 @@
 import {
+  cloneElement,
+  isValidElement,
   useEffect,
+  useId,
   useRef,
   type ButtonHTMLAttributes,
+  type ReactElement,
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "../lib/cn";
+import { parseDigits } from "../lib/digits";
 import { t } from "../i18n";
 import { BrandMark } from "./BrandMark";
 
@@ -195,7 +200,7 @@ export function EmptyState({
         <BrandMark size={56} />
       </div>
       <div className="empty-title">{title}</div>
-      {sub && <div className="muted empty-sub">{sub}</div>}
+      {sub && <p className="muted empty-sub">{sub}</p>}
       {action && <div className="empty-action">{action}</div>}
     </div>
   );
@@ -256,6 +261,13 @@ export function Modal({
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
+  // The parent re-creates onClose on every render (it is usually an inline
+  // arrow). Reading it through a ref keeps the effect below tied to `open`
+  // alone: depending on the handler made every keystroke re-run the cleanup
+  // (restoring focus to the opener and re-toggling body overflow), which
+  // ejected the caret from a textarea after its first character.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
@@ -267,7 +279,7 @@ export function Modal({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== "Tab" || !boxRef.current) return;
@@ -291,20 +303,20 @@ export function Modal({
       document.body.style.overflow = prevOverflow;
       restoreRef.current?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   return createPortal(
     <div
       className="modal-backdrop"
-      role="button"
-      tabIndex={0}
-      aria-label={t("locCloseDialog")}
-      onKeyDown={(e) => {
-        // The backdrop dismisses on click, so it must be reachable and
-        // dismissible by keyboard too.
-        if (e.key === "Escape" || e.key === "Enter" || e.key === " ") onClose();
-      }}
+      // Purely dismissive chrome: clicking it closes, but it is NOT an
+      // interactive element (role=presentation). It used to carry
+      // role="button" + tabIndex + onKeyDown, which made a SPACE typed inside
+      // the dialog's own textarea bubble here and close the dialog
+      // mid-sentence (keydown handlers see their descendants' events).
+      // Dismissal is the close button and Escape (handled by the effect
+      // above), both keyboard-reachable.
+      role="presentation"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -365,7 +377,14 @@ export function Skeleton({
   );
 }
 
-/** Label + control + error text, matching the .field contract. */
+/** Label + control + error text, matching the .field contract.
+ *
+ * AUD-G-11: the error text used to be a sibling with no programmatic link to
+ * the input, so a screen-reader user heard "unlabelled edit field" and never
+ * the reason it was rejected. The single control passed as `children` is now
+ * given the id, `aria-invalid` and `aria-describedby` the error needs, so any
+ * form built from this primitive is wired by construction.
+ */
 export function Field({
   label,
   htmlFor,
@@ -381,17 +400,87 @@ export function Field({
   children: ReactNode;
   className?: string;
 }) {
+  const autoId = useId();
+  const controlId = htmlFor ?? autoId;
+  const errorId = `${controlId}-error`;
+  const hintId = `${controlId}-hint`;
+  const control = isValidElement(children)
+    ? cloneElement(children as ReactElement<Record<string, unknown>>, {
+        id: (children.props as { id?: string }).id ?? controlId,
+        "aria-invalid": error ? true : undefined,
+        "aria-describedby": error ? errorId : hint ? hintId : undefined,
+      })
+    : children;
   return (
     <div className={cn("field", !!error && "field-error", className)}>
-      <label htmlFor={htmlFor}>{label}</label>
-      {children}
-      {hint && !error && <span className="field-hint">{hint}</span>}
+      <label htmlFor={controlId}>{label}</label>
+      {control}
+      {hint && !error && (
+        <span className="field-hint" id={hintId}>
+          {hint}
+        </span>
+      )}
       {error && (
-        <span className="field-error-text" role="alert">
+        <span className="field-error-text" id={errorId} role="alert">
           {error}
         </span>
       )}
     </div>
+  );
+}
+
+/** Number field that accepts Bengali and ASCII digits (AUD-G-11).
+ *
+ * `type="number"` refuses Bengali digits at the keyboard level - nothing
+ * arrives in `onChange` - so a Bangla keyboard user cannot fill a numeric
+ * field at all. This renders a text control with a numeric keypad hint and
+ * normalises ০-৯ to ASCII before parsing.
+ */
+export function NumberInput({
+  value,
+  onValue,
+  min,
+  max,
+  fallback,
+  id,
+  className,
+  ...rest
+}: {
+  value: number;
+  onValue: (value: number) => void;
+  min?: number;
+  max?: number;
+  /** Value used when the field is emptied or unparsable. */
+  fallback?: number;
+  id?: string;
+  className?: string;
+} & Omit<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  "value" | "onChange" | "type" | "id" | "className"
+>) {
+  const commit = (raw: string) => {
+    const parsed = parseDigits(raw, Number.NaN);
+    if (Number.isNaN(parsed)) {
+      onValue(fallback ?? min ?? 0);
+      return;
+    }
+    const lower = min ?? Number.NEGATIVE_INFINITY;
+    const upper = max ?? Number.POSITIVE_INFINITY;
+    onValue(Math.min(upper, Math.max(lower, parsed)));
+  };
+  return (
+    <input
+      {...rest}
+      id={id}
+      className={cn("input", className)}
+      type="text"
+      inputMode="numeric"
+      // Both scripts in the pattern so the browser's own validity check and
+      // the on-screen keypad agree with what we accept.
+      pattern="[0-9০-৯]*"
+      value={String(value)}
+      onChange={(e) => commit(e.target.value)}
+    />
   );
 }
 

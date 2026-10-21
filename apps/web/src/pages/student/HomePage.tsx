@@ -18,6 +18,7 @@ import type {
 import { useAuth } from "../../AuthContext";
 import { Card, ProgressRing, Stat } from "../../components/ui";
 import { t, tSubject } from "../../i18n";
+import { truncateGraphemes } from "../../lib/text";
 
 function useProgress(me: MeResponse | null) {
   return useQuery({
@@ -104,7 +105,7 @@ export default function HomePage() {
   const rec = dashboard?.recommendation;
 
   return (
-    <main className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       {/* 1 — greeting + "আজ কী শিখতে চাও?" prompt bar into the AI tutor */}
       <section className="hero">
         <h2>
@@ -136,7 +137,9 @@ export default function HomePage() {
           <p className="muted">
             {tSubject(showCont.subject)} · {t("classLabel")}{" "}
             {showCont.class_level}
-            {showCont.excerpt ? ` — ${showCont.excerpt.slice(0, 80)}…` : ""}
+            {showCont.excerpt
+              ? ` — ${truncateGraphemes(showCont.excerpt, 80)}…`
+              : ""}
           </p>
           <button
             className="btn btn-teal"

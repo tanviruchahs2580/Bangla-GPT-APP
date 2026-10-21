@@ -67,24 +67,33 @@ export default function AnalyticsPage() {
         setRooms(rs);
         setLevel((cur) => cur ?? rs[0]?.class_level ?? null);
       })
-      .catch(() => {});
+      .catch((err) => {
+        // AUD-CD-07: an empty analytics page used to be indistinguishable
+        // from a failed load, here and in the console.
+        console.error("teacher classrooms load failed", err);
+      });
     get<Coverage>("/teacher/curriculum-coverage")
       .then((c) => {
         if (live) setCov(c);
       })
-      .catch(() => {
+      .catch((err) => {
         if (live) setCov(null);
+        console.error("curriculum coverage load failed", err);
       });
     get<SupportPlanRow[]>("/teacher/support-plans")
       .then((rows) => {
         if (live) setSps(rows ?? []);
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error("support plans load failed", err);
+      });
     getTeacherWorkload()
       .then((w) => {
         if (live) setWorkload(w ?? null);
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error("teacher workload load failed", err);
+      });
     return () => {
       live = false;
     };
@@ -162,7 +171,7 @@ export default function AnalyticsPage() {
   const levels = Array.from(new Set(rooms.map((r) => r.class_level)));
 
   return (
-    <main className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       <section className="section-head">
         <h1 className="page-title">{t("tNavAnalytics")}</h1>
       </section>

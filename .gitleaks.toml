@@ -57,6 +57,13 @@ regexes = [
   # pre-move root path). Content-scoped, so only this reviewed value is
   # pardoned -- not the file that happens to contain it.
   '''^Auth: JWT\+RBAC\+tenancy''',
+  # The benchmark harness's throwaway fixture, reviewed: a deterministic
+  # placeholder for the settings validator, never used against any deployed
+  # instance, and since computed rather than written (see the commit that
+  # replaced the literal). The finding survives only because the full-history
+  # scan still walks the branch commits that contained it. Content-scoped so
+  # the path itself stays scannable.
+  '''bench-secret-[0-9a-f]{8,}''',
 ]
 paths = [
   # Test suites only. Production code is never allowlisted here.

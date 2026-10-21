@@ -1,11 +1,17 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
-import AITutorPage from "../pages/student/AITutorPage";
 import { t } from "../i18n";
+import {
+  SOURCE,
+  askOneQuestion,
+  renderTutorPage,
+  wireTutorMocks,
+} from "./tutorPageMock";
 
+// The hoisted surface must stay per-file: vi.mock factories run before module
+// imports, so a shared module crashes this vitest build's worker (measured;
+// see the harness docstring).
 const apiMock = vi.hoisted(() => ({
   get: vi.fn(),
   post: vi.fn(),
@@ -13,53 +19,9 @@ const apiMock = vi.hoisted(() => ({
   patch: vi.fn(),
   del: vi.fn(),
 }));
-
-const authMock = vi.hoisted(() => ({
-  useAuth: vi.fn(),
-}));
-
+const authMock = vi.hoisted(() => ({ useAuth: vi.fn() }));
 vi.mock("../api", () => apiMock);
 vi.mock("../AuthContext", () => authMock);
-
-const me = {
-  user_id: 1,
-  email: "s@x.com",
-  role: "student",
-  profile_id: 7,
-  name: "S",
-  class_level: 6,
-};
-
-// ASCII fixture fields keep the assertions byte-safe (no Bengali literals in this file).
-const SOURCE = {
-  book: "Biggan",
-  chapter: "Kosh-Excerpt-Chapter",
-  section: "Cell-Ki",
-  page: 12,
-  score: 4.2,
-  excerpt: "Koash hosse jibdeher ekok. Sanitized excerpt line two.",
-};
-
-function renderPage() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
-        <AITutorPage />
-      </MemoryRouter>
-    </QueryClientProvider>,
-  );
-}
-
-async function askOneQuestion(user: ReturnType<typeof userEvent.setup>) {
-  // added a history-search textbox — target the chat input by name.
-  const box = await screen.findByRole("textbox", { name: t("askPlaceholder") });
-  await user.type(box, "k");
-  await user.keyboard("{Enter}");
-  await waitFor(() => expect(apiMock.postStream).toHaveBeenCalled());
-}
 
 function sourceChip(): HTMLElement {
   const chip = screen
@@ -70,34 +32,11 @@ function sourceChip(): HTMLElement {
 }
 
 describe("evidence modal", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    authMock.useAuth.mockReturnValue({ me, signOut: vi.fn() });
-    apiMock.get.mockResolvedValue([]);
-    apiMock.post.mockResolvedValue({
-      id: 1,
-      title: null,
-      created_at: "2026-01-01T00:00:00Z",
-      message_count: 0,
-      last_strategy: null,
-    });
-    apiMock.postStream.mockImplementation(
-      async (_url: string, _body: unknown, onToken: (tok: string) => void) => {
-        onToken("Koash hosse ekok.");
-        return {
-          message_id: 2,
-          user_message_id: 1,
-          answer: "Koash hosse ekok.",
-          grounded: true,
-          sources: [SOURCE],
-        };
-      },
-    );
-  });
+  beforeEach(() => wireTutorMocks(apiMock, authMock));
 
   it("source chip opens the evidence modal with the sanitized excerpt and path", async () => {
     const user = userEvent.setup();
-    renderPage();
+    renderTutorPage();
     await askOneQuestion(user);
 
     // The chip advertises the evidence action through its accessible name.
@@ -119,7 +58,7 @@ describe("evidence modal", () => {
 
   it("closes the modal via the close button", async () => {
     const user = userEvent.setup();
-    renderPage();
+    renderTutorPage();
     await askOneQuestion(user);
     await user.click(await waitFor(sourceChip));
     const dialog = await screen.findByRole("dialog");

@@ -67,10 +67,66 @@ class Settings(BaseSettings):
     # provider payload (OpenAI max_tokens / Gemini maxOutputTokens). Bounds
     # the cost of a looping model; 0 disables the cap (key omitted).
     llm_max_output_tokens: int = 2048
+    # A5-01: measure the context/evidence token budget with the target
+    # model's own tokenizer (the vendor countTokens endpoint) instead of the
+    # calibrated heuristic upper bound. Default OFF: production keeps the
+    # safe upper bound (calibration: the heuristic counts 1.07x-1.20x the
+    # vendor count, mean 1.13x, artifact eval/token_counter_calibration.json;
+    # an earlier r3 sample measured 1.27x-1.58x), so a budget decision made
+    # on it can only be conservative. When True, the tutor's evidence
+    # selection counts with the provider's declared count_tokens (Gemini REST
+    # countTokens; mock = the same heuristic, honestly reported) and falls
+    # back per-call when the endpoint fails.
+    llm_exact_token_counting: bool = False
     # AI-002: monthly per-user AI budget (USD, estimated — see services/costs.py).
     # 0 (default) = unlimited. When set, generation entry points refuse with
     # 429 ai_budget_exceeded once the user's current-month ledger hits the cap.
     ai_monthly_budget_usd_per_user: float = 0.0
+    # I-11: global (whole-deployment) monthly AI budget in USD. 0 (default) =
+    # not configured, and the series bgpt_ai_monthly_budget_usd is NOT
+    # exported, so the burn-rate alert cannot fire on an unset budget. Set it
+    # with the provider figure you have actually budgeted; the alert compares
+    # the projected month-end spend against it.
+    ai_monthly_budget_usd: float = 0.0
+    # --- AI quotas and breakers (AUD-A2-10 / A7-05) ---
+    # Whole-deployment DAILY AI budget in USD (estimated ledger, see
+    # services/costs.py). 0 (default) = disabled. Env fallback today:
+    # AI_DAILY_BUDGET_USD (the settings field wins once it exists).
+    ai_daily_budget_usd: float = 0.0
+    # Per-school daily AI budget in USD. 0 (default) = disabled.
+    # Env fallback: AI_DAILY_BUDGET_USD_PER_SCHOOL.
+    ai_daily_budget_usd_per_school: float = 0.0
+    # A7-05: per-role in-flight cap multipliers on the tutor routes (the base
+    # cap stays the concurrency policy; a role multiplier narrows it for
+    # higher-privilege accounts whose actions cost more). 0 = inherit base.
+    teacher_inflight_cap: int = 1
+    admin_inflight_cap: int = 1
+    # Maximum stored messages per conversation before a new turn is refused
+    # with 429 conversation_limit_reached. 0 = disabled. Default 200.
+    # Env fallback: AI_MAX_CONVERSATION_MESSAGES.
+    ai_max_conversation_messages: int = 200
+    # A11-03: hint-first behaviour for homework-like prompts (configurable).
+    # Env fallback: TUTOR_HINT_FIRST; default true.
+    tutor_hint_first: bool = True
+    # A6-08: idle seconds before an SSE stream emits a heartbeat event.
+    # Env fallback: TUTOR_STREAM_HEARTBEAT_SECONDS; <= 0 disables.
+    tutor_stream_heartbeat_seconds: float = 10.0
+    # I-01: emit one structured JSON access line per request (method, route,
+    # status, latency_ms, pseudonymous user ref) next to the Prometheus
+    # counters, so metric-to-log correlation does not need the database.
+    access_log_enabled: bool = True
+    # I-03: emit per-stage trace records (retrieval, prompt, generation) as
+    # structured JSON events carrying the trace id, index/prompt versions,
+    # token counts and retrieved chunk ids. The no-collector equivalent of
+    # OpenTelemetry spans; see docs/operations/TRACING.md.
+    tracing_enabled: bool = False
+    # H-07: PostgreSQL per-session guards applied on every connection. A
+    # statement that runs past the timeout is cancelled by the server instead
+    # of holding one of the pool's connections until the client gives up;
+    # lock_timeout bounds how long a transaction waits on a contested lock.
+    # 0 disables the guard (not recommended in production).
+    db_statement_timeout_ms: int = 30_000
+    db_lock_timeout_ms: int = 5_000
     # Circuit breaker thresholds
     circuit_breaker_failure_threshold: int = 3  # failures before opening
     circuit_breaker_reset_timeout_seconds: float = 60.0  # seconds before half-open
@@ -93,7 +149,16 @@ class Settings(BaseSettings):
 
     # --- auth ---
     jwt_secret: str = DEFAULT_JWT_SECRET
-    jwt_expire_minutes: int = 60
+    # B-02: access tokens are SHORT-LIVED (15 minutes). A leaked access token
+    # is a credential for this window only; the session stays usable through
+    # the rotating refresh token (POST /auth/refresh), which is single-use
+    # and whose replay revokes the whole login family. 60 minutes was the
+    # old default -- one leaked bearer token stayed live for an hour with no
+    # recovery path beyond logout (which only works if the holder cooperates).
+    jwt_expire_minutes: int = 15
+    # B-02: refresh-token lifetime, the session length. Rotation makes the
+    # sliding window without ever extending a single token's life.
+    jwt_refresh_expire_days: int = 14
     # SEC-03: tokens are stamped with and verified against these so a token
     # minted for a different audience/issuer (e.g. a future service sharing the
     # signing key) cannot be replayed here.
@@ -246,27 +311,6 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> list[str]:
         return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
-
-
-class SettingsRegistry:
-    """Thread-safe settings cache with optional hot-reload capability.
-
-    By default it uses:func:`get_settings` (cached singleton) for simplicity.
-    When ``force_reload=True`` is passed, a fresh ``Settings`` instance is
-    constructed (useful for tests or config-reload scenarios).
-    """
-
-    _settings: Settings | None = None
-
-    @classmethod
-    def get(cls, force_reload: bool = False) -> Settings:
-        if cls._settings is None or force_reload:
-            cls._settings = Settings()
-        return cls._settings
-
-    @classmethod
-    def clear(cls) -> None:
-        cls._settings = None
 
 
 @lru_cache

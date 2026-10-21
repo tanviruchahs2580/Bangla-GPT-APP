@@ -5,7 +5,7 @@ name: bangla-gpt-app
 #   worker      — ARQ cron worker        (add --profile worker; set JOBS_BACKEND=arq)
 #   web         — static dashboard       (add --profile web)
 #   tls         — Caddy auto-HTTPS proxy (add --profile tls WITH --profile web;
-#                 Caddy reverse-proxies web:80, so `--profile tls` alone is an
+#                 Caddy reverse-proxies web:8080, so `--profile tls` alone is an
 #                 invalid project: "caddy depends on undefined service web".
 #                 Requires DOMAIN/ACME_EMAIL)
 #   postgres    — Postgres service       (add --profile postgres)
@@ -16,9 +16,28 @@ x-api-common: &api-common
   restart: unless-stopped
   expose:
     - "8000"
+  # AUD-B-07: the API image already runs as uid 10001 and needs no Linux
+  # capabilities. Its only writable paths are the /data volume and gunicorn's
+  # temp files, so the root filesystem can be read-only with a tmpfs for /tmp
+  # (verified: hardened container answers /health 200).
+  read_only: true
+  tmpfs:
+    - /tmp
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
 
 services:
   api:
+    # Resource limits (F-11 / AUD-EF-10): bounded blast radius for a
+    # runaway process or a memory leak. Verified with docker compose v2
+    # (deploy.resources.limits is applied to the container, 2026-10-19).
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1g
     <<: *api-common
     build: .
     image: ghcr.io/tanviruchahs2580/bangla-gpt-app/api:${API_TAG:-local}
@@ -34,7 +53,8 @@ services:
       # DATA-001: 4 MB fits the wave-2 vision contract (~2 MB base64 image
       # JSON per chat turn); smaller values 413 valid image turns.
       MAX_BODY_BYTES: ${MAX_BODY_BYTES:-4000000}
-      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-60}
+      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-15}
+      JWT_REFRESH_EXPIRE_DAYS: ${JWT_REFRESH_EXPIRE_DAYS:-14}
       PASSWORD_RESET_TOKEN_MINUTES: ${PASSWORD_RESET_TOKEN_MINUTES:-30}
       FORCE_ADMIN_PASSWORD_CHANGE: ${FORCE_ADMIN_PASSWORD_CHANGE:-true}
       RATE_LIMIT_LOGIN_PER_MINUTE: ${RATE_LIMIT_LOGIN_PER_MINUTE:-10}
@@ -60,6 +80,30 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
+      # gunicorn >= 23 opens a control socket at $HOME/.gunicorn; with the
+      # read-only rootfs that write fails and every boot logs an ERROR. HOME
+      # points at the tmpfs /tmp already mounted below.
+      HOME: /tmp
+      # E-18: settings .env.production.example documents and the deployment
+      # guide requires, but this list never forwarded -- so a production boot
+      # had no PII_ENC_KEY (a hard boot refusal) and no metrics gate. Every one
+      # of these is read by the API process itself.
+      PII_ENC_KEY: ${PII_ENC_KEY:-}
+      TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-true}
+      METRICS_REQUIRE_AUTH: ${METRICS_REQUIRE_AUTH:-true}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      AI_MONTHLY_BUDGET_USD: ${AI_MONTHLY_BUDGET_USD:-0}
+      AI_MONTHLY_BUDGET_USD_PER_USER: ${AI_MONTHLY_BUDGET_USD_PER_USER:-0}
+      AI_DAILY_BUDGET_USD: ${AI_DAILY_BUDGET_USD:-0}
+      AI_DAILY_BUDGET_USD_PER_SCHOOL: ${AI_DAILY_BUDGET_USD_PER_SCHOOL:-0}
+      MAX_CONCURRENT_PER_USER: ${MAX_CONCURRENT_PER_USER:-0}
+      CONVERSATION_MESSAGE_CAP: ${CONVERSATION_MESSAGE_CAP:-0}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+      RETRIEVAL_MODE: ${RETRIEVAL_MODE:-hybrid}
+      ALLOW_MOCK_LLM_IN_PRODUCTION: ${ALLOW_MOCK_LLM_IN_PRODUCTION:-}
+      GEMINI_FAST_MODEL: ${GEMINI_FAST_MODEL:-}
+      LLM_MAX_OUTPUT_TOKENS: ${LLM_MAX_OUTPUT_TOKENS:-2048}
+      SENTRY_DSN: ${SENTRY_DSN:-}
     volumes:
       - api_data:/data
     # Host-side port. This is for a tunnel or proxy that runs ON THE HOST, not
@@ -95,16 +139,45 @@ services:
       retries: 3
 
   redis:
-    image: redis:7-alpine
+    # Resource limits (F-11 / AUD-EF-10): bounded blast radius for a
+    # runaway process or a memory leak. Verified with docker compose v2
+    # (deploy.resources.limits is applied to the container, 2026-10-19).
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128m
+    # Digest-pinned (AUD-EF-10 / F-11), resolved 2026-10-19. Dependabot's
+    # docker ecosystem keeps the digest and the comment in step.
+    image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
     profiles: [core]
     restart: unless-stopped
     command: ["redis-server", "--save", "", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
     # Not exposed to the host on purpose.
+    # AUD-B-07: the image's entrypoint drops root via gosu, which needs
+    # exactly these three capabilities (verified: PONG with them, chown/SID
+    # failure without them). Everything else is dropped.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
 
   # S5.4: ARQ cron worker. Run INSTEAD of the in-process loops: set
   # JOBS_BACKEND=arq on the api service so its web workers stop scheduling,
   # and start exactly ONE of these (job_runs still guarantees no double runs).
   worker:
+    # Resource limits (F-11 / AUD-EF-10): bounded blast radius for a
+    # runaway process or a memory leak. Verified with docker compose v2
+    # (deploy.resources.limits is applied to the container, 2026-10-19).
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768m
     build: .
     image: ghcr.io/tanviruchahs2580/bangla-gpt-app/api:${API_TAG:-local}
     profiles: [worker]
@@ -123,13 +196,38 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # E-18: same settings surface as the api service (the worker builds the
+      # same Settings object for the jobs it runs).
+      PII_ENC_KEY: ${PII_ENC_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      ALLOW_MOCK_LLM_IN_PRODUCTION: ${ALLOW_MOCK_LLM_IN_PRODUCTION:-}
+      AI_DAILY_BUDGET_USD: ${AI_DAILY_BUDGET_USD:-0}
     volumes:
       - api_data:/data
+    # AUD-B-07: same image and write paths as the api service (the /data
+    # volume plus temp files), so the same hardening applies.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       redis:
         condition: service_started
 
   web:
+    # Resource limits (F-11 / AUD-EF-10): bounded blast radius for a
+    # runaway process or a memory leak. Verified with docker compose v2
+    # (deploy.resources.limits is applied to the container, 2026-10-19).
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256m
     build:
       context: ./apps/web
       args:
@@ -138,14 +236,48 @@ services:
     profiles: [web]
     restart: unless-stopped
     expose:
-      - "80"
+      - "8080"
+    # AUD-B-24: the image is nginxinc/nginx-unprivileged -- master AND workers
+    # run as uid 101 and listen on 8080, so NO capability is needed. The root
+    # filesystem is read-only, /tmp (pid + temp paths in the unprivileged
+    # image) and /var/cache/nginx live on tmpfs, ALL capabilities are dropped
+    # and no-new-privileges blocks any re-grant. Verified by building and
+    # running this exact image on this host: page served 200 as uid 101 with
+    # this container configuration (evidence E-R3-ws4-b24-web-nonroot).
+    # Caddy proxies `web:8080` (deploy/caddy/Caddyfile).
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /run
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       - api
 
   caddy:
-    image: caddy:2-alpine
+    # Resource limits (F-11 / AUD-EF-10): bounded blast radius for a
+    # runaway process or a memory leak. Verified with docker compose v2
+    # (deploy.resources.limits is applied to the container, 2026-10-19).
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128m
+    # Digest-pinned (AUD-EF-10 / F-11), resolved 2026-10-19.
+    image: caddy:2-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
     profiles: [tls]
     restart: unless-stopped
+    # AUD-B-07: Caddy needs exactly one capability -- binding the privileged
+    # ports 80/443 (verified: index served with this set).
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "80:80"
       - "443:443"
@@ -161,15 +293,40 @@ services:
       - web
 
   postgres:
+    # Resource limits (F-11 / AUD-EF-10): bounded blast radius for a
+    # runaway process or a memory leak. Verified with docker compose v2
+    # (deploy.resources.limits is applied to the container, 2026-10-19).
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1g
     # S5.7: postgres 16 + pgBackRest binary (archive-push runs inside this
     # container); the pgbackrest sidecar shares the socket + repo volumes.
     build: ./deploy/postgres
     profiles: [postgres]
     restart: unless-stopped
+    # AUD-B-07: the official entrypoint starts as root, chowns PGDATA and
+    # drops to the postgres user -- those four capabilities and nothing else
+    # (verified: `select 1` served with exactly this set).
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-bgpt}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
       POSTGRES_DB: ${POSTGRES_DB:-bgpt}
+      # AUD-B-03: archive-push must encrypt to the repo (repo1-cipher-type in
+      # deploy/postgres/pgbackrest.conf), so the passphrase is injected here
+      # too. Keep it in the host secret store; an empty value makes
+      # archive-push/backup fail loudly, never write plaintext.
+      PGBACKREST_REPO1_CIPHER_PASS: ${PGBR_CIPHER_PASS:-}
     command:
       [
         "postgres",
@@ -189,9 +346,23 @@ services:
       retries: 5
 
   prometheus:
-    image: prom/prometheus:v2.53.0
+    # Resource limits (F-11 / AUD-EF-10): bounded blast radius for a
+    # runaway process or a memory leak. Verified with docker compose v2
+    # (deploy.resources.limits is applied to the container, 2026-10-19).
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
+    # Digest-pinned (AUD-EF-10 / F-11), resolved 2026-10-19.
+    image: prom/prometheus:v2.53.0@sha256:075b1ba2c4ebb04bc3a6ab86c06ec8d8099f8fda1c96ef6d104d9bb1def1d8bc
     profiles: [monitoring]
     restart: unless-stopped
+    # AUD-B-07: runs as nobody with no capabilities needed.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./deploy/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
@@ -199,9 +370,23 @@ services:
       - "127.0.0.1:9090:9090"
 
   grafana:
-    image: grafana/grafana:11.1.0
+    # Resource limits (F-11 / AUD-EF-10): bounded blast radius for a
+    # runaway process or a memory leak. Verified with docker compose v2
+    # (deploy.resources.limits is applied to the container, 2026-10-19).
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
+    # Digest-pinned (AUD-EF-10 / F-11), resolved 2026-10-19.
+    image: grafana/grafana:11.1.0@sha256:079600c9517b678c10cda6006b4487d3174512fd4c6cface37df7822756ed7a5
     profiles: [monitoring]
     restart: unless-stopped
+    # AUD-B-07: runs as the grafana uid; no capabilities needed.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "127.0.0.1:3000:3000"
     environment:
@@ -209,6 +394,14 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
 
   backup:
+    # Resource limits (F-11 / AUD-EF-10): bounded blast radius for a
+    # runaway process or a memory leak. Verified with docker compose v2
+    # (deploy.resources.limits is applied to the container, 2026-10-19).
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256m
     build: .
     image: ghcr.io/tanviruchahs2580/bangla-gpt-app/api:${API_TAG:-local}
     profiles: [backup]
@@ -224,8 +417,25 @@ services:
       - api_data:/data:ro
       - backup_data:/backups
       - ./scripts:/srv/scripts:ro
+    # AUD-B-07: same image as the api service; writes only the /backups
+    # volume, so the root filesystem stays read-only.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
 
   pgbackrest:
+    # Resource limits (F-11 / AUD-EF-10): bounded blast radius for a
+    # runaway process or a memory leak. Verified with docker compose v2
+    # (deploy.resources.limits is applied to the container, 2026-10-19).
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512m
     # S5.7: nightly pgBackRest full backups (WAL archiving runs continuously
     # via the postgres service's archive_command, so effective RPO is
     # minutes, not a day). Restore drill: scripts/pgbackrest_drill.sh.
@@ -233,6 +443,11 @@ services:
     profiles: [backup]
     restart: unless-stopped
     user: postgres  # peer auth against the shared socket as the postgres role
+    # AUD-B-07: already non-root; pgBackRest needs no capabilities.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       postgres:
         # `required: false` so `--profile backup` alone still parses; real
@@ -242,6 +457,7 @@ services:
     environment:
       PGBR_STANZA: ${PGBR_STANZA:-bgpt}
       BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      PGBACKREST_REPO1_CIPHER_PASS: ${PGBR_CIPHER_PASS:-}
     entrypoint: ["/usr/local/bin/pgbackrest_nightly.sh"]
     volumes:
       - pg_data:/var/lib/postgresql/data

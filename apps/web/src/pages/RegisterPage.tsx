@@ -3,7 +3,7 @@ import { login, register, resendVerification, verifyEmail } from "../api";
 import { useAuth } from "../AuthContext";
 import { friendlyError, type ErrorCopy } from "../errors";
 import { t } from "../i18n";
-import { Button, Card } from "../components/ui";
+import { Button, Card, NumberInput } from "../components/ui";
 import { BrandMark } from "../components/BrandMark";
 import { BadgeCheck, BookOpenCheck, CloudOff } from "lucide-react";
 
@@ -95,7 +95,12 @@ export default function RegisterPage() {
     // Shares login's photo backdrop (.splash-login): the desktop artwork, the
     // portrait mobile artwork with its ambient fill, the dark-mode veil and
     // the low-data kill-switch all live in that one class.
-    <div className="splash splash-login auth-shell">
+    // AUD-G-18: public routes had no main landmark; this is the page's.
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="splash splash-login auth-shell"
+    >
       <section className="auth-brand">
         <div className="auth-brand-head">
           <span className="auth-brand-logo" aria-hidden>
@@ -188,6 +193,8 @@ export default function RegisterPage() {
                   value={name}
                   required
                   minLength={2}
+                  aria-invalid={error ? true : undefined}
+                  aria-describedby={error ? "register-error" : undefined}
                   onChange={(e) => setName(e.target.value)}
                 />
               </div>
@@ -200,6 +207,8 @@ export default function RegisterPage() {
                   autoComplete="email"
                   value={email}
                   required
+                  aria-invalid={error ? true : undefined}
+                  aria-describedby={error ? "register-error" : undefined}
                   onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
@@ -214,6 +223,8 @@ export default function RegisterPage() {
                   value={password}
                   required
                   minLength={8}
+                  aria-invalid={error ? true : undefined}
+                  aria-describedby={error ? "register-error" : undefined}
                   onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
@@ -221,14 +232,15 @@ export default function RegisterPage() {
                 <>
                   <div className="field">
                     <label htmlFor="class">{t("className")}</label>
-                    <input
-                      className="input"
+                    <NumberInput
                       id="class"
-                      type="number"
                       min={1}
                       max={12}
                       value={classLevel}
-                      onChange={(e) => setClassLevel(Number(e.target.value))}
+                      onValue={setClassLevel}
+                      fallback={6}
+                      aria-invalid={error ? true : undefined}
+                      aria-describedby={error ? "register-error" : undefined}
                     />
                   </div>
                   <div className="field">
@@ -243,11 +255,21 @@ export default function RegisterPage() {
                       />
                       <span>
                         {t("consentPrefix")}{" "}
-                        <a href="/privacy" target="_blank" rel="noreferrer">
+                        <a
+                          className="inline-link"
+                          href="/privacy"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
                           {t("privacy")}
                         </a>{" "}
                         ·{" "}
-                        <a href="/terms" target="_blank" rel="noreferrer">
+                        <a
+                          className="inline-link"
+                          href="/terms"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
                           {t("terms")}
                         </a>{" "}
                         {t("consentSuffix")}
@@ -257,7 +279,7 @@ export default function RegisterPage() {
                 </>
               )}
               {error && (
-                <p className="error" role="alert">
+                <p className="error" role="alert" id="register-error">
                   {error.text}
                   {error.action === "resend-verification" && (
                     <>
@@ -267,6 +289,10 @@ export default function RegisterPage() {
                   )}
                 </p>
               )}
+              {/* AUD-B-30: standing AI-use notice next to the consent block. */}
+              <p className="muted" data-testid="ai-disclosure">
+                {t("aiDisclosureShort")}
+              </p>
               <Button variant="primary" block type="submit" disabled={busy}>
                 {t("register")}
               </Button>
@@ -279,6 +305,6 @@ export default function RegisterPage() {
           </>
         )}
       </Card>
-    </div>
+    </main>
   );
 }

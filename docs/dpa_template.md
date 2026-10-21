@@ -12,9 +12,9 @@
 
 ## 1. Parties & roles
 
-* **Data Controller:** [SCHOOL NAME], determining the purposes of processing
+- **Data Controller:** [SCHOOL NAME], determining the purposes of processing
   student data ([ADDRESS], contact [NAME/EMAIL]).
-* **Data Processor:** [OPERATING ENTITY], operator of the Bangla GPT learning
+- **Data Processor:** [OPERATING ENTITY], operator of the Bangla GPT learning
   platform ([DEPLOYMENT URL], contact [DPO/EMAIL]).
 
 ## 2. Subject matter & data
@@ -64,7 +64,7 @@ No student feature is usable without recorded guardian consent
 | Sub-processor | Purpose | Data seen | Notes |
 | --- | --- | --- | --- |
 | [HOSTING PROVIDER] | compute + database hosting | all persisted data | contract/TBD |
-| **Google Gemini (Google LLC)** | answers the tutoring/quiz-generation prompts | the student's prompt + retrieved NCTB textbook passages; no name/email is included in provider calls | provider terms & regional routing to be confirmed by counsel |
+| **Google Gemini (Google LLC)** | answers the tutoring/quiz-generation prompts | the student's prompt + retrieved NCTB textbook passages; no name/email is included in provider calls | **terms checked and recorded 2026-10-20** in `docs/compliance/provider-terms.md` (55-day abuse-monitoring retention; paid tier does not use prompts to improve products, the free tier does — so a **paid-tier key is required before launch**, or the free-tier use needs a documented guardian-consent basis). Regional routing still to be confirmed by counsel. |
 | [SMTP PROVIDER] | verification/reset/digest emails | recipient email + message content | TLS |
 | [CDN/DNS — if any] | static asset delivery | IP, User-Agent via web server logs | TBD |
 

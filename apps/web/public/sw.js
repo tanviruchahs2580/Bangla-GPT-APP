@@ -15,9 +15,43 @@ const SHELL = [
   '/manifest.webmanifest',
 ];
 
+/**
+ * Cache the hashed bundle the served index.html references (AUD-G-17).
+ *
+ * `SHELL` holds the HTML, but the app is a JS bundle: caching index.html
+ * alone produced an offline "shell" that boots no React and paints an empty
+ * page, so a device that went offline before its *second* navigation had
+ * nothing usable. The asset URLs are content-hashed and only knowable from
+ * the HTML, so they are read out of it and cached explicitly — once at
+ * install, and again after every successful navigation (a deploy changes the
+ * hashes).
+ */
+async function warmShellAssets() {
+  try {
+    const cache = await caches.open(CACHE);
+    const index = await cache.match('/index.html');
+    if (!index) return;
+    const html = await index.text();
+    const urls = new Set();
+    for (const match of html.matchAll(/["'](\/assets\/[^"']+\.(?:js|css|woff2?))["']/g)) {
+      urls.add(match[1]);
+    }
+    // Preload hints repeat the same URLs; the Set de-duplicates them. A
+    // failure here must not fail the install: an offline shell without every
+    // font is still an offline shell.
+    await Promise.all([...urls].map((url) => cache.add(url).catch(() => undefined)));
+  } catch {
+    /* best effort */
+  }
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting())
+    caches
+      .open(CACHE)
+      .then((cache) => cache.addAll(SHELL))
+      .then(warmShellAssets)
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -50,7 +84,12 @@ self.addEventListener('fetch', (event) => {
       fetch(event.request)
         .then((res) => {
           const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put('/index.html', copy));
+          caches
+            .open(CACHE)
+            .then((c) => c.put('/index.html', copy))
+            // A deploy changes the asset hashes, so re-warm from the HTML the
+            // browser just received rather than trusting last build's list.
+            .then(warmShellAssets);
           return res;
         })
         .catch(() => caches.match('/index.html'))

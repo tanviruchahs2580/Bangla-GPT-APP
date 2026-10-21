@@ -9,13 +9,16 @@ section) -> embedder (retrieval/embedding.py) -> vector lane
 hybrid index is a drop-in for TutorService/the generation retrievers.
 The reranker is a deterministic feature ranker (:func:`make_lexical_rerank`
 documents the feature set and why each weight is what it is); a model-based
-reranker replaces exactly one stage of this pipeline when one is benchmarked.
+reranker replaces exactly one stage of this pipeline when one is benchmarked,
+and a fault in it degrades to fusion-only ranking (A4-08, :class:`FallbackReranker`).
 """
 
-from collections.abc import Callable, Iterable
+import logging
+from collections.abc import Callable
 
 from bangla_gpt_api.curriculum.models import Chunk
 from bangla_gpt_api.retrieval.bm25 import BM25Index, Hit, indexable_text, tokenize
+from bangla_gpt_api.retrieval.diversity import DEFAULT_LAMBDA, mmr_select
 from bangla_gpt_api.retrieval.embedding import Embedder, bengali_bigrams
 from bangla_gpt_api.retrieval.fusion import reciprocal_rank_fusion
 from bangla_gpt_api.retrieval.hybrid import light_stem, trigram_similarity
@@ -29,6 +32,8 @@ from bangla_gpt_api.retrieval.vocabulary import TermStats
 
 #: rerank(query, [(chunk, rrf_score, lexical_lane_base_score)]) -> final scores
 Reranker = Callable[[str, list[tuple[Chunk, float, float]]], list[float]]
+
+logger = logging.getLogger(__name__)
 
 _RRF_K = 60
 #: candidate pool per lane before fusion (RRF then trims)
@@ -149,7 +154,11 @@ def make_lexical_rerank(term_stats: TermStats | None = None) -> Reranker:
                 for term in covered
             ]
             proximity = len(covered) / max(_minimal_window(positions), 1) if covered else 0.0
-            tri = trigram_similarity(query, indexable_text(chunk))
+            # The trigram feature targets the chunk's own text — the same
+            # target the BM25 trigram lane precomputes at build time, not
+            # indexable_text: the A3-03 contextual header is uniform
+            # metadata and would dilute the per-candidate phonetic signal.
+            tri = trigram_similarity(query, chunk.text)
             scores.append(
                 lexical_base
                 + _W_RRF * rrf_score
@@ -178,9 +187,42 @@ def lexical_rerank(query: str, candidates: list[tuple[Chunk, float, float]]) -> 
             coverage = sum(1 for t in query_terms if t in chunk_terms) / len(query_terms)
         else:
             coverage = 0.0
-        tri = trigram_similarity(query, indexable_text(chunk))
+        # Same trigram target as the corpus-aware reranker: the chunk's own
+        # text (see the note in make_lexical_rerank about the A3-03 header).
+        tri = trigram_similarity(query, chunk.text)
         scores.append(lexical_base + _W_RRF * rrf_score + _W_COVERAGE * coverage + _W_TRIGRAM * tri)
     return scores
+
+
+class FallbackReranker:
+    """Serving safety net: a reranker fault degrades to fusion-only ranking (A4-08).
+
+    A serving answer must not depend on an optional stage's health. When the
+    primary reranker raises (a model process down, an out-of-memory feature
+    extraction, a dependency fault), the candidate list already carries the
+    RRF fusion score and the lexical-lane base score, so returning
+    ``rrf + lexical_base`` per candidate is exactly the ``hybrid_rerank_off``
+    ranking the eval measured as the fallback (0.9006 recall@1 on the held-out
+    split) — degraded, never dead. The fault is logged at ERROR with the
+    traceback so the on-call sees the degradation in the logs.
+
+    Deliberately applied to the index's configured reranker (default AND an
+    explicit one at construction): the serving index must never serve a
+    refusal because the reranker crashed. Evaluation harnesses that swap
+    ``index.reranker`` in place (``variant_matrix``, ``stage_latency``, the
+    NCTB script) bypass this wrapper, so an eval-stage fault still fails its
+    run loudly instead of silently degrading a measurement.
+    """
+
+    def __init__(self, primary: Reranker) -> None:
+        self.primary = primary
+
+    def __call__(self, query: str, candidates: list[tuple[Chunk, float, float]]) -> list[float]:
+        try:
+            return self.primary(query, candidates)
+        except Exception:  # noqa: BLE001 - documented degraded path
+            logger.exception("reranker failed; falling back to fusion-only ranking")
+            return [rrf + lexical_base for _chunk, rrf, lexical_base in candidates]
 
 
 class HybridIndex:
@@ -203,8 +245,13 @@ class HybridIndex:
         # The default reranker is the corpus-aware one: statistics come from
         # this index's own lexical lane, so reranking, the grounding gate and
         # the query expansion all read the same document frequencies. An
-        # explicit reranker still wins (tests, experiments).
-        self.reranker: Reranker = reranker or make_lexical_rerank(self.bm25.term_stats)
+        # explicit reranker still wins (tests, experiments). Either way the
+        # configured reranker is wrapped in the A4-08 serving fallback: a
+        # fault degrades to the fusion-only ranking instead of propagating
+        # into every tutoring turn.
+        self.reranker: Reranker = FallbackReranker(
+            reranker or make_lexical_rerank(self.bm25.term_stats)
+        )
 
     @property
     def term_stats(self) -> TermStats:
@@ -218,8 +265,12 @@ class HybridIndex:
         class_level: int | None = None,
         subject: str | None = None,
         chapter: str | None = None,
+        content_type: str | None = None,
+        version: str | None = None,
         top_k: int = 4,
         min_score: float = 0.0,
+        diversify: bool = False,
+        diversity_lambda: float = DEFAULT_LAMBDA,
     ) -> list[Hit]:
         candidate_k = max(top_k * _CANDIDATE_FACTOR, top_k + 1)
         bm25_hits = self.bm25.search(
@@ -227,6 +278,8 @@ class HybridIndex:
             class_level=class_level,
             subject=subject,
             chapter=chapter,
+            content_type=content_type,
+            version=version,
             top_k=candidate_k,
             min_score=0.0,
         )
@@ -235,6 +288,8 @@ class HybridIndex:
             class_level=class_level,
             subject=subject,
             chapter=chapter,
+            content_type=content_type,
+            version=version,
             top_k=candidate_k,
             min_score=0.0,
         )
@@ -273,13 +328,8 @@ class HybridIndex:
             if score > min_score
         ]
         ranked.sort(key=lambda hit: (-hit.score, hit.chunk.id))
+        if diversify:
+            # Opt-in MMR over the ranked candidates; off by default so the
+            # served ranking (and every committed number) is unchanged.
+            return mmr_select(ranked[:candidate_k], k=top_k, lambda_=diversity_lambda)
         return ranked[:top_k]
-
-
-def iter_corpus_search(
-    index: BM25Index | HybridIndex,
-    queries: Iterable[str],
-    **filters: object,
-) -> list[list[Hit]]:
-    """Batch helper for the hit@k evaluation harness (keeps top_k explicit)."""
-    return [index.search(q, **filters) for q in queries]  # type: ignore[arg-type]

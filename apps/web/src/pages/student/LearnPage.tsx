@@ -29,14 +29,24 @@ import { useAuth } from "../../AuthContext";
 import { Card, LoadError } from "../../components/ui";
 import { t, tSubject } from "../../i18n";
 import { cn } from "../../lib/cn";
-import { chapterBadge, ttsSupported as ttsAvailable } from "../../lib/progress";
+import { chapterBadge } from "../../lib/progress";
+import {
+  TTS_PITCH,
+  TTS_RATE,
+  clampTtsValue,
+  readTtsPrefs,
+  resolveBanglaVoice,
+  ttsSupport,
+} from "../../lib/tts";
 import { SafeMarkdownLazy as SafeMarkdown } from "../../lib/safeMarkdownLazy";
 import {
   fetchChapterWithOfflineFallback,
+  isQuotaExceeded,
   loadChapter,
   saveChapter,
 } from "../../lib/offlineStore";
 import { getLowData } from "../../lib/lowData";
+import { toast } from "../../lib/toast";
 
 const SUBJECT_TONE: Record<string, string> = {
   science: "tile-teal",
@@ -68,8 +78,7 @@ export function LearnPage() {
     queryKey: ["learnProgressAll", selected],
     queryFn: () => getLearnProgress(undefined, selected),
   });
-  // A shared constant, not `?? []`: a fresh array identity on every render makes
-  // every effect that depends on `subjects` re-run forever.
+  // A shared constant: a fresh array identity here would re-run every effect forever.
   const subjects = subjectsQuery.data ?? EMPTY_SUBJECTS;
 
   // Chapter totals per subject (for the ring denominator), from the same
@@ -113,7 +122,7 @@ export function LearnPage() {
   };
 
   return (
-    <main className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       <section className="section-head">
         <h2>{t("subjects")}</h2>
       </section>
@@ -325,7 +334,17 @@ export function LearnChapterPage() {
     }
   });
   const [speaking, setSpeaking] = useState(false);
+  // AUD-G-12: reader-controlled speech, persisted per device.
+  const [ttsPrefs, setTtsPrefs] = useState(() =>
+    readTtsPrefs(
+      typeof localStorage !== "undefined" ? localStorage : undefined,
+    ),
+  );
+  const [ttsNotice, setTtsNotice] = useState<string | null>(null);
   const [bookmarked, setBookmarked] = useState(false);
+  // AUD-G-07: a rejected bookmark write is rolled back and reported here,
+  // next to the control, without dropping the reader out of the chapter.
+  const [error, setError] = useState<string | null>(null);
   // unified workspace tabs — পড়া | অনুশীলন | জিজ্ঞাসা (no page exit).
   const [tab, setTab] = useState<"read" | "practice" | "ask">("read");
   // offline-copy availability + download button state
@@ -350,7 +369,11 @@ export function LearnChapterPage() {
       .then((rec) => {
         if (alive) setSaved(!!rec);
       })
-      .catch(() => {});
+      .catch((err) => {
+        // AUD-CD-07: an absent offline copy is normal, but a rejected
+        // IndexedDB read is not, and it used to disappear silently.
+        console.error("offline chapter copy check failed", err);
+      });
     return () => {
       alive = false;
     };
@@ -379,7 +402,11 @@ export function LearnChapterPage() {
         chapter,
         class_level: classLevel,
         read_pct: 40,
-      }).catch(() => {});
+      }).catch((err) => {
+        // AUD-CD-07: progress writes are best-effort, but a rejected one used
+        // to leave no trace anywhere.
+        console.error("learn progress write failed", err);
+      });
       track("chapter_read", { subject, chapter });
     }, 1500);
     let lastReported = 70;
@@ -405,7 +432,10 @@ export function LearnChapterPage() {
         class_level: classLevel,
         read_pct: pct,
         completed: pct > 90,
-      }).catch(() => {});
+      }).catch((err) => {
+        // AUD-CD-07: same as the initial write — throttled, not silent.
+        console.error("scroll progress write failed", err);
+      });
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => {
@@ -417,6 +447,7 @@ export function LearnChapterPage() {
   const toggleBookmark = async () => {
     if (!subject || !chapter || !classLevel) return;
     const next = !bookmarked;
+    setError(null);
     setBookmarked(next);
     try {
       await upsertLearnProgress({
@@ -425,29 +456,54 @@ export function LearnChapterPage() {
         class_level: classLevel,
         bookmarked: next,
       });
-    } catch {
-      /* Bookmarking is best-effort: a failed write must not drop the reader
-         out of the chapter they are reading. */
+    } catch (err) {
+      // AUD-G-07: the optimistic flip used to stay on screen after a rejected
+      // write, so the reader saw a bookmark the server never stored. Roll it
+      // back and report it the way the rest of the page does; the reader is
+      // not navigated away by this.
+      setBookmarked(!next);
+      setError(t("errorGeneric"));
+      console.error("bookmark toggle failed", err);
     }
   };
 
-  const speak = () => {
+  const speak = async () => {
+    // AUD-G-12 / G-26: the engine, the voice and the reader's controls are
+    // three separate things. Speech only ever starts from this click handler
+    // (no autoplay), and when no Bangla voice is installed the reader is told
+    // instead of silently hearing Bangla read by an English voice.
+    const engine =
+      typeof window !== "undefined" ? window.speechSynthesis : undefined;
+    if (
+      !engine ||
+      typeof window.SpeechSynthesisUtterance !== "function" ||
+      !content
+    )
+      return;
+    if (speaking) {
+      engine.cancel();
+      setSpeaking(false);
+      setTtsNotice(null);
+      return;
+    }
+    // Awaited, not read once: Chromium's voice list arrives asynchronously,
+    // and deciding in that window told readers their device cannot speak
+    // Bangla when it can (AUD-G-26).
+    const voice = await resolveBanglaVoice();
     try {
-      if (!("speechSynthesis" in window) || !content) return;
-      if (speaking) {
-        window.speechSynthesis.cancel();
-        setSpeaking(false);
-        return;
-      }
       const text = content.sections
         .map((s) => `${s.section} ${s.text}`)
         .join(" ");
-      const utter = new SpeechSynthesisUtterance(text);
+      const utter = new window.SpeechSynthesisUtterance(text);
       utter.lang = "bn-BD";
+      utter.rate = ttsPrefs.rate;
+      utter.pitch = ttsPrefs.pitch;
+      if (voice) utter.voice = voice;
       utter.onend = () => setSpeaking(false);
       utter.onerror = () => setSpeaking(false);
       setSpeaking(true);
-      window.speechSynthesis.speak(utter);
+      setTtsNotice(voice ? null : t("ttsNoBanglaVoice"));
+      engine.speak(utter);
     } catch {
       setSpeaking(false);
     }
@@ -455,23 +511,45 @@ export function LearnChapterPage() {
 
   const content = query.data?.content;
   const offlineCopy = query.data?.offline === true;
-  const ttsSupported = ttsAvailable();
+  const ttsEngine = ttsSupport();
+
+  const updateTtsPref = (key: "rate" | "pitch", raw: number) => {
+    const bounds = key === "rate" ? TTS_RATE : TTS_PITCH;
+    const value = clampTtsValue(raw, bounds);
+    setTtsPrefs((prev) => ({ ...prev, [key]: value }));
+    try {
+      // Device preference, not user data: survives sign-out (USER_STORAGE_KEYS in api.ts).
+      localStorage.setItem(
+        key === "rate" ? "ttsRate" : "ttsPitch",
+        String(value),
+      );
+    } catch {
+      /* private mode: the in-memory value still applies for this session */
+    }
+  };
 
   const download = async () => {
     if (!content || !subject || !chapter) return;
     setSaving(true);
+    setError(null);
     try {
       await saveChapter(subject, chapter, offlineClass, content);
       setSaved(true);
-    } catch {
-      /* storage may be unavailable; the offline copy stays optional */
+    } catch (err) {
+      // AUD-G-17: a full device must not look like success — inline + toast.
+      const message = isQuotaExceeded(err)
+        ? t("offlineQuotaFull")
+        : t("offlineSaveFailed");
+      setError(message);
+      toast(message);
+      console.error("offline chapter save failed", err);
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <main className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       <button
         className="btn btn-ghost btn-sm chips-gap"
         onClick={() => navigate(-1)}
@@ -521,20 +599,63 @@ export function LearnChapterPage() {
               />{" "}
               {t("bookmark")}
             </button>
-            {ttsSupported && (
-              <button
-                className="btn btn-sm btn-ghost"
-                onClick={speak}
-                aria-label={t("listen")}
-                aria-pressed={speaking}
+            {error && <p className="error">{error}</p>}
+            {ttsEngine.supported ? (
+              <>
+                <button
+                  className="btn btn-sm btn-ghost"
+                  onClick={() => void speak()}
+                  aria-label={t("listen")}
+                  aria-pressed={speaking}
+                  aria-describedby={ttsNotice ? "tts-notice" : undefined}
+                >
+                  {speaking ? (
+                    <Square size={14} aria-hidden />
+                  ) : (
+                    <Volume2 size={14} aria-hidden />
+                  )}{" "}
+                  {speaking ? t("stop") : t("listen")}
+                </button>
+                <label className="tts-control">
+                  <span className="muted muted-sm">{t("ttsRate")}</span>
+                  <input
+                    type="range"
+                    min={TTS_RATE.min}
+                    max={TTS_RATE.max}
+                    step={TTS_RATE.step}
+                    value={ttsPrefs.rate}
+                    onChange={(e) =>
+                      updateTtsPref("rate", Number(e.target.value))
+                    }
+                  />
+                </label>
+                <label className="tts-control">
+                  <span className="muted muted-sm">{t("ttsPitch")}</span>
+                  <input
+                    type="range"
+                    min={TTS_PITCH.min}
+                    max={TTS_PITCH.max}
+                    step={TTS_PITCH.step}
+                    value={ttsPrefs.pitch}
+                    onChange={(e) =>
+                      updateTtsPref("pitch", Number(e.target.value))
+                    }
+                  />
+                </label>
+              </>
+            ) : (
+              // No engine: say so rather than showing a button that does
+              // nothing (AUD-G-12).
+              <span className="muted muted-sm">{t("ttsUnsupported")}</span>
+            )}
+            {ttsNotice && (
+              <p
+                id="tts-notice"
+                className="muted muted-sm tts-notice"
+                role="status"
               >
-                {speaking ? (
-                  <Square size={14} aria-hidden />
-                ) : (
-                  <Volume2 size={14} aria-hidden />
-                )}{" "}
-                {speaking ? t("stop") : t("listen")}
-              </button>
+                {ttsNotice}
+              </p>
             )}
             {offlineCopy && <span className="badge">{t("offlineBadge")}</span>}
             <button

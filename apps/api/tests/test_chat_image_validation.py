@@ -16,7 +16,7 @@ from pydantic import ValidationError
 
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
-from bangla_gpt_api.routers.common import _validate_chat_image
+from bangla_gpt_api.routers._image_contract import _validate_chat_image
 from bangla_gpt_api.schemas import ChatImageIn
 
 PASSWORD = "supersecret1"

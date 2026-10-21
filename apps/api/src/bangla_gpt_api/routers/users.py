@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import Field
 from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy.orm import Session
 
 from bangla_gpt_api.db.models import (
     AiJob,
@@ -64,9 +65,10 @@ from .deps import (
     Ctx,
     CurrentUser,
     DbSession,
-    _assert_student_in_school,
+    NonImpersonatedUser,
     _build_me_response,
     authorize_student_access,
+    load_student_for_tenant,
 )
 
 router = APIRouter(responses=AUTH_GUARD_RESPONSES)
@@ -135,15 +137,21 @@ def read_me(app_ctx: Ctx, db: DbSession, user: CurrentUser) -> MeResponse:
     return _build_me_response(app_ctx, db, user)
 
 
-@router.delete("/users/me", status_code=204)
-def delete_me(db: DbSession, user: CurrentUser) -> Response:
+@router.delete("/users/me", status_code=204, responses=message(409))
+def delete_me(db: DbSession, user: NonImpersonatedUser) -> Response:
     """GDPR-style self-service account deletion.
 
     Removes the account and every row owned by it: student/teacher/parent
     profile and ALL FK-children (Postgres enforces referential integrity --
     SQLite silently does not, so every child table must be cleaned here or
     the delete aborts mid-transaction on the production engine). The last
-    remaining admin cannot delete their own account (409).
+    remaining admin cannot delete their own account (409). Impersonation
+    sessions are refused outright (403): the erasure is irreversible and
+    belongs to the account holder alone (AUD-B-02).
+
+    AUD-B-19: the last-admin 409 body is the plain message shape and was
+    undocumented; the 403 comes from the NonImpersonatedUser dependency and
+    keeps the router-level guard declaration.
     """
     if user.role == "admin":
         admins = db.execute(
@@ -165,10 +173,14 @@ def delete_me(db: DbSession, user: CurrentUser) -> Response:
             .where(ParentInvite.used_by_parent_id == parent.id)
             .values(used_by_parent_id=None)
         )
-        db.delete(parent)
+        # Core delete, not db.delete(): the unit of work orders the profile
+        # deletes by the model's module path, so an ORM delete here can be
+        # emitted AFTER the users delete below and the parent FK aborts the
+        # erasure (C-03 regression). Executed order is written order.
+        db.execute(delete(Parent).where(Parent.id == parent.id))
     if teacher is not None:
         db.execute(delete(ClassTeacher).where(ClassTeacher.teacher_id == teacher.id))
-        db.delete(teacher)
+        db.execute(delete(Teacher).where(Teacher.id == teacher.id))
     if student is not None:
         attempt_ids = (
             db.execute(select(QuizAttempt.id).where(QuizAttempt.student_id == student.id))
@@ -220,7 +232,9 @@ def delete_me(db: DbSession, user: CurrentUser) -> Response:
         db.execute(delete(SupportPlan).where(SupportPlan.student_id == student.id))
         db.execute(delete(ConceptMastery).where(ConceptMastery.student_id == student.id))
         db.execute(delete(StudentAbility).where(StudentAbility.student_id == student.id))
-        db.delete(student)
+        # Same reason as the parent profile above: explicit Core delete, so the
+        # students row is gone before the users row in the same transaction.
+        db.execute(delete(Student).where(Student.id == student.id))
 
     # User-scoped rows (any role), removed before the users row itself.
     db.execute(delete(PasswordReset).where(PasswordReset.user_id == user.id))
@@ -268,14 +282,13 @@ def delete_me(db: DbSession, user: CurrentUser) -> Response:
     return Response(status_code=204)
 
 
-@router.get("/users/me/export", response_model=_DataExportV2)
-def export_me(response: Response, db: DbSession, user: CurrentUser) -> _DataExportV2:
-    """Self-service data portability: everything stored about this account."""
-    response.headers["Content-Disposition"] = 'attachment; filename="my-data-export.json"'
-    student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one_or_none()
-    teacher = db.execute(select(Teacher).where(Teacher.user_id == user.id)).scalar_one_or_none()
-    parent = db.execute(select(Parent).where(Parent.user_id == user.id)).scalar_one_or_none()
-
+def _export_identity_sections(
+    db: Session,
+    student: Student | None,
+    teacher: Teacher | None,
+    parent: Parent | None,
+) -> tuple[dict, list[dict], list[dict]]:
+    """Profile row, quiz attempts and parent links (the v1 sections)."""
     profile: dict
     attempt_rows: list[QuizAttempt] = []
     links: list[dict] = []
@@ -319,6 +332,14 @@ def export_me(response: Response, db: DbSession, user: CurrentUser) -> _DataExpo
         }
         for a in attempt_rows
     ]
+
+    return profile, attempts, links
+
+
+def _export_chat_sections(
+    db: Session, student: Student | None
+) -> tuple[list[dict], list[dict], list[dict]]:
+    """Conversations, chat messages and daily activity (F-063)."""
     # F-063: a student's export stopped at quiz scores. The conversations and
     # chat messages -- the largest body of personal data this product holds
     # about a child -- were not exported at all, so the "download everything
@@ -367,18 +388,11 @@ def export_me(response: Response, db: DbSession, user: CurrentUser) -> _DataExpo
             )
         ]
 
-    # audit event 2/5: data_export (self-service; only the fact is
-    # logged -- the payload itself never touches logs or audit rows).
-    write_audit(
-        db,
-        action="data_export",
-        actor_user_id=user.id,
-        actor_role=user.role,
-        target=f"user:{user.id}",
-        detail={"format": "json"},
-    )
-    db.commit()
+    return conversations, chat_messages, learning_activity
 
+
+def _export_user_tables(db: Session, user: User) -> dict[str, list[dict]]:
+    """Per-user tables that need no profile row (S-021)."""
     # --- S-021: the remaining per-user tables -------------------------------
     # Everything below is stored per user or per profile and was missing from
     # the export while DELETE /users/me removed it. Queried after the audit
@@ -461,6 +475,18 @@ def export_me(response: Response, db: DbSession, user: CurrentUser) -> _DataExpo
             select(AiJob).where(AiJob.user_id == user.id).order_by(AiJob.id)
         ).scalars()
     ]
+    return {
+        "notes": notes,
+        "notifications": notifications,
+        "ai_usage": ai_usage,
+        "analytics_events": analytics_events,
+        "feedback": feedback_rows,
+        "ai_jobs": ai_jobs,
+    }
+
+
+def _export_teacher_tables(db: Session, user: User) -> dict[str, list[dict]]:
+    """Teacher-owned rows (S-021)."""
     teacher_documents = [
         {
             "id": row.id,
@@ -542,6 +568,19 @@ def export_me(response: Response, db: DbSession, user: CurrentUser) -> _DataExpo
             select(Assignment).where(Assignment.teacher_id == user.id).order_by(Assignment.id)
         ).scalars()
     ]
+    return {
+        "teacher_documents": teacher_documents,
+        "question_papers": question_papers,
+        "question_bank": question_bank,
+        "short_tests": short_tests,
+        "assignments": assignments,
+    }
+
+
+def _export_plan_and_invite_tables(
+    db: Session, user: User, student: Student | None
+) -> dict[str, list[dict]]:
+    """Support plans and the invite rows this account created or received."""
     plan_filters = [SupportPlan.teacher_id == user.id]
     if student is not None:
         plan_filters.append(SupportPlan.student_id == student.id)
@@ -591,6 +630,15 @@ def export_me(response: Response, db: DbSession, user: CurrentUser) -> _DataExpo
         ]
     # Single-use credential rows: SHAPE only -- the token hashes are never
     # exported (they are derived secrets, not personal data).
+    return {
+        "support_plans": support_plans,
+        "parent_invites": parent_invites,
+        "student_invites": student_invites,
+    }
+
+
+def _export_credential_tables(db: Session, user: User) -> dict[str, list[dict]]:
+    """Single-use credential rows (shape only) and the audit trail."""
     password_resets = [
         {
             "id": row.id,
@@ -627,8 +675,27 @@ def export_me(response: Response, db: DbSession, user: CurrentUser) -> _DataExpo
             select(AuditLog).where(AuditLog.actor_user_id == user.id).order_by(AuditLog.id)
         ).scalars()
     ]
+    return {
+        "password_resets": password_resets,
+        "email_verifications": email_verifications,
+        "audit_events": audit_events,
+    }
 
-    # Student-scoped learning tables not covered by the v1 sections.
+
+def _export_account_tables(
+    db: Session, user: User, student: Student | None
+) -> dict[str, list[dict]]:
+    """Every S-021 table, merged for the export response."""
+    return {
+        **_export_user_tables(db, user),
+        **_export_teacher_tables(db, user),
+        **_export_plan_and_invite_tables(db, user, student),
+        **_export_credential_tables(db, user),
+    }
+
+
+def _export_student_learning(db: Session, student: Student | None) -> dict[str, list[dict]]:
+    """Student-scoped learning tables not covered by the v1 sections."""
     chapter_progress: list[dict] = []
     revision_items: list[dict] = []
     concept_mastery: list[dict] = []
@@ -714,6 +781,43 @@ def export_me(response: Response, db: DbSession, user: CurrentUser) -> _DataExpo
             ).scalars()
         ]
 
+    return {
+        "chapter_progress": chapter_progress,
+        "revision_items": revision_items,
+        "concept_mastery": concept_mastery,
+        "student_abilities": student_abilities,
+        "classrooms": classrooms,
+    }
+
+
+@router.get("/users/me/export", response_model=_DataExportV2)
+def export_me(response: Response, db: DbSession, user: CurrentUser) -> _DataExportV2:
+    """Self-service data portability: everything stored about this account.
+
+    The per-table assembly lives in the ``_export_*`` helpers below; this
+    function is the composition: look the caller's profiles up, collect the
+    sections, write the audit event, return.
+    """
+    response.headers["Content-Disposition"] = 'attachment; filename="my-data-export.json"'
+    student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one_or_none()
+    teacher = db.execute(select(Teacher).where(Teacher.user_id == user.id)).scalar_one_or_none()
+    parent = db.execute(select(Parent).where(Parent.user_id == user.id)).scalar_one_or_none()
+
+    profile, attempts, links = _export_identity_sections(db, student, teacher, parent)
+    conversations, chat_messages, learning_activity = _export_chat_sections(db, student)
+
+    # audit event 2/5: data_export (self-service; only the fact is
+    # logged -- the payload itself never touches logs or audit rows).
+    write_audit(
+        db,
+        action="data_export",
+        actor_user_id=user.id,
+        actor_role=user.role,
+        target=f"user:{user.id}",
+        detail={"format": "json"},
+    )
+    db.commit()
+
     return _DataExportV2(
         schema_version=EXPORT_SCHEMA_VERSION,
         user={
@@ -728,28 +832,8 @@ def export_me(response: Response, db: DbSession, user: CurrentUser) -> _DataExpo
         conversations=conversations,
         chat_messages=chat_messages,
         learning_activity=learning_activity,
-        notes=notes,
-        notifications=notifications,
-        chapter_progress=chapter_progress,
-        revision_items=revision_items,
-        concept_mastery=concept_mastery,
-        student_abilities=student_abilities,
-        classrooms=classrooms,
-        ai_usage=ai_usage,
-        analytics_events=analytics_events,
-        feedback=feedback_rows,
-        ai_jobs=ai_jobs,
-        teacher_documents=teacher_documents,
-        question_papers=question_papers,
-        question_bank=question_bank,
-        short_tests=short_tests,
-        assignments=assignments,
-        support_plans=support_plans,
-        parent_invites=parent_invites,
-        student_invites=student_invites,
-        password_resets=password_resets,
-        email_verifications=email_verifications,
-        audit_events=audit_events,
+        **_export_account_tables(db, user, student),
+        **_export_student_learning(db, student),
     )
 
 
@@ -791,10 +875,12 @@ def post_consent_reconfirm(
             status_code=400,
             detail={"code": "consent_not_accepted", "message": "acceptance required"},
         )
-    # align implementation with policy "student or linked guardian"
-    student = db.get(Student, student_id)
-    if student is None:
-        raise HTTPException(status_code=404, detail="Student not found")
+    # align implementation with policy "student or linked guardian".
+    # B-08: the load runs through the tenant helper, so a staff caller gets
+    # the documented 403 other_school for a student of another school (the
+    # central ORM filter would otherwise hide the row and produce a bare 404
+    # before this function's own role checks run).
+    student = load_student_for_tenant(db, student_id, user)
     allowed = False
     if user.role == "student" and student.user_id == user.id:
         allowed = True
@@ -811,10 +897,8 @@ def post_consent_reconfirm(
                 allowed = True
     elif user.role in ("admin", "teacher", "school_admin"):
         # Staff support path: teacher/school_admin stay behind the school
-        # tenancy wall (same gate as GET /students/{id}/consent); admin is
+        # tenancy wall (the helper above already applied it); admin is
         # platform-wide by design.
-        if user.role != "admin":
-            _assert_student_in_school(db, user, student)
         allowed = True
     if not allowed:
         raise HTTPException(status_code=403, detail="Not allowed to access this student")

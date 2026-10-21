@@ -7,6 +7,7 @@ The original `main.py` was ~7000 lines with all business logic, middleware, and 
 ## Decision
 
 Refactor into a modular monolith with:
+
 - Thin `main.py` (581 lines today) delegating to `initialize/` subpackage
 - 13 domain routers in `routers/`
 - 35 service modules in `services/` (incl. `generators/`)
@@ -43,6 +44,7 @@ The platform must support multiple AI providers (Gemini, OpenAI, OpenRouter, Oll
 ## Decision
 
 Define an `LLMProvider` protocol with factory pattern:
+
 - `mock` provider is the default and always available
 - Real providers are loaded only when their API key is set
 - `/ready` endpoint returns 503 if configured provider is unavailable
@@ -75,6 +77,7 @@ Pure BM25 retrieval misses semantic matches; pure vector retrieval misses exact 
 ## Decision
 
 Implement hybrid retrieval (`RetrievalMode.hybrid`) combining:
+
 1. **BM25 lane** — Lexical matching with Bangla-aware tokenizer (U+0980-U+09FF)
 2. **Vector lane** — Deterministic local embeddings (or real multilingual model)
 3. **Fusion** — Reciprocal Rank Fusion (RRF) with configurable weights
@@ -95,9 +98,67 @@ Implement hybrid retrieval (`RetrievalMode.hybrid`) combining:
 - **+** Configurable per deployment
 - **-** RRF weights need tuning per corpus size
 
+## Measured (2026-10-20, A4-02)
+
+The vector lane's default is still the deterministic hashing embedder
+(`EMBEDDING_MODEL` empty). The real model's backend is now wired behind the
+same `Embedder` protocol, so the decision below is a configuration change, not
+a code change:
+
+- **Backend**: `retrieval/gemini_embedder.py` speaks the Gemini API's
+  `batchEmbedContents` endpoint (model `gemini-embedding-001`, multilingual,
+  3 072 dimensions with Matryoshka truncation — requested at 768 — and a
+  2 048-token input ceiling per text; properties recorded with the retrieved
+  reference page and date in the module docstring). Terms: the same Gemini API
+  terms and tier rules the generation lane documents in
+  `docs/compliance/provider-terms.md`.
+- **Verified live**: the adapter returned 768-dimension vectors for Bangla text
+  (smoke call, 1.5 s, 2026-10-20) and a 72-request bounded probe (60 chunks +
+  12 queries) ran clean; on that sample both lanes reach recall@5 1.0, i.e. the
+  sample is too small to discriminate and is recorded as a smoke test, not a
+  quality measurement.
+- **Blocked, on the record**: the corpus-scale measurement (Recall@1/5, MRR for
+  the vector lane against the hashing baseline on the 1 565-chunk served corpus
+  and the golden query families) needs ~1 850 embedding requests, and the
+  free-tier key's daily embedding quota is ~1 000: the run stops with the
+  vendor's own 429 ("You exceeded your current quota…") after ~1 000 requests.
+  The adapter paces batches (65 s between batch starts) and honours the
+  vendor's retry hint, which is why the quota — not the code — is the limit.
+- **What unblocks it**: a paid tier for the same model, or a self-hosted
+  multilingual model (e.g. an ONNX/GGUF encoder), both of which are staging
+  decisions with cost and licence consequences this ADR leaves to the owner.
+  The measurement command is one line once a key with quota exists:
+  `EMBEDDING_MODEL=gemini-embedding-001 python scripts/evaluate_nctb_retrieval.py
+  ../../data/nctb --out ../../data/nctb/embedding_eval.json` (the harness reads
+  the embedder from configuration and records its name in the artifact).
+
+### Cache and resume (2026-10-21)
+
+The quota no longer costs the whole measurement. The adapter caches every
+vector on disk (`EMBEDDING_CACHE_PATH`) and the harness reads that cache before
+calling the provider, so a run the vendor cuts off at the daily ceiling banks
+everything it fetched and the next run resumes from there:
+
+- second live probe: **OK**, 768-dimension vectors for Bangla text (2026-10-21);
+- the corpus-scale attempt the same day ended in the same vendor 429
+  (`gemini embeddings rate-limited: 6 retries exhausted`), and the cache file
+  recorded **825 vectors** (it grew 7,247,403 → 8,727,403 bytes) — a partial
+  run is progress, not a loss;
+- pacing is configurable (`EMBEDDING_MIN_INTERVAL_SECONDS`) and 429 responses
+  are retried with the vendor's own retry hint, so the day's budget is spent
+  rather than thrown away on a burst.
+
+The remaining gap is therefore *only* the tier: with quota, the same command
+finishes and the lane comparison with the real model lands in
+`retrieval-variants.md`. Full record:
+`.audit/evidence/R5-a402-embedding-lane.md`.
+
 ## Status
 
-Accepted — Default mode in production.
+Accepted — Default mode in production. The vector lane serves the deterministic
+hashing embedder; swapping in a real multilingual model is a configuration
+change (`EMBEDDING_MODEL`) whose quality measurement is blocked by the
+free-tier embedding quota as recorded above.
 
 ---
 
@@ -201,6 +262,7 @@ The platform has a static frontend SPA and a long-running API server with SSE st
 ## Decision
 
 Split deployment into two services:
+
 1. **Vercel** — Static SPA with `/api/*` proxy rewrite to API origin
 2. **API origin** — Any long-running host (VM, Docker, PaaS) with Cloudflare tunnel or direct DNS
 
@@ -266,6 +328,7 @@ Student PII (phone numbers, emails) stored in database must be encrypted at rest
 ## Decision
 
 Use Fernet symmetric encryption (from `cryptography` library):
+
 - Helper functions `encrypt_pii()` / `decrypt_pii()` in `security.py` handle
   encrypt/decrypt; the single encrypted column today is `parents.phone_enc`
 - Encryption key from the `PII_ENC_KEY` env var (production boot refuses to

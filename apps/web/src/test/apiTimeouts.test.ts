@@ -10,6 +10,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  BULK_REQUEST_TIMEOUT_MS,
   getBlob,
   post,
   postStream,
@@ -93,6 +94,35 @@ describe("non-streaming request timeout (F-015/F-030)", () => {
       ok: true,
     });
     expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  // G-19: the classroom CSV import is O(rows) server work (one Argon2id hash
+  // per invite code; 200 rows -- the API's documented ceiling -- measured
+  // ~10 s against an idle API). Under the 20 s default the client gave up
+  // before the API finished and the teacher read "The server isn't
+  // responding" for an import that had in fact enrolled all 200 students.
+  it("honours a longer deadline for a bulk call, and still bounds it", async () => {
+    stalledFetch();
+    let settled = false;
+    const call = post(
+      "/teacher/classrooms/1/import",
+      { csv_text: "name,email" },
+      { timeoutMs: BULK_REQUEST_TIMEOUT_MS },
+    ).catch((e: unknown) => {
+      settled = true;
+      throw e;
+    });
+    const assertion = expect(call).rejects.toMatchObject({
+      status: 0,
+      code: "timeout",
+    });
+    // Past the default deadline: the bulk call is still waiting on the server.
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS + 5_000);
+    expect(settled).toBe(false);
+    // ...and it is not unbounded either.
+    await vi.advanceTimersByTimeAsync(BULK_REQUEST_TIMEOUT_MS);
+    await assertion;
     expect(vi.getTimerCount()).toBe(0);
   });
 });

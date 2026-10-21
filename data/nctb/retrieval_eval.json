@@ -1,34 +1,476 @@
 {
-  "corpus_chunks": 2508,
-  "index_build_seconds": 26.471,
+  "corpus_chunks": 1565,
+  "index_build_seconds": 90.345,
   "served_index": "hybrid",
+  "run_conditions": {
+    "seed": 20260825,
+    "host": "DESKTOP-GET9GA6",
+    "platform": "Windows-11-10.0.26300-SP0",
+    "python": "3.12.10",
+    "queries_family_a": 100,
+    "queries_family_b": 80,
+    "queries_family_d_banglish": 100,
+    "top_k_evaluated": 10,
+    "bootstrap_resamples": 1000
+  },
+  "serve_stats": {
+    "duplicates_dropped_at_load": 1034,
+    "stale_sources_skipped": 0,
+    "latin_residue_drops": 0,
+    "legacy_drops": 0,
+    "served_duplicate_text_groups": 373,
+    "served_duplicate_class_text_pairs": 0,
+    "cross_source_near_duplicates": {
+      "unique_source_text_records": 373,
+      "groups": 16,
+      "members": 37,
+      "threshold": 0.9,
+      "definition": "cross-source (source, text) records at character-trigram Jaccard >= 0.9, transitively grouped; Jaccard 1.0 = exact reprint"
+    },
+    "content_hash_verification": {
+      "records": 0,
+      "verified": 0,
+      "mismatched": 0,
+      "unhashed": 0
+    }
+  },
   "family_A_self_sentence": {
     "n": 100,
-    "recall_at_1": 0.98,
-    "recall_at_5": 0.98,
-    "mrr": 0.6107
+    "recall_at_1": 0.84,
+    "recall_at_3": 0.99,
+    "recall_at_5": 0.99,
+    "recall_at_10": 1.0,
+    "ndcg_at_10": 0.9352,
+    "mrr": 0.9129,
+    "recall_at_1_ci95": [
+      0.77,
+      0.91
+    ],
+    "ndcg_at_10_ci95": [
+      0.9056,
+      0.9636
+    ]
   },
   "family_B_chapter_title": {
     "n": 80,
-    "recall_at_1": 1.0,
-    "recall_at_5": 1.0,
-    "mrr": 1.0
+    "recall_at_1": 0.65,
+    "recall_at_3": 0.95,
+    "recall_at_5": 0.975,
+    "recall_at_10": 1.0,
+    "ndcg_at_10": 0.8548,
+    "mrr": 0.8054,
+    "recall_at_1_ci95": [
+      0.55,
+      0.75
+    ],
+    "ndcg_at_10_ci95": [
+      0.8087,
+      0.896
+    ]
+  },
+  "family_D_banglish": {
+    "n": 100,
+    "recall_at_1": 0.57,
+    "recall_at_3": 0.85,
+    "recall_at_5": 0.92,
+    "recall_at_10": 0.98,
+    "ndcg_at_10": 0.7835,
+    "mrr": 0.7191,
+    "recall_at_1_ci95": [
+      0.48,
+      0.67
+    ],
+    "ndcg_at_10_ci95": [
+      0.734,
+      0.8394
+    ]
   },
   "family_C_adversarial_refusal_rate": 1.0,
-  "search_latency_p50_ms": 120.23,
-  "search_latency_p95_ms": 252.94,
+  "search_latency_p50_ms": 136.01,
+  "search_latency_p95_ms": 195.66,
   "baseline_lexical": {
     "family_A_self_sentence": {
       "n": 100,
-      "recall_at_1": 0.98,
-      "recall_at_5": 0.98,
-      "mrr": 0.6098
+      "recall_at_1": 0.82,
+      "recall_at_3": 0.99,
+      "recall_at_5": 0.99,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 0.9278,
+      "mrr": 0.9029,
+      "recall_at_1_ci95": [
+        0.74,
+        0.9
+      ],
+      "ndcg_at_10_ci95": [
+        0.8962,
+        0.9581
+      ]
     },
     "family_B_chapter_title": {
       "n": 80,
-      "recall_at_1": 1.0,
-      "recall_at_5": 1.0,
-      "mrr": 1.0
+      "recall_at_1": 0.65,
+      "recall_at_3": 0.95,
+      "recall_at_5": 0.975,
+      "recall_at_10": 1.0,
+      "ndcg_at_10": 0.8483,
+      "mrr": 0.7971,
+      "recall_at_1_ci95": [
+        0.55,
+        0.75
+      ],
+      "ndcg_at_10_ci95": [
+        0.8011,
+        0.8913
+      ]
     }
+  },
+  "variants": {
+    "lexical": {
+      "A": {
+        "n": 100,
+        "recall_at_1": 0.82,
+        "recall_at_3": 0.99,
+        "recall_at_5": 0.99,
+        "recall_at_10": 1.0,
+        "ndcg_at_10": 0.9278,
+        "mrr": 0.9029,
+        "recall_at_1_ci95": [
+          0.74,
+          0.9
+        ],
+        "ndcg_at_10_ci95": [
+          0.8962,
+          0.9581
+        ]
+      },
+      "B": {
+        "n": 80,
+        "recall_at_1": 0.65,
+        "recall_at_3": 0.95,
+        "recall_at_5": 0.975,
+        "recall_at_10": 1.0,
+        "ndcg_at_10": 0.8483,
+        "mrr": 0.7971,
+        "recall_at_1_ci95": [
+          0.55,
+          0.75
+        ],
+        "ndcg_at_10_ci95": [
+          0.8011,
+          0.8913
+        ]
+      },
+      "D": {
+        "n": 100,
+        "recall_at_1": 0.57,
+        "recall_at_3": 0.85,
+        "recall_at_5": 0.91,
+        "recall_at_10": 0.98,
+        "ndcg_at_10": 0.7832,
+        "mrr": 0.7188,
+        "recall_at_1_ci95": [
+          0.48,
+          0.67
+        ],
+        "ndcg_at_10_ci95": [
+          0.7331,
+          0.8393
+        ]
+      },
+      "latency": {
+        "p50_ms": 19.18,
+        "p95_ms": 40.91
+      }
+    },
+    "vector": {
+      "A": {
+        "n": 100,
+        "recall_at_1": 0.36,
+        "recall_at_3": 0.58,
+        "recall_at_5": 0.65,
+        "recall_at_10": 0.72,
+        "ndcg_at_10": 0.5418,
+        "mrr": 0.4847,
+        "recall_at_1_ci95": [
+          0.27,
+          0.46
+        ],
+        "ndcg_at_10_ci95": [
+          0.4553,
+          0.6233
+        ]
+      },
+      "B": {
+        "n": 80,
+        "recall_at_1": 0.2625,
+        "recall_at_3": 0.475,
+        "recall_at_5": 0.5,
+        "recall_at_10": 0.6,
+        "ndcg_at_10": 0.4234,
+        "mrr": 0.3684,
+        "recall_at_1_ci95": [
+          0.1625,
+          0.3625
+        ],
+        "ndcg_at_10_ci95": [
+          0.3341,
+          0.5165
+        ]
+      },
+      "D": {
+        "n": 100,
+        "recall_at_1": 0.01,
+        "recall_at_3": 0.01,
+        "recall_at_5": 0.02,
+        "recall_at_10": 0.07,
+        "ndcg_at_10": 0.0297,
+        "mrr": 0.0184,
+        "recall_at_1_ci95": [
+          0.0,
+          0.03
+        ],
+        "ndcg_at_10_ci95": [
+          0.0096,
+          0.0573
+        ]
+      },
+      "latency": {
+        "p50_ms": 14.47,
+        "p95_ms": 34.79
+      }
+    },
+    "hybrid-no-rerank": {
+      "A": {
+        "n": 100,
+        "recall_at_1": 0.82,
+        "recall_at_3": 0.99,
+        "recall_at_5": 0.99,
+        "recall_at_10": 1.0,
+        "ndcg_at_10": 0.9278,
+        "mrr": 0.9029,
+        "recall_at_1_ci95": [
+          0.74,
+          0.9
+        ],
+        "ndcg_at_10_ci95": [
+          0.8962,
+          0.9581
+        ]
+      },
+      "B": {
+        "n": 80,
+        "recall_at_1": 0.65,
+        "recall_at_3": 0.95,
+        "recall_at_5": 0.975,
+        "recall_at_10": 1.0,
+        "ndcg_at_10": 0.8483,
+        "mrr": 0.7971,
+        "recall_at_1_ci95": [
+          0.55,
+          0.75
+        ],
+        "ndcg_at_10_ci95": [
+          0.8011,
+          0.8913
+        ]
+      },
+      "D": {
+        "n": 100,
+        "recall_at_1": 0.57,
+        "recall_at_3": 0.85,
+        "recall_at_5": 0.92,
+        "recall_at_10": 0.98,
+        "ndcg_at_10": 0.7835,
+        "mrr": 0.7191,
+        "recall_at_1_ci95": [
+          0.48,
+          0.67
+        ],
+        "ndcg_at_10_ci95": [
+          0.734,
+          0.8394
+        ]
+      },
+      "latency": {
+        "p50_ms": 43.89,
+        "p95_ms": 60.15
+      }
+    },
+    "hybrid": {
+      "A": {
+        "n": 100,
+        "recall_at_1": 0.84,
+        "recall_at_3": 0.99,
+        "recall_at_5": 0.99,
+        "recall_at_10": 1.0,
+        "ndcg_at_10": 0.9352,
+        "mrr": 0.9129,
+        "recall_at_1_ci95": [
+          0.77,
+          0.91
+        ],
+        "ndcg_at_10_ci95": [
+          0.9056,
+          0.9636
+        ]
+      },
+      "B": {
+        "n": 80,
+        "recall_at_1": 0.65,
+        "recall_at_3": 0.95,
+        "recall_at_5": 0.975,
+        "recall_at_10": 1.0,
+        "ndcg_at_10": 0.8548,
+        "mrr": 0.8054,
+        "recall_at_1_ci95": [
+          0.55,
+          0.75
+        ],
+        "ndcg_at_10_ci95": [
+          0.8087,
+          0.896
+        ]
+      },
+      "D": {
+        "n": 100,
+        "recall_at_1": 0.57,
+        "recall_at_3": 0.85,
+        "recall_at_5": 0.92,
+        "recall_at_10": 0.98,
+        "ndcg_at_10": 0.7835,
+        "mrr": 0.7191,
+        "recall_at_1_ci95": [
+          0.48,
+          0.67
+        ],
+        "ndcg_at_10_ci95": [
+          0.734,
+          0.8394
+        ]
+      },
+      "latency": {
+        "p50_ms": 136.01,
+        "p95_ms": 195.66
+      }
+    }
+  },
+  "gate_threshold_calibration": {
+    "min_coverage_default": 0.5,
+    "answerable_mean_coverage": 1.0,
+    "adversarial_mean_coverage": 0.0,
+    "thresholds": {
+      "0.3": {
+        "answerable_pass_rate": 1.0,
+        "adversarial_pass_rate": 0.0
+      },
+      "0.4": {
+        "answerable_pass_rate": 1.0,
+        "adversarial_pass_rate": 0.0
+      },
+      "0.5": {
+        "answerable_pass_rate": 1.0,
+        "adversarial_pass_rate": 0.0
+      },
+      "0.6": {
+        "answerable_pass_rate": 1.0,
+        "adversarial_pass_rate": 0.0
+      },
+      "0.7": {
+        "answerable_pass_rate": 1.0,
+        "adversarial_pass_rate": 0.0
+      }
+    }
+  },
+  "lexicon_audit": {
+    "stem_groups": 6345,
+    "collision_groups": 490,
+    "collision_ratio": 0.0772,
+    "collision_examples": {
+      "140": [
+        "140",
+        "140টি"
+      ],
+      "216": [
+        "216",
+        "216টি"
+      ],
+      "অংকন": [
+        "অংকন",
+        "অংকনের"
+      ],
+      "অংশ": [
+        "অংশ",
+        "অংশকে",
+        "অংশগুলো",
+        "অংশগুলোর",
+        "অংশটি",
+        "অংশের"
+      ],
+      "অংশগ্রহণ": [
+        "অংশগ্রহণ",
+        "অংশগ্রহণের"
+      ]
+    },
+    "expansion_targets": 42,
+    "expansion_targets_absent_from_corpus": [
+      "অতিভুজ",
+      "আকর্ষণ",
+      "ওহম",
+      "ক্লোরোফিল",
+      "চুম্বক",
+      "দর্পণ",
+      "পরিচলন",
+      "পরিবহন",
+      "পিথাগোরাস",
+      "পূর্ণসংখ্যা",
+      "প্রতিবিম্ব",
+      "প্রতিসরণ",
+      "প্রভাবক",
+      "ফুসফুস",
+      "ব্যাসার্ধ",
+      "মেরু",
+      "লব",
+      "লম্ব",
+      "শিরা",
+      "সমকোণ",
+      "সাইটোপ্লাজম",
+      "সূক্ষ্মকোণ",
+      "সূর্য",
+      "স্থূলকোণ",
+      "হর"
+    ],
+    "expansion_targets_absent_count": 25
+  },
+  "banglish_subset": {
+    "n_pairs": 100,
+    "recall_at_5_bangla": 0.99,
+    "recall_at_5_banglish": 0.92,
+    "paired_delta_banglish_minus_bangla": -0.07,
+    "paired_delta_ci95": [
+      -0.13,
+      -0.02
+    ],
+    "delta_definition": "mean over chunks of (recall@5 on the romanised form - recall@5 on the Bangla form); a negative value is the roman lane's cost",
+    "labels_family_a": [
+      [
+        "bangla",
+        100
+      ]
+    ],
+    "labels_family_d": [
+      [
+        "banglish",
+        26
+      ],
+      [
+        "mixed",
+        74
+      ]
+    ]
+  },
+  "index_footprint": {
+    "build_peak_memory_mb": 278.06,
+    "chunks": 1565,
+    "chunks_per_second_of_build": 17.3
   }
 }

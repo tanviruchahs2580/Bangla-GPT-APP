@@ -8,7 +8,7 @@ import type {
   QPaper,
   RosterEntry,
 } from "../../types";
-import { Badge, Button, Card, Stat } from "../../components/ui";
+import { Badge, Button, Card, NumberInput, Stat } from "../../components/ui";
 import { QPaperReviewPanel } from "../../components/teacher/QPaperReviewPanel";
 import { friendlyError } from "../../errors";
 import { t } from "../../i18n";
@@ -204,7 +204,7 @@ export default function AssessmentsPage() {
   ];
 
   return (
-    <main className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       <section className="section-head">
         <h1 className="page-title">{t("asmTitle")}</h1>
       </section>
@@ -263,6 +263,9 @@ export default function AssessmentsPage() {
                 <p className="muted">{t("noDocumentsYet")}</p>
               ) : (
                 <div className="stack">
+                  <p className="muted muted-sm" role="note">
+                    {t("teacherAiDisclaimer")}
+                  </p>
                   {qps.map((qp) => (
                     <div key={qp.id} className="row qp-review-row">
                       <span className="quick-icon tile-teal" aria-hidden>
@@ -418,14 +421,14 @@ export default function AssessmentsPage() {
                 <option value="bangla">{t("subjectBangla")}</option>
               </select>
               <label htmlFor="bacount">{t("questionCount")}</label>
-              <input
+              <NumberInput
                 id="bacount"
-                type="number"
                 min={3}
                 max={25}
                 value={asCount}
-                onChange={(e) => setAsCount(Number(e.target.value) || 5)}
-                className="input w-num"
+                onValue={setAsCount}
+                fallback={5}
+                className="w-num"
               />
               <label htmlFor="badue">{t("baDue")}</label>
               <input
@@ -463,14 +466,12 @@ export default function AssessmentsPage() {
                     <option value="bangla">{t("subjectBangla")}</option>
                   </select>
                   <label htmlFor="acount">{t("questionCount")}</label>
-                  <input
+                  <NumberInput
                     id="acount"
-                    className="input"
-                    type="number"
                     min={1}
                     max={10}
                     value={assignCount}
-                    onChange={(e) => setAssignCount(Number(e.target.value))}
+                    onValue={setAssignCount}
                   />
                 </div>
                 <div className="align-end">
@@ -601,7 +602,11 @@ function ShortTestList() {
       .then((r) => {
         if (live) setRows((r as typeof rows) ?? []);
       })
-      .catch(() => {});
+      .catch((err) => {
+        // AUD-CD-07: a failed load rendered the "no tests yet" empty state,
+        // which reads as a fact rather than an error.
+        console.error("short tests load failed", err);
+      });
     return () => {
       live = false;
     };

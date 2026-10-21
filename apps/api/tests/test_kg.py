@@ -298,3 +298,21 @@ def test_kg_rebuild_is_admin_only_and_counts_graph(client: TestClient) -> None:
 
     # Rebuild wiped mastery (fresh graph) but gaps endpoint stays healthy.
     assert client.get("/kg/gaps", headers=headers).status_code == 200
+
+
+def test_e2_weak_prerequisite_direction_is_pinned() -> None:
+    """E-05 survivor: the prereq-missing rule's direction, pinned by behaviour.
+
+    A prerequisite at 25% is *weak* and must surface (with its measured pct); a
+    prerequisite at 75% is strong and must not. Mutation that this catches:
+    ``missing = entry is None or entry[0] < weak_threshold_pct`` flipped to
+    ``>`` -- the audit's sample survived because the example test above only
+    exercised the never-practiced (``entry is None``) branch.
+    """
+    edges = {"C": ("B",), "B": ("A",), "A": ()}
+    weak = resolve_gaps({"C": (0, 3), "B": (1, 4)}, edges)
+    surfaced = [g for g in weak if g.concept == "C" and g.prereq == "B"]
+    assert surfaced and surfaced[0].prereq_pct == 25.0 and surfaced[0].prereq_total == 4
+
+    strong = resolve_gaps({"C": (0, 3), "B": (3, 4)}, edges)
+    assert [g for g in strong if g.concept == "C" and g.prereq == "B"] == []

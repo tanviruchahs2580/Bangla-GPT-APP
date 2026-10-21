@@ -4,23 +4,29 @@ Moved verbatim from main.py; the drifted duplicate at ``core/middleware.py``
 (static CSP, divergent Prometheus labels) is deleted. Behavior unchanged.
 """
 
+import hashlib
+import hmac
 import ipaddress
 import logging
 import re
 import secrets
 import uuid
+from http import HTTPStatus
 from time import perf_counter
 from typing import ClassVar
 
 from fastapi import Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from bangla_gpt_api.auth.security import decode_token
 from bangla_gpt_api.config import Settings
-from bangla_gpt_api.logging_config import request_id_var
+from bangla_gpt_api.logging_config import json_log, request_id_var, trace_id_var
 from bangla_gpt_api.metrics import (
     REQUEST_LATENCY_SECONDS,
     REQUESTS_TOTAL,
@@ -33,6 +39,39 @@ from bangla_gpt_api.ratelimit import RateLimitBackendError, RateLimiter
 #: ``PrometheusMetricsMiddleware._route_path``).
 UNMATCHED_ROUTE_LABEL = "<unmatched>"
 
+#: Window length of both rate-limit backends (``ratelimit.py``):
+#: ``MemoryRateLimiter`` slides over 60 s and ``RedisRateLimiter`` counts into
+#: wall-clock minute buckets, so 60 s is the worst-case wait for either.
+#: Used as the ``Retry-After`` hint on a refused request (AUD-B-13).
+RATE_LIMIT_WINDOW_SECONDS = 60
+
+_access_logger = logging.getLogger("bangla_gpt_api.access")
+
+
+def pseudonymous_user_ref(user_id: object, secret: str, prefix: str = "u_") -> str:
+    """A stable, non-reversible handle for one account (I-01).
+
+    ``sha256(user_id)`` would be trivially reversible over sequential integer
+    ids, so the digest is keyed with the deployment's JWT secret: the same
+    user keeps the same handle across requests (which is the whole point of
+    the correlation), and the handle is useless to anyone without the secret.
+    The ``prefix`` separates the name spaces: ``u_`` for account handles,
+    ``s_`` for school (tenant) handles (I-01, R4-wsC).
+    """
+    digest = hmac.new(
+        secret.encode("utf-8"), str(user_id).encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    return f"{prefix}{digest[:12]}"
+
+
+def pseudonymous_tenant_ref(school_id: object, secret: str) -> str | None:
+    """The access log's tenant handle (I-01): HMAC like user_ref, ``s_`` prefix,
+    so one school's traffic groups without leaking its id. ``None`` (unscoped
+    admin sessions, unauthenticated requests) stays None in the record."""
+    if school_id is None:
+        return None
+    return pseudonymous_user_ref(school_id, secret, prefix="s_")
+
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -44,10 +83,15 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
             request_id = uuid.uuid4().hex[:16]
         request.state.request_id = request_id
         token = request_id_var.set(request_id)
+        # One trace id per request (AUD-HI-04): per-stage trace records and
+        # the access line then share a single correlation key, so a slow ask
+        # can be reassembled from the log sink alone.
+        trace_token = trace_id_var.set(request_id)
         try:
             response = await call_next(request)
         finally:
             request_id_var.reset(token)
+            trace_id_var.reset(trace_token)
         response.headers["X-Request-ID"] = request_id
         return response
 
@@ -119,24 +163,33 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return None
         try:
             payload = decode_token(auth[7:], settings=request.app.state.settings)
-            return f"u:{payload['sub']}"
         except Exception:
             return None
+        # I-01: the token is decoded here anyway, so this is where the
+        # pseudonymous user handle for the access log comes from for free --
+        # the outer metrics middleware runs before this one and cannot read it.
+        settings = request.app.state.settings
+        request.state.user_ref = pseudonymous_user_ref(payload["sub"], settings.jwt_secret)
+        return f"u:{payload['sub']}"
 
     async def dispatch(self, request: Request, call_next):
         client_ip = _client_ip(request, trust_proxy=self._settings.trust_proxy_headers)
+        # Resolve the caller once per request when a bearer token is present
+        # (I-01): the verified decode also yields the pseudonymous handle the
+        # access log carries, and doing it here -- rather than only inside the
+        # user-scoped branch -- means the handle exists for every
+        # authenticated route, not just the rate-limited ones.
+        user_key: str | None = None
+        if request.headers.get("authorization", "").lower().startswith("bearer "):
+            user_key = self._user_key(request)
         # evaluate ALL matching rules (not first-match break) so
         # per-user and IP ceiling both apply; a single request counts once per limiter
         for path_prefix, (limit, scope) in self.rules.items():
             if not request.url.path.startswith(path_prefix) or limit <= 0:
                 continue
-            if scope == "user":
-                # Per-user budget so a shared school NAT cannot lock out a
-                # classroom; unauthenticated callers fall back to their IP.
-                user_key = self._user_key(request)
-                key_source = user_key or f"ip:{client_ip}"
-            else:
-                key_source = f"ip:{client_ip}"
+            # Per-user budget so a shared school NAT cannot lock out a whole
+            # classroom; unauthenticated callers fall back to their IP.
+            key_source = (user_key or f"ip:{client_ip}") if scope == "user" else f"ip:{client_ip}"
             # Strict prefix matching: "/tutor" matches "/tutor/" and "/tutor/ask"
             # but NOT "/tutor-admin" (avoids false positives).
             path = request.url.path
@@ -145,12 +198,21 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             try:
                 allowed = self.limiter.check(f"{path_prefix}|{key_source}", limit)
             except RateLimitBackendError:
-                return JSONResponse({"detail": "Rate limiter unavailable"}, status_code=503)
+                # C-10: one error shape everywhere -- middleware refusals are
+                # problem+json too, not a fourth envelope.
+                return problem_details(request, status=503, detail="Rate limiter unavailable")
             if not allowed:
-                return JSONResponse(
-                    {"detail": {"code": "rate_limited", "message": "Rate limit exceeded"}},
-                    status_code=429,
+                # AUD-B-13: a 429 without a wait hint invites an immediate
+                # retry that deepens the limit. The hint is the backend's full
+                # window, so a client that honours it always succeeds; a
+                # client that retries earlier is simply refused again.
+                response = problem_details(
+                    request,
+                    status=429,
+                    detail={"code": "rate_limited", "message": "Rate limit exceeded"},
                 )
+                response.headers["Retry-After"] = str(RATE_LIMIT_WINDOW_SECONDS)
+                return response
         return await call_next(request)
 
 
@@ -191,8 +253,24 @@ class BodySizeLimitMiddleware:
         self.max_bytes = max_bytes
 
     @staticmethod
-    def _response(status: int, detail: str) -> Response:
-        return JSONResponse({"detail": detail}, status_code=status)
+    def _response(status: int, detail: str, scope: Scope) -> Response:
+        # C-10: same problem+json envelope as every other error, built by hand
+        # because this is an ASGI middleware with a scope, not a Request.
+        try:
+            title = HTTPStatus(status).phrase
+        except ValueError:  # pragma: no cover - all statuses here are standard
+            title = "Error"
+        return JSONResponse(
+            {
+                "type": "about:blank",
+                "title": title,
+                "status": status,
+                "detail": detail,
+                "instance": scope.get("path", ""),
+            },
+            status_code=status,
+            media_type=PROBLEM_MEDIA_TYPE,
+        )
 
     @staticmethod
     def _declared_length(scope: Scope) -> int | None:
@@ -214,7 +292,7 @@ class BodySizeLimitMiddleware:
         # single body byte is read.
         declared = self._declared_length(scope)
         if declared is not None and declared > self.max_bytes:
-            await self._response(413, "Request body too large")(scope, receive, send)
+            await self._response(413, "Request body too large", scope)(scope, receive, send)
             return
 
         total = 0
@@ -241,13 +319,13 @@ class BodySizeLimitMiddleware:
                 # The application already committed to a response; the only
                 # honest thing left is to let the error surface.
                 raise
-            await self._response(413, "Request body too large")(scope, receive, send)
+            await self._response(413, "Request body too large", scope)(scope, receive, send)
         except (OSError, MemoryError):
             # The stream failed mid-read. Forwarding would leave the endpoint
             # waiting on a body that will never arrive — fail clean instead.
             if response_started:
                 raise
-            await self._response(400, "Unable to read request body")(scope, receive, send)
+            await self._response(400, "Unable to read request body", scope)(scope, receive, send)
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -264,6 +342,14 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "DENY",
         "Referrer-Policy": "no-referrer",
+        # AUD-B-08: deny every powerful browser feature by default. The API
+        # answers JSON and needs none of them, so an allow-list would only be
+        # a future drift source; a deny-by-default policy also covers any
+        # browser that lands on an API error response.
+        "Permissions-Policy": (
+            "accelerometer=(), camera=(), geolocation=(), gyroscope=(), "
+            "magnetometer=(), microphone=(), payment=(), usb=()"
+        ),
     }
 
     #: Dev surfaces that bootstrap with inline + CDN scripts and are therefore
@@ -318,16 +404,26 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 class PrometheusMetricsMiddleware(BaseHTTPMiddleware):
-    """Count every request and observe latency, labeled by route template."""
+    """Count every request and observe latency, labeled by route template.
+
+    Also emits the structured access line (I-01): one JSON record per request
+    carrying method, route template, status, latency and the pseudonymous user
+    handle the rate limiter resolved. It lives here because this middleware is
+    the outermost one, so it sees the final status for every request
+    (including 4xx/5xx produced by inner middleware) and can read
+    ``request.state`` written by the layers inside it.
+    """
 
     async def dispatch(self, request: Request, call_next):
         start = perf_counter()
         status_code = 500
+        error_class: str | None = None
         try:
             response = await call_next(request)
             status_code = response.status_code
             return response
-        except Exception:
+        except Exception as exc:
+            error_class = type(exc).__name__
             UNHANDLED_EXCEPTIONS_TOTAL.labels(
                 method=request.method, path=self._route_path(request)
             ).inc()
@@ -337,6 +433,51 @@ class PrometheusMetricsMiddleware(BaseHTTPMiddleware):
             path = self._route_path(request)
             REQUESTS_TOTAL.labels(method=request.method, path=path, status=str(status_code)).inc()
             REQUEST_LATENCY_SECONDS.labels(path=path).observe(elapsed)
+            self._emit_access_log(request, path, status_code, elapsed, error_class)
+
+    @staticmethod
+    def _emit_access_log(
+        request: Request,
+        path: str,
+        status_code: int,
+        elapsed: float,
+        error_class: str | None,
+    ) -> None:
+        """One structured record per request, when enabled.
+
+        The user handle is the HMAC pseudonym set by ``RateLimitMiddleware``
+        (absent on unauthenticated requests). ``request_id``/``trace_id`` are
+        added by ``json_log`` from the contextvar, so this line correlates
+        with the per-stage trace records and the error body.
+        """
+        settings = getattr(request.app.state, "settings", None)
+        if settings is not None and not getattr(settings, "access_log_enabled", True):
+            return
+        # The outer middleware's ``finally`` runs after RequestIdMiddleware
+        # has already reset the contextvars, so the ids are read off
+        # ``request.state`` (which the ids were also written to) instead.
+        request_id = getattr(request.state, "request_id", None)
+        fields: dict[str, object] = {
+            "op": "http_request",
+            "method": request.method,
+            "route": path,
+            "status": status_code,
+            "latency_ms": round(elapsed * 1000, 1),
+            "user_ref": getattr(request.state, "user_ref", None),
+            # I-01 (R4-wsC): pseudonymous tenant handle, set by get_current_user
+            # (tenancy needs the DB-backed user; tokens carry no school claim).
+            "tenant_ref": getattr(request.state, "tenant_ref", None),
+            "client_ip": request.client.host if request.client else None,
+        }
+        if request_id:
+            fields["request_id"] = request_id
+            fields["trace_id"] = request_id
+        if error_class is not None:
+            fields["error_class"] = error_class
+        try:
+            json_log(_access_logger, logging.INFO, "access", **fields)
+        except Exception:  # logging must never break a response
+            _access_logger.debug("access_log_emit_failed", exc_info=True)
 
     @staticmethod
     def _route_path(request: Request) -> str:
@@ -388,16 +529,92 @@ def unhandled_exception_response(request: Request, exc: Exception) -> JSONRespon
             "exc_type": type(exc).__name__,
         },
     )
-    body: dict[str, object] = {
-        "detail": {
+    # C-10: the 500 uses the same problem+json envelope as every other error
+    # (``detail`` and ``request_id`` unchanged, plus the RFC members).
+    response = problem_details(
+        request,
+        status=500,
+        detail={
             "code": "internal_error",
             "message": "An unexpected error occurred",
-        }
-    }
-    if request_id:
-        body["request_id"] = request_id
-    response = JSONResponse(body, status_code=500)
+        },
+        extra={"request_id": request_id} if request_id else None,
+    )
     if request_id:
         response.headers["X-Request-ID"] = request_id
     SecurityHeadersMiddleware.apply_baseline(response, request.url.path)
     return response
+
+
+# --------------------------------------------------------------------------- #
+# RFC 9457 problem details (C-06 / AUD-CD-04, additive)
+# --------------------------------------------------------------------------- #
+#: ``application/problem+json``. The media type is the RFC's, so a generic
+#: client can route on it; the members below are the five the RFC defines,
+#: with ``detail`` carrying exactly what it always carried (a string for auth
+#: guards, ``{code, message}`` for business rules, a list for validation) and
+#: ``code`` mirrored at the top level for the coded shape. Nothing that
+#: existed before is removed or renamed: every client that reads ``detail``
+#: keeps working, and a client that speaks problem+json gets the members it
+#: expects.
+PROBLEM_MEDIA_TYPE = "application/problem+json"
+
+
+def problem_details(
+    request: Request,
+    *,
+    status: int,
+    detail: object,
+    extra: dict[str, object] | None = None,
+) -> JSONResponse:
+    """Build one problem+json response from the existing detail contract."""
+    try:
+        title = HTTPStatus(status).phrase
+    except ValueError:  # non-standard status codes still get a usable title
+        title = "Error"
+    body: dict[str, object] = {
+        "type": "about:blank",
+        "title": title,
+        "status": status,
+        "detail": detail,
+        "instance": request.url.path,
+    }
+    if isinstance(detail, dict) and "code" in detail:
+        body["code"] = detail["code"]
+    if extra:
+        body.update(extra)
+    return JSONResponse(body, status_code=status, media_type=PROBLEM_MEDIA_TYPE)
+
+
+def http_exception_response(request: Request, exc: Exception) -> JSONResponse:
+    """RFC 9457 rendering of every HTTPException the app raises.
+
+    Typed ``Exception`` because that is Starlette's handler signature (the
+    same convention ``unhandled_exception_response`` follows); the isinstance
+    check is the narrowing, and re-raising keeps a handler registered for the
+    wrong type from silently mislabelling an error. Preserves ``detail``
+    verbatim and re-emits the exception's headers (the ``WWW-Authenticate`` on
+    a 401, ``Retry-After`` on a 429), which the default handler also did.
+    """
+    if not isinstance(exc, StarletteHTTPException):  # pragma: no cover - registration guard
+        raise exc
+    response = problem_details(request, status=exc.status_code, detail=exc.detail)
+    for name, value in (exc.headers or {}).items():
+        response.headers[name] = value
+    return response
+
+
+def validation_exception_response(request: Request, exc: Exception) -> JSONResponse:
+    """RFC 9457 rendering of FastAPI's 422, preserving the error list.
+
+    ``exc.errors()`` is not guaranteed to be JSON-safe: a ``model_validator``
+    that raises leaves the raised object under ``ctx.error`` (the qpaper
+    review contract does exactly this), and serialising it raw turns every
+    such 422 into a 500. FastAPI's own handler runs the list through
+    ``jsonable_encoder`` first, so this handler mirrors that -- the documented
+    ``detail`` list keeps its ``loc``/``msg``/``type`` members and the
+    unencodable object is rendered the same way the framework would.
+    """
+    if not isinstance(exc, RequestValidationError):  # pragma: no cover - registration guard
+        raise exc
+    return problem_details(request, status=422, detail=jsonable_encoder(exc.errors()))

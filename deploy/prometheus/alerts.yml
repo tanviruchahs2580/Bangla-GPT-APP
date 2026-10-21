@@ -78,3 +78,96 @@ groups:
         annotations:
           summary: "Citation verification failed on a grounded answer in the last 15 minutes"
           description: "Inspect the ai_call / tutor_retrieval logs for the affected request id."
+
+      # --- SLO burn-rate alerts (AUD-HI-06 / I-04) -------------------------
+      # SLIs, targets and the error-budget policy are defined in
+      # docs/operations/SLO.md. Availability SLO: 99.5% of API requests
+      # non-5xx over a 28-day window -> error budget 0.005 (0.5%), so
+      # burn_rate = error_ratio / 0.005. Multi-window rules follow the SRE
+      # workbook: the long window confirms the trend, the short window
+      # ("reset" window) confirms it is still burning now, so a single spike
+      # that already recovered does not page anyone.
+      - alert: AvailabilityErrorBudgetBurnFast
+        expr: >
+          (sum(rate(bgpt_http_requests_total{status=~"5.."}[1h]))
+           / clamp_min(sum(rate(bgpt_http_requests_total[1h])), 0.001)) / 0.005 > 14.4
+          and
+          (sum(rate(bgpt_http_requests_total{status=~"5.."}[5m]))
+           / clamp_min(sum(rate(bgpt_http_requests_total[5m])), 0.001)) / 0.005 > 14.4
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Burning the 28d availability error budget at >14.4x (2% of budget per hour)"
+          description: >
+            1h and 5m 5xx ratios both exceed 14.4x burn. Page the on-call API
+            engineer; run docs/operations/SLO.md#runbook and the relevant
+            incident runbook (docs/runbook.md, Incident 2/5/9).
+
+      - alert: AvailabilityErrorBudgetBurnSlow
+        expr: >
+          (sum(rate(bgpt_http_requests_total{status=~"5.."}[6h]))
+           / clamp_min(sum(rate(bgpt_http_requests_total[6h])), 0.001)) / 0.005 > 6
+          and
+          (sum(rate(bgpt_http_requests_total{status=~"5.."}[30m]))
+           / clamp_min(sum(rate(bgpt_http_requests_total[30m])), 0.001)) / 0.005 > 6
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sustained availability error-budget burn (6x) over 6h"
+          description: >
+            Ticket, do not page: the budget is draining steadily. Find the
+            dominant failing route from bgpt_http_requests_total{status=~"5.."}.
+
+      # Latency SLO burn: p95 above the 1s objective for a sustained window.
+      # The 6h arm catches a slow degradation the 10m rule (HighP95Latency)
+      # would fire-and-clear on.
+      - alert: LatencyErrorBudgetBurnSlow
+        expr: >
+          histogram_quantile(
+            0.95,
+            sum(rate(bgpt_http_request_duration_seconds_bucket[6h])) by (le)
+          ) > 1
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API p95 above the 1s latency objective for 6h"
+          description: >
+            Latency budget is being consumed steadily. Check DB pool saturation
+            (statement/lock timeouts), retrieval index size and provider latency.
+
+      # Cost governance (AUD-HI-15 / I-11): the projected month-end spend from
+      # the ledger-estimated cost counter versus the operator's configured
+      # budget. Gated on budget > 0 so an unconfigured deployment never fires.
+      - alert: AIMonthlyBudgetBurnRateHigh
+        expr: >
+          (sum(increase(bgpt_ai_cost_usd_total[30d])) * 30 / clamp_min(day_of_month(), 1))
+          > bgpt_ai_monthly_budget_usd
+          and bgpt_ai_monthly_budget_usd > 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Projected month-end AI spend exceeds the configured monthly budget"
+          description: >
+            Raise AI_MONTHLY_BUDGET_USD if the spend is approved, or throttle
+            (per-user budget, model router) if not. Cost figures are ledger
+            estimates -- see services/costs.py for the pricing source.
+
+      # Generation quality/durability (AUD-HI-03 / I-02): a rising failed
+      # share of async jobs means the provider or the validators degraded.
+      - alert: AIJobFailureRateHigh
+        expr: >
+          sum(rate(bgpt_ai_jobs_total{status="failed"}[1h]))
+          / clamp_min(sum(rate(bgpt_ai_jobs_total[1h])), 0.001) > 0.2
+          and sum(increase(bgpt_ai_jobs_total[1h])) > 5
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 20% of async AI jobs failed in the last hour"
+          description: >
+            Check ai_job_failed log lines for the error class and the provider
+            circuit-breaker state; see docs/runbook.md (Incident 1).

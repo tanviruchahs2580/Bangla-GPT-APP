@@ -87,8 +87,7 @@ describe("history UI", () => {
     );
   });
 
-  it("delete sends DELETE and the chip disappears from the list", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+  it("delete asks in the in-app dialog, then sends DELETE and the chip disappears", async () => {
     const user = userEvent.setup();
     apiMock.get.mockReset();
     let listCalls = 0;
@@ -104,10 +103,14 @@ describe("history UI", () => {
       await screen.findByRole("button", { name: t("deleteChat") }),
     );
 
+    // The trash click opens the in-app dialog (S-11); DELETE fires on confirm.
+    await screen.findByText(t("deleteChatConfirm"));
+    await user.click(
+      screen.getByRole("button", { name: t("deleteChatConfirmShort") }),
+    );
     await waitFor(() =>
       expect(apiMock.del).toHaveBeenCalledWith("/tutor/conversations/5"),
     );
     await waitFor(() => expect(screen.queryByText("My-Old-Title")).toBeNull());
-    expect(window.confirm).toHaveBeenCalled();
   });
 });

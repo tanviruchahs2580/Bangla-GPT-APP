@@ -115,9 +115,7 @@ def run_once() -> None:
 
     if offsite:
         result = subprocess.run(["sh", "-c", offsite], check=False)
-        status = (
-            "completed" if result.returncode == 0 else f"failed rc={result.returncode}"
-        )
+        status = "completed" if result.returncode == 0 else f"failed rc={result.returncode}"
         logger.info("offsite sync %s", status)
 
 

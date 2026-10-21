@@ -261,6 +261,31 @@ def test_impersonation_revocation_is_per_session(pair) -> None:
     assert client.get("/users/me", headers=_login(client, "a@example.com")).status_code == 200
 
 
+def test_impersonation_cannot_delete_the_target_account(pair) -> None:
+    """A support session must not exercise the target's irreversible right.
+
+    DELETE /users/me cascades through every row the account owns; a
+    support admin wearing the identity could erase the real user's data
+    with no way back (AUD-B-02).
+    """
+    client, _ = pair
+    me = _register(client, "s@example.com")
+    admin = _admin_headers(client)
+    imp = {"Authorization": f"Bearer {_impersonate(client, admin, me['user_id'])}"}
+
+    denied = client.delete("/users/me", headers=imp)
+    assert denied.status_code == 403
+    # B-09: the refusal is now the central coded 403 from get_current_user
+    # (every DELETE, not just this route); the word "impersonation" stays in
+    # the message, the machine code is the stable contract.
+    detail = denied.json()["detail"]
+    assert detail["code"] == "impersonation_readonly"
+    assert "impersonation" in detail["message"].lower()
+    # The account and the session are intact — the guard refuses, nothing else.
+    assert client.get("/users/me", headers=imp).status_code == 200
+    assert client.get("/users/me", headers=_login(client, "s@example.com")).status_code == 200
+
+
 # --------------------------------------------- F-08: revocation fails closed
 
 

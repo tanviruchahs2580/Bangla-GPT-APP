@@ -1,0 +1,26 @@
+{
+  "hardcoded_colours": {
+    "count": 0,
+    "by_file": {},
+    "examples": []
+  },
+  "off_grid_px": {
+    "count": 0,
+    "common_values": {},
+    "examples": [],
+    "media_breakpoints": [
+      "1023px",
+      "1024px",
+      "480px",
+      "560px",
+      "760px",
+      "899px",
+      "900px",
+      "960px"
+    ]
+  },
+  "token_cycles": {
+    "count": 0,
+    "examples": []
+  }
+}

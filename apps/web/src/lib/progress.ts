@@ -11,13 +11,3 @@ export function chapterBadge(
   if (prog.read_pct > 0) return "reading";
   return null;
 }
-
-// TTS is feature-guarded: only offer the button when the browser exposes it.
-export function ttsSupported(
-  win: Pick<Window, "speechSynthesis"> | undefined = typeof window !==
-  "undefined"
-    ? window
-    : undefined,
-): boolean {
-  return !!win && "speechSynthesis" in win;
-}

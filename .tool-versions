@@ -1,0 +1,11 @@
+# Toolchain pins (audit finding AUD-JK-09).
+#
+# python: the version CI's primary job, the Dockerfile and the local .venv use
+#         (3.11 is still tested in CI for compatibility; 3.12 is the target).
+# nodejs: .nvmrc says 24 and apps/web/package.json requires node >=24 <25.
+#         Must agree with .nvmrc and package.json engines.
+#
+# Read by asdf (asdf install / asdf current); .python-version and .nvmrc cover
+# pyenv and nvm respectively.
+python 3.12
+nodejs 24

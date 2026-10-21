@@ -17,8 +17,10 @@
 - [ ] **Moderation red-team sign-off**: run through
       `tests/test_product_v3.py::test_unsafe_questions_get_supportive_refusal`
       categories manually in staging; document any gaps found with Gemini live.
-- [ ] **Helpline accuracy**: verify the mental-health helpline number shown in
-      self-harm refusals (`services/safety.py`) is current.
+- [ ] **Helpline accuracy**: the helpline number was removed from self-harm
+      refusals (`services/safety.py`, `SELF_HARM_ANSWER`) because it was
+      unverified; before launch, verify a current mental-health helpline
+      string and re-add it there.
 
 ## 2. UAT with real users (1 school, 20–50 students)
 

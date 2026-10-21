@@ -136,3 +136,11 @@ def build_middleware_stack(
 
     # Prometheus metrics (observe every request) — outermost
     app.add_middleware(PrometheusMetricsMiddleware)
+
+    # I-03 (AUD-HI-04): OpenTelemetry server spans. The instrumentor replaces
+    # ``app.build_middleware_stack``, so the span covers every middleware above
+    # and every error handler; registered last because nothing may wrap it.
+    # No-op unless TRACING_ENABLED is set (tracing.instrument_app).
+    from bangla_gpt_api import tracing
+
+    tracing.instrument_app(app)

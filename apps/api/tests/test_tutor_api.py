@@ -192,8 +192,19 @@ def test_provider_failure_maps_to_502(tmp_path) -> None:
             headers={"Authorization": f"Bearer {tok}"},
         )
         assert res.status_code == 502, res.text
-        assert res.json() == {
-            "detail": {"code": "llm_unavailable", "message": "LLM provider unavailable"}
+        # Documented contract: the RFC 9457 problem+json envelope whose
+        # ``detail`` is byte-identical to the pre-RFC body; the envelope adds
+        # type/title/status/instance (and mirrors ``code`` top-level).
+        assert res.headers["content-type"].startswith("application/problem+json")
+        body = res.json()
+        assert body["detail"] == {
+            "code": "llm_unavailable",
+            "message": "LLM provider unavailable",
         }
+        assert body["status"] == 502
+        assert body["type"] == "about:blank"
+        assert body["title"] == "Bad Gateway"
+        assert body["instance"] == "/tutor/ask"
+        assert body["code"] == "llm_unavailable"
     finally:
         main_module.TutorService.__init__ = original  # type: ignore[method-assign]

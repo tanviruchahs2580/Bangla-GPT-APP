@@ -24,7 +24,7 @@ mutates after construction.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from typing import Protocol
 
 from bangla_gpt_api.retrieval.transliteration import (
@@ -125,10 +125,6 @@ class CorpusVocabulary:
     def document_frequency(self, term: str) -> int:
         return self._df.get(term, 0)
 
-    def term_frequencies(self) -> Mapping[str, int]:
-        """The raw frequency map (for callers that aggregate or persist it)."""
-        return self._df
-
     # --- spelling lane -------------------------------------------------------
 
     def match_spelling(self, term: str, *, min_similarity: float = 0.6) -> list[str]:
@@ -221,21 +217,3 @@ class CorpusVocabulary:
         return list(seen)[:MAX_MATCHES]
 
     # --- inspection -----------------------------------------------------------
-
-    def vocabulary_size(self) -> int:
-        return len(self._terms)
-
-
-def _trigrams_standalone(term: str) -> set[str]:  # pragma: no cover - parity helper
-    return _trigrams(term)
-
-
-def merged_document_frequency(
-    frequency_maps: Iterable[Mapping[str, int]],
-) -> dict[str, int]:
-    """Merge per-source frequency maps into one (multi-source index builds)."""
-    merged: dict[str, int] = {}
-    for mapping in frequency_maps:
-        for term, df in mapping.items():
-            merged[term] = merged.get(term, 0) + df
-    return merged

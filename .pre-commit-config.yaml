@@ -15,7 +15,7 @@
 # `pre-commit run --all-files` against the pinned revision below, so a tree
 # that violates this file cannot merge. Keep the two in step.
 
-default_install_hook_types: [pre-commit]
+default_install_hook_types: [pre-commit, commit-msg]
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -23,6 +23,13 @@ repos:
     hooks:
       - id: check-added-large-files
         args: [--maxkb=512]
+        # Visual-regression baselines are pixels, not data: Playwright compares
+        # them byte-for-byte per run, so they cannot be compressed on the fly.
+        # The directory is the one justified exception to the size cap -- 60
+        # reviewed baselines, ~16 MB total, and the six login shots run
+        # 512-762 KB because the splash backdrop is a photograph. Everything
+        # else stays capped at 512 KB.
+        exclude: ^apps/web/e2e/__screenshots__/
       - id: check-merge-conflict
       - id: check-yaml
       - id: end-of-file-fixer
@@ -43,10 +50,31 @@ repos:
     rev: v0.17.0
     hooks:
       - id: ruff
+        # D-01: apps/web/e2e/*.py are the Playwright seed/maintenance scripts
+        # maintained next to the TS specs; they have no other Python linter, so
+        # both ruff hooks include them (root ruff.toml supplies the rules and
+        # the line length they are formatted to).
         args: [--fix, --exit-non-zero-on-fix]
-        files: ^(apps/api/(src|tests|scripts)/|scripts/)
+        files: ^(apps/api/(src|tests|scripts)/|scripts/|apps/web/e2e/[^/]*\.py$)
       - id: ruff-format
-        files: ^apps/api/(src|tests|scripts)/
+        # D-01: the formatter used to cover apps/api only, so the guard scripts
+        # under scripts/ were never format-checked even though the ruff *lint*
+        # hook above already ran over them. Same file set as that hook now; the
+        # root ruff.toml supplies the line length they are formatted to.
+        files: ^(apps/api/(src|tests|scripts)/|scripts/|apps/web/e2e/[^/]*\.py$)
+
+  # F-13: commit-message lint in front of the commit, not after the push. The
+  # hook is local (not a published repo) because it calls the repository's own
+  # scripts/check_commits.py, so the rule the hook applies is exactly the rule
+  # the `Commit subjects (PR range)` CI step applies -- one implementation,
+  # two entry points (history and one message file).
+  - repo: local
+    hooks:
+      - id: commit-subject-conventional
+        name: commit subject (Conventional Commits, matching CI)
+        entry: python scripts/check_commits.py
+        language: system
+        stages: [commit-msg]
 
 # Exclusions for generated corpora, eval fixtures and the frozen docs archive.
 #

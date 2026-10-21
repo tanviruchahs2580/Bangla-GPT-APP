@@ -1,21 +1,48 @@
 {
-  "title": "Bangla GPT — API Overview (S0.6)",
+  "title": "Bangla GPT — API Overview (S0.7)",
   "panels": [
     {
       "title": "p95 Latency (by route)",
-      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, path))" }]
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(bgpt_http_request_duration_seconds_bucket[5m])) by (le, path))" }]
     },
     {
       "title": "Error Rate (5xx)",
-      "targets": [{ "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m]))" }]
+      "targets": [{ "expr": "sum(rate(bgpt_http_requests_total{status=~\"5..\"}[5m])) / clamp_min(sum(rate(bgpt_http_requests_total[5m])), 0.001)" }]
     },
     {
-      "title": "AI Latency (gemini_generate)",
-      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(gemini_generate_latency_ms_bucket[5m])) by (le))" }]
+      "title": "Tutor retrieval latency (p95)",
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(bgpt_rag_retrieval_latency_seconds_bucket[5m])) by (le))" }]
     },
     {
       "title": "Rate Limit Hits",
-      "targets": [{ "expr": "sum(rate(http_requests_total{status=\"429\"}[5m])) by (path)" }]
+      "targets": [{ "expr": "sum(rate(bgpt_http_requests_total{status=\"429\"}[5m])) by (path)" }]
+    },
+    {
+      "title": "Answers / day (answered vs refused)",
+      "targets": [{ "expr": "sum(increase(bgpt_ai_answers_total[24h])) by (outcome)" }]
+    },
+    {
+      "title": "Refusal rate (1h)",
+      "targets": [{ "expr": "sum(rate(bgpt_ai_answers_total{outcome=\"refused\"}[1h])) / clamp_min(sum(rate(bgpt_ai_answers_total[1h])), 0.001)" }]
+    },
+    {
+      "title": "Estimated AI spend, USD (30d, by model)",
+      "targets": [{ "expr": "sum(increase(bgpt_ai_cost_usd_total[30d])) by (model)" }]
+    },
+    {
+      "title": "AI tokens/s by model and direction",
+      "targets": [{ "expr": "sum(rate(bgpt_ai_tokens_total[5m])) by (model, direction)" }]
+    },
+    {
+      "title": "AI job outcomes (24h)",
+      "targets": [{ "expr": "sum(increase(bgpt_ai_jobs_total[24h])) by (kind, status)" }]
+    },
+    {
+      "title": "Monthly AI budget vs projected spend",
+      "targets": [
+        { "expr": "bgpt_ai_monthly_budget_usd" },
+        { "expr": "sum(increase(bgpt_ai_cost_usd_total[30d])) * 30 / clamp_min(day_of_month(), 1)" }
+      ]
     }
   ]
 }

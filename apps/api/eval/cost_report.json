@@ -1,0 +1,197 @@
+{
+ "budget_alert": {
+  "alert": false,
+  "budget_usd": 25.0,
+  "gate": "budget_set",
+  "message": "projected month-end spend is within budget",
+  "projected_usd": 8.23422,
+  "ratio": 0.3294
+ },
+ "caveats": [
+  "prompt tokens are the real prompts the routes built (app estimator, ~4 chars/token, over-counts short ASCII and under-counts long Bangla)",
+  "completion tokens are mock-shaped: the mock quotes retrieved evidence",
+  "teacher routes record a summary prompt string, so their prompt side understates the true prompt",
+  "list prices, not an invoice: the provider's page and the date it was read are in prices.<model>.source / .accessed"
+ ],
+ "endpoint_notes": {
+  "teacher/lesson_plan": "status=404",
+  "teacher/question_paper": "status=201",
+  "teacher/rubric": "status=201",
+  "teacher/worksheet": "status=201",
+  "tutor.ask": "status=200",
+  "tutor.chat": "status=200",
+  "tutor.chat.stream": "status=200"
+ },
+ "generated_at": "2026-10-19T08:33:35+00:00",
+ "generated_by": "scripts/cost_report.py",
+ "ledger_vs_true_prompt": {
+  "ledger_prompt_tokens_total": 27,
+  "note": "tutor routes ledger the question string while the model receives the full prompt (system rules + context + evidence): budgets and cost per 1,000 answers computed from the ledger alone understate the input side; the projection below uses the traced prompt where available",
+  "rows": 6,
+  "rows_with_trace": 3,
+  "true_prompt_tokens_total": 863,
+  "undercount_factor": 31.963
+ },
+ "measured_per_endpoint": [
+  {
+   "completion_tokens": 114,
+   "cost_per_1000_answers_true_prompt_usd": 0.23725,
+   "cost_per_1000_answers_usd": 0.173,
+   "cost_usd_per_answer": 0.0,
+   "model": "mock",
+   "prompt_tokens": 8,
+   "route": "tutor.ask",
+   "trace_paired": true,
+   "true_prompt_tokens": 265
+  },
+  {
+   "completion_tokens": 129,
+   "cost_per_1000_answers_true_prompt_usd": 0.24825,
+   "cost_per_1000_answers_usd": 0.194,
+   "cost_usd_per_answer": 0.0,
+   "model": "mock",
+   "prompt_tokens": 2,
+   "route": "tutor.chat",
+   "trace_paired": true,
+   "true_prompt_tokens": 219
+  },
+  {
+   "completion_tokens": 129,
+   "cost_per_1000_answers_true_prompt_usd": 0.2845,
+   "cost_per_1000_answers_usd": 0.194,
+   "cost_usd_per_answer": 0.0,
+   "model": "mock",
+   "prompt_tokens": 2,
+   "route": "tutor.chat.stream",
+   "trace_paired": true,
+   "true_prompt_tokens": 364
+  },
+  {
+   "completion_tokens": 713,
+   "cost_per_1000_answers_true_prompt_usd": 1.0705,
+   "cost_per_1000_answers_usd": 1.0705,
+   "cost_usd_per_answer": 0.0,
+   "model": "mock",
+   "prompt_tokens": 4,
+   "route": "teacher/worksheet",
+   "trace_paired": false,
+   "true_prompt_tokens": null
+  },
+  {
+   "completion_tokens": 241,
+   "cost_per_1000_answers_true_prompt_usd": 0.3625,
+   "cost_per_1000_answers_usd": 0.3625,
+   "cost_usd_per_answer": 0.0,
+   "model": "mock",
+   "prompt_tokens": 4,
+   "route": "teacher/rubric",
+   "trace_paired": false,
+   "true_prompt_tokens": null
+  },
+  {
+   "completion_tokens": 512,
+   "cost_per_1000_answers_true_prompt_usd": 0.76975,
+   "cost_per_1000_answers_usd": 0.76975,
+   "cost_usd_per_answer": 0.0,
+   "model": "mock",
+   "prompt_tokens": 7,
+   "route": "teacher/question_paper",
+   "trace_paired": false,
+   "true_prompt_tokens": null
+  }
+ ],
+ "model": "gemini-3.1-flash-lite",
+ "price_table_mismatches": [],
+ "prices": {
+  "gemini-2.5-flash-lite": {
+   "accessed": "2026-10-19",
+   "input_usd_per_1m": 0.1,
+   "matches_runtime": true,
+   "output_usd_per_1m": 0.4,
+   "page_last_updated": "2026-10-16",
+   "provider": "Google",
+   "runtime_usd_per_1k": [
+    0.0001,
+    0.0004
+   ],
+   "source": "https://ai.google.dev/gemini-api/docs/pricing",
+   "tier": "standard paid (text/image/video input)",
+   "verified": true
+  },
+  "gemini-3.1-flash-lite": {
+   "accessed": "2026-10-19",
+   "input_usd_per_1m": 0.25,
+   "matches_runtime": true,
+   "output_usd_per_1m": 1.5,
+   "page_last_updated": "2026-10-16",
+   "provider": "Google",
+   "runtime_usd_per_1k": [
+    0.00025,
+    0.0015
+   ],
+   "source": "https://ai.google.dev/gemini-api/docs/pricing",
+   "tier": "standard paid (text/image/video input)",
+   "verified": true
+  },
+  "gpt-4o-mini": {
+   "accessed": "2026-10-19",
+   "input_usd_per_1m": 0.15,
+   "matches_runtime": true,
+   "output_usd_per_1m": 0.6,
+   "page_last_updated": null,
+   "provider": "OpenAI",
+   "runtime_usd_per_1k": [
+    0.00015,
+    0.0006
+   ],
+   "source": "https://platform.openai.com/docs/pricing",
+   "tier": "standard (unverified this session: the documented URL redirects to developers.openai.com, which this session did not fetch)",
+   "verified": false
+  }
+ },
+ "projection": {
+  "assumptions": {
+   "chat_turns_per_student_per_month": 20,
+   "student_asks_per_student_per_month": 40,
+   "students": 400,
+   "teacher_generations_per_month": 80
+  },
+  "model": "gemini-3.1-flash-lite",
+  "monthly_usd": 8.23422,
+  "monthly_usd_per_student": 0.020586,
+  "per_route": {
+   "teacher/question_paper": {
+    "monthly_calls": 80.0,
+    "monthly_usd": 0.06158,
+    "per_call_usd": 0.00076975
+   },
+   "teacher/rubric": {
+    "monthly_calls": 80.0,
+    "monthly_usd": 0.029,
+    "per_call_usd": 0.0003625
+   },
+   "teacher/worksheet": {
+    "monthly_calls": 80.0,
+    "monthly_usd": 0.08564,
+    "per_call_usd": 0.0010705
+   },
+   "tutor.ask": {
+    "monthly_calls": 16000.0,
+    "monthly_usd": 3.796,
+    "per_call_usd": 0.00023725
+   },
+   "tutor.chat": {
+    "monthly_calls": 8000.0,
+    "monthly_usd": 1.986,
+    "per_call_usd": 0.00024825
+   },
+   "tutor.chat.stream": {
+    "monthly_calls": 8000.0,
+    "monthly_usd": 2.276,
+    "per_call_usd": 0.0002845
+   }
+  },
+  "unprojected_routes": []
+ },
+ "provider": "mock (hermetic; replace completion tokens with a live run's ledger before procurement)"
+}

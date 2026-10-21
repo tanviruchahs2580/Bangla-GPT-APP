@@ -1,9 +1,9 @@
 """PDF export for question papers (paper + answer key).
 
-Primary engine is WeasyPrint when the platform's Pango/GTK libraries are
-loadable (Linux containers). On hosts without them (e.g. Windows dev) this
-falls back to fpdf2 with the bundled Noto Sans Bengali TTF. If neither engine
-is usable the API returns the HTML print view instead (documented fallback).
+The PDF engine is fpdf2 with uharfbuzz shaping and the bundled Noto Sans
+Bengali TTF (see the shaping note below). If the bundled font is missing the
+renderer raises, and the router serves the HTML print view instead
+(documented fallback).
 
 fpdf2 does NOT shape complex scripts unless told to: text shaping is opt-in,
 so every fpdf2 document MUST call ``set_text_shaping(True)`` after
@@ -11,6 +11,23 @@ so every fpdf2 document MUST call ``set_text_shaping(True)`` after
 conjunct decomposed with detached vowel signs (ক্ষ -> কয়, জ্ঞান -> জুন্ঞেন),
 which no text-extraction test can detect. Both renderers below enable it, and
 tests/test_qp_pdf_shaping.py pins the behaviour.
+
+G-24 (measured 2026-10-20, wave-5 probe — evidence
+``.audit/evidence/R5-wsa-g24-text-layer-probe.txt``): shaping and a clean text
+layer cannot both be had from fpdf2 2.8.9. With shaping ON the text layer is
+CORRUPT for any cluster harfbuzz reorders or ligates — control characters are
+injected inside the word (বিজ্ঞান extracts as ``বি\x02জ্ঞান``, কার্যক্রম as
+``কার্য\x04 ক \x06 ্র ম``) because fpdf2 builds the glyph->Unicode map from
+harfbuzz cluster ids and drops the mapping for repeated (reordered) clusters
+(``fonts.py: shape_text``). With shaping OFF the text layer is exact but every
+conjunct decomposes. pypdf and pypdfium2 (PDFium) extract the SAME bytes, so
+this is written into the PDF by the engine, not an extractor artefact; the
+wave-4 note that called it a "MuPDF rendering property" is corrected by this
+probe. Consequences: the visual output is correct (the requirement the PDF is
+generated for), and copy/paste or screen-reader use of these PDFs is
+unreliable for the affected words. A future fpdf2 release that fixes the
+shaped-run ToUnicode map turns the non-strict xfail in
+tests/test_a5_qp_pdf_text_layer.py into an XPASS — revisit this note then.
 """
 
 from pathlib import Path
@@ -93,12 +110,25 @@ def render_qp_html(paper: dict, kind: str = "paper") -> str:
         "margin:2rem auto;line-height:1.7}"
         "@media print{body{margin:0}}"
         ".answer{font-weight:700}.marks{color:#666}</style></head><body>"
-        f"<h1>{_esc(paper['exam_type'])} ({paper['class_level']}) - {_esc(paper['subject'])}"
+        f"<h1>{_esc(paper['exam_type'])} ({_esc(str(paper['class_level']))}) - {_esc(paper['subject'])}"
         f"{' / উত্তরমালা' if kind == 'answer' else ''}</h1>"
-        f"<p>{paper['marks']} নম্বর | {paper['duration_min']} মিনিট | "
+        f"<p>{_esc(str(paper['marks']))} নম্বর | {_esc(str(paper['duration_min']))} মিনিট | "
         f"{_esc(', '.join(paper['chapters']))}</p>"
         f"<ol>{''.join(rows)}</ol></body></html>"
     )
+
+
+def _field(value: object) -> str:
+    """Render an optional generation field: absent means blank, never 'None'.
+
+    G-24: the answer-key PDF printed the literal string None when a generated
+    item had no detailed_solution / marking_guide fields (the generator omits
+    them on the not-enough-evidence path). Every render site formats optional
+    fields through this helper.
+    """
+    if value is None:
+        return ""
+    return str(value)
 
 
 def _esc(text: str) -> str:
@@ -197,14 +227,14 @@ def _answer_key_pdf(pdf: FPDF, payload: dict) -> None:
         pdf.multi_cell(
             w=0,
             h=6,
-            text=f"{a.get('ref')} ({a.get('marks')}): {a.get('answer')}",
+            text=f"{_field(a.get('ref'))} ({_field(a.get('marks'))}): {_field(a.get('answer'))}",
             new_x="LMARGIN",
             new_y="NEXT",
         )
         pdf.set_font("nbg", size=10)
         pdf.set_text_color(70, 70, 70)
         pdf.multi_cell(
-            w=0, h=5, text=f"  {a.get('detailed_solution')}", new_x="LMARGIN", new_y="NEXT"
+            w=0, h=5, text=f"  {_field(a.get('detailed_solution'))}", new_x="LMARGIN", new_y="NEXT"
         )
         pdf.set_text_color(0, 0, 0)
         pdf.set_font("nbg", size=11)
@@ -214,7 +244,7 @@ def _answer_key_pdf(pdf: FPDF, payload: dict) -> None:
     pdf.cell(
         w=0,
         h=8,
-        text=f"মূল্যায়ন নির্দেশিকা — মোট {guide.get('total_marks')}",
+        text=f"মূল্যায়ন নির্দেশিকা — মোট {_field(guide.get('total_marks'))}",
         new_x="LMARGIN",
         new_y="NEXT",
     )
@@ -258,11 +288,11 @@ def render_document_html(doc: dict) -> str:
     for tier in payload.get("tiers") or []:
         rows.append(f"<h2>{_esc(str(tier.get('tier')))}</h2>")
         for i, q in enumerate(tier.get("questions") or [], start=1):
-            rows.append(f"<p>{i}. {_esc(str(q.get('text')))} ({q.get('marks')})</p>")
+            rows.append(f"<p>{i}. {_esc(str(q.get('text')))} ({_esc(str(q.get('marks')))})</p>")
     for a in payload.get("answers") or []:
         rows.append(
-            f"<p><b>{_esc(str(a.get('ref')))}</b> {_esc(str(a.get('answer')))} "
-            f"({a.get('marks')})<br><i>{_esc(str(a.get('detailed_solution')))}</i></p>"
+            f"<p><b>{_esc(_field(a.get('ref')))}</b> {_esc(_field(a.get('answer')))} "
+            f"({_esc(_field(a.get('marks')))})<br><i>{_esc(_field(a.get('detailed_solution')))}</i></p>"
         )
     for row in payload.get("answer_sheet") or []:
         add(f"{row.get('ref')}: {row.get('answer')}")
@@ -271,7 +301,7 @@ def render_document_html(doc: dict) -> str:
         rows.append(f"<h2>{_esc(str(key))}</h2><p>{_esc(str(value))}</p>")
     guide = payload.get("marking_guide") or {}
     if guide:
-        add(f"Total marks: {guide.get('total_marks')}")
+        add(f"Total marks: {_esc(str(guide.get('total_marks')))}")
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
         f"<title>{_esc(str(doc.get('title') or ''))}</title><style>"

@@ -1,6 +1,6 @@
 # Data-Minimization Review
 
-Scope: every table in `apps/api/src/bangla_gpt_api/db/models.py` plus the
+Scope: every table in `apps/api/src/bangla_gpt_api/db/models/` plus the
 log surfaces. Reviewer: engineering (self-review). **Bangladesh legal
 review is a human step and is NOT done here — see
 [`archive/PROGRESS.md`](archive/PROGRESS.md).**
@@ -35,21 +35,42 @@ short TTL, sweep); **NONE** = we deliberately do not store it.
 `POST /admin/maintenance/purge` (with `dry_run=true` for evidence) and the
 nightly arq job:
 
-* Conversations + their messages older than `chat_retention_days` — deleted.
-* Expired password-reset / email-verification rows older than 30 days — deleted.
-* **Used** parent invites older than 30 days — deleted (unused invites stay
+- Conversations + their messages older than `chat_retention_days` — deleted.
+- Expired password-reset / email-verification rows older than 30 days — deleted.
+- **Used** parent invites older than 30 days — deleted (unused invites stay
   until their own expiry so a student's shared code still works).
-* Report and audit row carry counts only. `PII_ENC_KEY` is
+- Report and audit row carry counts only. `PII_ENC_KEY` is
   deliberately NOT in backups (docs/backup_dr.md).
 
 ## Honest gaps (not fixed this step)
 
-* No automatic **account-dormancy** purge yet — self-service deletion exists
+- No automatic **account-dormancy** purge yet — self-service deletion exists
   (`DELETE /users/me`), but a signed-up-and-abandoned student keeps data
   until admin action. Candidate for a later step.
-* `consent_at`/`consent_ip` horizon is policy-on-paper (limitation period),
+- `consent_at`/`consent_ip` horizon is policy-on-paper (limitation period),
   not a coded expiry.
-* Web analytics: the frontend loads no third-party analytics — but the
+- Web analytics: the frontend loads no third-party analytics — but the
   Hind Siliguri font is currently self-hosted; keep it that way (tokens).
-* Teacher/parent names have no retention sweep (needed while accounts are
+- Teacher/parent names have no retention sweep (needed while accounts are
   active; dormancy gap above).
+
+## Applicable-law mapping (AUD-B-12) — requirements to confirm with counsel
+
+This is an engineering inventory, not legal advice and not a legal
+conclusion (I10). Source column = where the statement comes from today;
+each row is an item for counsel to confirm, amend or delete.
+
+| # | Requirement area | What the product does today | Source / status |
+| --- | --- | --- | --- |
+| L-1 | Bangladesh data-protection statutes: the Digital Security Act / Cyber Security Act 2023 and any successor or education-sector rules | No compliance claim is made. The DPA template names the statutes and states counsel review has not been performed | `docs/dpa_template.md` (checked 2026-10-18); no comprehensive GDPR-equivalent statute is asserted there. **Counsel to confirm** current statute names, commencement status and applicability to a school-data processor |
+| L-2 | Children's data and guardian consent | Guardian consent is mandatory for student registration, versioned (`CONSENT_VERSION`) and re-confirmed on version change; consent evidence (`consent_ip`, `consent_at`) is stored for exactly that purpose | Code: `routers/auth.py`, `routers/deps.py`; verified by `tests/test_compliance_v2.py`. **Counsel to confirm** the required consent form, age of digital consent and whether school-mediated consent replaces guardian consent |
+| L-3 | Purpose limitation, minimisation, retention | Field-level inventory above; hard-delete retention sweep (`services/retention.py`); self-service export and erasure | `docs/data_minimization.md` (this file); `tests/test_data_export.py`, `tests/test_delete_cascade_v2.py`. **Counsel to confirm** retention periods are defensible |
+| L-4 | Cross-border transfer / processor terms | Student prompts and retrieved textbook passages go to Google Gemini; no name, email or phone is included in the payload. Provider terms acknowledgement is an owner action | `docs/dpa_template.md` (sub-processor table). **Counsel/provider to confirm** regional routing, retention and the correct contractual basis for minors' data |
+| L-5 | Breach notification duties | No notification timeline is claimed or coded. Incident runbooks currently contain no "suspected breach" page and name no escalation contacts (tracked separately) | Honest gap; **counsel to confirm** who must be notified, within what period, and to whom |
+| L-6 | Data-subject rights | Export and delete are implemented end-to-end in code; server logs are documented as not subject-deletable ("where feasible") | Code + `docs/dpa_template.md` §3.5. **Counsel to confirm** whether access/erasure must extend to logs |
+| L-7 | Government/authority reporting exports | Aggregate-only, k-anonymity floored in the service, PII scan fails the export closed, and every successful export now writes an audit row | `services/govt_report.py`, `routers/school.py`, audit action `govt_export`. **Counsel to confirm** any additional disclosure-authority requirements |
+| L-8 | Security of processing (GDPR-style baseline) | Argon2id, JWT with revocation, tenancy isolation, rate limits, at-rest encryption for PII and backups, append-only audit trail | `SECURITY.md`, `docs/backup_dr.md`. Treated as the baseline where Bangladesh-specific rules are silent |
+
+Open owner actions from this table: commission the counsel review, record the
+decision here with the date, and convert each confirmed item into either a
+code change or a documented acceptance.

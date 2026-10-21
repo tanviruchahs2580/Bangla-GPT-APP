@@ -179,28 +179,44 @@ async def test_safety_refusal_reason_is_metered_before_retrieval() -> None:
 
 
 @pytest.mark.asyncio
-async def test_citation_check_metered_and_warned_on_fail(caplog: pytest.LogCaptureFixture) -> None:
+async def test_citation_check_enforced_and_warned_on_fail(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """AUD-A2-03: a failed citation check replaces the answer (never shown)."""
+    from bangla_gpt_api.services.tutor import INSUFFICIENT_EVIDENCE_ANSWER
+
     service = _service(_RecordingIndex())
 
     before_fail = _counter_value("bgpt_rag_citation_checks_total", {"result": "fail"}) or 0.0
     before_pass = _counter_value("bgpt_rag_citation_checks_total", {"result": "pass"}) or 0.0
+    before_enforced = (
+        _counter_value("bgpt_rag_gate_refusals_total", {"reason": "citation_unverified"}) or 0.0
+    )
 
     with caplog.at_level("WARNING", logger="bangla_gpt_api.tutor"):
         response = service._assemble(
             "সম্পূর্ণ অসম্পর্কিত উত্তর",
             hits=[],
+            question="কোষ কী?",
             route="simple",
             provider=_Stub(),
             context_blocks="blocks",
             started=0.0,
         )
-    assert response.citation_verified is False
+    assert response.grounded is False
+    assert response.answer == INSUFFICIENT_EVIDENCE_ANSWER
+    assert response.refused_reason == "citation_unverified"
+    assert response.sources == []
+    assert response.citation_verified is None
     assert (_counter_value("bgpt_rag_citation_checks_total", {"result": "fail"}) or 0.0) == (
         before_fail + 1.0
     )
     assert (
         _counter_value("bgpt_rag_citation_checks_total", {"result": "pass"}) or 0.0
     ) == before_pass
+    assert (
+        _counter_value("bgpt_rag_gate_refusals_total", {"reason": "citation_unverified"}) or 0.0
+    ) == (before_enforced + 1.0)
     assert any("citation_check_failed" in r.message for r in caplog.records)
 
 
@@ -216,6 +232,7 @@ def test_model_refusal_is_refusal_metered_without_citation_check() -> None:
     response = service._assemble(
         "এটি পাঠ্যবইয়ে নেই",
         hits=[],
+        question="কোষ কী?",
         route="simple",
         provider=_Stub(),
         context_blocks="blocks",

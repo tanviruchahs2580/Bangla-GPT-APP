@@ -15,6 +15,12 @@ request_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "request_id", default=None
 )
 
+# Trace id for per-stage tracing events (AUD-HI-04 / I-03). One per request
+# (the request id, unless a caller sets its own), so every stage line of one
+# ask shares a single correlation key with the request id already in the
+# access log and the error responses.
+trace_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("trace_id", default=None)
+
 # --------------------------------------------------------------------------
 # Redaction (F-082)
 # --------------------------------------------------------------------------
@@ -48,14 +54,27 @@ _IDENTIFIER_KEY_RE = re.compile(
 
 # Values that are unmistakably credentials regardless of the key they sit under.
 _SENSITIVE_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"\$argon2[id]?\$"),  # argon2 PHC string
+    # argon2 PHC string. The former `[id]?` matched "$argon2i$"/"$argon2d$"
+    # but NOT "$argon2id$" -- the exact format this application stores and the
+    # one a stray hash in a log value would carry.
+    re.compile(r"\$argon2(?:id|i|d)?\$"),
     re.compile(r"\bpbkdf2_sha256\$"),  # legacy PHC string
     re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\."),  # JWT
     re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}"),  # GitHub token
     re.compile(r"\b(?:sk|ghp|glpat|xox[abps])-[A-Za-z0-9_-]{16,}"),  # vendor tokens
     re.compile(r"\bBearer\s+[A-Za-z0-9._~+/-]{12,}=*"),  # Authorization header
-    re.compile(r"\+?[0-9]{10,15}"),  # phone numbers (guardian PII)
-    re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.]{2,}\b"),  # email addresses
+    # Guardian phone numbers. The run must stand alone: matching any 10-15
+    # digit substring redacted non-PII identifiers that merely CONTAIN ten
+    # digits (one prompt build's prompt_version was replaced by "[redacted]"
+    # in every trace record, and a UUID's tail matched too), which broke the
+    # trace-record contract without protecting anything. Phone numbers are
+    # logged as standalone digit runs.
+    re.compile(r"(?<![\w-])\+?[0-9]{10,15}(?![\w-])"),
+    # An address, not just "something@something.wordword": the TLD must be
+    # letters. The looser form redacted the versioned prompt id
+    # ("tutor_system@1.0.1+sp-…") as an address in every trace record, which
+    # cost the trace its prompt_version without protecting anything.
+    re.compile(r"\b[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[^\W\d_]{2,}\b"),
 )
 
 #: Keys whose values are long opaque blobs (tokens) regardless of the word match.
@@ -208,6 +227,66 @@ def _utf8_stream(stream):
     return stream
 
 
+# --------------------------------------------------------------------------
+# Per-stage tracing events (AUD-HI-04 / I-03)
+# --------------------------------------------------------------------------
+# The audit finding asks for distributed tracing. Full OpenTelemetry (SDK +
+# auto-instrumentation + an OTLP collector) is a deployment-level dependency
+# this pass deliberately does not add (the operator has no collector
+# endpoint; see docs/operations/TRACING.md). The gate's "equivalent" is
+# satisfied by structured per-stage trace records on the existing JSON log
+# sink: one line per pipeline stage, carrying the correlation id, the index
+# and prompt versions, token counts and the retrieved chunk ids. They are
+# behind TRACING_ENABLED so a deployment that later adds an OTLP exporter can
+# flip the same call sites over without touching the pipeline code.
+
+_tracing_enabled = False
+
+_trace_logger = logging.getLogger("bangla_gpt_api.trace")
+
+
+def set_tracing_enabled(value: bool) -> None:
+    """Called once per app build from :func:`bangla_gpt_api.main.create_app`."""
+    global _tracing_enabled
+    _tracing_enabled = bool(value)
+
+
+def tracing_enabled() -> bool:
+    return _tracing_enabled
+
+
+def trace_event(stage: str, **fields: Any) -> None:
+    """Emit one structured trace record for a pipeline stage.
+
+    No-op unless tracing is enabled, so the call sites are always present and
+    the flag is the only switch. Fields are redacted by ``json_log`` like
+    every other structured line; the question text is never passed here (the
+    service keeps student wording out of logs).
+    """
+    if not _tracing_enabled:
+        return
+    tid = trace_id_var.get() or request_id_var.get()
+    json_log(
+        _trace_logger,
+        logging.INFO,
+        "trace",
+        stage=stage,
+        trace_id=tid,
+        **fields,
+    )
+
+
+#: I-01 (R4-wsC): the level policy is one root level from ``LOG_LEVEL``
+#: (default INFO) plus exactly this override table. uvicorn's own access log
+#: stays quiet because every request already emits one structured access
+#: record (op=http_request) -- letting uvicorn.access through would double the
+#: per-request volume with an unredacted, unstructured duplicate. Everything
+#: else inherits the root. Documented in docs/operations/LOGGING.md.
+LOGGER_LEVEL_OVERRIDES: dict[str, int] = {
+    "uvicorn.access": logging.WARNING,
+}
+
+
 def configure_logging(level: str = "INFO") -> None:
     handler = logging.StreamHandler(_EncodingSafeStream(_utf8_stream(sys.stdout)))
     handler.setFormatter(RedactingFormatter("%(message)s"))
@@ -223,6 +302,8 @@ def configure_logging(level: str = "INFO") -> None:
     if resolved not in _VALID_LEVELS:
         resolved = "INFO"
     root.setLevel(getattr(logging, resolved))
+    for logger_name, logger_level in LOGGER_LEVEL_OVERRIDES.items():
+        logging.getLogger(logger_name).setLevel(logger_level)
 
 
 def json_log(logger: logging.Logger, level: int, event: str, **fields) -> None:
@@ -237,6 +318,22 @@ def json_log(logger: logging.Logger, level: int, event: str, **fields) -> None:
     rid = request_id_var.get()
     if rid:
         fields.setdefault("request_id", rid)
+    # I-03 (AUD-HI-04): trace-log correlation. While a span is active, every
+    # structured line carries the ids of that span, so a log line joins an
+    # exported trace with no collector-aware log pipeline. The field names are
+    # ``otel_trace_id``/``otel_span_id`` rather than the OpenTelemetry
+    # convention's ``trace_id``/``span_id`` because this service has used
+    # ``trace_id`` for the request-level correlation id since AUD-HI-18
+    # (access line, per-stage trace records, error bodies) and renaming it
+    # would break every operator query built on it. No import at module scope:
+    # tracing imports this module back for the redaction key rules.
+    from bangla_gpt_api import tracing as _tracing
+
+    otel_trace_id, otel_span_id = _tracing.current_trace_ids()
+    if otel_trace_id:
+        fields.setdefault("otel_trace_id", otel_trace_id)
+    if otel_span_id:
+        fields.setdefault("otel_span_id", otel_span_id)
     safe = {"event": event, **redact_value(fields)}
     logger.log(level, json.dumps(safe, ensure_ascii=False, default=str))
 

@@ -10,7 +10,7 @@ from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -30,13 +30,16 @@ from bangla_gpt_api.db.models import (
     User,
 )
 from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded, message
+from bangla_gpt_api.routers._http_semantics import document_etag, require_if_match
 from bangla_gpt_api.schemas import (
     EXPLANATION_STYLES,
     ActivityDay,
     ActivitySummary,
     ChapterStat,
     MemoryFactsOut,
+    ParentInviteCodeOut,
     ParentInviteLinkRequest,
+    ParentLinkOut,
     ParentLinkRequest,
     ParentReportOut,
     StudentBrief,
@@ -78,7 +81,7 @@ logger = logging.getLogger(__name__)
 @router.post("/parents/link", status_code=201, responses={**message(404, 409), **coded(410)})
 def parent_link(
     app_ctx: Ctx, payload: ParentLinkRequest, db: DbSession, parent: ParentUser
-) -> dict:
+) -> ParentLinkOut:
     """Legacy direct-ID linking — disabled by default (V2 hardening).
 
     An unconsented parent could previously link ANY student_id and read
@@ -137,7 +140,7 @@ def parent_link(
         # Lost a race against a concurrent duplicate link.
         db.rollback()
         raise HTTPException(status_code=409, detail="Already linked") from exc
-    return {"linked": True, "parent_id": parent_profile.id, "student_id": student.id}
+    return ParentLinkOut(linked=True, parent_id=parent_profile.id, student_id=student.id)
 
 
 # ------------------------------------------------------------------
@@ -146,8 +149,8 @@ def parent_link(
 # ------------------------------------------------------------------
 
 
-@router.post("/students/me/invite-code", status_code=201)
-def create_parent_invite(app_ctx: Ctx, db: DbSession, user: CurrentUser) -> dict:
+@router.post("/students/me/invite-code", status_code=201, response_model=ParentInviteCodeOut)
+def create_parent_invite(app_ctx: Ctx, db: DbSession, user: CurrentUser) -> ParentInviteCodeOut:
     if user.role != "student":
         raise HTTPException(status_code=403, detail="Students only")
     student = _student_profile(db, user)
@@ -178,7 +181,7 @@ def create_parent_invite(app_ctx: Ctx, db: DbSession, user: CurrentUser) -> dict
         )
     )
     db.commit()
-    return {"code": code, "expires_in_minutes": app_ctx.settings.invite_ttl_minutes}
+    return ParentInviteCodeOut(code=code, expires_in_minutes=app_ctx.settings.invite_ttl_minutes)
 
 
 # --- student learning preferences + memory --------------------------
@@ -189,20 +192,40 @@ def create_parent_invite(app_ctx: Ctx, db: DbSession, user: CurrentUser) -> dict
 # never a data-destroying surprise for the account owner.
 
 
+def _prefs_state(student: Student) -> dict:
+    """The resource body the ETag is computed over (H-03)."""
+    prefs = student.learning_prefs if isinstance(student.learning_prefs, dict) else {}
+    return {"memory_enabled": bool(student.memory_enabled), "learning_prefs": prefs}
+
+
 @router.get("/students/me/prefs", response_model=StudentPrefsOut)
-def get_my_prefs(db: DbSession, user: CurrentUser) -> StudentPrefsOut:
+def get_my_prefs(db: DbSession, user: CurrentUser, response: Response) -> StudentPrefsOut:
     if user.role != "student":
         raise HTTPException(status_code=403, detail="Students only")
     student = _student_profile(db, user)
-    prefs = student.learning_prefs if isinstance(student.learning_prefs, dict) else {}
-    return StudentPrefsOut(memory_enabled=bool(student.memory_enabled), learning_prefs=prefs)
+    state = _prefs_state(student)
+    # H-03: the validator a concurrent PATCH can present as If-Match.
+    response.headers["ETag"] = document_etag(state)
+    return StudentPrefsOut(
+        memory_enabled=state["memory_enabled"], learning_prefs=state["learning_prefs"]
+    )
 
 
 @router.patch("/students/me/prefs", response_model=StudentPrefsOut)
-def patch_my_prefs(payload: StudentPrefsPatch, db: DbSession, user: CurrentUser) -> StudentPrefsOut:
+def patch_my_prefs(
+    payload: StudentPrefsPatch,
+    db: DbSession,
+    user: CurrentUser,
+    response: Response,
+    if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+) -> StudentPrefsOut:
     if user.role != "student":
         raise HTTPException(status_code=403, detail="Students only")
     student = _student_profile(db, user)
+    # H-03: this handler merges into the stored dict, so without a client-side
+    # guard two concurrent PATCHes lose one edit. If-Match makes the
+    # read-modify-write explicit; omitting it keeps last-write-wins.
+    require_if_match(if_match, document_etag(_prefs_state(student)))
     if payload.learning_prefs is not None:
         merged = dict(student.learning_prefs) if isinstance(student.learning_prefs, dict) else {}
         for key, value in payload.learning_prefs.items():
@@ -247,8 +270,11 @@ def patch_my_prefs(payload: StudentPrefsPatch, db: DbSession, user: CurrentUser)
         student.memory_enabled = payload.memory_enabled
     db.commit()
     db.refresh(student)
-    prefs = student.learning_prefs if isinstance(student.learning_prefs, dict) else {}
-    return StudentPrefsOut(memory_enabled=bool(student.memory_enabled), learning_prefs=prefs)
+    state = _prefs_state(student)
+    response.headers["ETag"] = document_etag(state)
+    return StudentPrefsOut(
+        memory_enabled=state["memory_enabled"], learning_prefs=state["learning_prefs"]
+    )
 
 
 @router.get("/students/me/memory", response_model=MemoryFactsOut)
@@ -310,8 +336,15 @@ def disable_my_memory(db: DbSession, user: CurrentUser) -> MemoryFactsOut:
     )
 
 
-@router.post("/parents/link/invite", status_code=201, responses={**coded(400), **message(404, 409)})
-def link_via_invite(payload: ParentInviteLinkRequest, db: DbSession, parent: ParentUser) -> dict:
+@router.post(
+    "/parents/link/invite",
+    status_code=201,
+    response_model=ParentLinkOut,
+    responses={**coded(400), **message(404, 409)},
+)
+def link_via_invite(
+    payload: ParentInviteLinkRequest, db: DbSession, parent: ParentUser
+) -> ParentLinkOut:
     now = datetime.now(UTC).replace(tzinfo=None)
     # One code, one link: claim atomically so two parents racing the same code
     # cannot both attach themselves to the student. AUD-0034.
@@ -372,11 +405,7 @@ def link_via_invite(payload: ParentInviteLinkRequest, db: DbSession, parent: Par
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(status_code=409, detail="Already linked") from exc
-    return {
-        "linked": True,
-        "parent_id": parent_profile.id,
-        "student_id": invite.student_id,
-    }
+    return ParentLinkOut(linked=True, parent_id=parent_profile.id, student_id=invite.student_id)
 
 
 @router.get("/parents/me/children", response_model=list[StudentBrief])

@@ -57,7 +57,6 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       ...reactHooks.configs['recommended-latest'].rules,
       ...jsxA11y.flatConfigs.recommended.rules,
-      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
 
       // Unused arguments prefixed with `_` are deliberate (callbacks,
       // interface conformance); anything else unused is a mistake.
@@ -116,22 +115,26 @@ export default tseslint.config(
     },
   },
 
-  // ---- tests: same linter, fewer stylistic rules --------------------------
+  // ---- tests: the few rules a test double legitimately breaks -------------
+  // Each remaining exemption was measured: with the whole block removed these
+  // are the only rules the current test sources violate (require-await 17,
+  // unbound-method 5, no-floating-promises 2, no-unsafe-assignment 2, on
+  // 2026-10-19). Anything else applies to tests exactly as it does to app
+  // code, `no-explicit-any` included.
   {
     files: ['src/**/*.{test,spec}.{ts,tsx}', 'src/test/**/*.{ts,tsx}'],
     rules: {
-      // Test doubles legitimately cast and stub.
-      '@typescript-eslint/no-explicit-any': 'off',
-      '@typescript-eslint/no-unsafe-function-type': 'off',
-      // Asserting on a query result in a test is how you assert it was found.
-      '@typescript-eslint/no-non-null-assertion': 'off',
+      // `expect(spy.method).toHaveBeenCalledWith(...)` asserts through an
+      // unbound method reference; that is the Vitest idiom.
       '@typescript-eslint/unbound-method': 'off',
-      '@typescript-eslint/no-unsafe-assignment': 'off',
-      '@typescript-eslint/no-unsafe-member-access': 'off',
-      // Fixture promises are created and immediately ignored on purpose.
+      // `logout()` and friends are fire-and-forget in these tests by design.
       '@typescript-eslint/no-floating-promises': 'off',
+      // `vi.fn(async () => ...)` doubles a Promise-returning function; the
+      // body itself has nothing to await.
       '@typescript-eslint/require-await': 'off',
-      'no-console': 'off',
+      // Vitest asymmetric matchers (`expect.stringContaining`) are typed
+      // `any`; assigning one into an expected payload is their shape.
+      '@typescript-eslint/no-unsafe-assignment': 'off',
     },
   },
 

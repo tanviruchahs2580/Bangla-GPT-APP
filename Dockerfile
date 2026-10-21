@@ -49,6 +49,17 @@ COPY apps/api/src ./apps/api/src
 COPY apps/api/alembic ./apps/api/alembic
 COPY apps/api/alembic.ini ./apps/api/alembic.ini
 
+# A5-02 prompt registry: the versioned prompt files live at apps/api/prompts,
+# OUTSIDE the import package, so the wheel cannot carry them as package-data
+# (setuptools package-data is relative to the package directory) and a plain
+# wheel install resolves the loader's checkout-relative default to
+# site-packages' parent, where no prompts exist. The image therefore ships the
+# directory at its checkout path and points the loader at it explicitly; the
+# prompt-registry manifest makes a missing registry a loud boot failure, so
+# this COPY + ENV pair is what keeps the container bootable.
+COPY apps/api/prompts ./apps/api/prompts
+ENV BANGLA_GPT_PROMPTS_DIR=/app/apps/api/prompts
+
 # Two steps, deliberately. constraints.txt pins exact versions AND carries
 # hashes, which switches pip into hash-checking mode; a local directory has no
 # single artifact to hash, so the project itself is installed --no-deps after

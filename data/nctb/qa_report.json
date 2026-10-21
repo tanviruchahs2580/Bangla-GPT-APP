@@ -1,0 +1,101 @@
+{
+  "nctb-hsc-28d03c592c2c": {
+    "total_chunks": 62,
+    "flagged_chunks": 0,
+    "flagged_ratio": 0.0,
+    "issues": {},
+    "worst": [],
+    "pass": true,
+    "threshold": 0.02,
+    "duplicate_chunks": 0,
+    "duplicate_ratio": 0.0
+  },
+  "nctb-hsc-9c44bb8ff649": {
+    "total_chunks": 60,
+    "flagged_chunks": 0,
+    "flagged_ratio": 0.0,
+    "issues": {},
+    "worst": [],
+    "pass": true,
+    "threshold": 0.02,
+    "duplicate_chunks": 0,
+    "duplicate_ratio": 0.0
+  },
+  "nctb-hsc-a513203336f6": {
+    "total_chunks": 63,
+    "flagged_chunks": 0,
+    "flagged_ratio": 0.0,
+    "issues": {},
+    "worst": [],
+    "pass": true,
+    "threshold": 0.02,
+    "duplicate_chunks": 0,
+    "duplicate_ratio": 0.0
+  },
+  "nctb-hsc-ca39e5957513": {
+    "total_chunks": 57,
+    "flagged_chunks": 0,
+    "flagged_ratio": 0.0,
+    "issues": {},
+    "worst": [],
+    "pass": true,
+    "threshold": 0.02,
+    "duplicate_chunks": 0,
+    "duplicate_ratio": 0.0
+  },
+  "nctb-secondary-3ce5065b7a32": {
+    "total_chunks": 133,
+    "flagged_chunks": 0,
+    "flagged_ratio": 0.0,
+    "issues": {},
+    "worst": [],
+    "pass": true,
+    "threshold": 0.02,
+    "duplicate_chunks": 0,
+    "duplicate_ratio": 0.0
+  },
+  "nctb-secondary-afda21d8556d": {
+    "total_chunks": 163,
+    "flagged_chunks": 0,
+    "flagged_ratio": 0.0,
+    "issues": {},
+    "worst": [],
+    "pass": true,
+    "threshold": 0.02,
+    "duplicate_chunks": 0,
+    "duplicate_ratio": 0.0
+  },
+  "nctb-secondary-be50d8aff8d5": {
+    "total_chunks": 100,
+    "flagged_chunks": 0,
+    "flagged_ratio": 0.0,
+    "issues": {},
+    "worst": [],
+    "pass": true,
+    "threshold": 0.02,
+    "duplicate_chunks": 0,
+    "duplicate_ratio": 0.0
+  },
+  "nctb-secondary-ca0d6bd886b7": {
+    "total_chunks": 90,
+    "flagged_chunks": 0,
+    "flagged_ratio": 0.0,
+    "issues": {},
+    "worst": [],
+    "pass": true,
+    "threshold": 0.02,
+    "duplicate_chunks": 0,
+    "duplicate_ratio": 0.0
+  },
+  "nctb-secondary-e39c58d35764": {
+    "total_chunks": 100,
+    "flagged_chunks": 0,
+    "flagged_ratio": 0.0,
+    "issues": {},
+    "worst": [],
+    "pass": true,
+    "threshold": 0.02,
+    "duplicate_chunks": 0,
+    "duplicate_ratio": 0.0
+  }
+}

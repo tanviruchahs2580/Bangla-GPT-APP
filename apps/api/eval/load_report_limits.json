@@ -1,0 +1,120 @@
+{
+ "base_url": "http://127.0.0.1:58396",
+ "budgets": {
+  "dashboard_p95_ms": 2000,
+  "full_answer_p95_ms": 12000,
+  "saturation_error_rate": 0.01,
+  "saturation_p95_multiplier": 3.0
+ },
+ "generated_at": "2026-10-19T08:37:16+00:00",
+ "generated_by": "scripts/loadgen.py",
+ "levels": [
+  {
+   "ask": {
+    "mean_ms": 47.69,
+    "n": 20,
+    "p50_ms": 45.38,
+    "p95_ms": 94.22,
+    "p99_ms": 94.22
+   },
+   "concurrency": 1,
+   "dashboard": {
+    "mean_ms": 24.06,
+    "n": 4,
+    "p50_ms": 22.19,
+    "p95_ms": 33.89,
+    "p99_ms": 33.89
+   },
+   "error_rate": 0.0,
+   "errors": 0,
+   "requests": 40,
+   "search": {
+    "mean_ms": 112.93,
+    "n": 8,
+    "p50_ms": 88.42,
+    "p95_ms": 310.23,
+    "p99_ms": 310.23
+   },
+   "status_counts": {
+    "200": 40
+   },
+   "stream": {
+    "mean_ms": 114.45,
+    "n": 8,
+    "p50_ms": 80.75,
+    "p95_ms": 317.48,
+    "p99_ms": 317.48
+   },
+   "throughput_rps": 13.92,
+   "wall_seconds": 2.87
+  },
+  {
+   "ask": {
+    "mean_ms": 229.23,
+    "n": 20,
+    "p50_ms": 199.42,
+    "p95_ms": 669.9,
+    "p99_ms": 669.9
+   },
+   "concurrency": 4,
+   "dashboard": {
+    "mean_ms": 268.58,
+    "n": 4,
+    "p50_ms": 227.83,
+    "p95_ms": 487.35,
+    "p99_ms": 487.35
+   },
+   "error_rate": 0.25,
+   "errors": 10,
+   "requests": 40,
+   "search": {
+    "mean_ms": 380.56,
+    "n": 8,
+    "p50_ms": 469.48,
+    "p95_ms": 617.47,
+    "p99_ms": 617.47
+   },
+   "status_counts": {
+    "200": 30,
+    "429": 10
+   },
+   "stream": {
+    "mean_ms": 414.41,
+    "n": 8,
+    "p50_ms": 493.22,
+    "p95_ms": 602.71,
+    "p99_ms": 602.71
+   },
+   "throughput_rps": 12.82,
+   "wall_seconds": 3.12
+  }
+ ],
+ "mix": "50% POST /tutor/ask, 20% streaming chat, 20% GET /search, 10% GET /dashboard/summary",
+ "mode": "product-limits",
+ "run_conditions": {
+  "cpu_count": 8,
+  "database": "sqlite (dev/test posture; Postgres numbers differ)",
+  "host": "DESKTOP-GET9GA6",
+  "mode": "product-limits",
+  "platform": "Windows-11-10.0.26300-SP0",
+  "provider": "mock (app-side latency only; TTFT is NOT measured)",
+  "python": "3.12.10",
+  "rate_limits": "shipped defaults: 30 tutor requests/user/min, 60/IP/min per IP",
+  "server": "single in-process uvicorn worker, throwaway sqlite"
+ },
+ "saturation": {
+  "first_saturated_concurrency": 4,
+  "note": "saturation = error rate above the stated cap, ask/stream p95 beyond the A9-01 answer budget, dashboard p95 beyond its own budget, or ask p95 above 3x the lowest-concurrency p95",
+  "observations": [
+   "concurrency 4: ask p95 669.9ms, stream p95 602.71ms, dashboard p95 487.35ms (base 94.22ms), error rate 0.25"
+  ],
+  "peak_throughput_concurrency": 1,
+  "peak_throughput_rps": 13.92,
+  "saturated": true
+ },
+ "unmeasured": [
+  "model time-to-first-token (needs a live provider)",
+  "multi-worker / multi-replica capacity",
+  "abort/cancellation behaviour under client disconnects"
+ ]
+}

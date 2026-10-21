@@ -7,11 +7,12 @@ Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 import asyncio
 import logging
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import func, select
 
+from bangla_gpt_api import ai_jobs, tracing
 from bangla_gpt_api.db.models import (
     AiJob,
     ChapterContent,
@@ -23,7 +24,9 @@ from bangla_gpt_api.db.models import (
     User,
 )
 from bangla_gpt_api.logging_config import json_log
+from bangla_gpt_api.metrics import AI_JOBS_TOTAL
 from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES
+from bangla_gpt_api.routers._pagination import ArchivePage
 from bangla_gpt_api.schemas import (
     AiJobIn,
     AiJobOut,
@@ -103,15 +106,14 @@ def create_note(payload: SavedNoteIn, db: DbSession, user: CurrentUser) -> Saved
 
 
 @router.get("/notes", response_model=list[SavedNoteOut])
-def list_notes(
-    db: DbSession, user: CurrentUser, limit: Annotated[int, Query(ge=1, le=100)] = 100
-) -> list[SavedNoteOut]:
+def list_notes(db: DbSession, user: CurrentUser, page: ArchivePage) -> list[SavedNoteOut]:
     rows = (
         db.execute(
             select(SavedNote)
             .where(SavedNote.user_id == user.id)
             .order_by(SavedNote.created_at.desc(), SavedNote.id.desc())
-            .limit(limit)
+            .offset(page.offset)
+            .limit(page.limit)
         )
         .scalars()
         .all()
@@ -182,10 +184,47 @@ def notification_mark_read(
 # --- background generation jobs (AiJob) --------------------------------
 
 
+def dispatch_ai_job(app_ctx: Ctx, job_id: str) -> asyncio.Task[None]:
+    """Start the durable runner for one job and keep a strong reference.
+
+    The handle lives on ``AppContext.ai_job_tasks`` so asyncio cannot
+    garbage-collect a running job and the lifespan drain can await it. Used by
+    the queue route and by the recovery sweep in the lifespan, so both entry
+    points share one runner.
+    """
+    task = asyncio.create_task(_execute_ai_job(app_ctx, job_id))
+    app_ctx.ai_job_tasks.add(task)
+    task.add_done_callback(app_ctx.ai_job_tasks.discard)
+    return task
+
+
 async def _execute_ai_job(app_ctx: Ctx, job_id: str) -> None:
-    """Run one AiJob to completion. Runs detached from the request, so it
-    opens its OWN session (session_factory) and never touches the request
-    session -- the study of jobs.py: `db = session_factory; finally close`."""
+    """Run one AiJob inside an ``ai_job.run`` span (I-03), then the attempt.
+
+    This is the worker half of the trace: the job runs detached from its
+    request (``asyncio.create_task`` / the ARQ dispatcher), so without a span
+    of its own the background half of the Create hub is invisible in traces.
+    A no-op unless TRACING_ENABLED is set (``tracing.span``).
+    """
+    with tracing.span("ai_job.run"):
+        await _execute_ai_job_body(app_ctx, job_id)
+
+
+async def _execute_ai_job_body(app_ctx: Ctx, job_id: str) -> None:
+    """Run one AiJob attempt. Durable version of the fire-and-forget runner:
+
+    * the row is claimed with an atomic conditional UPDATE (C-08), so two
+      replicas -- or the recovery sweep and a route dispatch -- cannot both run
+      the same job;
+    * every status write goes through the ``ai_jobs`` state machine (C-04), so
+      an out-of-order transition raises instead of being persisted;
+    * a failure is handed to ``ai_jobs.record_ai_job_failure``: input-shaped
+      errors fail, transient ones are retried with backoff, and a job that
+      keeps failing is dead-lettered -- never silently stranded.
+
+    Runs detached from the request, so it opens its OWN session
+    (``session_factory``) and never touches the request session.
+    """
     db = app_ctx.session_factory()
     try:
         job = db.get(AiJob, job_id)
@@ -193,15 +232,30 @@ async def _execute_ai_job(app_ctx: Ctx, job_id: str) -> None:
             return
         actor = db.get(User, job.user_id)
         if actor is None:
+            # No owner: nothing can complete this job, so fail it VISIBLY
+            # instead of leaving a row that looks permanently in-progress.
+            ai_jobs.abandon_ai_job(db, job_id, "owner account no longer exists")
             return
-        job.status = "generating"
-        db.commit()
+        if not ai_jobs.claim_ai_job(db, job_id):
+            # Someone else owns it (another replica claimed it first, or the
+            # row is terminal). Running it anyway would duplicate output.
+            json_log(logger, logging.INFO, "ai_job_claim_lost", job_id=job_id)
+            return
+        job = db.get(AiJob, job_id)
+        if job is None:  # pragma: no cover - deleted inside the claim window
+            return
         try:
             gen_in = _doc_in_for(job.kind, dict(job.payload or {}))
             doc_payload, _sources, chapter = await _generate_document(
                 app_ctx, db, actor, job.kind, gen_in
             )
-            job.status = "validating"
+            # Fencing: the lease may have expired while the provider was
+            # thinking (the sweep would have re-queued the row). Persisting a
+            # result we no longer own would duplicate the document.
+            if not ai_jobs.ai_job_still_ours(db, job_id):
+                json_log(logger, logging.WARNING, "ai_job_lease_lost", job_id=job_id)
+                return
+            ai_jobs.transition_ai_job(job, ai_jobs.AI_JOB_VALIDATING)
             db.commit()
             doc = _persist_document(
                 db,
@@ -212,7 +266,7 @@ async def _execute_ai_job(app_ctx: Ctx, job_id: str) -> None:
                 chapter=chapter,
                 payload=doc_payload,
             )
-            job.status = "ready"
+            ai_jobs.transition_ai_job(job, ai_jobs.AI_JOB_READY)
             job.result = {"document_id": doc.id}
             job.error = None
             # job lifecycle as sanitized product analytics.
@@ -225,16 +279,31 @@ async def _execute_ai_job(app_ctx: Ctx, job_id: str) -> None:
             )
             db.commit()
             json_log(logger, logging.INFO, "ai_job_ready", job_id=job_id, kind=job.kind)
+            AI_JOBS_TOTAL.labels(kind=job.kind, status="ready").inc()
         except Exception as exc:
             db.rollback()
-            fresh = db.get(AiJob, job_id)
-            if fresh is not None:
-                fresh.status = "failed"
-                # Exception bodies can carry DB/URL fragments — persist the
-                # type name only; full tracebacks stay in server logs.
-                fresh.error = type(exc).__name__
+            try:
+                status = ai_jobs.record_ai_job_failure(db, job_id, exc)
+            except ai_jobs.IllegalAiJobTransition:
+                # The row already reached a terminal state, so the failure came
+                # from post-success bookkeeping: re-recording it would be an
+                # out-of-order transition and the job itself did not fail.
+                db.rollback()
+                json_log(
+                    logger,
+                    logging.WARNING,
+                    "ai_job_failure_after_terminal",
+                    job_id=job_id,
+                    error_type=type(exc).__name__,
+                )
+                return
+            if status != "gone":
                 _record_analytics(
-                    db, fresh.user_id, actor.role, "ai_job_failed", {"kind": fresh.kind}
+                    db,
+                    actor.id,
+                    actor.role,
+                    "ai_job_failed" if status == ai_jobs.AI_JOB_FAILED else "ai_job_retrying",
+                    {"kind": job.kind, "state": status},
                 )
                 db.commit()
             json_log(
@@ -244,7 +313,14 @@ async def _execute_ai_job(app_ctx: Ctx, job_id: str) -> None:
                 job_id=job_id,
                 kind=job.kind,
                 error_type=type(exc).__name__,
+                job_status=status,
             )
+            # The counter keeps its original meaning: terminal outcomes only
+            # (ready/failed). A scheduled retry is in-flight, not a failure --
+            # counting it would quietly deflate the failure-rate alert
+            # (AIJobFailureRateHigh) and the SLO ratio that reads this metric.
+            if status == ai_jobs.AI_JOB_FAILED:
+                AI_JOBS_TOTAL.labels(kind=job.kind, status=ai_jobs.AI_JOB_FAILED).inc()
     finally:
         db.close()
 
@@ -267,16 +343,14 @@ async def teacher_job_create(
     app_ctx: Ctx, payload: AiJobIn, db: DbSession, teacher: TeacherOrAdminUser
 ) -> AiJobOut:
     """Queue a generation as an AiJob: queued -> generating -> validating
-    -> ready (or failed + error). Kind is intentionally not whitelisted at
-    the door: an unsupported kind becomes a VISIBLE failed job, which beats
-    a bare 422 on a long-running API."""
+    -> ready (or failed/retrying/dead_letter + error). Kind is intentionally
+    not whitelisted at the door: an unsupported kind becomes a VISIBLE failed
+    job, which beats a bare 422 on a long-running API."""
     job = AiJob(user_id=teacher.id, kind=payload.kind[:40], payload=dict(payload.payload))
     db.add(job)
     db.commit()
     db.refresh(job)
-    task = asyncio.create_task(_execute_ai_job(app_ctx, job.id))
-    app_ctx.ai_job_tasks.add(task)
-    task.add_done_callback(app_ctx.ai_job_tasks.discard)
+    dispatch_ai_job(app_ctx, job.id)
     json_log(
         logger, logging.INFO, "ai_job_queued", job_id=job.id, kind=job.kind, user_id=teacher.id
     )

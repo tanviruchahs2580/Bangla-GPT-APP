@@ -18,7 +18,12 @@ export default function SchoolDashboard() {
 
   if (isPending) {
     return (
-      <main className="container" aria-live="polite">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="container"
+        aria-live="polite"
+      >
         <p className="muted">{t("loading")}</p>
         <Skeleton w="60%" />
         <Skeleton w="40%" />
@@ -27,7 +32,7 @@ export default function SchoolDashboard() {
   }
   if (isError || !data) {
     return (
-      <main className="container">
+      <main id="main-content" tabIndex={-1} className="container">
         <div className="card" role="alert">
           <h2>{t("errorGeneric")}</h2>
         </div>
@@ -36,7 +41,7 @@ export default function SchoolDashboard() {
   }
 
   return (
-    <main className="container">
+    <main id="main-content" tabIndex={-1} className="container">
       <h1>{t("schoolDashboard")}</h1>
       <p className="muted">
         <span>{data.name}</span> ·{" "}

@@ -3,7 +3,7 @@
 Keeps ``original_text`` untouched and produces ``normalized_text`` used
 for indexing/retrieval. Never destroys mathematical/scientific notation:
 normalization is limited to Unicode form, zero-width characters,
-whitespace and optional numeral conversion.
+private-use glyph residue, whitespace and optional numeral conversion.
 """
 
 from __future__ import annotations
@@ -13,12 +13,34 @@ import unicodedata
 ZERO_WIDTH_CHARS = {"\u200b", "\u200c", "\u200d", "\ufeff"}
 BENGALI_DIGITS = str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789")
 
+# Private-use ranges. The PDF text layer of several NCTB books encodes
+# decorative symbol-font glyphs (bullets, list markers) as these code
+# points; they render as tofu boxes and carry no textual meaning.
+PUA_RANGES = ((0xE000, 0xF8FF), (0xF0000, 0xFFFFD), (0x100000, 0x10FFFD))
+
+
+def in_private_use_area(char: str) -> bool:
+    """True when the character is a Unicode private-use code point."""
+    code = ord(char)
+    return any(low <= code <= high for low, high in PUA_RANGES)
+
+
+def strip_private_use(text: str) -> str:
+    """Replace private-use glyphs with a space.
+
+    A space — not deletion — keeps neighbouring words from being glued
+    together. content QA flags any surviving private-use character as
+    ``pua_char``, so this is the repair step for that verdict.
+    """
+    return "".join(" " if in_private_use_area(char) else char for char in text)
+
 
 def normalize_bangla(text: str, *, ascii_digits: bool = False) -> str:
-    """NFC-normalize, drop zero-width characters and collapse whitespace."""
+    """NFC-normalize, drop zero-width chars and PUA residue, collapse space."""
     normalized = unicodedata.normalize("NFC", text)
     for char in ZERO_WIDTH_CHARS:
         normalized = normalized.replace(char, "")
+    normalized = strip_private_use(normalized)
     normalized = " ".join(normalized.split())
     if ascii_digits:
         normalized = normalized.translate(BENGALI_DIGITS)

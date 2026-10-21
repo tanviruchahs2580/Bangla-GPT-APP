@@ -28,6 +28,72 @@ _BANGLA_WORD_RE = re.compile("[A-Za-z0-9" + chr(92) + "u0980-" + chr(92) + "u09F
 _BANGLA_RE = re.compile("[" + chr(92) + "u0980-" + chr(92) + "u09FF]")
 
 
+#: Canonical digit form for matching: Bengali digits fold to ASCII so that
+#: "১২৩" and "123" tokenize identically (AUD-A1-12). Applied inside
+#: :func:`tokenize`, i.e. to BOTH the indexed corpus and every query, which
+#: is what makes the equivalence hold on both sides; the stored/served text
+#: keeps the digits exactly as the source published them.
+_DIGIT_FOLD = str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789")
+
+#: A4-04: unit normalization in the retrieval tokenizer. Measurement units
+#: appear in student questions as English abbreviations ("3 km"), English
+#: words ("kilometre"), Bangla abbreviations ("কিমি") or the full Bangla
+#: term ("কিলোমিটার") — while the NCTB corpus prints the full Bangla form.
+#: Every alias folds to the canonical corpus form, exact-token only (a
+#: single-letter alias never folds inside a word), applied to BOTH the
+#: indexed corpus and every query like the digit fold, so the equivalence
+#: is symmetric. Deliberately small and curriculum-shaped: units the
+#: class 6-10 science/maths syllabus measures with, nothing else.
+UNIT_ALIASES: dict[str, str] = {
+    # length
+    "km": "কিলোমিটার",
+    "kms": "কিলোমিটার",
+    "kilometre": "কিলোমিটার",
+    "kilometer": "কিলোমিটার",
+    "কিমি": "কিলোমিটার",
+    "m": "মিটার",
+    "metre": "মিটার",
+    "meter": "মিটার",
+    "cm": "সেন্টিমিটার",
+    "centimetre": "সেন্টিমিটার",
+    "centimeter": "সেন্টিমিটার",
+    "সেমি": "সেন্টিমিটার",
+    # mass
+    "kg": "কিলোগ্রাম",
+    "kgs": "কিলোগ্রাম",
+    "kilogram": "কিলোগ্রাম",
+    "kilograms": "কিলোগ্রাম",
+    "কেজি": "কিলোগ্রাম",
+    "g": "গ্রাম",
+    "gm": "গ্রাম",
+    "gram": "গ্রাম",
+    "grams": "গ্রাম",
+    # volume
+    "l": "লিটার",
+    "litre": "লিটার",
+    "liter": "লিটার",
+    "litres": "লিটার",
+    "liters": "লিটার",
+    # time
+    # (no bare "s": English possessives like "tomorrow's" tokenize to "s" and
+    # would fold every such token to সেকেন্ড -- the wave-4 red-team contract
+    # caught exactly that collision. "sec"/"secs" carry the unit meaning.)
+    "sec": "সেকেন্ড",
+    "secs": "সেকেন্ড",
+    "second": "সেকেন্ড",
+    "seconds": "সেকেন্ড",
+    "min": "মিনিট",
+    "mins": "মিনিট",
+    "minute": "মিনিট",
+    "minutes": "মিনিট",
+    "hr": "ঘণ্টা",
+    "hrs": "ঘণ্টা",
+    "hour": "ঘণ্টা",
+    "hours": "ঘণ্টা",
+    "ঘন্টা": "ঘণ্টা",
+}
+
+
 def tokenize(text: str) -> list[str]:
     """Tokenize keeping Bangla graphemes intact.
 
@@ -37,13 +103,18 @@ def tokenize(text: str) -> list[str]:
     and digits.
 
     NFKC folds compatibility variants (e.g. mobile-keyboard precomposed vs
-    decomposed Bangla) so indexing and querying stay symmetric. Lives
+    decomposed Bangla) so indexing and querying stay symmetric, Bengali
+    digits fold to ASCII so "১২৩" and "123" are the same token (AUD-A1-12),
+    and unit spellings fold to one canonical form so "৩ km", "৩ কিমি" and
+    "৩ কিলোমিটার" retrieve the same passages (A4-04/A2-03). All three folds
+    apply to BOTH the indexed corpus and every query -- the functions that
+    read one side always read the other through the same tokenizer. Lives
     beside :func:`light_stem` rather than in :mod:`bm25` because both the
     lexical index and the query-side analysis need it, and the analysis
     layer must not depend on the index.
     """
     return [
-        match.group(0).lower()
+        UNIT_ALIASES.get(token := match.group(0).lower().translate(_DIGIT_FOLD), token)
         for match in _BANGLA_WORD_RE.finditer(unicodedata.normalize("NFKC", text))
     ]
 
@@ -128,11 +199,6 @@ def expand_query(terms: list[str], extra: list[str] | None = None) -> list[str]:
         if term and term not in out:
             out.append(term)
     return out
-
-
-def _char_ngrams(text: str, n: int = 3) -> set[str]:
-    compact = re.sub(r"\s+", "", text.lower())
-    return {compact[i : i + n] for i in range(max(len(compact) - n + 1, 0))}
 
 
 def trigram_ngrams(text: str) -> frozenset[str]:

@@ -31,6 +31,31 @@ both targets comfortably; the numbers below are measured, not aspirated.
   `repo1` at S3 (`repo1-type=s3`, `repo1-s3-endpoint`, `repo1-s3-bucket`) or
   rclone-sync the volume -- same stanza, same drills.
 
+### Encryption at rest (AUD-B-03)
+
+- `deploy/postgres/pgbackrest.conf` sets `repo1-cipher-type=aes-256-cbc`.
+  The pgBackRest binary shipped in the image (2.59.1) accepts exactly
+  `none` and `aes-256-cbc`; `aes-256-ctr` is rejected with
+  `'aes-256-ctr' is not allowed for 'repo1-cipher-type' option`.
+- The passphrase is deliberately not in this repository or in the conf.
+  Both the `postgres` service (WAL `archive-push`) and the `pgbackrest`
+  sidecar read it from `PGBACKREST_REPO1_CIPHER_PASS`, which compose injects
+  from `PGBR_CIPHER_PASS` (a value in the operator's untracked `.env` /
+  secret store).
+- A missing passphrase fails loudly, never silently plaintext: pgBackRest
+  reports `info command requires option: repo1-cipher-pass` (or
+  `environment variable 'repo1-cipher-pass' must have a value` when the
+  variable is set but empty), and `deploy/postgres/pgbackrest_nightly.sh`
+  refuses to start its loop without it.
+- Consequence to accept deliberately: the backups are only as recoverable as
+  that passphrase. Keep it in the same secret store as `JWT_SECRET` and
+  `PII_ENC_KEY`, and keep a copy of the *store* (not the passphrase beside
+  the repo -- that would defeat the control).
+- Not done in this round (owner action): rotating the passphrase for an
+  existing repo. pgBackRest re-encrypts on the next full backup taken with
+  the new passphrase; until that full exists, keep the old passphrase
+  available for restore.
+
 Start the stack with backups:
 `docker compose --profile postgres --profile backup up -d`
 
@@ -73,10 +98,78 @@ Evidence: drill output `PASS... (9s restore)`; postgres log during recovery:
 `restored log file "000000010000000000000005" from archive`, `archive
 recovery complete`, new timeline 2 selected.
 
-The weekly cadence on the real staging box is the human/infra step
-(staging server itself is pending 🖐); until then run the drill locally --
+**Re-executed 2026-10-19 (AUD-B-33, PASS, encrypted repo).** The round-3
+re-run found and fixed one real defect first: the repo is encrypted
+(`repo1-cipher-type=aes-256-cbc`, AUD-B-03) and the drill's throwaway cluster
+was started without `PGBACKREST_REPO1_CIPHER_PASS`, so `archive_command` died
+with exit 37 (`archive-push command requires option: repo1-cipher-pass`) and
+the drill failed at step 2. `scripts/pgbackrest_drill.sh` now injects a
+throwaway passphrase (composed in the script, never a real secret; the drill
+owns its throwaway volumes) into both postgres containers and the restore
+invocation.
+
+Measured on this host (Windows 11, Docker 29.7.2), command
+`DRILL_PORT=15435 bash scripts/pgbackrest_drill.sh`, evidence
+`E-R3-ws4-b33-pgbackrest`:
+
+| Step | Result |
+|---|---|
+| stanza-create + check + full backup | PASS (`full backup size = 29.4MB`; `expire ... completed successfully`) |
+| post-backup write + `pg_switch_wal()` | PASS (segment archived by `archive-push`) |
+| container destroyed + data volume wiped | PASS (disaster simulated, not mocked) |
+| `--delta restore` + startup (wall clock) | **13 s** (RTO budget 14400 s) |
+| recovered markers | `pre-backup,post-backup` -> WAL replay proven, not just dump-and-reload |
+| drill exit code | 0 (`PASS: pgBackRest backup + PITR-style WAL-replay restore drill verified`) |
+
+**Credential separation (AUD-B-33).** The drill also demonstrates it: the
+backup tools act as the OS user `postgres` over the Unix socket (peer auth)
+and read the repo passphrase from `PGBACKREST_REPO1_CIPHER_PASS`; the
+application connects as the `bgpt` role with `POSTGRES_PASSWORD` and never
+sees the backup-repo passphrase. Production keeps the same split: app
+credentials in the app environment, `PGBR_CIPHER_PASS` only in the
+postgres/pgbackrest containers, both sourced from the host secret store.
+
+The weekly cadence on the real staging box remains the human/infra step
+(staging server itself is pending); until then run the drill locally --
 it is host-agnostic (needs docker only). Schedule suggestion:
 `0 4 * * 1 cd /srv/bangla-gpt && bash scripts/pgbackrest_drill.sh`.
+
+### Exact owner steps for the pgBackRest re-run (BLOCKED here)
+
+The audit could not reproduce the destructive drill: it builds the pgBackRest
+image, wipes a data volume and restores it, so it needs an isolated Docker host
+and a spare volume (not a developer workstation with live compose volumes).
+Exact sequence for the owner, to be executed on staging and recorded here:
+
+```bash
+# 1. Isolation: a throwaway project name, its own volumes, non-default ports.
+cd /srv/bangla-gpt
+export COMPOSE_PROJECT_NAME=bgpt-drill-$(date +%Y%m%d)
+export PGBR_CIPHER_PASS="<from the secret store>"
+export POSTGRES_PASSWORD="<throwaway>"
+export PORT_API=18080 PORT_WEB=18081 PORT_POSTGRES=15432
+
+# 2. Bring the stack up with the backup profile and let one full backup run.
+docker compose --profile postgres --profile backup up -d
+docker compose exec pgbackrest pgbackrest --stanza=bgpt --type=full backup
+docker compose exec pgbackrest pgbackrest --stanza=bgpt info
+
+# 3. Seed markers, write MORE data after the backup, then wipe the volume.
+bash scripts/pgbackrest_drill.sh          # performs steps 3-6 itself:
+#    stanza-create -> check -> full backup -> extra writes -> volume wipe ->
+#    --delta restore -> start -> assert both markers + WAL replay
+
+# 4. Record in this file: date, host, wall-clock restore time, log lines
+#    ("archive recovery complete", timeline switch), then tear down:
+#    docker compose --profile postgres --profile backup down -v
+```
+
+Status after the 2026-10-19 re-run above: **drill executed on this host,
+encrypted repo, 13 s restore; the owner re-runs it on staging with the real
+secret store** (the local run uses a throwaway passphrase and throwaway
+volumes, which is why it is safe on a workstation; the owner run needs the
+production `PGBR_CIPHER_PASS`). The SQLite rehearsal below is the fallback
+path for dev installs and was re-run in the same round.
 
 ## Key loss caveat (operator duty)
 
@@ -84,6 +177,11 @@ it is host-agnostic (needs docker only). Schedule suggestion:
 `PII_ENC_KEY` makes `parents.phone_enc` ciphertext unrecoverable: rotate by
 re-collecting phone numbers at next guardian login, do NOT delete the key
 blindly. Store both in the same secret store with the same backup story.
+
+The backup repo passphrase (`PGBR_CIPHER_PASS`) has the same property, one
+level up: losing it makes every pgBackRest backup unreadable even though the
+backup files themselves are intact (AUD-B-03). Back the secret store up
+separately from the database.
 
 ## SQLite dev fallback
 
@@ -103,9 +201,82 @@ complete backup if it takes all three files together (`app.db`,
 on a connection to the live database; a bare `cp app.db` can silently lose
 the most recent transactions.
 
+### SQLite restore rehearsal, re-run 2026-10-19 (PASS)
+
+`apps/api/scripts/backup_restore_drill.py` is the rehearsal: online backup via
+SQLite's backup API, restore into a fresh file, and verification of integrity,
+foreign keys and per-table row counts -- plus a deliberate demonstration of the
+raw-copy trap above. Measured on the deterministic demo dataset
+(12 students, 5 activity days), evidence `E-R2-h2-005`, re-run 2026-10-19
+(`E-R2-h2b-005`) with the same result:
+
+| Measurement | Value |
+|---|---|
+| Tables / rows in the source | 42 / 228 |
+| `PRAGMA integrity_check` (source, restore) | `ok` / `ok` |
+| `PRAGMA foreign_key_check` violations | 0 / 0 |
+| Online backup wall time | 0.77 s; 0.048 s on the 2026-10-19 re-run (`E-R2-h2b-005`) -- host-dependent |
+| Row counts identical after restore | yes (228 = 228) |
+| Newest post-checkpoint commit present in the restore | yes |
+| Same commit present in a bare `cp` of `app.db` | **no** (the trap, demonstrated) |
+| Drill exit code | 0 (`DRILL PASSED`) |
+
+Run it against any database (or the built-in demo) with:
+
+```bash
+cd apps/api && python scripts/backup_restore_drill.py            # demo database
+cd apps/api && python scripts/backup_restore_drill.py --source /data/app.db
+```
+
+Exit code 0 means: integrity ok, no FK violations, identical row counts, and
+the newest committed transaction present in the restore. A non-zero exit lists
+the failed checks.
+
 ## Corpus object storage
 
 `scripts/s3_corpus_sync.py` (optional boto3; any S3-compatible endpoint)
 materialises `S3_BUCKET`/`S3_PREFIX` into the local corpus dir before
 indexing; refuses keys that would escape the destination. Credentials via
 standard `AWS_*` env vars.
+
+## Single points of failure (AUD-HI-19)
+
+The design above answers "how do we restore"; this table answers "what, if it
+dies right now, takes the product down until a human acts". Each row says
+whether the shipped configuration already survives its failure and what the
+owner would have to approve to remove the point of failure. Multi-zone and
+multi-region topology is an **owner decision** (I10) with a cost estimate --
+not something this repository can decide on its own.
+
+| # | Single point of failure | Shipped configuration | Survives its failure? | Removing it requires (owner) |
+|---|---|---|---|---|
+| 1 | PostgreSQL instance (single volume, single host in the compose profile) | One container + one named volume (`deploy/postgres`) | No -- restore from pgBackRest (RTO budget 4h, last drill 9s) | Managed Postgres with a standby and automatic failover, or a second PG container with streaming replication (ADR + cost) |
+| 2 | Redis (rate-limit counters and shared caches) | One container; the API degrades per `RATE_LIMIT_FAIL_OPEN` | Partially -- with `FAIL_OPEN=false` (default) protected routes answer 503; with `true`, limits weaken to per-process | Managed Redis with a replica, or accept a documented availability-over-strictness posture |
+| 3 | API host / container (all workers on one machine) | `docker compose` on one host; no second replica | No | Two API replicas behind the proxy (the app is already replica-safe: shared limiter store, SSE, no local job queue). Needs the deploy runbook to describe rolling restarts |
+| 4 | Off-site backup copy | **Not configured by default**: `pgbackrest` archives to a local repo unless the operator points it at object storage | No -- host loss loses the backups | Configure the S3/GCS repo (`docs/backup_dr.md` §pgBackRest design) with owner credentials; also test the cross-region throughput |
+| 5 | Encryption key for backups | Operator-held; loss is unrecoverable (`docs/backup_dr.md` §Key loss caveat) | n/a | A documented key custodian and an escrow decision (owner) |
+| 6 | TLS termination / reverse proxy (Caddy in the documented topology) | One proxy container | No | Terminate TLS at a managed load balancer, or a second proxy with a shared certificate store |
+| 7 | LLM provider (single configured provider; fallback optional) | `LLM_PROVIDER` + optional `LLM_FALLBACK_PROVIDER` | Partially -- with a fallback configured, generation continues; without one, students get refusals (never fabrications) | Configure the fallback provider + key, and pay for both |
+| 8 | DNS / domain and the outbound SMTP account | Owner-held accounts | No | Provider accounts with recovery contacts recorded in the owner's runbook (not in this repository) |
+| 9 | The single deploy credential (SSH key / registry token) | Owner-held | No | A second operator with credentials and a rotation procedure (`docs/runbook.md` §6, §10) |
+| 10 | Availability of the application index at boot | Rebuilt in-memory per worker at boot; a bad `NCTB_CORPUS_DIR` silently falls back to the bundled sample | Partially -- `/ready` reports degraded and `HighRAGRefusalRate` fires | A persisted, versioned index (the deferred pgvector/persistence work) |
+
+**Owner decisions requested (I10):** whether to fund rows 1, 2, 3, 4 and 6
+(multi-zone posture), and who holds the keys in rows 4, 5 and 9. Until those
+are decided, the honest statement of the DR posture is: *single-host with a
+tested local restore path*. The audit's RPO/RTO figures above assume that host
+still exists to restore onto.
+
+### Restore drill re-run (owner action)
+
+The last recorded destructive `pgbackrest` drill is dated 2026-09-07 (in-repo
+claim). This audit could not reproduce it inside its budget: it builds the
+pgBackRest image, wipes a volume and restores, and needs an isolated Docker
+host. Re-run on staging with:
+
+```bash
+cd apps/api && bash scripts/pgbackrest_drill.sh   # see docs/backup_dr.md §Restore drill
+```
+
+and record the wall-clock time here. Until that re-run, treat the restore path
+as *documented and previously measured*, not *re-verified*.

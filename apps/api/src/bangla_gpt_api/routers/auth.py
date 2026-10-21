@@ -2,6 +2,13 @@
 
 Behavior-identical extraction: same paths, validation, status codes.
 Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
+
+C-03: the three *session* handlers (login, refresh rotation, logout) and
+their helpers live in :mod:`.auth_sessions`; this module keeps registration,
+verification, the password lifecycle and MFA, and includes that router at the
+exact position the three handlers used to be defined at, so the served route
+order (and therefore the OpenAPI document) is byte-identical to the pre-split
+file.
 """
 
 import hashlib
@@ -10,18 +17,16 @@ import secrets
 from datetime import UTC, datetime, timedelta
 
 import jwt as pyjwt
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from bangla_gpt_api.auth.mfa import new_secret, otpauth_uri, verify_code
 from bangla_gpt_api.auth.security import (
-    _burn_password_check,
-    create_access_token,
+    REFRESH_TOKEN_TYP,
     decode_token,
     hash_password,
     is_common_password,
-    needs_rehash,
     verify_password,
 )
 from bangla_gpt_api.auth.single_use import claim_single_use, fetch_by_hash
@@ -40,49 +45,47 @@ from bangla_gpt_api.routers._error_contract import (
     coded,
     message,
 )
-from bangla_gpt_api.routers.deps import AppContext
+from bangla_gpt_api.routers.auth_sessions import (
+    _LOGIN_LOCKOUT_THRESHOLD,  # noqa: F401 - ditto (S-002 lockout constants)
+    LOGIN_LOCKED_CODE,  # noqa: F401 - moved with the login handler; tests pin it here
+    SessionTokenResponse,
+    _issue_session,
+)
+from bangla_gpt_api.routers.auth_sessions import (
+    router as auth_sessions_router,
+)
+from bangla_gpt_api.routers.deps import (
+    CONSENT_VERSION,
+    AppContext,
+    BearerCredentials,
+    Ctx,
+    CurrentUser,
+    DbSession,
+)
 from bangla_gpt_api.schemas import (
     ChangePasswordRequest,
     ForgotPasswordRequest,
-    LoginRequest,
     MfaChallengeIn,
+    MfaDisabledOut,
     MfaDisableIn,
+    MfaEnabledOut,
     MfaEnrollOut,
     MfaVerifyIn,
     RegisterRequest,
     RegisterResponse,
     ResendVerificationRequest,
     ResetPasswordRequest,
-    TokenResponse,
+    StatusAcceptedOut,
     VerifyEmailRequest,
 )
 from bangla_gpt_api.security import encrypt_pii
+from bangla_gpt_api.services.breached_passwords import is_breached_password
 from bangla_gpt_api.services.mailer import send_mail, smtp_configured
 from bangla_gpt_api.services.verification import send_verification_email
-
-from .deps import (
-    CONSENT_VERSION,
-    BearerCredentials,
-    Ctx,
-    CurrentUser,
-    DbSession,
-)
 
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
-
-# --- S-002: per-account failed-login lockout --------------------------------
-# The per-IP login rule can be defeated by IP rotation, so the ACCOUNT also
-# backs off. Five consecutive password failures lock the account for 60 s;
-# every further failure doubles the lock (120 s, 240 s, ... up to 1 hour).
-# The counter only resets on a successful sign-in. Kept as module constants
-# (not Settings) so no new env surface is introduced.
-_LOGIN_LOCKOUT_THRESHOLD = 5
-_LOGIN_LOCKOUT_BASE_SECONDS = 60
-_LOGIN_LOCKOUT_MAX_SECONDS = 3600
-#: Stable machine code for the 429 refusal while locked.
-LOGIN_LOCKED_CODE = "account_locked"
 
 
 @router.post(
@@ -168,8 +171,8 @@ def register(
     return RegisterResponse(user_id=user.id, role=user.role, profile_id=profile.id)
 
 
-@router.post("/auth/verify-email", response_model=TokenResponse)
-def verify_email(app_ctx: Ctx, payload: VerifyEmailRequest, db: DbSession) -> TokenResponse:
+@router.post("/auth/verify-email", response_model=SessionTokenResponse, responses=coded(400))
+def verify_email(app_ctx: Ctx, payload: VerifyEmailRequest, db: DbSession) -> SessionTokenResponse:
     """Complete email verification with the token from the mail.
 
     On success the account is marked verified and a session is issued.
@@ -207,16 +210,16 @@ def verify_email(app_ctx: Ctx, payload: VerifyEmailRequest, db: DbSession) -> To
         )
     user.email_verified = True
     db.commit()
-    return TokenResponse(access_token=create_access_token(user, settings=app_ctx.settings))
+    return _issue_session(app_ctx, user)
 
 
-@router.post("/auth/resend-verification", status_code=202)
+@router.post("/auth/resend-verification", status_code=202, response_model=StatusAcceptedOut)
 def resend_verification(
     app_ctx: Ctx,
     db: DbSession,
     credentials: BearerCredentials,
     payload: ResendVerificationRequest | None = None,
-) -> dict:
+) -> StatusAcceptedOut:
     """Re-send the email-verification code.
 
     Reachable both with and without a session: login issues no token
@@ -226,138 +229,42 @@ def resend_verification(
     the account. Always answers 202 with a generic body so the endpoint
     cannot be used to enumerate registered addresses.
     """
-    target: User | None = None
+    target = _resend_target(app_ctx, db, credentials, payload)
+    if target is not None and smtp_configured(app_ctx.settings) and not target.email_verified:
+        send_verification_email(db, app_ctx.settings, target)
+    return StatusAcceptedOut(status="accepted")
+
+
+def _resend_target(
+    app_ctx: Ctx,
+    db: DbSession,
+    credentials: BearerCredentials,
+    payload: ResendVerificationRequest | None,
+) -> User | None:
+    """The account to re-send to: a valid bearer session wins, else the email.
+
+    A malformed or unusable bearer header falls through to the body email
+    rather than erroring: the endpoint's contract is the same 202 either way,
+    and refusing here would tell an attacker whether a token is valid.
+    """
     if credentials is not None and credentials.scheme.lower() == "bearer":
         try:
             claims = decode_token(credentials.credentials, settings=app_ctx.settings)
-            if claims.get("mfa") is not True:
-                target = db.get(User, int(claims["sub"]))
+            # B-02: a refresh token is not a session credential here either.
+            if claims.get("mfa") is not True and claims.get("typ") != REFRESH_TOKEN_TYP:
+                return db.get(User, int(claims["sub"]))
         except Exception:
-            target = None
-    if target is None and payload is not None and payload.email:
+            return None
+    if payload is not None and payload.email:
         email = payload.email.strip().lower()
-        target = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
-    if target is not None and smtp_configured(app_ctx.settings) and not target.email_verified:
-        send_verification_email(db, app_ctx.settings, target)
-    return {"status": "accepted"}
+        return db.execute(select(User).where(User.email == email)).scalar_one_or_none()
+    return None
 
 
-def _lockout_seconds(failed_count: int) -> int:
-    """Progressive lock length: doubles per failure past the threshold."""
-    over = max(0, failed_count - _LOGIN_LOCKOUT_THRESHOLD)
-    # Explicit int keeps the contract visible (the builtin min() overload with
-    # an `int ** int` operand is inferred as Any by this mypy/stubs pair).
-    delay: int = _LOGIN_LOCKOUT_BASE_SECONDS * (2**over)
-    return min(delay, _LOGIN_LOCKOUT_MAX_SECONDS)
-
-
-def _lock_remaining_seconds(user: User, now: datetime) -> int | None:
-    """Seconds the account stays locked, or None when it is not locked.
-
-    ``users.locked_until`` is a naive UTC column; attach UTC before comparing
-    with the timezone-aware ``now`` (SQLite/Postgres both drop tzinfo).
-    """
-    if user.locked_until is None:
-        return None
-    locked_until = user.locked_until
-    if locked_until.tzinfo is None:
-        locked_until = locked_until.replace(tzinfo=UTC)
-    remaining = (locked_until - now).total_seconds()
-    if remaining <= 0:
-        return None
-    return max(1, int(remaining))
-
-
-@router.post("/auth/login", response_model=TokenResponse, responses=coded(429))
-def login(app_ctx: Ctx, response: Response, payload: LoginRequest, db: DbSession) -> TokenResponse:
-    email = payload.email.strip().lower()
-    user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
-
-    # F-057, oracle 1 (status code). The old chain short-circuited on
-    # `user is None`, so an unknown address and a known-but-unverified one
-    # took different branches: 401 vs 403 `email_unverified`. Anyone who
-    # guessed ANY password could tell registered addresses apart from
-    # unregistered ones and build a list to target with credential stuffing.
-    # The unverified hint is now only given once the password is CORRECT --
-    # at which point the caller already proves they hold the credential, so
-    # the hint discloses nothing they did not already know.
-    password_ok = verify_password(payload.password, user.password_hash) if user else False
-
-    # F-057, oracle 2 (timing). Argon2id at 19 MiB / t=2 takes tens of
-    # milliseconds. The old code never ran it for an unknown address, so the
-    # "no such user" path answered ~5x faster -- an equally reliable oracle
-    # that survives any amount of response-body tidying. Do the work either
-    # way, against a fixed decoy hash.
-    if user is None:
-        _burn_password_check(payload.password)
-        raise HTTPException(
-            status_code=401,
-            detail={"code": "bad_credentials", "message": "Incorrect email or password"},
-        )
-
-    now = datetime.now(UTC)
-    # S-002: while the account is locked, even the CORRECT password is refused
-    # (429 + Retry-After), so guessing cannot continue regardless of the
-    # caller's IP. The password hash above was still verified, keeping the
-    # response time of a locked account in the same band as a normal login.
-    lock_remaining = _lock_remaining_seconds(user, now)
-    if lock_remaining is not None:
-        raise HTTPException(
-            status_code=429,
-            detail={
-                "code": LOGIN_LOCKED_CODE,
-                "message": "Account temporarily locked after repeated failed sign-ins",
-            },
-            headers={"Retry-After": str(lock_remaining)},
-        )
-
-    if not password_ok:
-        # S-002: count the failure; crossing the threshold stamps a
-        # progressive lock. The response body stays exactly the same as for
-        # an unknown address (and as before this change).
-        user.failed_login_count = (user.failed_login_count or 0) + 1
-        if user.failed_login_count >= _LOGIN_LOCKOUT_THRESHOLD:
-            user.locked_until = now.replace(tzinfo=None) + timedelta(
-                seconds=_lockout_seconds(user.failed_login_count)
-            )
-        db.commit()
-        raise HTTPException(
-            status_code=401,
-            detail={"code": "bad_credentials", "message": "Incorrect email or password"},
-        )
-
-    # A successful sign-in clears the account's failure state.
-    if (user.failed_login_count or 0) > 0 or user.locked_until is not None:
-        user.failed_login_count = 0
-        user.locked_until = None
-        db.commit()
-
-    if not user.email_verified:
-        raise HTTPException(
-            status_code=403,
-            detail={"code": "email_unverified", "message": "Email verification required"},
-        )
-
-    # SEC-02: transparently upgrade the stored hash on a successful login.
-    # This runs BEFORE the MFA branch: the old order returned the step-up
-    # token first, so a legacy pbkdf2_sha256 hash was never upgraded for any
-    # MFA-enabled account, however many times it logged in (F-071).
-    if needs_rehash(user.password_hash):
-        user.password_hash = hash_password(payload.password)
-        db.commit()
-
-    # AUTH-001: MFA-enabled accounts get a purpose-bound step-up token
-    # (token_type "mfa", 5 minutes). It is rejected by every normal route;
-    # only POST /auth/mfa/challenge accepts it. HTTP 202 signals "accepted,
-    # second factor required". Accounts without MFA see zero change.
-    if user.totp_secret:
-        response.status_code = 202
-        mfa_token = create_access_token(
-            user, settings=app_ctx.settings, minutes=5, extra_claims={"mfa": True}
-        )
-        return TokenResponse(access_token=mfa_token, token_type="mfa")  # noqa: S106 - a token type string, not a credential
-    token = create_access_token(user, settings=app_ctx.settings)
-    return TokenResponse(access_token=token, must_change_password=user.must_change_password)
+# C-03: login, refresh rotation and logout moved verbatim to
+# routers/auth_sessions.py; included exactly where their definitions used to
+# sit so the registration order (and the OpenAPI document) is byte-identical.
+router.include_router(auth_sessions_router)
 
 
 def _hash_reset_token(token: str) -> str:
@@ -395,12 +302,28 @@ def _burn_mfa_token(app_ctx: AppContext, jti: str, claims: dict) -> None:
 
 
 def _reject_common_password(password: str) -> None:
-    """Refuse a well-known guess with the one coded 400 (F-072).
+    """Refuse a well-known or breached guess with the one coded 400 (F-072/AUD-B-06).
 
     Applied at registration, at reset and at change-password. A blocklist on
     registration alone is bypassed the moment a user resets to "12345678",
     which is exactly what a forced-reset flow pushes people toward.
+
+    A breached value gets its own message ("appears in known data breaches")
+    because it tells the user what to fix; the machine code stays
+    ``password_too_common`` -- one code for "this candidate is refused", so no
+    client switch or error-catalog entry changes (NIST SP 800-63B §3.1.1.2
+    calls for both the check and useful feedback).
     """
+    if is_breached_password(password):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "password_too_common",
+                "message": (
+                    "That password appears in known data breaches. Choose a different one."
+                ),
+            },
+        )
     if is_common_password(password):
         raise HTTPException(
             status_code=400,
@@ -411,8 +334,10 @@ def _reject_common_password(password: str) -> None:
         )
 
 
-@router.post("/auth/forgot", status_code=202)
-def forgot_password(app_ctx: Ctx, payload: ForgotPasswordRequest, db: DbSession) -> dict:
+@router.post("/auth/forgot", status_code=202, response_model=StatusAcceptedOut)
+def forgot_password(
+    app_ctx: Ctx, payload: ForgotPasswordRequest, db: DbSession
+) -> StatusAcceptedOut:
     """Start a password reset.
 
     Always returns 202 with a generic body so attackers cannot enumerate
@@ -422,7 +347,7 @@ def forgot_password(app_ctx: Ctx, payload: ForgotPasswordRequest, db: DbSession)
     email = payload.email.strip().lower()
     user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if user is None:
-        return {"status": "accepted"}
+        return StatusAcceptedOut(status="accepted")
 
     now = datetime.now(UTC).replace(tzinfo=None)
     pending = (
@@ -465,11 +390,13 @@ def forgot_password(app_ctx: Ctx, payload: ForgotPasswordRequest, db: DbSession)
             # Non-production convenience: the only place the raw token is
             # ever logged; never emitted when ENV=production.
             json_log_secret(logger, logging.INFO, "password_reset_token_console", token=token)
-    return {"status": "accepted"}
+    return StatusAcceptedOut(status="accepted")
 
 
-@router.post("/auth/reset", response_model=TokenResponse)
-def reset_password(app_ctx: Ctx, payload: ResetPasswordRequest, db: DbSession) -> TokenResponse:
+@router.post("/auth/reset", response_model=SessionTokenResponse, responses=message(400))
+def reset_password(
+    app_ctx: Ctx, payload: ResetPasswordRequest, db: DbSession
+) -> SessionTokenResponse:
     now = datetime.now(UTC).replace(tzinfo=None)
     # Compare-and-set so a reset token cannot be redeemed twice under
     # concurrency: both a second password write and a token-epoch rotation
@@ -496,17 +423,17 @@ def reset_password(app_ctx: Ctx, payload: ResetPasswordRequest, db: DbSession) -
     # (PyJWT rejects future iat, so the boundary is second-precision).
     user.sessions_invalidated_at = datetime.now(UTC).replace(tzinfo=None)
     db.commit()
-    return TokenResponse(access_token=create_access_token(user, settings=app_ctx.settings))
+    return _issue_session(app_ctx, user)
 
 
 @router.post(
     "/auth/change-password",
-    response_model=TokenResponse,
+    response_model=SessionTokenResponse,
     responses={**AUTH_GUARD_RESPONSES, **message(400), **coded(409)},
 )
 def change_password(
     app_ctx: Ctx, payload: ChangePasswordRequest, db: DbSession, user: CurrentUser
-) -> TokenResponse:
+) -> SessionTokenResponse:
     if not verify_password(payload.current_password, user.password_hash):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     if payload.current_password == payload.new_password:
@@ -536,7 +463,7 @@ def change_password(
     ).scalars():
         reset.used_at = now
     db.commit()
-    return TokenResponse(access_token=create_access_token(user, settings=app_ctx.settings))
+    return _issue_session(app_ctx, user)
 
 
 # --- AUTH-001: TOTP multi-factor authentication -------------------------------
@@ -550,8 +477,14 @@ def mfa_enroll(app_ctx: Ctx, user: CurrentUser) -> MfaEnrollOut:
     return MfaEnrollOut(secret=secret, otpauth_uri=otpauth_uri(secret, user.email))
 
 
-@router.post("/auth/mfa/verify", response_model=dict, responses=AUTH_GUARD_RESPONSES)
-def mfa_verify(app_ctx: Ctx, payload: MfaVerifyIn, db: DbSession, user: CurrentUser) -> dict:
+@router.post(
+    "/auth/mfa/verify",
+    response_model=MfaEnabledOut,
+    responses={**AUTH_GUARD_RESPONSES, **message(409)},
+)
+def mfa_verify(
+    app_ctx: Ctx, payload: MfaVerifyIn, db: DbSession, user: CurrentUser
+) -> MfaEnabledOut:
     if user.totp_secret:
         raise HTTPException(status_code=409, detail="MFA is already enabled")
     if not verify_code(payload.secret, payload.code):
@@ -561,26 +494,28 @@ def mfa_verify(app_ctx: Ctx, payload: MfaVerifyIn, db: DbSession, user: CurrentU
         )
     user.totp_secret = payload.secret
     db.commit()
-    return {"enabled": True}
+    return MfaEnabledOut(enabled=True)
 
 
 @router.post(
     "/auth/mfa/disable",
-    response_model=dict,
+    response_model=MfaDisabledOut,
     responses={**AUTH_GUARD_RESPONSES, **message(409)},
 )
-def mfa_disable(app_ctx: Ctx, payload: MfaDisableIn, db: DbSession, user: CurrentUser) -> dict:
+def mfa_disable(
+    app_ctx: Ctx, payload: MfaDisableIn, db: DbSession, user: CurrentUser
+) -> MfaDisabledOut:
     if not user.totp_secret:
         raise HTTPException(status_code=409, detail="MFA is not enabled")
     if not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Current password is incorrect")
     user.totp_secret = None
     db.commit()
-    return {"disabled": True}
+    return MfaDisabledOut(disabled=True)
 
 
-@router.post("/auth/mfa/challenge", response_model=TokenResponse)
-def mfa_challenge(app_ctx: Ctx, payload: MfaChallengeIn, db: DbSession) -> TokenResponse:
+@router.post("/auth/mfa/challenge", response_model=SessionTokenResponse, responses=coded(401))
+def mfa_challenge(app_ctx: Ctx, payload: MfaChallengeIn, db: DbSession) -> SessionTokenResponse:
     try:
         claims = decode_token(payload.mfa_token, settings=app_ctx.settings)
         user_id = int(claims["sub"])
@@ -623,5 +558,4 @@ def mfa_challenge(app_ctx: Ctx, payload: MfaChallengeIn, db: DbSession) -> Token
     # mistyped code does not cost the user their login.
     if isinstance(jti, str):
         _burn_mfa_token(app_ctx, jti, claims)
-    token = create_access_token(user, settings=app_ctx.settings)
-    return TokenResponse(access_token=token, must_change_password=user.must_change_password)
+    return _issue_session(app_ctx, user)

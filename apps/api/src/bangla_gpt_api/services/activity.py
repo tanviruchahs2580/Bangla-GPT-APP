@@ -23,10 +23,6 @@ def dhaka_date(now: datetime) -> str:
     return now.astimezone(DHAKA).date().isoformat()
 
 
-def now_dhaka() -> datetime:
-    return datetime.now(UTC).astimezone(DHAKA)
-
-
 class _ActivityRow(Protocol):
     date: str
 

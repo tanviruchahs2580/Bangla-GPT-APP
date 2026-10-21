@@ -2,15 +2,6 @@ import React, { lazy, Suspense, useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes, Link } from "react-router-dom";
-import * as Sentry from "@sentry/react";
-// Sentry — no-op when DSN absent
-if (import.meta.env.VITE_SENTRY_DSN) {
-  Sentry.init({
-    dsn: import.meta.env.VITE_SENTRY_DSN as string,
-    environment: import.meta.env.MODE,
-    tracesSampleRate: 0.1,
-  });
-}
 import "./styles.css";
 import "@fontsource/noto-sans-bengali/400.css";
 import "@fontsource/noto-sans-bengali/700.css";
@@ -18,8 +9,17 @@ import "@fontsource/hind-siliguri/400.css";
 import "@fontsource/hind-siliguri/600.css";
 import { getToken, setLogoutCleanup } from "./api";
 import { AuthProvider, ROLE_HOME, useAuth } from "./AuthContext";
-import { AppShell } from "./AppShell";
+// AUD-G-15: the signed-in shell (topbar, sidebar, bottombar, notification
+// bell, search) is only ever mounted through RequireAuth, but a static import
+// put it in the entry bundle every anonymous visitor downloads and parses
+// before the prerendered page can paint (Lighthouse: 153 KiB of the entry
+// unused on a public route, 89% of the LCP in render delay). It is a lazy
+// chunk now, loaded inside RequireAuth's own boundary.
+const AppShell = lazy(() =>
+  import("./AppShell").then((module) => ({ default: module.AppShell })),
+);
 import { Skeleton } from "./components/ui";
+import { SkipLink } from "./components/SkipLink";
 import {
   AppErrorBoundary,
   RouteErrorBoundary,
@@ -28,12 +28,23 @@ import { PublicLanguageToggle } from "./components/PublicLanguageToggle";
 import { onLangChange, t } from "./i18n";
 import { initInstallPrompt } from "./lib/installPrompt";
 import { initLowData } from "./lib/lowData";
+// AUD-HI-07 / I-12: Sentry + web-vitals are consent-gated; nothing leaves the
+// device until the user opts in (see lib/telemetry.ts and the MePage toggle).
+import { initTelemetry } from "./lib/telemetry";
+// AUD-G-15: the seven prerendered routes are static imports on purpose. A
+// lazy() route suspends on its first client render, and during hydration that
+// suspension replaced the prerendered document with the pending shell --
+// measured CLS 0.1227 on /welcome, i.e. the exact shift the prerender exists
+// to remove (the fallback's main is short, so the footer drops when the real
+// page commits). Static imports make the first client render the tree that
+// was shipped. Every other route stays lazy.
+import LoginPage from "./pages/LoginPage";
+import WelcomePage from "./pages/WelcomePage";
+import RegisterPage from "./pages/RegisterPage";
+import ForgotResetPage from "./pages/ForgotResetPage";
+import LegalPage from "./pages/LegalPage";
+import StatusPage from "./pages/StatusPage";
 
-const LoginPage = lazy(() => import("./pages/LoginPage"));
-const WelcomePage = lazy(() => import("./pages/WelcomePage"));
-const RegisterPage = lazy(() => import("./pages/RegisterPage"));
-const ForgotResetPage = lazy(() => import("./pages/ForgotResetPage"));
-const LegalPage = lazy(() => import("./pages/LegalPage"));
 const HomePage = lazy(() => import("./pages/student/HomePage"));
 const AITutorPage = lazy(() => import("./pages/student/AITutorPage"));
 const QuizPage = lazy(() => import("./pages/student/QuizPage"));
@@ -65,7 +76,6 @@ const TeacherProfilePage = lazy(
 const ParentDashboard = lazy(() => import("./pages/ParentDashboard"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const SchoolDashboard = lazy(() => import("./pages/SchoolDashboard"));
-const StatusPage = lazy(() => import("./pages/StatusPage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -92,7 +102,12 @@ function RequireAuth({
   if (!getToken()) return <Navigate to="/login" replace />;
   if (loading)
     return (
-      <main className="container" aria-live="polite">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="container"
+        aria-live="polite"
+      >
         <p className="muted">{t("loading")}</p>
         <div className="stack">
           <Skeleton w="60%" />
@@ -112,9 +127,24 @@ function RequireAuth({
   // F-001: the page renders inside its own boundary, so a page-level render
   // error keeps the nav/sidebar alive and clears when the route changes.
   return (
-    <AppShell>
-      <RouteErrorBoundary>{children}</RouteErrorBoundary>
-    </AppShell>
+    // The shell is a lazy chunk (AUD-G-15), so it needs a boundary of its own;
+    // the pending state is the same skeleton the route boundary shows, and both
+    // stay inside the signed-in path where the footer is mounted anyway.
+    <Suspense fallback={<Loading />}>
+      <AppShell>
+        <RouteErrorBoundary>
+          {/* AUD-G-15: the boundary belongs here, per signed-in route, not around
+              the whole route switch. A prerendered public page is captured from a
+              client render, so it carries none of React's `<!--$-->` suspense
+              markers, and hydrating a tree that contains a boundary without them
+              fails outright (React's 418 hydration error) -- the audit's crawl
+              watches exactly that error. Every `lazy()` route in this file is
+              reached through RequireAuth, so no lazy component is left without a
+              boundary. */}
+          <Suspense fallback={<Loading />}>{children}</Suspense>
+        </RouteErrorBoundary>
+      </AppShell>
+    </Suspense>
   );
 }
 
@@ -125,7 +155,12 @@ function RequireAuth({
  */
 function ApiUnreachable({ onRetry }: { onRetry: () => void }) {
   return (
-    <main className="container" aria-live="assertive">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="container"
+      aria-live="assertive"
+    >
       <div className="card stack">
         <h1>{t("apiUnreachableTitle")}</h1>
         <p className="muted">{t("apiUnreachableBody")}</p>
@@ -141,7 +176,12 @@ function ApiUnreachable({ onRetry }: { onRetry: () => void }) {
 
 function Loading() {
   return (
-    <main className="container" aria-live="polite">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="container"
+      aria-live="polite"
+    >
       <p className="muted">{t("loading")}</p>
       <div className="stack">
         <Skeleton w="70%" />
@@ -365,10 +405,19 @@ function App() {
   return (
     <BrowserRouter>
       <LangRoot>
-        <Suspense fallback={<Loading />}>
-          <RoutesSwitch />
-          <Footer />
-        </Suspense>
+        {/* AUD-G-02: first focusable element on every screen, above both the
+            public routes and the authenticated shell. */}
+        <SkipLink />
+        {/* AUD-G-15: no Suspense boundary wraps this switch. Every route the
+            prerender writes (the seven public ones) is a static import and
+            renders synchronously, and a boundary here would put a `<Suspense>`
+            in the hydrating tree of every prerendered page -- which React only
+            accepts with the `<!--$-->` markers its own server renderer emits.
+            The lazy signed-in routes carry their own boundary inside
+            RequireAuth, and the footer stays mounted for both, which is what
+            the CLS fix (footer.footer moving) was about. */}
+        <RoutesSwitch />
+        <Footer />
       </LangRoot>
     </BrowserRouter>
   );
@@ -400,7 +449,10 @@ function Footer() {
 // apply the persisted low-data mode before first paint.
 initLowData();
 initInstallPrompt();
-ReactDOM.createRoot(document.getElementById("root")!).render(
+// Consent-gated: a no-op unless the user opted in (AUD-HI-07).
+initTelemetry();
+const container = document.getElementById("root")!;
+const app = (
   <React.StrictMode>
     {/* Last-resort boundary for errors above the routes (providers, shell);
         per-route recovery lives in RouteErrorBoundary (F-001). */}
@@ -411,8 +463,19 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         </AuthProvider>
       </QueryClientProvider>
     </AppErrorBoundary>
-  </React.StrictMode>,
+  </React.StrictMode>
 );
+// AUD-G-15: `scripts/prerender.mjs` ships the seven public routes with this
+// markup already rendered, so the first paint is the real page and hydration
+// keeps those nodes instead of repainting them. Two cases take the client
+// render: an empty #root (a route that was not prerendered) and a stored
+// token (the shipped markup is always the anonymous page, so it is not the
+// tree this session renders).
+if (container.hasChildNodes() && !getToken()) {
+  ReactDOM.hydrateRoot(container, app);
+} else {
+  ReactDOM.createRoot(container).render(app);
+}
 
 // PWA: register the service worker in production builds only — in dev the
 // cache-first strategy would serve stale Vite modules and break HMR.

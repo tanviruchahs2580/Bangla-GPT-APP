@@ -79,7 +79,10 @@ const bn = {
   attachImage: "ছবি সংযুক্ত করুন",
   removeImage: "ছবি সরান",
   imageTooLarge: "ছবিটি অনেক বড় (১.৫ MB-এর কম রাখুন)",
-  confidenceBadge: "{pct}% নিশ্চিত",
+  // A6-05: the numeric confidence badge was an uncalibrated internal
+  // signal rendered as a claim; the UI no longer shows a percentage.
+  numericUnverified:
+    "এই উত্তরে হিসাবের ফল যাচাই করা যায়নি — নিজে মিলিয়ে দেখো।",
   learningStyleTitle: "শেখার ধরন ও মনে রাখা তথ্য",
   explanationStyle: "ব্যাখ্যার ধরন",
   styleSimple: "সহজ",
@@ -167,12 +170,16 @@ const bn = {
   rename: "নাম পরিবর্তন করুন",
   deleteChat: "চ্যাট মুছুন",
   deleteChatConfirm: "এই চ্যাটটি মুছে ফেলবেন? নিশ্চিত?",
+  deleteChatTitle: "চ্যাট মুছুন",
+  deleteChatConfirmShort: "মুছুন",
   noResults: "কিছু পাওয়া যায়নি",
   activityTitle: "প্রতিদিনের অনুশীলন",
   streakLabel: "{days} দিনের ধারাবাহিকতা",
   activityHint: "প্রতিদিন অন্তত একটি প্রশ্ন বা কুইজ স্ট্রিক ধরে রাখে",
-  activityQuestion: "{n}টি প্রশ্ন",
-  activityQuestions: "{n}টি প্রশ্ন",
+  // Bangla does not inflect the noun for plural; the plural arm keeps the two
+  // dictionaries structurally identical (scripts/check_i18n.py compares them)
+  // and states the rule where a translator will look for it.
+  activityQuestions: "{n, plural, =0 {কোনো প্রশ্ন নেই} other {#টি প্রশ্ন}}",
   activityQuizzes: "{n}টি কুইজ",
   activityMinutes: "{n} মিনিট",
   revisionTab: "রিভিশন",
@@ -191,8 +198,16 @@ const bn = {
   downloadChapter: "ডাউনলোড করুন",
   downloaded: "সংরক্ষিত",
   offlineBadge: "অফলাইন কপি",
+  offlineSaveFailed: "অফলাইন কপি সেভ করা যায়নি — আবার চেষ্টা করুন।",
+  offlineQuotaFull:
+    "ডিভাইসে জায়গা নেই — পুরোনো অফলাইন কপি মুছে আবার চেষ্টা করুন।",
   lowDataTitle: "কম ডেটা মোড",
   lowDataHint: "ছবি বাদ — উত্তর সংক্ষিপ্ত রাখুন",
+  // AUD-HI-07 / I-12: telemetry opt-in. PENDING native-speaker review before
+  // release: an engineer does not certify Bangla copy on their own.
+  telemetryTitle: "সমস্যা ও গতির তথ্য পাঠান",
+  telemetryHint:
+    "শুধু ক্র্যাশ ও গতির মাপ পাঠানো হয় — আপনার প্রশ্ন, নাম বা ক্লাসের তথ্য নয়",
   installApp: "অ্যাপ ইনস্টল করুন",
   classrooms: "শ্রেণিসমূহ",
   newClassroom: "নতুন শ্রেণি",
@@ -200,12 +215,15 @@ const bn = {
   csvImport: "CSV দিয়ে শিক্ষার্থী যোগ করুন",
   csvHint: "name,email হেডারসহ প্রতি সারিতে একজন",
   importBtn: "ইমপোর্ট করুন",
+  importBusyHint:
+    "ইমপোর্ট চলছে — পূর্ণ তালিকায় এক মিনিট পর্যন্ত লাগতে পারে। এই পাতা বন্ধ করবেন না।",
   importCreated: "তৈরি: {n}",
   importFailed: "ব্যর্থ: {n}",
   inviteCode: "ইনভাইট কোড",
   invitePending: "অপেক্ষমাণ",
   refreshBtn: "রিফ্রেশ করুন",
   newChat: "নতুন চ্যাট",
+  loadEarlier: "আগের বার্তাগুলো দেখুন",
   conversations: "চ্যাট",
   askPlaceholder: "পাঠ্যবই থেকে যেকোনো প্রশ্ন লিখুন…",
   thinking: "ভাবছি…",
@@ -264,6 +282,8 @@ const bn = {
   qpFinalize: "চূড়ান্ত করুন",
   qpReplace: "বদলান",
   qpNeedsReview: "অনুমোদন বাকি",
+  teacherAiDisclaimer:
+    "এআই-নির্ধারিত খসড়া — শ্রেণিতে দেওয়ার আগে প্রতিটি প্রশ্ন যাচাই করুন",
   qpFinalized: "চূড়ান্ত হয়েছে",
   qpDraftReady: "খসড়া প্রস্তুত",
   stTitle: "সংক্ষিপ্ত পরীক্ষা",
@@ -371,7 +391,6 @@ const bn = {
   locHighlights: "বিশেষ বৈশিষ্ট্য",
   locFontSize: "লেখার আকার",
   locWorkspace: "কর্মক্ষেত্র",
-  locCloseDialog: "ডায়ালগ বন্ধ করুন",
   locLinkRemoved: "সহায়ক এই লিংকটি সরিয়ে দিয়েছে।",
   locExternalLink: " (বাইরের লিংক)",
   locResetCode: "রিসেট কোড",
@@ -384,6 +403,8 @@ const bn = {
   subject: "বিষয়",
   consentPrefix: "আমি অভিভাবক হিসেবে বা অভিভাবকের সম্মতিতে নিবন্ধন করছি এবং",
   consentSuffix: "পড়ে সম্মত হচ্ছি।",
+  aiDisclosureShort:
+    "উত্তর তৈরি করতে তৃতীয় পক্ষের AI মডেল ব্যবহার করা হয় — বিস্তারিত গোপনীয়তা নীতিতে।",
   consentRequired: "অনুগ্রহ করে অভিভাবকের সম্মতি নিশ্চিত করে নিবন্ধন করুন।",
   privacy: "গোপনীয়তা",
   terms: "শর্তাবলি",
@@ -610,8 +631,23 @@ const bn = {
   loadFailed: "লোড করা যায়নি",
   newChatFailed: "নতুন চ্যাট শুরু করা যায়নি",
   bookmark: "বুকমার্ক",
+  skipToContent: "মূল কনটেন্টে যান",
   stop: "থামুন",
   listen: "শুনুন",
+  ttsUnsupported: "এই ব্রাউজারে পড়ে শোনানোর সুবিধা নেই।",
+  ttsNoBanglaVoice:
+    "বাংলা কণ্ঠস্বর পাওয়া যায়নি — ডিভাইসের ডিফল্ট কণ্ঠে পড়া হচ্ছে।",
+  ttsRate: "পড়ার গতি",
+  ttsPitch: "কণ্ঠের উচ্চতা",
+  copyAnswer: "উত্তর কপি করুন",
+  copied: "কপি হয়েছে",
+  copyFailed: "কপি করা যায়নি",
+  feedbackReasonTitle: "কী সমস্যা হয়েছিল?",
+  feedbackReasonHint: "ঐচ্ছিক — আপনার মন্তব্য শিক্ষক ও দল দেখবে।",
+  feedbackReasonPlaceholder: "যেমন: উত্তরটা পাঠ্যবইয়ের সাথে মিলছে না",
+  feedbackSend: "পাঠান",
+  feedbackSkip: "এড়িয়ে যান",
+  feedbackThanks: "মতামতের জন্য ধন্যবাদ",
   errBadCredentials: "ইমেইল বা পাসওয়ার্ড সঠিক নয়।",
   errEmailTaken: "এই ইমেইল দিয়ে আগেই অ্যাকাউন্ট খোলা আছে।",
   errEmailUnverified: "আগে ইমেইল যাচাই করুন — কোড পাঠানো হয়েছে।",
@@ -724,7 +760,8 @@ const en: Dict = {
   attachImage: "Attach image",
   removeImage: "Remove image",
   imageTooLarge: "Image too large (keep it under 1.5 MB)",
-  confidenceBadge: "{pct}% confident",
+  numericUnverified:
+    "The arithmetic in this answer could not be verified — check it yourself.",
   learningStyleTitle: "Learning style & memory",
   explanationStyle: "Explanation style",
   styleSimple: "Simple",
@@ -808,12 +845,16 @@ const en: Dict = {
   rename: "Rename",
   deleteChat: "Delete chat",
   deleteChatConfirm: "Delete this chat for good? Are you sure?",
+  deleteChatTitle: "Delete chat",
+  teacherAiDisclaimer:
+    "AI-generated draft — review every question before classroom use",
+  deleteChatConfirmShort: "Delete",
   noResults: "Nothing found",
   activityTitle: "Daily practice",
   streakLabel: "{days}-day streak",
   activityHint: "One question or quiz a day keeps the streak alive",
-  activityQuestion: "{n} question",
-  activityQuestions: "{n} questions",
+  activityQuestions:
+    "{n, plural, =0 {No questions} one {# question} other {# questions}}",
   activityQuizzes: "{n} quizzes",
   activityMinutes: "{n} minutes",
   revisionTab: "Revision",
@@ -833,8 +874,15 @@ const en: Dict = {
   downloadChapter: "Download chapter",
   downloaded: "Saved",
   offlineBadge: "Offline copy",
+  offlineSaveFailed: "Couldn't save the offline copy — please try again.",
+  offlineQuotaFull:
+    "The device is out of storage — free space or remove an old offline copy, then try again.",
   lowDataTitle: "Low-data mode",
   lowDataHint: "Skip images; keep answers short",
+  // AUD-HI-07 / I-12: telemetry consent, default off (see lib/telemetry.ts).
+  telemetryTitle: "Share crash and speed reports",
+  telemetryHint:
+    "Only crashes and speed measurements — never your messages, name or class data",
   installApp: "Install app",
   classrooms: "Classes",
   newClassroom: "New class",
@@ -842,12 +890,15 @@ const en: Dict = {
   csvImport: "Add students from CSV",
   csvHint: "One student per line with a name,email header",
   importBtn: "Import",
+  importBusyHint:
+    "Importing — a full roster can take up to a minute. Please keep this page open.",
   importCreated: "Created: {n}",
   importFailed: "Failed: {n}",
   inviteCode: "Invite code",
   invitePending: "Pending",
   refreshBtn: "Refresh",
   newChat: "New chat",
+  loadEarlier: "Load earlier messages",
   conversations: "Chats",
   askPlaceholder: "Ask anything from your textbook…",
   thinking: "Thinking…",
@@ -1013,7 +1064,6 @@ const en: Dict = {
   locHighlights: "highlights",
   locFontSize: "font size",
   locWorkspace: "workspace",
-  locCloseDialog: "Close dialog",
   locLinkRemoved: "This link was removed by the assistant.",
   locExternalLink: " (external link)",
   locResetCode: "Reset code",
@@ -1027,6 +1077,8 @@ const en: Dict = {
   consentPrefix:
     "I am the guardian or register with guardian consent, and I agree to the",
   consentSuffix: ".",
+  aiDisclosureShort:
+    "Answers are generated with the help of a third-party AI model — see the Privacy Policy.",
   consentRequired: "Please confirm guardian consent to register.",
   privacy: "Privacy",
   terms: "Terms",
@@ -1246,8 +1298,24 @@ const en: Dict = {
   loadFailed: "Couldn't load",
   newChatFailed: "Couldn't start a new chat",
   bookmark: "Bookmark",
+  skipToContent: "Skip to main content",
   stop: "Stop",
   listen: "Listen",
+  ttsUnsupported: "Reading aloud isn't available in this browser.",
+  ttsNoBanglaVoice:
+    "No Bangla voice is installed — reading with the device default voice.",
+  ttsRate: "Speech rate",
+  ttsPitch: "Speech pitch",
+  copyAnswer: "Copy answer",
+  copied: "Copied",
+  copyFailed: "Couldn't copy",
+  feedbackReasonTitle: "What went wrong?",
+  feedbackReasonHint: "Optional — your note is shown to teachers and the team.",
+  feedbackReasonPlaceholder:
+    "For example: the answer doesn't match the textbook",
+  feedbackSend: "Send",
+  feedbackSkip: "Skip",
+  feedbackThanks: "Thanks for the feedback",
   errBadCredentials: "Email or password is incorrect.",
   errEmailTaken: "An account with this email already exists.",
   errEmailUnverified: "Verify your email first — a code has been sent.",
@@ -1315,19 +1383,133 @@ export function tSubject(value: string | null | undefined): string {
   return v;
 }
 
-/** Translate a key; `{var}` placeholders are replaced positionally by named props. */
+/* ------------------------------------------------------------------ *
+ * Message formatting (G-20)
+ *
+ * Two gaps this closes:
+ *
+ *  1. `t()` was a plain `{var}` replaceAll, so a count had to be handled by
+ *     picking between two hand-written keys at the call site
+ *     (`d.questions === 1 ? "activityQuestion" : "activityQuestions"`). That
+ *     gets Bangla wrong for any language whose plural rules are not
+ *     "1 vs rest" the moment a third form is needed, and it puts grammar in
+ *     the component. Messages may now carry an ICU plural arm —
+ *     `{n, plural, =0 {…} one {# …} other {# …}}` — evaluated with
+ *     `Intl.PluralRules` for the active locale, with `#` replaced by the
+ *     count formatted in that locale's digits.
+ *  2. A missing key was silent: `t()` returned the key string and the screen
+ *     showed `streakLabel` to a child. Missing keys are now recorded (and
+ *     warned about once per key in a dev build) so a test — see
+ *     `src/test/i18nMessages.test.ts` — and an error reporter can see them.
+ *
+ * The supported ICU subset is deliberately small: `{name}` and
+ * `{name, plural, …}` with `=N`/`zero`/`one`/`two`/`few`/`many`/`other`
+ * arms. Nested braces inside an arm are not supported; `select` and
+ * `selectordinal` are not implemented. Anything not matching the plural
+ * shape is left untouched, so a literal `{` in copy still renders.
+ * ------------------------------------------------------------------ */
+
+const PLURAL_MESSAGE =
+  /\{(\w+),\s*plural,\s*((?:(?:=\d+|zero|one|two|few|many|other)\s*\{[^{}]*\}\s*)+)\}/;
+const PLURAL_ARM = /(=\d+|zero|one|two|few|many|other)\s*\{([^{}]*)\}/g;
+
+/** Keys asked for that are absent from the active dictionary. */
+const missingKeys = new Set<string>();
+
+/** The keys `t()` could not resolve since the last clear (G-20). */
+export function missingTranslationKeys(): string[] {
+  return [...missingKeys];
+}
+
+export function clearMissingTranslationKeys(): void {
+  missingKeys.clear();
+}
+
+function noteMissingKey(key: string): void {
+  if (missingKeys.has(key)) return;
+  missingKeys.add(key);
+  // A dev-build console line is the fastest feedback loop for a typo'd key;
+  // the recorded set is what CI/reporters read in any build.
+  if (import.meta.env.DEV) {
+    console.warn(`[i18n] missing ${current} string for key "${key}"`);
+  }
+}
+
+/** `bn` -> `bn-BD`, the locale `Intl` formats counts with. */
+function localeTag(lang: Lang): string {
+  return lang === "bn" ? "bn-BD" : "en-US";
+}
+
+/** The count as the reader's script writes it (`6` vs `৬`). */
+function formatCount(value: number, lang: Lang): string {
+  try {
+    return new Intl.NumberFormat(localeTag(lang)).format(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function pluralCategory(value: number, lang: Lang): Intl.LDMLPluralRule {
+  try {
+    return new Intl.PluralRules(localeTag(lang)).select(value);
+  } catch {
+    return value === 1 ? "one" : "other";
+  }
+}
+
+/**
+ * Fill `{name}` placeholders and evaluate a plural arm, if present.
+ * Exported so a message held outside the dictionary (a server-supplied
+ * template) goes through the same rules.
+ */
+export function formatMessage(
+  message: string,
+  vars?: Record<string, string | number>,
+  lang: Lang = current,
+): string {
+  let out = message;
+  if (!vars) return out;
+
+  const plural = out.match(PLURAL_MESSAGE);
+  if (plural && typeof vars[plural[1]] === "number") {
+    const name = plural[1];
+    const count = vars[name] as number;
+    const arms = new Map<string, string>();
+    for (const arm of plural[2].matchAll(PLURAL_ARM)) {
+      arms.set(arm[1], arm[2]);
+    }
+    const exact = arms.get(`=${count}`);
+    const branch =
+      exact ??
+      arms.get(pluralCategory(count, lang)) ??
+      // `other` is mandatory in ICU; a message without it is malformed, and
+      // leaving the source text visible is better than rendering "".
+      arms.get("other");
+    if (branch !== undefined) {
+      out = out.replace(
+        plural[0],
+        branch.replaceAll("#", formatCount(count, lang)),
+      );
+    }
+  }
+
+  for (const [k, v] of Object.entries(vars)) {
+    out = out.replaceAll(`{${k}}`, String(v));
+  }
+  return out;
+}
+
+/** Translate a key; `{var}` placeholders and ICU plural arms are filled from `vars`. */
 export function t(
   key: keyof Dict,
   vars?: Record<string, string | number>,
 ): string {
-  let out = DICTS[current][key];
+  const out = DICTS[current][key];
   // Unknown keys must never crash callers that pass vars (the dict lookup is
   // open to server-supplied codes); echoing the key keeps `t(...) || fallback` usable.
-  if (typeof out !== "string") return String(key);
-  if (vars) {
-    for (const [k, v] of Object.entries(vars)) {
-      out = out.replaceAll(`{${k}}`, String(v));
-    }
+  if (typeof out !== "string") {
+    noteMissingKey(String(key));
+    return String(key);
   }
-  return out;
+  return formatMessage(out, vars, current);
 }

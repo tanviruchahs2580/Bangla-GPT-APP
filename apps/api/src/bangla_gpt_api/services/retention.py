@@ -12,12 +12,13 @@ MANY rows expired, never what they contained.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from bangla_gpt_api.db.clock import utcnow
 from bangla_gpt_api.db.models import (
     AnalyticsEventRow,
     ChatMessage,
@@ -91,7 +92,8 @@ def run_retention_sweep(
     call against production for compliance evidence.
     """
     if now is None:
-        now = datetime.now(UTC).replace(tzinfo=None)
+        # H-14: the injectable clock seam, not a direct datetime.now.
+        now = utcnow()
     analytics_days = getattr(settings, "analytics_retention_days", None)
     report = retention_report(
         db,

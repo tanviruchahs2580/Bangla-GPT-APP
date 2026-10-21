@@ -117,6 +117,11 @@ def test_encoding_safety_and_redaction_compose() -> None:
     logger = logging.getLogger("test.compose")
     logger.handlers.clear()
     logger.propagate = False
+    # Pin this logger's own level: without it the effective level comes from
+    # the root logger, which is WARNING until some other test calls
+    # configure_logging("INFO") -- so this test passed only when it happened to
+    # run after one (E-17: an order-dependent test is a defect, not a flake).
+    logger.setLevel(logging.INFO)
     logger.addHandler(handler)
     try:
         # json_log redacts the MAPPING before serialising, which is the only

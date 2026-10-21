@@ -42,6 +42,12 @@ dependencies = [
     "alembic>=1.13",
     "prometheus-client>=0.21",
     "pypdf>=5.0",
+    # AUD-A2-17: chat-image sanitizing (EXIF/PNG metadata strip + re-encode,
+    # blur/blank quality gate) imports PIL lazily in
+    # providers/image_safety.py. Declared because deptry checks the import
+    # against this manifest; the gate degrades to an honest
+    # "image_unreadable" refusal if the import ever fails at runtime.
+    "pillow>=11.0",
     "bijoy2unicode>=0.1.1",
     # The ceiling is arq's, not ours: arq (0.28.0, the newest release) requires
     # `redis[hiredis]<6`, so no redis 6/7/8 can be installed beside it. Spelling
@@ -55,6 +61,17 @@ dependencies = [
     "httpx>=0.27",
     "psycopg[binary]>=3.2",
     "sentry-sdk>=2.0",
+    # I-03 (AUD-HI-04): OpenTelemetry. API/SDK/exporter share the 1.x release
+    # train; the instrumentation packages are published as 0.x betas that must
+    # match the API minor (0.66b1 <-> 1.45). The SQLAlchemy instrumentor is
+    # declared for the day it accepts SQLAlchemy 2.1 (today it declines at
+    # 2.1.4 and tracing falls back to engine events, see below) -- keeping it
+    # in the manifest means the upgrade is a version bump, not a code change.
+    "opentelemetry-api>=1.45,<2",
+    "opentelemetry-sdk>=1.45,<2",
+    "opentelemetry-instrumentation-fastapi>=0.66b1,<0.67",
+    "opentelemetry-instrumentation-sqlalchemy>=0.66b1,<0.67",
+    "opentelemetry-exporter-otlp>=1.45,<2",
     "fpdf2>=2.8.3",
     # fpdf2 declares uharfbuzz only as a *test* extra, but it is a RUNTIME
     # requirement for this project: services/qp_pdf.py calls
@@ -78,10 +95,37 @@ dev = [
   "ruff>=0.6",
   "mypy>=1.11",
   "pip-audit>=2.7",
+  # The quality ratchet imports radon directly (scripts/check_quality_ratchet.py),
+  # and the dependency-hygiene gate correctly flagged the undeclared import in
+  # CI. vulture and deptry are only ever shelled out to, so declaring them here
+  # would trip the same gate from the other side; the CI step installs them.
+  "radon>=6.0.1",
+  # scripts/check_lockfile.py compares declared specifiers against the pinned
+  # lock with packaging's Requirement/SpecifierSet; deptry flags the undeclared
+  # import wherever the project's own environment is not installed (CI).
+  "packaging>=24",
+  # E-11: property-based tests for the Bangla normalizer, the BM25 tokenizer,
+  # the chunker and the citation parser (apps/api/tests/test_e2_property_based.py).
+  # Test-only: never imported by `src`, so it stays out of the runtime image.
+  "hypothesis>=6.168.4,<7",
+  # E-04: bounded mutation sampling of critical modules (nightly job in
+  # .github/workflows/nightly.yml; see .audit/handoffs/workflows-e2.md).
+  # Linux/macOS only -- mutmut refuses native Windows (use WSL or the
+  # container), which is why this is a dev extra and never a runtime dep.
+  "mutmut>=3.8.0,<4",
 ]
 
+# D-12: a console entry point so the API has one named launch command
+# (`bgpt-api`) alongside `python -m bangla_gpt_api`; both thin-wrap the
+# documented `uvicorn bangla_gpt_api.main:app` invocation.
+[project.scripts]
+bgpt-api = "bangla_gpt_api.__main__:main"
+
 [build-system]
-requires = ["setuptools>=68"]
+# D-12: the backend is pinned to a bounded range (>=68 for pyproject.toml
+# [tool.setuptools] support; <81 so a future major cannot silently change
+# editable-install semantics under us).
+requires = ["setuptools>=68,<81"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
@@ -92,6 +136,16 @@ where = ["src"]
 # the S5 knowledge graph, and the Bengali TTF embedded in generated PDFs. The
 # font's SIL OFL licence travels with it (OFL-1.1 requires the licence to
 # accompany every copy).
+#
+# A5-02 prompt registry: apps/api/prompts/ is loaded at runtime too, but it
+# sits OUTSIDE this import package (apps/api/src/bangla_gpt_api), and
+# package-data globs are relative to the package directory, so no pattern
+# here can carry it. The Docker image copies the directory and sets
+# BANGLA_GPT_PROMPTS_DIR (see Dockerfile), the env override the loader
+# documents (services/tutor.prompts_dir); MANIFEST.in keeps source
+# distributions whole. A wheel-only, non-Docker deployment would have to
+# either move the prompts under src/bangla_gpt_api/prompts/ or set the same
+# env var to a directory shipped beside the wheel.
 bangla_gpt_api = [
     "data/sample_nctb/*.md",
     "data/kg/*.json",
@@ -189,11 +243,18 @@ ignore = [
 #   tests/*           `assert` IS the mechanism in a test, and fixture
 #                     credentials, literal SQL, subprocess calls, prints in
 #                     diagnostics and unused unpacked fixtures are how tests
-#                     are written
+#                     are written; ASYNC240: the Alembic evaluation test
+#                     declares `async def` for the shared client fixture, then
+#                     reads its sample file synchronously; the call is on a
+#                     tmp_path, not an event-loop blocking risk.
 [tool.ruff.lint.per-file-ignores]
 "src/bangla_gpt_api/evaluation/cli.py" = ["T201"]
 "scripts/*" = ["T201", "S101", "S603", "S311", "S607", "S404"]
 "tests/test_phase1_exploits.py" = ["B011"]
+# Vulture's de-facto whitelist format: bare names mark symbols as used, so
+# this file is undefined names and useless expressions by construction. It is
+# the input to the dead-code gate (check_quality_ratchet.py), not app code.
+"quality-baselines/vulture_whitelist.py" = ["B018", "F821"]
 "tests/*" = [
     "S101",    # assert used
     "S105",    # hardcoded password (fixture strings)
@@ -208,12 +269,66 @@ ignore = [
     "SIM117",  # nested with statements in fixtures
 ]
 
+# ---------------------------------------------------------------------------
+# E-04 / TST-05: mutation testing. Bounded on purpose -- mutmut is a sampler
+# here, not a full-suite gate: one critical module per nightly run, with the
+# score reported so a regression is visible without spending an hour.
+#
+# Run (Linux; `python -m mutmut`):
+#   python -m mutmut run --max-children 4
+#   python -m mutmut results
+#   python -m mutmut export-cicd-stats
+#
+# To move the sampled module, change `source_paths` and
+# `pytest_add_cli_args_test_selection` together.
+# ---------------------------------------------------------------------------
+[tool.mutmut]
+# E-04 names three areas -- authorization, grounding and abstention, quiz
+# scoring -- so the sample mutates one module per area: the single-use claim
+# primitive (the race the authorization layer rests on), the quiz scorer, and
+# the tutor's grounding/abstention gate. One module per area keeps a weekly run
+# bounded; the per-area scores are in .audit/evidence/R5-e04-mutation-score.md.
+source_paths = [
+  "src/bangla_gpt_api/auth/single_use.py",
+  "src/bangla_gpt_api/services/quiz.py",
+  "src/bangla_gpt_api/services/tutor/retrieval.py",
+]
+pytest_add_cli_args_test_selection = [
+  "tests/test_single_use_tokens.py",
+  "tests/test_quiz_progress.py",
+  "tests/test_r5_citation_selection.py",
+  "tests/test_corpus_qa_gate.py",
+]
+# E-04: the mutants tree must be importable IN FULL. `source_paths` copies only
+# the mutated file, so without `src/` the copy holds a partial
+# `mutants/src/bangla_gpt_api` package that shadows the complete one for the
+# copied conftest: pytest then dies with
+# `ModuleNotFoundError: No module named 'bangla_gpt_api.config'` before a single
+# mutant runs (measured in the container recipe, 2026-10-21). `prompts/` is the
+# same requirement one layer up: the registry loads prompts/manifest.json at
+# import time, so a copy without it fails every test that touches the app with
+# `RuntimeError: prompt registry missing` (measured 2026-10-21, quiz area).
+# `eval/` is the third: the eval-shape tests read the golden set (and its
+# siblings) by path, and a copy without them fails collection (measured
+# 2026-10-21, grounding area: FileNotFoundError: mutants/eval/golden_v2.json --
+# a single-file entry in also_copy is not enough, mutmut 3 copies a file
+# list but the tests resolve sibling artifacts too).
+also_copy = ["tests/", "prompts/", "eval/", "pyproject.toml", "src/"]
+use_git_change_detection = false
+mutate_only_covered_lines = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 markers = [
     "skipif: conditional skip (pytest.mark.skipif)",
-    "integration: slow integration tests requiring external services",
+    # E-02 layer split (R4-wsC): default = unit (in-process, in-memory DB, no
+    # external service). integration marks the genuinely slow tier --
+    # subprocess/multi-process/migration/Postgres/eval-CLI tests -- so
+    # `pytest -m integration` times one layer and `-m "not integration"` times
+    # the other. An unannotated test is unit by construction.
+    "unit: fast in-process test (no external service, no subprocess); the default for unannotated tests",
+    "integration: slow tier: subprocesses, migrations, real Postgres, docker or the eval CLI",
 ]
 
 [tool.coverage.run]
@@ -253,11 +368,56 @@ exclude_lines = [
 #            Dockerfile CMD / SQLAlchemy driver URL / fpdf2 runtime shaping,
 #            never via an `import` deptry can see), and the dev tools
 #            (pytest*, ruff, mypy, pip-audit) that are executed, not imported.
-#   DEP001 - `_changelog_common`, a sibling module of the scripts in
-#            apps/api/scripts/ imported through a sys.path insert (its own
-#            module, not a distribution). Add it to known_first_party if
-#            deptry is ever wired into CI.
-known_first_party = ["bangla_gpt_api"]
+#   DEP003/DEP001 - pypdfium2, the independent SECOND reader of the A2-02
+#            extraction audit (scripts/extraction_audit.py imports it lazily,
+#            inside the read functions). deptry names it DEP003 in a developer
+#            venv (installed transitively) and DEP001 in CI's guardrails job
+#            (project not installed), and both forms are recorded in the deps
+#            baseline for that reason. Deliberately not a declared dependency: it ships
+#            native pdfium binaries per platform and only this audit script
+#            needs it, so every dev/CI install would carry ~10 MB per platform
+#            for a tool that runs on demand. The script fails with an
+#            actionable install message when it is absent, and the A2-02
+#            evidence records which reader produced it. Declaring it would
+#            also require regenerating the hash-pinned constraints.txt, a
+#            whole-lock rewrite for one audit tool.
+#   DEP001 - sibling modules of the scripts in apps/api/scripts/ imported
+#            through a sys.path insert (their own modules, not distributions):
+#            `_changelog_common` and `seed_demo` (imported by
+#            scripts/backup_restore_drill.py). Listed as first party rather
+#            than silenced per finding.
+# A9-01/A4-02: the live runners import each other's sibling helpers through
+# the same scripts/ sys.path entry (`_live_common`, `ttft_profile`), so they
+# belong in this list beside `_changelog_common`.
+known_first_party = [
+    "bangla_gpt_api",
+    "_changelog_common",
+    "_live_common",
+    "seed_demo",
+    "ttft_profile",
+]
+
+# Import-name to distribution-name mappings deptry cannot infer without the
+# project's environment installed. Locally the venv resolves them; in CI's
+# guardrails job (which installs only the ratchet tools) the same imports were
+# reported as DEP001 and their distributions as DEP002, so the mapping is
+# spelled out here and the deps gate behaves identically in both places.
+[tool.deptry.package_module_name_map]
+"pyjwt" = "jwt"
+"argon2-cffi" = "argon2"
+"fpdf2" = "fpdf"
+# A2-17/I-03: Pillow's module is PIL; the OpenTelemetry distributions all
+# contribute to the shared `opentelemetry` namespace, and deptry matches
+# top-level module names only -- without these entries the guardrails env
+# (project not installed) reported every one of them DEP001/DEP002 while the
+# developer venv reported none, so the gate must be told the same mapping in
+# both places.
+"pillow" = "PIL"
+"opentelemetry-api" = "opentelemetry"
+"opentelemetry-sdk" = "opentelemetry"
+"opentelemetry-instrumentation-fastapi" = "opentelemetry"
+"opentelemetry-instrumentation-sqlalchemy" = "opentelemetry"
+"opentelemetry-exporter-otlp" = "opentelemetry"
 
 [tool.mypy]
 python_version = "3.11"
@@ -280,16 +440,101 @@ warn_unreachable = true         # dead code after a terminating branch
 no_implicit_reexport = true     # `import x` must say `from x import y as y`
 strict_bytes = true
 
-# Still off, deliberately, with the measured cost on 2026-10-10:
-#   disallow_any_generics    161 - bare `dict`/`list` annotations that need a
-#                                   per-site decision about key/value types
-#   disallow_untyped_defs     24 - untyped public functions
-#   disallow_untyped_decorators, disallow_any_decorated, no_partialtypes,
-#   disallow_subclassing_any, extra_checks - no measurable benefit today
-# Removing any of the above from this list is a deliberate act: see the plan.
+# Still off globally, deliberately. The stale 2026-10-10 counts that used to
+# live here (disallow_any_generics 161, disallow_untyped_defs 24) drift as
+# modules are ratcheted, so the current measurement and the remaining-gap
+# state live in docs/type-checking-plan.md instead of being restated here. Modules
+# that already pass --strict are listed in the override block at the end of
+# this file; removing any flag from that block is a deliberate act, and the
+# plan records the mechanism and the measured numbers.
 
 # bijoy2unicode ships no stubs/py.typed (import-untyped at the lazy import in
 # nctb/bijoy.py); silence that code at the single import site.
 [[tool.mypy.overrides]]
 module = "bangla_gpt_api.nctb.bijoy"
 disable_error_code = "import-untyped"
+
+# ---- AUD-CD-10 ratchet: enforce --strict for modules that already pass it ----
+# `strict = true` inside [[tool.mypy.overrides]] applies GLOBALLY in mypy 2.4.0
+# (set_strict_flags mutates the global Options), so the per-module flags it
+# expands to are listed explicitly for these modules instead.
+# warn_redundant_casts and no_implicit_reexport are global-only options, already
+# on in [tool.mypy] above, so this set is equivalent to --strict here.
+[[tool.mypy.overrides]]
+module = [
+    "bangla_gpt_api",
+    "bangla_gpt_api.auth",
+    "bangla_gpt_api.caching",
+    "bangla_gpt_api.config",
+    "bangla_gpt_api.data",
+    "bangla_gpt_api.db",
+    "bangla_gpt_api.evaluation",
+    "bangla_gpt_api.ingestion",
+    "bangla_gpt_api.initialize",
+    "bangla_gpt_api.jobs",
+    "bangla_gpt_api.main",
+    "bangla_gpt_api.metrics",
+    "bangla_gpt_api.nctb",
+    "bangla_gpt_api.providers",
+    "bangla_gpt_api.retrieval",
+    "bangla_gpt_api.routers",
+    "bangla_gpt_api.services",
+    "bangla_gpt_api.auth.mfa",
+    "bangla_gpt_api.curriculum.*",
+    "bangla_gpt_api.curriculum",
+    "bangla_gpt_api.db.base",
+    "bangla_gpt_api.db.clock",
+    "bangla_gpt_api.evaluation.cost_model",
+    "bangla_gpt_api.evaluation.retrieval_strata",
+    "bangla_gpt_api.evaluation.thresholds",
+    "bangla_gpt_api.ingestion.*",
+    "bangla_gpt_api.initialize.dependencies",
+    "bangla_gpt_api.initialize.middleware_stack",
+    "bangla_gpt_api.initialize.observability",
+    "bangla_gpt_api.initialize.schedulers",
+    "bangla_gpt_api.nctb.manifest",
+    "bangla_gpt_api.nctb.normalize",
+    "bangla_gpt_api.nctb.sources",
+    "bangla_gpt_api.providers.image_safety",
+    "bangla_gpt_api.retrieval.*",
+    "bangla_gpt_api.routers._error_contract",
+    "bangla_gpt_api.routers.assessment",
+    "bangla_gpt_api.routers.learn",
+    "bangla_gpt_api.routers.school",
+    "bangla_gpt_api.routers.system",
+    "bangla_gpt_api.routers.teacher",
+    "bangla_gpt_api.routers.workspace",
+    "bangla_gpt_api.routers.school.*",
+    "bangla_gpt_api.services.activity",
+    "bangla_gpt_api.services.answer_structure",
+    "bangla_gpt_api.services.atrisk",
+    "bangla_gpt_api.services.breached_passwords",
+    "bangla_gpt_api.services.context",
+    "bangla_gpt_api.services.coverage",
+    "bangla_gpt_api.services.generators",
+    "bangla_gpt_api.services.mailer",
+    "bangla_gpt_api.services.numeric_check",
+    "bangla_gpt_api.services.parent_digest",
+    "bangla_gpt_api.services.pii",
+    "bangla_gpt_api.services.question_bank",
+    "bangla_gpt_api.services.quiz_explain",
+    "bangla_gpt_api.services.retention",
+    "bangla_gpt_api.services.router",
+    "bangla_gpt_api.services.safety",
+    "bangla_gpt_api.services.teach_strategy",
+    "bangla_gpt_api.services.trace_meta",
+    "bangla_gpt_api.services.verification",
+    "bangla_gpt_api.services.weakness",
+    "bangla_gpt_api.services.generators.question_paper",
+]
+disallow_any_generics = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+warn_unused_ignores = true
+warn_return_any = true
+strict_equality = true
+extra_checks = true

@@ -23,14 +23,17 @@ stay per class/subject/chapter.
 from __future__ import annotations
 
 import json
+import time
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import CursorResult, delete, func, select, update
+from sqlalchemy.exc import IntegrityError
 
 from bangla_gpt_api.db.models import Concept, ConceptMastery, ConceptPrerequisite
+from bangla_gpt_api.services.prompt_registry import load_prompt
 
 if TYPE_CHECKING:  # pragma: no cover
     from collections.abc import Iterable, Mapping, Sequence
@@ -222,13 +225,20 @@ def resolve_gaps(
 
 
 # --- LLM extraction (corpus-verified) ----------------------------------------
+#
+# A1-04 finding fixed here: this call site used to send the raw corpus text
+# with an INLINE instruction and no system prompt, no delimiter policy, no
+# trace and no prompt-version record. It is admin-triggered
+# (``POST /admin/kg/rebuild?llm=true``) but it is still an LLM call: the
+# instruction now lives in the prompt registry, the corpus text is wrapped as
+# delimited data (it is untrusted too -- a poisoned textbook must not steer
+# the extractor), and every call emits a generation trace. Token accounting
+# for this route stays with its owner (routers/learn.py) -- see the handoff.
 
-EXTRACTION_PROMPT = (
-    "You are a curriculum analyst. From the Bangla chapter text below, list "
-    "3-6 key CONCEPT names (short word or phrase, exactly as spelled in the "
-    "text). Respond with a JSON array of strings only, no commentary.\n\n"
-    "Chapter: {chapter}\nText: {text}"
-)
+_EXTRACTION_SPEC = load_prompt("knowledge_extract_system")
+EXTRACTION_SYSTEM_PROMPT = _EXTRACTION_SPEC.text
+
+EXTRACTION_PROMPT_TEMPLATE = "Chapter: {chapter}\nText:\n<evidence>\n{text}\n</evidence>"
 
 
 def parse_concept_names(raw: str, *, chapter: str, text: str, limit: int = 6) -> list[str]:
@@ -265,14 +275,53 @@ async def extract_chapter_concepts(
     chapter: str,
     text: str,
     limit: int = 6,
+    usage: tuple[Session, int] | None = None,
 ) -> list[str]:
     """LLM chapter extraction, corpus-verified. Any failure -> [] (never raise
-    into a rebuild: the deterministic chapter roots always exist)."""
-    prompt = EXTRACTION_PROMPT.format(chapter=chapter, text=text[:4000])
+    into a rebuild: the deterministic chapter roots always exist).
+
+    A1-04: registry system prompt + delimited untrusted corpus text + one
+    generation trace per call, exactly like every other provider call site.
+
+    ``usage=(db, user_id)`` (A1-04) funnels the call into the same ai_usage
+    ledger every AI-bearing route writes via ``record_ai_usage`` -- spend is
+    spend even when the parsed result is empty (the admin kg/rebuild?llm=true
+    route was the one un-accounted call site). The row is added to the
+    caller's session; the rebuild's own commit persists it.
+    """
+    # trace_event lives in logging_config (the wave-1 helper every other
+    # stage uses); tracing.py imports logging_config lazily, so importing
+    # it back from there would close a cycle (c2 handoff).
+    from bangla_gpt_api.logging_config import trace_event
+    from bangla_gpt_api.services.costs import estimate_tokens, record_ai_usage
+    from bangla_gpt_api.services.safety import sanitize_evidence
+
+    prompt = EXTRACTION_PROMPT_TEMPLATE.format(chapter=chapter, text=sanitize_evidence(text[:4000]))
+    started = time.perf_counter()
     try:
-        raw = await provider.generate(prompt)
+        raw = await provider.generate(prompt, system=EXTRACTION_SYSTEM_PROMPT)
     except Exception:
         return []
+    if usage is not None:
+        usage_db, usage_user_id = usage
+        record_ai_usage(
+            usage_db,
+            user_id=usage_user_id,
+            route="kg.rebuild",
+            model=getattr(provider, "model", None) or getattr(provider, "name", None),
+            prompt_text=prompt,
+            answer_text=raw,
+        )
+    trace_event(
+        "generation",
+        route="knowledge_extraction",
+        model=getattr(provider, "model", None) or getattr(provider, "name", "unknown"),
+        prompt_version=_EXTRACTION_SPEC.trace_version,
+        prompt_tokens=estimate_tokens(prompt),
+        completion_tokens=estimate_tokens(raw),
+        answer_chars=len(raw),
+        latency_ms=int((time.perf_counter() - started) * 1000),
+    )
     return parse_concept_names(raw, chapter=chapter, text=text, limit=limit)
 
 
@@ -317,10 +366,17 @@ async def rebuild_concepts(
     provider: LLMProvider | None = None,
     *,
     llm: bool = False,
+    usage_user_id: int | None = None,
 ) -> dict[str, int]:
     """Full re-seed. With llm=True AND a provider, also run corpus-verified
     LLM extraction per chapter (mock providers fail validation -> roots only,
-    which keeps local/dev honest)."""
+    which keeps local/dev honest).
+
+    ``usage_user_id`` (A1-04): when the caller can attribute the spend (the
+    admin route passes the acting admin's id), every LLM extraction call is
+    written to the ai_usage ledger with route ``kg.rebuild`` -- the last
+    provider call site that used to bypass token accounting.
+    """
     db.execute(delete(ConceptMastery))
     db.execute(delete(ConceptPrerequisite))
     db.execute(delete(Concept))
@@ -340,7 +396,13 @@ async def rebuild_concepts(
                 by_chapter.setdefault(key, []).append(chunk.text)
         for (class_level, subject, chapter), texts in sorted(by_chapter.items()):
             joined = "\n".join(texts)
-            names = await extract_chapter_concepts(provider, chapter=chapter, text=joined)
+            names = await extract_chapter_concepts(
+                provider,
+                chapter=chapter,
+                text=joined,
+                # A1-04: attribute the extraction spend to the acting admin.
+                usage=(db, usage_user_id) if usage_user_id is not None else None,
+            )
             existing = {
                 name
                 for (name,) in db.execute(
@@ -369,6 +431,60 @@ async def rebuild_concepts(
     return {"concepts": concepts + llm_added, "llm_concepts": llm_added, "edges": edges}
 
 
+def _bump_mastery(
+    db: Session, student_id: int, concept_id: int, correct_add: int, total_add: int
+) -> None:
+    """Add to a mastery cell with ONE atomic statement (no lost updates).
+
+    The previous read-modify-write (``row.correct += n``) lost updates when
+    two quiz submissions for the same student overlapped: both sessions read
+    the same row, the second commit overwrote the first increment. The
+    conditional UPDATE moves the arithmetic into the database, which is the
+    only place it is serialized. The INSERT fallback races too -- the loser's
+    INSERT violates the composite primary key, and its retry finds the row
+    the winner created.
+    """
+    updated = cast(
+        CursorResult,
+        db.execute(
+            update(ConceptMastery)
+            .where(
+                ConceptMastery.student_id == student_id,
+                ConceptMastery.concept_id == concept_id,
+            )
+            .values(
+                correct=ConceptMastery.correct + correct_add,
+                total=ConceptMastery.total + total_add,
+            )
+        ),
+    )
+    if updated.rowcount:
+        return
+    try:
+        with db.begin_nested():
+            db.add(
+                ConceptMastery(
+                    student_id=student_id,
+                    concept_id=concept_id,
+                    correct=correct_add,
+                    total=total_add,
+                )
+            )
+    except IntegrityError:
+        # Another submission created the row first: apply our delta to theirs.
+        db.execute(
+            update(ConceptMastery)
+            .where(
+                ConceptMastery.student_id == student_id,
+                ConceptMastery.concept_id == concept_id,
+            )
+            .values(
+                correct=ConceptMastery.correct + correct_add,
+                total=ConceptMastery.total + total_add,
+            )
+        )
+
+
 def record_quiz_result(
     db: Session,
     student_id: int,
@@ -395,14 +511,7 @@ def record_quiz_result(
             correct, total = updates.get(concept.id, (0, 0))
             updates[concept.id] = (correct + (1 if item.is_correct else 0), total + 1)
     for concept_id, (correct_add, total_add) in updates.items():
-        row = db.get(ConceptMastery, (student_id, concept_id))
-        if row is None:
-            # explicit zeros: column defaults apply only at INSERT, a pending
-            # instance would read None here and break the += below.
-            row = ConceptMastery(student_id=student_id, concept_id=concept_id, correct=0, total=0)
-            db.add(row)
-        row.correct += correct_add
-        row.total += total_add
+        _bump_mastery(db, student_id, concept_id, correct_add, total_add)
     db.commit()
 
 

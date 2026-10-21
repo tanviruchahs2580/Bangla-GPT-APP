@@ -33,14 +33,6 @@ class AcquisitionError(RuntimeError):
     pass
 
 
-def _sha256_of(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as fh:
-        for block in iter(lambda: fh.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
-
-
 def fetch_url(url: str, *, timeout: float = 60.0) -> tuple[bytes, str]:
     """GET a URL and return (body, content_type). Raises AcquisitionError."""
     if urllib.parse.urlparse(url).scheme not in ("http", "https"):

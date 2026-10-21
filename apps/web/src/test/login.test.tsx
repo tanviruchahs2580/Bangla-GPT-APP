@@ -9,6 +9,8 @@ const apiMock = vi.hoisted(() => ({
   login: vi.fn(),
   mfaChallenge: vi.fn(),
   fetchMe: vi.fn(),
+  // AUD-G-15: AuthProvider reads the stored session before its first commit.
+  getToken: vi.fn(() => null),
   logout: vi.fn(),
   setUnauthorizedHandler: vi.fn(),
 }));

@@ -1,10 +1,20 @@
-"""parent weekly digest v1.5 -- summary-only aggregates.
+"""parent weekly digest v1.6 -- summary-only aggregates, bn + en.
 
 Hard privacy rule: the digest is assembled exclusively from aggregates
 (session counts, graded-attempt counts, score averages, the at-risk
 flag and chapter labels). Conversation titles and messages are NEVER
 read here; the PASS-WHEN test seeds a sentinel message and asserts it
 cannot appear in the digest.
+
+H-11 additions (AUD-HI-17):
+
+* the wrapper copy (greeting, heading, privacy note, signature) and the
+  subject come from ``services.mailer.EMAIL_TEMPLATES`` in the language the
+  guardian chose (``parents.digest_language``: ``bn`` or ``en``);
+* a guardian with ``parents.digest_opt_out`` set is skipped before the send
+  and counted as ``opted_out`` (never silently dropped);
+* sends go through ``mailer.send_mail_checked``, so a hard-bounced address
+  stops receiving bulk mail while transactional mail stays unaffected.
 
 Bengali strings use \\u escapes so the source stays ASCII-safe byte-wise.
 
@@ -18,12 +28,13 @@ Bengali strings use \\u escapes so the source stays ASCII-safe byte-wise.
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from bangla_gpt_api.config import Settings
+from bangla_gpt_api.db.clock import utcnow
 from bangla_gpt_api.db.models import (
     Conversation,
     Parent,
@@ -34,27 +45,53 @@ from bangla_gpt_api.db.models import (
 )
 from bangla_gpt_api.services import atrisk, mailer, weakness
 
-# "Saptahik Pita-Mata Digest" (Bengali) / Weekly parent digest
-DIGEST_SUBJECT = "সাপ্তাহিক অভিভাবক সারসংক্ষেপ / Weekly parent digest"
-GREETING = "প্রিয় "
-HEADER = "অভিভাবক সাপ্তাহিক সারসংক্ষেপ"
 WEEK_SECONDS = 7 * 24 * 3600
 DIGEST_WEEKDAY = 6  # Sunday
 DIGEST_HOUR_UTC = 16  # 16:00 UTC = 22:00 Dhaka
 WEAK_CHAPTER_LIMIT = 3
 
-# Parent-facing copy for the weekly digest, in one place. The recipient is a
-# Bangladeshi parent, so the digest is Bengali like the rest of the product.
-STATUS_OK = "ভালো এগোচ্ছে"
-STATUS_SUPPORT = "সহায়তা প্রয়োজন"
-CLASS_LABEL = "শ্রেণি"
-SESSIONS_SUFFIX = "টি পড়ার সেশন"
-ATTEMPTS_SUFFIX = "টি মূল্যায়িত পরীক্ষা"
-AVG_LABEL = "গড়"
-WEAK_CHAPTERS_LABEL = "অনুশীলন দরকার এমন অধ্যায়:"
-NO_ACTIVITY_LINE = "এ সপ্তাহে কোনো কার্যক্রম নেই — প্রতিদিন অল্প সময়ের রুটিন কাজে দেয়।"
-PRIVACY_LINE_1 = "এই সারসংক্ষেপে শুধু পরিসংখ্যান আছে। আপনার সন্তানের ব্যক্তিগত টিউটর আলাপ"
-PRIVACY_LINE_2 = "কখনোই এতে যোগ করা হয় না বা শেয়ার করা হয় না।"
+#: Per-language copy for the dynamic child lines. Everything fixed (greeting,
+#: heading, privacy note, signature) lives in the mailer template; this dict
+#: holds only what depends on the collected aggregates.
+COPY: dict[str, dict[str, str]] = {
+    "bn": {
+        "status_ok": "\u09ad\u09be\u09b2\u09cb \u098f\u0997\u09cb\u099a\u09cd\u099b\u09c7",
+        "status_support": "\u09b8\u09b9\u09be\u09af\u09bc\u09a4\u09be "
+        "\u09aa\u09cd\u09b0\u09af\u09bc\u09cb\u099c\u09a8",
+        "class_label": "\u09b6\u09cd\u09b0\u09c7\u09a3\u09bf",
+        "sessions_suffix": "\u099f\u09bf \u09aa\u09a1\u09bc\u09be\u09b0 \u09b8\u09c7\u09b6\u09a8",
+        "attempts_suffix": "\u099f\u09bf "
+        "\u09ae\u09c2\u09b2\u09cd\u09af\u09be\u09af\u09bc\u09bf\u09a4 "
+        "\u09aa\u09b0\u09c0\u0995\u09cd\u09b7\u09be",
+        "avg_label": "\u0997\u09a1\u09bc",
+        "weak_label": "\u0985\u09a8\u09c1\u09b6\u09c0\u09b2\u09a8 "
+        "\u09a6\u09b0\u0995\u09be\u09b0 \u098f\u09ae\u09a8 "
+        "\u0985\u09a7\u09cd\u09af\u09be\u09af\u09bc:",
+        "no_activity": "\u098f "
+        "\u09b8\u09aa\u09cd\u09a4\u09be\u09b9\u09c7 \u0995\u09cb\u09a8\u09cb "
+        "\u0995\u09be\u09b0\u09cd\u09af\u0995\u09cd\u09b0\u09ae \u09a8\u09c7\u0987 "
+        "\u2014 \u09aa\u09cd\u09b0\u09a4\u09bf\u09a6\u09bf\u09a8 "
+        "\u0985\u09b2\u09cd\u09aa \u09b8\u09ae\u09af\u09bc\u09c7\u09b0 "
+        "\u09b0\u09c1\u099f\u09bf\u09a8 \u0995\u09be\u099c\u09c7 "
+        "\u09a6\u09c7\u09af\u09bc\u0964",
+        "line": "- {name} ({class_label} {class_level}): "
+        "{sessions}{sessions_suffix}, {attempts}{attempts_suffix}, {avg_label} {avg} "
+        "\u2014 {status}\u0964",
+    },
+    "en": {
+        "status_ok": "on track",
+        "status_support": "needs support",
+        "class_label": "Class",
+        "sessions_suffix": " study sessions",
+        "attempts_suffix": " graded tests",
+        "avg_label": "average",
+        "weak_label": "Chapters to practise:",
+        "no_activity": "No activity this week \u2014 a short daily routine helps.",
+        "line": "- {name} ({class_label} {class_level}): "
+        "{sessions}{sessions_suffix}, {attempts}{attempts_suffix}, {avg_label} {avg} "
+        "\u2014 {status}.",
+    },
+}
 
 
 def week_key(dt: datetime) -> str:
@@ -89,42 +126,46 @@ class WeeklyDigest:
     children: list[ChildSummary]
 
 
-def build_body(digest: WeeklyDigest) -> str:
-    """Render the email body. Aggregates and chapter labels ONLY.
+def build_body(digest: WeeklyDigest, language: str = "bn") -> str:
+    """Render the email body for ``language``. Aggregates and labels ONLY.
 
-    Bengali, like every other parent-facing surface in the product: the
-    recipient is a Bangladeshi parent, and an English summary under a
-    Bengali heading is not a digest they can read.
+    Bengali is the default and the product's parent-facing voice; the English
+    wrapper exists for guardians whose preference is ``en``.
     """
-    lines = [
-        f"{GREETING}{digest.parent_name},",
-        "",
-        f"{HEADER} ({digest.week_label})",
-        "আপনার সন্তানের এ সপ্তাহের সারসংক্ষেপ নিচে দেওয়া হলো।",
-        "",
-    ]
+    lang = mailer.normalize_language(language)
+    copy = COPY[lang]
+    lines: list[str] = []
     for child in digest.children:
-        avg = f"{child.avg_score_pct:.1f}%" if child.avg_score_pct is not None else "—"
-        status = STATUS_SUPPORT if child.at_risk else STATUS_OK
+        avg = f"{child.avg_score_pct:.1f}%" if child.avg_score_pct is not None else "\u2014"
+        status = copy["status_support"] if child.at_risk else copy["status_ok"]
         lines.append(
-            f"- {child.name} ({CLASS_LABEL} {child.class_level}): "
-            f"{child.sessions}{SESSIONS_SUFFIX}, {child.attempts_graded}{ATTEMPTS_SUFFIX}, "
-            f"{AVG_LABEL} {avg} — {status}।"
+            copy["line"].format(
+                name=child.name,
+                class_label=copy["class_label"],
+                class_level=child.class_level,
+                sessions=child.sessions,
+                sessions_suffix=copy["sessions_suffix"],
+                attempts=child.attempts_graded,
+                attempts_suffix=copy["attempts_suffix"],
+                avg_label=copy["avg_label"],
+                avg=avg,
+                status=status,
+            )
         )
         if child.weak_chapters:
             lines.append(
-                f"  {WEAK_CHAPTERS_LABEL} " + ", ".join(child.weak_chapters[:WEAK_CHAPTER_LIMIT])
+                f"  {copy['weak_label']} " + ", ".join(child.weak_chapters[:WEAK_CHAPTER_LIMIT])
             )
         if child.sessions == 0 and child.attempts_graded == 0:
-            lines.append("  " + NO_ACTIVITY_LINE)
-    lines += [
-        "",
-        PRIVACY_LINE_1,
-        PRIVACY_LINE_2,
-        "",
-        "বাংলা GPT",
-    ]
-    return "\n".join(lines)
+            lines.append("  " + copy["no_activity"])
+    _subject, wrapper = mailer.render(
+        "parent_digest",
+        lang,
+        parent_name=digest.parent_name,
+        week_label=digest.week_label,
+        children="\n".join(lines),
+    )
+    return wrapper
 
 
 def collect_digest(
@@ -203,6 +244,10 @@ class DigestRunStats:
     families: int = 0
     delivered: int = 0
     undelivered: int = 0
+    #: Guardians who turned the digest off in their preferences (H-11).
+    opted_out: int = 0
+    #: Bulk sends refused because the address hard-bounced earlier (H-11).
+    suppressed: int = 0
     skipped: str | None = None
 
 
@@ -213,16 +258,28 @@ def run_weekly_digest(
     sender: Callable[..., bool] | None = None,
     now: datetime | None = None,
 ) -> DigestRunStats:
-    """Send the weekly summary to every linked parent. Aggregate-only bodies."""
-    now = now or datetime.now(UTC).replace(tzinfo=None)
+    """Send the weekly summary to every linked, subscribed parent.
+
+    Aggregate-only bodies; language and opt-out are read per parent, and bulk
+    sends are checked against the bounce ledger (a suppressed address is
+    refused by ``send_mail_checked`` and lands in ``undelivered``).
+    """
+    now = now or utcnow()
     since = now - timedelta(seconds=WEEK_SECONDS)
-    send = sender or mailer.send_mail
+    send = sender or (
+        lambda settings_, *, to, subject, body: mailer.send_mail_checked(
+            db, settings_, to=to, subject=subject, body=body
+        )
+    )
     stats = DigestRunStats()
     if sender is None and not mailer.smtp_configured(settings):
         stats.skipped = "smtp_not_configured"
         return stats
     parents = db.execute(select(Parent)).scalars().all()
     for parent in parents:
+        if parent.digest_opt_out:
+            stats.opted_out += 1
+            continue
         user = db.get(User, parent.user_id)
         if user is None:
             continue
@@ -230,7 +287,13 @@ def run_weekly_digest(
         if digest is None:
             continue
         stats.families += 1
-        ok = send(settings, to=user.email, subject=DIGEST_SUBJECT, body=build_body(digest))
+        language = mailer.normalize_language(parent.digest_language)
+        ok = send(
+            settings,
+            to=user.email,
+            subject=mailer.subject("parent_digest", language),
+            body=build_body(digest, language),
+        )
         if ok:
             stats.delivered += 1
         else:

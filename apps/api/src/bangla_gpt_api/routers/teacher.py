@@ -9,9 +9,8 @@ import logging
 import secrets
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -43,6 +42,7 @@ from bangla_gpt_api.schemas import (
 )
 from bangla_gpt_api.services import weakness
 
+from ._pagination import WindowPage
 from .common import (
     _classroom_or_404,
     _default_school,
@@ -69,13 +69,18 @@ IMPORT_MAX_ROWS = 200
 def teacher_roster(
     db: DbSession,
     teacher: TeacherOrAdminUser,
+    page: WindowPage,
     class_level: int | None = None,
-    limit: Annotated[int, Query(ge=1, le=1000)] = 200,
 ) -> list[StudentBrief]:
-    # capped (class_level omitted used to pull the whole student table).
-    # tenancy: school-bound teachers only ever see their own school.
+    # C-10: one pagination convention (offset + capped limit, stable order by
+    # Student.id inside the loader). tenancy: school-bound teachers only ever
+    # see their own school.
     students = _load_class_students(
-        db, class_level, limit=limit, school_id=_tenant_school_id(db, teacher)
+        db,
+        class_level,
+        limit=page.limit,
+        offset=page.offset,
+        school_id=_tenant_school_id(db, teacher),
     )
     return _student_briefs(db, students)
 
@@ -261,9 +266,19 @@ def classroom_import(
     returned exactly once -- only its SHA-256 hash is stored. The school
     supplies guardian consent on behalf of imported minors: consent
     is recorded with version 'CSV-IMPORT-1'.
+
+    Encoding contract (AUD-HI-16 / H-13): the field is UTF-8 **text**, not
+    bytes — Bangla names arrive as ordinary characters and are stored as
+    given. A leading UTF-8 BOM is tolerated and stripped (Excel's
+    "Save as CSV UTF-8" writes one, and it otherwise becomes part of the
+    first cell, which is how a column named ``\\ufeffname`` reached a real
+    import). CRLF line endings are tolerated. Size is bounded by the
+    request schema (20,000 characters) plus the row cap below; the demo
+    UI's file picker enforces the same bound client-side.
     """
     room = _assert_room_in_school(db, teacher, _classroom_or_404(db, room_id))
-    reader = csv.reader(payload.csv_text.splitlines())
+    csv_text = payload.csv_text.lstrip("\ufeff")
+    reader = csv.reader(csv_text.splitlines())
     data_rows: list[list[str]] = []
     for i, row in enumerate(reader):
         cells = [c.strip() for c in row]

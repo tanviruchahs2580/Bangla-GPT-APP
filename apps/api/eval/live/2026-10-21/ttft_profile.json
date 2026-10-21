@@ -1,0 +1,61 @@
+{
+ "generated_by": "scripts/evaluate_live.py --ttft-profile",
+ "A9-01": {
+  "concurrency": 2,
+  "items": 16,
+  "model": "gemini-3.5-flash-lite",
+  "pacing_seconds_between_call_starts": 6.0,
+  "wall_seconds": 97.2,
+  "calls": {
+   "attempted": 16,
+   "succeeded": 16,
+   "failed": 0
+  },
+  "failure_samples": [],
+  "ttft_seconds": {
+   "n": 16,
+   "p50": 0.97,
+   "p95": 3.493,
+   "p99": 12.656,
+   "min": 0.611,
+   "max": 12.656
+  },
+  "total_answer_seconds": {
+   "n": 16,
+   "p50": 1.229,
+   "p95": 3.548,
+   "p99": 13.07,
+   "min": 0.936,
+   "max": 13.07
+  },
+  "retrieval_only_ms": {
+   "n": 16,
+   "p50": 3.531,
+   "p95": 3.868,
+   "p99": 4.898,
+   "min": 3.259,
+   "max": 4.898
+  },
+  "question_chars": {
+   "n": 16,
+   "p50": 29.0,
+   "p95": 37.0,
+   "p99": 37.0,
+   "min": 20.0,
+   "max": 37.0
+  },
+  "budgets": {
+   "ttft_p95_seconds": 3.0,
+   "total_p95_seconds": 12.0,
+   "retrieval_p95_ms": 300.0
+  },
+  "caveat": "Per-call timings start AFTER the harness pacer's wait: the free-tier pacing is harness overhead, not product latency, and it is excluded by construction (the recorder is built with min_interval=0 so nothing sleeps inside the measured window). What remains is the pipeline plus the free-tier model's own queueing on this host. Retrieval-only is measured without a provider call.",
+  "recordings": "C:\\Users\\DST\\projects\\Bangla GPT APP\\apps\\api\\eval\\live\\2026-10-21\\ttft_recorded_responses.jsonl"
+ },
+ "run_conditions": {
+  "host": "DESKTOP-GET9GA6",
+  "platform": "Windows-11-10.0.26300-SP0",
+  "python": "3.12.10",
+  "started": "2026-10-21T05:24:36+00:00"
+ }
+}

@@ -1,0 +1,55 @@
+{
+ "generated_by": "scripts/evaluate_live.py --ttft-profile",
+ "A9-01": {
+  "concurrency": 2,
+  "items": 16,
+  "model": "gemini-3.5-flash-lite",
+  "pacing_seconds_between_call_starts": 6.0,
+  "wall_seconds": 206.1,
+  "calls": {
+   "attempted": 16,
+   "succeeded": 15,
+   "failed": 1
+  },
+  "failure_samples": [
+   "ProviderError: Gemini stream timed out after 22.25s"
+  ],
+  "ttft_seconds": {
+   "n": 15,
+   "p50": 16.287,
+   "p95": 37.269,
+   "p99": 38.135,
+   "min": 12.843,
+   "max": 38.135
+  },
+  "total_answer_seconds": {
+   "n": 15,
+   "p50": 16.602,
+   "p95": 37.53,
+   "p99": 38.469,
+   "min": 13.179,
+   "max": 38.469
+  },
+  "retrieval_only_ms": {
+   "n": 16,
+   "p50": 3.712,
+   "p95": 4.207,
+   "p99": 4.454,
+   "min": 3.123,
+   "max": 4.454
+  },
+  "budgets": {
+   "ttft_p95_seconds": 3.0,
+   "total_p95_seconds": 12.0,
+   "retrieval_p95_ms": 300.0
+  },
+  "caveat": "TTFT and total include the free-tier pacing sleep, which sits inside the provider call; the pacing is removed from the product path, so these are upper bounds. Retrieval-only is measured without a provider call.",
+  "recordings": "C:\\Users\\DST\\projects\\Bangla GPT APP\\apps\\api\\eval\\live\\2026-10-20\\ttft_recorded_responses.jsonl"
+ },
+ "run_conditions": {
+  "host": "DESKTOP-GET9GA6",
+  "platform": "Windows-11-10.0.26300-SP0",
+  "python": "3.12.10",
+  "started": "2026-10-20T17:04:39+00:00"
+ }
+}

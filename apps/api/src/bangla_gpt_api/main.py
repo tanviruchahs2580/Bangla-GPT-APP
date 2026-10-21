@@ -22,6 +22,8 @@ import os
 from typing import TYPE_CHECKING, Any
 
 from cryptography.fernet import Fernet
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from bangla_gpt_api import caching, initialize
 from bangla_gpt_api.config import DEFAULT_JWT_SECRET, Settings, get_settings
@@ -40,8 +42,13 @@ from bangla_gpt_api.initialize.middleware_stack import build_middleware_stack
 from bangla_gpt_api.initialize.observability import (
     configure_observability_with_sentry,
 )
-from bangla_gpt_api.logging_config import set_secret_logging_allowed
-from bangla_gpt_api.middleware import unhandled_exception_response
+from bangla_gpt_api.logging_config import set_secret_logging_allowed, set_tracing_enabled
+from bangla_gpt_api.metrics import set_ai_budget_usd
+from bangla_gpt_api.middleware import (
+    http_exception_response,
+    unhandled_exception_response,
+    validation_exception_response,
+)
 from bangla_gpt_api.providers import (
     ProviderNotConfigured,  # noqa: F401 (re-exported for tests)
     get_fast_provider,  # noqa: F401 (re-exported for tests)
@@ -407,6 +414,10 @@ PUBLIC_OPERATIONS: frozenset[tuple[str, str]] = frozenset(
         ("post", "/auth/verify-email"),
         ("post", "/auth/join-school"),
         ("post", "/auth/mfa/challenge"),
+        # B-02: the refresh credential is the body's refresh_token, not an
+        # Authorization header, so the operation carries no security scheme.
+        # Possession of a valid, unrotated refresh token is the authentication.
+        ("post", "/auth/refresh"),
         # Optional auth: the route reads a bearer token when one is supplied
         # and works without it, so FastAPI emits a security requirement that
         # anonymous callers do not actually satisfy. Declared public here so the
@@ -430,7 +441,7 @@ def _mark_public_operations(app: object) -> None:
     and the document has no global `security`, so a deliberate decision is
     invisible in the contract.
     """
-    original = app.openapi  # type: ignore[attr-defined]
+    original = app.openapi  # type: ignore[attr-defined]  # FastAPI builds `.openapi` on the instance; `app` is typed `object` here.
 
     def openapi() -> dict[str, Any]:
         spec: dict[str, Any] = original()
@@ -449,7 +460,7 @@ def _mark_public_operations(app: object) -> None:
 
     # Replacing the attribute on the FastAPI instance is the documented way to
     # customise the schema; mypy types `app` as a bare object here.
-    app.openapi = openapi  # type: ignore[attr-defined]
+    app.openapi = openapi  # type: ignore[attr-defined]  # replacing the instance attribute is FastAPI's documented schema hook.
 
 
 _HTTP_METHODS = frozenset({"get", "post", "put", "patch", "delete", "head", "options"})
@@ -476,6 +487,13 @@ def create_app(settings: Settings | None = None) -> object:
     # Decided here, centrally, so the guarantee does not rest on an `if` at
     # each call site (F-082).
     set_secret_logging_allowed(not settings.is_production)
+
+    # I-03 per-stage trace records, behind a flag so the call sites are always
+    # present and a later OTLP exporter can replace the sink only.
+    set_tracing_enabled(settings.tracing_enabled)
+    # I-11: publish the operator's global monthly AI budget (if any) so the
+    # burn-rate alert compares projected spend against a configured number.
+    set_ai_budget_usd(settings.ai_monthly_budget_usd)
 
     # Phase 2: Production safety gate (fail-fast)
     enforce_production_safety(settings)
@@ -552,6 +570,14 @@ def create_app(settings: Settings | None = None) -> object:
     # it bypasses RequestIdMiddleware and SecurityHeadersMiddleware and ships
     # with no X-Request-ID and no hardening headers (F-083).
     app.add_exception_handler(Exception, unhandled_exception_response)
+    # C-06 / AUD-CD-04: the documented error contract rendered as RFC 9457
+    # problem+json. Additive: `detail` keeps its exact previous content
+    # (string | {code,message} | validation list); the RFC members
+    # (type/title/status/instance) ride alongside it. Statuses were already
+    # declared per route via AUTH_GUARD_RESPONSES/coded(); this gives the
+    # body the standard shape those declarations describe.
+    app.add_exception_handler(StarletteHTTPException, http_exception_response)
+    app.add_exception_handler(RequestValidationError, validation_exception_response)
 
     # Phase 8: Build lifespan (explicit params — no closure capture)
     app.router.lifespan_context = initialize.build_lifespan(

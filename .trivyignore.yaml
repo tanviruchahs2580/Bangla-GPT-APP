@@ -1,0 +1,29 @@
+# Trivy misconfiguration ignores (F-12). Passed explicitly with
+# `trivy config --ignorefile .trivyignore.yaml` for deploy/postgres/Dockerfile,
+# whose official postgres entrypoint chowns PGDATA on first boot and therefore
+# starts as root by contract. AUD-B-24 moved the web image to
+# nginxinc/nginx-unprivileged: its master runs as uid 101 and the finding no
+# longer fires there (the ignorefile is still passed to that target, so a
+# regression would be caught by the ignore no longer being needed rather than
+# silently suppressed -- re-verified with trivy 0.58.0 on 2026-10-19:
+# `.trivyignore.yaml` now suppresses nothing for apps/web/Dockerfile). The
+# root Dockerfile is scanned WITHOUT this file, so its non-root uid/gid 10001
+# remains fully checked.
+#
+# The runtime posture the postgres image relies on instead lives in
+# docker-compose.yml (read-only rootfs where possible, ALL capabilities
+# dropped except the four its entrypoint provably needs, no-new-privileges)
+# and is documented in docs/ci.md §8.
+#
+# Paths are relative to the scan target, which is the file itself, so the
+# entry is "Dockerfile". Remove an entry the moment it stops being true; the
+# expiry is the date by which the exception must be re-justified or closed.
+misconfigurations:
+  - id: AVD-DS-0002
+    paths:
+      - "Dockerfile"
+    statement: >-
+      Root entrypoint required by the upstream postgres image (chowns PGDATA
+      on first boot); the compensating controls are the compose hardening and
+      the non-root runtime user the entrypoint drops to.
+    expired_at: "2027-01-31T00:00:00Z"

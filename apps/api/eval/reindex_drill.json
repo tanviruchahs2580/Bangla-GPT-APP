@@ -1,0 +1,385 @@
+{
+ "decision": {
+  "candidate_decisions": {
+   "v2-hash-ngrams-3-5": {
+    "delta": 0.0,
+    "incumbent_value": 1.0,
+    "primary_value": 1.0,
+    "ship": false
+   },
+   "v3-hash-ngrams-1-2": {
+    "delta": 0.0,
+    "incumbent_value": 1.0,
+    "primary_value": 1.0,
+    "ship": false
+   }
+  },
+  "caught": [
+   "v2-hash-ngrams-3-5",
+   "v3-hash-ngrams-1-2"
+  ],
+  "decision_rule": "a candidate ships only if the primary metric beats the incumbent; a tie keeps the incumbent -- an embedding change must beat it, not equal it",
+  "incumbent": "v1-hash-default",
+  "primary_metric": "recall_at_5",
+  "ships": []
+ },
+ "dense_lane": {
+  "v1-hash-default": {
+   "bootstrap_resamples": 1000,
+   "hit_rate_at_10": 1.0,
+   "hit_rate_at_10_ci95": [
+    1.0,
+    1.0
+   ],
+   "mde_absolute": 0.0155,
+   "mde_basis": "recall_at_5",
+   "mde_by_metric": {
+    "hit_rate_at_10": 0.0,
+    "mrr_at_10": 0.0372,
+    "ndcg_at_10": 0.0277,
+    "recall_at_1": 0.0669,
+    "recall_at_10": 0.0,
+    "recall_at_3": 0.0155,
+    "recall_at_5": 0.0155
+   },
+   "mde_degenerate_ceiling": false,
+   "misses": 0,
+   "mrr_at_10": 0.9365,
+   "mrr_at_10_ci95": [
+    0.9088,
+    0.9604
+   ],
+   "n": 181,
+   "ndcg_at_10": 0.9528,
+   "ndcg_at_10_ci95": [
+    0.9322,
+    0.9706
+   ],
+   "recall_at_1": 0.884,
+   "recall_at_10": 1.0,
+   "recall_at_10_ci95": [
+    1.0,
+    1.0
+   ],
+   "recall_at_1_ci95": [
+    0.8343,
+    0.9282
+   ],
+   "recall_at_3": 0.9945,
+   "recall_at_3_ci95": [
+    0.9834,
+    1.0
+   ],
+   "recall_at_5": 0.9945,
+   "recall_at_5_ci95": [
+    0.9834,
+    1.0
+   ]
+  },
+  "v2-hash-ngrams-3-5": {
+   "bootstrap_resamples": 1000,
+   "hit_rate_at_10": 1.0,
+   "hit_rate_at_10_ci95": [
+    1.0,
+    1.0
+   ],
+   "mde_absolute": 0.0,
+   "mde_basis": "recall_at_5",
+   "mde_by_metric": {
+    "hit_rate_at_10": 0.0,
+    "mrr_at_10": 0.0331,
+    "ndcg_at_10": 0.0246,
+    "recall_at_1": 0.0593,
+    "recall_at_10": 0.0,
+    "recall_at_3": 0.0,
+    "recall_at_5": 0.0
+   },
+   "mde_degenerate_ceiling": true,
+   "misses": 0,
+   "mrr_at_10": 0.9512,
+   "mrr_at_10_ci95": [
+    0.9263,
+    0.9724
+   ],
+   "n": 181,
+   "ndcg_at_10": 0.9638,
+   "ndcg_at_10_ci95": [
+    0.9466,
+    0.9801
+   ],
+   "recall_at_1": 0.9116,
+   "recall_at_10": 1.0,
+   "recall_at_10_ci95": [
+    1.0,
+    1.0
+   ],
+   "recall_at_1_ci95": [
+    0.8729,
+    0.9503
+   ],
+   "recall_at_3": 1.0,
+   "recall_at_3_ci95": [
+    1.0,
+    1.0
+   ],
+   "recall_at_5": 1.0,
+   "recall_at_5_ci95": [
+    1.0,
+    1.0
+   ]
+  },
+  "v3-hash-ngrams-1-2": {
+   "bootstrap_resamples": 1000,
+   "hit_rate_at_10": 0.9945,
+   "hit_rate_at_10_ci95": [
+    0.9834,
+    1.0
+   ],
+   "mde_absolute": 0.0342,
+   "mde_basis": "recall_at_5",
+   "mde_by_metric": {
+    "hit_rate_at_10": 0.0155,
+    "mrr_at_10": 0.063,
+    "ndcg_at_10": 0.0484,
+    "recall_at_1": 0.1002,
+    "recall_at_10": 0.0155,
+    "recall_at_3": 0.0558,
+    "recall_at_5": 0.0342
+   },
+   "mde_degenerate_ceiling": false,
+   "misses": 1,
+   "mrr_at_10": 0.7817,
+   "mrr_at_10_ci95": [
+    0.7384,
+    0.8257
+   ],
+   "n": 181,
+   "ndcg_at_10": 0.8351,
+   "ndcg_at_10_ci95": [
+    0.8011,
+    0.8676
+   ],
+   "recall_at_1": 0.6409,
+   "recall_at_10": 0.9945,
+   "recall_at_10_ci95": [
+    0.9834,
+    1.0
+   ],
+   "recall_at_1_ci95": [
+    0.5691,
+    0.7127
+   ],
+   "recall_at_3": 0.9227,
+   "recall_at_3_ci95": [
+    0.884,
+    0.9558
+   ],
+   "recall_at_5": 0.9724,
+   "recall_at_5_ci95": [
+    0.9448,
+    0.9945
+   ]
+  }
+ },
+ "generated_by": "bangla_gpt_api.evaluation.reindex_drill",
+ "generations": {
+  "v1-hash-default": {
+   "bootstrap_resamples": 1000,
+   "gold_unmatched_items": 0,
+   "hit_rate_at_10": 1.0,
+   "hit_rate_at_10_ci95": [
+    1.0,
+    1.0
+   ],
+   "mde_absolute": 0.0,
+   "mde_basis": "recall_at_5",
+   "mde_by_metric": {
+    "hit_rate_at_10": 0.0,
+    "mrr_at_10": 0.0317,
+    "ndcg_at_10": 0.0235,
+    "recall_at_1": 0.0576,
+    "recall_at_10": 0.0,
+    "recall_at_3": 0.0,
+    "recall_at_5": 0.0
+   },
+   "mde_degenerate_ceiling": true,
+   "misses": 0,
+   "mrr_at_10": 0.9549,
+   "mrr_at_10_ci95": [
+    0.9309,
+    0.9761
+   ],
+   "n": 181,
+   "ndcg_at_10": 0.9665,
+   "ndcg_at_10_ci95": [
+    0.9501,
+    0.9822
+   ],
+   "recall_at_1": 0.9171,
+   "recall_at_10": 1.0,
+   "recall_at_10_ci95": [
+    1.0,
+    1.0
+   ],
+   "recall_at_1_ci95": [
+    0.8785,
+    0.9558
+   ],
+   "recall_at_3": 1.0,
+   "recall_at_3_ci95": [
+    1.0,
+    1.0
+   ],
+   "recall_at_5": 1.0,
+   "recall_at_5_ci95": [
+    1.0,
+    1.0
+   ]
+  },
+  "v2-hash-ngrams-3-5": {
+   "bootstrap_resamples": 1000,
+   "gold_unmatched_items": 0,
+   "hit_rate_at_10": 1.0,
+   "hit_rate_at_10_ci95": [
+    1.0,
+    1.0
+   ],
+   "mde_absolute": 0.0,
+   "mde_basis": "recall_at_5",
+   "mde_by_metric": {
+    "hit_rate_at_10": 0.0,
+    "mrr_at_10": 0.0317,
+    "ndcg_at_10": 0.0235,
+    "recall_at_1": 0.0576,
+    "recall_at_10": 0.0,
+    "recall_at_3": 0.0,
+    "recall_at_5": 0.0
+   },
+   "mde_degenerate_ceiling": true,
+   "misses": 0,
+   "mrr_at_10": 0.9549,
+   "mrr_at_10_ci95": [
+    0.9309,
+    0.9761
+   ],
+   "n": 181,
+   "ndcg_at_10": 0.9665,
+   "ndcg_at_10_ci95": [
+    0.9501,
+    0.9822
+   ],
+   "recall_at_1": 0.9171,
+   "recall_at_10": 1.0,
+   "recall_at_10_ci95": [
+    1.0,
+    1.0
+   ],
+   "recall_at_1_ci95": [
+    0.8785,
+    0.9558
+   ],
+   "recall_at_3": 1.0,
+   "recall_at_3_ci95": [
+    1.0,
+    1.0
+   ],
+   "recall_at_5": 1.0,
+   "recall_at_5_ci95": [
+    1.0,
+    1.0
+   ]
+  },
+  "v3-hash-ngrams-1-2": {
+   "bootstrap_resamples": 1000,
+   "gold_unmatched_items": 0,
+   "hit_rate_at_10": 1.0,
+   "hit_rate_at_10_ci95": [
+    1.0,
+    1.0
+   ],
+   "mde_absolute": 0.0,
+   "mde_basis": "recall_at_5",
+   "mde_by_metric": {
+    "hit_rate_at_10": 0.0,
+    "mrr_at_10": 0.0317,
+    "ndcg_at_10": 0.0235,
+    "recall_at_1": 0.0576,
+    "recall_at_10": 0.0,
+    "recall_at_3": 0.0,
+    "recall_at_5": 0.0
+   },
+   "mde_degenerate_ceiling": true,
+   "misses": 0,
+   "mrr_at_10": 0.9549,
+   "mrr_at_10_ci95": [
+    0.9309,
+    0.9761
+   ],
+   "n": 181,
+   "ndcg_at_10": 0.9665,
+   "ndcg_at_10_ci95": [
+    0.9501,
+    0.9822
+   ],
+   "recall_at_1": 0.9171,
+   "recall_at_10": 1.0,
+   "recall_at_10_ci95": [
+    1.0,
+    1.0
+   ],
+   "recall_at_1_ci95": [
+    0.8785,
+    0.9558
+   ],
+   "recall_at_3": 1.0,
+   "recall_at_3_ci95": [
+    1.0,
+    1.0
+   ],
+   "recall_at_5": 1.0,
+   "recall_at_5_ci95": [
+    1.0,
+    1.0
+   ]
+  }
+ },
+ "procedure": "1) build the incumbent and every candidate offline (all generations kept); 2) measure all on the frozen split; 3) a candidate ships only if the primary metric beats the incumbent; 4) publish through IndexRegistry (atomic swap, cache keys follow the version); 5) rollback() re-activates the previous generation if the canary disagrees -- exercised here, not described",
+ "rollback": {
+  "active_after": "5d115137b811326a",
+  "active_before": "8d9fa32d7d5a460c",
+  "events": [
+   [
+    "publish",
+    "5d115137b811326a"
+   ],
+   [
+    "publish",
+    "5a3cff871c2bc680"
+   ],
+   [
+    "publish",
+    "8d9fa32d7d5a460c"
+   ],
+   [
+    "rollback",
+    "5d115137b811326a"
+   ]
+  ],
+  "rolled_back_to_incumbent": true,
+  "versions": [
+   "5a3cff871c2bc680",
+   "8d9fa32d7d5a460c",
+   "5d115137b811326a"
+  ]
+ },
+ "run_conditions": {
+  "candidates_note": "both candidates are simulated embedding changes (same local hashing embedder, different n-gram set/dimension); a real multilingual model drops into the same factory seam and the drill is unchanged. v3 is deliberately weaker so the drill demonstrates a caught regression.",
+  "corpus": "bundled-sample",
+  "corpus_chunks": 78,
+  "golden_dataset_hash": "3500ef2a0f464278",
+  "provider": "none -- retrieval only",
+  "seed": 20261019,
+  "split": "test",
+  "top_k": 10
+ }
+}

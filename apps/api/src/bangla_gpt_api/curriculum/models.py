@@ -10,6 +10,11 @@ class CurriculumMeta(BaseModel):
     chapter: str = ""
     section: str | None = None
     page: int | None = None
+    #: A2-04c: last physical page the chunk's text was extracted from. A chunk
+    #: whose text stays inside one page has ``page_end == page``; a chunk that
+    #: continues a passage across a page break carries the whole range, so a
+    #: citation can point at the pages the evidence actually came from.
+    page_end: int | None = None
     language: str = "bn"
     version: str = "sample-v1"
     content_type: str = "text"

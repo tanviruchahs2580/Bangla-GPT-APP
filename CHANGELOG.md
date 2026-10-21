@@ -15,10 +15,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- feat(api): production connection posture, truthful readiness, boot index metric
+- feat(api): logout token revocation, security headers, infra hardening and privacy docs
+- feat(api): production connection posture, truthful readiness, boot index metric; full-suite Postgres parity in CI (#29)
+- feat(api): render errors as RFC 9457 problem+json, additively
+- feat(api): strict schemas, idempotent writes, streamed CSV import, one pagination policy
+- feat(audit): wave 6 — split the god modules, prerender the public routes, close the measured gaps
+- feat(audit): wave 7 — meet the citation target, cut the pre-paint boot, batch the transcript
+- feat(auth): rotating refresh tokens, impersonation limits, central tenancy filter
+- feat(eval): live model run with recorded responses, replayed in PR CI
+- feat(eval): reconstruct the golden set independently; widen red-team to 43 cases
+- feat(eval): variant matrix, held-out targets with CIs, index budget, ANN sweep, one rag-eval command
 - feat(i18n): land Bangla copy for the status and impersonation strings
+- feat(mobile): fail-closed Play Store signing, AAB build path, launch runbook
+- feat(obs): per-stage traces, business metrics, SLO/runbook, cost dashboard and generated API reference
+- feat(quality): complexity/file-size/dead-code/deps/duplication ratchet + as-built architecture map
 - feat(rag): event-loop hardening, hot-path observability, follow-up retrieval; gate CI on retrieval baselines + CodeQL SAST (#27)
+- feat(rag): rank-aware retrieval metrics, chunk-boundary rules, index lifecycle and corpus dedupe
 - feat(rag): retrieval-quality rework - fair gate, query lanes, measured rank lift
+- feat(rag): token-budgeted context, versioned prompts, hint-first pedagogy, wider safety sets
+- feat(web): Bangla i18n glossary, native-review sheet, offline quota, TTS controls and dialog unification
+- feat(web): a live check for the deployed app, and the production deploy it verified
+- feat(web): a11y/perf/visual suites, shared settings components, consent-gated telemetry UI
 - feat(web): login page background image with dark/light theme sync
 - feat(web): student section background image with dark/light sync
 
@@ -30,6 +47,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): close two moderation false negatives and cover the chat routes
 - fix(api): derive the school analytics day window in Asia/Dhaka
 - fix(api): drop an unused variable the new RUF059 rule caught
+- fix(api): drop the unverified helpline number from self-harm support copy
+- fix(api): flush SSE streams through buffering proxies
 - fix(api): gate evals on hybrid retrieval, de-tautologize golden set, precompute BM25 trigrams, single-pass redteam (A13, A8, A18)
 - fix(api): harden authentication, session end and abuse limits
 - fix(api): impersonation revocation fails closed when cache is down (F-08)
@@ -40,11 +59,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): one weak-chapter rule, a survivable mastery rollup and content-verified images
 - fix(api): record an explicit auth decision on every public operation
 - fix(api): redact exception tracebacks in logs
+- fix(api): refuse account deletion from an impersonation session
 - fix(api): remove the dead 'answer is None' regeneration branch (A25)
 - fix(api): repair corrupted Bengali in tutor prompts, feedback IDOR, dead code
 - fix(api): repair the retrieval evaluation's coverage-gate call
 - fix(api): restore middleware_stack and circuit_breaker to last-green versions
 - fix(api): restore the documented build_limiter patch seam in create_app
+- fix(api): retry create_all on the schema race between booting workers
 - fix(api): rotate token epoch on password change/reset — sessions revoke (F-05)
 - fix(api): ruff format circuit_breaker
 - fix(api): ruff format middleware_stack
@@ -54,11 +75,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): vision-honest refusal for openai, max_output_tokens cap, transport retries (A10, A9, A16)
 - fix(api): wall school-less staff into the shared default school (F-04)
 - fix(api,web): audit remediations — breaker recovery, MFA/chat rate limits, CORS PATCH, model-refusal honesty, test runner
+- fix(audit): the placeholder sweep must not flag type-checking declarations
 - fix(auth): bind JWTs to an issuer and audience
 - fix(auth): hash passwords with Argon2id and upgrade legacy hashes on login
 - fix(auth): redeem single-use codes with a compare-and-set, not a read-then-write
 - fix(auth): unblock login on web and APK (MFA step-up, unauth resend, proxy/APK errors)
+- fix(ci): drop the two out-of-convention shebangs; format the datetime test
 - fix(ci): exempt changelog-regenerating commits by changed paths, not subject text
+- fix(ci): formatting, generated-artifact newline, and one shellcheck warning
+- fix(ci): make the commit-subject gate testable anywhere; lint fixes the CI run caught
 - fix(ci): make the doc-path guard cover the classes of path it claims to
 - fix(ci): make the lockfile guardrail deterministic
 - fix(ci): pin every action to a commit SHA and scope registry permission
@@ -67,36 +92,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(ci): serialise release and deploy runs per git ref
 - fix(ci): unblock Dependabot PRs and name the Vercel credential failure (#9)
 - fix(ci): upgrade setuptools before pip-audit; refresh lock to current resolution
+- fix(compose): writable HOME for gunicorn's control socket; drop the dead SettingsRegistry
+- fix(db)!: track the db/models package; narrow the /models/ ignore rule
 - fix(db): reconcile ORM/migration drift so alembic check passes
+- fix(deps)+test(e2e): pypdf 6.21.2 for CVE-2026-113786; diagnose the focus flake
+- fix(deps): bump certifi to 2026.10.19 for GHSA-6q48-6c7w-9gw2
+- fix(deps): bump pillow to 13.0.0 for the 2026-11xx CVE cluster
+- fix(deps): bump pypdf to 6.20.1 for the 2026-11xxx advisory pair
+- fix(deps): declare packaging, the lockfile gate's own import
+- fix(deps): declare radon, the one ratchet tool the script imports
+- fix(deps): lock radon and make deptry's import mapping environment-independent
+- fix(deps): record the pypdfium2 finding under both path separators (CI reports forward slashes)
+- fix(e2e): raise the harness login rate limit above the suite's own login volume
 - fix(encoding): add .gitattributes and repair three encoding defects
+- fix(eval): read faithfulness against the retrieved evidence; format and keep the gate green
 - fix(i18n): put the parent digest and the printed papers in Bangla, and correct five copy defects
+- fix(nctb): recover the chunker lost to a split truncation, fix two packing rules, regenerate the corpus
+- fix(ops): point the Grafana dashboard at the exported metric names
 - fix(ops): stop publishing the API on a random host port, and make the release gate real
 - fix(pdf): enable Bengali complex-script shaping in PDF renderers
+- fix(quality): close every ratchet finding CI reported (each fixed at the source)
+- fix(quality): keep the CI-only deptry entries and record the sweep's growth
+- fix(rag): attach the citations an answer leans on; measure TTFT live (A8-08, A9-01)
+- fix(rag): enforce post-generation grounding (citation + numeric) instead of warning
 - fix(rag): framing-plane coverage, cross-script gate resolution, in-corpus weighting
 - fix(rag): locative reclassification + short-token roman guard
+- fix(rag): report true recall@1 in retrieval evaluation
 - fix(rag): roman-lane floor, edit-similarity rank, MRR unit, trailing newline
 - fix(rag): runtime prompt-injection screening at the query boundary
+- fix(rag): strip symbol-font PUA residue and gate corpus quality at build and load
+- fix(rag): the chunk-ablation script crashed on the pages artifact
+- fix(scripts): compute the benchmark's throwaway JWT value instead of writing a literal
+- fix(scripts): satisfy the repo-wide hooks on the root scripts (PLC0206, formatting)
+- fix(scripts): set the executable bit on the three new shebang scripts
 - fix(sec): refuse unsafe production defaults at boot
 - fix(sec): stop serving the OpenAPI reference in production
+- fix(tests): the live A/B assertion points at the committed record, not audit scratch
+- fix(web): WCAG 2.2 fixes on the public routes
 - fix(web): clear footer from bottom nav + cut a round-trip from login
 - fix(web): clear the two WCAG AA failures axe found on the tutor screen
+- fix(web): clear the two design-token regressions the guardrails gate caught
 - fix(web): close-JSDoc sequence inside edge-proxy comment broke Vercel TS build
 - fix(web): configurable production API origin via edge proxy (FE-01)
+- fix(web): correct the password-hashing claim in the legal copy
+- fix(web): drop the regex HTML stripper and guard the image-preview sink
 - fix(web): guarantee minimum gap between stacked page sections
 - fix(web): guard the tutor turn, bound stalled requests and clear data on sign-out
+- fix(web): keep Enter out of IME composition and truncate by grapheme
 - fix(web): let an anonymous visitor change the interface language
 - fix(web): localize consent/invite copy, theme icon sync, error states, icon cleanup
 - fix(web): make the register screen's email-verification step usable
+- fix(web): modal focus/backdrop defects, truthful grounding UI, shared test harness
+- fix(web): move the list key onto the element the map returns
 - fix(web): notification panel no longer clipped off the left edge
 - fix(web): raise three status tokens to the WCAG AA contrast minimum
 - fix(web): recover from page errors, report load failures, and never show another child's data
 - fix(web): report a dead API origin accurately, not as a busy server (#14)
+- fix(web): revert the deferred boot, keep the rest of the wave-7 pre-paint work
 - fix(web): route /api/* explicitly to the edge proxy function
+- fix(web): split transport deadlines and the CSV import panel out of god-files
 - fix(web): stop rendering remote images in answers and announce each answer once
 - fix(web): stop showing failures as facts, and read API timestamps as UTC
+- fix(web): stop swallowing failed writes; roll back the bookmark toggle
+- fix(web): verified visual baselines, three-engine green, Play Store listing assets
+- fix(web,e2e): bn plural expectation, empty-sub geometry, ratchet line budget
+- fix(web,e2e,scripts): close the CI failures the wave introduced
+- fix: A7-05 per-role in-flight caps and A7-08 teacher AI disclaimer
 - fix: complete admin password-change flow, tutor typo gate, roster-scoped stats, quiz distractors, i18n
+- fix: corpus test skip on CI, AITutorPage pagination, and the loader split as final shape
 - fix: land the verified remediation on current main (CORS-adjacent, budget, UI states)
 - fix: resolve mypy 2.4.0 type errors in teacher/school/common/weakness
+- fix: wave-4 closing batch — ratchet baseline, brand tokens, loade split, role caps, env parity
+- fix: wave-4 quality batch — C-10 pagination parity, G-24 PDF None-render, D-16 in-app confirm, tokenizer unit collision
 
 ### Security
 
@@ -120,17 +187,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### CI/CD
 
+- ci(deploy): run the prerender smoke check before the API-origin one
+- ci(deploy): ship the prerendered build from CI, and prove it shipped
+- ci(mobile): avoid the reserved example domain in the android workflow comment
+- ci(security): record the reviewed benchmark fixture in the gitleaks allowlist
 - ci: add CI-gated Vercel production deploy workflow
 - ci: add concurrency to api CI, fix eval-gate header, retire sanity workflow
 - ci: bound job runtimes and harden release/deploy workflows
+- ci: fetch tags in the make-parity job; record the last three commits in the CHANGELOG
 - ci: gate a release on a successful CI run for the tagged commit
 - ci: hermetic import-time settings patch + step-isolated migration DBs
+- ci: lint/scan/replay jobs, prompt packaging, packaging locks, release attestations
 - ci: require a real 200 before calling a web deploy healthy
 - ci: run the skipped Redis and Postgres paths and enforce the hook set
+- ci: wire the handoff gates into workflows
 
 ### Documentation
 
+- docs(adr): record the data and artifact management decision (K-05)
+- docs(audit): final audit report (INCOMPLETE — BLOCKED) + changelog refresh
 - docs(audit): record the merge and live-production outcome
+- docs(audit): refresh the audit report for the second remediation pass (61.0/100)
+- docs(audit): wave-3 report — score 83.0/100, live evaluation closed, caps re-checked
+- docs(changelog): record the A8-08 citation selection and the A9-01 TTFT profile
+- docs(changelog): record the CI-fix commits
+- docs(changelog): record the dependency-audit bump and the baseline fix
+- docs(changelog): record the e2e-evidence wave
+- docs(changelog): record the faithfulness-evidence fix and the embedding backend
+- docs(changelog): record the hook, spelling and retry-discipline commits
+- docs(changelog): record the ratchet-fix commit
+- docs(changelog): record the wave-3 commits
+- docs(changelog): record the wave-5 recovery, corpus and web batches
+- docs(changelog): regenerate for the ratchet-baseline fix
+- docs(changelog): regenerate for the wave-6 commit
+- docs(changelog): regenerate for the wave-6 follow-up commits
+- docs(changelog): regenerate for the wave-7 commit
+- docs(ci): refresh the lighthouse and mutation-sample rows to the measured state
+- docs(compliance): record the provider's current terms, tier by tier (A7-04)
+- docs(dx): threat model, AI system card, OpenSSF self-assessment, devcontainer and Make targets
 - docs(qa): publish the 2026-10-16 audit report; refresh the lockfile within its ranges
 - docs(qa): publish the 2026-10-17 QA record and archive its predecessor
 - docs(qa): record the 2026-10-17 deployment and how it was verified
@@ -141,10 +235,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(qa): record the post-merge CI evidence and the live Dependabot result
 - docs(qa): record the registration-backdrop change and its deployment
 - docs(qa): record the role-based acceptance run and the live deployment
+- docs(rag): correct the measured-baseline table to the fixed harness
+- docs(rag): quote the current artifact instead of the pre-regeneration numbers
+- docs(runbook): the prebuilt deploy path, and what a dead API_ORIGIN looks like live
+- docs(spelling): add the three words the operations docs need (promtool, unredacted, pseudonymised)
 - docs: add 2026-10-06 QA audit and final certification reports
 - docs: add a CHANGELOG generated from git history, and a check that keeps it honest
 - docs: add final QA report for 2026-10-07 UAT completion
+- docs: audit wave-3 records, SBOM/DAST artefacts, tenancy and statelessness notes
 - docs: correct stale facts and move point-in-time reports to the archive
+- docs: fix the loader path named in the NCTB pipeline guide
+- docs: name only paths that exist in the corpus and security guides
 - docs: phase-2 CI/CD pipeline execution record (v0.9.2 shipped through full pipeline)
 - docs: pin the deploy host key, make the quick starts real, and repair script hygiene
 - docs: purge session-report accumulation, rewrite README, add docs index
@@ -158,10 +259,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate the CHANGELOG for the QA-record amendment
 - docs: regenerate the CHANGELOG for the RAG retrieval rework
 - docs: regenerate the CHANGELOG for the acceptance-testing fixes
+- docs: regenerate the CHANGELOG for the audit remediation commits
 - docs: regenerate the CHANGELOG for the branch's final commits
 - docs: regenerate the CHANGELOG for the delivery record
 - docs: regenerate the CHANGELOG for the deployment record
+- docs: regenerate the CHANGELOG for the gitleaks allowlist entry
 - docs: regenerate the CHANGELOG for the injection screen
+- docs: regenerate the CHANGELOG for the key-prop fix
 - docs: regenerate the CHANGELOG for the locative reclassification fix
 - docs: regenerate the CHANGELOG for the post-merge CI record
 - docs: regenerate the CHANGELOG for the redeploy record
@@ -170,23 +274,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate the CHANGELOG for the scripts commit
 - docs: regenerate the CHANGELOG for the test and QA-record commits
 - docs: regenerate the CHANGELOG for this branch's commits
+- docs: repoint the pre-split module paths and add the prerender words
+- docs: satisfy the markdown and spelling gates the wave's new docs tripped
 - docs: ship the bundled font's licence, third-party notices, contributing guide
+- docs: the AI system card cites current numbers and an artifact that exists
+- docs: truthful disclosure channel, corpus step, pipeline gate and PDF engine copy
+- docs: wave-4 report (96.8/100) — register 241 PASS / 18 PARTIAL / 0 FAIL
 
 ### Tests
 
 - test(api): cover school admin fallbacks and tenant guards
-- test(ci): run the full domain suite on Postgres with truncation isolation
+- test(api): make the injection-guard fixture grounded under the enforced contract
+- test(e2e): Playwright smoke scaffold and a sqlite boot-timeout regression test
+- test(e2e): drop the CI retry pattern; A4-02 backend tests and the ADR record
+- test(e2e): scope the sign-out selector to the header
+- test(e2e): wait for the classes screen before sweeping its tab stops
+- test(e2e): wait for the session in signIn, not just the submit click
+- test(eval): commit the fresh live recording the replay gate reads
 - test(school): cover the aggregation routes TST-04 flagged as unexercised
 - test(tenancy): cover school dashboard routes across two tenants
 - test(web): assert the changed behaviour instead of the old literals
 - test(web): drop remaining plan-tracker tags from suite titles
+- test(web): the i18n key scan uses a build-time glob, not a filesystem walk
 
 ### Maintenance
 
 - chore(api): remove unresolvable plan-tracker tags from comments
+- chore(quality): record the transcript file's prettier-corrected size; regenerate the changelog
 - chore(scripts): make the shebang executable real for the five scripts that have one
 - chore(security): allowlist the reviewed ASCII-art hit in the full-history secret scan
 - chore(web): repoint /api proxy to current tunnel host (quick-tunnel rotation)
+- chore: apply the repository's pre-commit hooks to the second-pass files
+- chore: checkpoint before switching to main
 - chore: code honesty - unused args, un-typed db params, inert suppressions, stale comments
 - chore: satisfy the two CI guardrails main added after this branch's baseline
 - fmt: ruff format teacher.py _room_counts
@@ -197,6 +316,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - style(api): reformat SchoolInvite claim call
 - style(api): ruff format four test files (format-gate drift)
 - style(api): ruff format mock provider and lesson plan prompt
+- style(scripts): parenthesise the scanner's exemption reasons for ruff ISC004
+- style(tests): ruff format the threshold test (CI formatting gate)
 - style(web): give the registration screen login's photo backdrop
 - style: satisfy the repository's own pre-commit hooks
 

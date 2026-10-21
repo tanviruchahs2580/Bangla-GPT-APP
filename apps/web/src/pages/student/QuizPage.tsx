@@ -254,7 +254,7 @@ export default function QuizPage() {
   // ----- result screen -----
   if (result) {
     return (
-      <main className="shell-main">
+      <main id="main-content" tabIndex={-1} className="shell-main">
         <section className="section-head">
           <h2>{t("yourQuizResult")}</h2>
         </section>
@@ -345,7 +345,7 @@ export default function QuizPage() {
     const chosen = answers[current];
     const answeredCount = Object.keys(answers).length;
     return (
-      <main className="shell-main">
+      <main id="main-content" tabIndex={-1} className="shell-main">
         <section className="section-head">
           <h2>{t("practiceTitle")}</h2>
           <Badge>
@@ -440,7 +440,7 @@ export default function QuizPage() {
   });
 
   return (
-    <main className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       <section className="section-head">
         <h2>{t("practiceTitle")}</h2>
       </section>

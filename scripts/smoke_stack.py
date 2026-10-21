@@ -61,17 +61,13 @@ status, body = call(
 )
 step("tutor/ask 200 grounded", status == 200 and body.get("grounded") is True)
 
-status, body = call(
-    "POST", "/quizzes", {"student_id": profile_id, "num_questions": 2}, token=token
-)
+status, body = call("POST", "/quizzes", {"student_id": profile_id, "num_questions": 2}, token=token)
 attempt_id = (body or {}).get("attempt_id")
 step("quiz start 200", status == 200 and attempt_id is not None)
 
 if attempt_id is not None:
     answers = [0] * len(body.get("questions", []))
-    status, _ = call(
-        "POST", f"/quizzes/{attempt_id}/submit", {"answers": answers}, token=token
-    )
+    status, _ = call("POST", f"/quizzes/{attempt_id}/submit", {"answers": answers}, token=token)
     step("quiz submit 200", status == 200)
 
 status, body = call("GET", "/users/me/export", None, token=token)

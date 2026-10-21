@@ -2,6 +2,7 @@ import json
 import re
 from collections.abc import AsyncIterator
 
+from bangla_gpt_api.providers.base import SamplingParams
 from bangla_gpt_api.services.answer_structure import (
     SECTION_CHECK,
     SECTION_EXAMPLE,
@@ -21,10 +22,20 @@ class MockLLMProvider:
     # Vision-honesty contract (A10): the mock has no eyes; chat routes
     # refuse image turns up front (see deps._provider_lacks_vision).
     supports_vision = False
+    # A6-06: the parameter is accepted for protocol parity. The mock's output
+    # is a pure function of the prompt, so there is nothing to sample -- which
+    # is exactly the determinism the real providers are pinned to.
+    supports_sampling = True
 
     async def generate(
-        self, prompt: str, *, system: str | None = None, image: dict | None = None
+        self,
+        prompt: str,
+        *,
+        system: str | None = None,
+        image: dict | None = None,
+        sampling: SamplingParams | None = None,
     ) -> str:
+        # `sampling` is accepted for protocol parity (A6-06).
         # `image` is accepted for protocol parity. The mock provider
         # cannot see images; chat routes refuse vision turns for mock mode
         # BEFORE calling here (services/tutor.VISION_UNSUPPORTED_ANSWER), so
@@ -305,10 +316,33 @@ class MockLLMProvider:
             ensure_ascii=False,
         )
 
+    def count_tokens(self, text: str, *, system: str | None = None) -> int:
+        """A5-01: the mock's "vendor" count IS the heuristic upper bound.
+
+        The exact-token-counting path (settings.llm_exact_token_counting)
+        needs a provider-side count_tokens; the mock has no vendor to ask, so
+        it reports the SAME calibrated heuristic the app uses by default --
+        the ceil-based context estimate (services.context), not the
+        floor-based cost estimate, so a calibration audit against the mock
+        measures exactly 1.0 instead of a floor/ceil artifact. Honestly, under
+        its own counter name, and ``count_tokens_is_vendor`` False makes the
+        non-vendor provenance visible.
+        """
+        from bangla_gpt_api.services.context import HeuristicTokenCounter
+
+        return HeuristicTokenCounter().count((system or "") + text)
+
+    count_tokens_is_vendor = False
+
     async def stream(
-        self, prompt: str, *, system: str | None = None, image: dict | None = None
+        self,
+        prompt: str,
+        *,
+        system: str | None = None,
+        image: dict | None = None,
+        sampling: SamplingParams | None = None,
     ) -> AsyncIterator[str]:
         """Yield the mock answer in small chunks to exercise SSE consumers."""
-        answer = await self.generate(prompt, system=system, image=image)
+        answer = await self.generate(prompt, system=system, image=image, sampling=sampling)
         for i in range(0, len(answer), _CHUNK_SIZE):
             yield answer[i : i + _CHUNK_SIZE]

@@ -1,0 +1,50 @@
+{
+ "budgets": {
+  "build_seconds": 120.0,
+  "search_p95_ms": 1500.0
+ },
+ "build": {
+  "build_seconds": 11.145,
+  "chunks": 1565,
+  "definition": "build_seconds is a clean build of BM25 + vector + hybrid; index_peak_alloc_mb is a SECOND build under tracemalloc (which slows the build, so its time is not reported)",
+  "index_bytes_per_chunk": 100566.5,
+  "index_peak_alloc_mb": 150.1,
+  "load_seconds": 1.966,
+  "mean_chunk_text_bytes": 3522.2,
+  "search_latency": {
+   "n": 6,
+   "p50_ms": 51.45,
+   "p95_ms": 148.157
+  },
+  "within_budget": {
+   "build_seconds": true,
+   "search_p95_ms": true
+  }
+ },
+ "cold_start": {
+  "cold_start_total_ms": 14934.583,
+  "cold_start_work_ms": 14615.823,
+  "definition": "cold_start_total_ms = fresh `python -c` process wall time for imports + corpus load + index build; cold_start_work_ms is the in-child measurement of load+build only; interpreter_baseline_ms is `python -c pass` on the same machine. status=failed means the child process failed and every number beside it is null.",
+  "interpreter_baseline_ms": 109.518,
+  "status": "measured",
+  "stderr_tail": null
+ },
+ "disk": {
+  "normalized_chunk_file_bytes": 7411971,
+  "normalized_chunk_file_count": 9,
+  "quality_report_bytes": 97998,
+  "total_artifact_bytes": 7509969
+ },
+ "generated_by": "bangla_gpt_api.evaluation.index_budget",
+ "run_conditions": {
+  "corpus": "nctb:C:\\Users\\DST\\projects\\Bangla GPT APP\\data\\nctb",
+  "host": "DESKTOP-GET9GA6",
+  "note": "timings are host-dependent; the budget check is against the stated numbers",
+  "platform": "Windows-11-10.0.26300-SP0",
+  "python": "3.12.10"
+ },
+ "within_budget": {
+  "build_seconds": true,
+  "search_p95_ms": true
+ }
+}

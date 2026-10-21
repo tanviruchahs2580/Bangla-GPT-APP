@@ -17,7 +17,7 @@ boundary and HSTS is the proxy's job.
 
 ## Layout
 
-```
+```text
 src/bangla_gpt_api/
   main.py            app factory only; boot concerns are in initialize/
   initialize/        settings, observability, middleware, lifespan, schedulers

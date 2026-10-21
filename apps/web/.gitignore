@@ -5,6 +5,10 @@ dist
 .env*
 .vercel
 
+# Lighthouse CI's working directory (raw LHR json/html for the last run).
+# The reviewed artifacts are the assertions and the uploaded CI reports.
+.lighthouseci/
+
 # Capacitor. android/ is deliberately TRACKED, not ignored: the APK is built
 # from it (docs/mobile_release.md), so the manifest, gradle config and
 # resources are release inputs, not regenerable scaffold. Listing it here

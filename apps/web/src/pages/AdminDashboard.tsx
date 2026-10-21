@@ -259,7 +259,7 @@ export default function AdminDashboard() {
   }
 
   return (
-    <>
+    <main id="main-content" tabIndex={-1}>
       <h1 className="page-title">{t("adminDashboard")}</h1>
 
       <AiQualityCard />
@@ -766,6 +766,6 @@ export default function AdminDashboard() {
           </button>
         </p>
       </div>
-    </>
+    </main>
   );
 }

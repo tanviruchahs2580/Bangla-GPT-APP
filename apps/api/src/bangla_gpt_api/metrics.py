@@ -101,3 +101,87 @@ RAG_CITATION_CHECKS_TOTAL = Counter(
     labelnames=["result"],
     registry=REGISTRY,
 )
+
+# --------------------------------------------------------------------------
+# Business signals (AUD-HI-03 / I-02). The RAG counters above answer "is the
+# pipeline healthy"; these answer "is the product being used and is it
+# refusing more than it used to". Both were previously derivable only by
+# querying the ai_usage table, so no dashboard or alert could see them.
+# --------------------------------------------------------------------------
+
+#: One increment per completed tutoring turn. ``outcome`` is a fixed
+#: vocabulary so `refused / total` is a stable, dashbordable refusal rate
+#: (the per-reason split stays on bgpt_rag_gate_refusals_total).
+AI_ANSWERS_TOTAL = Counter(
+    "bgpt_ai_answers_total",
+    "Tutor answers by route and outcome (answered or refused); refusal rate = refused / total.",
+    labelnames=["route", "outcome"],
+    registry=REGISTRY,
+)
+
+#: Estimated tokens by direction, from the same estimator the cost ledger
+#: uses (services/costs.py). Labelled by model so a provider switch is
+#: visible in the token mix before it shows up on the invoice.
+AI_TOKENS_TOTAL = Counter(
+    "bgpt_ai_tokens_total",
+    "Estimated LLM tokens (planning estimate, see services/costs.py) by model and direction.",
+    labelnames=["model", "direction"],
+    registry=REGISTRY,
+)
+
+#: Estimated spend in USD, list-price based. The monthly-budget burn alert in
+#: deploy/prometheus/alerts.yml and the cost dashboard panel both read this.
+AI_COST_USD_TOTAL = Counter(
+    "bgpt_ai_cost_usd_total",
+    "Estimated LLM spend in USD (list-price estimate, see services/costs.py) by model and route.",
+    labelnames=["model", "route"],
+    registry=REGISTRY,
+)
+
+#: The operator-configured global monthly AI budget (0 = not configured).
+#: Exported as a gauge rather than created on demand because an alert rule
+#: cannot reference a series that may not exist; the burn-rate rule in
+#: deploy/prometheus/alerts.yml therefore gates on ``> 0``, so an unset
+#: budget can never produce a false page.
+AI_MONTHLY_BUDGET_USD = Gauge(
+    "bgpt_ai_monthly_budget_usd",
+    "Operator-configured global monthly AI budget in USD (0 = not configured).",
+    registry=REGISTRY,
+)
+
+#: Async job outcomes (teacher Create hub). ``kind`` is the document kind,
+#: ``status`` is the terminal status (ready or failed) -- a rising failed
+#: share is the signal that generation quality or the provider is degrading.
+AI_JOBS_TOTAL = Counter(
+    "bgpt_ai_jobs_total",
+    "Async AI generation jobs by kind and terminal status (ready or failed).",
+    labelnames=["kind", "status"],
+    registry=REGISTRY,
+)
+
+
+def set_ai_budget_usd(budget_usd: float) -> None:
+    """Publish the configured global monthly AI budget (0 = not configured).
+
+    Called once per app build. The gauge is what makes the burn-rate alert in
+    ``deploy/prometheus/alerts.yml`` meaningful without hard-coding a dollar
+    figure in the rule file; the rule gates on ``> 0``, so the unset default
+    cannot fire.
+    """
+    AI_MONTHLY_BUDGET_USD.set(float(budget_usd) if budget_usd and budget_usd > 0 else 0.0)
+
+
+#: The bounded route vocabulary for bgpt_ai_answers_total. Anything else is
+#: folded into "other" (defence against label-cardinality growth).
+TUTOR_ROUTES = frozenset({"tutor", "tutor.chat", "tutor.chat.stream", "quiz_explain"})
+
+
+def record_tutor_answer(route: str, outcome: str) -> None:
+    """Count one finished tutoring turn (outcome: ``answered`` | ``refused``).
+
+    Bounded label values only -- an unexpected value is folded into
+    ``other`` so a future call site cannot inflate the series count.
+    """
+    safe_outcome = outcome if outcome in ("answered", "refused") else "other"
+    safe_route = route if route in TUTOR_ROUTES else "other"
+    AI_ANSWERS_TOTAL.labels(route=safe_route, outcome=safe_outcome).inc()

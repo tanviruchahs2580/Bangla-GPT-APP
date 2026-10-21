@@ -10,6 +10,7 @@ cheap; the pgvector backend for the real NCTB corpus is infrastructure
 from bangla_gpt_api.curriculum.models import Chunk
 from bangla_gpt_api.retrieval.bm25 import Hit
 from bangla_gpt_api.retrieval.embedding import Embedder
+from bangla_gpt_api.retrieval.filters import chunk_matches_filters
 
 
 def vector_text(chunk: Chunk) -> str:
@@ -37,17 +38,22 @@ class VectorIndex:
         class_level: int | None = None,
         subject: str | None = None,
         chapter: str | None = None,
+        content_type: str | None = None,
+        version: str | None = None,
         top_k: int = 4,
         min_score: float = 0.0,
     ) -> list[Hit]:
         qv = self.embedder.embed([query])[0]
         hits: list[Hit] = []
         for chunk, vec in zip(self.chunks, self.vectors, strict=True):
-            if class_level is not None and chunk.meta.class_level != class_level:
-                continue
-            if subject is not None and chunk.meta.subject != subject:
-                continue
-            if chapter is not None and chunk.meta.chapter != chapter:
+            if not chunk_matches_filters(
+                chunk,
+                class_level=class_level,
+                subject=subject,
+                chapter=chapter,
+                content_type=content_type,
+                version=version,
+            ):
                 continue
             score = sum(a * b for a, b in zip(qv, vec, strict=True))
             if score > min_score:

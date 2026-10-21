@@ -37,6 +37,37 @@ const TOKEN_KEY = "bgpt_token";
 const ADMIN_TOKEN_KEY = "bgpt_admin_token_backup";
 const IMP_ACTIVE_KEY = "bgpt_impersonating";
 
+/*
+ * Why the bearer token lives in localStorage (AUD-B-04 / B-03):
+ *
+ * The alternative the item prefers — HttpOnly, Secure, SameSite cookies —
+ * requires the API to authenticate from a cookie, which this API does not do:
+ * it is a bearer-token API consumed by (a) this SPA, (b) the Capacitor WebView
+ * on `capacitor://localhost` and (c) the future public API. Cookies would
+ * force credentialed CORS with an exact-origin allowlist per client, would not
+ * travel from the WebView's custom scheme the same way, and would reintroduce
+ * the CSRF surface the token design avoids (`Authorization` is not sent
+ * ambiently by a cross-site request, which is why "no cookie auth" is the
+ * CSRF story in B-16).
+ *
+ * The cost of that choice is XSS reach: any script running on this origin can
+ * read the token. What bounds it today:
+ *   - no `dangerouslySetInnerHTML` anywhere; model output goes through
+ *     `lib/safeMarkdown.tsx`, which renders no raw HTML (react-markdown
+ *     without rehype-raw), allowlists link schemes and refuses remote images;
+ *   - the served CSP (edge/Caddy and the API middleware, not this repo) uses
+ *     `script-src 'self'`/nonce with no `unsafe-inline`, and the SPA ships no
+ *     inline script (`public/theme-boot.js` is a static file);
+ *   - the token is short-lived (60 min) and `logout()` now revokes it
+ *     server-side, so a copied token dies with the session instead of at
+ *     expiry.
+ *
+ * Residual, recorded rather than hidden: a successful XSS still wins until the
+ * token is revoked or expires. Migrating to cookie auth is an API-contract
+ * change with CORS, WebView and CSRF consequences — it belongs to the API
+ * workstream, not to a web-app change.
+ */
+
 /** Called when any API call comes back 401 — lets the app force re-login. */
 let onUnauthorized: (() => void) | null = null;
 export function setUnauthorizedHandler(fn: () => void): void {
@@ -53,18 +84,29 @@ const AUTH_401_PATHS = [
   "/auth/resend-verification",
 ];
 
+import {
+  REQUEST_TIMEOUT_MS,
+  STREAM_CONNECT_TIMEOUT_MS,
+  STREAM_STALL_TIMEOUT_MS,
+  combineSignals,
+  isAbortError,
+  timeoutGuard,
+} from "./lib/requestTimeout";
+
 /**
- * Request timeouts (F-015/F-030). A proxy that accepts the connection and
- * then never answers used to hang the UI forever: a stalled GET left a
- * spinner running, and a stalled answer stream left the tutor in its
- * `streaming` state until the student pressed Stop. The stream is NOT
- * bounded as a whole — long generations are legitimate — it gets a
- * connect/first-byte deadline plus a stall deadline that resets on every
- * received chunk.
+ * Request deadlines and the abort plumbing every call shares live in
+ * `lib/requestTimeout.ts` (transport policy, split out for cohesion); they are
+ * re-exported here so callers and tests keep importing them from `api`.
  */
-export const REQUEST_TIMEOUT_MS = 20_000;
-export const STREAM_CONNECT_TIMEOUT_MS = 20_000;
-export const STREAM_STALL_TIMEOUT_MS = 45_000;
+export {
+  BULK_REQUEST_TIMEOUT_MS,
+  REQUEST_TIMEOUT_MS,
+  STREAM_CONNECT_TIMEOUT_MS,
+  STREAM_STALL_TIMEOUT_MS,
+  combineSignals,
+  isAbortError,
+  timeoutGuard,
+} from "./lib/requestTimeout";
 
 /** Machine-coded timeout error so `friendlyError` and tests can name it. */
 function timeoutError(): ApiError {
@@ -72,62 +114,6 @@ function timeoutError(): ApiError {
     code: "timeout",
     message: "request timed out",
   });
-}
-
-function isAbortError(e: unknown): boolean {
-  return (e as { name?: string } | null)?.name === "AbortError";
-}
-
-/**
- * First abort wins. `AbortSignal.any` where the runtime has it; a manual
- * controller elsewhere (older WebViews, jsdom) so Stop still works there.
- */
-function combineSignals(
-  signals: Array<AbortSignal | undefined>,
-): AbortSignal | undefined {
-  const list = signals.filter((s): s is AbortSignal => s !== undefined);
-  if (list.length === 0) return undefined;
-  if (list.length === 1) return list[0];
-  const anySignal = (
-    AbortSignal as unknown as {
-      any?: (s: AbortSignal[]) => AbortSignal;
-    }
-  ).any;
-  if (typeof anySignal === "function") return anySignal.call(AbortSignal, list);
-  const controller = new AbortController();
-  for (const s of list) {
-    if (s.aborted) {
-      controller.abort();
-      break;
-    }
-    s.addEventListener("abort", () => controller.abort(), { once: true });
-  }
-  return controller.signal;
-}
-
-/**
- * Hard per-request deadline. Implemented with `setTimeout` rather than
- * `AbortSignal.timeout` so tests can drive it with fake timers.
- */
-function timeoutGuard(
-  ms: number,
-  caller?: AbortSignal,
-): {
-  signal: AbortSignal | undefined;
-  timedOut: () => boolean;
-  clear: () => void;
-} {
-  const controller = new AbortController();
-  let timedOut = false;
-  const id = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, ms);
-  return {
-    signal: combineSignals([caller, controller.signal]),
-    timedOut: () => timedOut,
-    clear: () => clearTimeout(id),
-  };
 }
 
 /** True inside the Capacitor WebView (capacitor://localhost origin). */
@@ -264,19 +250,29 @@ async function parseSse(
 export async function api<T>(
   path: string,
   options: RequestInit = {},
-  opts?: { skipUnauthorized?: boolean; signal?: AbortSignal },
+  opts?: {
+    skipUnauthorized?: boolean;
+    signal?: AbortSignal;
+    /** Bearer to send instead of the stored one (sign-out revokes a token it
+     *  has already deleted from storage — see `logout`). */
+    token?: string | null;
+    /** Override the 20 s deadline for a bulk call (see
+     *  ``BULK_REQUEST_TIMEOUT_MS``). Callers that pass this must be able to
+     *  show a busy state for that long. */
+    timeoutMs?: number;
+  },
 ): Promise<T> {
   const headers = new Headers(options.headers);
   if (options.body !== undefined && !(options.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
   }
-  const token = getToken();
+  const token = opts?.token === undefined ? getToken() : opts.token;
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
   // F-015: every non-streaming request is bounded. A caller signal (the
   // tutor's Stop) is combined so either can end the request.
   const caller = opts?.signal ?? options.signal ?? undefined;
-  const guard = timeoutGuard(REQUEST_TIMEOUT_MS, caller);
+  const guard = timeoutGuard(opts?.timeoutMs ?? REQUEST_TIMEOUT_MS, caller);
   try {
     let res: Response;
     try {
@@ -346,7 +342,11 @@ export const get = <T>(path: string) => api<T>(path);
 export const post = <T>(
   path: string,
   body?: unknown,
-  opts?: { skipUnauthorized?: boolean; signal?: AbortSignal },
+  opts?: {
+    skipUnauthorized?: boolean;
+    signal?: AbortSignal;
+    timeoutMs?: number;
+  },
 ) =>
   api<T>(
     path,
@@ -658,18 +658,64 @@ export function setLogoutCleanup(fn: (() => void) | null): void {
   logoutCleanup = fn;
 }
 
+/** How long sign-out waits for the server to confirm the revocation. */
+export const SIGN_OUT_REVOKE_MS = 4_000;
+
 /**
- * Clear every trace of the signed-in user from this device (F-036).
+ * Retire a token on the server (AUD-B-04 / B-03).
+ *
+ * Wiping localStorage ended the session only in this browser: the bearer
+ * token stayed valid at the API until its expiry, so a copy of it — from a
+ * proxy log, a support screenshot, an XSS read — still worked after the user
+ * had "signed out". POST /auth/logout writes the token's jti to the shared
+ * revocation store, which is the half the client cannot do locally.
+ *
+ * Bounded and never throwing: sign-out is a promise the device has to keep
+ * even when the API is unreachable. The caller passes the token explicitly
+ * because `logout` deletes it from storage first (an immediate local
+ * sign-out), and the request still has to carry it.
+ */
+export async function revokeSession(
+  token: string | null = getToken(),
+  timeoutMs = SIGN_OUT_REVOKE_MS,
+): Promise<boolean> {
+  if (!token) return false;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    await api<void>(
+      "/auth/logout",
+      { method: "POST", signal: controller.signal },
+      // A 401 here means the token was already dead — that is this function's
+      // goal, not a reason to bounce the app through the re-login handler.
+      { skipUnauthorized: true, token },
+    );
+    return true;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Clear every trace of the signed-in user from this device (F-036), and end
+ * the session at the API (B-03).
  *
  * Awaitable on purpose: the offline chapter store (IndexedDB) and the
  * registered teardown hooks must finish before sign-out navigates away, or
  * the next user on a shared device inherits this one's downloaded chapters,
- * last-open chapter and full last quiz result.
+ * last-open chapter and full last quiz result. The **local** wipe is
+ * synchronous and comes first — a shared device must be clean the moment the
+ * user signs out, whatever the network is doing — and the server-side
+ * revocation then runs against the token captured before the wipe.
  */
 export async function logout(): Promise<void> {
+  const token = getToken();
   for (const key of USER_STORAGE_KEYS) localStorage.removeItem(key);
   sessionStorage.removeItem(LAST_RESULT_KEY);
   logoutCleanup?.();
+  await revokeSession(token);
   try {
     await clearOfflineChapters();
   } catch {

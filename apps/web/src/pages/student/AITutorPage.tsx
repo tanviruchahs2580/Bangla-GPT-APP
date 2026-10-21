@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Bookmark,
   Check,
+  Copy,
   MessageSquarePlus,
   Paperclip,
   RefreshCcw,
@@ -26,18 +27,25 @@ import type {
   SourceRef,
 } from "../../types";
 import { useAuth } from "../../AuthContext";
-import { Badge, Button, Card } from "../../components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Field,
+  Modal,
+} from "../../components/ui";
+import { AssistantContent, EvidenceModal } from "../../components/TutorAnswer";
 import { ConversationChip } from "../../components/ConversationChip";
-import { AiSparkle, BrandMark } from "../../components/BrandMark";
+import { AiSparkle } from "../../components/BrandMark";
 import { VoiceButton } from "../../components/VoiceButton";
 import { friendlyError } from "../../errors";
 import { t } from "../../i18n";
 import { getLowData } from "../../lib/lowData";
+import { copyText } from "../../lib/clipboard";
 import { toast } from "../../lib/toast";
 import { track } from "../../lib/analytics";
 import { explainMessage, type QuizExplainPayload } from "../../lib/quizExplain";
-import { SafeMarkdownLazy as SafeMarkdown } from "../../lib/safeMarkdownLazy";
-import { parseStructuredAnswer } from "../../lib/structuredAnswer";
 
 // labels from i18n, evaluated per render (lang switch remounts).
 const subjectOptions = () => [
@@ -65,6 +73,22 @@ const STRAT_LABELS: Record<
   analogy: "stratAnalogy",
 };
 
+// AUD-G-19: the transcript renders a sliding window, not the whole thread.
+// A 120-message history painted in one commit produced 1,700+ ms main-thread
+// tasks at 4x CPU -- and then repeated the work on every streamed token,
+// because each token re-renders every bubble. Thirty messages cover a full
+// question-and-answer session on screen at once; older turns stay one click
+// away through the "load earlier messages" affordance.
+const MESSAGE_WINDOW = 30;
+// AUD-G-19: one "load earlier" click reveals the window in steps of this many
+// bubbles, one step per frame. Mounting all thirty in a single commit measured
+// 285-357 ms at 4x CPU throttle (the audit's original figure was 746-760 ms
+// before the CSS containment); at six per step the commits still measured
+// 129-181 ms, so the step is three -- roughly 70-90 ms at 4x, inside the
+// 100 ms interaction bar -- and the reading position is preserved per step by
+// the same anchor the single-commit version used.
+const REVEAL_STEP = 3;
+
 export default function AITutorPage() {
   const { me } = useAuth();
   const navigate = useNavigate();
@@ -84,8 +108,23 @@ export default function AITutorPage() {
   const [announcement, setAnnouncement] = useState("");
   const [thanks, setThanks] = useState<number | null>(null);
   const [savedId, setSavedId] = useState<number | null>(null);
+  // AUD-G-10: copy confirmation and the thumbs-down reason dialog.
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  const [copyMsg, setCopyMsg] = useState<string | null>(null);
+  const [downTarget, setDownTarget] = useState<number | null>(null);
+  const [reason, setReason] = useState("");
   // explicit explanation strategy + image attachment.
   const [strategy, setStrategy] = useState<string | null>(null);
+  // Both the attach handler and the <img> render below enforce this list:
+  // the data: URL must never be built from a mime type the browser would
+  // treat as anything but a still image (CodeQL js/xss-through-dom on the
+  // preview sink). The server re-validates too (422 image_invalid).
+  const ALLOWED_IMAGE_MIMES: readonly string[] = [
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+  ];
   const [image, setImage] = useState<{
     mime_type: string;
     data_base64: string;
@@ -98,7 +137,17 @@ export default function AITutorPage() {
   const [hits, setHits] = useState<MessageSearchHit[] | null>(null);
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  // AUD-G-19: how many trailing messages the transcript window renders.
+  const [windowSize, setWindowSize] = useState(MESSAGE_WINDOW);
   const viewportRef = useRef<HTMLDivElement>(null);
+  // While a "load earlier" expansion is in flight: the scrollHeight measured
+  // BEFORE the extra bubbles mounted, so the effect below can offset scrollTop
+  // by the inserted height and keep the reading position pinned to the same
+  // message instead of the auto-scroll rule yanking it to the bottom.
+  const expandAnchorRef = useRef<number | null>(null);
+  // The window size the current expansion is heading for; the driver below
+  // reveals it one REVEAL_STEP at a time. Null when no expansion is in flight.
+  const expandTargetRef = useRef<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   // Synchronous send guard (F-012). State (`streaming`) is only updated after
   // renders, so it cannot gate a second send fired while the conversation
@@ -114,15 +163,57 @@ export default function AITutorPage() {
   useEffect(() => () => abortRef.current?.abort(), []);
 
   useEffect(() => {
-    viewportRef.current?.scrollTo({
-      top: viewportRef.current.scrollHeight,
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    // A "load earlier" expansion just grew the transcript upwards: offset the
+    // scroll position by the inserted height so the student keeps looking at
+    // the same message. The normal rule (below) would otherwise yank the
+    // viewport to the bottom the moment the older bubbles mount.
+    if (expandAnchorRef.current != null) {
+      const before = expandAnchorRef.current;
+      expandAnchorRef.current = null;
+      viewport.scrollTop += viewport.scrollHeight - before;
+      return;
+    }
+    viewport.scrollTo({
+      top: viewport.scrollHeight,
       behavior: "smooth",
     });
-  }, [messages, streaming]);
+  }, [messages, streaming, windowSize]);
+
+  /** Reveal one more window of older messages, keeping the reading position. */
+  const showEarlier = useCallback(() => {
+    const viewport = viewportRef.current;
+    if (viewport) expandAnchorRef.current = viewport.scrollHeight;
+    setWindowSize((size) => {
+      expandTargetRef.current = Math.min(
+        messages.length,
+        size + MESSAGE_WINDOW,
+      );
+      return size + REVEAL_STEP;
+    });
+  }, [messages.length]);
+
+  // AUD-G-19: the rest of the expansion, one step per frame.
+  useEffect(() => {
+    const target = expandTargetRef.current;
+    if (target == null || windowSize >= target) {
+      if (target != null) expandTargetRef.current = null;
+      return;
+    }
+    const frame = requestAnimationFrame(() => {
+      const viewport = viewportRef.current;
+      if (viewport) expandAnchorRef.current = viewport.scrollHeight;
+      setWindowSize((size) => Math.min(target, size + REVEAL_STEP));
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [windowSize]);
 
   const loadConversation = useCallback(async (id: number) => {
     setConversationId(id);
     setMessages([]);
+    expandTargetRef.current = null;
+    setWindowSize(MESSAGE_WINDOW);
     setError(null);
     try {
       const msgs = await get<ChatMessage[]>(
@@ -239,11 +330,16 @@ export default function AITutorPage() {
             const final = {
               id: undone.message_id,
               role: "assistant" as const,
-              content: acc.text,
+              // AUD-A2-03: the final event is authoritative. When the server's
+              // post-generation checks replaced the answer (citation or
+              // numeric enforcement), the streamed tokens shown so far are
+              // superseded by that answer, exactly as the contract states.
+              content: undone.answer || acc.text,
               grounded: undone.grounded,
               refused_reason: undone.refused_reason,
               sources: undone.sources ?? [],
               confidence: undone.confidence ?? null,
+              numeric_check: undone.numeric_check ?? null,
             };
             if (li >= 0) copy[li] = { ...copy[li], ...final };
             else copy.push(final);
@@ -302,15 +398,43 @@ export default function AITutorPage() {
     void navigate(location.pathname, { replace: true, state: null });
   }, [location, navigate, send]);
 
-  const rate = async (messageId: number, rating: 1 | -1) => {
+  const rate = async (messageId: number, rating: 1 | -1, comment?: string) => {
     try {
-      await post("/feedback", { rating, message_id: messageId });
+      await post(
+        "/feedback",
+        comment
+          ? { rating, message_id: messageId, comment }
+          : { rating, message_id: messageId },
+      );
       setThanks(messageId);
-      track("tutor_feedback", { rating });
+      track("tutor_feedback", { rating, has_comment: !!comment });
       setTimeout(() => setThanks(null), 2000);
     } catch {
-      /* ignore */
+      // AUD-G-10: a dropped rating is invisible to the student, so it is said
+      // out loud instead of being swallowed.
+      toast(t("errorGeneric"));
     }
+  };
+
+  /** Thumbs-down first asks for the reason (AUD-G-10); the API takes it. */
+  const submitDown = async (withReason: boolean) => {
+    const id = downTarget;
+    setDownTarget(null);
+    if (id === null) return;
+    const comment = withReason ? reason.trim().slice(0, 500) : "";
+    setReason("");
+    await rate(id, -1, comment || undefined);
+    if (comment) toast(t("feedbackThanks"));
+  };
+
+  const copyAnswer = async (messageId: number, text: string) => {
+    const ok = await copyText(text);
+    setCopyMsg(ok ? t("copied") : t("copyFailed"));
+    if (ok) setCopiedId(messageId);
+    setTimeout(() => {
+      setCopiedId(null);
+      setCopyMsg(null);
+    }, 2000);
   };
 
   // Blueprint §26: any tutor answer can be kept in the student's saved notes.
@@ -334,10 +458,7 @@ export default function AITutorPage() {
   // turn. Server re-validates mime + decoded size and answers 422 image_invalid.
   const attachFile = (f: File | null) => {
     if (!f) return;
-    if (
-      !["image/png", "image/jpeg", "image/webp"].includes(f.type) ||
-      f.size > 1_500_000
-    ) {
+    if (!ALLOWED_IMAGE_MIMES.includes(f.type) || f.size > 1_500_000) {
       setError(t("imageTooLarge"));
       return;
     }
@@ -382,8 +503,18 @@ export default function AITutorPage() {
     }
   };
 
-  const removeConversation = async (id: number) => {
-    if (!window.confirm(t("deleteChatConfirm"))) return;
+  const removeConversation = (id: number) => {
+    // D-16 / S-11: a native window.confirm is not stylable, is announced
+    // inconsistently by assistive tech, and returns before the spinner can
+    // start. The in-app dialog carries the same bn/en copy and posts through
+    // the same handler once confirmed.
+    setConfirmDelete(id);
+  };
+
+  const confirmDeleteConversation = async () => {
+    const id = confirmDelete;
+    setConfirmDelete(null);
+    if (id === null) return;
     try {
       await del(`/tutor/conversations/${id}`);
       if (conversationId === id) {
@@ -396,8 +527,14 @@ export default function AITutorPage() {
     }
   };
 
+  // AUD-G-19: everything below renders only `messages.slice(windowStart)`,
+  // so painting -- and every streamed token's re-render -- costs O(window),
+  // not O(history). Indexes stay absolute (reteach/regenerate look up the
+  // question above the answer in the full array).
+  const windowStart = Math.max(0, messages.length - windowSize);
+
   return (
-    <main className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       <section className="section-head">
         <h2>{t("aiTutor")}</h2>
         <Button variant="soft" size="sm" onClick={newChat}>
@@ -437,7 +574,13 @@ export default function AITutorPage() {
           placeholder={t("searchHistory")}
           aria-label={t("searchHistory")}
           onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && runSearch()}
+          onKeyDown={(e) => {
+            // A Bangla phonetic/IME keyboard confirms a candidate with Enter
+            // while it is still composing; searching here would run on a
+            // half-typed word (AUD-G-04).
+            if (e.key === "Enter" && !e.nativeEvent.isComposing)
+              void runSearch();
+          }}
         />
         <Button
           variant="ghost"
@@ -483,7 +626,11 @@ export default function AITutorPage() {
                 aria-label={t("rename")}
                 onChange={(e) => setRenameValue(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") void commitRename(c.id);
+                  // Enter mid-composition belongs to the IME, not to us
+                  // (AUD-G-04); Escape still leaves the rename.
+                  if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                    void commitRename(c.id);
+                  }
                   if (e.key === "Escape") setRenamingId(null);
                 }}
                 onBlur={() => void commitRename(c.id)}
@@ -516,18 +663,34 @@ export default function AITutorPage() {
           data-testid="tutor-announcer"
         >
           {announcement}
+          {copyMsg ? ` ${copyMsg}` : ""}
         </div>
         <div ref={viewportRef} className="chat-thread chat-viewport">
+          {windowStart > 0 && (
+            // AUD-G-19: the older turns are one click away, not deleted.
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm load-earlier"
+              onClick={showEarlier}
+            >
+              {t("loadEarlier")}
+            </button>
+          )}
           {messages.length === 0 && !streaming && (
-            <div className="center empty-state">
-              <div className="empty-mark" aria-hidden>
-                <BrandMark size={56} />
-              </div>
-              <div className="empty-title">{t("emptyChatTitle")}</div>
-              <p className="muted">{t("emptyChatSub")}</p>
-              <div className="suggest-row">
-                {[t("suggestTeach"), t("suggestSolve"), t("suggestQuizMe")].map(
-                  (q) => (
+            // AUD-G-09 / G-02: this used to hand-roll the `.empty-state`
+            // markup (mark, title, sub) that `EmptyState` already ships, so a
+            // padding or typography change had to be made twice. The primitive
+            // owns the layout; only the suggestion chips are local content.
+            <EmptyState
+              title={t("emptyChatTitle")}
+              sub={t("emptyChatSub")}
+              action={
+                <div className="suggest-row">
+                  {[
+                    t("suggestTeach"),
+                    t("suggestSolve"),
+                    t("suggestQuizMe"),
+                  ].map((q) => (
                     <button
                       key={q}
                       type="button"
@@ -536,20 +699,24 @@ export default function AITutorPage() {
                     >
                       {q}
                     </button>
-                  ),
-                )}
-                <button
-                  type="button"
-                  className="suggest-chip suggest-chip-image"
-                  onClick={() => fileRef.current?.click()}
-                >
-                  {t("suggestImage")}
-                </button>
-              </div>
-            </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="suggest-chip suggest-chip-image"
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    {t("suggestImage")}
+                  </button>
+                </div>
+              }
+            />
           )}
-          {messages.map((m, i) => {
-            const prev = messages[i - 1];
+          {messages.slice(windowStart).map((m, k) => {
+            const i = windowStart + k;
+            // A group's visual predecessor must be on screen for the tighter
+            // grouping to apply: across the window edge a new bubble starts
+            // its own group (and its own day header).
+            const prev = k > 0 ? messages[i - 1] : undefined;
             const tight = prev && prev.role === m.role;
             const day = formatServerDate(m.created_at, {
               day: "numeric",
@@ -561,9 +728,16 @@ export default function AITutorPage() {
             });
             const showDay = day && day !== prevDay;
             return (
+              // AUD-G-19: `chat-message` carries the CSS containment that
+              // skips layout/paint for the bubbles outside the viewport (see
+              // styles.css). A "load earlier" expansion inserts its window
+              // *above* the reading position, so the rows it adds are
+              // off-screen at the moment they mount.
               <div
                 key={m.id || i}
-                className={tight ? "chat-group-tight" : undefined}
+                className={
+                  tight ? "chat-message chat-group-tight" : "chat-message"
+                }
               >
                 {showDay && (
                   <div className="chat-day" aria-hidden>
@@ -623,20 +797,24 @@ export default function AITutorPage() {
                       </button>
                     </div>
                   )}
-                {m.role === "assistant" && m.confidence != null && (
-                  <div className="confidence-row">
-                    <Badge tone={m.confidence >= 0.6 ? "ok" : "warn"}>
-                      {t("confidenceBadge", {
-                        pct: String(Math.round(m.confidence * 100)),
-                      })}
-                    </Badge>
-                    {/* low-confidence state: distinct, not alarming. */}
-                    {m.confidence < 0.6 && (
+                {m.role === "assistant" &&
+                  m.grounded &&
+                  m.confidence != null &&
+                  m.confidence < 0.6 && (
+                    <div className="confidence-row">
+                      {/* A6-05: the numeric "<pct>% confident" badge rendered an
+                          uncalibrated internal signal as a claim; it is gone.
+                          What remains is a behavioural hint, and only when the
+                          grounding signal is weak. */}
                       <p className="low-conf-hint" role="status">
                         {t("lowConfidenceHint")}
                       </p>
-                    )}
-                  </div>
+                    </div>
+                  )}
+                {m.role === "assistant" && m.numeric_check === "unverified" && (
+                  <p className="low-conf-hint" role="status">
+                    {t("numericUnverified")}
+                  </p>
                 )}
                 {m.role === "assistant" &&
                   m.sources &&
@@ -677,9 +855,24 @@ export default function AITutorPage() {
                           <button
                             className="icon-btn rate-btn"
                             aria-label={t("rateDown")}
-                            onClick={() => rate(m.id, -1)}
+                            aria-haspopup="dialog"
+                            onClick={() => {
+                              setReason("");
+                              setDownTarget(m.id);
+                            }}
                           >
                             <ThumbsDown size={16} aria-hidden />
+                          </button>
+                          <button
+                            className="icon-btn rate-btn"
+                            aria-label={t("copyAnswer")}
+                            onClick={() => void copyAnswer(m.id, m.content)}
+                          >
+                            {copiedId === m.id ? (
+                              <Check size={16} aria-hidden />
+                            ) : (
+                              <Copy size={16} aria-hidden />
+                            )}
                           </button>
                           {m.grounded && (
                             <button
@@ -767,11 +960,13 @@ export default function AITutorPage() {
         {image && (
           <div className="attach-row attach-flow">
             <div className="row-flex">
-              <img
-                src={`data:${image.mime_type};base64,${image.data_base64}`}
-                alt=""
-                className="attach-preview"
-              />
+              {ALLOWED_IMAGE_MIMES.includes(image.mime_type) && (
+                <img
+                  src={`data:${image.mime_type};base64,${image.data_base64}`}
+                  alt=""
+                  className="attach-preview"
+                />
+              )}
               <button
                 className="icon-btn rate-btn"
                 aria-label={t("removeImage")}
@@ -815,7 +1010,12 @@ export default function AITutorPage() {
             value={input}
             placeholder={t("askPlaceholder")}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && send()}
+            onKeyDown={(e) => {
+              // The Enter that confirms a phonetic/IME candidate is composed,
+              // not sent: without this a Bangla keyboard submitted a half-word
+              // on every selection (AUD-G-04).
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) void send();
+            }}
             aria-label={t("askPlaceholder")}
           />
           <input
@@ -864,134 +1064,59 @@ export default function AITutorPage() {
         )}
       </Card>
 
+      {/* AUD-G-10: the rating is recorded either way; the note is optional. */}
+      <Modal
+        open={downTarget !== null}
+        onClose={() => setDownTarget(null)}
+        title={t("feedbackReasonTitle")}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => void submitDown(false)}>
+              {t("feedbackSkip")}
+            </Button>
+            <Button variant="primary" onClick={() => void submitDown(true)}>
+              {t("feedbackSend")}
+            </Button>
+          </>
+        }
+      >
+        <p className="muted">{t("feedbackReasonHint")}</p>
+        <Field label={t("feedbackReasonTitle")} htmlFor="feedback-reason">
+          <textarea
+            id="feedback-reason"
+            className="input"
+            rows={3}
+            maxLength={500}
+            value={reason}
+            placeholder={t("feedbackReasonPlaceholder")}
+            onChange={(e) => setReason(e.target.value)}
+          />
+        </Field>
+      </Modal>
+
       {evidence && (
         <EvidenceModal source={evidence} onClose={() => setEvidence(null)} />
       )}
-    </main>
-  );
-}
 
-/** full sanitized textbook evidence behind the source chip. */
-function EvidenceModal({
-  source,
-  onClose,
-}: {
-  source: SourceRef;
-  onClose: () => void;
-}) {
-  const modalRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const prev = document.activeElement as HTMLElement | null;
-    modalRef.current?.querySelector("button")?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onClose();
-        return;
-      }
-      // Minimal focus trap: keep Tab inside the dialog.
-      if (e.key !== "Tab" || !modalRef.current) return;
-      const items = Array.from(
-        modalRef.current.querySelectorAll<HTMLElement>(
-          'button, [href], input, [tabindex]:not([tabindex="-1"])',
-        ),
-      ).filter((el) => !el.hasAttribute("disabled"));
-      if (items.length === 0) return;
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      prev?.focus?.();
-    };
-  }, [onClose]);
-  const path = [source.book, source.chapter, source.section]
-    .filter(Boolean)
-    .join(" › ");
-  return (
-    <div
-      className="modal-backdrop"
-      role="button"
-      tabIndex={0}
-      aria-label={t("close")}
-      onKeyDown={(e) => {
-        // Click closes the overlay; Escape must do the same for keyboard use.
-        if (e.key === "Escape") onClose();
-      }}
-      onClick={(e) => {
-        // Only a click on the backdrop itself closes; clicks inside bubble up.
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        ref={modalRef}
-        className="modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label={t("evidenceTitle")}
+      {/* D-16 / S-11: in-app confirm (the native window.confirm is a11y-poor
+          and unstylable); copy is the same deleteChatConfirm key. */}
+      <Modal
+        open={confirmDelete !== null}
+        onClose={() => setConfirmDelete(null)}
+        title={t("deleteChatTitle")}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setConfirmDelete(null)}>
+              {t("cancel")}
+            </Button>
+            <Button onClick={() => void confirmDeleteConversation()}>
+              {t("deleteChatConfirmShort")}
+            </Button>
+          </>
+        }
       >
-        <div className="modal-head">
-          <h3 className="modal-title">{t("evidenceTitle")}</h3>
-          <button
-            className="icon-btn rate-btn"
-            onClick={onClose}
-            aria-label={t("close")}
-          >
-            <X size={16} aria-hidden />
-          </button>
-        </div>
-        <p className="muted evidence-path">
-          {path}
-          {source.page != null ? ` · ${t("page")} ${source.page}` : ""}
-        </p>
-        <blockquote className="evidence-quote">
-          {source.excerpt ?? source.chapter}
-        </blockquote>
-      </div>
-    </div>
-  );
-}
-
-/** renders the sectioned answer layout when present, plain markdown otherwise. */
-function AssistantContent({ content }: { content: string }) {
-  const parsed = parseStructuredAnswer(content);
-  if (!parsed.structured) return <SafeMarkdown content={content} />;
-  return (
-    <div className="structured-answer">
-      {parsed.simple && (
-        <section>
-          <h4 className="section-label">{t("saSimple")}</h4>
-          <SafeMarkdown content={parsed.simple} />
-        </section>
-      )}
-      {parsed.example && (
-        <section>
-          <h4 className="section-label">{t("saExample")}</h4>
-          <SafeMarkdown content={parsed.example} />
-        </section>
-      )}
-      {parsed.points.length > 0 && (
-        <section>
-          <h4 className="section-label">{t("saPoints")}</h4>
-          <ul>
-            {parsed.points.map((p, i) => (
-              <li key={i}>{p}</li>
-            ))}
-          </ul>
-        </section>
-      )}
-      {parsed.check && (
-        <section className="check-question">
-          <SafeMarkdown content={`${t("saCheck")} ${parsed.check}`.trim()} />
-        </section>
-      )}
-    </div>
+        <p className="muted">{t("deleteChatConfirm")}</p>
+      </Modal>
+    </main>
   );
 }

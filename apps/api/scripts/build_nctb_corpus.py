@@ -8,6 +8,8 @@ Stages:
     1. acquire — respectful download of officially linked PDFs
     2. process — extract pages + QC + chunking + JSONL artifacts
     3. classes — derived class detection stamped onto chunk files
+    4. quality — per-chunk content QA gate; the build fails on a corpus
+       that must not be indexed (report: <data-dir>/qa_report.json)
 
 Subsets:
     ssc-science: Secondary বাংলা/ইংরেজি/গণিত/বিজ্ঞান-শাখা/ICT
@@ -18,13 +20,21 @@ Subsets:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
 from bangla_gpt_api.data.nctb_loader import attach_detected_classes
 from bangla_gpt_api.nctb import HSC_ARTIFACTS, SECONDARY_ARTIFACTS
 from bangla_gpt_api.nctb.acquisition import acquire_many
-from bangla_gpt_api.nctb.corpus import load_manifest, process_source
+from bangla_gpt_api.nctb.content_qa import qa_chunks
+from bangla_gpt_api.nctb.corpus import (
+    coverage_report,
+    load_chunks_jsonl,
+    load_manifest,
+    process_source,
+    prune_outputs,
+)
 
 SUBSETS = {
     "ssc-science": [
@@ -68,6 +78,14 @@ def main() -> int:
     parser.add_argument(
         "--max-pages", type=int, default=None, help="limit extraction to first N pages (debug)"
     )
+    parser.add_argument(
+        "--only",
+        default=None,
+        help=(
+            "process only sources whose id contains this substring "
+            "(debug/re-extraction); pruning still considers every acquired source"
+        ),
+    )
     args = parser.parse_args()
 
     raw_dir = args.data_dir / "raw"
@@ -89,8 +107,34 @@ def main() -> int:
 
     records = load_manifest(manifest_path)
     acquired = [r for r in records.values() if r.source_status == "acquired"]
-    print(f"\nProcessing {len(acquired)} acquired sources ...")
-    for record in acquired:
+    if not acquired:
+        print(
+            "No acquired sources in the manifest — the acquisition step did not "
+            "produce raw PDFs, so there is nothing to build. Re-run without "
+            "--skip-acquire (or fix the acquisition errors above).",
+            file=sys.stderr,
+        )
+        return 1
+    # Stale-output prune: derived artifacts of sources that are no longer
+    # acquired must not stay indexable (AUD-A1-07). The loader globs every
+    # *.chunks.jsonl that has a report row, so both the artifact and its
+    # report row are removed here.
+    pruned = prune_outputs(
+        out_extracted, out_normalized, report_path, {r.source_id for r in acquired}
+    )
+    if pruned["sources"]:
+        print(
+            f"Pruned stale outputs of {len(pruned['sources'])} no-longer-acquired "
+            f"source(s): {', '.join(pruned['sources'])}"
+        )
+
+    # --only re-processes a subset (debug/re-extraction) while pruning keeps
+    # every acquired source, so a targeted rebuild can never evict the rest.
+    to_process = [r for r in acquired if args.only is None or args.only in r.source_id]
+    if args.only is not None:
+        print(f"--only {args.only!r}: processing {len(to_process)}/{len(acquired)} sources")
+    print(f"\nProcessing {len(to_process)} acquired sources ...")
+    for record in to_process:
         summary = process_source(
             record,
             raw_dir,
@@ -110,6 +154,60 @@ def main() -> int:
     print("\nDerived class detection:")
     for source_id, detected in detections.items():
         print(f"  {source_id}: {'class ' + str(detected) if detected else 'UNDETECTED'}")
+
+    # Content QA gate: a corpus that fails the per-chunk QA must not be
+    # indexed; the report lists every flagged chunk for investigation.
+    qa_report_path = args.data_dir / "qa_report.json"
+    quality = json.loads(report_path.read_text(encoding="utf-8")) if report_path.exists() else {}
+    qa_report: dict[str, dict] = {}
+    failed_sources: list[str] = []
+    for path in sorted(out_normalized.glob("*.chunks.jsonl")):
+        source_id = path.name.removesuffix(".chunks.jsonl")
+        rows = [
+            {"chunk_id": chunk.chunk_id, "text": chunk.text} for chunk in load_chunks_jsonl(path)
+        ]
+        bangla_source = (
+            float(quality.get(source_id, {}).get("bangla_char_ratio_on_usable", 0.0)) >= 0.5
+        )
+        report = qa_chunks(rows, bangla_source=bangla_source)
+        qa_report[source_id] = report.to_dict()
+        status = "pass" if report.passed else "FAIL"
+        print(
+            f"  qa {status}: {path.name} "
+            f"({report.flagged_chunks}/{report.total_chunks} flagged, "
+            f"issues={report.issues or 'none'})"
+        )
+        if not report.passed:
+            failed_sources.append(path.name)
+    qa_report_path.write_text(
+        json.dumps(qa_report, ensure_ascii=False, indent=2) + chr(10), encoding="utf-8"
+    )
+    print(f"\nContent QA report: {qa_report_path}")
+    if failed_sources:
+        print(
+            "CONTENT QA GATE FAILED — do not index this corpus: " + ", ".join(failed_sources),
+            file=sys.stderr,
+        )
+        return 1
+
+    # Coverage report: what the corpus actually serves per class × subject ×
+    # chapter, and which sources could not be assigned to a class. This is
+    # the artifact the coverage-gated-refusal claim is read against
+    # (AUD-A1-14) — gaps are listed, not inferred from absence of errors.
+    coverage_path = args.data_dir / "coverage_report.json"
+    coverage = coverage_report(out_normalized, report_path)
+    coverage_path.write_text(
+        json.dumps(coverage, ensure_ascii=False, indent=2) + chr(10), encoding="utf-8"
+    )
+    print(f"\nCoverage report: {coverage_path}")
+    for class_level, subjects in coverage["classes"].items():
+        for subject, entry in subjects.items():
+            print(
+                f"  class {class_level} {subject}: {entry['chunks']} chunks, "
+                f"{entry['chapter_count']} chapters"
+            )
+    if coverage["unassigned_sources"]:
+        print(f"  unassigned sources: {', '.join(coverage['unassigned_sources'])}")
 
     print(f"\nQuality report: {report_path}")
     return 0

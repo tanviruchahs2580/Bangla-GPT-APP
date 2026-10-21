@@ -82,23 +82,75 @@ def validate_database_url(settings: Settings) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _safe_init_db(engine: Engine, settings: Settings) -> None:
-    """create_all tolerant of concurrent multi-worker boot (gunicorn -w N)."""
+#: SQLite/Postgres messages that mean "another worker changed the schema under
+#: you" -- the same boot race with different timing. Postgres raises its own
+#: unique-violation errors for the same situation.
+_DDL_RACE_MARKERS = (
+    "database schema has changed",
+    "database is locked",
+    "duplicate key value",
+    "already exists",
+)
+_DDL_RETRY_ATTEMPTS = 5
+_DDL_RETRY_DELAY_SECONDS = 0.5
+
+
+def _init_db_is_skipped(settings: Settings) -> bool:
+    """True when table creation is not this call's job (e.g. managed Postgres)."""
     try:
         from bangla_gpt_api.config import get_settings as _get_s
 
-        s = settings or _get_s()
-        if s.is_production and s.database_url.strip().startswith("postgresql"):
-            return
+        resolved = settings or _get_s()
+        return bool(
+            resolved.is_production and resolved.database_url.strip().startswith("postgresql")
+        )
     except Exception as exc:
         # Unresolvable settings must not stop table creation; the schema that
         # results is valid either way, so record why the check was skipped.
         logging.getLogger(__name__).debug("settings check skipped: %s", exc)
-    try:
-        init_db(engine)
-    except Exception as exc:
-        if "already exists" not in str(exc):
-            raise
+        return False
+
+
+def _init_db_failure_kind(exc: Exception) -> str:
+    """Classify a create_all failure: 'created' | 'retry' | 'raise'."""
+    text = str(exc)
+    if "already exists" in text:
+        return "created"  # a sibling won the race; its schema is what we wanted
+    if any(marker in text for marker in _DDL_RACE_MARKERS):
+        return "retry"
+    return "raise"
+
+
+def _safe_init_db(engine: Engine, settings: Settings) -> None:
+    """create_all tolerant of concurrent multi-worker boot (gunicorn -w N).
+
+    Boot-time DDL races between sibling workers are transient by nature: the
+    winner's schema is exactly what the loser wanted, and the collision is
+    reported differently depending on timing -- "database is locked" (addressed
+    once by the WAL posture) or "database schema has changed" (a prepared DDL
+    statement invalidated by a sibling's CREATE; this took the docker smoke
+    down after the first fix). Retryable failures get a bounded number of
+    attempts; anything else surfaces (AUD-EF-01).
+    """
+    if _init_db_is_skipped(settings):
+        return
+    for attempt in range(1, _DDL_RETRY_ATTEMPTS + 1):
+        try:
+            init_db(engine)
+            return
+        except Exception as exc:
+            kind = _init_db_failure_kind(exc)
+            if kind == "created":
+                return
+            if kind == "raise" or attempt >= _DDL_RETRY_ATTEMPTS:
+                raise
+            logging.getLogger(__name__).warning(
+                "init_db race with a sibling worker (attempt %d/%d): %s",
+                attempt,
+                _DDL_RETRY_ATTEMPTS,
+                str(exc).splitlines()[0] or exc.__class__.__name__,
+            )
+            time.sleep(_DDL_RETRY_DELAY_SECONDS * attempt)
 
 
 def _bootstrap_admin(session_factory: Callable[[], Session], settings: Settings) -> None:
@@ -145,13 +197,29 @@ def _build_tutor(
     circuit_breaker: CircuitBreaker | None,
     fallback_provider: LLMProvider | None,
     term_stats: TermStats | None = None,
+    settings: Settings | None = None,
 ) -> TutorService:
     """Construct the TutorService with optional circuit breaker + fallback.
 
     ``term_stats`` carries corpus document frequencies to the grounding gate
     (weighted content-term coverage). Optional: absence degrades the gate to
     uniform weights over content terms, never to a lie.
+
+    A5-01: with ``settings.llm_exact_token_counting`` the evidence token
+    budget is measured by the provider's own ``count_tokens`` (Gemini REST
+    countTokens; the mock reports the honest heuristic) instead of the
+    calibrated upper bound. Default off -- production keeps the safe bound;
+    a per-call failure of the vendor endpoint falls back to it too.
     """
+    token_counter = None
+    if settings is not None and settings.llm_exact_token_counting:
+        from bangla_gpt_api.providers.token_counter import (
+            ExactTokenCounter,
+            provider_supports_count_tokens,
+        )
+
+        if provider_supports_count_tokens(provider):
+            token_counter = ExactTokenCounter(provider)
     return TutorService(
         index=index,
         provider=provider,
@@ -159,6 +227,7 @@ def _build_tutor(
         circuit_breaker=circuit_breaker,
         fallback_provider=fallback_provider,
         term_stats=term_stats,
+        token_counter=token_counter,
     )
 
 
@@ -179,9 +248,15 @@ def _load_corpus_chunks(settings: Settings) -> tuple[list[Chunk], str]:
         from bangla_gpt_api.data.nctb_loader import load_nctb_corpus
 
         corpus_root = _Path(settings.nctb_corpus_dir)
+        # A2-06: deletion propagation to SERVING — the acquisition manifest
+        # is the ledger of what the pipeline currently acquires, so a source
+        # deleted (or re-acquired as failed) after the last build stops
+        # serving even without a rebuild.
+        manifest_path = corpus_root / "manifests" / "acquisition_manifest.jsonl"
         chunks = load_nctb_corpus(
             corpus_root / "normalized",
             quality_report_path=corpus_root / "quality_report.json",
+            manifest_path=manifest_path if manifest_path.exists() else None,
         )
         if chunks:
             return chunks, "nctb"
@@ -292,6 +367,7 @@ def build_dependencies(
             circuit_breaker,
             fallback_provider,
             term_stats=term_stats,
+            settings=settings,
         )
     else:
         tutor = None
@@ -302,6 +378,13 @@ def build_dependencies(
 
         _me_fn = _real_make_engine
     engine = _me_fn(settings)
+    # I-03: one span per statement on this engine, so a slow request can be
+    # attributed to the DB. No-op unless TRACING_ENABLED is set (it is the
+    # master switch, see tracing.configure_tracing), and it covers the boot
+    # DDL below because it is attached before init_db runs.
+    from bangla_gpt_api import tracing as _tracing
+
+    _tracing.instrument_engine(engine)
     _safe_init_db(engine, settings)
     session_factory = make_session_factory(engine)
 

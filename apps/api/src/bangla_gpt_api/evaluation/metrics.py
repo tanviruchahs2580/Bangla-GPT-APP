@@ -39,6 +39,15 @@ _SENTENCE_SPLIT = re.compile(r"[।\n]+")
 _MOCK_MARK_RE = re.compile(r"^\s*\[mock\]\s*")
 _BULLET_RE = re.compile(r"^\s*[-•*]\s*")
 _LABEL_RE = re.compile(r"^[ঃ।\u0980-\u09ff\s]*?:\s*")
+# A5-01 passage labels: the context builder prefixes each evidence passage with
+# "[id=<chunk> | class 6 › science › chapter › section]" so a citation resolves
+# to the chunk that produced it, and a quoting model (the mock quotes evidence
+# verbatim) returns that line as a sentence. It is app-added scaffolding, the
+# same class as the mock marker and bullets, so it is stripped before overlap
+# and grammar scoring: the metric must not move because a header was added to
+# the prompt (it did: faithfulness 0.855 -> 0.458 in this session's working
+# tree until this strip landed, with the answers otherwise unchanged).
+_PASSAGE_HEADER_RE = re.compile(r"^\s*(?:[-•*]\s*)?\[id=[^\]]*\]\s*")
 
 _JUDGE_INSTRUCTION = (
     "You are a strict faithfulness judge for a Bangla tutoring system. "
@@ -54,9 +63,17 @@ def split_sentences(text: str) -> list[str]:
 
 
 def normalize_sentence(sentence: str) -> str:
-    """Strip answer scaffolding (mock marker, bullet, section label)."""
+    """Strip answer scaffolding (mock marker, bullet, label and passage header).
+
+    The two label passes are not redundant: the mock writes
+    "[mock] সহজ ব্যাখ্যা: [id=... | class 6 › ...]" and "- [id=...] ক্লোরোফিল",
+    so a Bengali label may precede the header or follow it. Both are
+    app-added scaffolding; neither is content.
+    """
     s = _MOCK_MARK_RE.sub("", sentence)
     s = _BULLET_RE.sub("", s)
+    s = _LABEL_RE.sub("", s)
+    s = _PASSAGE_HEADER_RE.sub("", s)
     s = _LABEL_RE.sub("", s)
     return s.strip()
 
@@ -149,6 +166,25 @@ class SuiteMetrics:
         }
 
 
+def _evidence_sources(tutor: Any, item: dict, response: Any) -> list:
+    """The evidence a faithfulness score is about (A8-08).
+
+    What the model RECEIVED (the retrieved passages), not the citations the
+    response chose to display: narrowing the displayed set must not move a
+    number that is about grounding. The tutor is asked for the retrieved set
+    when it exposes the seam; the attached sources remain the fallback (test
+    doubles, callers without a retrieval seam). SourceRef models carry
+    ``excerpt``; plain dicts are tolerated for doubles.
+    """
+    displayed = list(getattr(response, "sources", None) or [])
+    retrieved = getattr(tutor, "retrieved_sources", None)
+    if not callable(retrieved):
+        return displayed
+    return list(
+        retrieved(item["question"], item["class_level"], item.get("subject") or None) or displayed
+    )
+
+
 async def run_suite(
     tutor: Any,
     items: list[dict],
@@ -201,11 +237,9 @@ async def run_suite(
             )
         if resp.grounded:
             answered_total += 1
-            # sources are SourceRef models (schemas.py, excerpt: str | None);
-            # tolerate plain dicts too so test doubles can fake a response.
             evidence = [
                 (s.get("excerpt") or "") if isinstance(s, dict) else (s.excerpt or "")
-                for s in resp.sources or []
+                for s in _evidence_sources(tutor, item, resp)
             ]
             faith = await faithfulness(resp.answer, item["question"], evidence, judge_provider)
             faith_sum += faith["score"]

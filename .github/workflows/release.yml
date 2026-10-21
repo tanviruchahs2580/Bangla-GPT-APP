@@ -184,9 +184,40 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install cosign (pinned)
+        # F-08: images are pushed with an SBOM and buildx provenance; cosign
+        # adds a keyless signature bound to this workflow's OIDC identity, so
+        # a consumer can verify who built the tag. The action is SHA-pinned;
+        # the cosign release it installs is pinned by version.
+        uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+        with:
+          cosign-release: "v2.5.3"
+
       - name: Compute version label
         id: meta
         run: echo "version=${GITHUB_REF_NAME:-manual-$(date +%s)}" >> "$GITHUB_OUTPUT"
+
+      - name: Tag is SemVer vX.Y.Z and matches the declared version
+        # F-08: the tag drove the image tag and the release record with no
+        # check on its shape or on its agreement with the version the code
+        # declares. `v1.2` or a tag pasted from another project produced a
+        # release whose images say one version and whose code says another.
+        # workflow_dispatch (no tag) skips this; a tag push cannot.
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$RELEASE_TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error title=Tag is not SemVer::$RELEASE_TAG must match vMAJOR.MINOR.PATCH (no pre-release suffix, no leading zeros policy beyond the regex)."
+            exit 1
+          fi
+          declared="$(python3 -c "import pathlib, tomllib; print(tomllib.loads(pathlib.Path('apps/api/pyproject.toml').read_text())['project']['version'])")"
+          if [ "v$declared" != "$RELEASE_TAG" ]; then
+            echo "::error title=Tag does not match the code::tag ${RELEASE_TAG} != v${declared} (apps/api/pyproject.toml [project].version). scripts/check_version.py is the source of truth; align the tag with the version the release actually contains."
+            exit 1
+          fi
+          echo "tag ${RELEASE_TAG} is SemVer and matches apps/api/pyproject.toml."
 
       # No `:latest` tag. The deploy job and docker-compose both address images
       # by the release tag (${API_TAG}/${WEB_TAG}), so a floating tag bought
@@ -226,6 +257,37 @@ jobs:
       # The pushed digest is the only stable identity of what shipped; record it
       # in the job summary so an operator running a host months later can map
       # the running image back to this release.
+      - name: Attest the API image provenance
+        # F-08: actions/attest-build-provenance writes a signed SLSA
+        # provenance attestation for the pushed digest to the repository's
+        # attestation store (verified with `gh attestation verify`).
+        uses: actions/attest-build-provenance@db473fddc028af60658334401dc6fa3ffd8669fd # v2.3.0
+        with:
+          subject-name: ${{ steps.images.outputs.api }}
+          subject-digest: ${{ steps.api.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest the web image provenance
+        uses: actions/attest-build-provenance@db473fddc028af60658334401dc6fa3ffd8669fd # v2.3.0
+        with:
+          subject-name: ${{ steps.images.outputs.web }}
+          subject-digest: ${{ steps.web.outputs.digest }}
+          push-to-registry: true
+
+      - name: Sign the images keyless with cosign
+        # Keyless: Fulcio issues a short-lived certificate for this workflow's
+        # OIDC identity and the signature lands in the transparency log, so no
+        # long-lived signing key exists to leak or rotate.
+        env:
+          API_IMAGE: ${{ steps.images.outputs.api }}
+          WEB_IMAGE: ${{ steps.images.outputs.web }}
+          API_DIGEST: ${{ steps.api.outputs.digest }}
+          WEB_DIGEST: ${{ steps.web.outputs.digest }}
+        run: |
+          set -euo pipefail
+          cosign sign --yes "${API_IMAGE}@${API_DIGEST}"
+          cosign sign --yes "${WEB_IMAGE}@${WEB_DIGEST}"
+
       - name: Record image digests
         env:
           API_IMAGE: ${{ steps.images.outputs.api }}
@@ -241,8 +303,18 @@ jobs:
             echo "| $API_IMAGE | \`$API_DIGEST\` |"
             echo "| $WEB_IMAGE | \`$WEB_DIGEST\` |"
             echo
-            echo "SBOM and build provenance are attached to both images."
-            echo "Verify with: \`gh attestation verify oci://$API_IMAGE@$API_DIGEST --repo \${{ github.repository }}\`"
+            echo "SBOM and buildx provenance are attached to both images, a signed"
+            echo "SLSA provenance attestation is stored for each digest, and both"
+            echo "images are cosign-signed keyless (Fulcio/Rekor)."
+            echo
+            echo "Verify with (one command per line; SC2028 keeps printf here"
+            echo "because echo would not expand the backslash continuations):"
+            echo "\`\`\`"
+            printf 'gh attestation verify oci://%s@%s --repo %s\n' \
+              "$API_IMAGE" "$API_DIGEST" "$GITHUB_REPOSITORY"
+            printf "cosign verify %s@%s --certificate-identity-regexp '^https://github.com/%s/' --certificate-oidc-issuer https://token.actions.githubusercontent.com\n" \
+              "$API_IMAGE" "$API_DIGEST" "$GITHUB_REPOSITORY"
+            echo "\`\`\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Create GitHub Release
