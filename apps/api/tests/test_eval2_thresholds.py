@@ -74,7 +74,9 @@ def test_revision_must_name_every_moved_threshold() -> None:
     new = copy.deepcopy(old)
     new["version"] = old["version"] + 1
     new["targets"]["mrr_at_10"] = {"target": 0.75, "comparison": ">="}
-    new["changelog"].append({"version": new["version"], "date": "2026-11-01", "change": "", "moved_from": None})
+    new["changelog"].append(
+        {"version": new["version"], "date": "2026-11-01", "change": "", "moved_from": None}
+    )
     with pytest.raises(th.ThresholdError, match="moved thresholds"):
         th.validate_revision(old, new)
 
@@ -107,7 +109,9 @@ def test_tolerance_change_is_itself_a_moved_threshold() -> None:
     new = copy.deepcopy(old)
     new["version"] = old["version"] + 1
     new["gate"]["tolerance_pp"] = 5.0
-    new["changelog"].append({"version": new["version"], "date": "2026-11-01", "change": "", "moved_from": None})
+    new["changelog"].append(
+        {"version": new["version"], "date": "2026-11-01", "change": "", "moved_from": None}
+    )
     with pytest.raises(th.ThresholdError, match=r"gate\.tolerance_pp"):
         th.validate_revision(old, new)
 
