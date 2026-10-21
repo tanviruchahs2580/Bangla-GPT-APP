@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - feat(api): render errors as RFC 9457 problem+json, additively
 - feat(api): strict schemas, idempotent writes, streamed CSV import, one pagination policy
 - feat(audit): wave 6 — split the god modules, prerender the public routes, close the measured gaps
+- feat(audit): wave 7 — meet the citation target, cut the pre-paint boot, batch the transcript
 - feat(auth): rotating refresh tokens, impersonation limits, central tenancy filter
 - feat(eval): live model run with recorded responses, replayed in PR CI
 - feat(eval): reconstruct the golden set independently; widen red-team to 43 cases
@@ -127,6 +128,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): WCAG 2.2 fixes on the public routes
 - fix(web): clear footer from bottom nav + cut a round-trip from login
 - fix(web): clear the two WCAG AA failures axe found on the tutor screen
+- fix(web): clear the two design-token regressions the guardrails gate caught
 - fix(web): close-JSDoc sequence inside edge-proxy comment broke Vercel TS build
 - fix(web): configurable production API origin via edge proxy (FE-01)
 - fix(web): correct the password-hashing claim in the legal copy
