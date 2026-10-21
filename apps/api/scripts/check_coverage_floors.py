@@ -20,7 +20,8 @@ Module mapping (this codebase's layout):
   - tenancy: ``bangla_gpt_api/db/tenancy.py`` (the ORM read-path tenant filter).
   - scoring/grading: ``bangla_gpt_api/services/quiz.py`` (+ quiz_explain).
   - retention/purge: ``bangla_gpt_api/services/retention.py``.
-  - grounding/abstention: ``bangla_gpt_api/services/tutor.py`` (the
+  - grounding/abstention: ``bangla_gpt_api/services/tutor`` (the package the
+t    1814-line module was split into, C-03; the gate lives in ``retrieval.py``) (the
     regenerator + abstention gate; the only in-src implementation).
 
 Usage:
@@ -68,10 +69,13 @@ FLOORS: dict[str, tuple[str, float, str]] = {
         60.0,
         "measured 62.5 branch % (5/8) over tests/test_b2_retention_purge.py, 2026-10-20 R4-wsC",
     ),
-    "bangla_gpt_api/services/tutor.py": (
+    "bangla_gpt_api/services/tutor": (
         "grounding/abstention",
         62.0,
-        "measured 64.5 branch % (111/172) over test_tutor_service_seams.py + test_tutor_api.py + test_rag2_streaming_contract.py, 2026-10-20 R4-wsC",
+        "measured 68.6 branch % (118/172) over the tutor seam tests (test_tutor_service_seams.py + "
+        "test_tutor_api.py + test_rag2_streaming_contract.py + test_r5_citation_selection.py + "
+        "test_r5_gate_arithmetic.py + test_bangla_matrix.py; CI's full run covers more), 2026-10-21: "
+        "same floor, same critical path, now aggregated over the package the module was split into",
     ),
 }
 
