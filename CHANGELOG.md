@@ -96,6 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(db): reconcile ORM/migration drift so alembic check passes
 - fix(deps): bump certifi to 2026.10.19 for GHSA-6q48-6c7w-9gw2
 - fix(deps): bump pillow to 13.0.0 for the 2026-11xx CVE cluster
+- fix(deps): bump pypdf to 6.20.1 for the 2026-11xxx advisory pair
 - fix(deps): declare packaging, the lockfile gate's own import
 - fix(deps): declare radon, the one ratchet tool the script imports
 - fix(deps): lock radon and make deptry's import mapping environment-independent

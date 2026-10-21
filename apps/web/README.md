@@ -63,6 +63,7 @@ proxy, so a built bundle can log in locally too.
 | `npx playwright test` | Browser e2e smoke; the config starts a seeded API and the built app itself (Chromium; WebKit/Firefox nightly). `E2E_PYTHON` selects the API interpreter, `E2E_WEB_PORT`/`E2E_API_PORT` move the ports when the defaults are taken. |
 | `npm run audit:serve` | Starts the stack Lighthouse CI audits: seeded API (mock provider) plus `dist/` served with the production caching policy (prerendered route indexes included) and the `/api` proxy; prints `audit stack ready`. |
 | `npx size-limit` | Bundle-size budgets (config in `package.json`); needs a prior `npm run build`. |
+| `node live_check.mjs` | Live check of the deployed app (defaults to the production URL): the prerendered pages, the language and theme switches, the auth guard, the form's offline explanation, the PWA wiring and an axe pass. It exits non-zero on a failure, so it is what a post-deploy check can run -- and it asserts the *degraded* states too, because "the API is down" must still be a readable page. |
 | `npm run cap:sync` | Build and sync the Capacitor Android project. |
 
 CI runs exactly these (`ci.yml`: web job; `e2e-smoke` job) plus
