@@ -210,6 +210,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(changelog): record the ratchet-fix commit
 - docs(changelog): record the wave-3 commits
 - docs(changelog): record the wave-5 recovery, corpus and web batches
+- docs(changelog): regenerate for the ratchet-baseline fix
 - docs(changelog): regenerate for the wave-6 commit
 - docs(changelog): regenerate for the wave-6 follow-up commits
 - docs(ci): refresh the lighthouse and mutation-sample rows to the measured state

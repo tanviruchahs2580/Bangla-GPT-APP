@@ -3995,7 +3995,7 @@ button.small {
    on the built app at the audit's 412 px viewport (the login link sits at
    y=313 in both states, and CLS dropped 0.0813 -> 0.0392). */
 .status-pending {
-  min-height: 198px;
+  min-height: 200px;
 }
 .status-hero.degraded {
   color: var(--warn);

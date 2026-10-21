@@ -125,7 +125,7 @@ function RequireAuth({
             the whole route switch. A prerendered public page is captured from a
             client render, so it carries none of React's `<!--$-->` suspense
             markers, and hydrating a tree that contains a boundary without them
-            fails outright (React #418) -- the audit's crawl watches exactly
+            fails outright (React's 418 hydration error) -- the audit's crawl watches exactly
             that error. Loading a signed-in route's chunk now also leaves the
             shell and the footer mounted, which is the same CLS fix as above.
             Every `lazy()` route in this file is reached through RequireAuth,
