@@ -425,6 +425,18 @@ def scan_python_stubs(rel: str, text: str) -> list[Finding]:
             for child in class_node.body:
                 if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     skip.add(id(child))
+    # A `...` body under `if TYPE_CHECKING:` is a declaration for the type
+    # checker, not a placeholder: the tutor package declares its method surface
+    # that way so the mixins type-check (services/tutor/state.py), and mypy
+    # verifies every implementation against it.
+    for if_node in ast.walk(tree):
+        if not isinstance(if_node, ast.If):
+            continue
+        if not (isinstance(if_node.test, ast.Name) and if_node.test.id == "TYPE_CHECKING"):
+            continue
+        for child in ast.walk(if_node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                skip.add(id(child))
     findings: list[Finding] = []
     lines = text.splitlines()
     for node in ast.walk(tree):
@@ -517,7 +529,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     for hit in findings:
-        print(f"{hit.path}:{hit.lineno}: [{hit.rule}] {RULE_BY_NAME[hit.rule].what}: {hit.line}")
+        what = RULE_BY_NAME[hit.rule].what if hit.rule in RULE_BY_NAME else hit.rule
+        print(f"{hit.path}:{hit.lineno}: [{hit.rule}] {what}: {hit.line}")
     if args.verbose:
         for hit in allowed:
             reason = hit.allowed.reason if hit.allowed else ""
