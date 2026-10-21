@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - feat(api): production connection posture, truthful readiness, boot index metric; full-suite Postgres parity in CI (#29)
 - feat(api): render errors as RFC 9457 problem+json, additively
 - feat(api): strict schemas, idempotent writes, streamed CSV import, one pagination policy
+- feat(audit): wave 6 — split the god modules, prerender the public routes, close the measured gaps
 - feat(auth): rotating refresh tokens, impersonation limits, central tenancy filter
 - feat(eval): live model run with recorded responses, replayed in PR CI
 - feat(eval): reconstruct the golden set independently; widen red-team to 43 cases
@@ -198,6 +199,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(audit): wave-3 report — score 83.0/100, live evaluation closed, caps re-checked
 - docs(changelog): record the A8-08 citation selection and the A9-01 TTFT profile
 - docs(changelog): record the CI-fix commits
+- docs(changelog): record the dependency-audit bump and the baseline fix
 - docs(changelog): record the e2e-evidence wave
 - docs(changelog): record the faithfulness-evidence fix and the embedding backend
 - docs(changelog): record the hook, spelling and retry-discipline commits
