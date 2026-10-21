@@ -83,11 +83,11 @@ with a real model the mode changes to `llm_judge` and the value moves with it.
 
 ## Register revisions
 
-* **v2 (2026-10-21)** — the golden-set revision: the contextual stratum's items
+- **v2 (2026-10-21)** — the golden-set revision: the contextual stratum's items
   were fragments, so they were rebuilt by the generator (whole clauses, content
   terms only) rather than hand-edited; new dataset/test hashes in the table
   above.
-* **v3 (2026-10-21)** — the citation-selection revision (A8-08):
+- **v3 (2026-10-21)** — the citation-selection revision (A8-08):
   `CITATION_SELECTION_FLOOR` 0.25 -> 0.40 and the thin-overlap fallback now
   attaches the best-covered passage instead of the whole retrieved set. The
   measured sweep, the reason and the moved-from values are in the register's
