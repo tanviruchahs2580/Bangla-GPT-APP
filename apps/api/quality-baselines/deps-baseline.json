@@ -1,5 +1,7 @@
 {
  "accepted": {
+  "DEP001:pypdfium2:scripts/extraction_audit.py": "'pypdfium2' imported but missing from the dependency definitions",
+  "DEP001:pypdfium2:scripts\\extraction_audit.py": "'pypdfium2' imported but missing from the dependency definitions",
   "DEP002:gunicorn:pyproject.toml": "'gunicorn' defined as a dependency but not used in the codebase",
   "DEP002:hypothesis:pyproject.toml": "'hypothesis' defined as a dependency but not used in the codebase",
   "DEP002:mutmut:pyproject.toml": "'mutmut' defined as a dependency but not used in the codebase",
@@ -12,8 +14,9 @@
   "DEP002:ruff:pyproject.toml": "'ruff' defined as a dependency but not used in the codebase",
   "DEP002:uharfbuzz:pyproject.toml": "'uharfbuzz' defined as a dependency but not used in the codebase",
   "DEP002:uvicorn-worker:pyproject.toml": "'uvicorn-worker' defined as a dependency but not used in the codebase",
+  "DEP003:pypdfium2:scripts/extraction_audit.py": "'pypdfium2' imported but it is a transitive dependency",
   "DEP003:pypdfium2:scripts\\extraction_audit.py": "'pypdfium2' imported but it is a transitive dependency"
  },
- "generated": "2026-10-21T02:04:52Z",
+ "generated": "2026-10-21T08:15:00Z",
  "tool": "deptry"
 }

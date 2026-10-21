@@ -33,8 +33,8 @@
   "apps/web/src/pages/teacher/ClassesPage.tsx": 598,
   "apps/web/src/pages/teacher/CreatePage.tsx": 696,
   "apps/web/src/types.ts": 581,
-  "scripts/check_placeholders.py": 545
+  "scripts/check_placeholders.py": 558
  },
- "generated": "2026-10-21T02:04:48Z",
+ "generated": "2026-10-21T08:24:12Z",
  "max_lines": 500
 }
