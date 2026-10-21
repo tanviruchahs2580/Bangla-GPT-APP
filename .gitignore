@@ -88,7 +88,11 @@ venv/
 *.sqlite3-wal
 *.sqlite3-shm
 *.sqlite3-journal
-models/
+# Vendored model weights live at the repository root (`/models`), not in any
+# source package: a bare `models/` also ignored `bangla_gpt_api/db/models/`
+# once that module became a package (caught by the CI eval gate: the package
+# was absent from the pushed tree).
+/models/
 *.onnx
 *.gguf
 
