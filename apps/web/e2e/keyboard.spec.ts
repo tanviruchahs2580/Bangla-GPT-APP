@@ -158,6 +158,10 @@ test('teacher reaches the classes screen by keyboard and every focus stop is vis
   await navLink.focus()
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(/\/teacher\/classes$/)
+  // Wait for the screen itself, not just the URL: the route is a lazy chunk, and
+  // sweeping the tab stops while the pending state is still mounted counts the
+  // skeleton's few stops (flaked in CI: 3 stops instead of >5).
+  await expect(page.locator('main#main-content h1.page-title')).toBeVisible()
   const stops = await tabSweep(page)
   expect(stops.length).toBeGreaterThan(5)
 })
