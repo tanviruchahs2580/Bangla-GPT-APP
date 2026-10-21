@@ -43,7 +43,7 @@ jobs:
        github.event.workflow_run.head_repository.full_name == github.repository)
     environment: vercel-production
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -59,6 +59,22 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install web dependencies and Chromium
+        # AUD-G-15: the web build ends in `scripts/prerender.mjs`, which writes
+        # the seven public routes' documents and inlines their first-paint
+        # stylesheet. It drives the built app in Chromium; a build host without
+        # it degrades to the SPA shell (measured: the 2026-10-21 deploy of the
+        # prerendered output was done by hand for exactly that reason). The
+        # browser comes from the repository's own pinned @playwright/test, so
+        # the deploy builds the same artifact CI tests.
+        working-directory: apps/web
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
 
       - name: Link Vercel project (from encrypted secrets, never committed)
         run: |
@@ -85,10 +101,17 @@ jobs:
             exit 1
           fi
 
-      - name: Deploy (production)
+      - name: Build for production (prebuilt output)
         # Version-pinned: the previous `npx vercel` resolved whatever was
-        # latest at run time and executed it with a production token.
-        run: npx --yes vercel@63.1.0 --prod --yes --token="$VERCEL_TOKEN"
+        # latest at run time and executed it with a production token. The build
+        # runs HERE, on a runner that has Chromium, and the deploy ships its
+        # output (`--prebuilt`) instead of asking Vercel's build image to
+        # reproduce it -- that image has no Playwright browser, so a remote
+        # build silently drops the prerender.
+        run: npx --yes vercel@63.1.0 build --prod --yes --token="$VERCEL_TOKEN"
+
+      - name: Deploy (production, prebuilt)
+        run: npx --yes vercel@63.1.0 deploy --prebuilt --prod --yes --token="$VERCEL_TOKEN"
 
       - name: Post-deploy smoke check (production alias, /api/health)
         # F-048: this used to GET /login. That is a static SPA route served by
@@ -131,17 +154,26 @@ jobs:
           echo "::error title=Post-deploy smoke failed::$url never returned 200 after ${max_attempts} attempts (~4 min). Last status: ${code}. A 502 here means the /api proxy could not reach API_ORIGIN (the API origin is down or unreachable); any other status means the alias is not serving the deployed app. The deployment is NOT healthy -- see docs/runbook.md."
           exit 1
 
-      - name: Post-deploy smoke check (production alias, /login serves)
+      - name: Post-deploy smoke check (production alias serves the prerendered build)
+        # AUD-G-15: a 200 on /login is not enough -- the SPA shell answers 200
+        # too, and that is exactly what ships when the prerender step did not
+        # run (Vercel's own build image, before this workflow prebuilt on the
+        # runner). The prerendered `/login` document carries its markup and the
+        # inlined first-paint stylesheet, so it is an order of magnitude bigger
+        # than the shell; both facts are asserted, not assumed.
         run: |
           set -e
+          shell_size=$(curl -s -o /dev/null -w "%{size_download}" https://bangla-gpt-app.vercel.app/ || true)
           ok=0
-          for _ in $(seq 1 6); do
+          for _ in $(seq 1 12); do
+            body=$(curl -s https://bangla-gpt-app.vercel.app/login || true)
             code=$(curl -s -o /dev/null -w "%{http_code}" https://bangla-gpt-app.vercel.app/login || true)
-            if [ "$code" = "200" ]; then
-              echo "production alias /login -> 200"
+            size=${#body}
+            if [ "$code" = "200" ] && [ "$size" -gt 20000 ] && printf '%s' "$body" | grep -q 'data-inlined-stylesheet'; then
+              echo "production alias /login -> 200, ${size} bytes, first-paint stylesheet inlined (shell is ${shell_size} bytes)"
               ok=1
               break
             fi
-            echo "waiting for alias (got $code)"; sleep 5
+            echo "waiting for the prerendered alias (status ${code}, ${size} bytes)"; sleep 5
           done
-          [ "$ok" = "1" ] || { echo "alias did not return 200 in time"; exit 1; }
+          [ "$ok" = "1" ] || { echo "::error title=Prerender missing::/login is not serving the prerendered document (a shell-sized response means scripts/prerender.mjs did not run in this build); check the 'Install web dependencies and Chromium' step."; exit 1; }

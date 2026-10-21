@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - feat(rag): retrieval-quality rework - fair gate, query lanes, measured rank lift
 - feat(rag): token-budgeted context, versioned prompts, hint-first pedagogy, wider safety sets
 - feat(web): Bangla i18n glossary, native-review sheet, offline quota, TTS controls and dialog unification
+- feat(web): a live check for the deployed app, and the production deploy it verified
 - feat(web): a11y/perf/visual suites, shared settings components, consent-gated telemetry UI
 - feat(web): login page background image with dark/light theme sync
 - feat(web): student section background image with dark/light sync
