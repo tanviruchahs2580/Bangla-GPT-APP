@@ -73,6 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): vision-honest refusal for openai, max_output_tokens cap, transport retries (A10, A9, A16)
 - fix(api): wall school-less staff into the shared default school (F-04)
 - fix(api,web): audit remediations — breaker recovery, MFA/chat rate limits, CORS PATCH, model-refusal honesty, test runner
+- fix(audit): the placeholder sweep must not flag type-checking declarations
 - fix(auth): bind JWTs to an issuer and audience
 - fix(auth): hash passwords with Argon2id and upgrade legacy hashes on login
 - fix(auth): redeem single-use codes with a compare-and-set, not a read-then-write
@@ -90,8 +91,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(ci): unblock Dependabot PRs and name the Vercel credential failure (#9)
 - fix(ci): upgrade setuptools before pip-audit; refresh lock to current resolution
 - fix(compose): writable HOME for gunicorn's control socket; drop the dead SettingsRegistry
+- fix(db)!: track the db/models package; narrow the /models/ ignore rule
 - fix(db): reconcile ORM/migration drift so alembic check passes
 - fix(deps): bump certifi to 2026.10.19 for GHSA-6q48-6c7w-9gw2
+- fix(deps): bump pillow to 13.0.0 for the 2026-11xx CVE cluster
 - fix(deps): declare packaging, the lockfile gate's own import
 - fix(deps): declare radon, the one ratchet tool the script imports
 - fix(deps): lock radon and make deptry's import mapping environment-independent
@@ -206,6 +209,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(changelog): record the ratchet-fix commit
 - docs(changelog): record the wave-3 commits
 - docs(changelog): record the wave-5 recovery, corpus and web batches
+- docs(changelog): regenerate for the wave-6 commit
+- docs(ci): refresh the lighthouse and mutation-sample rows to the measured state
 - docs(compliance): record the provider's current terms, tier by tier (A7-04)
 - docs(dx): threat model, AI system card, OpenSSF self-assessment, devcontainer and Make targets
 - docs(qa): publish the 2026-10-16 audit report; refresh the lockfile within its ranges
@@ -256,6 +261,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate the CHANGELOG for the scripts commit
 - docs: regenerate the CHANGELOG for the test and QA-record commits
 - docs: regenerate the CHANGELOG for this branch's commits
+- docs: repoint the pre-split module paths and add the prerender words
 - docs: satisfy the markdown and spelling gates the wave's new docs tripped
 - docs: ship the bundled font's licence, third-party notices, contributing guide
 - docs: the AI system card cites current numbers and an artifact that exists
@@ -269,6 +275,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - test(e2e): Playwright smoke scaffold and a sqlite boot-timeout regression test
 - test(e2e): drop the CI retry pattern; A4-02 backend tests and the ADR record
 - test(e2e): scope the sign-out selector to the header
+- test(e2e): wait for the classes screen before sweeping its tab stops
 - test(e2e): wait for the session in signIn, not just the submit click
 - test(eval): commit the fresh live recording the replay gate reads
 - test(school): cover the aggregation routes TST-04 flagged as unexercised
@@ -296,6 +303,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - style(api): ruff format four test files (format-gate drift)
 - style(api): ruff format mock provider and lesson plan prompt
 - style(scripts): parenthesise the scanner's exemption reasons for ruff ISC004
+- style(tests): ruff format the threshold test (CI formatting gate)
 - style(web): give the registration screen login's photo backdrop
 - style: satisfy the repository's own pre-commit hooks
 
