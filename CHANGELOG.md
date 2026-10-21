@@ -294,6 +294,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Maintenance
 
 - chore(api): remove unresolvable plan-tracker tags from comments
+- chore(quality): record the transcript file's prettier-corrected size; regenerate the changelog
 - chore(scripts): make the shebang executable real for the five scripts that have one
 - chore(security): allowlist the reviewed ASCII-art hit in the full-history secret scan
 - chore(web): repoint /api proxy to current tunnel host (quick-tunnel rotation)
