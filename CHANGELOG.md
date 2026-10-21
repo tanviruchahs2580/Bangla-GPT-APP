@@ -145,6 +145,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): raise three status tokens to the WCAG AA contrast minimum
 - fix(web): recover from page errors, report load failures, and never show another child's data
 - fix(web): report a dead API origin accurately, not as a busy server (#14)
+- fix(web): revert the deferred boot, keep the rest of the wave-7 pre-paint work
 - fix(web): route /api/* explicitly to the edge proxy function
 - fix(web): split transport deadlines and the CSV import panel out of god-files
 - fix(web): stop rendering remote images in answers and announce each answer once
@@ -215,6 +216,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(changelog): regenerate for the ratchet-baseline fix
 - docs(changelog): regenerate for the wave-6 commit
 - docs(changelog): regenerate for the wave-6 follow-up commits
+- docs(changelog): regenerate for the wave-7 commit
 - docs(ci): refresh the lighthouse and mutation-sample rows to the measured state
 - docs(compliance): record the provider's current terms, tier by tier (A7-04)
 - docs(dx): threat model, AI system card, OpenSSF self-assessment, devcontainer and Make targets
