@@ -332,6 +332,35 @@ Quarterly rotation procedure:
   one live `/tutor/ask`. Old key must be revoked in AI Studio.
 - SMTP credentials: rotate in `.env`; test via `/auth/forgot`.
 
+### Vercel build must prebuild on the runner (AUD-G-15)
+
+`npm run build` ends in `apps/web/scripts/prerender.mjs`, which writes the seven
+public routes' documents and inlines their first-paint stylesheet by driving the
+app in Chromium. Vercel's own build image has no Playwright browser, so a
+*remote* build silently skips that step and production serves the SPA shell --
+every public route answers ~2.7 kB instead of ~90 kB (`/welcome` measured 95 195
+bytes prerendered vs 2 725 bytes as a shell on 2026-10-21). The deploy workflow
+therefore installs the repository's pinned Chromium on the runner, runs
+`vercel build --prod` there and ships the result with `vercel deploy --prebuilt
+--prod`; its post-deploy check asserts `/login` is larger than the shell and
+carries the inlined stylesheet, so a regression is named instead of shipped.
+
+When deploying by hand, do the same (`npx vercel build --prod && npx vercel
+deploy --prebuilt --prod`) or run the workflow: `gh workflow run "Vercel
+Production Deploy" --ref <branch>`.
+
+### The production API origin (`API_ORIGIN`) is the live app's one hard dependency
+
+The web deployment proxies `/api/*` through `apps/web/api/[[...path]].ts` to
+whatever `API_ORIGIN` names (project environment, Production). With the origin
+down, every data-backed screen degrades to its designed message -- `/status`
+renders "সিস্টেমের অবস্থা / সার্ভারে সংযোগ করা যাচ্ছে না", `/login` explains the
+connection problem, and `/student` bounces to `/login` -- and both the deploy
+workflow's `/api/health` check and the public status page report it. On
+2026-10-21 the configured origin was a four-day-old host that no longer answered,
+so production was in exactly that state: the web app itself was healthy and
+byte-identical to the built commit, the API was not reachable.
+
 ### Vercel deployment token
 
 `VERCEL_TOKEN` is a repository secret consumed by `.github/workflows/vercel-deploy.yml`.
@@ -590,11 +619,11 @@ the SLO policy in `docs/operations/SLO.md` §4 cannot be enforced.
 
 | Role | Responsibility | Contact | Filled in? |
 |---|---|---|---|
-| On-call API engineer | Incidents 1–5, 9 | _owner to provide_ | no |
-| Data/DB owner | Incident 2, restore decisions | _owner to provide_ | no |
-| Security lead | Incident 8, credential rotation | _owner to provide_ | no |
-| Privacy contact | Incident 7, data-subject requests | _owner to provide_ | no |
-| Product owner | Incident 6 budget decisions, SLO ratification | _owner to provide_ | no |
+| On-call API engineer | Incidents 1–5, 9 | *owner to provide* | no |
+| Data/DB owner | Incident 2, restore decisions | *owner to provide* | no |
+| Security lead | Incident 8, credential rotation | *owner to provide* | no |
+| Privacy contact | Incident 7, data-subject requests | *owner to provide* | no |
+| Product owner | Incident 6 budget decisions, SLO ratification | *owner to provide* | no |
 | Provider support | Quota/outage escalation (LLM, SMTP, host) | account console only | no |
 
 Paging channel, escalation window and out-of-hours expectations are owner
