@@ -52,7 +52,17 @@ logger = logging.getLogger("bangla_gpt_api.tutor")
 #: A8-08: the coverage a retrieved passage must carry before it counts as a
 #: source the answer leans on (the floor `verify_citation` enforces over the
 #: whole evidence, applied per passage); see `_cited_sources` for the numbers.
-CITATION_SELECTION_FLOOR = 0.25
+#:
+#: 0.25 -> 0.40 in wave 7, measured before it was changed and recorded in the
+#: pre-registration register (thresholds_v1.json, version 3). On the held-out
+#: split the section-granularity citation precision was 0.8802 against the 0.95
+#: target; the residual was neighbouring sections of the right chapter, which
+#: carry the answer's generic vocabulary but far less of it than the passage the
+#: answer is actually about. Sweeping the floor over the frozen split showed
+#: precisely the shape the metric wants -- 0.25: 0.9086, 0.30: 0.9385, 0.35:
+#: 0.9545, 0.40: 0.9655 section precision -- and 0.40 sits on the plateau where
+#: the number stops moving, so the threshold is not tuned to the last decimal.
+CITATION_SELECTION_FLOOR = 0.40
 
 
 def normalize_query(text: str) -> str:

@@ -80,6 +80,14 @@ const STRAT_LABELS: Record<
 // question-and-answer session on screen at once; older turns stay one click
 // away through the "load earlier messages" affordance.
 const MESSAGE_WINDOW = 30;
+// AUD-G-19: one "load earlier" click reveals the window in steps of this many
+// bubbles, one step per frame. Mounting all thirty in a single commit measured
+// 285-357 ms at 4x CPU throttle (the audit's original figure was 746-760 ms
+// before the CSS containment); at six per step the commits still measured
+// 129-181 ms, so the step is three -- roughly 70-90 ms at 4x, inside the
+// 100 ms interaction bar -- and the reading position is preserved per step by
+// the same anchor the single-commit version used.
+const REVEAL_STEP = 3;
 
 export default function AITutorPage() {
   const { me } = useAuth();
@@ -137,6 +145,9 @@ export default function AITutorPage() {
   // by the inserted height and keep the reading position pinned to the same
   // message instead of the auto-scroll rule yanking it to the bottom.
   const expandAnchorRef = useRef<number | null>(null);
+  // The window size the current expansion is heading for; the driver below
+  // reveals it one REVEAL_STEP at a time. Null when no expansion is in flight.
+  const expandTargetRef = useRef<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   // Synchronous send guard (F-012). State (`streaming`) is only updated after
   // renders, so it cannot gate a second send fired while the conversation
@@ -174,12 +185,34 @@ export default function AITutorPage() {
   const showEarlier = useCallback(() => {
     const viewport = viewportRef.current;
     if (viewport) expandAnchorRef.current = viewport.scrollHeight;
-    setWindowSize((size) => size + MESSAGE_WINDOW);
-  }, []);
+    setWindowSize((size) => {
+      expandTargetRef.current = Math.min(
+        messages.length,
+        size + MESSAGE_WINDOW,
+      );
+      return size + REVEAL_STEP;
+    });
+  }, [messages.length]);
+
+  // AUD-G-19: the rest of the expansion, one step per frame.
+  useEffect(() => {
+    const target = expandTargetRef.current;
+    if (target == null || windowSize >= target) {
+      if (target != null) expandTargetRef.current = null;
+      return;
+    }
+    const frame = requestAnimationFrame(() => {
+      const viewport = viewportRef.current;
+      if (viewport) expandAnchorRef.current = viewport.scrollHeight;
+      setWindowSize((size) => Math.min(target, size + REVEAL_STEP));
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [windowSize]);
 
   const loadConversation = useCallback(async (id: number) => {
     setConversationId(id);
     setMessages([]);
+    expandTargetRef.current = null;
     setWindowSize(MESSAGE_WINDOW);
     setError(null);
     try {

@@ -9,7 +9,15 @@ import "@fontsource/hind-siliguri/400.css";
 import "@fontsource/hind-siliguri/600.css";
 import { getToken, setLogoutCleanup } from "./api";
 import { AuthProvider, ROLE_HOME, useAuth } from "./AuthContext";
-import { AppShell } from "./AppShell";
+// AUD-G-15: the signed-in shell (topbar, sidebar, bottombar, notification
+// bell, search) is only ever mounted through RequireAuth, but a static import
+// put it in the entry bundle every anonymous visitor downloads and parses
+// before the prerendered page can paint (Lighthouse: 153 KiB of the entry
+// unused on a public route, 89% of the LCP in render delay). It is a lazy
+// chunk now, loaded inside RequireAuth's own boundary.
+const AppShell = lazy(() =>
+  import("./AppShell").then((module) => ({ default: module.AppShell })),
+);
 import { Skeleton } from "./components/ui";
 import { SkipLink } from "./components/SkipLink";
 import {
@@ -119,20 +127,24 @@ function RequireAuth({
   // F-001: the page renders inside its own boundary, so a page-level render
   // error keeps the nav/sidebar alive and clears when the route changes.
   return (
-    <AppShell>
-      <RouteErrorBoundary>
-        {/* AUD-G-15: the boundary belongs here, per signed-in route, not around
-            the whole route switch. A prerendered public page is captured from a
-            client render, so it carries none of React's `<!--$-->` suspense
-            markers, and hydrating a tree that contains a boundary without them
-            fails outright (React's 418 hydration error) -- the audit's crawl watches exactly
-            that error. Loading a signed-in route's chunk now also leaves the
-            shell and the footer mounted, which is the same CLS fix as above.
-            Every `lazy()` route in this file is reached through RequireAuth,
-            so no lazy component is left without a boundary. */}
-        <Suspense fallback={<Loading />}>{children}</Suspense>
-      </RouteErrorBoundary>
-    </AppShell>
+    // The shell is a lazy chunk (AUD-G-15), so it needs a boundary of its own;
+    // the pending state is the same skeleton the route boundary shows, and both
+    // stay inside the signed-in path where the footer is mounted anyway.
+    <Suspense fallback={<Loading />}>
+      <AppShell>
+        <RouteErrorBoundary>
+          {/* AUD-G-15: the boundary belongs here, per signed-in route, not around
+              the whole route switch. A prerendered public page is captured from a
+              client render, so it carries none of React's `<!--$-->` suspense
+              markers, and hydrating a tree that contains a boundary without them
+              fails outright (React's 418 hydration error) -- the audit's crawl
+              watches exactly that error. Every `lazy()` route in this file is
+              reached through RequireAuth, so no lazy component is left without a
+              boundary. */}
+          <Suspense fallback={<Loading />}>{children}</Suspense>
+        </RouteErrorBoundary>
+      </AppShell>
+    </Suspense>
   );
 }
 

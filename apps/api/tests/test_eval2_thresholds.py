@@ -46,7 +46,11 @@ def test_committed_thresholds_match_the_code_that_enforces_them() -> None:
 
 def test_loader_rejects_a_version_without_its_changelog_entry(tmp_path: Path) -> None:
     payload = _load()
-    payload["version"] = 3
+    # One *past* the register's own version: a hard-coded number here becomes a
+    # no-op the moment the register reaches it (it did: v3 is a real revision
+    # with its entry, so the loader rightly accepted it and this test stopped
+    # testing anything).
+    payload["version"] = int(payload["version"]) + 1
     path = tmp_path / "thresholds.json"
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
     with pytest.raises(th.ThresholdError, match="changelog entries"):

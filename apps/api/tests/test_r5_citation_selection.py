@@ -92,12 +92,36 @@ def test_cited_sources_keeps_only_the_passages_the_answer_leans_on() -> None:
     assert PASSAGE_B in leaned and PASSAGE_C not in leaned
 
 
-def test_cited_sources_falls_back_instead_of_dropping_evidence() -> None:
-    """A thin overlap everywhere keeps the whole retrieved set: a response must
-    never lose its sources because the measurement came out low."""
+def test_cited_sources_falls_back_to_the_best_passage() -> None:
+    """A thin overlap everywhere keeps ONE passage, not the whole set.
+
+    The response must never lose its evidence because the overlap measurement
+    came out low -- but attaching the full retrieved set in that case is where
+    the imprecise citations came from (measured on the frozen split: section
+    precision 0.8802 while neighbouring sections of the right chapter travelled
+    with answers that did not lean on them). The best-covered passage is the
+    one to keep, and it is kept even when every score is low.
+    """
     answer = "এই উত্তরটি ভিন্ন জগতের শব্দে লেখা হয়েছে সম্পূর্ণ অন্যভাবে।"
     hits = [_Hit(PASSAGE_C, 3.0), _Hit(PASSAGE_B, 2.0)]
-    assert TutorService._cited_sources(answer, hits) == hits
+    kept = TutorService._cited_sources(answer, hits)
+    assert len(kept) == 1, f"exactly the best passage is attached, got {len(kept)}"
+    best = max(hits, key=lambda h: citation_coverage(answer, h.chunk.text))
+    assert kept == [best]
+    assert TutorService._cited_sources(answer, []) == []
+
+
+def test_cited_sources_floor_is_the_declared_boundary() -> None:
+    """A passage at the floor is kept; one just below it is dropped."""
+    # Ten distinct content terms, so the coverage of one passage is simply the
+    # share of them it carries: four terms = 0.40 (the floor), three = 0.30.
+    answer = " ".join(f"অনন্য{i}" for i in range(10))
+    at_floor = " ".join(f"অনন্য{i}" for i in range(4))
+    below = " ".join(f"অনন্য{i}" for i in range(3))
+    assert citation_coverage(answer, at_floor) == CITATION_SELECTION_FLOOR
+    assert citation_coverage(answer, below) < CITATION_SELECTION_FLOOR
+    kept = TutorService._cited_sources(answer, [_Hit(at_floor, 2.0), _Hit(below, 1.0)])
+    assert [hit.chunk.text for hit in kept] == [at_floor]
 
 
 def _source(chapter: str, section: str, page: int = 1) -> SourceRef:

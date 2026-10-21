@@ -7,7 +7,7 @@
  * window maths, the affordance and the per-conversation reset e2e/perf.spec.ts
  * depends on.
  */
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { t } from "../i18n";
@@ -103,7 +103,7 @@ describe("tutor transcript window (AUD-G-19)", () => {
     ).toBeTruthy();
   });
 
-  it("load earlier reveals one more window and keeps it scroll-stable", async () => {
+  it("load earlier reveals one more window in bounded steps", async () => {
     renderTutorPage();
     await userEvent
       .setup()
@@ -115,12 +115,23 @@ describe("tutor transcript window (AUD-G-19)", () => {
         ),
       );
     await screen.findByText("msg-120", undefined, { timeout: WAIT });
+    expect(bubbleCount()).toBe(WINDOW);
     await userEvent
       .setup()
       .click(screen.getByRole("button", { name: t("loadEarlier") }));
-    expect(bubbleCount()).toBe(2 * WINDOW);
-    // The second window is messages 61..120: msg-61 just mounted, the head
-    // (msg-60 and above) is still unmounted.
+    // AUD-G-19: the expansion is revealed REVEAL_STEP bubbles per frame, so the
+    // immediate commit is bounded -- mounting 30 at once measured 285-357 ms of
+    // main-thread work at 4x CPU throttle, which is the interaction bar the
+    // audit set. The first frame must therefore be strictly between the old
+    // window and the new one.
+    const firstFrame = bubbleCount();
+    expect(firstFrame).toBeGreaterThan(WINDOW);
+    expect(firstFrame).toBeLessThan(2 * WINDOW);
+    // ...and the end state is exactly one more window, with the head of the
+    // thread (msg-60 and above) still unmounted.
+    await waitFor(() => expect(bubbleCount()).toBe(2 * WINDOW), {
+      timeout: WAIT,
+    });
     expect(screen.getByText("msg-61")).toBeTruthy();
     expect(document.body.contains(screen.queryByText("msg-60") ?? null)).toBe(
       false,
@@ -155,7 +166,11 @@ describe("tutor transcript window (AUD-G-19)", () => {
     );
     await screen.findByText("msg-120", undefined, { timeout: WAIT });
     await user.click(screen.getByRole("button", { name: t("loadEarlier") }));
-    expect(bubbleCount()).toBe(2 * WINDOW);
+    // The expansion is stepped (AUD-G-19): wait for the window to settle before
+    // switching threads, which is what a reader does too.
+    await waitFor(() => expect(bubbleCount()).toBe(2 * WINDOW), {
+      timeout: WAIT,
+    });
 
     // A fresh 40-message thread under a still-expanded window would render 40
     // bubbles with no affordance; the reset makes it the standard 30 + link.

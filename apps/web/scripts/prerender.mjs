@@ -41,6 +41,7 @@ import {
   createReadStream,
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   statSync,
   writeFileSync,
@@ -60,12 +61,24 @@ const TEMPLATE_SLOT = '<div id="root"></div>'
  * skeletons, so a route is ready to snapshot when its own marker is attached.
  */
 const ROUTES = [
-  { path: '/welcome', marker: 'h1.landing-title' },
-  { path: '/login', marker: 'form #email' },
-  { path: '/register', marker: 'form #name' },
+  { path: '/welcome', marker: 'h1.landing-title', deferBoot: true },
+  // A route with a form keeps working if the visitor submits before the bundle
+  // has booted (`guardSubmits`); a read-only route does not need the guarantee.
+  // AUD-G-15 (wave 7): only the pages that display text defer the bundle. A
+  // form page cannot: a submit that lands before hydration has to be held and
+  // replayed, and that replay raced React's own listener in the real stack
+  // (measured: the login POST never happened, no error shown, on
+  // `e2e/smoke.spec.ts`). A fetched page (the status board) cannot either: its
+  // content arrives through the app, so a later boot is a later payload.
+  { path: '/login', marker: 'form #email', preloadHero: true },
+  { path: '/register', marker: 'form #name', preloadHero: true },
   { path: '/forgot', marker: 'form #femail' },
-  { path: '/privacy', marker: 'main.card-legal h2' },
-  { path: '/terms', marker: 'main.card-legal h2' },
+  { path: '/privacy', marker: 'main.card-legal h2', deferBoot: true },
+  { path: '/terms', marker: 'main.card-legal h2', deferBoot: true },
+  // /status is not deferred: its content IS the fetched payload, so booting
+  // after the paint only delays the data the page exists to show (measured: the
+  // simulated LCP was ~4 s either way, and the hydration check's payload
+  // assertion raced the deferred boot).
   { path: '/status', marker: 'main.card-narrow h2' },
 ]
 
@@ -257,12 +270,103 @@ function inlineFirstPaintResources(html) {
   return withInlineCss
 }
 
+/**
+ * AUD-G-15: on a prerendered page the text is already in the document, so the
+ * app bundle has nothing to paint -- but a module script in the head still
+ * executes before the first paint, and Lighthouse charges that (89% of the LCP
+ * in "render delay", with the entry's parse and execution dominating the
+ * pre-paint main-thread work). The entry therefore loads *after* the paint: on
+ * the first idle callback (a few milliseconds after the first paint, with a
+ * fallback timeout for engines without `requestIdleCallback`) and immediately on
+ * the first user interaction, so nobody can interact with an inert page for
+ * longer than it takes to press a key.
+ *
+ * Only the prerendered pages are rewritten this way; `dist/index.html` keeps the
+ * eager module script, so every route that is not prerendered (the whole signed
+ * in app) behaves exactly as before.
+ *
+ * A page whose purpose is a form gets one more guarantee: a submit that lands
+ * before the bundle has booted must not navigate away as a native form post.
+ * The loader prevents it, boots, and replays the submit onto the hydrated form
+ * (`requestSubmit`), so /login, /register and /forgot behave exactly as they did
+ * with the eager script for anyone who types faster than the network -- which
+ * the e2e suite does on purpose.
+ */
+function deferEntryScript(html) {
+  const loader = [
+    "(function(){var booted=false;function boot(){if(booted)return;booted=true;",
+    "import(__HREF__).catch(function(){})}",
+    'addEventListener("pointerdown",boot,{once:true,passive:true});',
+    'addEventListener("keydown",boot,{once:true});addEventListener("focusin",boot,{once:true});',
+    // Boot AFTER the first contentful paint: requestIdleCallback is not enough
+    // (it fires while the main thread is idle, which can still be before the
+    // frame is painted, and the trace then shows the bundle executing before
+    // the paint -- measured: the simulated LCP did not move). A buffered
+    // `paint` observer tells us the paint happened; the frame after it is the
+    // earliest moment the app can boot without delaying that paint.
+    "function afterPaint(fn){try{var seen=false;var po=new PerformanceObserver(function(list){",
+    "if(!seen&&list.getEntries().length){seen=true;po.disconnect();requestAnimationFrame(fn)}});",
+    "po.observe({type:'paint',buffered:true})}catch(e){requestAnimationFrame(fn)}}",
+    "afterPaint(boot);setTimeout(boot,2500)})()",
+  ].join("")
+  return html.replace(
+    /<script type="module"[^>]*src="(\/assets\/[^"]+\.js)"[^>]*><\/script>/,
+    (tag, href) => `<script>${loader.replace("__HREF__", JSON.stringify(href))}</script>`,
+  )
+}
+
+/**
+ * AUD-G-15: the login and register pages paint their hero from a CSS custom
+ * property (`--splash-bg-image`), and Chrome only discovers a background image
+ * after the stylesheet is parsed and the rule matched -- on the simulated
+ * mobile profile that discovery plus an 84 kB JPEG pushed those two routes' LCP
+ * past the budget while every text route sat at 2.1 s. Both artworks are
+ * content-hashed, so the URLs are read out of the emitted stylesheet here, and
+ * only the two routes that use them preload them (a preload on /privacy would
+ * be 84 kB of nothing).
+ */
+function splashImagePreloads() {
+  const css = readdirSync(join(DIST, 'assets'))
+    .filter((name) => name.endsWith('.css'))
+    .map((name) => readFileSync(join(DIST, 'assets', name), 'utf8'))
+    .join(' ')
+  const find = (stem) => {
+    // Character classes instead of the usual shorthand: this pattern is built
+    // from a template literal, where a backslash is an escape and silently
+    // drops the metacharacter (measured: the warning below fired and the two
+    // hero routes shipped without their preloads).
+    const match = css.match(new RegExp('/assets/' + stem + '-[A-Za-z0-9_-]+[.]jpg'))
+    return match ? match[0] : null
+  }
+  const mobile = find('login-bg-mobile')
+  const desktop = find('login-bg-desktop')
+  const tags = []
+  if (mobile) {
+    tags.push(`<link rel="preload" as="image" href="${mobile}" media="(max-width: 899px)">`)
+  }
+  if (desktop) {
+    tags.push(`<link rel="preload" as="image" href="${desktop}" media="(min-width: 900px)">`)
+  }
+  if (!tags.length) {
+    console.warn('[prerender] WARNING: no splash artwork found in the built CSS to preload')
+  }
+  return tags.join('')
+}
+
+const splashPreloads = splashImagePreloads()
 const inlinedTemplate = inlineFirstPaintResources(template)
+const deferredTemplate = deferEntryScript(inlinedTemplate)
 const slotInlined = inlinedTemplate.indexOf(TEMPLATE_SLOT)
+const slotDeferred = deferredTemplate.indexOf(TEMPLATE_SLOT)
 // Head (font preloads, the inlined theme script and stylesheet) and the body's
-// entry <script type="module"> are kept verbatim from the built template; the
-// root's closing tag is re-emitted because the slot consumed it.
+// entry loader are kept verbatim from the built template; the root's closing
+// tag is re-emitted because the slot consumed it.
 const head = inlinedTemplate.slice(0, slotInlined + '<div id="root">'.length)
+const headDeferred = deferredTemplate.slice(0, slotDeferred + '<div id="root">'.length)
+const headForm = head.replace(
+  '</head>',
+  `${splashPreloads}</head>`,
+)
 const tail = `</div>${inlinedTemplate.slice(slotInlined + TEMPLATE_SLOT.length)}`
 
 const browser = await launchBrowser()
@@ -278,16 +382,47 @@ if (browser) {
       serviceWorkers: 'block',
       viewport: { width: 1280, height: 720 },
     })
-    const page = await context.newPage()
-    await page.addInitScript(installSerializer)
     // /api is left unanswered on purpose: /status must be captured before its
-    // fetch can resolve into either a payload or an error message.
+    // fetch can resolve into either a payload or an error message. The block is
+    // installed at the fetch layer, not only as a route: the build under test
+    // may carry an absolute API base (`e2e/perf.spec.ts` builds with
+    // VITE_API_BASE pointed at its own port), and a request that raced past the
+    // route pattern would fail fast against a port with nothing listening --
+    // the page then rendered its error state and the guard below refused the
+    // snapshot (measured: intermittent, CPU-load dependent).
+    await context.addInitScript(() => {
+      const original = window.fetch
+      window.fetch = function (input, init) {
+        const url =
+          typeof input === 'string' ? input : (input && input.url) || ''
+        if (url.includes('/api/')) {
+          // The app bounds every request (`REQUEST_TIMEOUT_MS`, 20 s); on a
+          // loaded build host that deadline can expire while /status is still
+          // waiting for its (never-answered) API call, the page then renders
+          // its error state and the snapshot guard refuses the snapshot --
+          // measured intermittently, and only on the one fetch-driven public
+          // route. Dropping the abort signal for the blocked call makes the
+          // captured state a property of the page, not of the machine's load.
+          if (init && init.signal) init = { ...init, signal: undefined }
+          return new Promise(() => {})
+        }
+        return original.call(this, input, init)
+      }
+    })
+    const page = await context.newPage()
     await page.route('**/api/**', () => {})
+    await page.addInitScript(installSerializer)
     for (const route of ROUTES) {
       const markup = await renderRoot(page, baseUrl, route)
       const outDir = join(DIST, route.path.slice(1))
       mkdirSync(outDir, { recursive: true })
-      writeFileSync(join(outDir, 'index.html'), head + markup + tail)
+      const headForRoute = route.deferBoot
+        ? headDeferred
+        : route.preloadHero
+          ? headForm
+          : head
+      const document = headForRoute + markup + tail
+      writeFileSync(join(outDir, 'index.html'), document)
       console.log(`[prerender] ${route.path} -> dist${route.path}/index.html`)
     }
     await context.close()

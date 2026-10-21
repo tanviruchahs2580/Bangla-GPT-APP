@@ -13,7 +13,7 @@ number below rests on a definition that only exists in prose.
 
 | Metric | Definition |
 | --- | --- |
-| `citation_precision` | micro-average over the sources the response ATTACHED -- the passages the answer leans on (`TutorService._cited_sources`, A8-08): share whose (chapter, section) equals the item's gold section |
+| `citation_precision` | micro-average over the sources the response ATTACHED -- the passages the answer leans on (`TutorService._cited_sources`, A8-08): share whose (chapter, section) equals the item's gold section. A passage is attached when it carries at least `CITATION_SELECTION_FLOOR` (0.40 since wave 7; the sweep and the register entry are in the A8-08 evidence) of the answer's terms; when none clears the floor the best-covered passage is attached, so a response never loses its evidence but never ships a neighbour it does not lean on either |
 | `citation_precision_chapter` | the same count at chapter granularity (a source from the right chapter but a neighbouring section is imprecise, not wrong) |
 | `citation_precision_retrieved` / `..._chapter_retrieved` | the same counts over the passages RETRIEVAL returned, which is what the metric measured before the selection existed: the two readings answer different questions and neither hides the other |
 | `citation_recall` | macro-average over answered answerable items: share citing at least one gold source |
@@ -23,6 +23,7 @@ number below rests on a definition that only exists in prose.
 | `refusal_correctness_unsafe` | on the red-team set, the share refused |
 | `response_language_correctness` | share of grounded answers that are Bangla-dominant (>= 50% Bengali letters) and free of U+09F0/U+09F1 |
 | `format_validity` | share of grounded answers carrying all four SYSTEM_PROMPT rule 6 section labels and at least one source |
+| `intervals_95` | every proportion above with its trials, successes and a 95% Wilson score interval (A8-08 asks for results versus targets *with CIs*; the interval behaves at the 0-success edges the refusal rates live on) |
 
 ## Measured (2026-10-20, mock provider)
 
@@ -51,6 +52,23 @@ remaining attachment is a passage sharing generic Bangla terms — measured, and
 documented in `_cited_sources`. `citation_recall` 0.9679 (8 of 624 answers no
 longer attach a gold-section passage) is the price of attaching less, and the
 pair of numbers is reported together rather than traded silently.
+
+## Wave 7 (2026-10-21) selection change
+
+`CITATION_SELECTION_FLOOR` 0.25 -> 0.40 and the thin-overlap fallback attaches
+the best-covered passage instead of the whole retrieved set (register version 3,
+recorded before the result run). Replaying the frozen 2026-10-21 test recording
+(deterministic; the answers are the provider's own, only the attachment moves):
+
+| metric | wave 6 | wave 7 |
+| --- | --- | --- |
+| `citation_precision` (section) | 0.8802 | **0.9655** |
+| `citation_precision_chapter` | 0.9688 | **0.9885** |
+| `citation_recall` | 0.9713 | 0.9655 |
+| `false_refusal_rate` | 0.0387 | 0.0387 |
+
+The CI gate replays the same recording and compares against the committed live
+report, so these numbers are re-derived on every run rather than quoted.
 
 ## The judge is not a metric of record yet
 

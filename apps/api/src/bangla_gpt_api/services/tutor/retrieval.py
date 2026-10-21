@@ -379,19 +379,23 @@ class TutorRetrievalMixin(TutorState):
         3 retrieved passages on average, and the ones it does not lean on are
         where the imprecise citations came from.
 
-        An answer whose overlap is thin on every passage keeps the full
-        retrieved set: the response must never lose its evidence because the
-        overlap measurement came out low (that failure mode is what the
-        post-generation citation check already guards).
+        An answer whose overlap is thin on every passage keeps its BEST
+        passage rather than the whole retrieved set: the response must never
+        lose its evidence because the overlap measurement came out low, but the
+        passages it demonstrably does not lean on are exactly where the
+        imprecise citations came from -- measured on the frozen split, attaching
+        the whole set in that case is what kept section-granularity citation
+        precision at 0.8802. One passage is always attached, so a reader can
+        still follow the answer to its source.
         """
         from bangla_gpt_api.services.safety import citation_coverage
 
-        selected = [
-            hit
-            for hit in hits
-            if citation_coverage(answer, hit.chunk.text) >= CITATION_SELECTION_FLOOR
-        ]
-        return selected or hits
+        scored = [(citation_coverage(answer, hit.chunk.text), hit) for hit in hits]
+        selected = [hit for coverage, hit in scored if coverage >= CITATION_SELECTION_FLOOR]
+        if selected:
+            return selected
+        # Thin everywhere: keep the best-covered passage, not the whole set.
+        return [max(scored, key=lambda pair: pair[0])[1]] if scored else []
 
     @staticmethod
     def _sources(hits: list) -> list[SourceRef]:

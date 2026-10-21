@@ -12,7 +12,7 @@ disagree, so the register cannot drift into a document nobody runs.
 | Item | Value |
 | --- | --- |
 | Primary retrieval metric | Recall@5 on the golden set, filtered lane (class + subject pre-filter, what the tutor serves) |
-| Primary split | the frozen held-out `test` split (`sha256(question)` 70/30), dataset hash `3500ef2a0f464278`, test hash `20acce69c7812ca9` |
+| Primary split | the frozen held-out `test` split (`sha256(question)` 70/30), dataset hash `3f48ecccee6f84c3`, test hash `8204848d17461138` |
 | Decision rule (CI gate) | fail when any of the six golden metrics drops more than 2.0 percentage points against `apps/api/eval/baseline_v2.json` |
 | Reporting rule | tune on `dev` (`--split dev`); report once on `test`; the gate always runs the full set |
 | Variants reporting | every variant tried is listed in the report, including the ones that lost |
@@ -49,38 +49,50 @@ Command: `cd apps/api && python -m bangla_gpt_api.evaluation.cli --targets-repor
 tests `tests/test_eval3_targets_report.py`.
 
 Measured on the frozen held-out `test` split (n = 185 items: 181 answerable,
-4 must-refuse), mock provider, seed 20261019, CIs by seeded percentile
-bootstrap (cluster bootstrap over items for micro-averaged citation
-precision):
+4 must-refuse) by replaying the committed 2026-10-21 live recording through the
+wave-7 pipeline (`scripts/evaluate_replay.py --split test`: the provider's own
+answers, 184 calls replayed, 0 misses; the CI gate re-derives the same numbers on
+every run). CIs for the retrieval metrics come from the seeded percentile
+bootstrap in `targets_report.py`; the generation proportions carry 95% Wilson
+intervals (`intervals_95` in the report).
 
 | Target | Bar | Measured | CI95 | Meets | Status |
 | --- | --- | --- | --- | --- | --- |
-| recall_at_5 | ≥ 0.85 | 1.0 | [1.0, 1.0] | yes | measured (saturated: cannot fail on this corpus) |
-| mrr_at_10 | ≥ 0.70 | 0.9549 | [0.9309, 0.9761] | yes | measured |
-| citation_precision | ≥ 0.95 | 0.3346 | [0.3333, 0.3371] | **no** | measured (mock quotes evidence; breadth property) |
-| citation_recall | ≥ 0.95 | 1.0 | [1.0, 1.0] | yes | measured (tautological for a quoting provider) |
-| abstention_recall | ≥ 0.90 | 1.0 | [1.0, 1.0] | yes | measured (small negative stratum) |
-| false_refusal_rate | ≤ 0.05 | 0.0 | [0.0, 0.0] | yes | measured |
-| faithfulness | ≥ 0.90 | 0.8544 | [0.8532, 0.8555] | **no** | proxy: the gate's `local_overlap` mode |
-| unsupported_claim_rate | ≤ 0.05 | 0.1456 | [0.1445, 0.1468] | **no** | proxy: derived as 1 − faithfulness |
-| format_validity | ≥ 0.95 | 1.0 | [1.0, 1.0] | yes | measured |
-| response_language_correctness | ≥ 0.98 | 1.0 | [1.0, 1.0] | yes | measured |
-| refusal_correctness_unsafe | == 1.0 | 1.0 | — | yes | measured (43/43 red-team refusals) |
-| injection leak / exfiltration | == 0 | 0 leaks | — | yes | measured under mock; the live-provider run repeats the same scan |
+| recall_at_5 | >= 0.85 | 1.0 | [1.0, 1.0] | yes | measured (saturated: cannot fail on this corpus) |
+| mrr_at_10 | >= 0.70 | 0.9549 | [0.9309, 0.9761] | yes | measured |
+| citation_precision (section) | >= 0.95 | **0.9655** | [0.9268, 0.9841] | **yes** | measured, register v3 (was 0.8802 at floor 0.25 + whole-set fallback) |
+| citation_recall | >= 0.95 | 0.9655 | [0.9268, 0.9841] | yes | measured (1.4 pp of precision bought with 0.6 pp of recall) |
+| abstention_recall | >= 0.90 | 1.0 | [0.5101, 1.0] | yes | measured (small negative stratum: 4 items) |
+| false_refusal_rate | <= 0.05 | 0.0387 | [0.0189, 0.0777] | yes | measured (the CI's upper bound is above the bar: 7/181 is a small sample, and the interval says so) |
+| faithfulness | >= 0.90 | 0.8555 | -- | **no** | proxy: the gate's `local_overlap` mode; a rephrasing model scores below the bar structurally, so this row needs the judge (50 human labels, owner) or a re-specified target |
+| unsupported_claim_rate | <= 0.05 | 0.1445 | -- | **no** | proxy: derived as 1 - faithfulness, i.e. the same row seen from the other side |
+| format_validity | >= 0.95 | 1.0 | [0.9784, 1.0] | yes | measured |
+| response_language_correctness | >= 0.98 | 1.0 | [0.9784, 1.0] | yes | measured |
+| refusal_correctness_unsafe | == 1.0 | 1.0 | [0.9180, 1.0] | yes | measured (43/43 red-team refusals) |
+| injection leak / exfiltration | == 0 | 0 leaks | -- | yes | measured under mock; the live-provider run repeats the same scan |
 
 **Not measured, with the reason recorded in the artifact** (never estimated):
-`answer_correctness`, `answer_relevance` and live-model `faithfulness` — all
-three need a configured provider, and this environment has none. The
-live-provider evaluation is the owner action the report names; the moment it
-runs, the same command fills those rows.
+`answer_correctness`, `answer_relevance` and judge-mode `faithfulness` -- the
+first two need a rubric the owner ratifies, the third needs the judge-human
+agreement study (50 labels).
 
-The three unmet rows are reported, not hidden. Two of them (`faithfulness`,
-`unsupported_claim_rate`) are **pipeline-mode** numbers: with a real model the
-recorded mode changes from `local_overlap` to `llm_judge` and the value moves
-with it.
-`citation_precision` 0.33 is the honest reading of a top-3 evidence window
-against a single gold section (see `generation-metrics.md`) and is a
-retrieval-breadth decision, not a model defect.
+The unmet rows are reported, not hidden. Both are the same underlying proxy:
+`faithfulness` (0.8555) is the share of an answer's sentences that appear
+verbatim in the retrieved evidence, which measures copying rather than support --
+with a real model the mode changes to `llm_judge` and the value moves with it.
+
+## Register revisions
+
+* **v2 (2026-10-21)** — the golden-set revision: the contextual stratum's items
+  were fragments, so they were rebuilt by the generator (whole clauses, content
+  terms only) rather than hand-edited; new dataset/test hashes in the table
+  above.
+* **v3 (2026-10-21)** — the citation-selection revision (A8-08):
+  `CITATION_SELECTION_FLOOR` 0.25 -> 0.40 and the thin-overlap fallback now
+  attaches the best-covered passage instead of the whole retrieved set. The
+  measured sweep, the reason and the moved-from values are in the register's
+  changelog; the result run's numbers are in the A8-08 evidence and in
+  `generation-metrics.md`.
 
 ## Owner actions
 

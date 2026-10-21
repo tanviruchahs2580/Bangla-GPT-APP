@@ -25,7 +25,7 @@
   "apps/web/src/components/ui.tsx": 546,
   "apps/web/src/i18n.ts": 1515,
   "apps/web/src/pages/AdminDashboard.tsx": 771,
-  "apps/web/src/pages/student/AITutorPage.tsx": 1089,
+  "apps/web/src/pages/student/AITutorPage.tsx": 1119,
   "apps/web/src/pages/student/LearnPage.tsx": 1047,
   "apps/web/src/pages/student/MePage.tsx": 573,
   "apps/web/src/pages/student/QuizPage.tsx": 705,
@@ -35,6 +35,6 @@
   "apps/web/src/types.ts": 581,
   "scripts/check_placeholders.py": 558
  },
- "generated": "2026-10-21T08:24:12Z",
+ "generated": "2026-10-21T14:38:09Z",
  "max_lines": 500
 }
