@@ -171,8 +171,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               const next = getLang() === "bn" ? "en" : "bn";
               setLang(next);
               document.documentElement.setAttribute("lang", next);
-              // setLang notifies subscribers; LangRoot remounts the tree in
-              // place so every t() string updates without a page reload.
+              // setLang notifies subscribers; App re-renders in place so
+              // every t() string updates without a page reload — and without
+              // remounting (a remount would discard in-progress page state).
             }}
           >
             <Languages size={18} aria-hidden />

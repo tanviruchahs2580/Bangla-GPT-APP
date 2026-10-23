@@ -471,3 +471,48 @@ def test_hash_password_roundtrip() -> None:
 
     assert verify_password(PASSWORD, stored)
     assert not verify_password("wrong", stored)
+
+
+def test_parallel_mfa_challenges_issue_exactly_one_session(client) -> None:
+    """Concurrent replays of one step-up token: exactly one winner.
+
+    The original burn was check-then-act — ``get_json_strict`` to see
+    whether the jti was used, then ``set_json_strict`` to mark it. Two
+    concurrent challenges with the same intercepted token and the same
+    currently-valid 30-second code both read "unused" before either wrote,
+    and both were issued full sessions, defeating the replay guarantee for
+    exactly the parallel case it was written for. The claim is now one
+    SETNX (``Cache.add_if_absent``); this test fires N identical
+    challenges and asserts the count of 200s is exactly 1.
+    """
+    import threading
+
+    secret = _enable_mfa(client, "parallel-mfa@example.test")
+    step_up = _login(client, "parallel-mfa@example.test")
+    assert step_up.status_code == 202
+    mfa_token = step_up.json()["access_token"]
+
+    code = mfa_mod._hotp(secret, int(time.time()) // mfa_mod._STEP_SECONDS)
+    attempts = 4
+    barrier = threading.Barrier(attempts)
+    statuses: list[int] = []
+    statuses_lock = threading.Lock()
+
+    def challenge() -> None:
+        barrier.wait(5)
+        res = client.post("/auth/mfa/challenge", json={"mfa_token": mfa_token, "code": code})
+        with statuses_lock:
+            statuses.append(res.status_code)
+
+    threads = [threading.Thread(target=challenge) for _ in range(attempts)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(30)
+
+    assert len(statuses) == attempts
+    assert statuses.count(200) == 1, (
+        f"the step-up token was replayed: {statuses.count(200)} of {attempts} "
+        f"concurrent challenges minted sessions (statuses: {statuses})"
+    )
+    assert all(s in (200, 401) for s in statuses), statuses

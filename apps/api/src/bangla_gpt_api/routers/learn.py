@@ -116,7 +116,9 @@ def learn_subject_chapters(
 ) -> list[ChapterSummaryOut]:
     chapters = subject_chapters(subject, class_level, chunks=_index_chunks(app_ctx))
     if not chapters:
-        raise HTTPException(status_code=404, detail="Subject not found")
+        raise HTTPException(
+            status_code=404, detail={"code": "subject_not_found", "message": "Subject not found"}
+        )
     return chapters
 
 
@@ -130,7 +132,9 @@ def learn_chapter_content(
 ) -> ChapterContentOut:
     content = chapter_content(subject, class_level, chapter, chunks=_index_chunks(app_ctx))
     if content is None:
-        raise HTTPException(status_code=404, detail="Chapter not found")
+        raise HTTPException(
+            status_code=404, detail={"code": "chapter_not_found", "message": "Chapter not found"}
+        )
     return content
 
 
@@ -221,7 +225,9 @@ def submit_quiz(
 ) -> QuizResult:
     attempt = db.get(QuizAttempt, attempt_id)
     if attempt is None:
-        raise HTTPException(status_code=404, detail="Attempt not found")
+        raise HTTPException(
+            status_code=404, detail={"code": "attempt_not_found", "message": "Attempt not found"}
+        )
     authorize_student_access(db, attempt.student_id, user)
 
     # Atomic claim: exactly one concurrent submission may transition
@@ -234,7 +240,10 @@ def submit_quiz(
     claimed = cast(CursorResult[Any], db.execute(claim_stmt))
     if claimed.rowcount != 1:
         db.rollback()
-        raise HTTPException(status_code=400, detail="Attempt already graded")
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "attempt_already_graded", "message": "Attempt already graded"},
+        )
 
     questions = list(attempt.quiz_json)
     if len(payload.answers) != len(questions):
@@ -781,40 +790,48 @@ def upsert_learn_progress(
 ) -> ChapterProgressOut:
     """Upsert progress/bookmark for a chapter."""
     if user.role != "student":
-        raise HTTPException(status_code=403, detail="Only students")
+        raise HTTPException(
+            status_code=403, detail={"code": "students_only", "message": "Only students"}
+        )
     student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one_or_none()
     if student is None:
-        raise HTTPException(status_code=404, detail="Student not found")
+        raise HTTPException(
+            status_code=404, detail={"code": "student_not_found", "message": "Student not found"}
+        )
     # Import here to avoid circular
     from bangla_gpt_api.db.models import ChapterProgress
+    from bangla_gpt_api.services.upsert import get_or_create
 
-    row = db.execute(
-        select(ChapterProgress).where(
+    # A first-touch read AND write from two tabs used to race the unique key
+    # into an unhandled IntegrityError; get_or_create closes that (savepoint +
+    # re-read). updated_at is naive UTC like every other column default —
+    # an aware datetime here would depend on the database session's timezone.
+    row, _created = get_or_create(
+        db,
+        model=ChapterProgress,
+        lookup=select(ChapterProgress).where(
             ChapterProgress.student_id == student.id,
             ChapterProgress.subject == payload.subject,
             ChapterProgress.chapter == payload.chapter,
             ChapterProgress.class_level == payload.class_level,
-        )
-    ).scalar_one_or_none()
-    if row is None:
-        row = ChapterProgress(
-            student_id=student.id,
-            subject=payload.subject,
-            chapter=payload.chapter,
-            class_level=payload.class_level,
-            read_pct=payload.read_pct or 0,
-            completed=payload.completed or False,
-            bookmarked=payload.bookmarked or False,
-        )
-        db.add(row)
-    else:
-        if payload.read_pct is not None:
-            row.read_pct = payload.read_pct
-        if payload.completed is not None:
-            row.completed = payload.completed
-        if payload.bookmarked is not None:
-            row.bookmarked = payload.bookmarked
-        row.updated_at = datetime.now(UTC)
+        ),
+        defaults={
+            "student_id": student.id,
+            "subject": payload.subject,
+            "chapter": payload.chapter,
+            "class_level": payload.class_level,
+            "read_pct": payload.read_pct or 0,
+            "completed": payload.completed or False,
+            "bookmarked": payload.bookmarked or False,
+        },
+    )
+    if payload.read_pct is not None:
+        row.read_pct = payload.read_pct
+    if payload.completed is not None:
+        row.completed = payload.completed
+    if payload.bookmarked is not None:
+        row.bookmarked = payload.bookmarked
+    row.updated_at = datetime.now(UTC).replace(tzinfo=None)
     db.commit()
     db.refresh(row)
     return ChapterProgressOut(

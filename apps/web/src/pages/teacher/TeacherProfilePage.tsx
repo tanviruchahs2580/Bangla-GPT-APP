@@ -89,7 +89,7 @@ export default function TeacherProfilePage() {
               const v = e.target.value as "bn" | "en";
               setLang(v);
               document.documentElement.setAttribute("lang", v);
-              // in-place remount via LangRoot — no page reload.
+              // in-place re-render via App — no page reload, no state loss.
             }}
           >
             <option value="bn">বাংলা</option>

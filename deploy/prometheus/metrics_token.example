@@ -1,0 +1,2 @@
+# Placeholder: the real token file is created by the operator and is
+# git-ignored. Prometheus reads it via bearer_token_file for /metrics.

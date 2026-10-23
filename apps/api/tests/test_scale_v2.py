@@ -252,7 +252,7 @@ def test_messages_capped_and_conversation_counts(env) -> None:
 
 
 # --------------------------------------------------------------------------
-# /assignments/mine: windowed scan + batched attempts
+# /assignments/mine: indexed membership + batched attempts
 # --------------------------------------------------------------------------
 
 
@@ -284,7 +284,15 @@ def test_assignments_mine_window_and_flags(tmp_path) -> None:
                 _ts(now - timedelta(hours=hrs)),
             ),
         )
-        made.append(int(conn.execute("SELECT last_insert_rowid()").fetchone()[0]))
+        assignment_id = int(conn.execute("SELECT last_insert_rowid()").fetchone()[0])
+        made.append(assignment_id)
+        # /assignments/mine reads the indexed membership relation; raw-SQL
+        # seeds must write it exactly like the API's dual-write does.
+        conn.execute(
+            "INSERT INTO assignment_recipients (assignment_id, student_id, attempt_id,"
+            " created_at) VALUES (?, ?, ?, ?)",
+            (assignment_id, sid, aid_attempt, _ts(now)),
+        )
     # an assignment NOT addressed to this student must never appear
     conn.execute(
         "INSERT INTO assignments (teacher_id, subject, chapter, num_questions, due_at,"
@@ -304,10 +312,12 @@ def test_assignments_mine_window_and_flags(tmp_path) -> None:
 
     win = client.get("/assignments/mine", headers=student, params={"limit": 2})
     assert win.status_code == 200
-    # limit windows the SCAN of the newest N assignments, not a page of mine:
-    # the Geometry row (same created_at, higher id -> newest, not addressed to
-    # this student) consumes one slot, leaving only made[0]
-    assert [a["id"] for a in win.json()] == [made[0]]
+    # ``limit`` windows the STUDENT'S OWN list (the membership relation makes
+    # that possible). The old implementation windowed the newest assignments
+    # PLATFORM-WIDE, so the unaddressed Geometry row consumed one of the two
+    # slots and only made[0] came back — the defect this relation removes.
+    # The first two of this student's three assignments are made[0], made[1].
+    assert [a["id"] for a in win.json()] == [made[0], made[1]]
 
     # the teacher-side progress page batches too (1+2N -> 1+2)
     prog = client.get(f"/teacher/assignments/{made[0]}/progress", headers=teacher)

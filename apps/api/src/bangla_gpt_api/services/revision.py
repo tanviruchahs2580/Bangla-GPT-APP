@@ -65,43 +65,45 @@ def record_quiz_result(
     Wrong items become due today (reps reset); correct items enter the schedule
     with a 1-day interval. Existing questions keep their history: a correct
     review bumps reps, a wrong one resets it and re-due-s today.
+
+    The hand-rolled get-or-create raised an unhandled ``IntegrityError`` when
+    two submissions first-touched the same question concurrently — a 500
+    after the quiz itself was already graded. ``get_or_create`` handles the
+    insert race; the schedule is then recomputed identically for the created
+    and the existing row.
     """
     from sqlalchemy import select
 
     from bangla_gpt_api.db.models import RevisionItem
+    from bangla_gpt_api.services.upsert import get_or_create
 
     today = dhaka_date(when or datetime.now(UTC))
     for item in review:
         quality = 5 if item.is_correct else 1
-        row = (
-            db.execute(
-                select(RevisionItem).where(
-                    RevisionItem.student_id == student_id,
-                    RevisionItem.question == item.question_text,
-                )
-            )
-            .scalars()
-            .first()
+        row, _created = get_or_create(
+            db,
+            model=RevisionItem,
+            lookup=select(RevisionItem).where(
+                RevisionItem.student_id == student_id,
+                RevisionItem.question == item.question_text,
+            ),
+            defaults={
+                "student_id": student_id,
+                "question": item.question_text,
+                "options_json": list(item.options),
+                "correct_index": item.correct_index,
+                "chapter": item.chapter,
+                "subject": subject,
+                "class_level": class_level,
+                "reps": 0,
+                "interval_days": 0,
+                "ease_factor": DEFAULT_EASE,
+                "due_date": today,
+            },
         )
-        if row is None:
-            row = RevisionItem(
-                student_id=student_id,
-                question=item.question_text,
-                options_json=list(item.options),
-                correct_index=item.correct_index,
-                chapter=item.chapter,
-                subject=subject,
-                class_level=class_level,
-                reps=0,
-                interval_days=0,
-                ease_factor=DEFAULT_EASE,
-                due_date=today,
-            )
-            db.add(row)
-        else:
-            row.options_json = list(item.options)
-            row.correct_index = item.correct_index
-            row.chapter = item.chapter
+        row.options_json = list(item.options)
+        row.correct_index = item.correct_index
+        row.chapter = item.chapter
         reps, interval, ease = next_schedule(row.reps, row.interval_days, row.ease_factor, quality)
         row.reps, row.interval_days, row.ease_factor = reps, interval, ease
         row.due_date = today if quality < 3 else add_days(today, interval)

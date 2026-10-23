@@ -369,7 +369,10 @@ async def send_chat_message(
     """Non-streaming chat turn: persists both sides and returns the reply."""
     tutor = app_ctx.tutor
     if tutor is None:
-        raise HTTPException(status_code=503, detail="Tutor service unavailable")
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "tutor_unavailable", "message": "Tutor service unavailable"},
+        )
     # AI-002: budget gate before spending upstream tokens.
     check_ai_budget(db, user_id=user.id, settings=app_ctx.settings)
     conv = _own_conversation(db, conversation_id, user)
@@ -481,7 +484,10 @@ async def stream_chat_message(
     """SSE streaming chat turn: token events, then one final JSON event."""
     tutor = app_ctx.tutor
     if tutor is None:
-        raise HTTPException(status_code=503, detail="Tutor service unavailable")
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "tutor_unavailable", "message": "Tutor service unavailable"},
+        )
     # AI-002: budget gate before spending upstream tokens.
     check_ai_budget(db, user_id=user.id, settings=app_ctx.settings)
     conv = _own_conversation(db, conversation_id, user)

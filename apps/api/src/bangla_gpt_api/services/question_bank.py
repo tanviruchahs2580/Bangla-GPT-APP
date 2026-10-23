@@ -56,43 +56,55 @@ def store_reviewed(
     """Insert the reviewed question, or return the existing row.
 
     Returns ``(row, created)``. Flushes but does not commit -- callers keep
-    their own transaction boundary.
+    their own transaction boundary. Two teachers reviewing identical text
+    concurrently used to collide on ``dedupe_key`` with an unhandled
+    ``IntegrityError`` (a 500 on a normal review flow); ``get_or_create``
+    closes that race with a savepoint and a re-read.
     """
+    from bangla_gpt_api.services.upsert import get_or_create
+
     key = dedupe_key(text)
-    existing = db.execute(
-        select(QuestionBankEntry).where(QuestionBankEntry.dedupe_key == key)
-    ).scalar_one_or_none()
-    if existing is not None:
-        return existing, False
-    row = QuestionBankEntry(
-        teacher_id=teacher_id,
-        dedupe_key=key,
-        question_text=text,
-        options=[str(o) for o in options],
-        answer_index=answer_index,
-        subject=subject,
-        chapter=chapter,
-        class_level=class_level,
-        source=source,
+    row, created = get_or_create(
+        db,
+        model=QuestionBankEntry,
+        lookup=select(QuestionBankEntry).where(QuestionBankEntry.dedupe_key == key),
+        defaults={
+            "teacher_id": teacher_id,
+            "dedupe_key": key,
+            "question_text": text,
+            "options": [str(o) for o in options],
+            "answer_index": answer_index,
+            "subject": subject,
+            "chapter": chapter,
+            "class_level": class_level,
+            "source": source,
+        },
     )
-    db.add(row)
-    db.flush()
-    return row, True
+    return row, created
 
 
 def find_reusable(
     db: Session,
     *,
     class_level: int,
+    school_id: int | None,
     subject: str | None = None,
     chapter: str | None = None,
     exclude_texts: Iterable[str] = (),
     limit: int = 1,
+    include_all_schools: bool = False,
 ) -> list[QuestionBankEntry]:
     """Reviewed questions reusable for a generation request.
 
     Filters to the same class level (and subject/chapter when given), newest
     first, skipping anything already used on the paper being edited.
+
+    Tenancy matches ``_assert_content_writable``: entries authored inside the
+    viewer's own school are reusable, and school-less entries are visible to
+    school-less viewers — the same rule the chapter-content library applies to
+    writes. Without this filter, a teacher in one school received the OTHER
+    school's reviewed questions back as "reuse" replacements.
+    ``include_all_schools`` is the explicit admin path.
     """
     excluded = {normalize_text(text) for text in exclude_texts}
     stmt = (
@@ -100,6 +112,11 @@ def find_reusable(
         .where(QuestionBankEntry.class_level == class_level)
         .order_by(QuestionBankEntry.created_at.desc(), QuestionBankEntry.id.desc())
     )
+    if not include_all_schools:
+        from bangla_gpt_api.db.models import User
+
+        authors = select(User.id).where(User.school_id == school_id)
+        stmt = stmt.where(QuestionBankEntry.teacher_id.in_(authors))
     if subject is not None:
         stmt = stmt.where(QuestionBankEntry.subject == subject)
     if chapter is not None:

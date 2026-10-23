@@ -490,7 +490,10 @@ def _default_school(db: Session) -> School:
 def _classroom_or_404(db: Session, room_id: int) -> ClassRoom:
     room = db.get(ClassRoom, room_id)
     if room is None:
-        raise HTTPException(status_code=404, detail="classroom not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "classroom_not_found", "message": "classroom not found"},
+        )
     return room
 
 

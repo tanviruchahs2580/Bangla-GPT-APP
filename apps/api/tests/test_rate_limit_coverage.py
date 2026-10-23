@@ -235,3 +235,44 @@ def test_anonymous_routes_are_either_public_or_rated() -> None:
     # Sanity: the public list really does contain the health probes, so this
     # test is not passing because PUBLIC_OPERATIONS is empty.
     assert any("/health" in op for op in PUBLIC_OPERATIONS)
+
+
+# --- the credential-verifying counterpart of login ---------------------------
+
+
+def test_change_password_rule_ships_by_default() -> None:
+    """/auth/change-password verifies the CURRENT password and re-hashes.
+
+    It had no rule at all: a stolen-token holder (or anyone on a shared
+    school device) could guess the current password unbounded, and each
+    attempt costs two Argon2id operations (verify + hash-on-save) — the
+    worst cost profile of any credential endpoint, with no throttle. Per
+    user, for the school-NAT reason the /auth/mfa rule documents.
+    """
+    assert _rule_for(_effective_rules(Settings(env="test")), "/auth/change-password") == (
+        10,
+        "user",
+    )
+
+
+def test_change_password_is_rate_limited_end_to_end(tmp_path) -> None:
+    """The 11th wrong-current-password attempt in a minute is a 429.
+
+    The first ten must reach the handler and answer 400 (wrong current
+    password), otherwise this would pass because of some other rejection.
+    """
+    client = _client(tmp_path, rate_limit_rules={"/auth/change-password": (10, "user")})
+    client.post("/auth/register", json=_register_payload("chpw@example.com"))
+    headers = _login(client, "chpw@example.com")
+
+    statuses = [
+        client.post(
+            "/auth/change-password",
+            json={"current_password": f"wrong{i}", "new_password": "AnotherPass!234"},
+            headers=headers,
+        )
+        for i in range(11)
+    ]
+    assert all(s.status_code == 400 for s in statuses[:10]), [s.text for s in statuses[:10]]
+    assert statuses[10].status_code == 429
+    assert statuses[10].json()["detail"]["code"] == "rate_limited"

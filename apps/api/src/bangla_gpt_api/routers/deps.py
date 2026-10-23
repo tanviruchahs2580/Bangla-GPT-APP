@@ -190,7 +190,10 @@ def get_current_user(
     if user.must_change_password and request.url.path not in _FORCE_CHANGE_EXEMPT_PATHS:
         raise HTTPException(
             status_code=403,
-            detail="Password change required. Use POST /auth/change-password first.",
+            detail={
+                "code": "password_change_required",
+                "message": "Password change required. Use POST /auth/change-password first.",
+            },
         )
     return user
 
@@ -201,7 +204,10 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 def require_roles(*roles: str):
     def dependency(user: CurrentUser) -> User:
         if user.role not in roles:
-            raise HTTPException(status_code=403, detail="Insufficient role")
+            raise HTTPException(
+                status_code=403,
+                detail={"code": "insufficient_role", "message": "Insufficient role"},
+            )
         return user
 
     return dependency
@@ -331,7 +337,9 @@ def _assert_room_in_school(db: Session, user: User, room: ClassRoom) -> ClassRoo
 def authorize_student_access(db: Session, student_id: int, user: User) -> Student:
     student = db.get(Student, student_id)
     if student is None:
-        raise HTTPException(status_code=404, detail="Student not found")
+        raise HTTPException(
+            status_code=404, detail={"code": "student_not_found", "message": "Student not found"}
+        )
     # school_admin gets school-scoped access (same as teacher), documented policy
     if user.role in ("teacher", "admin", "school_admin"):
         return _assert_student_in_school(db, user, student)
@@ -339,7 +347,10 @@ def authorize_student_access(db: Session, student_id: int, user: User) -> Studen
         return student
     # linked guardian allowed via ParentStudentLink
     # This helper is intentionally broader — consent reconfirm checks link explicitly
-    raise HTTPException(status_code=403, detail="Not allowed to access this student")
+    raise HTTPException(
+        status_code=403,
+        detail={"code": "not_allowed", "message": "Not allowed to access this student"},
+    )
 
 
 def _build_me_response(app_ctx: AppContext, db: Session, user: User) -> MeResponse:

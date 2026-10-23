@@ -192,23 +192,33 @@ def apply_review(
     class_level: int,
     graded: Sequence[tuple[str, str, bool]],  # (item fingerprint, chapter, correct)
 ) -> None:
-    """Elo-update ability (per concept) and item difficulty after grading."""
-    # db.get cannot see PENDING rows (their PK is unset until flush), so a
-    # chapter appearing twice in one review would create duplicate rows.
-    fresh: dict[str, StudentAbility] = {}
+    """Elo-update ability (per concept) and item difficulty after grading.
+
+    Two concurrent grading paths first-touching the same (student, concept)
+    used to collide on the composite primary key with an unhandled
+    ``IntegrityError`` — a 500 after the quiz was already graded.
+    ``get_or_create`` handles the insert race (savepoint + re-read), and a
+    chapter appearing twice in one review finds the flushed row, so the old
+    pending-row workaround is gone with it.
+    """
+    from bangla_gpt_api.services.upsert import get_or_create
+
     for fingerprint, chapter, correct in graded:
         concept = knowledge.canonical(chapter)
-        ability_row = fresh.get(concept) or db.get(StudentAbility, (student_id, concept))
-        if ability_row is None:
-            ability_row = StudentAbility(
-                student_id=student_id,
-                concept=concept,
-                class_level=class_level,
-                ability=DEFAULT_ELO,
-                attempts=0,
-            )
-            db.add(ability_row)
-            fresh[concept] = ability_row
+        ability_row, _created = get_or_create(
+            db,
+            model=StudentAbility,
+            lookup=select(StudentAbility).where(
+                StudentAbility.student_id == student_id, StudentAbility.concept == concept
+            ),
+            defaults={
+                "student_id": student_id,
+                "concept": concept,
+                "class_level": class_level,
+                "ability": DEFAULT_ELO,
+                "attempts": 0,
+            },
+        )
         item = db.get(PracticeItem, fingerprint)
         item_elo = item.elo if item is not None else DEFAULT_ELO
         new_ability, new_elo = update_pair(ability_row.ability, item_elo, correct)

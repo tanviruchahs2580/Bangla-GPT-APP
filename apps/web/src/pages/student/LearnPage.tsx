@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   BookOpen,
@@ -27,6 +27,7 @@ import type {
 } from "../../types";
 import { useAuth } from "../../AuthContext";
 import { Card, LoadError } from "../../components/ui";
+import { invalidateStudyCaches } from "../../lib/invalidate";
 import { t, tSubject } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { chapterBadge, ttsSupported as ttsAvailable } from "../../lib/progress";
@@ -302,6 +303,7 @@ export function LearnPage() {
 export function LearnChapterPage() {
   const { subject, chapter, searchParams } = useRouteParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const classLevel = Number(searchParams.get("class")) || undefined;
   // one normalized class number keeps the offline key stable
   const offlineClass = classLevel ?? 6;
@@ -379,7 +381,9 @@ export function LearnChapterPage() {
         chapter,
         class_level: classLevel,
         read_pct: 40,
-      }).catch(() => {});
+      })
+        .then(() => invalidateStudyCaches(queryClient))
+        .catch(() => {});
       track("chapter_read", { subject, chapter });
     }, 1500);
     let lastReported = 70;
@@ -405,14 +409,18 @@ export function LearnChapterPage() {
         class_level: classLevel,
         read_pct: pct,
         completed: pct > 90,
-      }).catch(() => {});
+      })
+        // The write is what the "reading"/"done" badge and the subject ring
+        // read; without this the list behind the reader stayed stale.
+        .then(() => invalidateStudyCaches(queryClient))
+        .catch(() => {});
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       clearTimeout(t);
       window.removeEventListener("scroll", onScroll);
     };
-  }, [query.data, subject, chapter, classLevel]);
+  }, [query.data, subject, chapter, classLevel, queryClient]);
 
   const toggleBookmark = async () => {
     if (!subject || !chapter || !classLevel) return;
@@ -425,6 +433,7 @@ export function LearnChapterPage() {
         class_level: classLevel,
         bookmarked: next,
       });
+      invalidateStudyCaches(queryClient);
     } catch {
       /* Bookmarking is best-effort: a failed write must not drop the reader
          out of the chapter they are reading. */

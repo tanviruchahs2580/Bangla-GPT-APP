@@ -352,3 +352,71 @@ def test_cache_key_includes_corpus_fingerprint():
     # same query on a different corpus must NOT hit corpus-a's cached answer
     assert idx_b.search("kox ki", class_level=6)[0].score == pytest.approx(1.5)
     assert inner_a.calls == 1 and inner_b.calls == 1
+
+
+# --- add_if_absent: the single-use claim primitive ---------------------------
+
+
+def test_memory_add_if_absent_claims_exactly_once() -> None:
+    """First claim wins, every later claim loses while the entry lives."""
+    cache = MemoryCache()
+    assert cache.add_if_absent("k", 1, 60.0) is True
+    assert cache.add_if_absent("k", 1, 60.0) is False
+    # The stored value is readable through the normal path too.
+    assert cache.get_json("k") == 1
+
+
+def test_memory_add_if_absent_respects_plain_writes_and_expiry() -> None:
+    cache = MemoryCache()
+    cache.set_json("k", {"v": 1}, 0.05)
+    assert cache.add_if_absent("k", 1, 60.0) is False, "a live value must block the claim"
+    time.sleep(0.06)
+    assert cache.add_if_absent("k", 1, 60.0) is True, "an expired entry must not block"
+
+
+def test_memory_add_if_absent_is_atomic_under_threads() -> None:
+    """Exactly one of N racing threads acquires the claim.
+
+    This is the property the MFA step-up burn depends on: a check-then-act
+    pair lets every racing caller observe "absent" before any of them
+    writes. The primitive is exercised here directly because the HTTP-level
+    regression test (test_round2_auth_hardening) proves the wiring, while
+    this proves the primitive itself under real contention.
+    """
+    import threading
+
+    cache = MemoryCache()
+    threads_n = 16
+    barrier = threading.Barrier(threads_n)
+    wins: list[bool] = []
+    wins_lock = threading.Lock()
+
+    def claim() -> None:
+        barrier.wait(5)
+        got = cache.add_if_absent("racing", 1, 60.0)
+        with wins_lock:
+            wins.append(got)
+
+    threads = [threading.Thread(target=claim) for _ in range(threads_n)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(30)
+
+    assert len(wins) == threads_n
+    assert wins.count(True) == 1, f"{wins.count(True)} claimants won; exactly one must"
+
+
+@needs_redis
+def test_redis_add_if_absent_claims_exactly_once_across_instances() -> None:
+    """SETNX semantics on the shared backend: two clients, one winner.
+
+    Two RedisCache instances stand in for two workers/pods; the claim must
+    be decided by Redis, not by per-process state.
+    """
+    assert REDIS_URL is not None
+    a = RedisCache(REDIS_URL)
+    b = RedisCache(REDIS_URL)
+    key = f"claim-test:{uuid.uuid4().hex}"
+    assert a.add_if_absent(key, 1, 60.0) is True
+    assert b.add_if_absent(key, 1, 60.0) is False

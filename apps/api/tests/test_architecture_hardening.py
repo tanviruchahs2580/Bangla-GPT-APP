@@ -109,7 +109,7 @@ def test_ready_includes_the_retrieval_index() -> None:
     try:
         res = client.get("/ready")
         assert res.status_code == 503
-        assert res.json()["detail"] == "Retrieval index unavailable"
+        assert res.json()["detail"]["code"] == "index_unavailable"
     finally:
         ctx.index, ctx.tutor = saved
 

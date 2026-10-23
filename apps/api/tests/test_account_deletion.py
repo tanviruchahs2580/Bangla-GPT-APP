@@ -140,7 +140,7 @@ def test_last_admin_cannot_self_delete(client: TestClient) -> None:
     root = _login_headers(client, "root@example.com")
     res = client.delete("/users/me", headers=root)
     assert res.status_code == 409
-    assert res.json()["detail"] == "Cannot delete the last admin"
+    assert res.json()["detail"]["code"] == "last_admin_guard"
 
 
 def test_second_admin_can_self_delete(client: TestClient) -> None:

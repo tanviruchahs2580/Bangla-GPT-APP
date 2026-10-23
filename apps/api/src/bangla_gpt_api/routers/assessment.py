@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from bangla_gpt_api.db.models import (
     Assignment,
+    AssignmentRecipient,
     ChapterContent,
     ChapterProgress,
     ClassRoom,
@@ -494,7 +495,9 @@ def teacher_create_support_plan(
     """Rule-based 3-week plan over the student's three weakest concepts."""
     student = db.get(Student, payload.student_id)
     if student is None:
-        raise HTTPException(status_code=404, detail="student not found")
+        raise HTTPException(
+            status_code=404, detail={"code": "student_not_found", "message": "student not found"}
+        )
     # tenancy: plans can only be opened for own-school students.
     _assert_student_in_school(db, teacher, student)
     cells = _answer_cells(db, [student.id]).get(student.id, {})
@@ -507,7 +510,10 @@ def teacher_create_support_plan(
         key=lambda t: (t[1], t[0]),
     )
     if not scored:
-        raise HTTPException(status_code=422, detail="no graded quiz data for this student")
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "no_graded_data", "message": "no graded quiz data for this student"},
+        )
     weak = [{"name": ch, "accuracy": acc} for ch, acc in scored[:3]]
     plan = atrisk.build_plan(weak)
     row = SupportPlan(
@@ -662,6 +668,18 @@ def teacher_assignment_create(
     )
     db.add(assignment)
     db.flush()
+    # Dual-write: the JSON keeps serving displays that already read it, while
+    # these rows are the indexable membership /assignments/mine queries. Both
+    # copies land in the same transaction, so they cannot diverge.
+    for ref in attempts:
+        db.add(
+            AssignmentRecipient(
+                assignment_id=assignment.id,
+                student_id=int(ref["student_id"]),
+                attempt_id=int(ref["attempt_id"]),
+            )
+        )
+    db.flush()
     # every assigned student with a user account gets a notification.
     for student in students:
         notify_user(
@@ -769,7 +787,10 @@ def teacher_assignment_progress(
 ) -> list[AssignmentProgressRow]:
     assignment = db.get(Assignment, assignment_id)
     if assignment is None or (teacher.role != "admin" and assignment.teacher_id != teacher.id):
-        raise HTTPException(status_code=404, detail="Assignment not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "assignment_not_found", "message": "Assignment not found"},
+        )
     return _assignment_progress_rows(db, assignment)
 
 
@@ -782,10 +803,13 @@ def assignments_mine(
     """Assigned quizzes for the signed-in student. Due date is soft like
     short tests: ``overdue`` is advisory, submitting still grades the work.
 
-    membership lives in the attempts JSON, so the candidate window is
-    the most recent `limit` assignments (was an unbounded full-table scan),
-    and attempt rows are fetched in ONE batched query (was 1 per item).
-    A membership link table is the proper long-term fix (documented).
+    Membership is the indexed ``assignment_recipients`` relation (the
+    ``attempts`` JSON is dual-written for displays that already read it).
+    Before the relation existed this route windowed the newest ``limit``
+    assignments *platform-wide* and filtered in Python, so once more than
+    ``limit`` newer assignments existed anywhere, a student's own older
+    assignment silently vanished from their hub. ``limit`` now bounds the
+    student's own list, where it belongs.
     """
     if user.role != "student":
         return []
@@ -793,21 +817,14 @@ def assignments_mine(
     if student is None:
         return []
     now = datetime.now(UTC).replace(tzinfo=None)
-    rows = (
-        db.execute(
-            select(Assignment)
-            .order_by(Assignment.created_at.desc(), Assignment.id.desc())
-            .limit(limit)
-        )
-        .scalars()
-        .all()
-    )
-    matched: list[tuple[Assignment, int]] = []
-    for a in rows:
-        own = {int(r["student_id"]): int(r["attempt_id"]) for r in a.attempts}
-        aid = own.get(student.id)
-        if aid is not None:
-            matched.append((a, aid))
+    rows = db.execute(
+        select(Assignment, AssignmentRecipient.attempt_id)
+        .join(AssignmentRecipient, AssignmentRecipient.assignment_id == Assignment.id)
+        .where(AssignmentRecipient.student_id == student.id)
+        .order_by(Assignment.created_at.desc(), Assignment.id.desc())
+        .limit(limit)
+    ).all()
+    matched: list[tuple[Assignment, int]] = [(a, int(aid)) for a, aid in rows]
     attempts = (
         {
             a.id: a

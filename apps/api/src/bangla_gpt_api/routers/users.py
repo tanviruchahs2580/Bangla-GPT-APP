@@ -150,7 +150,10 @@ def delete_me(db: DbSession, user: CurrentUser) -> Response:
             select(func.count()).select_from(User).where(User.role == "admin")
         ).scalar_one()
         if admins <= 1:
-            raise HTTPException(status_code=409, detail="Cannot delete the last admin")
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "last_admin_guard", "message": "Cannot delete the last admin"},
+            )
 
     student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one_or_none()
     parent = db.execute(select(Parent).where(Parent.user_id == user.id)).scalar_one_or_none()
@@ -794,7 +797,9 @@ def post_consent_reconfirm(
     # align implementation with policy "student or linked guardian"
     student = db.get(Student, student_id)
     if student is None:
-        raise HTTPException(status_code=404, detail="Student not found")
+        raise HTTPException(
+            status_code=404, detail={"code": "student_not_found", "message": "Student not found"}
+        )
     allowed = False
     if user.role == "student" and student.user_id == user.id:
         allowed = True
@@ -817,7 +822,10 @@ def post_consent_reconfirm(
             _assert_student_in_school(db, user, student)
         allowed = True
     if not allowed:
-        raise HTTPException(status_code=403, detail="Not allowed to access this student")
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "not_allowed", "message": "Not allowed to access this student"},
+        )
     # reuse student already loaded
     student.consent_version = CONSENT_VERSION
     student.consent_at = datetime.now(UTC)

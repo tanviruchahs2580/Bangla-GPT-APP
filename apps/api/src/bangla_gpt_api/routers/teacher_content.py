@@ -171,7 +171,10 @@ async def teacher_content_generate(
 ) -> TeacherContentOut:
     """one retrieval + one AI call fills all seven sections."""
     if app_ctx.tutor is None:
-        raise HTTPException(status_code=503, detail="provider not configured")
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "provider_unconfigured", "message": "provider not configured"},
+        )
     # S-007: generating when content already exists appends the new "current"
     # version, i.e. it is a write like PUT. Refuse it across the tenancy wall
     # BEFORE spending the provider call.
@@ -195,7 +198,10 @@ async def teacher_content_generate(
             ),
         )
     except ProviderError as exc:
-        raise HTTPException(status_code=502, detail="content generation failed") from exc
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "llm_unavailable", "message": "content generation failed"},
+        ) from exc
     version = _content_next_version(db, payload.subject, payload.class_level, payload.chapter)
     row = ChapterContent(
         subject=payload.subject,
@@ -266,7 +272,9 @@ def teacher_content_get(
 ) -> TeacherContentOut:
     row = _content_current(db, subject, class_level, chapter)
     if row is None:
-        raise HTTPException(status_code=404, detail="content not found")
+        raise HTTPException(
+            status_code=404, detail={"code": "content_not_found", "message": "content not found"}
+        )
     return _content_out(row)
 
 
@@ -283,7 +291,9 @@ def teacher_content_edit(
     """
     current = _content_current(db, payload.subject, payload.class_level, payload.chapter)
     if current is None:
-        raise HTTPException(status_code=404, detail="content not found")
+        raise HTTPException(
+            status_code=404, detail={"code": "content_not_found", "message": "content not found"}
+        )
     _assert_content_writable(db, current, teacher)
     row = ChapterContent(
         subject=payload.subject,
@@ -306,7 +316,10 @@ def teacher_content_edit(
 def _qp_or_404(db: Session, qp_id: int, teacher: User) -> QuestionPaper:
     qp = db.get(QuestionPaper, qp_id)
     if qp is None or (qp.teacher_id != teacher.id and teacher.role != "admin"):
-        raise HTTPException(status_code=404, detail="question paper not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "qpaper_not_found", "message": "question paper not found"},
+        )
     return qp
 
 
@@ -349,7 +362,10 @@ async def _qp_fresh_draft(
     but never applied to teachers.
     """
     if app_ctx.tutor is None:
-        raise HTTPException(status_code=503, detail="provider not configured")
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "provider_unconfigured", "message": "provider not configured"},
+        )
     check_ai_budget(db, user_id=actor.id, settings=app_ctx.settings)
     try:
         questions, meta = await generate_question_paper(
@@ -363,7 +379,10 @@ async def _qp_fresh_draft(
             context=context,
         )
     except ProviderError as exc:
-        raise HTTPException(status_code=502, detail="question paper generation failed") from exc
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "llm_unavailable", "message": "question paper generation failed"},
+        ) from exc
     # Adds only; the caller's commit persists the ledger row with the paper.
     record_ai_usage(
         db,
@@ -467,7 +486,10 @@ def teacher_qp_get(qp_id: int, db: DbSession, teacher: TeacherOrAdminUser) -> QP
 
 def _qp_editable(qp: QuestionPaper) -> None:
     if qp.status == "final":
-        raise HTTPException(status_code=409, detail="paper is already finalised")
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "paper_finalised", "message": "paper is already finalised"},
+        )
 
 
 @router.post("/teacher/qpapers/{qp_id}/regenerate", response_model=QPOut)
@@ -545,7 +567,13 @@ def teacher_qp_review(
     for decision in payload.decisions:
         question = by_ref.get(decision.ref)
         if question is None:
-            raise HTTPException(status_code=400, detail=f"unknown question ref: {decision.ref}")
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "unknown_question_ref",
+                    "message": f"unknown question ref: {decision.ref}",
+                },
+            )
         if decision.action == "edit":
             question["text"] = decision.text
             if decision.options is not None:
@@ -596,7 +624,13 @@ async def teacher_qp_replace(
     questions = [dict(q) for q in qp.questions]
     target = next((q for q in questions if str(q["ref"]) == payload.ref), None)
     if target is None:
-        raise HTTPException(status_code=400, detail=f"unknown question ref: {payload.ref}")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "unknown_question_ref",
+                "message": f"unknown question ref: {payload.ref}",
+            },
+        )
     label = payload.difficulty or str(target["difficulty"])
     chapter = payload.chapter or str(target["chapter"])
     started = time.perf_counter()
@@ -607,6 +641,8 @@ async def teacher_qp_replace(
     for row in find_reusable(
         db,
         class_level=qp.class_level,
+        school_id=teacher.school_id,
+        include_all_schools=teacher.role == "admin",
         subject=qp.subject,
         chapter=chapter,
         exclude_texts=[str(q["text"]) for q in questions],
@@ -663,7 +699,10 @@ async def teacher_qp_replace(
         )
         replacement = candidates[0] if candidates else None
     if replacement is None:
-        raise HTTPException(status_code=502, detail="no distinct replacement question")
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "no_replacement", "message": "no distinct replacement question"},
+        )
     if reuse_source == "ai":
         replacement["ref"] = str(target["ref"])
         replacement["difficulty"] = label
@@ -691,7 +730,9 @@ def teacher_qp_finalize(qp_id: int, db: DbSession, teacher: TeacherOrAdminUser) 
     """FINAL is an explicit teacher action, blocked until every question reviewed."""
     qp = _qp_or_404(db, qp_id, teacher)
     if qp.status == "final":
-        raise HTTPException(status_code=409, detail="already finalised")
+        raise HTTPException(
+            status_code=409, detail={"code": "paper_finalised", "message": "already finalised"}
+        )
     unreviewed = [str(q["ref"]) for q in qp.questions if not q.get("reviewed")]
     if unreviewed:
         raise HTTPException(
@@ -720,7 +761,10 @@ def teacher_qp_pdf(
     qp_id: int, db: DbSession, teacher: TeacherOrAdminUser, kind: str = "paper"
 ) -> Response:
     if kind not in ("paper", "answer"):
-        raise HTTPException(status_code=400, detail="kind must be paper or answer")
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "invalid_kind", "message": "kind must be paper or answer"},
+        )
     qp = _qp_or_404(db, qp_id, teacher)
     paper = {
         "exam_type": qp.exam_type,
@@ -757,14 +801,20 @@ async def teacher_lesson_plan(
     existing field keeps its exact shape.
     """
     if app_ctx.tutor is None:
-        raise HTTPException(status_code=503, detail="provider not configured")
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "provider_unconfigured", "message": "provider not configured"},
+        )
     started = time.perf_counter()
     try:
         doc_payload, sources, _chapter = await _generate_document(
             app_ctx, db, teacher, "lesson_plan", payload
         )
     except ProviderError as exc:
-        raise HTTPException(status_code=502, detail="lesson plan generation failed") from exc
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "llm_unavailable", "message": "lesson plan generation failed"},
+        ) from exc
     doc = _persist_document(
         db,
         user_id=teacher.id,
@@ -802,7 +852,9 @@ async def teacher_lesson_plan(
 def _document_or_404(db: Session, document_id: int, actor: User) -> TeacherDocument:
     doc = db.get(TeacherDocument, document_id)
     if doc is None or (doc.teacher_id != actor.id and actor.role != "admin"):
-        raise HTTPException(status_code=404, detail="document not found")
+        raise HTTPException(
+            status_code=404, detail={"code": "document_not_found", "message": "document not found"}
+        )
     return doc
 
 
@@ -827,9 +879,14 @@ async def teacher_generate_document(
     rubric. The persisted TeacherDocument is returned with the cited
     sources (answer_key takes {paper_id} OR {questions})."""
     if kind not in TEACHER_DOCUMENT_KINDS:
-        raise HTTPException(status_code=404, detail="unknown generator kind")
+        raise HTTPException(
+            status_code=404, detail={"code": "unknown_kind", "message": "unknown generator kind"}
+        )
     if app_ctx.tutor is None:
-        raise HTTPException(status_code=503, detail="provider not configured")
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "provider_unconfigured", "message": "provider not configured"},
+        )
     try:
         gen_in = _doc_in_for(kind, body)
     except ValidationError as exc:
@@ -845,7 +902,10 @@ async def teacher_generate_document(
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ProviderError as exc:
-        raise HTTPException(status_code=502, detail=f"{kind} generation failed") from exc
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "llm_unavailable", "message": f"{kind} generation failed"},
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     doc = _persist_document(
@@ -899,7 +959,9 @@ def teacher_documents_list(
     lesson_plan kind persisted by POST /teacher/lesson-plans)."""
     allowed = (*TEACHER_DOCUMENT_KINDS, "lesson_plan")
     if kind is not None and kind not in allowed:
-        raise HTTPException(status_code=422, detail="unknown document kind")
+        raise HTTPException(
+            status_code=422, detail={"code": "unknown_kind", "message": "unknown document kind"}
+        )
     q = select(TeacherDocument).where(TeacherDocument.teacher_id == teacher.id)
     if kind is not None:
         q = q.where(TeacherDocument.kind == kind)
@@ -927,7 +989,9 @@ def teacher_document_delete(
     # Deletion is strictly own-only (admins included).
     doc = db.get(TeacherDocument, document_id)
     if doc is None or doc.teacher_id != teacher.id:
-        raise HTTPException(status_code=404, detail="document not found")
+        raise HTTPException(
+            status_code=404, detail={"code": "document_not_found", "message": "document not found"}
+        )
     db.delete(doc)
     db.commit()
     return Response(status_code=204)
@@ -937,7 +1001,10 @@ def teacher_document_delete(
 def teacher_document_pdf(document_id: int, db: DbSession, teacher: TeacherOrAdminUser) -> Response:
     doc = _document_or_404(db, document_id, teacher)
     if doc.kind not in TEACHER_DOCUMENT_PDF_KINDS:
-        raise HTTPException(status_code=400, detail="no PDF export for this document kind")
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "pdf_unsupported", "message": "no PDF export for this document kind"},
+        )
     doc_dict = {
         "kind": doc.kind,
         "title": doc.title,

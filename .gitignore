@@ -117,3 +117,6 @@ apps/api/.coverage
 # Audit run screenshots: large local QA evidence (26MB+). Regenerate with the
 # app running; the reports in docs/audit-*/ are the durable record.
 docs/audit-*/screenshots/
+
+# Monitoring secrets and state
+deploy/prometheus/metrics_token

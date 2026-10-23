@@ -29,8 +29,19 @@
 	# API: strip the /api prefix before proxying to FastAPI.
 	# CSP/nonce for API responses is set by the app itself
 	# (SecurityHeadersMiddleware); no HTML is served from this prefix.
+	#
+	# X-Forwarded-For is OVERWRITTEN, not appended, and that is what makes
+	# TRUST_PROXY_HEADERS=true (the compose default) correct rather than a
+	# spoofing hole: the API reads the LAST XFF entry, so it must be the
+	# address Caddy itself observed ({remote_host}), never anything the
+	# client sent. Caddy's default is to append, which left every IP-scoped
+	# rate limit sharing one bucket (the proxy's own address) and let any
+	# caller rotate a fake identity. `apps/api/scripts/check_proxy_contract.py`
+	# fails CI if this line and the compose default ever drift apart again.
 	handle_path /api/* {
-		reverse_proxy api:8000
+		reverse_proxy api:8000 {
+			header_up X-Forwarded-For {remote_host}
+		}
 	}
 
 	# Static dashboard (SPA): hashed assets + client-rendered routes.

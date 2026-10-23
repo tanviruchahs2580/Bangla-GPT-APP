@@ -71,6 +71,18 @@ class Cache(Protocol):
         swallowing a backend write failure."""
         ...
 
+    def add_if_absent(self, key: str, value: Any, ttl: float) -> bool:
+        """Atomically claim ``key`` (SETNX). True for exactly one caller.
+
+        The single-use flows that used to read-then-write (MFA step-up
+        burn) were check-then-act: concurrent callers all observed "unused"
+        before any of them wrote, and every one of them won. A claim must be
+        one indivisible operation, which is what this primitive provides.
+        Raises ``CacheUnavailable`` when the backend cannot be reached —
+        callers that guard a credential must fail CLOSED on that.
+        """
+        ...
+
     def clear(self) -> None: ...
 
     def ping(self) -> bool:
@@ -103,15 +115,30 @@ class MemoryCache:
 
     def set_json(self, key: str, value: Any, ttl: float) -> None:
         with self._lock:
-            if len(self._data) >= self._max_keys and key not in self._data:
-                now = time.monotonic()
-                expired = [k for k, (exp, _) in self._data.items() if exp <= now]
-                for k in expired:
-                    del self._data[k]
-                while len(self._data) >= self._max_keys:
-                    oldest = min(self._data, key=lambda k: self._data[k][0])
-                    del self._data[oldest]
-            self._data[key] = (time.monotonic() + ttl, copy.deepcopy(value))
+            self._insert_locked(key, value, ttl)
+
+    def add_if_absent(self, key: str, value: Any, ttl: float) -> bool:
+        with self._lock:
+            entry = self._data.get(key)
+            if entry is not None:
+                expires_at, _ = entry
+                if time.monotonic() < expires_at:
+                    return False
+                del self._data[key]
+            self._insert_locked(key, value, ttl)
+            return True
+
+    def _insert_locked(self, key: str, value: Any, ttl: float) -> None:
+        """Insert under the caller-held lock; evicts like ``set_json`` did."""
+        if len(self._data) >= self._max_keys and key not in self._data:
+            now = time.monotonic()
+            expired = [k for k, (exp, _) in self._data.items() if exp <= now]
+            for k in expired:
+                del self._data[k]
+            while len(self._data) >= self._max_keys:
+                oldest = min(self._data, key=lambda k: self._data[k][0])
+                del self._data[oldest]
+        self._data[key] = (time.monotonic() + ttl, copy.deepcopy(value))
 
     # The memory backend has no "unreachable" state, so strict == regular.
     get_json_strict = get_json
@@ -189,6 +216,23 @@ class RedisCache:
             raise CacheUnavailable("redis set failed") from exc
         # TypeError/ValueError (unserialisable value) are caller bugs: in
         # strict mode they propagate instead of pretending the write landed.
+
+    def add_if_absent(self, key: str, value: Any, ttl: float) -> bool:
+        import redis.exceptions
+
+        try:
+            payload = json.dumps(value)
+        except (TypeError, ValueError) as exc:
+            raise CacheUnavailable("value not JSON-serialisable") from exc
+        try:
+            # nx=True is the whole point: Redis performs the exists-check and
+            # the write as one atomic command, so a concurrent caller can
+            # never observe-and-win the same claim.
+            acquired = self._redis.set(key, payload, nx=True, ex=max(1, int(ttl)))
+        except redis.exceptions.RedisError as exc:
+            logger.warning("cache_backend_unreachable", extra={"op": "add_if_absent"})
+            raise CacheUnavailable("redis set-nx failed") from exc
+        return bool(acquired)
 
     def clear(self) -> None:
         logger.warning("cache_clear_skipped_on_shared_backend", extra={"op": "clear"})

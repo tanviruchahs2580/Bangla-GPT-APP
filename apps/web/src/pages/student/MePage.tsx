@@ -539,7 +539,7 @@ export default function MePage() {
               const v = e.target.value as "bn" | "en";
               setLang(v);
               document.documentElement.setAttribute("lang", v);
-              // LangRoot remounts the tree in place — no page reload.
+              // App re-renders the tree in place — no page reload, no state loss.
             }}
           >
             <option value="bn">বাংলা</option>

@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- feat(api): production connection posture, truthful readiness, boot index metric
+- feat(api): production connection posture, truthful readiness, boot index metric; full-suite Postgres parity in CI (#29)
 - feat(i18n): land Bangla copy for the status and impersonation strings
 - feat(rag): event-loop hardening, hot-path observability, follow-up retrieval; gate CI on retrieval baselines + CodeQL SAST (#27)
 - feat(rag): retrieval-quality rework - fair gate, query lanes, measured rank lift
@@ -27,17 +27,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): P4 cleanup batch — chunk-id content hash, lesson echo gate, proportional Latin penalty, corpus-scoped RAG keys, history char cap (A20-A25)
 - fix(api): align the served OpenAPI contract with runtime behaviour
 - fix(api): burn pending verification codes when a new one is issued
+- fix(api): close the check-then-insert race class; reap orphaned AI jobs
 - fix(api): close two moderation false negatives and cover the chat routes
 - fix(api): derive the school analytics day window in Asia/Dhaka
 - fix(api): drop an unused variable the new RUF059 rule caught
 - fix(api): gate evals on hybrid retrieval, de-tautologize golden set, precompute BM25 trigrams, single-pass redteam (A13, A8, A18)
 - fix(api): harden authentication, session end and abuse limits
 - fix(api): impersonation revocation fails closed when cache is down (F-08)
+- fix(api): indexable assignment membership; /assignments/mine no longer loses work
 - fix(api): issue verification codes to invited school staff
 - fix(api): let a student clear their subject focus
+- fix(api): make login lockout and MFA step-up burn atomic
 - fix(api): make question-paper marks, difficulty buckets and integer parsing truthful
 - fix(api): make the account export complete
 - fix(api): one weak-chapter rule, a survivable mastery rollup and content-verified images
+- fix(api): rate-limit /auth/change-password
 - fix(api): record an explicit auth decision on every public operation
 - fix(api): redact exception tracebacks in logs
 - fix(api): remove the dead 'answer is None' regeneration branch (A25)
@@ -51,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): scope chapter-content writes to the author's school
 - fix(api): serve the configured corpus and the Dhaka day in the Learn flow
 - fix(api): tie the quiz ceilings to one bound so an assignment stays submittable
+- fix(api): unify the error envelope — every raise carries a machine code
 - fix(api): vision-honest refusal for openai, max_output_tokens cap, transport retries (A10, A9, A16)
 - fix(api): wall school-less staff into the shared default school (F-04)
 - fix(api,web): audit remediations — breaker recovery, MFA/chat rate limits, CORS PATCH, model-refusal honesty, test runner
@@ -62,14 +67,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(ci): make the doc-path guard cover the classes of path it claims to
 - fix(ci): make the lockfile guardrail deterministic
 - fix(ci): pin every action to a commit SHA and scope registry permission
+- fix(ci): prettier-format the web sources; drop the digest script's shebang
 - fix(ci): repair two gates that could not fail, and stop the impossible redis bump
 - fix(ci): resolve README links portably so the docs guard works on Linux
 - fix(ci): serialise release and deploy runs per git ref
+- fix(ci): trim the trailing whitespace pre-commit found in vercel-deploy.yml
 - fix(ci): unblock Dependabot PRs and name the Vercel credential failure (#9)
 - fix(ci): upgrade setuptools before pip-audit; refresh lock to current resolution
 - fix(db): reconcile ORM/migration drift so alembic check passes
 - fix(encoding): add .gitattributes and repair three encoding defects
 - fix(i18n): put the parent digest and the printed papers in Bangla, and correct five copy defects
+- fix(ops): make the proxy-trust contract hold, and machine-check it
+- fix(ops): pin images by digest, make monitoring real, scan release artifacts
 - fix(ops): stop publishing the API on a random host port, and make the release gate real
 - fix(pdf): enable Bengali complex-script shaping in PDF renderers
 - fix(rag): framing-plane coverage, cross-script gate resolution, in-corpus weighting
@@ -84,16 +93,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): configurable production API origin via edge proxy (FE-01)
 - fix(web): guarantee minimum gap between stacked page sections
 - fix(web): guard the tutor turn, bound stalled requests and clear data on sign-out
+- fix(web): invalidate study caches after quiz submit and learn-progress writes
+- fix(web): language switch re-renders in place instead of remounting the tree
 - fix(web): let an anonymous visitor change the interface language
 - fix(web): localize consent/invite copy, theme icon sync, error states, icon cleanup
+- fix(web): make the ARIA roles keep their keyboard promises
 - fix(web): make the register screen's email-verification step usable
 - fix(web): notification panel no longer clipped off the left edge
 - fix(web): raise three status tokens to the WCAG AA contrast minimum
 - fix(web): recover from page errors, report load failures, and never show another child's data
 - fix(web): report a dead API origin accurately, not as a busy server (#14)
 - fix(web): route /api/* explicitly to the edge proxy function
+- fix(web): ship the CSP the code claimed, and bound the edge proxy
 - fix(web): stop rendering remote images in answers and announce each answer once
 - fix(web): stop showing failures as facts, and read API timestamps as UTC
+- fix(web): stop the service worker caching error pages as the app shell
 - fix: complete admin password-change flow, tutor typo gate, roster-scoped stats, quiz distractors, i18n
 - fix: land the verified remediation on current main (CORS-adjacent, budget, UI states)
 - fix: resolve mypy 2.4.0 type errors in teacher/school/common/weakness
@@ -101,6 +115,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Security
 
 - security(school): bound staff invite codes to a lifetime
+
+### Performance
+
+- perf(web): batch streamed tokens; ship the Modal primitive where it belongs
 
 ### Changed
 
@@ -155,12 +173,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate CHANGELOG for the branch commit
 - docs: regenerate CHANGELOG for the current batch
 - docs: regenerate the CHANGELOG for the 2026-10-17 audit fixes
+- docs: regenerate the CHANGELOG for the CI-format fixes
 - docs: regenerate the CHANGELOG for the QA-record amendment
 - docs: regenerate the CHANGELOG for the RAG retrieval rework
 - docs: regenerate the CHANGELOG for the acceptance-testing fixes
+- docs: regenerate the CHANGELOG for the audit remediation branch
 - docs: regenerate the CHANGELOG for the branch's final commits
 - docs: regenerate the CHANGELOG for the delivery record
 - docs: regenerate the CHANGELOG for the deployment record
+- docs: regenerate the CHANGELOG for the env-parity registration
 - docs: regenerate the CHANGELOG for the injection screen
 - docs: regenerate the CHANGELOG for the locative reclassification fix
 - docs: regenerate the CHANGELOG for the post-merge CI record
@@ -175,15 +196,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Tests
 
 - test(api): cover school admin fallbacks and tenant guards
-- test(ci): run the full domain suite on Postgres with truncation isolation
+- test(ops): register ALERT_EMAIL_TO with the env-parity guard
 - test(school): cover the aggregation routes TST-04 flagged as unexercised
 - test(tenancy): cover school dashboard routes across two tenants
 - test(web): assert the changed behaviour instead of the old literals
+- test(web): cover the routing table and the password-reset page
 - test(web): drop remaining plan-tracker tags from suite titles
 
 ### Maintenance
 
 - chore(api): remove unresolvable plan-tracker tags from comments
+- chore(deps): clear all 42 known advisories in the pinned set
 - chore(scripts): make the shebang executable real for the five scripts that have one
 - chore(security): allowlist the reviewed ASCII-art hit in the full-history secret scan
 - chore(web): repoint /api proxy to current tunnel host (quick-tunnel rotation)

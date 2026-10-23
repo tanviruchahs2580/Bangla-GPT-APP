@@ -31,6 +31,7 @@ INFRA_ONLY = {
     "API_HOST_PORT",  # compose host-publish port
     "API_TAG",  # compose image tag
     "WEB_TAG",  # compose image tag
+    "ALERT_EMAIL_TO",  # alertmanager receiver address (monitoring profile)
     "BACKUP_INTERVAL_SECONDS",  # backup sidecar loop
     "BACKUP_KEEP_DAYS",  # backup sidecar retention
     "DOMAIN",  # Caddy site address
