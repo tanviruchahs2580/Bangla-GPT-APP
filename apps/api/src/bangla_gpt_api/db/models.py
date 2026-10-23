@@ -519,6 +519,33 @@ class Assignment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 
+class AssignmentRecipient(Base):
+    """Indexable assignment membership: one row per (assignment, student).
+
+    Membership used to exist only inside ``Assignment.attempts`` JSON, so
+    ``GET /assignments/mine`` could not filter by student in SQL: it took the
+    newest ``limit`` assignments *platform-wide* and filtered in Python.
+    Once more than ``limit`` newer assignments existed anywhere on the
+    platform, a student's own older assignment fell outside the window and
+    vanished from their hub — no error, no data change, work still graded on
+    the teacher side. Membership is now a real, indexed relation
+    (``uq_assignment_recipient`` keeps the dual-write honest); the JSON stays
+    authoritative for progress displays that already read it, and both are
+    written in the same transaction.
+    """
+
+    __tablename__ = "assignment_recipients"
+    __table_args__ = (
+        UniqueConstraint("assignment_id", "student_id", name="uq_assignment_recipient"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    assignment_id: Mapped[int] = mapped_column(ForeignKey("assignments.id"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    attempt_id: Mapped[int] = mapped_column(ForeignKey("quiz_attempts.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
 class QuestionBankEntry(Base):
     """question bank -- every teacher-reviewed question lands here.
 

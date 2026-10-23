@@ -266,3 +266,46 @@ def test_role_guards(client: TestClient, teacher_headers, db_path):
     assert client.get("/assignments/mine", headers=teacher_headers).json() == []
     # anonymous
     assert client.post("/teacher/assignments", json={}).status_code == 401
+
+
+def test_students_own_assignment_survives_a_crowded_platform(
+    client: TestClient, teacher_headers, db_path
+):
+    """A student's older assignment must not fall out of a platform-wide window.
+
+    Membership used to exist only in the ``attempts`` JSON, so
+    ``/assignments/mine`` took the newest ``limit`` assignments on the WHOLE
+    platform and filtered in Python. With ``limit=2`` and two newer
+    assignments belonging to another student, this student's own (older)
+    assignment fell outside the window and their hub answered ``[]`` — no
+    error, no data change, while the teacher side still listed it as
+    outstanding. The indexed recipient relation removes the window entirely;
+    this test fails (empty list) on the old code and passes on the new one.
+    """
+    rid = _create_room(client, teacher_headers)
+    codes = _import_students(client, teacher_headers, rid, 2)
+    ids = _student_ids(db_path, ["stu0@school.edu", "stu1@school.edu"])
+
+    # Student 0's assignment is created FIRST, so it is the OLDEST row.
+    first = _assign(client, teacher_headers, [ids[0]])
+    assert first.status_code == 201, first.text
+    first_id = first.json()["id"]
+
+    # Two newer assignments for the OTHER student push the platform-wide
+    # newest-2 window past student 0's row.
+    for _ in range(2):
+        newer = _assign(client, teacher_headers, [ids[1]])
+        assert newer.status_code == 201, newer.text
+
+    stu0 = _student_login(client, "stu0@school.edu", codes[0])
+    mine = client.get("/assignments/mine?limit=2", headers=stu0)
+    assert mine.status_code == 200, mine.text
+    returned = mine.json()
+    assert [row["id"] for row in returned] == [first_id], (
+        f"the student's own assignment vanished behind newer platform-wide rows: {returned}"
+    )
+
+    # And the other student still sees exactly their two.
+    stu1 = _student_login(client, "stu1@school.edu", codes[1])
+    theirs = client.get("/assignments/mine?limit=2", headers=stu1).json()
+    assert len(theirs) == 2
