@@ -645,9 +645,8 @@ export default function CreatePage() {
 
       <div className="create-grid" role="list" aria-label={t("cGridTitle")}>
         {ENTRIES.map(({ kind, label, sub, icon: Icon }) => (
-          <div role="listitem">
+          <div role="listitem" key={kind}>
             <button
-              key={kind}
               className={`create-tile${active === kind ? " active" : ""}`}
               aria-pressed={active === kind}
               onClick={() => setParams({ kind })}
