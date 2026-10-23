@@ -388,6 +388,10 @@ export default function QuizPage() {
             className="stack"
             role="radiogroup"
             aria-label={q.question_text}
+            // Programmatically focusable (not a tab stop): the keydown
+            // handler runs on events bubbling from the radios, and this
+            // satisfies the jsx-a11y focus contract for an interactive role.
+            tabIndex={-1}
             // APG radio-group contract: ONE tab stop (roving tabIndex) and
             // arrow keys move the selection. Announcing role="radio" while
             // every option sat in the tab order taught a screen reader the

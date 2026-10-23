@@ -26,7 +26,7 @@ import type {
   SourceRef,
 } from "../../types";
 import { useAuth } from "../../AuthContext";
-import { Badge, Button, Card } from "../../components/ui";
+import { Badge, Button, Card, Modal } from "../../components/ui";
 import { ConversationChip } from "../../components/ConversationChip";
 import { AiSparkle, BrandMark } from "../../components/BrandMark";
 import { VoiceButton } from "../../components/VoiceButton";
@@ -100,6 +100,60 @@ export default function AITutorPage() {
   const [renameValue, setRenameValue] = useState("");
   const viewportRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // Token batching (audit): every SSE token used to call setMessages with
+  // the whole accumulated answer, which re-parsed the full markdown +
+  // KaTeX document per token — quadratic main-thread work on exactly the
+  // low-end Android devices this app targets. Tokens now accumulate
+  // immediately (acc.text stays exact) and the visible bubble refreshes at
+  // most every 80 ms; the final merge still writes acc.text verbatim.
+  const flushTimerRef = useRef<number | null>(null);
+  const pendingTextRef = useRef<string | null>(null);
+
+  const applyStreamedText = useCallback((text: string) => {
+    setMessages((m) => {
+      const copy = [...m];
+      const last = copy[copy.length - 1];
+      if (last && last.role === "assistant") {
+        // Replace the object instead of mutating it: the previous state
+        // array still references `last`, and any future React.memo or
+        // memoized consumer would stop seeing updates.
+        copy[copy.length - 1] = { ...last, content: text };
+      } else {
+        copy.push({
+          id: 0,
+          role: "assistant",
+          content: text,
+          grounded: null,
+          sources: [],
+        });
+      }
+      return copy;
+    });
+  }, []);
+
+  const flushTokens = useCallback(() => {
+    if (flushTimerRef.current !== null) {
+      window.clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+    const text = pendingTextRef.current;
+    pendingTextRef.current = null;
+    if (text !== null) applyStreamedText(text);
+  }, [applyStreamedText]);
+
+  const scheduleTokenFlush = useCallback(
+    (text: string) => {
+      pendingTextRef.current = text;
+      if (flushTimerRef.current !== null) return;
+      flushTimerRef.current = window.setTimeout(() => {
+        flushTimerRef.current = null;
+        const pending = pendingTextRef.current;
+        pendingTextRef.current = null;
+        if (pending !== null) applyStreamedText(pending);
+      }, 80);
+    },
+    [applyStreamedText],
+  );
   // Synchronous send guard (F-012). State (`streaming`) is only updated after
   // renders, so it cannot gate a second send fired while the conversation
   // POST is still in flight; a ref can.
@@ -110,8 +164,18 @@ export default function AITutorPage() {
     queryFn: () => get<ConversationOut[]>("/tutor/conversations"),
   });
 
-  // Cancel an in-flight SSE stream when the student leaves the page.
-  useEffect(() => () => abortRef.current?.abort(), []);
+  // Cancel an in-flight SSE stream when the student leaves the page, and
+  // drop any scheduled token flush with it.
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+      if (flushTimerRef.current !== null) {
+        window.clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     viewportRef.current?.scrollTo({
@@ -204,24 +268,11 @@ export default function AITutorPage() {
             },
             (tok) => {
               acc.text += tok;
-              // live-update the trailing assistant bubble
-              setMessages((m) => {
-                const copy = [...m];
-                const last = copy[copy.length - 1];
-                if (last.role === "assistant") last.content = acc.text;
-                else
-                  copy.push({
-                    id: 0,
-                    role: "assistant",
-                    content: acc.text,
-                    grounded: null,
-                    sources: [],
-                  });
-                return copy;
-              });
+              scheduleTokenFlush(acc.text);
             },
             { signal: controller.signal },
           );
+          flushTokens();
           setMessages((m) => {
             const copy = [...m];
             let li = copy.findIndex((x) => x.id === undone.message_id);
@@ -259,6 +310,9 @@ export default function AITutorPage() {
           // carries the text, so the transcript is unaffected either way.
           if (image) setImage(null);
         } catch (e) {
+          // Whatever arrived before the failure is the student's partial
+          // answer; flush it so the bubble shows it.
+          flushTokens();
           if ((e as { name?: string })?.name === "AbortError") return;
           setError(
             friendlyError((e as { rawDetail?: unknown }).rawDetail)?.text ??
@@ -272,7 +326,7 @@ export default function AITutorPage() {
         if (abortRef.current === controller) abortRef.current = null;
       }
     },
-    [input, conversationId, subject, refetchConvs, strategy, image],
+    [input, conversationId, subject, refetchConvs, strategy, image, flushTokens, scheduleTokenFlush],
   );
 
   // a wrong quiz item can arrive here as `location.state.explain` —
@@ -879,83 +933,25 @@ function EvidenceModal({
   source: SourceRef;
   onClose: () => void;
 }) {
-  const modalRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const prev = document.activeElement as HTMLElement | null;
-    modalRef.current?.querySelector("button")?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onClose();
-        return;
-      }
-      // Minimal focus trap: keep Tab inside the dialog.
-      if (e.key !== "Tab" || !modalRef.current) return;
-      const items = Array.from(
-        modalRef.current.querySelectorAll<HTMLElement>(
-          'button, [href], input, [tabindex]:not([tabindex="-1"])',
-        ),
-      ).filter((el) => !el.hasAttribute("disabled"));
-      if (items.length === 0) return;
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      prev?.focus?.();
-    };
-  }, [onClose]);
+  // This used to reimplement the shared Modal primitive with a weaker
+  // contract — no scroll lock, a focusable backdrop OUTSIDE the trap
+  // (Shift+Tab could land on it), role=dialog nested inside a
+  // role=button backdrop, and the better primitive left dead in tests. The
+  // primitive now owns the portal, focus trap, Escape, scroll lock and
+  // focus restore; this component supplies only the evidence body.
   const path = [source.book, source.chapter, source.section]
     .filter(Boolean)
     .join(" › ");
   return (
-    <div
-      className="modal-backdrop"
-      role="button"
-      tabIndex={0}
-      aria-label={t("close")}
-      onKeyDown={(e) => {
-        // Click closes the overlay; Escape must do the same for keyboard use.
-        if (e.key === "Escape") onClose();
-      }}
-      onClick={(e) => {
-        // Only a click on the backdrop itself closes; clicks inside bubble up.
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        ref={modalRef}
-        className="modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label={t("evidenceTitle")}
-      >
-        <div className="modal-head">
-          <h3 className="modal-title">{t("evidenceTitle")}</h3>
-          <button
-            className="icon-btn rate-btn"
-            onClick={onClose}
-            aria-label={t("close")}
-          >
-            <X size={16} aria-hidden />
-          </button>
-        </div>
-        <p className="muted evidence-path">
-          {path}
-          {source.page != null ? ` · ${t("page")} ${source.page}` : ""}
-        </p>
-        <blockquote className="evidence-quote">
-          {source.excerpt ?? source.chapter}
-        </blockquote>
-      </div>
-    </div>
+    <Modal open onClose={onClose} title={t("evidenceTitle")}>
+      <p className="muted evidence-path">
+        {path}
+        {source.page != null ? ` · ${t("page")} ${source.page}` : ""}
+      </p>
+      <blockquote className="evidence-quote">
+        {source.excerpt ?? source.chapter}
+      </blockquote>
+    </Modal>
   );
 }
 
