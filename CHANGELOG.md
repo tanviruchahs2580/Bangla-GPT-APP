@@ -187,6 +187,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Tests
 
+- test(ops): register ALERT_EMAIL_TO with the env-parity guard
 - test(web): cover the routing table and the password-reset page
 - test(api): cover school admin fallbacks and tenant guards
 - test(ci): run the full domain suite on Postgres with truncation isolation
