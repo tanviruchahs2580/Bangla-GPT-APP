@@ -102,7 +102,9 @@ def parent_link(
         db.flush()
     student = db.get(Student, payload.student_id)
     if student is None:
-        raise HTTPException(status_code=404, detail="Student not found")
+        raise HTTPException(
+            status_code=404, detail={"code": "student_not_found", "message": "Student not found"}
+        )
     existing = db.execute(
         select(ParentStudentLink).where(
             ParentStudentLink.parent_id == parent_profile.id,
@@ -110,7 +112,9 @@ def parent_link(
         )
     ).scalar_one_or_none()
     if existing is not None:
-        raise HTTPException(status_code=409, detail="Already linked")
+        raise HTTPException(
+            status_code=409, detail={"code": "already_linked", "message": "Already linked"}
+        )
     db.add(ParentStudentLink(parent_id=parent_profile.id, student_id=student.id))
     # both sides of a successful link are notified (the student
     # only when their profile is claimed by a user account).
@@ -136,7 +140,9 @@ def parent_link(
     except IntegrityError as exc:
         # Lost a race against a concurrent duplicate link.
         db.rollback()
-        raise HTTPException(status_code=409, detail="Already linked") from exc
+        raise HTTPException(
+            status_code=409, detail={"code": "already_linked", "message": "Already linked"}
+        ) from exc
     return {"linked": True, "parent_id": parent_profile.id, "student_id": student.id}
 
 
@@ -149,7 +155,9 @@ def parent_link(
 @router.post("/students/me/invite-code", status_code=201)
 def create_parent_invite(app_ctx: Ctx, db: DbSession, user: CurrentUser) -> dict:
     if user.role != "student":
-        raise HTTPException(status_code=403, detail="Students only")
+        raise HTTPException(
+            status_code=403, detail={"code": "students_only", "message": "Students only"}
+        )
     student = _student_profile(db, user)
     active = (
         db.execute(
@@ -192,7 +200,9 @@ def create_parent_invite(app_ctx: Ctx, db: DbSession, user: CurrentUser) -> dict
 @router.get("/students/me/prefs", response_model=StudentPrefsOut)
 def get_my_prefs(db: DbSession, user: CurrentUser) -> StudentPrefsOut:
     if user.role != "student":
-        raise HTTPException(status_code=403, detail="Students only")
+        raise HTTPException(
+            status_code=403, detail={"code": "students_only", "message": "Students only"}
+        )
     student = _student_profile(db, user)
     prefs = student.learning_prefs if isinstance(student.learning_prefs, dict) else {}
     return StudentPrefsOut(memory_enabled=bool(student.memory_enabled), learning_prefs=prefs)
@@ -201,7 +211,9 @@ def get_my_prefs(db: DbSession, user: CurrentUser) -> StudentPrefsOut:
 @router.patch("/students/me/prefs", response_model=StudentPrefsOut)
 def patch_my_prefs(payload: StudentPrefsPatch, db: DbSession, user: CurrentUser) -> StudentPrefsOut:
     if user.role != "student":
-        raise HTTPException(status_code=403, detail="Students only")
+        raise HTTPException(
+            status_code=403, detail={"code": "students_only", "message": "Students only"}
+        )
     student = _student_profile(db, user)
     if payload.learning_prefs is not None:
         merged = dict(student.learning_prefs) if isinstance(student.learning_prefs, dict) else {}
@@ -257,7 +269,9 @@ def get_my_memory(db: DbSession, user: CurrentUser) -> MemoryFactsOut:
     live from real rows (identity, graded quiz accuracy, prefs). Nothing
     here is generated copy."""
     if user.role != "student":
-        raise HTTPException(status_code=403, detail="Students only")
+        raise HTTPException(
+            status_code=403, detail={"code": "students_only", "message": "Students only"}
+        )
     student = _student_profile(db, user)
     prefs = student.learning_prefs if isinstance(student.learning_prefs, dict) else {}
     # the ONE weakness verdict (services.weakness): the inline 60% cut-off here
@@ -298,7 +312,9 @@ def disable_my_memory(db: DbSession, user: CurrentUser) -> MemoryFactsOut:
     the complete deletion the owner asked for; the response says what the
     next personalized request will look like via the note code."""
     if user.role != "student":
-        raise HTTPException(status_code=403, detail="Students only")
+        raise HTTPException(
+            status_code=403, detail={"code": "students_only", "message": "Students only"}
+        )
     student = _student_profile(db, user)
     student.memory_enabled = False
     student.learning_prefs = None
@@ -371,7 +387,9 @@ def link_via_invite(payload: ParentInviteLinkRequest, db: DbSession, parent: Par
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(status_code=409, detail="Already linked") from exc
+        raise HTTPException(
+            status_code=409, detail={"code": "already_linked", "message": "Already linked"}
+        ) from exc
     return {
         "linked": True,
         "parent_id": parent_profile.id,
@@ -409,7 +427,9 @@ def parent_child_progress(student_id: int, db: DbSession, parent: ParentUser) ->
         select(Parent).where(Parent.user_id == parent.id)
     ).scalar_one_or_none()
     if parent_profile is None:
-        raise HTTPException(status_code=404, detail="Not linked to this student")
+        raise HTTPException(
+            status_code=404, detail={"code": "not_linked", "message": "Not linked to this student"}
+        )
     link = db.execute(
         select(ParentStudentLink).where(
             ParentStudentLink.parent_id == parent_profile.id,
@@ -417,10 +437,14 @@ def parent_child_progress(student_id: int, db: DbSession, parent: ParentUser) ->
         )
     ).scalar_one_or_none()
     if link is None:
-        raise HTTPException(status_code=404, detail="Not linked to this student")
+        raise HTTPException(
+            status_code=404, detail={"code": "not_linked", "message": "Not linked to this student"}
+        )
     student = db.get(Student, student_id)
     if student is None:
-        raise HTTPException(status_code=404, detail="Student not found")
+        raise HTTPException(
+            status_code=404, detail={"code": "student_not_found", "message": "Student not found"}
+        )
     attempts = (
         db.execute(select(QuizAttempt).where(QuizAttempt.student_id == student_id)).scalars().all()
     )
@@ -482,7 +506,9 @@ def _linked_child(db: Session, parent: User, student_id: int) -> Student:
             student = db.get(Student, student_id)
             if student is not None:
                 return student
-    raise HTTPException(status_code=404, detail="Not linked to this student")
+    raise HTTPException(
+        status_code=404, detail={"code": "not_linked", "message": "Not linked to this student"}
+    )
 
 
 @router.get("/parents/me/children/{student_id}/activity", response_model=ActivitySummary)
@@ -644,7 +670,9 @@ def student_self_report(
 ) -> ParentReportOut:
     """same window report for the signed-in student (Me page)."""
     if user.role != "student":
-        raise HTTPException(status_code=403, detail="Students only")
+        raise HTTPException(
+            status_code=403, detail={"code": "students_only", "message": "Students only"}
+        )
     student = _student_profile(db, user)
     return _window_report(db, student, period)
 

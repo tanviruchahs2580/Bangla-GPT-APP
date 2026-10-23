@@ -123,7 +123,9 @@ def list_notes(
 def delete_note(note_id: int, db: DbSession, user: CurrentUser) -> Response:
     note = db.get(SavedNote, note_id)
     if note is None or note.user_id != user.id:
-        raise HTTPException(status_code=404, detail="note not found")
+        raise HTTPException(
+            status_code=404, detail={"code": "note_not_found", "message": "note not found"}
+        )
     db.delete(note)
     db.commit()
     return Response(status_code=204)
@@ -171,7 +173,10 @@ def notification_mark_read(
 ) -> NotificationOut:
     row = db.get(Notification, notification_id)
     if row is None or row.user_id != user.id:
-        raise HTTPException(status_code=404, detail="notification not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "notification_not_found", "message": "notification not found"},
+        )
     if row.read_at is None:  # idempotent: re-marking keeps the first timestamp
         row.read_at = datetime.now(UTC).replace(tzinfo=None)
         db.commit()
@@ -302,7 +307,9 @@ def teacher_jobs_list(db: DbSession, teacher: TeacherOrAdminUser) -> list[AiJobO
 def teacher_job_get(job_id: str, db: DbSession, teacher: TeacherOrAdminUser) -> AiJobOut:
     job = db.get(AiJob, job_id)
     if job is None or (job.user_id != teacher.id and teacher.role != "admin"):
-        raise HTTPException(status_code=404, detail="job not found")
+        raise HTTPException(
+            status_code=404, detail={"code": "job_not_found", "message": "job not found"}
+        )
     return _job_out(job)
 
 

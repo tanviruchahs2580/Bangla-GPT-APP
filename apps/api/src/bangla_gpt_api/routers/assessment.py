@@ -495,7 +495,9 @@ def teacher_create_support_plan(
     """Rule-based 3-week plan over the student's three weakest concepts."""
     student = db.get(Student, payload.student_id)
     if student is None:
-        raise HTTPException(status_code=404, detail="student not found")
+        raise HTTPException(
+            status_code=404, detail={"code": "student_not_found", "message": "student not found"}
+        )
     # tenancy: plans can only be opened for own-school students.
     _assert_student_in_school(db, teacher, student)
     cells = _answer_cells(db, [student.id]).get(student.id, {})
@@ -508,7 +510,10 @@ def teacher_create_support_plan(
         key=lambda t: (t[1], t[0]),
     )
     if not scored:
-        raise HTTPException(status_code=422, detail="no graded quiz data for this student")
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "no_graded_data", "message": "no graded quiz data for this student"},
+        )
     weak = [{"name": ch, "accuracy": acc} for ch, acc in scored[:3]]
     plan = atrisk.build_plan(weak)
     row = SupportPlan(
@@ -782,7 +787,10 @@ def teacher_assignment_progress(
 ) -> list[AssignmentProgressRow]:
     assignment = db.get(Assignment, assignment_id)
     if assignment is None or (teacher.role != "admin" and assignment.teacher_id != teacher.id):
-        raise HTTPException(status_code=404, detail="Assignment not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "assignment_not_found", "message": "Assignment not found"},
+        )
     return _assignment_progress_rows(db, assignment)
 
 

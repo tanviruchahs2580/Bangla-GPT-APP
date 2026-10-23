@@ -100,13 +100,18 @@ def admin_update_role(
 ) -> UserPublic:
     target = db.get(User, user_id)
     if target is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(
+            status_code=404, detail={"code": "user_not_found", "message": "User not found"}
+        )
     if target.role == "admin" and payload.role != "admin":
         admins = db.execute(
             select(func.count()).select_from(User).where(User.role == "admin")
         ).scalar_one()
         if admins <= 1:
-            raise HTTPException(status_code=409, detail="Cannot demote the last admin")
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "last_admin_guard", "message": "Cannot demote the last admin"},
+            )
     old_role = target.role
     target.role = payload.role
     # audit event 1/5: role_change (ids + before/after only)
@@ -139,7 +144,9 @@ def admin_impersonate(
 ) -> ImpersonateOut:
     target = db.get(User, user_id)
     if target is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(
+            status_code=404, detail={"code": "user_not_found", "message": "User not found"}
+        )
     if target.role in ("admin", "school_admin"):
         raise HTTPException(
             status_code=403,
@@ -194,7 +201,9 @@ def admin_impersonate(
 def admin_impersonate_end(app_ctx: Ctx, user_id: int, db: DbSession, admin: AdminUser) -> None:
     target = db.get(User, user_id)
     if target is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(
+            status_code=404, detail={"code": "user_not_found", "message": "User not found"}
+        )
     # revoke all active impersonation JTIs for this target.
     # Strict (F-08): a cache outage must NOT produce a 204 + "stop" audit
     # row while the token keeps working — the caller gets 503 and the

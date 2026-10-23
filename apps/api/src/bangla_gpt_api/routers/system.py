@@ -56,11 +56,17 @@ async def ready(app_ctx: Ctx, db: DbSession) -> dict:
     # 503 for every student; readiness must state the dependency the product
     # actually needs, so a rolling deploy drains such a worker instead.
     if app_ctx.index is None or app_ctx.tutor is None:
-        raise HTTPException(status_code=503, detail="Retrieval index unavailable")
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "index_unavailable", "message": "Retrieval index unavailable"},
+        )
     try:
         db.execute(select(1))
     except Exception as exc:
-        raise HTTPException(status_code=503, detail="Database unavailable") from exc
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "database_unavailable", "message": "Database unavailable"},
+        ) from exc
     return {"status": "ready", "provider": app_ctx.provider.name}
 
 
@@ -121,14 +127,20 @@ async def metrics(app_ctx: Ctx, request: Request) -> Response:
         if not expected:
             # boot guard (enforce_production_safety) refuses this config; the
             # explicit deny keeps /metrics closed if the guard is ever bypassed.
-            raise HTTPException(status_code=403, detail="metrics access denied")
+            raise HTTPException(
+                status_code=403,
+                detail={"code": "metrics_denied", "message": "metrics access denied"},
+            )
         auth = request.headers.get("authorization", "")
         token = request.headers.get("x-metrics-token", "")
         supplied = [token]
         if auth.lower().startswith("bearer "):
             supplied.append(auth[7:].strip())
         if not any(secrets.compare_digest(s, expected) for s in supplied):
-            raise HTTPException(status_code=403, detail="metrics access denied")
+            raise HTTPException(
+                status_code=403,
+                detail={"code": "metrics_denied", "message": "metrics access denied"},
+            )
     return Response(content=generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
 

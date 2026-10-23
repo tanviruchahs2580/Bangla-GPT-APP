@@ -190,7 +190,9 @@ def teacher_create_classroom(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=409, detail="classroom exists") from None
+        raise HTTPException(
+            status_code=409, detail={"code": "classroom_exists", "message": "classroom exists"}
+        ) from None
     db.refresh(room)
     return ClassRoomOut(
         id=room.id, class_level=room.class_level, section=room.section, student_count=0
@@ -272,9 +274,17 @@ def classroom_import(
         if any(cells):
             data_rows.append(cells)
     if not data_rows:
-        raise HTTPException(status_code=422, detail="no data rows")
+        raise HTTPException(
+            status_code=422, detail={"code": "import_empty", "message": "no data rows"}
+        )
     if len(data_rows) > IMPORT_MAX_ROWS:
-        raise HTTPException(status_code=422, detail=f"max {IMPORT_MAX_ROWS} rows per import")
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "import_too_large",
+                "message": f"max {IMPORT_MAX_ROWS} rows per import",
+            },
+        )
     created = 0
     rows_out: list[ClassImportRowOut] = []
     now = datetime.now(UTC)

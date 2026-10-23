@@ -189,7 +189,9 @@ def admin_school_invite_list(
 ) -> list[SchoolInviteAdminOut]:
     """invite management list; plaintext codes/hashes are never returned."""
     if db.get(School, school_id) is None:
-        raise HTTPException(status_code=404, detail="school not found")
+        raise HTTPException(
+            status_code=404, detail={"code": "school_not_found", "message": "school not found"}
+        )
     invites = (
         db.execute(
             select(SchoolInvite)
@@ -220,7 +222,9 @@ def admin_school_invite_revoke(
     """revoke an unused staff invite (redeemed ones stay for audit)."""
     invite = db.get(SchoolInvite, invite_id)
     if invite is None or invite.school_id != school_id:
-        raise HTTPException(status_code=404, detail="invite not found")
+        raise HTTPException(
+            status_code=404, detail={"code": "invite_not_found", "message": "invite not found"}
+        )
     if invite.used_by is not None:
         raise HTTPException(
             status_code=409,
@@ -315,7 +319,13 @@ def admin_report_aggregate(
             "aggregate_report_pii_blocked",
             categories=len(violations),
         )
-        raise HTTPException(status_code=500, detail="aggregate report failed the PII safety check")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "pii_review_failed",
+                "message": "aggregate report failed the PII safety check",
+            },
+        )
     stamp = export.meta.generated_at[:10]
     if format == "pdf":
         content: bytes = govt_report.to_pdf(export)
@@ -346,7 +356,9 @@ def school_invite_create(
 ) -> SchoolInviteOut:
     """Single-use staff invite; plaintext code is returned exactly once."""
     if db.get(School, school_id) is None:
-        raise HTTPException(status_code=404, detail="school not found")
+        raise HTTPException(
+            status_code=404, detail={"code": "school_not_found", "message": "school not found"}
+        )
     _school_or_403(user, school_id)
     code = "".join(secrets.choice(SCHOOL_CODE_ALPHABET) for _ in range(10))
     now = datetime.now(UTC).replace(tzinfo=None)
@@ -537,7 +549,9 @@ def school_class_register(
     school_id: int, payload: ClassRoomCreateIn, db: DbSession, user: SchoolStaffUser
 ) -> ClassRoomOut:
     if db.get(School, school_id) is None:
-        raise HTTPException(status_code=404, detail="school not found")
+        raise HTTPException(
+            status_code=404, detail={"code": "school_not_found", "message": "school not found"}
+        )
     _school_or_403(user, school_id)
     section = (payload.section or "").strip().upper() or "GEN"
     room = ClassRoom(school_id=school_id, class_level=payload.class_level, section=section)
@@ -546,7 +560,9 @@ def school_class_register(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status_code=409, detail="classroom exists") from None
+        raise HTTPException(
+            status_code=409, detail={"code": "classroom_exists", "message": "classroom exists"}
+        ) from None
     db.refresh(room)
     json_log(logger, logging.INFO, "school_class_registered", school_id=school_id, room_id=room.id)
     return ClassRoomOut(
@@ -575,7 +591,9 @@ def school_health_overview(
             )
         school = db.get(School, user.school_id) if user.school_id else None
         if school is None:
-            raise HTTPException(status_code=404, detail="school not found")
+            raise HTTPException(
+                status_code=404, detail={"code": "school_not_found", "message": "school not found"}
+            )
     else:  # admin: any school, default school when none requested
         school = db.get(School, school_id) if school_id else None
         if school is None:
@@ -691,7 +709,9 @@ def _actor_school(db: Session, user: User, school_id: int | None) -> School:
             )
         school = db.get(School, user.school_id) if user.school_id else None
         if school is None:
-            raise HTTPException(status_code=404, detail="school not found")
+            raise HTTPException(
+                status_code=404, detail={"code": "school_not_found", "message": "school not found"}
+            )
         return school
     school = db.get(School, school_id) if school_id else None
     if school is None:

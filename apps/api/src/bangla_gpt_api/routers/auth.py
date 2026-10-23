@@ -515,15 +515,24 @@ def reset_password(app_ctx: Ctx, payload: ResetPasswordRequest, db: DbSession) -
     if not claim_single_use(
         db, PasswordReset, hash_column=PasswordReset.token_hash, hash_value=token_hash, now=now
     ):
-        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "invalid_token", "message": "Invalid or expired reset token"},
+        )
     row = fetch_by_hash(
         db, PasswordReset, hash_column=PasswordReset.token_hash, hash_value=token_hash
     )
     if row is None:
-        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "invalid_token", "message": "Invalid or expired reset token"},
+        )
     user = db.get(User, row.user_id)
     if user is None:
-        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "invalid_token", "message": "Invalid or expired reset token"},
+        )
     _reject_common_password(payload.new_password)
     user.password_hash = hash_password(payload.new_password)
     user.must_change_password = False
@@ -545,7 +554,10 @@ def change_password(
     app_ctx: Ctx, payload: ChangePasswordRequest, db: DbSession, user: CurrentUser
 ) -> TokenResponse:
     if not verify_password(payload.current_password, user.password_hash):
-        raise HTTPException(status_code=400, detail="Current password is incorrect")
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "bad_current_password", "message": "Current password is incorrect"},
+        )
     if payload.current_password == payload.new_password:
         raise HTTPException(
             status_code=409,
@@ -590,7 +602,10 @@ def mfa_enroll(app_ctx: Ctx, user: CurrentUser) -> MfaEnrollOut:
 @router.post("/auth/mfa/verify", response_model=dict, responses=AUTH_GUARD_RESPONSES)
 def mfa_verify(app_ctx: Ctx, payload: MfaVerifyIn, db: DbSession, user: CurrentUser) -> dict:
     if user.totp_secret:
-        raise HTTPException(status_code=409, detail="MFA is already enabled")
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "mfa_already_enabled", "message": "MFA is already enabled"},
+        )
     if not verify_code(payload.secret, payload.code):
         raise HTTPException(
             status_code=401,
@@ -608,9 +623,14 @@ def mfa_verify(app_ctx: Ctx, payload: MfaVerifyIn, db: DbSession, user: CurrentU
 )
 def mfa_disable(app_ctx: Ctx, payload: MfaDisableIn, db: DbSession, user: CurrentUser) -> dict:
     if not user.totp_secret:
-        raise HTTPException(status_code=409, detail="MFA is not enabled")
+        raise HTTPException(
+            status_code=409, detail={"code": "mfa_not_enabled", "message": "MFA is not enabled"}
+        )
     if not verify_password(payload.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Current password is incorrect")
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "bad_current_password", "message": "Current password is incorrect"},
+        )
     user.totp_secret = None
     db.commit()
     return {"disabled": True}
