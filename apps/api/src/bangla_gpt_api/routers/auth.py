@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 
 import jwt as pyjwt
 from fastapi import APIRouter, HTTPException, Request, Response
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from bangla_gpt_api.auth.mfa import new_secret, otpauth_uri, verify_code
@@ -268,6 +268,44 @@ def _lock_remaining_seconds(user: User, now: datetime) -> int | None:
     return max(1, int(remaining))
 
 
+def _record_failed_login(db: DbSession, user_id: int, now: datetime) -> int:
+    """Count one failed sign-in in the database and arm the progressive lock.
+
+    The previous shape was a read-modify-write on the ORM object
+    (``user.failed_login_count = (user.failed_login_count or 0) + 1`` then
+    commit). Five parallel wrong-password requests all read the counter
+    before any of them committed, all wrote the same value, and the lock
+    never armed — the account-level control the entire S-002 workstream
+    documents was bypassable with five sockets. The increment is now a
+    single UPDATE whose right-hand side the database computes, so every
+    failure counts exactly once under any interleaving; the RETURNING value
+    (SQLite ≥ 3.35 / PostgreSQL) drives the lock stamp in a second
+    statement, where a race can only make the stamp *fresher*, never lose
+    the count that crossed the threshold.
+    """
+    new_count = int(
+        db.execute(
+            update(User)
+            .where(User.id == user_id)
+            .values(failed_login_count=func.coalesce(User.failed_login_count, 0) + 1)
+            .returning(User.failed_login_count)
+            .execution_options(synchronize_session=False)
+        ).scalar_one()
+    )
+    if new_count >= _LOGIN_LOCKOUT_THRESHOLD:
+        db.execute(
+            update(User)
+            .where(User.id == user_id)
+            .values(
+                locked_until=now.replace(tzinfo=None)
+                + timedelta(seconds=_lockout_seconds(new_count))
+            )
+            .execution_options(synchronize_session=False)
+        )
+    db.commit()
+    return new_count
+
+
 @router.post("/auth/login", response_model=TokenResponse, responses=coded(429))
 def login(app_ctx: Ctx, response: Response, payload: LoginRequest, db: DbSession) -> TokenResponse:
     email = payload.email.strip().lower()
@@ -314,13 +352,9 @@ def login(app_ctx: Ctx, response: Response, payload: LoginRequest, db: DbSession
     if not password_ok:
         # S-002: count the failure; crossing the threshold stamps a
         # progressive lock. The response body stays exactly the same as for
-        # an unknown address (and as before this change).
-        user.failed_login_count = (user.failed_login_count or 0) + 1
-        if user.failed_login_count >= _LOGIN_LOCKOUT_THRESHOLD:
-            user.locked_until = now.replace(tzinfo=None) + timedelta(
-                seconds=_lockout_seconds(user.failed_login_count)
-            )
-        db.commit()
+        # an unknown address (and as before this change). The count itself is
+        # atomic in the database — see ``_record_failed_login``.
+        _record_failed_login(db, user.id, now)
         raise HTTPException(
             status_code=401,
             detail={"code": "bad_credentials", "message": "Incorrect email or password"},
@@ -368,30 +402,33 @@ def _hash_reset_token(token: str) -> str:
 _MFA_USED_PREFIX = "mfa_used:"
 
 
-def _mfa_token_already_used(app_ctx: AppContext, jti: str) -> bool:
-    """True when this step-up token has already completed an MFA challenge."""
-    try:
-        return bool(app_ctx.cache.get_json_strict(f"{_MFA_USED_PREFIX}{jti}"))
-    except CacheUnavailable:
-        # A cache outage must not turn into a replay. Fail CLOSED, the same
-        # rule the impersonation-revocation path uses: an uncheckable
-        # credential must not pass.
-        return True
-    except Exception:
-        return True
+def _claim_mfa_step_up(app_ctx: AppContext, jti: str, claims: dict) -> bool:
+    """Atomically consume a step-up token; False when already consumed.
 
+    The old pair (``get_json_strict`` to check, then ``set_json_strict`` to
+    burn) was check-then-act: two concurrent ``/auth/mfa/challenge`` calls
+    with the same intercepted token and the same currently-valid 30-second
+    code both observed "unused" and both minted full sessions — defeating
+    the F-066/F-070 guarantee for exactly the parallel-replay case it was
+    written for. The claim is now one SETNX (``Cache.add_if_absent``), so
+    exactly one caller wins.
 
-def _burn_mfa_token(app_ctx: AppContext, jti: str, claims: dict) -> None:
-    """Mark a step-up token consumed, for the remainder of its own life."""
+    Backend failure returns False — fail CLOSED, like the check it replaces:
+    an uncheckable credential must not pass.
+    """
     try:
         ttl = float(int(claims.get("exp", 0)) - int(datetime.now(UTC).timestamp()))
     except (TypeError, ValueError):
         ttl = 0.0
     ttl = max(1.0, float(min(ttl, 600.0)))
     try:
-        app_ctx.cache.set_json_strict(f"{_MFA_USED_PREFIX}{jti}", 1, ttl)
+        return bool(app_ctx.cache.add_if_absent(f"{_MFA_USED_PREFIX}{jti}", 1, ttl))
+    except CacheUnavailable:
+        json_log(logger, logging.WARNING, "mfa_token_claim_unavailable")
+        return False
     except Exception as exc:  # pragma: no cover - defensive
-        json_log(logger, logging.WARNING, "mfa_token_burn_failed", error=type(exc).__name__)
+        json_log(logger, logging.WARNING, "mfa_token_claim_failed", error=type(exc).__name__)
+        return False
 
 
 def _reject_common_password(password: str) -> None:
@@ -596,18 +633,12 @@ def mfa_challenge(app_ctx: Ctx, payload: MfaChallengeIn, db: DbSession) -> Token
         )
     # F-066/F-070: the step-up token was a bearer credential for 5 minutes and
     # could be presented repeatedly. Whoever intercepted one — a proxy log, a
-    # shared machine, a shoulder-surfeded phone — got a full login every time
+    # shared machine, a shoulder-surfed phone — got a full login every time
     # they asked, for as long as the authenticator app still showed the same
-    # 30-second code. Burn the jti on first successful use.
+    # 30-second code. The jti is consumed atomically AFTER the second factor
+    # checks out (a mistyped code must not cost the user their login), and
+    # exactly one concurrent caller can win the claim.
     jti = claims.get("jti")
-    if isinstance(jti, str) and _mfa_token_already_used(app_ctx, jti):
-        raise HTTPException(
-            status_code=401,
-            detail={
-                "code": "bad_mfa_token",
-                "message": "MFA step-up already completed; log in again",
-            },
-        )
     user = db.get(User, user_id)
     if user is None or not user.totp_secret:
         raise HTTPException(
@@ -620,8 +651,15 @@ def mfa_challenge(app_ctx: Ctx, payload: MfaChallengeIn, db: DbSession) -> Token
             detail={"code": "bad_mfa_code", "message": "Invalid authenticator code"},
         )
     # Burn the step-up token only AFTER the second factor checks out, so a
-    # mistyped code does not cost the user their login.
-    if isinstance(jti, str):
-        _burn_mfa_token(app_ctx, jti, claims)
+    # mistyped code does not cost the user their login. The claim is atomic:
+    # of N concurrent replays of the same token, exactly one proceeds.
+    if isinstance(jti, str) and not _claim_mfa_step_up(app_ctx, jti, claims):
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "code": "bad_mfa_token",
+                "message": "MFA step-up already completed; log in again",
+            },
+        )
     token = create_access_token(user, settings=app_ctx.settings)
     return TokenResponse(access_token=token, must_change_password=user.must_change_password)

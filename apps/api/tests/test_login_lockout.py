@@ -163,3 +163,62 @@ def test_unknown_email_does_not_create_rows_or_leak(tmp_path) -> None:
     # And the real account was NOT touched by the unknown attempts: its single
     # failure is still below the threshold, so the correct password signs in.
     assert _login(client, "known@example.test", PASSWORD).status_code == 200
+
+
+# --- the atomicity guarantee itself ------------------------------------------
+
+
+def test_parallel_failures_each_count_exactly_once(tmp_path) -> None:
+    """The lockout must arm under concurrent guessing, not just sequential.
+
+    The original implementation was a read-modify-write on the ORM object:
+    five parallel wrong-password requests all read the counter before any of
+    them committed (Argon2id verification takes tens of milliseconds, so the
+    reads genuinely overlap), all wrote the same value, and the lock never
+    armed. Five sockets defeated the account-level control this whole module
+    documents. The counter is now incremented by a single database-side
+    UPDATE, so the invariant asserted here — *the stored counter equals the
+    number of counted failures* — holds under any interleaving.
+
+    Every response is a 401 (counted) or a 429 (already-locked, not
+    counted); a thread that starts after the lock armed legitimately sees
+    429 and does not increment. The equalities below pin exactly that.
+    """
+    import threading
+
+    client, settings = make_client(tmp_path)
+    _register(client, "burst@example.test")
+
+    attempts = _LOGIN_LOCKOUT_THRESHOLD
+    barrier = threading.Barrier(attempts)
+    statuses: list[int] = []
+    statuses_lock = threading.Lock()
+
+    def attempt() -> None:
+        barrier.wait(5)
+        res = _login(client, "burst@example.test", WRONG)
+        with statuses_lock:
+            statuses.append(res.status_code)
+
+    threads = [threading.Thread(target=attempt) for _ in range(attempts)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(30)
+
+    assert len(statuses) == attempts
+    counted_failures = statuses.count(401)
+    already_locked = statuses.count(429)
+    assert counted_failures + already_locked == attempts, statuses
+
+    row = _user_row(settings, "burst@example.test")
+    # The lost-update detector: the counter must equal the failures that were
+    # actually answered with "wrong password", never fewer.
+    assert row.failed_login_count == counted_failures, (
+        f"{counted_failures} wrong-password 401s but the counter holds "
+        f"{row.failed_login_count} — increments were lost to a race"
+    )
+    # And the account is locked: either the failures crossed the threshold or
+    # a 429 proved it was already crossed.
+    assert row.locked_until is not None
+    assert _login(client, "burst@example.test", PASSWORD).status_code == 429
