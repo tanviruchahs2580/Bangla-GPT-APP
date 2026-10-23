@@ -6,6 +6,13 @@
  */
 const CACHE = 'bgpt-v2';
 const MAX_RUNTIME_ENTRIES = 50; // hashed build assets rotate; cap the cache
+// Last-resort navigation when the network fails and no shell was ever cached
+// (first visit on a broken connection). Mirrors the in-app offline banner.
+const OFFLINE_HTML =
+  '<!doctype html><html lang="bn"><head><meta charset="utf-8">' +
+  '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+  '<title>অফলাইন</title></head><body>' +
+  '<h1>অফলাইন — সংযোগ ফিরলে আবার চেষ্টা করুন</h1></body></html>';
 const SHELL = [
   '/',
   '/index.html',
@@ -17,7 +24,12 @@ const SHELL = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting())
+    caches
+      .open(CACHE)
+      // One missing shell URL must not abort the whole install (addAll is
+      // all-or-nothing): a stale icon path would leave the app with no SW.
+      .then((cache) => Promise.all(SHELL.map((url) => cache.add(url).catch(() => {}))))
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -49,11 +61,29 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(event.request)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put('/index.html', copy));
+          // Only a real same-origin page may replace the shell. A deploy-time
+          // 500/error page (or an opaque cross-origin response) written over
+          // /index.html would be served by every offline navigation until the
+          // cache version is bumped.
+          if (res.ok && (res.type === 'basic' || res.type === 'default')) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put('/index.html', copy));
+          }
           return res;
         })
-        .catch(() => caches.match('/index.html'))
+        .catch(() =>
+          caches.match('/index.html').then(
+            (hit) =>
+              hit ||
+              // Before the first successful navigation there is no shell to
+              // match; respondWith(undefined) would reject the navigation, so
+              // answer an explicit 503 offline page instead.
+              new Response(OFFLINE_HTML, {
+                status: 503,
+                headers: { 'Content-Type': 'text/html; charset=utf-8' },
+              })
+          )
+        )
     );
     return;
   }
