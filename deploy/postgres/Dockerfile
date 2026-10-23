@@ -5,7 +5,9 @@
 # Docker Desktop bind mounts silently yield missing files for host paths
 # with spaces, and config drift between image and host is avoided anyway --
 # this file lives in the repo and every change is a rebuild.
-FROM postgres:16
+# Digest-pinned (audit F9): the pgBackRest tooling layer must be built on
+# exactly the server image the release was tested against.
+FROM postgres:16@sha256:9e2cf6287f25c3151f4c9421ccce2b17f3e60061c111a29165e0d2cdd9ff0a97
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends pgbackrest \

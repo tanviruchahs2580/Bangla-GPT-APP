@@ -104,7 +104,9 @@ services:
       retries: 3
 
   redis:
-    image: redis:7-alpine
+    # Pinned by digest (audit F9): a floating tag can change under a rebuild
+    # without any commit. Update with scripts/update_image_digests.py.
+    image: redis:7-alpine@sha256:57e4255cc971b1c8d6f8a6ca283ac01bc3ecdd914273ef6bfaede87aaecd6541
     profiles: [core]
     restart: unless-stopped
     command: ["redis-server", "--save", "", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
@@ -152,7 +154,7 @@ services:
       - api
 
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2-alpine@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f
     profiles: [tls]
     restart: unless-stopped
     ports:
@@ -198,17 +200,46 @@ services:
       retries: 5
 
   prometheus:
-    image: prom/prometheus:v2.53.0
+    image: prom/prometheus:v2.53.0@sha256:075b1ba2c4ebb04bc3a6ab86c06ec8d8099f8fda1c96ef6d104d9bb1def1d8bc
     profiles: [monitoring]
     restart: unless-stopped
     volumes:
       - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./deploy/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      # METRICS_TOKEN as a file: the scrape config reads it via
+      # bearer_token_file. Without this mount the scrape answered 403 in
+      # production and every bgpt_* alert silently had no data (audit F4).
+      - ./deploy/prometheus/metrics_token:/etc/prometheus/metrics_token:ro
     ports:
       - "127.0.0.1:9090:9090"
 
+  # Alert delivery. Without it the rules in alerts.yml had no route to a
+  # human — the two production outages were found by users, not monitoring.
+  # `--config.expand-env=true` lets the SMTP settings come from the same
+  # environment the API uses. Alerts go to ALERT_EMAIL_TO.
+  alertmanager:
+    image: prom/alertmanager:v0.28.1@sha256:27c475db5fb156cab31d5c18a4251ac7ed567746a2483ff264516437a39b15ba
+    profiles: [monitoring]
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--config.expand-env=true"
+      - "--storage.path=/alertmanager"
+    environment:
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
+    volumes:
+      - ./deploy/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    ports:
+      - "127.0.0.1:9093:9093"
+
   grafana:
-    image: grafana/grafana:11.1.0
+    image: grafana/grafana:11.1.0@sha256:079600c9517b678c10cda6006b4487d3174512fd4c6cface37df7822756ed7a5
     profiles: [monitoring]
     restart: unless-stopped
     ports:
@@ -259,6 +290,7 @@ services:
 
 volumes:
   api_data:
+  alertmanager_data:
   pg_data:
   pg_sock:
   pgbackrest_repo:

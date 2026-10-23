@@ -1,0 +1,31 @@
+# Alert delivery for the monitoring profile.
+#
+# Before this existed the repository shipped alert RULES with no
+# Alertmanager and no `alerting:` block in Prometheus — a firing
+# APIScrapeDown or ReadyFlapping had no route to a human. Both production
+# outages in this project's history were found by users, not monitoring.
+#
+# `--config.expand-env=true` (set in docker-compose.yml) lets the SMTP
+# settings come from the same environment the API uses; ALERT_EMAIL_TO is
+# the one variable with no API-side twin, so it must be set for alerts to
+# be delivered. An empty SMTP_HOST makes delivery fail loudly in the
+# alertmanager log, which is preferable to a silent route to nowhere.
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: "${SMTP_HOST}:${SMTP_PORT}"
+  smtp_from: "${SMTP_FROM}"
+  smtp_auth_username: "${SMTP_USER}"
+  smtp_auth_password: "${SMTP_PASSWORD}"
+
+route:
+  receiver: ops-email
+  group_by: [alertname]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: ops-email
+    email_configs:
+      - to: "${ALERT_EMAIL_TO}"
+        send_resolved: true

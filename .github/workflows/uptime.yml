@@ -1,0 +1,40 @@
+name: Production uptime probe
+
+# The audit found the only end-to-end check of the public API ran during a
+# deploy — so between deploys an outage was invisible until a user hit it
+# (both historical outages were reported by users). This probe runs on a
+# schedule and fails loudly in Actions; with repository notifications on,
+# a failure reaches maintainers without any extra infrastructure.
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: Public API health
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: GET /api/health through the production alias
+        run: |
+          set -euo pipefail
+          url=https://bangla-gpt-app.vercel.app/api/health
+          body="$(mktemp)"
+          code="$(curl -s -o "$body" -w "%{http_code}" --max-time 20 "$url" || true)"
+          echo "$url -> $code"
+          head -c 300 "$body"; echo
+          if [ "$code" != "200" ]; then
+            echo "::error title=Production API unhealthy::$url answered ${code} (expected 200). 502 api_origin_unreachable means the API origin (the tunnel/host) is down. See docs/runbook.md and docs/qa/ for the current deployment record."
+            exit 1
+          fi
+          # A 200 is not enough: the proxy could be answering its own error
+          # envelope with a 200 by mistake. The body must be the API's own.
+          grep -q '"status"' "$body" || {
+            echo "::error title=Unexpected health body::200 without the API's own health payload."
+            exit 1
+          }

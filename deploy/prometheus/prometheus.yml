@@ -5,9 +5,24 @@ global:
 rule_files:
   - /etc/prometheus/alerts.yml
 
+# Alert delivery (audit F4): without this block the rules in alerts.yml had
+# nowhere to go. Alertmanager runs in the same compose profile and emails
+# its receiver list.
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
 scrape_configs:
   - job_name: bangla-gpt-api
     metrics_path: /metrics
+    # Production requires METRICS_REQUIRE_AUTH=true + METRICS_TOKEN, and
+    # /metrics answers 403 without it — so the previous unauthenticated
+    # scrape failed every time, `up` stayed 1 on the 403, and every bgpt_*
+    # rule evaluated against no data. compose mounts the token as a file
+    # (deploy/prometheus/metrics_token, git-ignored) so the secret never
+    # lives in this config.
+    bearer_token_file: /etc/prometheus/metrics_token
     static_configs:
       - targets:
           - api:8000

@@ -40,7 +40,13 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         "openssl=${OPENSSL_VERSION}" \
         "libssl3t64=${OPENSSL_VERSION}" \
+        postgresql-client \
     && rm -rf /var/lib/apt/lists/*
+# postgresql-client above ships pg_dump. Without it scripts/backup_loop.py
+# raised FileNotFoundError every cycle on this image and swallowed it - the
+# documented `--profile backup` service could never produce a Postgres
+# dump (audit F3). Debian's version is unpinned on purpose: pg_dump only
+# talks to the server over the wire and tolerates newer servers.
 
 COPY apps/api/constraints.txt ./apps/api/constraints.txt
 COPY apps/api/pyproject.toml ./apps/api/

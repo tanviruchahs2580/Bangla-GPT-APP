@@ -214,7 +214,27 @@ Copy-Item bangla_gpt.db "backups\bangla_gpt_$(Get-Date -Format yyyyMMdd_HHmm).db
 ```
 
 Rehearsed 2026-08-26 in the compose stack: automated snapshot → restore test
-(`integrity_check: ok`, row counts verified, exit 0).
+(`integrity_check: ok`, row counts verified, exit 0). Rehearsed again
+2026-10-23 against the **live** SQLite stack (the single-container setup, which
+has no compose profile):
+
+```bash
+docker run -d --name bgpt-backup-live --restart unless-stopped \
+  -e DATABASE_URL=sqlite:////data/app.db -e BACKUP_DIR=/backups \
+  -e BACKUP_INTERVAL_SECONDS=86400 -e BACKUP_KEEP_DAYS=14 \
+  -v api-live-data:/data:ro -v bgpt-live-backups:/backups \
+  -v "$PWD/scripts:/srv/scripts:ro" \
+  --entrypoint python bangla-gpt-api:<tag> /srv/scripts/backup_loop.py
+
+# then prove the newest snapshot restores:
+docker run --rm -v bgpt-live-backups:/backups -v "$PWD/scripts:/srv/scripts:ro" \
+  --entrypoint python bangla-gpt-api:<tag> /srv/scripts/restore_test.py --backup-dir /backups
+# PASS: backup restores and queries cleanly (integrity ok, row counts printed)
+```
+
+The API image now ships `postgresql-client` (pg_dump), so the same loop works
+for the Postgres profile — before that the loop logged
+`pg_dump binary not found` every cycle and swallowed it.
 
 ## 5. Health checks, metrics & alerting
 
@@ -224,6 +244,26 @@ Rehearsed 2026-08-26 in the compose stack: automated snapshot → restore test
 | `GET /live` 200 | request loop alive | orchestrator should restart |
 | `GET /ready` 200 | DB reachable AND provider configured | 503 with provider message → fix `LLM_PROVIDER`; 503 `Database unavailable` → check DB path/volume |
 | `GET /metrics` | Prometheus series | scraped by Prometheus (monitoring profile) |
+
+**The scrape must authenticate.** Production sets `METRICS_REQUIRE_AUTH=true`,
+so `/metrics` answers 403 without the token; the scrape config therefore reads
+the token from a file (`bearer_token_file: /etc/prometheus/metrics_token`).
+Create it before starting the monitoring profile:
+
+```bash
+printf '%s' "$METRICS_TOKEN" > deploy/prometheus/metrics_token   # git-ignored
+docker compose --profile core --profile monitoring up -d
+```
+
+Without this the scrape failed every time, `up` stayed 1 on the 403, and every
+`bgpt_*` alert evaluated against no data — the production outages in this
+project's history were found by users, not monitoring.
+
+**Alerts must have somewhere to go.** `deploy/alertmanager/alertmanager.yml`
+emails the `ALERT_EMAIL_TO` address using the same SMTP settings the API uses
+(`--config.expand-env=true`). Set `ALERT_EMAIL_TO` in the host `.env`, or
+read the alertmanager container log to see delivery failures — a route to
+nowhere is worse than no route, and this one fails loudly.
 
 Alert rules ship in `deploy/prometheus/alerts.yml`:
 
@@ -293,6 +333,10 @@ Quarterly rotation procedure:
   otherwise a bounded in-process cache. Redis failure never breaks a request;
   caches degrade to a miss. Expect up to 60 s of staleness on the home
   dashboard after a quiz is graded (spec'd cache window).
+- Third-party images are digest-pinned (compose, both Dockerfiles, the CI
+  scanner). Digests never move on their own: refresh them deliberately with
+  `python scripts/update_image_digests.py --write` (Dependabot cannot bump a
+  digest pin) and commit the result.
 - SQLite is single-node; move to Postgres before horizontal scaling.
 - Live Gemini behaviour needs a real `GEMINI_API_KEY`; contract tests cover the
   client, live latency/quota behaviour is UNVERIFIED until a key is deployed.

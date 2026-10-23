@@ -509,7 +509,7 @@ jobs:
         # is verified working with these flags (0 fixable HIGH/CRITICAL).
         run: |
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy:0.58.0 image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 bangla-gpt-api:ci
+            aquasec/trivy:0.58.0@sha256:b88012e2a0a309d6a8a00463d4e63e5e513377fb74eccbc8f9b0f8f81940ebeb image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 bangla-gpt-api:ci
 
       - name: Run container
         run: docker run -d --name api-smoke -p 8080:8000 -e ENV=ci bangla-gpt-api:ci

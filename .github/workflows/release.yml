@@ -80,7 +80,14 @@ jobs:
             echo "::notice::${GITHUB_REF} points at commit ${COMMIT_SHA} (github.sha ${GITHUB_SHA} is the tag object)"
           fi
 
-          WORKFLOW_FILE="ci.yml"
+          # One workflow was not enough: a release could ship with a
+          # red CodeQL SAST run or a red eval gate, because the gate
+          # only ever asked about ci.yml (audit F6). Every required
+          # workflow for this commit must have concluded success on
+          # main; the bounded-wait and error hygiene below are
+          # unchanged, just applied per workflow.
+          require_workflow() {
+            local WORKFLOW_FILE="$1"
           deadline=$(( $(date +%s) + CI_GATE_WAIT_SECONDS ))
           runs=""
           pending=0
@@ -112,8 +119,8 @@ jobs:
             pending=$(printf '%s\n' "$runs" | awk -F'\t' '$1!="completed" {n++} END {print n+0}')
 
             if [ "$main_success" -gt 0 ]; then
-              echo "CI (${WORKFLOW_FILE}) concluded success for ${COMMIT_SHA} on main; the release may proceed."
-              exit 0
+              echo "CI (${WORKFLOW_FILE}) concluded success for ${COMMIT_SHA} on main."
+              return 0
             fi
 
             # Wait (bounded) while a run for this commit is missing or still in
@@ -141,6 +148,12 @@ jobs:
           fi
           echo "::error title=CI not green::No run of ${WORKFLOW_FILE} for ${COMMIT_SHA} concluded success on main (the run list is printed above). Fix the build on main and re-tag: releasing an untested commit is exactly what this gate exists to prevent."
           exit 1
+          }
+
+          for WORKFLOW_FILE in ci.yml codeql.yml eval-gate.yml; do
+            require_workflow "$WORKFLOW_FILE"
+          done
+          echo "All required workflows concluded success for ${COMMIT_SHA}: ci.yml, codeql.yml, eval-gate.yml."
 
   build-push:
     name: Build & push images to GHCR
@@ -287,12 +300,44 @@ jobs:
 
           gh release create "$RELEASE_TAG" --title "$RELEASE_TAG" --notes-file "$body"
 
+  scan-images:
+    name: Scan release images and verify provenance (blocking)
+    # The audit found the RELEASE artifacts were never scanned: Trivy ran
+    # only in ci.yml against a locally-built image, and the attestations
+    # were produced but never verified. This job scans the pushed digests
+    # and verifies their provenance; the deploy job needs it, so a
+    # HIGH/CRITICAL finding stops the release at the last gate that can.
+    # (A hard pre-push block would need build -> load -> scan -> push and
+    # double build time; the deploy gate is the enforceable place.)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: build-push
+    permissions:
+      contents: read
+      packages: read
+      attestations: read
+    steps:
+      - name: Verify build provenance for both digests
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh attestation verify "oci://${{ needs.build-push.outputs.api_image }}@${{ needs.build-push.outputs.api_digest }}" --repo "$GITHUB_REPOSITORY"
+          gh attestation verify "oci://${{ needs.build-push.outputs.web_image }}@${{ needs.build-push.outputs.web_digest }}" --repo "$GITHUB_REPOSITORY"
+
+      - name: Trivy on both release digests (HIGH/CRITICAL, fixed only)
+        run: |
+          set -euo pipefail
+          for ref in "${{ needs.build-push.outputs.api_image }}@${{ needs.build-push.outputs.api_digest }}" "${{ needs.build-push.outputs.web_image }}@${{ needs.build-push.outputs.web_digest }}"; do
+            echo "Scanning $ref"
+            docker run --rm "aquasec/trivy@sha256:b88012e2a0a309d6a8a00463d4e63e5e513377fb74eccbc8f9b0f8f81940ebeb" image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$ref"
+          done
   deploy:
     name: Deploy to production host (SSH)
     # ci-gate is transitive through build-push, but it is listed explicitly so
     # the production-touching job cannot be reached by editing build-push's
     # dependency list alone.
-    needs: [ci-gate, build-push]
+    needs: [ci-gate, build-push, scan-images]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Skips cleanly when deployment secrets are not configured yet.
@@ -325,6 +370,16 @@ jobs:
           esac
           echo "Deploy-host fingerprint present; host-key verification enabled."
 
+      - name: Verify image attestations at the production gate
+        # Belt and braces with scan-images: this job is the one that
+        # touches production, so the provenance of exactly these digests
+        # is re-checked here immediately before the SSH deploy.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh attestation verify "oci://${{ needs.build-push.outputs.api_image }}@${{ needs.build-push.outputs.api_digest }}" --repo "$GITHUB_REPOSITORY"
+          gh attestation verify "oci://${{ needs.build-push.outputs.web_image }}@${{ needs.build-push.outputs.web_digest }}" --repo "$GITHUB_REPOSITORY"
       - name: Deploy release over SSH
         uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
         env:
