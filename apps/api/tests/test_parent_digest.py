@@ -16,6 +16,7 @@ from bangla_gpt_api.services.parent_digest import (
     digest_due,
     run_weekly_digest,
 )
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 SENTINEL = "SENTINEL-private-message-text-42"
@@ -73,7 +74,7 @@ def test_build_body_aggregates_only() -> None:
 def env(tmp_path):
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/digest.db",
+        database_url=engine_url(tmp_path, "digest"),
         jwt_secret="test-secret-0123456789abcdef0123456789",
         admin_email="root@example.com",
         admin_password=PASSWORD,
@@ -203,7 +204,7 @@ def test_digest_skips_without_smtp(env) -> None:
 def test_scheduler_starts_and_stops_with_app(tmp_path) -> None:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/sched.db",
+        database_url=engine_url(tmp_path, "sched"),
         jwt_secret="test-secret-0123456789abcdef0123456789",
         admin_email="root@example.com",
         admin_password=PASSWORD,

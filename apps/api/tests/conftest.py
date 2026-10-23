@@ -64,6 +64,26 @@ Settings.model_config = _HERMETIC_MODEL_CONFIG  # type: ignore[misc]
 Settings.__init__ = _hermetic_init  # type: ignore[method-assign]
 
 
+def engine_url(tmp_path, name: str) -> str:  # type: ignore[no-untyped-def]
+    """Resolve a test database URL for tests that pin their own database.
+
+    The audit (H-02) found 102 of 137 test files pinning
+    ``sqlite:///{tmp_path}/...`` directly, so the "engine parity" CI job ran
+    ~27% of the suite on Postgres while its name claimed all of it. Tests
+    that resolve through this helper run on the parity engine when
+    ``BGPT_TEST_DATABASE_URL`` is set (the autouse truncation fixture below
+    provides the isolation the per-file database used to), and keep the
+    historical per-file SQLite store otherwise. ``name`` preserves the old
+    per-file naming on SQLite so parallel-variant tests stay distinguishable
+    in failure output; on Postgres every name resolves to the one shared
+    database. (``name`` may carry its own ``.db`` suffix -- both conventions
+    exist among the converted call sites.)
+    """
+    if not name.endswith(".db"):
+        name = f"{name}.db"
+    return _PG_TEST_URL or f"sqlite:///{tmp_path}/{name}"
+
+
 @pytest.fixture(autouse=True)
 def _isolate_production_opt_ins():
     """Stop production-guard opt-ins leaking between tests.

@@ -35,6 +35,7 @@ from bangla_gpt_api.main import (
     _validate_pii,
     create_app,
 )
+from conftest import engine_url
 
 SECRET = "test-secret-0123456789abcdef0123456789"
 PASSWORD = "Str0ngPassphrase!234"
@@ -43,7 +44,7 @@ PASSWORD = "Str0ngPassphrase!234"
 def _settings(tmp_path, **overrides) -> Settings:
     base = {
         "env": "test",
-        "database_url": f"sqlite:///{tmp_path}/auth.db",
+        "database_url": engine_url(tmp_path, "auth"),
         "jwt_secret": SECRET,
         "admin_email": "root@example.test",
         "admin_password": PASSWORD,

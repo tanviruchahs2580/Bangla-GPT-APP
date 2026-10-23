@@ -15,6 +15,7 @@ from bangla_gpt_api.main import create_app
 from bangla_gpt_api.providers.base import ProviderError
 from bangla_gpt_api.ratelimit import MemoryRateLimiter
 from bangla_gpt_api.services.tutor import TutorService
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -23,7 +24,7 @@ SECRET = "test-secret-0123456789abcdef0123456789"
 def _settings(tmp_path, **overrides) -> Settings:
     return Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/scale.db",
+        database_url=engine_url(tmp_path, "scale"),
         jwt_secret=SECRET,
         admin_email="root@example.com",
         admin_password=PASSWORD,

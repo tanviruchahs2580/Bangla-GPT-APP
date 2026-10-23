@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 JOIN_PASSWORD = "joinsecret9"
@@ -17,7 +18,7 @@ JOIN_PASSWORD = "joinsecret9"
 def env(tmp_path):
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/adm.db",
+        database_url=engine_url(tmp_path, "adm"),
         jwt_secret="test-secret-0123456789abcdef0123456789",
         admin_email="root@example.com",
         admin_password=PASSWORD,

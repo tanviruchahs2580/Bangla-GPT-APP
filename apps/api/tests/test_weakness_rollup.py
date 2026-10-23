@@ -20,6 +20,7 @@ from bangla_gpt_api.main import create_app
 from bangla_gpt_api.routers import common
 from bangla_gpt_api.services import knowledge, weakness
 from bangla_gpt_api.services.parent_digest import run_weekly_digest
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 
@@ -74,7 +75,7 @@ def test_merged_cells_canonicalizes_aliases() -> None:
 def env(tmp_path):
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/rollup.db",
+        database_url=engine_url(tmp_path, "rollup"),
         jwt_secret="test-secret-0123456789abcdef0123456789",
         admin_email="root@example.com",
         admin_password=PASSWORD,

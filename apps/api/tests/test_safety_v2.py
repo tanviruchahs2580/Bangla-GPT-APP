@@ -31,6 +31,8 @@ from bangla_gpt_api.services.safety import (
 from bangla_gpt_api.services.tutor import SYSTEM_PROMPT
 
 # ── Bengali building blocks (escapes only) ─────────────────────────────────
+from conftest import engine_url
+
 _D = "\u0964"  # danda (full stop)
 _SYSTEM = "\u09b8\u09bf\u09b8\u09cd\u099f\u09c7\u09ae"  # "system" translit
 _PROMPT_ACC = "\u09aa\u09cd\u09b0\u09ae\u09cd\u09aa\u099f\u09c7"  # "prompt"-accusative
@@ -166,7 +168,7 @@ PASSWORD = "supersecret1"
 def make_client(tmp_path, **overrides) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/audit.db",
+        database_url=engine_url(tmp_path, "audit"),
         jwt_secret="test-secret-0123456789abcdef0123456789",
         admin_email="root@example.com",
         admin_password=PASSWORD,

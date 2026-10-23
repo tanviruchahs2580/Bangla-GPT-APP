@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app, enforce_production_safety
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -37,7 +38,7 @@ DRAFT_BODY = {
 def make_client(tmp_path, db_name="sec.db", **overrides) -> tuple[TestClient, Settings]:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/{db_name}",
+        database_url=engine_url(tmp_path, db_name),
         jwt_secret=SECRET,
         admin_email="root@example.com",
         admin_password=PASSWORD,

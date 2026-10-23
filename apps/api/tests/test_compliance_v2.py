@@ -30,6 +30,7 @@ from bangla_gpt_api.db.models import (
 )
 from bangla_gpt_api.db.session import make_engine, make_session_factory
 from bangla_gpt_api.main import CONSENT_VERSION, create_app
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -48,7 +49,7 @@ def pair(tmp_path):
     """Client + session factory over the SAME sqlite file (seed/assert directly)."""
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/compliance.db",
+        database_url=engine_url(tmp_path, "compliance"),
         jwt_secret=SECRET,
         admin_email="root@example.com",
         admin_password=PASSWORD,

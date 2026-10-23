@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app, enforce_production_safety
+from conftest import engine_url
 
 SECRET = "test-secret-0123456789abcdef0123456789"
 
@@ -47,7 +48,7 @@ def test_prod_boot_refuses_open_metrics() -> None:
 def test_prod_metrics_gated_by_token(tmp_path) -> None:
     app = create_app(
         _prod_settings(
-            database_url=f"sqlite:///{tmp_path}/metrics.db",
+            database_url=engine_url(tmp_path, "metrics"),
             metrics_require_auth=True,
             metrics_token="tok-" + "x" * 28,
         )
@@ -64,7 +65,7 @@ def test_dev_metrics_stays_open(tmp_path) -> None:
     app = create_app(
         Settings(
             env="test",
-            database_url=f"sqlite:///{tmp_path}/metrics-dev.db",
+            database_url=engine_url(tmp_path, "metrics-dev"),
             jwt_secret=SECRET,
         )
     )

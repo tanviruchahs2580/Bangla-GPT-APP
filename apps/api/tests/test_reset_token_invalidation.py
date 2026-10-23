@@ -19,6 +19,7 @@ from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.models import PasswordReset
 from bangla_gpt_api.db.session import make_engine, make_session_factory
 from bangla_gpt_api.main import create_app
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 JWT = "test-secret-0123456789abcdef0123456789"
@@ -28,7 +29,7 @@ JWT = "test-secret-0123456789abcdef0123456789"
 def client(tmp_path) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/reset-invalidation.db",
+        database_url=engine_url(tmp_path, "reset-invalidation"),
         jwt_secret=JWT,
     )
     return TestClient(create_app(settings))
@@ -88,7 +89,7 @@ def test_change_password_kills_a_pending_reset_token(client, tmp_path, caplog) -
 
     # The token row really was marked used in the same transaction ...
     with make_session_factory(
-        make_engine(Settings(database_url=f"sqlite:///{tmp_path}/reset-invalidation.db"))
+        make_engine(Settings(database_url=engine_url(tmp_path, "reset-invalidation")))
     )() as db:
         rows = db.execute(select(PasswordReset)).scalars().all()
     assert rows, "the /auth/forgot call must have persisted a reset row"

@@ -1,0 +1,56 @@
+- banner:
+  - button "হোমে যান": বাংলা GPT টিউটর
+  - combobox "খুঁজুন…"
+  - navigation "সেটিংস":
+    - text: E2E Visual Student
+    - button "নোটিফিকেশন"
+    - button "ভাষা"
+    - button "ডার্ক মোড"
+    - button "লগআউট"
+- main:
+  - heading "AI টিউটর" [level=2]
+  - button "নতুন চ্যাট"
+  - button "বিজ্ঞান"
+  - button "গণিত"
+  - button "বাংলা"
+  - textbox "ইতিহাস খুঁজুন…"
+  - button "ইতিহাস খুঁজুন…"
+  - status
+  - text: AI টিউটরকে প্রশ্ন করুন
+  - paragraph: নিচের একটি বেছে নিন অথবা নিজে লিখুন
+  - button "আমাকে বুঝাও"
+  - button "প্রশ্ন সমাধান করো"
+  - button "আমাকে পরীক্ষা নাও"
+  - button "ছবি থেকে বুঝাও"
+  - group "বোঝানোর ধরন বেছে নিন":
+    - button "সহজ"
+    - button "উদাহরণ"
+    - button "পাঠ্যবইয়ের ভাষায়"
+    - button "ধাপে ধাপে"
+    - button "উপমা"
+  - textbox "পাঠ্যবই থেকে যেকোনো প্রশ্ন লিখুন…"
+  - button "ছবি সংযুক্ত করুন"
+  - button "মাইকে বলুন"
+  - button "পাঠান" [disabled]
+  - text: চ্যাট চালিয়ে যান
+- navigation "প্রধান নেভিগেশন":
+  - link "হোম":
+    - /url: /student
+  - link "শিখুন":
+    - /url: /student/learn
+  - link "AI টিউটর":
+    - /url: /student/tutor
+  - link "অনুশীলন":
+    - /url: /student/quiz
+  - link "আমি":
+    - /url: /student/me
+- contentinfo:
+  - link "গোপনীয়তা":
+    - /url: /privacy
+  - text: ·
+  - link "শর্তাবলি":
+    - /url: /terms
+  - text: ·
+  - link "সিস্টেমের অবস্থা":
+    - /url: /status
+  - text: /© \d+ বাংলা GPT টিউটর/

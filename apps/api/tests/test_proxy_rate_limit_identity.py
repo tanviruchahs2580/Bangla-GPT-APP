@@ -12,6 +12,7 @@ from starlette.requests import Request
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
 from bangla_gpt_api.middleware import _client_ip
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 JWT = "test-secret-0123456789abcdef0123456789"
@@ -96,7 +97,7 @@ def test_untrusted_proxy_mode_ignores_the_header_entirely() -> None:
 def _client(tmp_path, **over) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/proxyip.db",
+        database_url=engine_url(tmp_path, "proxyip"),
         jwt_secret=JWT,
         rate_limit_login_per_minute=2,
         **over,

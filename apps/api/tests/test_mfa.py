@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from bangla_gpt_api.auth.mfa import _hotp, new_secret, otpauth_uri, verify_code
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
+from conftest import engine_url
 
 SECRET = "test-secret-0123456789abcdef0123456789"
 PASSWORD = "StrongPass123!"
@@ -23,7 +24,7 @@ RFC_SECRET_B32 = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
 def _settings(tmp_path) -> Settings:
     return Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/mfa.db",
+        database_url=engine_url(tmp_path, "mfa"),
         jwt_secret=SECRET,
     )
 

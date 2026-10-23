@@ -22,6 +22,7 @@ from bangla_gpt_api.curriculum.models import Chunk
 from bangla_gpt_api.main import create_app
 from bangla_gpt_api.ratelimit import RedisRateLimiter
 from bangla_gpt_api.retrieval.bm25 import Hit
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 REDIS_URL = os.environ.get("REDIS_URL")
@@ -62,7 +63,7 @@ class FakeIndex:
 def _settings(tmp_path, **kw) -> Settings:
     base = dict(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/cache.db",
+        database_url=engine_url(tmp_path, "cache"),
         jwt_secret="test-secret-0123456789abcdef0123456789",
     )
     base.update(kw)

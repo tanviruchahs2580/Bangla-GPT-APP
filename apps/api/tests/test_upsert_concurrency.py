@@ -34,11 +34,12 @@ from bangla_gpt_api.initialize.lifespan import (
 )
 from bangla_gpt_api.services.activity import dhaka_date, record_activity
 from bangla_gpt_api.services.upsert import get_or_create, increment
+from conftest import engine_url
 
 
 @pytest.fixture
 def engine(tmp_path):
-    eng = create_engine(f"sqlite:///{tmp_path}/upsert.db")
+    eng = create_engine(engine_url(tmp_path, "upsert"))
     Base.metadata.create_all(eng)
     return eng
 
@@ -162,7 +163,7 @@ def test_parallel_first_of_day_activity_counts_exactly_once_each(tmp_path) -> No
     """
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/activity.db",
+        database_url=engine_url(tmp_path, "activity"),
         jwt_secret="test-secret-0123456789abcdef0123456789",
     )
     factory = make_session_factory(make_engine(settings))
@@ -208,7 +209,7 @@ def test_reaper_fails_only_orphaned_jobs(tmp_path) -> None:
     """A SIGKILLed worker's rows resolve; a live-looking job is untouched."""
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/reaper.db",
+        database_url=engine_url(tmp_path, "reaper"),
         jwt_secret="test-secret-0123456789abcdef0123456789",
     )
     factory = make_session_factory(make_engine(settings))

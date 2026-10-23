@@ -18,6 +18,7 @@ from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
 from bangla_gpt_api.routers.common import _validate_chat_image
 from bangla_gpt_api.schemas import ChatImageIn
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 JWT = "test-secret-0123456789abcdef0123456789"
@@ -116,7 +117,7 @@ def test_no_image_is_none() -> None:
 def client(tmp_path) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/image.db",
+        database_url=engine_url(tmp_path, "image"),
         jwt_secret=JWT,
     )
     return TestClient(create_app(settings))

@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -27,7 +28,7 @@ TINY_PNG_B64 = (
 def client(tmp_path) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/wave2.db",
+        database_url=engine_url(tmp_path, "wave2"),
         jwt_secret=SECRET,
         allow_direct_parent_link=True,
         admin_email="root@example.com",
@@ -277,7 +278,7 @@ def test_admin_ai_quality_shape(client: TestClient) -> None:
 def test_chat_image_with_openai_primary_is_refused_as_vision_unsupported(tmp_path) -> None:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/wave2-openai.db",
+        database_url=engine_url(tmp_path, "wave2-openai"),
         jwt_secret=SECRET,
         admin_email="root@example.com",
         admin_password=PASSWORD,

@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from bangla_gpt_api.auth.mfa import _hotp
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
+from conftest import engine_url
 
 SECRET = "test-secret-0123456789abcdef0123456789"
 PASSWORD = "StrongPass123!"
@@ -24,7 +25,7 @@ PASSWORD = "StrongPass123!"
 def client(tmp_path) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/sessions.db",
+        database_url=engine_url(tmp_path, "sessions"),
         jwt_secret=SECRET,
     )
     return TestClient(create_app(settings))
@@ -143,7 +144,7 @@ def test_mfa_challenge_locks_the_account_after_ten_failures(tmp_path) -> None:
     # defeats IP rotation.
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/mfa-throttle.db",
+        database_url=engine_url(tmp_path, "mfa-throttle"),
         jwt_secret=SECRET,
         rate_limit_rules={"/auth/mfa/challenge": (1000, "ip")},
     )

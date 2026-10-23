@@ -8,13 +8,14 @@ from fastapi.testclient import TestClient
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
 from bangla_gpt_api.services.revision import MIN_EASE, next_schedule
+from conftest import engine_url
 
 
 @pytest.fixture
 def client(tmp_path) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/revision.db",
+        database_url=engine_url(tmp_path, "revision"),
         jwt_secret="test-secret-0123456789abcdef0123456789",
     )
     return TestClient(create_app(settings))

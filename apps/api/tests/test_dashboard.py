@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 
@@ -20,7 +21,7 @@ class _FixedInstant(datetime):
 def _client(tmp_path):
     s = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/dash.db",
+        database_url=engine_url(tmp_path, "dash"),
         jwt_secret="test-secret-0123456789abcdef0123456789",
     )
     return TestClient(create_app(s))

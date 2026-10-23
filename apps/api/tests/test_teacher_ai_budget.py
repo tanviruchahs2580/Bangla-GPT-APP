@@ -23,6 +23,7 @@ from bangla_gpt_api.db.models import AiUsage, User
 from bangla_gpt_api.db.session import make_engine, make_session_factory
 from bangla_gpt_api.main import create_app
 from bangla_gpt_api.services.costs import estimate_cost_usd
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -30,7 +31,7 @@ CHAPTER = chr(0x995) + chr(0x9CB) + chr(0x9B7)
 
 
 def _settings(tmp_path, **over) -> Settings:
-    base = dict(env="test", database_url=f"sqlite:///{tmp_path}/teacherai.db", jwt_secret=SECRET)
+    base = dict(env="test", database_url=engine_url(tmp_path, "teacherai"), jwt_secret=SECRET)
     base.update(over)
     return Settings(**base)
 

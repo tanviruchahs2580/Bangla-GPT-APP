@@ -25,6 +25,7 @@ from fastapi.testclient import TestClient
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.initialize.middleware_stack import _effective_rules
 from bangla_gpt_api.main import PUBLIC_OPERATIONS, create_app
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 JWT = "test-secret-0123456789abcdef0123456789"
@@ -33,7 +34,7 @@ JWT = "test-secret-0123456789abcdef0123456789"
 def _settings(tmp_path, **over) -> Settings:
     base = dict(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/ratelimit.db",
+        database_url=engine_url(tmp_path, "ratelimit"),
         jwt_secret=JWT,
         admin_email="root@example.com",
         admin_password=PASSWORD,

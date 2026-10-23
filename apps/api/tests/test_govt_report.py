@@ -20,6 +20,7 @@ from bangla_gpt_api.services.govt_report import (
     to_json_dict,
     to_pdf,
 )
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -27,7 +28,7 @@ SECRET = "test-secret-0123456789abcdef0123456789"
 
 @pytest.fixture
 def session(tmp_path):
-    engine = create_engine(f"sqlite:///{tmp_path}/govt.db")
+    engine = create_engine(engine_url(tmp_path, "govt"))
     Base.metadata.create_all(engine)
     with Session(engine) as s:
         yield s
@@ -203,7 +204,7 @@ ADMIN = "root@example.com"
 def client(tmp_path) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/govt_api.db",
+        database_url=engine_url(tmp_path, "govt_api"),
         admin_email=ADMIN,
         admin_password=PASSWORD,
         force_admin_password_change=False,

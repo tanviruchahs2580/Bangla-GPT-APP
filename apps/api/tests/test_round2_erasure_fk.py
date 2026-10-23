@@ -26,6 +26,7 @@ from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.models import Base
 from bangla_gpt_api.db.session import make_engine, make_session_factory
 from bangla_gpt_api.main import create_app
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -84,7 +85,7 @@ def fk_enforced(tmp_path):
     try:
         settings = Settings(
             env="test",
-            database_url=f"sqlite:///{tmp_path}/fk.db",
+            database_url=engine_url(tmp_path, "fk"),
             jwt_secret=SECRET,
             admin_email="root@example.test",
             admin_password=PASSWORD,

@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -23,7 +24,7 @@ WORKSHEET_BODY = {"class_level": 6, "subject": "science", "chapter": CHAPTER}
 def _client(tmp_path) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/jobs.db",
+        database_url=engine_url(tmp_path, "jobs"),
         jwt_secret=SECRET,
     )
     return TestClient(create_app(settings))
