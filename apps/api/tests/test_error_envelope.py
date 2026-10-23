@@ -70,6 +70,6 @@ def test_coded_details_actually_carry_a_code_key() -> None:
             keys = {k.value for k in value.keys if isinstance(k, ast.Constant)}
             if "code" not in keys:
                 offenders.append(f"{rel}:{lineno}")
-    assert not offenders, (
-        "HTTPException with a dict detail missing the 'code' key:\n" + "\n".join(offenders)
+    assert not offenders, "HTTPException with a dict detail missing the 'code' key:\n" + "\n".join(
+        offenders
     )

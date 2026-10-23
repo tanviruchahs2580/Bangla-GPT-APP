@@ -24,6 +24,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- fix(web): invalidate study caches after quiz submit and learn-progress writes
+- fix(web): stop the service worker caching error pages as the app shell
+- fix(web): language switch re-renders in place instead of remounting the tree
+- fix(web): ship the CSP the code claimed, and bound the edge proxy
+- fix(web): make the ARIA roles keep their keyboard promises
+- fix(api): unify the error envelope — every raise carries a machine code
+- fix(api): close the check-then-insert race class; reap orphaned AI jobs
+- fix(api): indexable assignment membership; /assignments/mine no longer loses work
+- fix(ops): make the proxy-trust contract hold, and machine-check it
+- fix(api): rate-limit /auth/change-password
+- fix(api): make login lockout and MFA step-up burn atomic
+- fix(ops): pin images by digest, make monitoring real, scan release artifacts
 - fix(api): P4 cleanup batch — chunk-id content hash, lesson echo gate, proportional Latin penalty, corpus-scoped RAG keys, history char cap (A20-A25)
 - fix(api): align the served OpenAPI contract with runtime behaviour
 - fix(api): burn pending verification codes when a new one is issued
@@ -104,6 +116,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- perf(web): batch streamed tokens; ship the Modal primitive where it belongs
 - refactor(api): bring TutorService.ask/ask_stream down from grade E
 - refactor(web): use one data-fetching path in the admin centre and the paper review panel
 
@@ -174,6 +187,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Tests
 
+- test(web): cover the routing table and the password-reset page
 - test(api): cover school admin fallbacks and tenant guards
 - test(ci): run the full domain suite on Postgres with truncation isolation
 - test(school): cover the aggregation routes TST-04 flagged as unexercised
@@ -183,6 +197,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Maintenance
 
+- chore(deps): clear all 42 known advisories in the pinned set
 - chore(api): remove unresolvable plan-tracker tags from comments
 - chore(scripts): make the shebang executable real for the five scripts that have one
 - chore(security): allowlist the reviewed ASCII-art hit in the full-history secret scan
