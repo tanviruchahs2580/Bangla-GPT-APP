@@ -11,6 +11,7 @@ import { render } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { Modal } from "../components/ui";
+import AITutorPage from "../pages/student/AITutorPage";
 import HomePage from "../pages/student/HomePage";
 import MePage from "../pages/student/MePage";
 import QuizPage from "../pages/student/QuizPage";
@@ -27,6 +28,8 @@ vi.mock("../api", async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   const shapeFor = (path: string): unknown => {
     if (path.includes("classrooms") || path.includes("support-plans"))
+      return [];
+    if (path.includes("tutor") || path.includes("quizzes"))
       return [];
     if (path.includes("memory"))
       return { memory_enabled: true, facts: {}, on_disable_note_code: "x" };
@@ -93,6 +96,7 @@ describe("accessibility sweep (student + teacher + primitives)", () => {
     authMock.useAuth.mockReturnValue({ me, signOut: vi.fn() });
     await axeExpect("home", <HomePage />);
     await axeExpect("practice", <QuizPage />);
+    await axeExpect("tutor", <AITutorPage />);
     await axeExpect("me", <MePage />);
   }, 40000);
 

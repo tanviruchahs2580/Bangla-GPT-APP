@@ -647,7 +647,10 @@ const USER_STORAGE_KEYS = [
   ADMIN_TOKEN_KEY,
   IMP_ACTIVE_KEY,
   "lastChapter",
-  "fontScale",
+  // fontScale is deliberately NOT here: it is a device accessibility
+  // preference by the same argument that keeps bgpt_theme and bgpt_lang —
+  // a low-vision user on a shared device must not lose their text size on
+  // every sign-out.
   "bgpt-lowdata",
   "bgpt_teacher_default_class",
 ];

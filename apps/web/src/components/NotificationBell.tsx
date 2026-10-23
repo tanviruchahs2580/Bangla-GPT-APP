@@ -37,6 +37,8 @@ export function NotificationBell() {
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [unread, setUnread] = useState(0);
   const boxRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
   const refresh = useCallback(async () => {
@@ -64,6 +66,56 @@ export function NotificationBell() {
     return () => document.removeEventListener("mousedown", onDown);
   }, []);
 
+  const closeAndRestore = useCallback(() => {
+    setOpen(false);
+    triggerRef.current?.focus();
+  }, []);
+
+  // role="menu" is a keyboard CONTRACT, not a styling hook: opening moves
+  // focus to the first item, arrows/Home/End traverse, Escape closes and
+  // restores focus to the trigger, and Tab out closes the menu. Before
+  // this, the panel announced a menu to screen readers and then ignored
+  // every key an APG menu promises.
+  useEffect(() => {
+    if (!open) return;
+    const items = () =>
+      Array.from(
+        panelRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ??
+          [],
+      );
+    const first = items()[0];
+    first?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      const all = items();
+      if (all.length === 0) {
+        if (e.key === "Escape" || e.key === "Tab") closeAndRestore();
+        return;
+      }
+      const at = all.indexOf(document.activeElement as HTMLElement);
+      let next: HTMLElement | null = null;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeAndRestore();
+        return;
+      }
+      if (e.key === "Tab") {
+        // Focus leaves the menu: close it, let the browser move focus.
+        setOpen(false);
+        return;
+      }
+      if (e.key === "ArrowDown") next = all[(at + 1 + all.length) % all.length];
+      else if (e.key === "ArrowUp") next = all[(at - 1 + all.length) % all.length];
+      else if (e.key === "Home") next = all[0];
+      else if (e.key === "End") next = all[all.length - 1];
+      if (next) {
+        e.preventDefault();
+        next.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, closeAndRestore]);
+
   const openItem = async (n: NotificationItem) => {
     setOpen(false);
     if (!n.read_at) {
@@ -81,9 +133,11 @@ export function NotificationBell() {
   return (
     <div ref={boxRef} className="notif-wrap">
       <button
+        ref={triggerRef}
         className="icon-btn"
         aria-label={t("notifications")}
         aria-expanded={open}
+        aria-haspopup="menu"
         onClick={() => {
           setOpen((o) => !o);
           if (!open) void refresh();
@@ -98,6 +152,7 @@ export function NotificationBell() {
       </button>
       {open && (
         <div
+          ref={panelRef}
           className="notif-panel"
           role="menu"
           aria-label={t("notifications")}

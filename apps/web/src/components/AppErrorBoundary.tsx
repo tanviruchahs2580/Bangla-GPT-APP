@@ -20,6 +20,12 @@ export class AppErrorBoundary extends React.Component<
     return { error };
   }
 
+  componentDidCatch(error: Error, info: React.ErrorInfo): void {
+    // The user sees localized copy; the actual error stays reachable for
+    // developers and for the optional Sentry hook.
+    console.error("render_error", error, info.componentStack);
+  }
+
   static getDerivedStateFromProps(
     props: { resetKey?: string },
     state: { error: Error | null; resetKey: string | undefined },
@@ -36,7 +42,12 @@ export class AppErrorBoundary extends React.Component<
         <div className="container" role="alert">
           <div className="card">
             <h2>{t("errorGeneric")}</h2>
-            <p className="muted">{this.state.error.message}</p>
+            {/* The raw error.message used to render here: untranslated
+                internal text in a Bengali-first children's product, and a
+                disclosure vector for whatever a dependency puts in a
+                message. The user gets the localized copy; the detail goes
+                to the console where a developer can still read it. */}
+            <p className="muted">{t("errorBoundaryBody")}</p>
             <button
               className="btn btn-primary"
               onClick={() => window.location.reload()}

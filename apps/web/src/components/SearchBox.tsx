@@ -22,6 +22,7 @@ export function SearchBox() {
   const [data, setData] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(-1);
   const boxRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
@@ -65,6 +66,33 @@ export function SearchBox() {
   const showDropdown =
     open && debounced.length >= 2 && !loading && data !== null;
 
+  // Flatten the rendered options once so the keyboard handler, the
+  // aria-activedescendant wiring and the click handlers all agree on the
+  // same ordering.
+  const options: Array<{ id: string; run: () => void }> = [];
+  if (showDropdown && data) {
+    if (data.ask_action) {
+      options.push({
+        id: "search-option-ask",
+        run: () => {
+          setOpen(false);
+          void navigate("/student/tutor", { state: { ask: debounced } });
+        },
+      });
+    }
+    data.hits.forEach((h, i) => {
+      options.push({
+        id: `search-option-${i}`,
+        run: () => {
+          setOpen(false);
+          void navigate(h.href);
+        },
+      });
+    });
+  }
+  const activeId =
+    active >= 0 && active < options.length ? options[active].id : undefined;
+
   return (
     <div className="searchbox" ref={boxRef}>
       <Search size={16} aria-hidden />
@@ -73,23 +101,58 @@ export function SearchBox() {
         value={q}
         placeholder={t("searchPlaceholder")}
         aria-label={t("searchPlaceholder")}
-        onChange={(e) => setQ(e.target.value)}
+        // APG combobox contract. The markup previously announced a listbox
+        // with options and then implemented none of the keyboard model:
+        // ArrowDown did nothing, every option was aria-selected=false
+        // (including the one being activated), and the input never said it
+        // had a popup. Focus stays in the input; activedescendant names the
+        // highlighted option.
+        role="combobox"
+        aria-expanded={showDropdown}
+        aria-controls="search-listbox"
+        aria-autocomplete="list"
+        aria-activedescendant={activeId}
+        onChange={(e) => {
+          setQ(e.target.value);
+          setActive(-1);
+        }}
         onFocus={() => setOpen(true)}
         onKeyDown={(e) => {
-          if (e.key === "Escape") setOpen(false);
+          if (e.key === "Escape") {
+            setOpen(false);
+            setActive(-1);
+            return;
+          }
+          if (!showDropdown || options.length === 0) return;
+          let next: number | null = null;
+          if (e.key === "ArrowDown")
+            next = active < 0 ? 0 : (active + 1) % options.length;
+          else if (e.key === "ArrowUp")
+            next = active < 0 ? options.length - 1 : (active - 1 + options.length) % options.length;
+          else if (e.key === "Home") next = 0;
+          else if (e.key === "End") next = options.length - 1;
+          else if (e.key === "Enter" && active >= 0) {
+            e.preventDefault();
+            options[active].run();
+            return;
+          } else return;
+          e.preventDefault();
+          setActive(next);
         }}
       />
       {showDropdown && (
         <div
+          id="search-listbox"
           className="search-dropdown"
           role="listbox"
           aria-label={t("searchPlaceholder")}
         >
           {data.ask_action && (
             <button
+              id="search-option-ask"
               type="button"
               role="option"
-              aria-selected={false}
+              aria-selected={active === options.findIndex((o) => o.id === "search-option-ask")}
               className="search-item search-ask"
               onClick={() => {
                 setOpen(false);
@@ -103,9 +166,10 @@ export function SearchBox() {
           {data.hits.map((h, i) => (
             <button
               key={`${h.href}-${i}`}
+              id={`search-option-${i}`}
               type="button"
               role="option"
-              aria-selected={false}
+              aria-selected={options[active]?.id === `search-option-${i}`}
               className="search-item"
               onClick={() => {
                 setOpen(false);

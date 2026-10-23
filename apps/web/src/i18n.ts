@@ -636,6 +636,8 @@ const bn = {
   errApiUnconfigured:
     "অ্যাপের সার্ভার ঠিকানা বসানো হয়নি — সঠিক ঠিকানা দিয়ে APK আবার বানাতে হবে।",
   errVerifyFailed: "লগইন হলেও সেশন যাচাই হয়নি — আবার চেষ্টা করুন।",
+  errorBoundaryBody:
+    "পাতাটি লোড করতে সমস্যা হয়েছে। আবার চেষ্টা করুন — সমস্যা থাকলে অ্যাপটি রিলোড করুন।",
   errBadCurrentPassword: "বর্তমান পাসওয়ার্ড সঠিক নয়।",
   errMfaAlreadyEnabled: "দুই ধাপের যাচাই আগেই চালু আছে।",
   errMfaNotEnabled: "দুই ধাপের যাচাই চালু নেই।",
@@ -1280,6 +1282,8 @@ const en: Dict = {
   errApiUnconfigured:
     "The app's server address is not set — rebuild the APK with the right address.",
   errVerifyFailed: "Login succeeded but the session check failed — try again.",
+  errorBoundaryBody:
+    "This page failed to load. Try again — if it keeps happening, reload the app.",
   errBadCurrentPassword: "Current password is incorrect.",
   errMfaAlreadyEnabled: "Two-step verification is already on.",
   errMfaNotEnabled: "Two-step verification is not enabled.",

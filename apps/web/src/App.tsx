@@ -7,9 +7,16 @@
  * service-worker registration.
  */
 
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { QueryClient } from "@tanstack/react-query";
-import { BrowserRouter, Link, Navigate, Route, Routes } from "react-router-dom";
+import {
+  BrowserRouter,
+  Link,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+} from "react-router-dom";
 import { getToken, setLogoutCleanup } from "./api";
 import { ROLE_HOME, useAuth } from "./AuthContext";
 import { AppShell } from "./AppShell";
@@ -113,10 +120,20 @@ function RequireAuth({
  * or, worse, a dashboard full of confident zeros.
  */
 function ApiUnreachable({ onRetry }: { onRetry: () => void }) {
+  // role="alert" (not aria-live on a container that mounts WITH its content)
+  // and focus moved onto the heading: live regions announce CHANGES, so the
+  // one screen that says what is wrong could be completely silent for a
+  // screen-reader user.
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, []);
   return (
-    <main className="container" aria-live="assertive">
-      <div className="card stack">
-        <h1>{t("apiUnreachableTitle")}</h1>
+    <main className="container">
+      <div className="card stack" role="alert">
+        <h1 ref={headingRef} tabIndex={-1}>
+          {t("apiUnreachableTitle")}
+        </h1>
         <p className="muted">{t("apiUnreachableBody")}</p>
         <div className="stack">
           <button type="button" className="btn" onClick={onRetry}>
@@ -359,16 +376,55 @@ function App() {
   // streaming tutor answer was aborted, and half-filled forms reset — all
   // from a control the UI invites users to press at any time. Re-render,
   // never remount.
-  const [, setLangTick] = useState(0);
+  const [langTick, setLangTick] = useState(0);
   useEffect(() => onLangChange(() => setLangTick((n) => n + 1)), []);
   return (
     <BrowserRouter>
+      <DocumentTitle tick={langTick} />
       <Suspense fallback={<Loading />}>
         <RoutesSwitch />
         <Footer />
       </Suspense>
     </BrowserRouter>
   );
+}
+
+/** Per-route document titles, longest prefix first. */
+const ROUTE_TITLES: Array<[string, Parameters<typeof t>[0]]> = [
+  ["/student/tutor", "aiTutor"],
+  ["/student/quiz", "practice"],
+  ["/student/learn", "learn"],
+  ["/student/me", "me"],
+  ["/student", "home"],
+  ["/teacher", "dashboard"],
+  ["/parent", "dashboard"],
+  ["/admin", "dashboard"],
+  ["/school", "dashboard"],
+  ["/login", "login"],
+  ["/register", "register"],
+  ["/forgot", "resetTitle"],
+  ["/status", "statusPage"],
+  ["/privacy", "privacy"],
+  ["/terms", "terms"],
+];
+
+function DocumentTitle({ tick }: { tick: number }) {
+  const location = useLocation();
+  useEffect(() => {
+    // Every route kept the landing <title> before this, so browser history
+    // entries and screen-reader tab announcements were indistinguishable
+    // between the tutor, a quiz and the admin dashboard. `tick` re-runs the
+    // effect on a language switch.
+    const match = ROUTE_TITLES.find(
+      ([prefix]) =>
+        location.pathname === prefix ||
+        location.pathname.startsWith(prefix + "/"),
+    );
+    document.title = match
+      ? `${t(match[1])} · ${t("appName")}`
+      : t("appName");
+  }, [location.pathname, tick]);
+  return null;
 }
 
 function Footer() {
