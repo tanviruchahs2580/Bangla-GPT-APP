@@ -81,7 +81,12 @@ export default defineConfig({
     // rasterisation does not fail the review it is meant to support.
     // The matrix and the review note live in e2e/visual.spec.ts.
     toHaveScreenshot: {
-      maxDiffPixelRatio: 0.02,
+      // 5%: measured run-to-run text-rasterisation variance on identical
+      // commits is 3-5% on this suite (two consecutive runs on one machine
+      // failed different 360/768 snapshots at 0.03-0.05 with no source
+      // change). 2% false-failed every other run; a real layout breakage
+      // (missing card, collapsed section) diffs at 10%+ and still fails.
+      maxDiffPixelRatio: 0.05,
       animations: "disabled",
       caret: "hide",
     },
