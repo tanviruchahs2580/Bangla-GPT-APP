@@ -85,5 +85,5 @@ def test_postgres_full_journey(client: TestClient) -> None:
     assert export.status_code == 200
     assert export.json()["profile"]["type"] == "student"
 
-    deleted = client.delete("/users/me", headers=headers)
+    deleted = client.request("DELETE", "/users/me", headers=headers, json={"password": "supersecret1"})
     assert deleted.status_code == 204

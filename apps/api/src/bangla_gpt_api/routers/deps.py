@@ -149,20 +149,31 @@ def get_current_user(
         user_id = int(payload["sub"])
     except (pyjwt.PyJWTError, KeyError, TypeError, ValueError) as exc:
         raise _unauthorized("Invalid or expired token") from exc
-    # impersonation tokens are revocable BEFORE their short expiry.
-    # The jti lands in the shared cache (Redis when configured: revocation
-    # then holds across workers/restarts; memory backend: per-worker) with
-    # a TTL that matches the token's own remaining life. The lookup is
-    # strict (F-08): if the revocation store is unreachable we fail CLOSED
-    # for these privileged tokens — an uncheckable impersonation session
-    # must not pass — while every other cache read in the app stays soft.
-    if payload.get("imp") and isinstance(payload.get("jti"), str):
+    # Every minted token carries a jti, and a logout (POST /auth/logout)
+    # or an account-wide revoke parks it in the shared cache (Redis when
+    # configured: revocation then holds across workers/restarts; memory
+    # backend: per-worker) with a TTL that matches the token's own
+    # remaining life — so a bearer token is revocable BEFORE its expiry
+    # (S-011), not only via a password change that rotates the epoch for
+    # every session at once. Impersonation tokens keep their own stricter
+    # namespace (`imp_revoke:`, F-08). Both lookups are strict: if the
+    # revocation store is unreachable we fail CLOSED — an uncheckable
+    # session must not pass — and in production Redis is already a hard
+    # dependency (the rate limiter fails closed on the same outage), so
+    # this adds no new failure mode. Every other cache read stays soft.
+    jti = payload.get("jti")
+    if isinstance(jti, str):
         try:
-            revoked = ctx.cache.get_json_strict(f"imp_revoke:{payload['jti']}")
+            if payload.get("imp"):
+                revoked = ctx.cache.get_json_strict(f"imp_revoke:{jti}")
+            else:
+                revoked = ctx.cache.get_json_strict(f"revoke:{jti}")
         except CacheUnavailable as exc:
             raise revocation_store_unavailable() from exc
         if revoked is True:
-            raise _unauthorized("Impersonation session has ended")
+            if payload.get("imp"):
+                raise _unauthorized("Impersonation session has ended")
+            raise _unauthorized("Session ended; please log in again")
     # AUTH-001: MFA step-up tokens (mfa:true, token_type "mfa") are accepted
     # ONLY by POST /auth/mfa/challenge — never as API credentials.
     if payload.get("mfa") is True:

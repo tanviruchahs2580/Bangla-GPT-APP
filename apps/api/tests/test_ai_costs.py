@@ -165,7 +165,7 @@ def test_delete_me_cleans_ledger(tmp_path) -> None:
         "/tutor/ask", json={"question": "ভগ্নাংশ কী?", "class_level": 6}, headers=headers
     )
     assert res.status_code == 200
-    assert client.delete("/users/me", headers=headers).status_code == 204
+    assert client.request("DELETE", "/users/me", headers=headers, json={"password": "StrongPass123!"}).status_code == 204
     engine = make_engine(_settings(tmp_path))
     session_factory = make_session_factory(engine)
     with session_factory() as db:

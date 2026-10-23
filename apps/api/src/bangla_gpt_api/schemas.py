@@ -249,6 +249,18 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(min_length=8, max_length=128)
 
 
+class AccountDeleteConfirm(BaseModel):
+    """F-142: irreversible self-service erasure re-authenticates the caller.
+
+    A bearer token alone used to be enough to destroy an account (and, for
+    a student, their entire learning history) permanently — a stolen
+    60-minute token was a one-shot erasure weapon. The current password is
+    required, exactly like /auth/mfa/disable.
+    """
+
+    password: str = Field(min_length=1, max_length=128)
+
+
 # --- AUTH-001: TOTP multi-factor authentication -------------------------------
 class MfaEnrollOut(BaseModel):
     """Fresh (unstored) secret + authenticator URI. Nothing is enabled yet."""

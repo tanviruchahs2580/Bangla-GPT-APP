@@ -128,7 +128,7 @@ def test_erasure_succeeds_despite_another_users_feedback(fk_enforced) -> None:
     login = client.post("/auth/login", json={"email": "owner@example.test", "password": PASSWORD})
     token = login.json()["access_token"]
 
-    res = client.delete("/users/me", headers={"Authorization": f"Bearer {token}"})
+    res = client.request("DELETE", "/users/me", headers={"Authorization": f"Bearer {token}"}, json={"password": "supersecret1"})
 
     assert res.status_code == 204, (
         f"erasure failed with {res.status_code}: {res.text}. "
@@ -153,7 +153,7 @@ def test_feedback_row_survives_but_its_pointer_is_cleared(fk_enforced) -> None:
     login = client.post("/auth/login", json={"email": "owner2@example.test", "password": PASSWORD})
     token = login.json()["access_token"]
     assert (
-        client.delete("/users/me", headers={"Authorization": f"Bearer {token}"}).status_code == 204
+        client.request("DELETE", "/users/me", headers={"Authorization": f"Bearer {token}"}, json={"password": "supersecret1"}).status_code == 204
     )
 
     with factory() as db:

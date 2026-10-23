@@ -33,7 +33,9 @@ Every non-preflight response carries `X-Request-ID` (echoed if supplied, otherwi
 | POST | `/auth/mfa/challenge` | - | `{mfa_token, code}` → real bearer `{access_token}`. 401 on wrong/expired token or code |
 | GET | `/users/me` | any | Profile of the caller: `{user_id, email, role, profile_id, name, class_level}` |
 | GET | `/users/me/export` | any | GDPR-style data export: account, profile, quiz attempts, parent links (`Content-Disposition: attachment`) |
-| DELETE | `/users/me` | any | Self-service account deletion (GDPR-style). Removes profile, quiz attempts + answer logs, parent links. Last remaining admin is refused (409). Returns 204 |
+| DELETE | `/users/me` | any | Self-service account deletion (GDPR-style). **Requires the current password in the body** (`{"password": ...}`, F-142 — a bearer token alone must never erase an account irreversibly; missing/wrong password → 401 `bad_current_password`). Removes profile, quiz attempts + answer logs, parent links. Last remaining admin is refused (409). Returns 204 |
+| POST | `/users/me/sessions/revoke` | any | Sign out everywhere: stamps the token epoch so every outstanding session token fails its next request. Returns 204 |
+| POST | `/auth/logout` | any | End THIS session: parks the presented token's jti in the fail-closed revocation store for its remaining life. Returns 204 |
 
 Rate limits (per client IP unless noted): `/auth/login`, `/auth/forgot`,
 `/auth/reset`, `/auth/register`, `/auth/resend-verification`,

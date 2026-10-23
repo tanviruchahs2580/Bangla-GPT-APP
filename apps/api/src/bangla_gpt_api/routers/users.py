@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import Field
 from sqlalchemy import delete, func, or_, select, update
 
+from bangla_gpt_api.auth.security import verify_password
 from bangla_gpt_api.db.models import (
     AiJob,
     AiUsage,
@@ -51,6 +52,7 @@ from bangla_gpt_api.db.models import (
 )
 from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded, message
 from bangla_gpt_api.schemas import (
+    AccountDeleteConfirm,
     ConsentReconfirmIn,
     ConsentStatusOut,
     DataExportResponse,
@@ -135,8 +137,31 @@ def read_me(app_ctx: Ctx, db: DbSession, user: CurrentUser) -> MeResponse:
     return _build_me_response(app_ctx, db, user)
 
 
-@router.delete("/users/me", status_code=204)
-def delete_me(db: DbSession, user: CurrentUser) -> Response:
+@router.post("/users/me/sessions/revoke", status_code=204)
+def revoke_my_sessions(db: DbSession, user: CurrentUser) -> Response:
+    """Sign out EVERYWHERE (S-011): stamps the token epoch, so every
+    outstanding bearer token of this account fails the F-05 epoch check on
+    its next request. DB-backed, so it holds even when the shared cache is
+    unreachable and survives restarts — the account-wide counterpart to
+    POST /auth/logout (which ends exactly one session).
+    """
+    user.sessions_invalidated_at = datetime.now(UTC)
+    write_audit(
+        db,
+        action="sessions_revoked",
+        actor_user_id=user.id,
+        actor_role=user.role,
+        target=f"user:{user.id}",
+        detail={},
+    )
+    db.commit()
+    return Response(status_code=204)
+
+
+@router.delete("/users/me", status_code=204, responses=coded(401, 409))
+def delete_me(
+    db: DbSession, user: CurrentUser, payload: AccountDeleteConfirm | None = None
+) -> Response:
     """GDPR-style self-service account deletion.
 
     Removes the account and every row owned by it: student/teacher/parent
@@ -144,7 +169,22 @@ def delete_me(db: DbSession, user: CurrentUser) -> Response:
     SQLite silently does not, so every child table must be cleaned here or
     the delete aborts mid-transaction on the production engine). The last
     remaining admin cannot delete their own account (409).
+
+    F-142: erasure is irreversible, so the CURRENT PASSWORD must be
+    re-supplied in the body — a bearer token alone (possibly a stolen
+    60-minute one) used to be enough to destroy the account permanently.
+    A missing body or wrong password is a coded 401, the same contract as
+    /auth/mfa/disable; a body-stripping intermediary therefore fails SAFE
+    (no deletion), never open.
     """
+    if payload is None or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "code": "bad_current_password",
+                "message": "Current password is required to delete this account",
+            },
+        )
     if user.role == "admin":
         admins = db.execute(
             select(func.count()).select_from(User).where(User.role == "admin")

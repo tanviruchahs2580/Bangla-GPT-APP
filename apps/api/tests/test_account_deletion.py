@@ -90,7 +90,7 @@ def test_student_deletion_removes_account_and_data(client: TestClient) -> None:
     assert link.status_code == 201
 
     old_token_headers = dict(headers)
-    res = client.delete("/users/me", headers=headers)
+    res = client.request("DELETE", "/users/me", headers=headers, json={"password": "supersecret1"})
     assert res.status_code == 204
     assert res.content == b""
 
@@ -119,7 +119,7 @@ def test_parent_deletion_removes_links_but_keeps_student(client: TestClient) -> 
     parent_headers = _login_headers(client, "p2@example.com")
     client.post("/parents/link", json={"student_id": 1}, headers=parent_headers)
 
-    res = client.delete("/users/me", headers=parent_headers)
+    res = client.request("DELETE", "/users/me", headers=parent_headers, json={"password": "supersecret1"})
     assert res.status_code == 204
     assert parent is not None
 
@@ -132,13 +132,13 @@ def test_parent_deletion_removes_links_but_keeps_student(client: TestClient) -> 
 def test_teacher_deletion(client: TestClient) -> None:
     _register(client, "t@example.com", role="teacher")
     headers = _login_headers(client, "t@example.com")
-    assert client.delete("/users/me", headers=headers).status_code == 204
+    assert client.request("DELETE", "/users/me", headers=headers, json={"password": "supersecret1"}).status_code == 204
     assert client.get("/teacher/students", headers=headers).status_code == 401
 
 
 def test_last_admin_cannot_self_delete(client: TestClient) -> None:
     root = _login_headers(client, "root@example.com")
-    res = client.delete("/users/me", headers=root)
+    res = client.request("DELETE", "/users/me", headers=root, json={"password": "supersecret1"})
     assert res.status_code == 409
     assert res.json()["detail"]["code"] == "last_admin_guard"
 
@@ -151,7 +151,7 @@ def test_second_admin_can_self_delete(client: TestClient) -> None:
     )
     assert promote.status_code == 200
     second_headers = _login_headers(client, "second@example.com")
-    assert client.delete("/users/me", headers=second_headers).status_code == 204
+    assert client.request("DELETE", "/users/me", headers=second_headers, json={"password": "supersecret1"}).status_code == 204
     remaining = [
         u for u in client.get("/admin/users", headers=root).json()["items"] if u["role"] == "admin"
     ]

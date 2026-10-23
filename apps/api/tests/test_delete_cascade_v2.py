@@ -139,7 +139,7 @@ def test_student_delete_removes_every_child_row(pair) -> None:
     assert _count(factory, DailyActivity, DailyActivity.student_id == sid) == 1
     assert _count(factory, StudentAbility, StudentAbility.student_id == sid) == 1
 
-    deleted = client.delete("/users/me", headers=_headers(client, "s@example.com"))
+    deleted = client.request("DELETE", "/users/me", headers=_headers(client, "s@example.com"), json={"password": "supersecret1"})
     assert deleted.status_code == 204
 
     for model in (
@@ -214,7 +214,7 @@ def test_teacher_delete_removes_artifacts_keeps_anonymised_audit(pair) -> None:
         )
         s.commit()
 
-    deleted = client.delete("/users/me", headers=_headers(client, "t@example.com"))
+    deleted = client.request("DELETE", "/users/me", headers=_headers(client, "t@example.com"), json={"password": "supersecret1"})
     assert deleted.status_code == 204
 
     assert _count(factory, Teacher, Teacher.id == tid) == 0
@@ -261,7 +261,7 @@ def test_parent_delete_nulls_redeemed_invite_pointer(pair) -> None:
         )
         s.commit()
 
-    deleted = client.delete("/users/me", headers=_headers(client, "p@example.com"))
+    deleted = client.request("DELETE", "/users/me", headers=_headers(client, "p@example.com"), json={"password": "supersecret1"})
     assert deleted.status_code == 204
     assert _count(factory, Parent, Parent.id == pid) == 0
     with factory() as s:
