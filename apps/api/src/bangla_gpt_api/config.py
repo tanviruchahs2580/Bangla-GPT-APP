@@ -200,6 +200,14 @@ class Settings(BaseSettings):
         "/tutor": (60, "ip"),
         "/auth/forgot": (10, "ip"),
         "/auth/reset": (10, "ip"),
+        # The password-verifying counterpart of /auth/login had NO rule: a
+        # stolen-token holder (or shared school device) could guess the
+        # CURRENT password unbounded, and each attempt costs two Argon2id
+        # operations (verify + hash-on-save) -- the worst cost profile on any
+        # credential endpoint, with no throttle. Scoped per user for the same
+        # school-NAT reason as /auth/mfa above; the unauthenticated fallback
+        # is the caller's IP.
+        "/auth/change-password": (10, "user"),
         # Unauthenticated resend (login stuck at email_unverified) must be
         # throttled like forgot/reset to avoid email-spam abuse.
         "/auth/resend-verification": (10, "ip"),
