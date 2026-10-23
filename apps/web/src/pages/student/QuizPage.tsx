@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -23,6 +23,7 @@ import type {
   ShortTestMine,
   StudentProgress,
 } from "../../types";
+import { invalidateStudyCaches } from "../../lib/invalidate";
 import { buildExplainPayload, LAST_RESULT_KEY } from "../../lib/quizExplain";
 import { useAuth } from "../../AuthContext";
 import {
@@ -94,6 +95,7 @@ export default function QuizPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const queryClient = useQueryClient();
   const { data: progress } = useQuery({
     queryKey: ["progress", me?.profile_id],
     queryFn: () => get<StudentProgress>(`/students/${me!.profile_id}/progress`),
@@ -230,6 +232,10 @@ export default function QuizPage() {
       );
       setResult(res);
       setStarted(null);
+      // The submit is what the streak, average and heatmap are derived from;
+      // without this the hub behind the result screen renders pre-quiz
+      // numbers for the whole staleTime window.
+      invalidateStudyCaches(queryClient);
       track("quiz_completed", {
         score_pct: res.score_pct,
         correct: res.correct,
