@@ -12,7 +12,7 @@ from typing import Annotated, Any
 import jwt as pyjwt
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from bangla_gpt_api.auth.security import decode_token
@@ -314,15 +314,13 @@ def _student_in_school(db: Session, school_id: int, student_id: int) -> bool:
     O(school enrollment) on every quiz submit/progress read. A 2,000-student
     school paid 2,000 rows to answer a one-row question.
     """
-    return (
-        db.scalar(
-            select(func.exists())
-            .select_from(ClassStudent)
-            .join(ClassRoom, ClassRoom.id == ClassStudent.classroom_id)
-            .where(ClassRoom.school_id == school_id, ClassStudent.student_id == student_id)
-        )
-        is True
+    probe = (
+        select(ClassStudent.student_id)
+        .join(ClassRoom, ClassRoom.id == ClassStudent.classroom_id)
+        .where(ClassRoom.school_id == school_id, ClassStudent.student_id == student_id)
+        .exists()
     )
+    return db.scalar(select(probe)) is True
 
 
 def _assert_student_in_school(db: Session, user: User, student: Student) -> Student:
