@@ -264,7 +264,14 @@ async function parseSse(
 export async function api<T>(
   path: string,
   options: RequestInit = {},
-  opts?: { skipUnauthorized?: boolean; signal?: AbortSignal },
+  opts?: {
+    skipUnauthorized?: boolean;
+    signal?: AbortSignal;
+    /** Per-call timeout override. The bulk roster import hashes up to 200
+     * Argon2id passwords server-side (measured >20s — past the default
+     * guard), so it is the one documented long call. */
+    timeoutMs?: number;
+  },
 ): Promise<T> {
   const headers = new Headers(options.headers);
   if (options.body !== undefined && !(options.body instanceof FormData)) {
@@ -276,7 +283,7 @@ export async function api<T>(
   // F-015: every non-streaming request is bounded. A caller signal (the
   // tutor's Stop) is combined so either can end the request.
   const caller = opts?.signal ?? options.signal ?? undefined;
-  const guard = timeoutGuard(REQUEST_TIMEOUT_MS, caller);
+  const guard = timeoutGuard(opts?.timeoutMs ?? REQUEST_TIMEOUT_MS, caller);
   try {
     let res: Response;
     try {
@@ -346,7 +353,7 @@ export const get = <T>(path: string) => api<T>(path);
 export const post = <T>(
   path: string,
   body?: unknown,
-  opts?: { skipUnauthorized?: boolean; signal?: AbortSignal },
+  opts?: { skipUnauthorized?: boolean; signal?: AbortSignal; timeoutMs?: number },
 ) =>
   api<T>(
     path,

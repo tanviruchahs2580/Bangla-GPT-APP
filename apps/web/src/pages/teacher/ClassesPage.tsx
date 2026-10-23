@@ -153,6 +153,9 @@ export default function ClassesPage() {
       const res = await post<ImportResult>(
         `/teacher/classrooms/${roomId}/import`,
         { csv_text: csvText },
+        // 200 rows = 200 Argon2id hashes server-side (measured past the
+        // 20s default guard); this is the one sanctioned long call.
+        { timeoutMs: 120_000 },
       );
       setImportResult(res);
       setCsvText("");
