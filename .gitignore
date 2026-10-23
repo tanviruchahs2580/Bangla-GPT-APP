@@ -120,3 +120,12 @@ docs/audit-*/screenshots/
 
 # Monitoring secrets and state
 deploy/prometheus/metrics_token
+
+# Lighthouse CI local runs
+.lighthouseci/
+
+# Playwright e2e artifacts (apps/web): HTML/junit reports, failure traces,
+# screenshots/videos of failed runs, and any saved auth state.
+.playwright-report/
+test-results/
+playwright/.auth/
