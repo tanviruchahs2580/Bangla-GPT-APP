@@ -28,6 +28,8 @@ from bangla_gpt_api.db.models import (
 )
 from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded, message
 from bangla_gpt_api.schemas import (
+    SMALL_PAGE_DEFAULT_LIMIT,
+    SMALL_PAGE_MAX_LIMIT,
     ActivityDay,
     ActivitySummary,
     ChapterProgressIn,
@@ -441,7 +443,9 @@ def _revision_out(row: RevisionItem) -> RevisionItemOut:
 
 @router.get("/revision/due", response_model=RevisionDueOut, responses=coded(404))
 def get_revision_due(
-    db: DbSession, user: CurrentUser, limit: Annotated[int, Query(ge=1, le=50)] = 20
+    db: DbSession,
+    user: CurrentUser,
+    limit: Annotated[int, Query(ge=1, le=SMALL_PAGE_MAX_LIMIT)] = SMALL_PAGE_DEFAULT_LIMIT,
 ) -> RevisionDueOut:
     student = _student_profile(db, user)
     today = dhaka_date(datetime.now(UTC))

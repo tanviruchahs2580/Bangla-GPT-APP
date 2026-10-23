@@ -31,6 +31,8 @@ from bangla_gpt_api.providers import (
 )
 from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded
 from bangla_gpt_api.schemas import (
+    STANDARD_PAGE_DEFAULT_LIMIT,
+    STANDARD_PAGE_MAX_LIMIT,
     TEACHER_DOCUMENT_KINDS,
     TEACHER_DOCUMENT_PDF_KINDS,
     ChapterContentEditIn,
@@ -497,7 +499,7 @@ async def teacher_qp_create(
 def teacher_qp_list(
     db: DbSession,
     teacher: TeacherOrAdminUser,
-    limit: Annotated[int, Query(ge=1, le=200)] = 100,
+    limit: Annotated[int, Query(ge=1, le=STANDARD_PAGE_MAX_LIMIT)] = STANDARD_PAGE_DEFAULT_LIMIT,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[QPOut]:
     # newest-first page; QPOut carries the full questions JSON, so
@@ -1021,7 +1023,7 @@ def teacher_documents_list(
     db: DbSession,
     teacher: TeacherOrAdminUser,
     kind: str | None = None,
-    limit: Annotated[int, Query(ge=1, le=200)] = 100,
+    limit: Annotated[int, Query(ge=1, le=STANDARD_PAGE_MAX_LIMIT)] = STANDARD_PAGE_DEFAULT_LIMIT,
 ) -> list[TeacherDocumentOut]:
     """Own library, newest first; optional kind filter (includes the
     lesson_plan kind persisted by POST /teacher/lesson-plans)."""

@@ -40,6 +40,8 @@ from bangla_gpt_api.db.models import (
 from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded
 from bangla_gpt_api.schemas import (
+    ROSTER_PAGE_DEFAULT_LIMIT,
+    ROSTER_PAGE_MAX_LIMIT,
     AdminSchoolStatsOut,
     ClassRoomCreateIn,
     ClassRoomOut,
@@ -769,7 +771,7 @@ def school_students(
     user: SchoolStaffUser,
     school_id: Annotated[int | None, Query()] = None,
     class_level: Annotated[int | None, Query(ge=1, le=12)] = None,
-    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    limit: Annotated[int, Query(ge=1, le=ROSTER_PAGE_MAX_LIMIT)] = ROSTER_PAGE_DEFAULT_LIMIT,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> SchoolStudentPage:
     """Paginated school roster: id, name, grade, section, approximate last

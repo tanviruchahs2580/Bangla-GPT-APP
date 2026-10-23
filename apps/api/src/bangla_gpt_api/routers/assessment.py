@@ -32,6 +32,8 @@ from bangla_gpt_api.db.models import (
 from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES
 from bangla_gpt_api.schemas import (
+    STANDARD_PAGE_DEFAULT_LIMIT,
+    STANDARD_PAGE_MAX_LIMIT,
     AssignmentIn,
     AssignmentMineOut,
     AssignmentOut,
@@ -213,7 +215,7 @@ def teacher_shorttest_list(
     db: DbSession,
     teacher: TeacherOrAdminUser,
     classroom_id: int | None = None,
-    limit: Annotated[int, Query(ge=1, le=200)] = 100,
+    limit: Annotated[int, Query(ge=1, le=STANDARD_PAGE_MAX_LIMIT)] = STANDARD_PAGE_DEFAULT_LIMIT,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[ShortTestOut]:
     q = select(ShortTest)
@@ -237,7 +239,7 @@ def teacher_shorttest_list(
 def shorttests_mine(
     db: DbSession,
     user: CurrentUser,
-    limit: Annotated[int, Query(ge=1, le=200)] = 100,
+    limit: Annotated[int, Query(ge=1, le=STANDARD_PAGE_MAX_LIMIT)] = STANDARD_PAGE_DEFAULT_LIMIT,
 ) -> list[ShortTestMineOut]:
     """Assigned short tests for the signed-in student (duration soft:
     ``expired`` is advisory; submitting after it is still allowed so no
@@ -716,7 +718,7 @@ def teacher_assignment_create(
 def teacher_assignment_list(
     db: DbSession,
     teacher: TeacherOrAdminUser,
-    limit: Annotated[int, Query(ge=1, le=200)] = 100,
+    limit: Annotated[int, Query(ge=1, le=STANDARD_PAGE_MAX_LIMIT)] = STANDARD_PAGE_DEFAULT_LIMIT,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[AssignmentOut]:
     # newest-first page (was every row the teacher ever created).
