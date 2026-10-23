@@ -391,6 +391,16 @@ jobs:
         # reproducible against a live index and it failed on valid locks.
         run: python3 apps/api/scripts/check_lockfile.py
 
+      - name: Proxy-trust contract holds
+        # TRUST_PROXY_HEADERS=true is only safe behind a proxy that OVERWRITES
+        # X-Forwarded-For. The compose api service used to not forward the
+        # flag at all, so behind the bundled Caddy every IP-scoped rate limit
+        # silently shared one bucket (10 logins/min platform-wide). This keeps
+        # the bundle self-consistent: the forwarding is present, and the Caddy
+        # overwrite is present whenever trust ships true in compose or in
+        # either env template.
+        run: python3 apps/api/scripts/check_proxy_contract.py
+
       - name: Docs agree with the code
         # "Docs-as-tests" (DOC-02): the README's endpoint table and install
         # commands are assertions about the app. This re-derives the facts they

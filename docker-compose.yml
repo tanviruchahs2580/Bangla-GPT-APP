@@ -31,6 +31,15 @@ services:
       DATABASE_URL: ${DATABASE_URL:-sqlite:////data/app.db}
       JWT_SECRET: ${JWT_SECRET:-}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      # IP-scoped rate limits must key on the real client, not the proxy.
+      # True is safe HERE (and is the shipped default) because the bundled
+      # Caddy OVERWRITES X-Forwarded-For with its observed peer address
+      # (deploy/caddy/Caddyfile, `header_up X-Forwarded-For {remote_host}`)
+      # and the API trusts only the last entry. Set it to false in front of
+      # a proxy that APPENDS instead — an appending proxy plus this flag
+      # lets callers choose their own rate-limit identity. The pairing is
+      # machine-checked by apps/api/scripts/check_proxy_contract.py.
+      TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-true}
       # DATA-001: 4 MB fits the wave-2 vision contract (~2 MB base64 image
       # JSON per chat turn); smaller values 413 valid image turns.
       MAX_BODY_BYTES: ${MAX_BODY_BYTES:-4000000}

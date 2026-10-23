@@ -232,9 +232,15 @@ correctly the proxy's job — see `deploy/caddy/Caddyfile`.
 
 Minimum: HSTS (`max-age=31536000; includeSubDomains`), and the proxy forwards
 `X-Forwarded-For`. The rate limiter reads that header only when
-`TRUST_PROXY_HEADERS=true`; leave it **false** unless the proxy *overwrites*
-rather than appends the header, because a client that can set its own
-`X-Forwarded-For` can choose its own rate-limit bucket.
+`TRUST_PROXY_HEADERS=true` (compose ships it true). That pairing is safe
+because the bundled reference proxy **overwrites** the header with the address
+it observed (`deploy/caddy/Caddyfile`: `header_up X-Forwarded-For {remote_host}`).
+If you use a proxy that **appends** instead (nginx's
+`$proxy_add_x_forwarded_for`, Caddy's default behaviour), set
+`TRUST_PROXY_HEADERS=false` or make the proxy overwrite first: an appending
+proxy plus the flag lets a client that sets its own `X-Forwarded-For` choose
+its own rate-limit bucket. `apps/api/scripts/check_proxy_contract.py` fails CI
+if this pairing drifts in the repository.
 
 ```bash
 curl -I https://api.example.edu.bd/health | grep -i strict-transport-security
