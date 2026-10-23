@@ -15,7 +15,7 @@ from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.models import Notification
 from bangla_gpt_api.db.session import make_engine, make_session_factory
 from bangla_gpt_api.main import create_app
-from bangla_gpt_api.routers.users import EXPORT_SCHEMA_VERSION
+from bangla_gpt_api.services.gdpr import EXPORT_SCHEMA_VERSION
 
 PASSWORD = "supersecret1"
 JWT = "test-secret-0123456789abcdef0123456789"
