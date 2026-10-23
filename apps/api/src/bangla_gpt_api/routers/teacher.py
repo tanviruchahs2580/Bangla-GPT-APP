@@ -296,8 +296,18 @@ def classroom_import(
             role="student",
             must_change_password=True,
         )
-        db.add(user)
-        db.flush()
+        try:
+            # Savepoint per row: another import (or a registration) can create
+            # this address between the pre-check above and this INSERT, and
+            # without the savepoint that race 500'd the WHOLE import with the
+            # earlier rows' work thrown away. Now the racing row is reported
+            # as a duplicate and the rest of the roster still lands.
+            with db.begin_nested():
+                db.add(user)
+                db.flush()
+        except IntegrityError:
+            rows_out.append(ClassImportRowOut(name=name, email=email, status="duplicate_email"))
+            continue
         student = Student(
             user_id=user.id,
             name=name,

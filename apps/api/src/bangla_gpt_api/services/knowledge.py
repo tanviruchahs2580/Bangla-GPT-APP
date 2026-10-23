@@ -377,6 +377,8 @@ def record_quiz_result(
 ) -> None:
     """Grade-answer counts per concept: questions carrying finer extracted
     concepts credit those; every question always credits its chapter root."""
+    from bangla_gpt_api.services.upsert import get_or_create, increment
+
     rows = list(db.execute(select(Concept)).scalars())
     if not rows:
         return
@@ -395,14 +397,33 @@ def record_quiz_result(
             correct, total = updates.get(concept.id, (0, 0))
             updates[concept.id] = (correct + (1 if item.is_correct else 0), total + 1)
     for concept_id, (correct_add, total_add) in updates.items():
-        row = db.get(ConceptMastery, (student_id, concept_id))
-        if row is None:
-            # explicit zeros: column defaults apply only at INSERT, a pending
-            # instance would read None here and break the += below.
-            row = ConceptMastery(student_id=student_id, concept_id=concept_id, correct=0, total=0)
-            db.add(row)
-        row.correct += correct_add
-        row.total += total_add
+        # get_or_create closes the insert race on the (student, concept) key
+        # (two concurrent first submissions used to answer 500 here, after
+        # the quiz itself had been graded and committed), and the counters are
+        # database-side additions so neither path can overwrite the other's.
+        get_or_create(
+            db,
+            model=ConceptMastery,
+            lookup=select(ConceptMastery).where(
+                ConceptMastery.student_id == student_id,
+                ConceptMastery.concept_id == concept_id,
+            ),
+            defaults={
+                "student_id": student_id,
+                "concept_id": concept_id,
+                "correct": 0,
+                "total": 0,
+            },
+        )
+        increment(
+            db,
+            model=ConceptMastery,
+            where=(
+                ConceptMastery.student_id == student_id,
+                ConceptMastery.concept_id == concept_id,
+            ),
+            deltas={"correct": correct_add, "total": total_add},
+        )
     db.commit()
 
 

@@ -222,3 +222,64 @@ def test_replace_reuses_bank_question(client: TestClient, teacher_headers, caplo
             "SELECT times_reused FROM question_bank WHERE question_text = ?", (CUSTOM_TEXT,)
         ).fetchone()
     assert used == 1
+
+
+def test_find_reusable_is_school_scoped() -> None:
+    """Reuse must not hand School B the questions School A reviewed.
+
+    ``find_reusable`` filtered only on class/subject/chapter, while the
+    sibling chapter-content library has an explicit tenancy rule
+    (``_assert_content_writable``: match on ``User.school_id``, school-less
+    matches school-less, admins are platform-wide). The same rule now guards
+    the bank: without it, a teacher in another school received School A's
+    reviewed questions as "reuse" replacements through
+    ``POST /teacher/qpapers/{id}/replace``.
+    """
+    from bangla_gpt_api.db.models import User
+    from bangla_gpt_api.services.question_bank import find_reusable
+
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    with Session(engine) as db:
+        db.add_all(
+            [
+                User(id=1, email="t1@a.test", password_hash="x", role="teacher", school_id=1),
+                User(id=2, email="t2@b.test", password_hash="x", role="teacher", school_id=2),
+                User(id=3, email="t3@none.test", password_hash="x", role="teacher", school_id=None),
+            ]
+        )
+        db.flush()
+        for teacher_id, text in (
+            (1, "school one question?"),
+            (2, "school two question?"),
+            (3, "school-less question?"),
+        ):
+            store_reviewed(
+                db,
+                teacher_id=teacher_id,
+                text=text,
+                options=["a", "b", "c", "d"],
+                answer_index=0,
+                subject="science",
+                chapter="kosh",
+                class_level=6,
+            )
+        db.commit()
+
+        def texts(rows) -> list[str]:
+            return sorted(r.question_text for r in rows)
+
+        # School 1 sees its own question only.
+        assert texts(find_reusable(db, class_level=6, school_id=1, limit=10)) == [
+            "school one question?"
+        ]
+        # A school-less viewer matches the school-less author (the documented
+        # legacy rule), not the schools.
+        assert texts(find_reusable(db, class_level=6, school_id=None, limit=10)) == [
+            "school-less question?"
+        ]
+        # Admins are the explicit platform-wide path.
+        assert (
+            len(find_reusable(db, class_level=6, school_id=1, limit=10, include_all_schools=True))
+            == 3
+        )

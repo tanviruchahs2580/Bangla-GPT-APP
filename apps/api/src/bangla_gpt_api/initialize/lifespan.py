@@ -12,6 +12,7 @@ import contextlib
 import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from datetime import UTC, datetime, timedelta
 
 from fastapi import FastAPI
 from sqlalchemy.orm import Session
@@ -29,6 +30,56 @@ logger = logging.getLogger(__name__)
 #: Comfortably inside gunicorn's ``--graceful-timeout 30`` so the SIGKILL
 #: fallback is never what actually ends the wait.
 AI_JOB_DRAIN_TIMEOUT_SECONDS = 20.0
+
+#: A job still at generating/validating after this long is orphaned. The
+#: provider budget caps any legitimate run at a few minutes
+#: (``LLM_TOTAL_BUDGET_SECONDS`` 45 s per call plus validation and retries),
+#: so nothing honest is still running at 30 minutes.
+AI_JOB_ORPHAN_AGE_SECONDS = 30 * 60
+
+
+def reap_orphaned_ai_jobs(session_factory: Callable[[], Session]) -> int:
+    """Fail AI jobs whose owning process died mid-run (F-079 follow-up).
+
+    A SIGKILLed worker (OOM, container kill, drain timeout) left rows at
+    ``status="generating"`` forever: no timeout, no reconciliation, and the
+    teacher's job list polled a job that could never resolve while no alert
+    could fire. Jobs run in-process, so a run older than the orphan threshold
+    at a fresh boot belongs to a process that no longer exists.
+
+    The age bound is what makes this safe with ``WEB_CONCURRENCY>1``: the
+    gunicorn master can respawn ONE worker while another is still running a
+    job, and "fail everything at boot" would kill live work. Returns the
+    number of jobs reaped.
+    """
+    from sqlalchemy import select
+
+    from bangla_gpt_api.db.models import AiJob
+
+    cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(seconds=AI_JOB_ORPHAN_AGE_SECONDS)
+    db = session_factory()
+    try:
+        orphaned = (
+            db.execute(
+                select(AiJob).where(
+                    AiJob.status.in_(("generating", "validating")),
+                    AiJob.created_at < cutoff,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if not orphaned:
+            return 0
+        for job in orphaned:
+            job.status = "failed"
+            # Type-style marker, same shape the runner writes: never a message
+            # that could carry data.
+            job.error = "job_interrupted"
+        db.commit()
+        return len(orphaned)
+    finally:
+        db.close()
 
 
 async def _drain_ai_jobs(app: FastAPI) -> None:
@@ -108,6 +159,13 @@ def build_lifespan(
         # Store task handles for shutdown
         app.state.digest_task = digest_task
         app.state.weakness_task = weakness_task
+
+        # Reconcile the AI-job ledger with reality before serving: jobs the
+        # previous process left mid-run (SIGKILL/crash) are marked failed so
+        # the teacher's list stops polling rows that can never resolve.
+        reaped = await asyncio.to_thread(reap_orphaned_ai_jobs, session_factory)
+        if reaped:
+            json_log(logger, logging.WARNING, "ai_jobs_reaped_at_startup", reaped=reaped)
 
         yield  # --- Application runs ---
 

@@ -607,6 +607,8 @@ async def teacher_qp_replace(
     for row in find_reusable(
         db,
         class_level=qp.class_level,
+        school_id=teacher.school_id,
+        include_all_schools=teacher.role == "admin",
         subject=qp.subject,
         chapter=chapter,
         exclude_texts=[str(q["text"]) for q in questions],

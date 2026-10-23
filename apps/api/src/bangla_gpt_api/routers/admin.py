@@ -326,24 +326,32 @@ def admin_refusal_audit(db: DbSession, admin: AdminUser, days: int = 30) -> Refu
     """
     days = max(1, min(days, 365))
     cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)
+    # yield_per streams the result in 500-row buffers: counts stay EXACT (no
+    # arbitrary LIMIT that would falsify the audit) while memory stays
+    # bounded — the previous `.all()` materialised every refused message in
+    # the window, which at a 365-day ask on a busy deployment is the whole
+    # table.
     rows = db.execute(
         select(ChatMessage.refused_reason, Student.class_level, ChatMessage.created_at)
         .join(Conversation, ChatMessage.conversation_id == Conversation.id)
         .join(Student, Conversation.student_id == Student.id)
         .where(ChatMessage.refused_reason.is_not(None))
         .where(ChatMessage.created_at >= cutoff)
-    ).all()
+        .execution_options(yield_per=500)
+    )
     by_reason: dict[str, int] = defaultdict(int)
     by_class: dict[str, int] = defaultdict(int)
     last_at: datetime | None = None
+    total_refusals = 0
     for reason, class_level, created_at in rows:
+        total_refusals += 1
         by_reason[reason or "unknown"] += 1
         by_class[str(class_level)] += 1
         if last_at is None or created_at > last_at:
             last_at = created_at
     return RefusalAuditOut(
         days=days,
-        total_refusals=len(rows),
+        total_refusals=total_refusals,
         by_reason=dict(by_reason),
         by_class=dict(by_class),
         last_refusal_at=last_at,
@@ -364,17 +372,25 @@ def admin_ai_quality(
     column, so ``by_model`` is honestly empty today (no fabricated split).
     """
     cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)
+    # yield_per: exact counts, bounded memory. The confidence share needs a
+    # per-row look at sources_json, so this pass cannot be a pure SQL
+    # aggregate — but it must not materialise a year of assistant messages
+    # first, which is what `.all()` did.
     rows = db.execute(
-        select(ChatMessage.grounded, ChatMessage.refused_reason, ChatMessage.sources_json).where(
+        select(ChatMessage.grounded, ChatMessage.refused_reason, ChatMessage.sources_json)
+        .where(
             ChatMessage.role == "assistant",
             ChatMessage.created_at >= cutoff,
         )
-    ).all()
+        .execution_options(yield_per=500)
+    )
     by_reason: dict[str, int] = defaultdict(int)
     grounded_count = 0
     ungrounded_count = 0
     low_confidence = 0
+    answers_total = 0
     for grounded, reason, sources_json in rows:
+        answers_total += 1
         if reason:
             by_reason[reason] += 1
         if grounded is True:
@@ -403,7 +419,7 @@ def admin_ai_quality(
     cost_by_model = {str(model): round(float(total or 0.0), 6) for model, total in cost_rows}
     return AdminAiQualityOut(
         days=days,
-        answers_total=len(rows),
+        answers_total=answers_total,
         grounded_count=grounded_count,
         ungrounded_count=ungrounded_count,
         refusals_total=sum(by_reason.values()),

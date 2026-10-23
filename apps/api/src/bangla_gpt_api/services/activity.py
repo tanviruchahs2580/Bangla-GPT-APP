@@ -71,25 +71,40 @@ def record_activity(
     minutes: int = 0,
     when: datetime | None = None,
 ) -> None:
-    """Upsert today's (Asia/Dhaka) activity counters for a student."""
+    """Upsert today's (Asia/Dhaka) activity counters for a student.
+
+    The old body was read-modify-write twice over: a hand-rolled
+    get-or-create whose first-of-day INSERT raised an unhandled
+    ``IntegrityError`` (a 500 on a double-click, *after* the tutor reply had
+    already been committed and billed), and ``row.questions += 1`` on the ORM
+    object, which loses concurrent increments. The insert race is handled
+    inside ``get_or_create`` (savepoint + re-read) and the counters are
+    database-side additions.
+    """
     from sqlalchemy import select
 
     from bangla_gpt_api.db.models import DailyActivity
+    from bangla_gpt_api.services.upsert import get_or_create, increment
 
     iso = dhaka_date(when or datetime.now(UTC))
-    row = (
-        db.execute(
-            select(DailyActivity).where(
-                DailyActivity.student_id == student_id, DailyActivity.date == iso
-            )
-        )
-        .scalars()
-        .first()
+    row, _created = get_or_create(
+        db,
+        model=DailyActivity,
+        lookup=select(DailyActivity).where(
+            DailyActivity.student_id == student_id, DailyActivity.date == iso
+        ),
+        defaults={
+            "student_id": student_id,
+            "date": iso,
+            "questions": 0,
+            "quizzes": 0,
+            "minutes": 0,
+        },
     )
-    if row is None:
-        row = DailyActivity(student_id=student_id, date=iso, questions=0, quizzes=0, minutes=0)
-        db.add(row)
-    row.questions += questions
-    row.quizzes += quizzes
-    row.minutes += minutes
+    increment(
+        db,
+        model=DailyActivity,
+        where=(DailyActivity.id == row.id,),
+        deltas={"questions": questions, "quizzes": quizzes, "minutes": minutes},
+    )
     db.commit()
