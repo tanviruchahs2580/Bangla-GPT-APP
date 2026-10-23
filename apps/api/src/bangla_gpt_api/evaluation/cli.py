@@ -94,12 +94,25 @@ def main() -> int:
         action="store_true",
         help="run eval/redteam_v2.json: all refused, no system-prompt leak",
     )
+    parser.add_argument(
+        "--real-model",
+        action="store_true",
+        help=(
+            "run against the provider configured in the environment instead of the"
+            " hermetic mock. NEVER wired into the merge gate: provider variance must"
+            " not decide merges; this is the manual quality-probe leg (M-19)."
+        ),
+    )
     args = parser.parse_args()
 
     # HERMETIC: the gate must never hit an external model (CI has no secrets;
-    # a real LLM-judge is a human-input upgrade, ). Force mock even if the
-    # local.env sets LLM_PROVIDER=gemini.
-    settings = Settings(env="test", llm_provider="mock")
+    # a real LLM-judge is a human-input upgrade). Force mock even if the
+    # local.env sets LLM_PROVIDER=gemini. --real-model is the one explicit
+    # opt-out, for the manual quality probe — never the merge gate.
+    if args.real_model:
+        settings = Settings(env="test")
+    else:
+        settings = Settings(env="test", llm_provider="mock")
 
     if args.redteam:
         return asyncio.run(_redteam(settings))
@@ -134,10 +147,11 @@ def main() -> int:
         items = items + bad
         print(f"SEED-BAD: injected {len(bad)} deliberately-wrong items (demo only)")
 
-    # HERMETIC: the gate must never hit an external model (CI has no secrets;
-    # a real LLM-judge is a human-input upgrade, ). Force mock even if the
-    # local.env sets LLM_PROVIDER=gemini.
-    settings = Settings(env="test", llm_provider="mock")
+    if args.real_model:
+        settings = Settings(env="test")
+    else:
+        # HERMETIC gate default: see the note above.
+        settings = Settings(env="test", llm_provider="mock")
     metrics = asyncio.run(_run(items, settings))
     current = metrics.as_dict()
     print(json.dumps(current, indent=1))

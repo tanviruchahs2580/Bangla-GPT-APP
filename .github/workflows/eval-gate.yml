@@ -12,6 +12,12 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      real_model:
+        description: "Also run the gate against the REAL provider (needs GEMINI_API_KEY secret; non-blocking report)"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -49,3 +55,25 @@ jobs:
       # reviewed, committed artifact (R12: never re-baseline to go green).
       - name: Run eval v2 suite vs recorded baseline (exit 1 on >2pp drop)
         run: python -m bangla_gpt_api.evaluation.cli
+
+      # M-19: the committed gate is hermetic against the mock provider, so it
+      # catches retrieval/pipeline regressions but never REAL model output
+      # quality. This optional leg runs the same suite against the configured
+      # provider when manually dispatched with real_model=true; it produces a
+      # report artifact for human review and is deliberately informational
+      # (continue-on-error) — provider variance must not break merges.
+      - name: Real-model quality probe (manual dispatch, informational)
+        if: github.event_name == 'workflow_dispatch' && inputs.real_model
+        env:
+          LLM_PROVIDER: gemini
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python -m bangla_gpt_api.evaluation.cli --real-model 2>&1 | tee real-model-report.txt
+        continue-on-error: true
+
+      - name: Upload real-model report
+        if: github.event_name == 'workflow_dispatch' && inputs.real_model
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: real-model-eval-report
+          path: apps/api/real-model-report.txt
+          if-no-files-found: ignore
