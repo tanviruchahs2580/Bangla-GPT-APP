@@ -99,6 +99,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): localize consent/invite copy, theme icon sync, error states, icon cleanup
 - fix(web): make the ARIA roles keep their keyboard promises
 - fix(web): make the register screen's email-verification step usable
+- fix(web): migrate vercel.json from legacy routes to rewrites
 - fix(web): notification panel no longer clipped off the left edge
 - fix(web): raise three status tokens to the WCAG AA contrast minimum
 - fix(web): recover from page errors, report load failures, and never show another child's data
@@ -108,6 +109,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): stop rendering remote images in answers and announce each answer once
 - fix(web): stop showing failures as facts, and read API timestamps as UTC
 - fix(web): stop the service worker caching error pages as the app shell
+- fix: close the full audit register — atomicity, envelope, a11y, ops; clear all 42 advisories (#57)
 - fix: complete admin password-change flow, tutor typo gate, roster-scoped stats, quiz distractors, i18n
 - fix: land the verified remediation on current main (CORS-adjacent, budget, UI states)
 - fix: resolve mypy 2.4.0 type errors in teacher/school/common/weakness
@@ -191,6 +193,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate the CHANGELOG for the scripts commit
 - docs: regenerate the CHANGELOG for the test and QA-record commits
 - docs: regenerate the CHANGELOG for this branch's commits
+- docs: regenerate the CHANGELOG with gen_changelog.py
 - docs: ship the bundled font's licence, third-party notices, contributing guide
 
 ### Tests
