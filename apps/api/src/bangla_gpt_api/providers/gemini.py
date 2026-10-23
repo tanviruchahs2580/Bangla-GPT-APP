@@ -32,6 +32,7 @@ from bangla_gpt_api.providers.base import (
     fit_timeout,
 )
 from bangla_gpt_api.services.context import get_current_context
+from bangla_gpt_api.metrics import PROVIDER_LATENCY_SECONDS
 
 
 def _context_log_fields() -> dict[str, object]:
@@ -213,6 +214,7 @@ class GeminiProvider:
                                 yield delta
                         if emitted:
                             latency_ms = int((time.perf_counter() - start) * 1000)
+                            PROVIDER_LATENCY_SECONDS.labels(provider=self.name).observe(latency_ms / 1000)
                             json_log(
                                 logger,
                                 logging.INFO,
@@ -282,6 +284,7 @@ class GeminiProvider:
                 try:
                     text = _extract_text(response.json())
                     latency_ms = int((time.perf_counter() - start) * 1000)
+                    PROVIDER_LATENCY_SECONDS.labels(provider=self.name).observe(latency_ms / 1000)
                     # Token usage not returned by generateContent; log chars as proxy for cost
                     json_log(
                         logger,

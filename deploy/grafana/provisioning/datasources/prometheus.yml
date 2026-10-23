@@ -1,0 +1,15 @@
+# Datasource auto-provisioning for the monitoring compose profile.
+# The Grafana container previously mounted NO volumes: dashboards and the
+# Prometheus datasource had to be imported by hand, and the shipped
+# dashboard JSON queried metric names that do not exist (H-05) — so even a
+# hand import rendered "No data" on every panel.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    # The compose network name of the prometheus service.
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false

@@ -29,6 +29,7 @@ from bangla_gpt_api.providers.base import (
     MAX_BACKOFF_SECONDS as _MAX_BACKOFF_SECONDS,
 )
 from bangla_gpt_api.providers.base import (
+from bangla_gpt_api.metrics import PROVIDER_LATENCY_SECONDS
     LLMProvider,
     ProviderError,
     ProviderSettings,
@@ -198,6 +199,7 @@ class OpenAIProvider(LLMProvider):
                                 yield delta
                         if emitted:
                             latency_ms = int((time.perf_counter() - start) * 1000)
+                            PROVIDER_LATENCY_SECONDS.labels(provider=self.name).observe(latency_ms / 1000)
                             json_log(
                                 logger,
                                 logging.INFO,
@@ -273,6 +275,7 @@ class OpenAIProvider(LLMProvider):
                 try:
                     text = _extract_text(response.json())
                     latency_ms = int((time.perf_counter() - start) * 1000)
+                    PROVIDER_LATENCY_SECONDS.labels(provider=self.name).observe(latency_ms / 1000)
                     json_log(
                         logger,
                         logging.INFO,

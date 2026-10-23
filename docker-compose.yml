@@ -93,9 +93,19 @@ services:
     # network, and nothing in the stack authenticates the client at that layer.
     ports:
       - "${API_HOST_BIND:-127.0.0.1}:${API_HOST_PORT:-8000}:8000"
+    # service_healthy, not service_started: the rate limiter fails CLOSED on
+    # a dead backend (F-08), so an API booting against a not-yet-ready Redis
+    # answered 503s for the first seconds of its life.
     depends_on:
       redis:
-        condition: service_started
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          # The API is mostly event loop + worker threads; 1 GB / 1 CPU is
+          # the measured headroom for 2 web workers with the corpus index.
+          memory: 1g
+          cpus: "1.0"
     healthcheck:
       test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status==200 else 1)"]
       interval: 30s
@@ -111,6 +121,16 @@ services:
     restart: unless-stopped
     command: ["redis-server", "--save", "", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
     # Not exposed to the host on purpose.
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 96m
+          cpus: "0.5"
 
   # S5.4: ARQ cron worker. Run INSTEAD of the in-process loops: set
   # JOBS_BACKEND=arq on the api service so its web workers stop scheduling,
@@ -138,7 +158,12 @@ services:
       - api_data:/data
     depends_on:
       redis:
-        condition: service_started
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "0.5"
 
   web:
     build:
@@ -152,6 +177,11 @@ services:
       - "80"
     depends_on:
       - api
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+          cpus: "0.25"
 
   caddy:
     image: caddy:2-alpine@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f
@@ -170,6 +200,11 @@ services:
     depends_on:
       - api
       - web
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+          cpus: "0.25"
 
   postgres:
     # S5.7: postgres 16 + pgBackRest binary (archive-push runs inside this
@@ -198,6 +233,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: "1.0"
 
   prometheus:
     image: prom/prometheus:v2.53.0@sha256:075b1ba2c4ebb04bc3a6ab86c06ec8d8099f8fda1c96ef6d104d9bb1def1d8bc
@@ -212,6 +252,11 @@ services:
       - ./deploy/prometheus/metrics_token:/etc/prometheus/metrics_token:ro
     ports:
       - "127.0.0.1:9090:9090"
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.25"
 
   # Alert delivery. Without it the rules in alerts.yml had no route to a
   # human — the two production outages were found by users, not monitoring.
@@ -237,6 +282,11 @@ services:
       - alertmanager_data:/alertmanager
     ports:
       - "127.0.0.1:9093:9093"
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+          cpus: "0.25"
 
   grafana:
     image: grafana/grafana:11.1.0@sha256:079600c9517b678c10cda6006b4487d3174512fd4c6cface37df7822756ed7a5
@@ -247,6 +297,18 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
+    volumes:
+      # Provisioning was previously absent: dashboards and the Prometheus
+      # datasource needed a hand import, and the shipped dashboard queried
+      # metric names that do not exist — so monitoring "worked" while every
+      # panel rendered no data (audit H-05).
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.25"
 
   backup:
     build: .
@@ -264,6 +326,11 @@ services:
       - api_data:/data:ro
       - backup_data:/backups
       - ./scripts:/srv/scripts:ro
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.5"
 
   pgbackrest:
     # S5.7: nightly pgBackRest full backups (WAL archiving runs continuously
@@ -287,6 +354,11 @@ services:
       - pg_data:/var/lib/postgresql/data
       - pg_sock:/var/run/postgresql
       - pgbackrest_repo:/repo
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: "0.5"
 
 volumes:
   api_data:

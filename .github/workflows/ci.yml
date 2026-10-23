@@ -530,6 +530,17 @@ jobs:
       - name: Readiness uses mock provider inside image
         run: curl -fsS http://127.0.0.1:8080/ready | grep -q '"provider":"mock"'
 
+      - name: k6 load gate (smoke profile, thresholds enforced)
+        # M-12: load/k6-tutor.js carried "Gates (CI/release)" thresholds that
+        # no pipeline ever ran. This is a smoke-sized profile (2 VUs, 20s) —
+        # the point is to catch error-rate/latency regressions per commit,
+        # not capacity testing; scale via VUS/DURATION on a bigger runner
+        # (documented in the script header). Digest = grafana/k6:0.58.0
+        # amd64, resolved from the registry 2026-10-23; refresh with
+        # scripts/update_image_digests.py discipline (verify before pinning).
+        run: |
+          docker run --rm --network host             -v "$PWD/load:/load:ro"             grafana/k6@sha256:15763404ccf3c7b93d8ff7f91a90566b589be81272c9423e94677380c3c88d4e             run -e BASE_URL=http://127.0.0.1:8080 -e VUS=2 -e DURATION=20s /load/k6-tutor.js
+
       - name: Cleanup
         if: always()
         run: |

@@ -37,6 +37,20 @@ PII_REDACTED_TOTAL = Counter(
     registry=REGISTRY,
 )
 
+# LLM provider round-trip latency per completed call (retries included).
+# The Grafana "AI latency" panel used to query a gemini-only log field no
+# exporter served — every panel rendered "No data". This is the metric that
+# panel always meant to have, provider-labelled so openai/gemini/mock are
+# distinguishable on one chart.
+PROVIDER_LATENCY_SECONDS = Histogram(
+    "bgpt_provider_latency_seconds",
+    "LLM provider round-trip latency per completed call (retries included).",
+    labelnames=["provider"],
+    buckets=(0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0),
+    registry=REGISTRY,
+)
+
+
 # Boot-level retrieval state: which corpus the tutor is actually serving and
 # how large it is. The operational failure this answers is silent degradation
 # -- an empty or mis-set NCTB_CORPUS_DIR dropping the tutor onto the bundled
