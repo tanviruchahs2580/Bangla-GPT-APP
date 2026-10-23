@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- fix(ci): prettier-format the web sources; drop the digest script shebang
+- fix(ci): prettier-format the web sources; drop the digest script shebang
 - fix(web): invalidate study caches after quiz submit and learn-progress writes
 - fix(web): stop the service worker caching error pages as the app shell
 - fix(web): language switch re-renders in place instead of remounting the tree
@@ -187,6 +189,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Tests
 
+- test(ci): apply the formatter and drop the digest script's shebang for pre-commit
 - test(ops): register ALERT_EMAIL_TO with the env-parity guard
 - test(web): cover the routing table and the password-reset page
 - test(api): cover school admin fallbacks and tenant guards
