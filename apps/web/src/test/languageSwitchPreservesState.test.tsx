@@ -64,7 +64,11 @@ describe("language switch preserves page state", () => {
     renderApp("/login");
 
     // The login form is lazy-loaded; wait for the real field.
-    const email = await screen.findByLabelText(t("email"), {}, { timeout: 5000 });
+    const email = await screen.findByLabelText(
+      t("email"),
+      {},
+      { timeout: 5000 },
+    );
     await userEvent.type(email, "student@example.test");
     expect((email as HTMLInputElement).value).toBe("student@example.test");
 

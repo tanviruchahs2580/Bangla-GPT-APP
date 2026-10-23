@@ -34,7 +34,6 @@ afterEach(() => {
   setLang("bn");
 });
 
-
 /** The tab strip button and the form submit share an accessible name; the
  * submit (inside the form) is last in DOM order, which is the only one any
  * test needs to press (the page always opens on the forgot tab). */
@@ -52,7 +51,9 @@ describe("ForgotResetPage", () => {
     await userEvent.click(submitButton());
 
     await waitFor(() =>
-      expect(apiMock.forgotPassword).toHaveBeenCalledWith("parent@example.test"),
+      expect(apiMock.forgotPassword).toHaveBeenCalledWith(
+        "parent@example.test",
+      ),
     );
     expect(await screen.findByText(t("forgotSent"))).toBeTruthy();
   });
@@ -94,7 +95,10 @@ describe("ForgotResetPage", () => {
       await screen.findByLabelText(t("locResetCode")),
       "expired-code-000000",
     );
-    await userEvent.type(screen.getByLabelText(t("password")), "BrandNewPass!234");
+    await userEvent.type(
+      screen.getByLabelText(t("password")),
+      "BrandNewPass!234",
+    );
     await userEvent.click(submitButton());
 
     // errInvalidToken, NOT errGeneric: the string-code branch of

@@ -45,7 +45,9 @@ const me = {
 };
 
 function wrap(ui: React.ReactElement) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter>{ui}</MemoryRouter>
@@ -86,14 +88,24 @@ describe("quiz radiogroup keyboard contract", () => {
     const { user, radios } = await startQuiz();
 
     // Roving tab stop: only the first option before any choice exists.
-    expect(radios.map((r) => r.getAttribute("tabindex"))).toEqual(["0", "-1", "-1", "-1"]);
+    expect(radios.map((r) => r.getAttribute("tabindex"))).toEqual([
+      "0",
+      "-1",
+      "-1",
+      "-1",
+    ]);
 
     radios[0].focus();
     await user.keyboard("{ArrowDown}");
     expect(radios[1]).toHaveAttribute("aria-checked", "true");
     expect(document.activeElement).toBe(radios[1]);
     // The tab stop followed the selection.
-    expect(radios.map((r) => r.getAttribute("tabindex"))).toEqual(["-1", "0", "-1", "-1"]);
+    expect(radios.map((r) => r.getAttribute("tabindex"))).toEqual([
+      "-1",
+      "0",
+      "-1",
+      "-1",
+    ]);
 
     await user.keyboard("{End}");
     expect(radios[3]).toHaveAttribute("aria-checked", "true");
@@ -170,8 +182,18 @@ describe("search combobox keyboard contract", () => {
       query: "ko",
       ask_action: false,
       hits: [
-        { kind: "chapter", title: "কোষ", href: "/student/learn/science/কোষ", subtitle: null },
-        { kind: "chapter", title: "কোষ বিভাজন", href: "/student/learn/science/কোষ-বিভাজন", subtitle: null },
+        {
+          kind: "chapter",
+          title: "কোষ",
+          href: "/student/learn/science/কোষ",
+          subtitle: null,
+        },
+        {
+          kind: "chapter",
+          title: "কোষ বিভাজন",
+          href: "/student/learn/science/কোষ-বিভাজন",
+          subtitle: null,
+        },
       ],
     });
     const user = userEvent.setup();

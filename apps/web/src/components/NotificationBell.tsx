@@ -104,7 +104,8 @@ export function NotificationBell() {
         return;
       }
       if (e.key === "ArrowDown") next = all[(at + 1 + all.length) % all.length];
-      else if (e.key === "ArrowUp") next = all[(at - 1 + all.length) % all.length];
+      else if (e.key === "ArrowUp")
+        next = all[(at - 1 + all.length) % all.length];
       else if (e.key === "Home") next = all[0];
       else if (e.key === "End") next = all[all.length - 1];
       if (next) {

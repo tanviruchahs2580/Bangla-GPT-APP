@@ -326,7 +326,16 @@ export default function AITutorPage() {
         if (abortRef.current === controller) abortRef.current = null;
       }
     },
-    [input, conversationId, subject, refetchConvs, strategy, image, flushTokens, scheduleTokenFlush],
+    [
+      input,
+      conversationId,
+      subject,
+      refetchConvs,
+      strategy,
+      image,
+      flushTokens,
+      scheduleTokenFlush,
+    ],
   );
 
   // a wrong quiz item can arrive here as `location.state.explain` —

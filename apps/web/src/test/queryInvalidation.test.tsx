@@ -11,7 +11,11 @@
  * re-reads them.
  */
 
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
@@ -19,7 +23,9 @@ import { invalidateStudyCaches } from "../lib/invalidate";
 
 function makeWrapper(client: QueryClient) {
   return function Wrapper({ children }: { children: ReactNode }) {
-    return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    return (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
   };
 }
 
@@ -56,6 +62,8 @@ describe("invalidateStudyCaches", () => {
 
     await waitFor(() => expect(progressFetches).toBe(2));
     expect(client.getQueryState(["dashboard"])?.isInvalidated).toBe(true);
-    expect(client.getQueryState(["learnProgressAll", 6])?.isInvalidated).toBe(true);
+    expect(client.getQueryState(["learnProgressAll", 6])?.isInvalidated).toBe(
+      true,
+    );
   });
 });

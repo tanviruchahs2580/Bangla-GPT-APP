@@ -128,7 +128,10 @@ export function SearchBox() {
           if (e.key === "ArrowDown")
             next = active < 0 ? 0 : (active + 1) % options.length;
           else if (e.key === "ArrowUp")
-            next = active < 0 ? options.length - 1 : (active - 1 + options.length) % options.length;
+            next =
+              active < 0
+                ? options.length - 1
+                : (active - 1 + options.length) % options.length;
           else if (e.key === "Home") next = 0;
           else if (e.key === "End") next = options.length - 1;
           else if (e.key === "Enter" && active >= 0) {
@@ -152,7 +155,10 @@ export function SearchBox() {
               id="search-option-ask"
               type="button"
               role="option"
-              aria-selected={active === options.findIndex((o) => o.id === "search-option-ask")}
+              aria-selected={
+                active ===
+                options.findIndex((o) => o.id === "search-option-ask")
+              }
               className="search-item search-ask"
               onClick={() => {
                 setOpen(false);

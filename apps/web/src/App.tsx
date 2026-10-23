@@ -420,9 +420,7 @@ function DocumentTitle({ tick }: { tick: number }) {
         location.pathname === prefix ||
         location.pathname.startsWith(prefix + "/"),
     );
-    document.title = match
-      ? `${t(match[1])} · ${t("appName")}`
-      : t("appName");
+    document.title = match ? `${t(match[1])} · ${t("appName")}` : t("appName");
   }, [location.pathname, tick]);
   return null;
 }
@@ -441,6 +439,5 @@ function Footer() {
     </footer>
   );
 }
-
 
 export { App, queryClient };

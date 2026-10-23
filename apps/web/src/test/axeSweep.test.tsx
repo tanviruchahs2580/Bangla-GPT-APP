@@ -29,8 +29,7 @@ vi.mock("../api", async (importOriginal) => {
   const shapeFor = (path: string): unknown => {
     if (path.includes("classrooms") || path.includes("support-plans"))
       return [];
-    if (path.includes("tutor") || path.includes("quizzes"))
-      return [];
+    if (path.includes("tutor") || path.includes("quizzes")) return [];
     if (path.includes("memory"))
       return { memory_enabled: true, facts: {}, on_disable_note_code: "x" };
     return null; // every other caller guards null as "empty/not loaded"

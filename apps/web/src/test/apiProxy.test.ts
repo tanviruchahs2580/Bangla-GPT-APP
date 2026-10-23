@@ -211,7 +211,9 @@ describe("handleApiProxy upstream deadlines", () => {
       vi.stubGlobal("fetch", fetchMock);
 
       const request = new Request("https://spa.vercel.app/api/health");
-      const pending = handleApiProxy(request, { API_ORIGIN: "https://api.example.com" });
+      const pending = handleApiProxy(request, {
+        API_ORIGIN: "https://api.example.com",
+      });
       await vi.advanceTimersByTimeAsync(20_000);
       const res = await pending;
 
@@ -230,7 +232,8 @@ describe("handleApiProxy upstream deadlines", () => {
     vi.useFakeTimers();
     try {
       // Headers arrive; the body then never produces a byte.
-      let sourceController: ReadableStreamDefaultController<Uint8Array> | null = null;
+      let sourceController: ReadableStreamDefaultController<Uint8Array> | null =
+        null;
       const stuckBody = new ReadableStream<Uint8Array>({
         start(controller) {
           sourceController = controller;
@@ -256,7 +259,9 @@ describe("handleApiProxy upstream deadlines", () => {
       vi.stubGlobal("fetch", fetchMock);
 
       const request = new Request("https://spa.vercel.app/api/users/me");
-      const res = await handleApiProxy(request, { API_ORIGIN: "https://api.example.com" });
+      const res = await handleApiProxy(request, {
+        API_ORIGIN: "https://api.example.com",
+      });
       const reader = res.body!.getReader();
       let settled = false;
       const read = reader.read().then((result) => {
@@ -286,16 +291,19 @@ describe("handleApiProxy upstream deadlines", () => {
           push = (chunk) => controller.enqueue(chunk);
         },
       });
-      const fetchMock = vi.fn(async () =>
-        new Response(stream, {
-          status: 200,
-          headers: { "content-type": "text/event-stream" },
-        }),
+      const fetchMock = vi.fn(
+        async () =>
+          new Response(stream, {
+            status: 200,
+            headers: { "content-type": "text/event-stream" },
+          }),
       );
       vi.stubGlobal("fetch", fetchMock);
 
       const request = new Request("https://spa.vercel.app/api/tutor/stream");
-      const res = await handleApiProxy(request, { API_ORIGIN: "https://api.example.com" });
+      const res = await handleApiProxy(request, {
+        API_ORIGIN: "https://api.example.com",
+      });
       expect(res.headers.get("content-type")).toContain("text/event-stream");
       const reader = res.body!.getReader();
 

@@ -83,7 +83,9 @@ describe("routing table", () => {
     authState.me = null;
     renderAt("/student");
     // The login form is lazy-loaded; its email field is the anchor.
-    expect(await screen.findByLabelText(t("email"), {}, { timeout: 5000 })).toBeTruthy();
+    expect(
+      await screen.findByLabelText(t("email"), {}, { timeout: 5000 }),
+    ).toBeTruthy();
     expect(window.location.pathname).toBe("/login");
   });
 
@@ -100,7 +102,9 @@ describe("routing table", () => {
     authState.me = STUDENT;
     renderAt("/welcome");
     await waitFor(() => expect(window.location.pathname).toBe("/student"));
-    expect(await screen.findByText(t("whatToDo"), {}, { timeout: 5000 })).toBeTruthy();
+    expect(
+      await screen.findByText(t("whatToDo"), {}, { timeout: 5000 }),
+    ).toBeTruthy();
   });
 
   it("refuses a student on /admin by redirecting to their own home", async () => {

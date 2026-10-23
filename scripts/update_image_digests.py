@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Reprint every third-party image reference pinned by digest in this repo.
 
 The audit (F9) found the supply-chain pinning strong for Python (2,117
