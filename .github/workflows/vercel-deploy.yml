@@ -164,4 +164,4 @@ jobs:
             echo "::error title=Entry chunk missing::index.html references $asset but it answered ${asset_code}. The alias may be serving a stale index against a new upload."
             exit 1
           fi
-          echo "static smoke OK: /login 200, entry chunk $asset 200" 
+          echo "static smoke OK: /login 200, entry chunk $asset 200"

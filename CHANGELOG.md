@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- fix(ci): trim the trailing whitespace pre-commit found in vercel-deploy.yml
 - fix(ci): prettier-format the web sources; drop the digest script shebang
 - fix(ci): prettier-format the web sources; drop the digest script shebang
 - fix(web): invalidate study caches after quiz submit and learn-progress writes
