@@ -575,17 +575,43 @@ export function LearnChapterPage() {
             </span>
           </div>
 
-          {/* in-page tabs — read / practice / ask without leaving the chapter */}
+          {/* in-page tabs — read / practice / ask without leaving the chapter.
+              APG tabs model: roving tabindex + arrow keys move selection and
+              focus together; each button controls its panel by id. */}
           <div
             className="chips workspace-tabs"
             role="tablist"
             aria-label={t("locWorkspace")}
+            tabIndex={-1}
+            onKeyDown={(e) => {
+              const keys = ["read", "practice", "ask"] as const;
+              const at = keys.indexOf(tab);
+              let next: (typeof keys)[number] | null = null;
+              if (e.key === "ArrowRight" || e.key === "ArrowDown")
+                next = keys[(at + 1) % keys.length];
+              else if (e.key === "ArrowLeft" || e.key === "ArrowUp")
+                next = keys[(at + keys.length - 1) % keys.length];
+              else if (e.key === "Home") next = keys[0];
+              else if (e.key === "End") next = keys[keys.length - 1];
+              if (next === null) return;
+              e.preventDefault();
+              setTab(next);
+              // selection follows focus; the panel host carries the id
+              requestAnimationFrame(() =>
+                document
+                  .getElementById(`workspace-tab-${next}`)
+                  ?.focus(),
+              );
+            }}
           >
             {(["read", "practice", "ask"] as const).map((k) => (
               <button
                 key={k}
+                id={`workspace-tab-${k}`}
                 role="tab"
                 aria-selected={tab === k}
+                aria-controls="workspace-tab-panel"
+                tabIndex={tab === k ? 0 : -1}
                 className={cn("chip", tab === k && "active")}
                 onClick={() => setTab(k)}
               >
@@ -598,6 +624,7 @@ export function LearnChapterPage() {
             ))}
           </div>
 
+          <div id="workspace-tab-panel" role="tabpanel" tabIndex={-1} hidden={false}>
           {tab === "read" && (
             <>
               <h1 className="card-title reader-title">{content.chapter}</h1>
@@ -665,6 +692,7 @@ export function LearnChapterPage() {
               classLevel={content.class_level}
             />
           )}
+          </div>
         </Card>
       )}
     </main>

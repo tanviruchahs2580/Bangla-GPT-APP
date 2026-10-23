@@ -395,7 +395,15 @@ export function Field({
   );
 }
 
-/** Segmented control over the .chip vocabulary (quiz tabs, class picker…). */
+/**
+ * Segmented control over the .chip vocabulary (report period, create kind…).
+ *
+ * role="group" + aria-pressed, NOT role="tablist": these pick a filter, they
+ * have no associated tabpanels, so a tablist role promises arrow-key roving
+ * and tabpanel associations the component never delivered (the same bug class
+ * keyboardContracts.test.tsx was written for). Plain toggle buttons keep the
+ * keyboard promise trivially true — every stop is a native button.
+ */
 export function Segmented<T extends string>({
   options,
   value,
@@ -412,15 +420,14 @@ export function Segmented<T extends string>({
   return (
     <div
       className={cn("chips", className)}
-      role="tablist"
+      role="group"
       aria-label={ariaLabel}
     >
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
-          role="tab"
-          aria-selected={o.value === value}
+          aria-pressed={o.value === value}
           className={cn("chip", o.value === value && "active")}
           onClick={() => onChange(o.value)}
         >

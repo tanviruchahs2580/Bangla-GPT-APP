@@ -107,12 +107,16 @@ describe("ui primitives", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("required");
   });
 
-  it("Segmented renders a tablist with aria-selected and fires onChange", async () => {
+  it("Segmented is a labelled toggle group: aria-pressed state + onChange", async () => {
+    // role=group + aria-pressed, not tablist/tab: these pick a filter and have
+    // no tabpanels, so a tablist role promised an arrow-key contract the
+    // component never delivered (audit M-17). Plain buttons keep the keyboard
+    // promise trivially true.
     const user = userEvent.setup();
     const onChange = vi.fn();
     render(
       <Segmented
-        ariaLabel="tabs"
+        ariaLabel="period"
         value="a"
         onChange={onChange}
         options={[
@@ -121,12 +125,15 @@ describe("ui primitives", () => {
         ]}
       />,
     );
-    expect(screen.getByRole("tablist")).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "A" })).toHaveAttribute(
-      "aria-selected",
-      "true",
+    const group = screen.getByRole("group", { name: "period" });
+    expect(group).toBeInTheDocument();
+    const a = screen.getByRole("button", { name: "A" });
+    expect(a).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "B" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
     );
-    await user.click(screen.getByRole("tab", { name: "B" }));
+    await user.click(screen.getByRole("button", { name: "B" }));
     expect(onChange).toHaveBeenCalledWith("b");
   });
 

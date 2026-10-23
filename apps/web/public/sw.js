@@ -29,7 +29,20 @@ self.addEventListener('install', (event) => {
       // One missing shell URL must not abort the whole install (addAll is
       // all-or-nothing): a stale icon path would leave the app with no SW.
       .then((cache) => Promise.all(SHELL.map((url) => cache.add(url).catch(() => {}))))
-      .then(() => self.skipWaiting())
+      .then(() => {
+        // Waiting-first updates (audit M-18): skipWaiting is for FIRST
+        // installs only (nothing is controlled yet, so taking over is free
+        // and first-load offline support works). For an UPDATE over a live
+        // session, taking control immediately serves a new index.html that
+        // references hashed chunks the old page never loaded — and with
+        // MAX_RUNTIME_ENTRIES trimming, chunks the cache no longer holds:
+        // a broken page until a manual reload. An updated worker now waits
+        // until every old tab has closed (browser default) instead.
+        const hadController =
+          self.registration && typeof self.registration.active === 'object';
+        if (!hadController && self.skipWaiting) return self.skipWaiting();
+        return undefined;
+      })
   );
 });
 
