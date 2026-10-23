@@ -41,11 +41,27 @@ const KEY: Record<string, Parameters<typeof t>[0]> = {
   // recover on its own, so it gets its own copy instead of "busy, try again".
   api_origin_unconfigured: "errApiOriginDown",
   api_origin_unreachable: "errApiOriginDown",
+  // The edge proxy's deadline fired (connect held open, no response):
+  // transient by nature, so it reads as the retryable timeout, not as an
+  // outage the user cannot act on.
+  api_origin_timeout: "errTimeout",
   bad_gateway: "errServiceUnavailable",
   service_unavailable: "errServiceUnavailable",
   revocation_unavailable: "errServiceUnavailable",
   verify_failed: "errVerifyFailed",
   api_base_unconfigured: "errApiUnconfigured",
+  // Codes the API-wide envelope pass introduced for flows the UI already
+  // distinguishes (previously bare strings that fell through to the generic
+  // copy): change-password, MFA settings, parent linking, last-admin guard.
+  bad_current_password: "errBadCurrentPassword",
+  mfa_already_enabled: "errMfaAlreadyEnabled",
+  mfa_not_enabled: "errMfaNotEnabled",
+  already_linked: "errAlreadyLinked",
+  last_admin_guard: "errLastAdmin",
+  // 403 from the API when the session must change its password before any
+  // other route will answer; the app routes this to the change screen, this
+  // copy covers any surface that shows it inline.
+  password_change_required: "errPasswordChangeRequired",
 };
 
 const ACTION: Record<string, ErrorCopy["action"]> = {
@@ -60,6 +76,7 @@ const ACTION: Record<string, ErrorCopy["action"]> = {
   service_unavailable: "retry",
   api_origin_unconfigured: "retry",
   api_origin_unreachable: "retry",
+  api_origin_timeout: "retry",
   revocation_unavailable: "retry",
   verify_failed: "retry",
 };

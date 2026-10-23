@@ -18,6 +18,18 @@ export interface ProxyEnv {
   API_ORIGIN?: string;
 }
 
+//: Time-to-first-byte budget for the upstream call. Headers on a healthy
+//: FastAPI origin arrive immediately, so this only fires on a hung or
+//: black-holed origin. It is deliberately separate from the body deadline:
+//: SSE answers legitimately stream for minutes.
+export const UPSTREAM_CONNECT_TIMEOUT_MS = 20_000;
+//: Whole-body deadline for NON-streaming responses. Without it a JSON
+//: request against an origin that accepts the socket and then goes silent
+//: kept the edge invocation (and its billing) alive long after the client's
+//: own 20 s timeout had already failed the request. SSE bodies are exempt —
+//: the client enforces a stall deadline and a disconnect cancels them.
+export const UPSTREAM_TOTAL_TIMEOUT_MS = 60_000;
+
 /** Hop-by-hop and derived headers must never be forwarded. */
 const HOP_BY_HOP = new Set([
   "connection",
@@ -80,24 +92,48 @@ export async function handleApiProxy(
       ? undefined
       : await request.arrayBuffer();
 
+  // Two-phase deadline on the upstream call. The controller's signal also
+  // covers the response BODY, so the same timer that bounds time-to-first-
+  // byte is re-armed as the whole-body budget once headers arrive (and is
+  // cleared when a streaming body finishes), which is what stops a silent
+  // origin from pinning an edge invocation after the client gave up.
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const arm = (ms: number) => {
+    if (timer !== undefined) clearTimeout(timer);
+    timer = setTimeout(() => controller.abort(), ms);
+  };
+  const disarm = () => {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      timer = undefined;
+    }
+  };
+
   let upstream: Response;
+  arm(UPSTREAM_CONNECT_TIMEOUT_MS);
   try {
     upstream = await fetch(target, {
       method: request.method,
       headers: forwardHeaders(request.headers),
       body,
       redirect: "manual",
+      signal: controller.signal,
     });
   } catch (cause) {
+    disarm();
     // The configured origin is unreachable: a stopped container, an expired
     // tunnel, a DNS failure. Without this the rejection escapes the handler
     // and Vercel answers with a bare 500 that names neither the cause nor the
     // host, so a total API outage looks identical to a bug in the app. The
     // unconfigured case above already fails honestly; this is the same
-    // treatment for the case that actually happens in production.
+    // treatment for the case that actually happens in production. A deadline
+    // that fired gets its own code so the UI can say "try again" instead of
+    // implying the origin is down.
+    const timedOut = controller.signal.aborted;
     console.error(
       JSON.stringify({
-        event: "api_origin_unreachable",
+        event: timedOut ? "api_origin_timeout" : "api_origin_unreachable",
         origin,
         path: new URL(request.url).pathname,
         method: request.method,
@@ -106,9 +142,10 @@ export async function handleApiProxy(
     );
     return new Response(
       JSON.stringify({
-        code: "api_origin_unreachable",
-        message:
-          "The API origin is configured but did not respond. This is an upstream outage, not a client error.",
+        code: timedOut ? "api_origin_timeout" : "api_origin_unreachable",
+        message: timedOut
+          ? `The API origin accepted the connection but did not respond within ${UPSTREAM_CONNECT_TIMEOUT_MS / 1000}s.`
+          : "The API origin is configured but did not respond. This is an upstream outage, not a client error.",
       }),
       { status: 502, headers: { "content-type": "application/json" } },
     );
@@ -120,7 +157,27 @@ export async function handleApiProxy(
   responseHeaders.delete("content-length");
   responseHeaders.delete("content-encoding");
 
-  return new Response(upstream.body, {
+  const contentType = responseHeaders.get("content-type") ?? "";
+  const isEventStream = contentType.includes("text/event-stream");
+  let responseBody = upstream.body;
+  if (responseBody === null) {
+    disarm();
+  } else if (isEventStream) {
+    // SSE is intentionally NOT bounded as a whole: a long generation is a
+    // legitimate answer, the client enforces its own stall deadline, and a
+    // client disconnect cancels this stream (and with it the upstream
+    // fetch). The timer is cleared here and never re-armed for SSE.
+    disarm();
+  } else {
+    arm(UPSTREAM_TOTAL_TIMEOUT_MS);
+    responseBody = responseBody.pipeThrough(
+      new TransformStream<Uint8Array, Uint8Array>({
+        flush: () => disarm(),
+      }),
+    );
+  }
+
+  return new Response(responseBody, {
     status: upstream.status,
     headers: responseHeaders,
   });
