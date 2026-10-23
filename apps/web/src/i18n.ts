@@ -228,6 +228,8 @@ const bn = {
   deleteWarning:
     "আপনার সমস্ত প্রোফাইল, চ্যাট ও কুইজ ডেটা স্থায়ীভাবে মুছে যাবে। নিশ্চিত?",
   confirmDelete: "হ্যাঁ, মুছুন",
+  deleteConfirmPassword: "নিশ্চিত করতে আপনার পাসওয়ার্ড দিন",
+  signOutEverywhere: "সব ডিভাইস থেকে লগআউট",
   cancel: "বাতিল",
   exportData: "আমার ডেটা ডাউনলোড করুন",
   parentInviteTitle: "অভিভাবক যুক্ত করুন",
@@ -879,6 +881,8 @@ const en: Dict = {
   deleteWarning:
     "All of your profile, chat and quiz data will be permanently deleted. Are you sure?",
   confirmDelete: "Yes, delete",
+  deleteConfirmPassword: "Enter your password to confirm",
+  signOutEverywhere: "Sign out everywhere",
   cancel: "Cancel",
   exportData: "Download my data",
   parentInviteTitle: "Link a parent",

@@ -10,6 +10,7 @@ import {
   KeyRound,
   LogOut,
   Moon,
+  ShieldCheck,
   Sun,
   Trash2,
 } from "lucide-react";
@@ -22,6 +23,7 @@ import {
   getMyPrefs,
   getMyReport,
   patchMyPrefs,
+  revokeAllSessions,
 } from "../../api";
 import { track } from "../../lib/analytics";
 import type { ActivitySummary } from "../../types";
@@ -66,6 +68,10 @@ export default function MePage() {
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // F-142: erasure re-authenticates — the confirm card collects the current
+  // password and DELETE /users/me carries it in the body.
+  const [delPassword, setDelPassword] = useState("");
+  const [revokeBusy, setRevokeBusy] = useState(false);
   const [invite, setInvite] = useState<{
     code: string;
     expires_in_minutes: number;
@@ -214,7 +220,7 @@ export default function MePage() {
     setBusy(true);
     setError(null);
     try {
-      await del("/users/me");
+      await del("/users/me", { password: delPassword });
       signOut();
       void navigate("/login");
     } catch (e) {
@@ -249,9 +255,26 @@ export default function MePage() {
               ) : null}
             </div>
           </div>
-          <Button variant="danger" size="sm" onClick={signOut}>
-            <LogOut size={16} aria-hidden /> {t("logout")}
-          </Button>
+          <div className="row-flex">
+            <Button variant="danger" size="sm" onClick={signOut}>
+              <LogOut size={16} aria-hidden /> {t("logout")}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={revokeBusy}
+              onClick={() => {
+                // S-011: server-side epoch stamp kills every session of the
+                // account, then the local sign-out finishes the job here.
+                setRevokeBusy(true);
+                revokeAllSessions()
+                  .then(() => signOut())
+                  .catch(() => setRevokeBusy(false));
+              }}
+            >
+              <ShieldCheck size={16} aria-hidden /> {t("signOutEverywhere")}
+            </Button>
+          </div>
         </div>
       </Card>
 
@@ -602,15 +625,34 @@ export default function MePage() {
           ) : (
             <div className="stack">
               <p className="error m-0">{t("deleteWarning")}</p>
+              <div className="stack">
+                <label className="label" htmlFor="del-password">
+                  {t("deleteConfirmPassword")}
+                </label>
+                <input
+                  id="del-password"
+                  type="password"
+                  className="input"
+                  autoComplete="current-password"
+                  value={delPassword}
+                  onChange={(e) => setDelPassword(e.target.value)}
+                />
+              </div>
               <div className="row-flex">
                 <Button
                   variant="danger"
                   onClick={deleteAccount}
-                  disabled={busy}
+                  disabled={busy || delPassword.length === 0}
                 >
                   {t("confirmDelete")}
                 </Button>
-                <Button variant="ghost" onClick={() => setConfirming(false)}>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setConfirming(false);
+                    setDelPassword("");
+                  }}
+                >
                   {t("cancel")}
                 </Button>
               </div>
