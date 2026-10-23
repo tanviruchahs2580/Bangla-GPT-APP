@@ -12,7 +12,7 @@ from typing import Annotated, Any
 import jwt as pyjwt
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from bangla_gpt_api.auth.security import decode_token
@@ -307,17 +307,22 @@ def _tenant_school_id(db: Session, user: User) -> int | None:
     return None
 
 
-def _school_student_id_set(db: Session, school_id: int) -> set[int]:
-    rows = (
-        db.execute(
-            select(ClassStudent.student_id)
+def _student_in_school(db: Session, school_id: int, student_id: int) -> bool:
+    """One EXISTS membership probe for the tenancy gate.
+
+    Was: the school's ENTIRE roster loaded into a Python set per request —
+    O(school enrollment) on every quiz submit/progress read. A 2,000-student
+    school paid 2,000 rows to answer a one-row question.
+    """
+    return (
+        db.scalar(
+            select(func.exists())
+            .select_from(ClassStudent)
             .join(ClassRoom, ClassRoom.id == ClassStudent.classroom_id)
-            .where(ClassRoom.school_id == school_id)
+            .where(ClassRoom.school_id == school_id, ClassStudent.student_id == student_id)
         )
-        .scalars()
-        .all()
+        is True
     )
-    return set(rows)
 
 
 def _assert_student_in_school(db: Session, user: User, student: Student) -> Student:
@@ -325,7 +330,7 @@ def _assert_student_in_school(db: Session, user: User, student: Student) -> Stud
     school_id = _tenant_school_id(db, user)
     if school_id is None:
         return student
-    if student.id not in _school_student_id_set(db, school_id):
+    if not _student_in_school(db, school_id, student.id):
         raise HTTPException(
             status_code=403,
             detail={"code": "other_school", "message": "Student is outside your school"},

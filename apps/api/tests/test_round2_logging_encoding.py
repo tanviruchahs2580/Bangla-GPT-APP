@@ -117,6 +117,10 @@ def test_encoding_safety_and_redaction_compose() -> None:
     logger = logging.getLogger("test.compose")
     logger.handlers.clear()
     logger.propagate = False
+    # json_log emits at INFO; without an explicit level this test only passed
+    # when earlier tests leaked an INFO root level into the process — it
+    # failed standalone (order-dependent). Set the level it needs.
+    logger.setLevel(logging.INFO)
     logger.addHandler(handler)
     try:
         # json_log redacts the MAPPING before serialising, which is the only

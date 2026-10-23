@@ -119,7 +119,9 @@ def test_parent_deletion_removes_links_but_keeps_student(client: TestClient) -> 
     parent_headers = _login_headers(client, "p2@example.com")
     client.post("/parents/link", json={"student_id": 1}, headers=parent_headers)
 
-    res = client.request("DELETE", "/users/me", headers=parent_headers, json={"password": "supersecret1"})
+    res = client.request(
+        "DELETE", "/users/me", headers=parent_headers, json={"password": "supersecret1"}
+    )
     assert res.status_code == 204
     assert parent is not None
 
@@ -132,7 +134,12 @@ def test_parent_deletion_removes_links_but_keeps_student(client: TestClient) -> 
 def test_teacher_deletion(client: TestClient) -> None:
     _register(client, "t@example.com", role="teacher")
     headers = _login_headers(client, "t@example.com")
-    assert client.request("DELETE", "/users/me", headers=headers, json={"password": "supersecret1"}).status_code == 204
+    assert (
+        client.request(
+            "DELETE", "/users/me", headers=headers, json={"password": "supersecret1"}
+        ).status_code
+        == 204
+    )
     assert client.get("/teacher/students", headers=headers).status_code == 401
 
 
@@ -151,7 +158,12 @@ def test_second_admin_can_self_delete(client: TestClient) -> None:
     )
     assert promote.status_code == 200
     second_headers = _login_headers(client, "second@example.com")
-    assert client.request("DELETE", "/users/me", headers=second_headers, json={"password": "supersecret1"}).status_code == 204
+    assert (
+        client.request(
+            "DELETE", "/users/me", headers=second_headers, json={"password": "supersecret1"}
+        ).status_code
+        == 204
+    )
     remaining = [
         u for u in client.get("/admin/users", headers=root).json()["items"] if u["role"] == "admin"
     ]

@@ -108,7 +108,9 @@ def test_delete_me_requires_the_current_password(client: TestClient) -> None:
     # no body, wrong password: both refused with the same coded 401, so the
     # response is not a password oracle either way
     no_body = client.request("DELETE", "/users/me", headers=headers)
-    wrong = client.request("DELETE", "/users/me", headers=headers, json={"password": "not-the-password"})
+    wrong = client.request(
+        "DELETE", "/users/me", headers=headers, json={"password": "not-the-password"}
+    )
     assert no_body.status_code == 401
     assert no_body.json()["detail"]["code"] == "bad_current_password"
     assert wrong.status_code == 401

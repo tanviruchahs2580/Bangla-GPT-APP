@@ -102,7 +102,12 @@ def test_delete_me_cleans_all_new_tables(client: TestClient, db_path) -> None:
     assert _count(db_path, "SELECT COUNT(*) FROM ai_jobs WHERE user_id = ?", (uid,)) == 1
     assert _count(db_path, "SELECT COUNT(*) FROM notifications WHERE user_id = ?", (uid,)) == 1
 
-    assert client.request("DELETE", "/users/me", headers=headers, json={"password": "supersecret1"}).status_code == 204
+    assert (
+        client.request(
+            "DELETE", "/users/me", headers=headers, json={"password": "supersecret1"}
+        ).status_code
+        == 204
+    )
 
     assert _count(db_path, "SELECT COUNT(*) FROM users WHERE id = ?", (uid,)) == 0
     assert (
@@ -155,7 +160,12 @@ def test_delete_me_cleans_student_new_rows(client: TestClient, db_path) -> None:
     )
     conn.commit()
     conn.close()
-    assert client.request("DELETE", "/users/me", headers=headers, json={"password": "supersecret1"}).status_code == 204
+    assert (
+        client.request(
+            "DELETE", "/users/me", headers=headers, json={"password": "supersecret1"}
+        ).status_code
+        == 204
+    )
 
     assert _count(db_path, "SELECT COUNT(*) FROM users WHERE id = ?", (uid,)) == 0
     assert _count(db_path, "SELECT COUNT(*) FROM students WHERE id = ?", (student_id,)) == 0
