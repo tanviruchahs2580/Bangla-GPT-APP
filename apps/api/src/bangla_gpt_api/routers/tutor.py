@@ -55,7 +55,7 @@ from bangla_gpt_api.services.activity import (
 from bangla_gpt_api.services.context import RequestContext
 from bangla_gpt_api.services.costs import check_ai_budget, record_ai_usage
 from bangla_gpt_api.services.quiz_explain import quiz_explain_instruction
-from bangla_gpt_api.services.tutor import VISION_UNSUPPORTED_ANSWER
+from bangla_gpt_api.services.tutor import VISION_UNSUPPORTED_ANSWER, StreamEvent
 
 from .common import (
     _answer_confidence,
@@ -77,6 +77,11 @@ from .deps import (
 router = APIRouter(responses=AUTH_GUARD_RESPONSES)
 
 logger = logging.getLogger(__name__)
+
+#: Idle seconds before the SSE stream emits a `: ping` comment line. Proxies
+#: and load balancers commonly drop a silent connection at 30-60s; retrieval
+#: plus provider time-to-first-token can legitimately exceed that.
+SSE_HEARTBEAT_SECONDS = 15.0
 
 
 def _ask_prepare(
@@ -616,22 +621,58 @@ async def stream_chat_message(
                 token_payload = json.dumps({"text": VISION_UNSUPPORTED_ANSWER}, ensure_ascii=False)
                 yield f"event: token\ndata: {token_payload}\n\n"
             else:
-                async for event in tutor.ask_stream(
-                    payload.message,
-                    prepared.class_level,
-                    canonical_subject(payload.subject),
-                    prepared.history,
-                    chapter=payload.chapter,
-                    extra_instruction=prepared.extra_instruction,
-                    low_data=payload.low_data,
-                    context=prepared.ctx,
-                    image=prepared.image_payload,
-                ):
-                    if event.type == "token":
-                        token_payload = json.dumps({"text": event.text}, ensure_ascii=False)
-                        yield f"event: token\ndata: {token_payload}\n\n"
-                    elif event.response is not None:
-                        final_response = event.response
+                # The stream is drained through a queue + producer task so a
+                # heartbeat can be emitted while NOTHING has arrived yet:
+                # retrieval + time-to-first-token can legitimately take tens
+                # of seconds, and proxy/LB idle timeouts would otherwise cut
+                # the connection before the first token. A `: ping` comment
+                # line is SSE-standard and ignored by browsers and by this
+                # app's own parser (it only reads `event:`/`data:` lines).
+                # (Wrapping __anext__ in wait_for instead would cancel the
+                # generator mid-flight on the first timeout — not an option.)
+                queue: asyncio.Queue[StreamEvent | ProviderError | None] = asyncio.Queue()
+
+                async def _produce() -> None:
+                    try:
+                        async for event in tutor.ask_stream(
+                            payload.message,
+                            prepared.class_level,
+                            canonical_subject(payload.subject),
+                            prepared.history,
+                            chapter=payload.chapter,
+                            extra_instruction=prepared.extra_instruction,
+                            low_data=payload.low_data,
+                            context=prepared.ctx,
+                            image=prepared.image_payload,
+                        ):
+                            await queue.put(event)
+                    except ProviderError as exc:
+                        await queue.put(exc)
+                    finally:
+                        await queue.put(None)
+
+                producer = asyncio.create_task(_produce())
+                try:
+                    while True:
+                        try:
+                            item = await asyncio.wait_for(queue.get(), SSE_HEARTBEAT_SECONDS)
+                        except TimeoutError:
+                            yield ": ping\n\n"
+                            continue
+                        if item is None:
+                            break
+                        if isinstance(item, ProviderError):
+                            raise item
+                        if item.type == "token":
+                            token_payload = json.dumps({"text": item.text}, ensure_ascii=False)
+                            yield f"event: token\ndata: {token_payload}\n\n"
+                        elif item.response is not None:
+                            final_response = item.response
+                finally:
+                    # Client disconnected mid-stream: stop the provider work.
+                    producer.cancel()
+                    with contextlib.suppress(BaseException):
+                        await producer
             if final_response is None:  # never leak a naked 500 under -O
                 # user_msg already committed before stream; no rollback needed
                 yield (
