@@ -190,58 +190,81 @@ def notification_mark_read(
 async def _execute_ai_job(app_ctx: Ctx, job_id: str) -> None:
     """Run one AiJob to completion. Runs detached from the request, so it
     opens its OWN session (session_factory) and never touches the request
-    session -- the study of jobs.py: `db = session_factory; finally close`."""
+    session -- the study of jobs.py: `db = session_factory; finally close`.
+
+    Every DB segment is offloaded to a worker thread: this coroutine shares
+    the event loop with live SSE streams, and its session is exclusively
+    its own, so sequential to_thread hops are safe.
+    """
     db = app_ctx.session_factory()
-    try:
+
+    def _load() -> tuple[AiJob, User] | None:
         job = db.get(AiJob, job_id)
         if job is None:  # deleted between queue and run
-            return
+            return None
         actor = db.get(User, job.user_id)
         if actor is None:
-            return
+            return None
         job.status = "generating"
         db.commit()
+        return job, actor
+
+    def _persist_ready(
+        job: AiJob,
+        actor: User,
+        gen_in: Any,
+        chapter: str | None,
+        doc_payload: dict,
+    ) -> None:
+        job.status = "validating"
+        db.commit()
+        doc = _persist_document(
+            db,
+            user_id=job.user_id,
+            kind=job.kind,
+            class_level=gen_in.class_level,
+            subject=gen_in.subject,
+            chapter=chapter,
+            payload=doc_payload,
+        )
+        job.status = "ready"
+        job.result = {"document_id": doc.id}
+        job.error = None
+        # job lifecycle as sanitized product analytics.
+        _record_analytics(
+            db,
+            job.user_id,
+            actor.role,
+            "ai_job_ready",
+            {"kind": job.kind, "document_id": doc.id},
+        )
+        db.commit()
+
+    def _mark_failed(exc_type_name: str, actor_role: str) -> None:
+        db.rollback()
+        fresh = db.get(AiJob, job_id)
+        if fresh is not None:
+            fresh.status = "failed"
+            # Exception bodies can carry DB/URL fragments — persist the
+            # type name only; full tracebacks stay in server logs.
+            fresh.error = exc_type_name
+            _record_analytics(db, fresh.user_id, actor_role, "ai_job_failed", {"kind": fresh.kind})
+            db.commit()
+
+    try:
+        loaded = await asyncio.to_thread(_load)
+        if loaded is None:
+            return
+        job, actor = loaded
         try:
             gen_in = _doc_in_for(job.kind, dict(job.payload or {}))
             doc_payload, _sources, chapter = await _generate_document(
                 app_ctx, db, actor, job.kind, gen_in
             )
-            job.status = "validating"
-            db.commit()
-            doc = _persist_document(
-                db,
-                user_id=job.user_id,
-                kind=job.kind,
-                class_level=gen_in.class_level,
-                subject=gen_in.subject,
-                chapter=chapter,
-                payload=doc_payload,
-            )
-            job.status = "ready"
-            job.result = {"document_id": doc.id}
-            job.error = None
-            # job lifecycle as sanitized product analytics.
-            _record_analytics(
-                db,
-                job.user_id,
-                actor.role,
-                "ai_job_ready",
-                {"kind": job.kind, "document_id": doc.id},
-            )
-            db.commit()
+            await asyncio.to_thread(_persist_ready, job, actor, gen_in, chapter, doc_payload)
             json_log(logger, logging.INFO, "ai_job_ready", job_id=job_id, kind=job.kind)
         except Exception as exc:
-            db.rollback()
-            fresh = db.get(AiJob, job_id)
-            if fresh is not None:
-                fresh.status = "failed"
-                # Exception bodies can carry DB/URL fragments — persist the
-                # type name only; full tracebacks stay in server logs.
-                fresh.error = type(exc).__name__
-                _record_analytics(
-                    db, fresh.user_id, actor.role, "ai_job_failed", {"kind": fresh.kind}
-                )
-                db.commit()
+            await asyncio.to_thread(_mark_failed, type(exc).__name__, actor.role)
             json_log(
                 logger,
                 logging.WARNING,
@@ -251,7 +274,7 @@ async def _execute_ai_job(app_ctx: Ctx, job_id: str) -> None:
                 error_type=type(exc).__name__,
             )
     finally:
-        db.close()
+        await asyncio.to_thread(db.close)
 
 
 def _job_out(job: AiJob) -> AiJobOut:
@@ -275,10 +298,15 @@ async def teacher_job_create(
     -> ready (or failed + error). Kind is intentionally not whitelisted at
     the door: an unsupported kind becomes a VISIBLE failed job, which beats
     a bare 422 on a long-running API."""
-    job = AiJob(user_id=teacher.id, kind=payload.kind[:40], payload=dict(payload.payload))
-    db.add(job)
-    db.commit()
-    db.refresh(job)
+
+    def _enqueue() -> AiJob:
+        job = AiJob(user_id=teacher.id, kind=payload.kind[:40], payload=dict(payload.payload))
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        return job
+
+    job = await asyncio.to_thread(_enqueue)
     task = asyncio.create_task(_execute_ai_job(app_ctx, job.id))
     app_ctx.ai_job_tasks.add(task)
     task.add_done_callback(app_ctx.ai_job_tasks.discard)
