@@ -5,6 +5,7 @@ Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 """
 
 import asyncio
+import contextlib
 import logging
 from datetime import UTC, datetime
 from typing import Annotated, Any
@@ -251,8 +252,23 @@ async def _execute_ai_job(app_ctx: Ctx, job_id: str) -> None:
             _record_analytics(db, fresh.user_id, actor_role, "ai_job_failed", {"kind": fresh.kind})
             db.commit()
 
+    # SHIELD the DB hops: this task is detached, and shutdown (or TestClient's
+    # portal close) cancels it after the drain window. A bare
+    # `await asyncio.to_thread(commit)` cancelled mid-flight keeps running in
+    # its worker thread while the task's finally closes the session —
+    # measured as IllegalStateChangeError (close during _prepare_impl) plus
+    # "database is locked" on CI. Each section is tracked so cancellation is
+    # only observed BETWEEN sections and the finally can wait for the
+    # in-flight one before closing.
+    in_flight: asyncio.Task | None = None
+
+    async def _db_call(fn, *args, **kwargs):
+        nonlocal in_flight
+        in_flight = asyncio.ensure_future(asyncio.to_thread(fn, *args, **kwargs))
+        return await asyncio.shield(in_flight)
+
     try:
-        loaded = await asyncio.to_thread(_load)
+        loaded = await _db_call(_load)
         if loaded is None:
             return
         job, actor = loaded
@@ -261,10 +277,10 @@ async def _execute_ai_job(app_ctx: Ctx, job_id: str) -> None:
             doc_payload, _sources, chapter = await _generate_document(
                 app_ctx, db, actor, job.kind, gen_in
             )
-            await asyncio.to_thread(_persist_ready, job, actor, gen_in, chapter, doc_payload)
+            await _db_call(_persist_ready, job, actor, gen_in, chapter, doc_payload)
             json_log(logger, logging.INFO, "ai_job_ready", job_id=job_id, kind=job.kind)
         except Exception as exc:
-            await asyncio.to_thread(_mark_failed, type(exc).__name__, actor.role)
+            await _db_call(_mark_failed, type(exc).__name__, actor.role)
             json_log(
                 logger,
                 logging.WARNING,
@@ -274,7 +290,15 @@ async def _execute_ai_job(app_ctx: Ctx, job_id: str) -> None:
                 error_type=type(exc).__name__,
             )
     finally:
-        await asyncio.to_thread(db.close)
+        # Cancelled while a section was in flight: a cancelled task raises at
+        # the next await, so wait it out (bounded) before touching the session.
+        if in_flight is not None and not in_flight.done():
+            with contextlib.suppress(BaseException):
+                await asyncio.wait_for(asyncio.shield(in_flight), timeout=30.0)
+        # Still-cancelled at close: the close runs in its worker thread
+        # regardless; nothing else touches this session afterwards.
+        with contextlib.suppress(BaseException):
+            await asyncio.shield(asyncio.to_thread(db.close))
 
 
 def _job_out(job: AiJob) -> AiJobOut:
