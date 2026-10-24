@@ -61,29 +61,44 @@ def _count(db_path, sql: str, params: tuple = ()) -> int:
         conn.close()
 
 
-def _seed_waves(client: TestClient, headers: dict) -> None:
-    """One row in each new table for this account."""
+def _seed_waves(client: TestClient, headers: dict, db_path) -> None:
+    """One row in each new table for this account.
+
+    The ai_jobs row is inserted directly instead of via POST /teacher/jobs:
+    that endpoint starts a DETACHED background task which writes to the same
+    SQLite file in parallel with this test's raw connections — a
+    writer-vs-writer race that flaked deterministically on Linux CI
+    ("database is locked", 2026-10-24). The row's ownership and cleanup are
+    what this test asserts, and a direct insert gives that
+    deterministically. (The job lifecycle itself is covered end-to-end in
+    test_ai_jobs.py.)
+    """
     doc = {"class_level": 6, "subject": "science", "chapter": CHAPTER}
     assert client.post("/teacher/generate/worksheet", json=doc, headers=headers).status_code == 201
     assert client.post("/notes", json={"body": "a note"}, headers=headers).status_code == 201
-    # background job row (the run may or may not finish before the portal
-    # closes, so assertions below are written for either outcome)
-    assert (
-        client.post(
-            "/teacher/jobs", json={"kind": "worksheet", "payload": doc}, headers=headers
-        ).status_code
-        == 202
-    )
     assert client.post("/events", json={"name": "wave1_seed"}, headers=headers).status_code == 202
+
+
+def _seed_job_row(db_path, uid: int) -> None:
+    conn = sqlite3.connect(db_path, isolation_level=None)  # autocommit: see module note
+    try:
+        conn.execute(
+            "INSERT INTO ai_jobs (id, user_id, kind, status, payload, created_at, updated_at)"
+            " VALUES ('seed-job-0001', ?, 'worksheet', 'queued', '{}',"
+            " datetime('now'), datetime('now'))",
+            (uid,),
+        )
+    finally:
+        conn.close()
 
 
 def test_delete_me_cleans_all_new_tables(client: TestClient, db_path) -> None:
     teach = _register(client, "teach@example.com", "teacher")
     headers = {"Authorization": teach["Authorization"]}
-    _seed_waves(client, headers)
+    _seed_waves(client, headers, db_path)
 
-    # direct insert so the teacher also owns a notification row
     uid = _user_id(db_path, "teach@example.com")
+    _seed_job_row(db_path, uid)
     conn = sqlite3.connect(db_path, isolation_level=None)  # autocommit: see module note
     conn.execute(
         "INSERT INTO notifications (user_id, kind, code, params, link, read_at, created_at)"
