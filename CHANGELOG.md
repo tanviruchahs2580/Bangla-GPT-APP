@@ -68,6 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(auth): redeem single-use codes with a compare-and-set, not a read-then-write
 - fix(auth): unblock login on web and APK (MFA step-up, unauth resend, proxy/APK errors)
 - fix(ci): exempt changelog-regenerating commits by changed paths, not subject text
+- fix(ci): green the pipeline — security bumps, k6 on the compose network, Linux visual skip, tracing start
 - fix(ci): make the doc-path guard cover the classes of path it claims to
 - fix(ci): make the lockfile guardrail deterministic
 - fix(ci): pin every action to a commit SHA and scope registry permission
@@ -219,6 +220,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - test(api): cover school admin fallbacks and tenant guards
 - test(api): erasure-fk fixture recognises the parity env var (BGPT_TEST_DATABASE_URL)
 - test(e2e): regenerate teacher-home dark baselines after the brand-solid contrast fix
+- test(e2e): reshape the CSV perf budget to measure typing latency, not driver mechanics
 - test(e2e): tolerate measured rasterisation variance (2% -> 5%) + regenerated teacher baselines after the contrast fix
 - test(ops): register ALERT_EMAIL_TO with the env-parity guard
 - test(school): cover the aggregation routes TST-04 flagged as unexercised
