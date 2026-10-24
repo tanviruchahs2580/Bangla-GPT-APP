@@ -44,7 +44,7 @@ def _register(client: TestClient, email: str, role: str) -> dict:
 
 
 def _user_id(db_path, email: str) -> int:
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, isolation_level=None)  # autocommit: see module note
     try:
         row = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
         assert row is not None
@@ -54,7 +54,7 @@ def _user_id(db_path, email: str) -> int:
 
 
 def _count(db_path, sql: str, params: tuple = ()) -> int:
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, isolation_level=None)  # autocommit: see module note
     try:
         return int(conn.execute(sql, params).fetchone()[0])
     finally:
@@ -84,7 +84,7 @@ def test_delete_me_cleans_all_new_tables(client: TestClient, db_path) -> None:
 
     # direct insert so the teacher also owns a notification row
     uid = _user_id(db_path, "teach@example.com")
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, isolation_level=None)  # autocommit: see module note
     conn.execute(
         "INSERT INTO notifications (user_id, kind, code, params, link, read_at, created_at)"
         " VALUES (?, 'system', 'notif_seed', '{}', NULL, NULL, datetime('now'))",
@@ -145,7 +145,7 @@ def test_delete_me_cleans_student_new_rows(client: TestClient, db_path) -> None:
     assert client.post("/events", json={"name": "study_done"}, headers=headers).status_code == 202
 
     uid = _user_id(db_path, "kid@example.com")
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, isolation_level=None)  # autocommit: see module note
     row = conn.execute("SELECT id FROM students WHERE user_id = ?", (uid,)).fetchone()
     assert row is not None
     student_id = int(row[0])
@@ -178,7 +178,7 @@ def test_new_columns_have_defaults_on_fresh_rows(client: TestClient, db_path) ->
     teach = _register(client, "teach@example.com", "teacher")
     uid = _user_id(db_path, "kid@example.com")
     tid = _user_id(db_path, "teach@example.com")
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, isolation_level=None)  # autocommit: see module note
     try:
         student = conn.execute(
             "SELECT learning_prefs, memory_enabled FROM students WHERE user_id = ?", (uid,)
