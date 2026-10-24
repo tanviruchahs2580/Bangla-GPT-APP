@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): close the check-then-insert race class; reap orphaned AI jobs
 - fix(api): close two moderation false negatives and cover the chat routes
 - fix(api): commit the NFC-normalised red-team dataset; raise the SQLite busy timeout to 15s
+- fix(api): converge create_all under concurrent multi-worker boot
 - fix(api): derive the school analytics day window in Asia/Dhaka
 - fix(api): drop an unused variable the new RUF059 rule caught
 - fix(api): emit SSE heartbeat comments so silent streams survive proxy timeouts
@@ -273,6 +274,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #24 from tanviruchahs2580/docs/2026-10-17-deployment-record
 - Merge pull request #25 from tanviruchahs2580/docs/2026-10-17-vercel-redeploy
 - Merge pull request #26 from tanviruchahs2580/feat/rag-retrieval-quality
+- Merge pull request #61 from tanviruchahs2580/fix/audit-remediation-2026-10-23
 
 ## v0.9.2 - 2026-09-15
 

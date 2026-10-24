@@ -129,3 +129,6 @@ deploy/prometheus/metrics_token
 .playwright-report/
 test-results/
 playwright/.auth/
+
+# Playwright MCP browser-tool artifacts (agent tooling, not app output)
+.playwright-mcp/
