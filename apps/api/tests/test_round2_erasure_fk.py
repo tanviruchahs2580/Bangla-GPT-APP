@@ -54,13 +54,16 @@ def fk_enforced(tmp_path):
     for the duration of this fixture and is removed afterwards, which covers
     every engine the app creates.
 
-    With ``TEST_DATABASE_URL`` set (the CI Postgres job) PostgreSQL does the
-    enforcing natively and no PRAGMA is involved.
+    With a parity database configured (``BGPT_TEST_DATABASE_URL`` — the CI
+    Postgres job, or a local run of the same) PostgreSQL does the enforcing
+    natively and no PRAGMA is involved.
     """
     from sqlalchemy import event
     from sqlalchemy.engine import Engine
 
-    test_db = os.environ.get("TEST_DATABASE_URL")
+    test_db = os.environ.get("BGPT_TEST_DATABASE_URL") or os.environ.get(
+        "TEST_DATABASE_URL"
+    )
     if test_db:
         settings = Settings(
             env="test",
