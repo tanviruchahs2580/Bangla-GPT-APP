@@ -25,6 +25,9 @@ transaction, so it must run on the raw connection before SQLAlchemy starts
 one).
 """
 
+import sqlite3
+import time
+
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -58,7 +61,23 @@ def _apply_sqlite_pragmas(target: Engine, url: str) -> None:
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
             if not memory:
-                cursor.execute("PRAGMA journal_mode=WAL")
+                # journal_mode=WAL requires exclusive access and does NOT go
+                # through the busy handler: two gunicorn workers booting
+                # simultaneously against one file (WEB_CONCURRENCY=2, the
+                # shipped default) raced here — the losing worker failed to
+                # boot, gunicorn's master gave up, and the container exited
+                # ~17s after start (reproduced deterministically, 2026-10-24).
+                # Read the current mode first (cheap, lock-free in WAL) and
+                # only attempt the switch with a bounded retry loop.
+                for _ in range(50):  # <= ~5s, like the busy timeout
+                    mode = cursor.execute("PRAGMA journal_mode").fetchone()
+                    if str(mode[0]).lower() == "wal":
+                        break
+                    try:
+                        cursor.execute("PRAGMA journal_mode=WAL")
+                        break
+                    except sqlite3.OperationalError:
+                        time.sleep(0.1)
                 cursor.execute("PRAGMA synchronous=NORMAL")
         finally:
             cursor.close()

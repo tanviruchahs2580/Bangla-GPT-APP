@@ -199,6 +199,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate the CHANGELOG for the 2026-10-17 audit fixes
 - docs: regenerate the CHANGELOG for the CI-format fixes
 - docs: regenerate the CHANGELOG for the CI-greening branch
+- docs: regenerate the CHANGELOG for the CI-greening follow-ups
 - docs: regenerate the CHANGELOG for the QA-record amendment
 - docs: regenerate the CHANGELOG for the RAG retrieval rework
 - docs: regenerate the CHANGELOG for the acceptance-testing fixes
