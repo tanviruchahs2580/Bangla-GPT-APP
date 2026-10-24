@@ -20,7 +20,10 @@ vi.mock("../api", async (importOriginal) => ({
 }));
 
 function renderPage() {
-  return renderWithQuery(<CreatePage />, { route: "/teacher/create?kind=lesson_plan", path: "/teacher/create" });
+  return renderWithQuery(<CreatePage />, {
+    route: "/teacher/create?kind=lesson_plan",
+    path: "/teacher/create",
+  });
 }
 
 const ROOMS = [{ id: 1, class_level: 6, section: "GEN", student_count: 2 }];

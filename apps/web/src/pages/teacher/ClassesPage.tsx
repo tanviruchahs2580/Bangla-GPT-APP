@@ -98,7 +98,9 @@ export default function ClassesPage() {
   const analyticsQuery = useQuery({
     queryKey: ["teacher", "classAnalytics", selected?.class_level],
     queryFn: () =>
-      get<ClassAnalytics>(`/teacher/classes/${selected?.class_level}/analytics`),
+      get<ClassAnalytics>(
+        `/teacher/classes/${selected?.class_level}/analytics`,
+      ),
     enabled: selected !== null,
   });
   const wmQuery = useQuery({
@@ -147,7 +149,9 @@ export default function ClassesPage() {
         section: newSection || "GEN",
       });
       setRoomId(room.id);
-      void queryClient.invalidateQueries({ queryKey: ["teacher", "classrooms"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["teacher", "classrooms"],
+      });
     } catch (err) {
       setMutationError(errText(err));
     } finally {
@@ -171,10 +175,16 @@ export default function ClassesPage() {
       setImportResult(res);
       setCsvText("");
       // roster sizes, health aggregates and the weak matrix all move
-      void queryClient.invalidateQueries({ queryKey: ["teacher", "classrooms"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["teacher", "classrooms"],
+      });
       void queryClient.invalidateQueries({ queryKey: ["teacher", "roster"] });
-      void queryClient.invalidateQueries({ queryKey: ["teacher", "classAnalytics"] });
-      void queryClient.invalidateQueries({ queryKey: ["teacher", "weak-matrix"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["teacher", "classAnalytics"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["teacher", "weak-matrix"],
+      });
     } catch (err) {
       setMutationError(errText(err));
     } finally {

@@ -332,7 +332,9 @@ export function ShortTestFlow() {
         num_questions: num,
         duration_min: duration,
       });
-      void queryClient.invalidateQueries({ queryKey: ["teacher", "shorttests"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["teacher", "shorttests"],
+      });
       setMsg(t("stAssigned", { n: st.attempts.length }));
     } catch (err) {
       setMsg(errText(err));
@@ -467,7 +469,8 @@ export function LessonPlanFlow() {
   const [edits, setEdits] = useState<Record<string, string>>({});
   const roomsQuery = useQuery({
     queryKey: ["teacher", "classrooms"],
-    queryFn: () => get<{ id: number; class_level: number }[]>("/teacher/classrooms"),
+    queryFn: () =>
+      get<{ id: number; class_level: number }[]>("/teacher/classrooms"),
   });
   const rooms = useMemo(() => roomsQuery.data ?? [], [roomsQuery.data]);
 

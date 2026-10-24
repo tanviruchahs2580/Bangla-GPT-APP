@@ -418,11 +418,7 @@ export function Segmented<T extends string>({
   className?: string;
 }) {
   return (
-    <div
-      className={cn("chips", className)}
-      role="group"
-      aria-label={ariaLabel}
-    >
+    <div className={cn("chips", className)} role="group" aria-label={ariaLabel}>
       {options.map((o) => (
         <button
           key={o.value}

@@ -115,6 +115,9 @@ test("tutor thread with 120 messages streams a new answer at 4x CPU throttle", a
   await useVariant(page, { theme: "light", lang: "bn" });
   const cdp = await context.newCDPSession(page);
   await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+  // explicit start: tracing.stop below throws "Must start tracing before
+  // stopping" otherwise — measured on the CI runner (2026-10-24)
+  await context.tracing.start({ screenshots: true, snapshots: true });
   await installLongTaskProbe(page);
   // Tracing is already started by playwright.config.ts (trace:
   // 'retain-on-failure'); starting it twice throws. We only redirect the
@@ -172,6 +175,9 @@ test("maximal roster CSV import (200 rows) at 4x CPU throttle", async ({
   await useVariant(page, { theme: "light", lang: "en" });
   const cdp = await context.newCDPSession(page);
   await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+  // explicit start: tracing.stop below throws "Must start tracing before
+  // stopping" otherwise — measured on the CI runner (2026-10-24)
+  await context.tracing.start({ screenshots: true, snapshots: true });
   await installLongTaskProbe(page);
   await signIn(page, "teacher1@e2e.test");
   await page.goto("/teacher/classes", { waitUntil: "domcontentloaded" });
@@ -229,6 +235,8 @@ test("tutor history renders at 6x CPU throttle without a >100 ms task", async ({
   await useVariant(page, { theme: "light", lang: "bn" });
   const cdp = await context.newCDPSession(page);
   await cdp.send("Emulation.setCPUThrottlingRate", { rate: 6 });
+  // same start-before-stop contract as the other perf tests
+  await context.tracing.start({ screenshots: true, snapshots: true });
   await installLongTaskProbe(page);
   await signIn(page, "student1@e2e.test");
   await page.goto("/student/tutor", { waitUntil: "domcontentloaded" });

@@ -20,18 +20,19 @@ vi.mock("../api", async (importOriginal) => ({
 }));
 
 function renderPage() {
-// react-query provider: the migrated teacher pages read the shared cache
+  // react-query provider: the migrated teacher pages read the shared cache
   // (audit H-04); the app's own defaults (no retry, 30s stale) keep tests fast.
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: 30_000 } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
-    <MemoryRouter initialEntries={["/teacher/assessments?tab=assignments"]}>
-      <Routes>
-        <Route path="/teacher/assessments" element={<AssessmentsPage />} />
-      </Routes>
-    </MemoryRouter>,
+      <MemoryRouter initialEntries={["/teacher/assessments?tab=assignments"]}>
+        <Routes>
+          <Route path="/teacher/assessments" element={<AssessmentsPage />} />
+        </Routes>
+      </MemoryRouter>
+      ,
     </QueryClientProvider>,
   );
 }

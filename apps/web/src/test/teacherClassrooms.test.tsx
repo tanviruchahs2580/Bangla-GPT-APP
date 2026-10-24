@@ -19,7 +19,12 @@ function renderPage() {
   return renderWithQuery(<ClassesPage />);
 }
 
-let roomsStore: Array<{ id: number; class_level: number; section: string; student_count: number }> = [];
+let roomsStore: Array<{
+  id: number;
+  class_level: number;
+  section: string;
+  student_count: number;
+}> = [];
 const ROOMS = [
   { id: 1, class_level: 6, section: "GEN", student_count: 2 },
   { id: 2, class_level: 7, section: "GEN", student_count: 1 },

@@ -80,7 +80,11 @@ function forwardHeaders(headers: Headers): Headers {
   const out = new Headers();
   headers.forEach((value, key) => {
     const name = key.toLowerCase();
-    if (!HOP_BY_HOP.has(name) && !CLIENT_SUPPLIED_FORWARDING.has(name) && name !== "host") {
+    if (
+      !HOP_BY_HOP.has(name) &&
+      !CLIENT_SUPPLIED_FORWARDING.has(name) &&
+      name !== "host"
+    ) {
       out.set(key, value);
     }
   });

@@ -598,9 +598,7 @@ export function LearnChapterPage() {
               setTab(next);
               // selection follows focus; the panel host carries the id
               requestAnimationFrame(() =>
-                document
-                  .getElementById(`workspace-tab-${next}`)
-                  ?.focus(),
+                document.getElementById(`workspace-tab-${next}`)?.focus(),
               );
             }}
           >
@@ -624,74 +622,79 @@ export function LearnChapterPage() {
             ))}
           </div>
 
-          <div id="workspace-tab-panel" role="tabpanel" tabIndex={-1} hidden={false}>
-          {tab === "read" && (
-            <>
-              <h1 className="card-title reader-title">{content.chapter}</h1>
-              <p className="muted">
-                <BookOpen size={15} className="reader-book" aria-hidden />{" "}
-                {content.book}
-              </p>
-              <div
-                className="md stack reader-md"
-                style={{
-                  fontSize: `${fontScale}em`,
-                }}
-              >
-                {content.sections.map((s, i) => (
-                  <div key={i}>
-                    {s.section && <h3>{s.section}</h3>}
-                    <SafeMarkdown content={s.text} />
-                  </div>
-                ))}
+          <div
+            id="workspace-tab-panel"
+            role="tabpanel"
+            tabIndex={-1}
+            hidden={false}
+          >
+            {tab === "read" && (
+              <>
+                <h1 className="card-title reader-title">{content.chapter}</h1>
+                <p className="muted">
+                  <BookOpen size={15} className="reader-book" aria-hidden />{" "}
+                  {content.book}
+                </p>
+                <div
+                  className="md stack reader-md"
+                  style={{
+                    fontSize: `${fontScale}em`,
+                  }}
+                >
+                  {content.sections.map((s, i) => (
+                    <div key={i}>
+                      {s.section && <h3>{s.section}</h3>}
+                      <SafeMarkdown content={s.text} />
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+            {tab !== "ask" && (
+              /* visible "AI suggestion: continue with X" card. */
+              <div className="ai-suggest-card" role="status">
+                <span className="ai-suggest-label" aria-hidden>
+                  <Bookmark size={14} /> {t("aiSuggestion")}
+                </span>
+                <span className="ai-suggest-text">
+                  {(progressQuery.data ?? []).find((x) => x.chapter === chapter)
+                    ?.completed
+                    ? t("nextSuggestionAsk")
+                    : t("nextSuggestionPractice")}
+                </span>
+                <button
+                  className="btn btn-soft btn-sm"
+                  onClick={() =>
+                    setTab(
+                      (progressQuery.data ?? []).find(
+                        (x) => x.chapter === chapter,
+                      )?.completed
+                        ? "ask"
+                        : "practice",
+                    )
+                  }
+                >
+                  {(progressQuery.data ?? []).find((x) => x.chapter === chapter)
+                    ?.completed
+                    ? t("tabAsk")
+                    : t("tabPractice")}
+                </button>
               </div>
-            </>
-          )}
-          {tab !== "ask" && (
-            /* visible "AI suggestion: continue with X" card. */
-            <div className="ai-suggest-card" role="status">
-              <span className="ai-suggest-label" aria-hidden>
-                <Bookmark size={14} /> {t("aiSuggestion")}
-              </span>
-              <span className="ai-suggest-text">
-                {(progressQuery.data ?? []).find((x) => x.chapter === chapter)
-                  ?.completed
-                  ? t("nextSuggestionAsk")
-                  : t("nextSuggestionPractice")}
-              </span>
-              <button
-                className="btn btn-soft btn-sm"
-                onClick={() =>
-                  setTab(
-                    (progressQuery.data ?? []).find(
-                      (x) => x.chapter === chapter,
-                    )?.completed
-                      ? "ask"
-                      : "practice",
-                  )
-                }
-              >
-                {(progressQuery.data ?? []).find((x) => x.chapter === chapter)
-                  ?.completed
-                  ? t("tabAsk")
-                  : t("tabPractice")}
-              </button>
-            </div>
-          )}
-          {tab === "practice" && (
-            <ChapterPractice
-              subject={content.subject}
-              chapter={content.chapter}
-              classLevel={content.class_level}
-            />
-          )}
-          {tab === "ask" && (
-            <ChapterAsk
-              subject={content.subject}
-              chapter={content.chapter}
-              classLevel={content.class_level}
-            />
-          )}
+            )}
+            {tab === "practice" && (
+              <ChapterPractice
+                subject={content.subject}
+                chapter={content.chapter}
+                classLevel={content.class_level}
+              />
+            )}
+            {tab === "ask" && (
+              <ChapterAsk
+                subject={content.subject}
+                chapter={content.chapter}
+                classLevel={content.class_level}
+              />
+            )}
           </div>
         </Card>
       )}

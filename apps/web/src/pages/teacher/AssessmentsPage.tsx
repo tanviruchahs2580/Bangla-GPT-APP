@@ -161,7 +161,9 @@ export default function AssessmentsPage() {
         // hours late. Sending an instant removes the disagreement.
         due_at: new Date(asDue).toISOString(),
       });
-      void queryClient.invalidateQueries({ queryKey: ["teacher", "assignments"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["teacher", "assignments"],
+      });
       setSelIds(new Set());
       setAsMsg(t("baSelected", { n: row.attempts.length }));
     } catch (err) {
@@ -244,9 +246,7 @@ export default function AssessmentsPage() {
                   queryClient.setQueryData<QPaper[]>(
                     ["teacher", "qpapers"],
                     (list) =>
-                      (list ?? []).map((q) =>
-                        q.id === next.id ? next : q,
-                      ),
+                      (list ?? []).map((q) => (q.id === next.id ? next : q)),
                   );
                 }}
               />

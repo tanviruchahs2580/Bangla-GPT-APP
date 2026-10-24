@@ -353,7 +353,11 @@ export const get = <T>(path: string) => api<T>(path);
 export const post = <T>(
   path: string,
   body?: unknown,
-  opts?: { skipUnauthorized?: boolean; signal?: AbortSignal; timeoutMs?: number },
+  opts?: {
+    skipUnauthorized?: boolean;
+    signal?: AbortSignal;
+    timeoutMs?: number;
+  },
 ) =>
   api<T>(
     path,
@@ -705,7 +709,8 @@ export async function logout(): Promise<void> {
  * outstanding session of the account fails its next request. Returns once
  * confirmed — callers then complete a local logout.
  */
-export const revokeAllSessions = () => post<void>("/users/me/sessions/revoke", {});
+export const revokeAllSessions = () =>
+  post<void>("/users/me/sessions/revoke", {});
 
 /* -------- Learn catalog (grounded corpus) -------- */
 export const getSubjects = (classLevel?: number) =>

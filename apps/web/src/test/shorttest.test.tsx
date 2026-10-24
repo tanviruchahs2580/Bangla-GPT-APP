@@ -19,7 +19,10 @@ vi.mock("../api", async (importOriginal) => ({
 }));
 
 function renderPage() {
-  return renderWithQuery(<CreatePage />, { route: "/teacher/create?kind=short_test", path: "/teacher/create" });
+  return renderWithQuery(<CreatePage />, {
+    route: "/teacher/create?kind=short_test",
+    path: "/teacher/create",
+  });
 }
 
 let testsStore: ShortTest[] = [];

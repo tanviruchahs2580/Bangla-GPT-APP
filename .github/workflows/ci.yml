@@ -583,7 +583,12 @@ jobs:
             aquasec/trivy:0.58.0@sha256:b88012e2a0a309d6a8a00463d4e63e5e513377fb74eccbc8f9b0f8f81940ebeb image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 bangla-gpt-api:ci
 
       - name: Run container
-        run: docker run -d --name api-smoke -p 8080:8000 -e ENV=ci bangla-gpt-api:ci
+        # On a shared network so the k6 step can reach it by name: the k6
+        # container's --network host could not dial the host-published port
+        # on the runner (connection refused, measured 2026-10-24).
+        run: |
+          docker network create smoke
+          docker run -d --name api-smoke --network smoke -p 8080:8000 -e ENV=ci bangla-gpt-api:ci
 
       - name: Wait for health endpoint
         run: |
@@ -610,7 +615,7 @@ jobs:
         # amd64, resolved from the registry 2026-10-23; refresh with
         # scripts/update_image_digests.py discipline (verify before pinning).
         run: |
-          docker run --rm --network host             -v "$PWD/load:/load:ro"             grafana/k6@sha256:15763404ccf3c7b93d8ff7f91a90566b589be81272c9423e94677380c3c88d4e             run -e BASE_URL=http://127.0.0.1:8080 -e VUS=2 -e DURATION=20s /load/k6-tutor.js
+          docker run --rm --network smoke             -v "$PWD/load:/load:ro"             grafana/k6@sha256:15763404ccf3c7b93d8ff7f91a90566b589be81272c9423e94677380c3c88d4e             run -e BASE_URL=http://api-smoke:8000 -e VUS=2 -e DURATION=20s /load/k6-tutor.js
 
       - name: Cleanup
         if: always()
