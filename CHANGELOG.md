@@ -58,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): ruff format circuit_breaker
 - fix(api): ruff format middleware_stack
 - fix(api): scope chapter-content writes to the author's school
+- fix(api): serialise AiJob cancellation against its own DB sections
 - fix(api): serve the configured corpus and the Dhaka day in the Learn flow
 - fix(api): tie the quiz ceilings to one bound so an assignment stays submittable
 - fix(api): unify the error envelope — every raise carries a machine code
@@ -68,6 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(auth): hash passwords with Argon2id and upgrade legacy hashes on login
 - fix(auth): redeem single-use codes with a compare-and-set, not a read-then-write
 - fix(auth): unblock login on web and APK (MFA step-up, unauth resend, proxy/APK errors)
+- fix(ci): commit the k6 namespace-share fix; regenerate the CHANGELOG
 - fix(ci): exempt changelog-regenerating commits by changed paths, not subject text
 - fix(ci): green the pipeline — security bumps, k6 on the compose network, Linux visual skip, tracing start
 - fix(ci): make the doc-path guard cover the classes of path it claims to
@@ -219,6 +221,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Tests
 
+- test(api): autocommit the raw fixture connections in new-tables deletion tests
 - test(api): cover school admin fallbacks and tenant guards
 - test(api): erasure-fk fixture recognises the parity env var (BGPT_TEST_DATABASE_URL)
 - test(e2e): regenerate teacher-home dark baselines after the brand-solid contrast fix
