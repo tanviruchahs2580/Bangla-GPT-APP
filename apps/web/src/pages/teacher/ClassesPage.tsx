@@ -57,10 +57,6 @@ export default function ClassesPage() {
   const [newSection, setNewSection] = useState("GEN");
   const [createBusy, setCreateBusy] = useState(false);
 
-  const [csvText, setCsvText] = useState("");
-  const [importBusy, setImportBusy] = useState(false);
-  const [importResult, setImportResult] = useState<ImportResult | null>(null);
-
   // Shared cache (audit H-04: this page ran five ad-hoc fetches per mount;
   // TeacherHomePage reads the same classrooms list through the same key, so
   // navigation between them no longer refetches or disagrees).
@@ -156,39 +152,6 @@ export default function ClassesPage() {
       setMutationError(errText(err));
     } finally {
       setCreateBusy(false);
-    }
-  }
-
-  async function runImport(e: React.FormEvent) {
-    e.preventDefault();
-    if (roomId === null || importBusy || !csvText.trim()) return;
-    setImportBusy(true);
-    setImportResult(null);
-    try {
-      const res = await post<ImportResult>(
-        `/teacher/classrooms/${roomId}/import`,
-        { csv_text: csvText },
-        // 200 rows = 200 Argon2id hashes server-side (measured past the
-        // 20s default guard); this is the one sanctioned long call.
-        { timeoutMs: 120_000 },
-      );
-      setImportResult(res);
-      setCsvText("");
-      // roster sizes, health aggregates and the weak matrix all move
-      void queryClient.invalidateQueries({
-        queryKey: ["teacher", "classrooms"],
-      });
-      void queryClient.invalidateQueries({ queryKey: ["teacher", "roster"] });
-      void queryClient.invalidateQueries({
-        queryKey: ["teacher", "classAnalytics"],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["teacher", "weak-matrix"],
-      });
-    } catch (err) {
-      setMutationError(errText(err));
-    } finally {
-      setImportBusy(false);
     }
   }
 
@@ -615,56 +578,110 @@ export default function ClassesPage() {
         </Card>
       )}
 
-      {selected && (
-        <Card title={t("csvImport")}>
-          <p className="muted">{t("csvHint")}</p>
-          <form onSubmit={runImport}>
-            <textarea
-              rows={5}
-              className="textarea mono-block"
-              value={csvText}
-              onChange={(e) => setCsvText(e.target.value)}
-              placeholder={"name,email"}
-            />
-            <Button
-              variant="primary"
-              type="submit"
-              loading={importBusy}
-              disabled={!csvText.trim()}
-            >
-              {t("importBtn")}
-            </Button>
-          </form>
-          {importResult && (
-            <div role="status">
-              <p>
-                <span>{t("importCreated", { n: importResult.created })}</span>
-                {" · "}
-                <span>{t("importFailed", { n: importResult.failed })}</span>
-              </p>
-              {importResult.rows.some((r) => r.invite_code) && (
-                <div className="table-wrap">
-                  <table className="data">
-                    <tbody>
-                      {importResult.rows
-                        .filter((r) => r.invite_code)
-                        .map((r) => (
-                          <tr key={r.email}>
-                            <td>{r.name}</td>
-                            <td>{r.email}</td>
-                            <td>
-                              {t("inviteCode")}: <code>{r.invite_code}</code>
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+      {selected && <CsvImportCard roomId={selected.id} />}
+    </main>
+  );
+}
+
+/**
+ * Owns the CSV-import form state locally (audit perf finding): a controlled
+ * 20 KB textarea at page level re-rendered the whole roster/grid on every
+ * change — a measured 3.7 s main-thread task under 4x throttle on paste.
+ * With the state here, typing costs a textarea re-render, nothing else.
+ */
+function CsvImportCard({ roomId }: { roomId: number }) {
+  const queryClient = useQueryClient();
+  const [csvText, setCsvText] = useState("");
+  const [importBusy, setImportBusy] = useState(false);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function runImport(e: React.FormEvent) {
+    e.preventDefault();
+    if (importBusy || !csvText.trim()) return;
+    setImportBusy(true);
+    setImportResult(null);
+    try {
+      const res = await post<ImportResult>(
+        `/teacher/classrooms/${roomId}/import`,
+        { csv_text: csvText },
+        // 200 rows = 200 Argon2id hashes server-side (measured past the
+        // 20s default guard); this is the one sanctioned long call.
+        { timeoutMs: 120_000 },
+      );
+      setImportResult(res);
+      setCsvText("");
+      // roster sizes, health aggregates and the weak matrix all move
+      void queryClient.invalidateQueries({
+        queryKey: ["teacher", "classrooms"],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["teacher", "roster"] });
+      void queryClient.invalidateQueries({
+        queryKey: ["teacher", "classAnalytics"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["teacher", "weak-matrix"],
+      });
+    } catch (err) {
+      setError(errText(err));
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
+  return (
+    <Card title={t("csvImport")}>
+      <p className="muted">{t("csvHint")}</p>
+      <form onSubmit={runImport}>
+        <textarea
+          rows={5}
+          className="textarea mono-block"
+          value={csvText}
+          onChange={(e) => setCsvText(e.target.value)}
+          placeholder={"name,email"}
+        />
+        <Button
+          variant="primary"
+          type="submit"
+          loading={importBusy}
+          disabled={!csvText.trim()}
+        >
+          {t("importBtn")}
+        </Button>
+      </form>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+      {importResult && (
+        <div role="status">
+          <p>
+            <span>{t("importCreated", { n: importResult.created })}</span>
+            {" · "}
+            <span>{t("importFailed", { n: importResult.failed })}</span>
+          </p>
+          {importResult.rows.some((r) => r.invite_code) && (
+            <div className="table-wrap">
+              <table className="data">
+                <tbody>
+                  {importResult.rows
+                    .filter((r) => r.invite_code)
+                    .map((r) => (
+                      <tr key={r.email}>
+                        <td>{r.name}</td>
+                        <td>{r.email}</td>
+                        <td>
+                          {t("inviteCode")}: <code>{r.invite_code}</code>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
             </div>
           )}
-        </Card>
+        </div>
       )}
-    </main>
+    </Card>
   );
 }
