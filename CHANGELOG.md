@@ -227,6 +227,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - test(api): cover school admin fallbacks and tenant guards
 - test(api): erasure-fk fixture recognises the parity env var (BGPT_TEST_DATABASE_URL)
 - test(api): pin both nukta-ya encodings in the injection screen (M-19)
+- test(api): seed the ai_jobs row directly — no background writer in the deletion test
 - test(e2e): regenerate teacher-home dark baselines after the brand-solid contrast fix
 - test(e2e): reshape the CSV perf budget to measure typing latency, not driver mechanics
 - test(e2e): tolerate measured rasterisation variance (2% -> 5%) + regenerated teacher baselines after the contrast fix

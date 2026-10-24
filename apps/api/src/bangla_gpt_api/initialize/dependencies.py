@@ -94,11 +94,25 @@ def _safe_init_db(engine: Engine, settings: Settings) -> None:
         # Unresolvable settings must not stop table creation; the schema that
         # results is valid either way, so record why the check was skipped.
         logging.getLogger(__name__).debug("settings check skipped: %s", exc)
-    try:
-        init_db(engine)
-    except Exception as exc:
-        if "already exists" not in str(exc):
-            raise
+    # Retryable under concurrent multi-worker boot (gunicorn -w 2, the
+    # shipped default): another worker simultaneously running create_all
+    # makes this one see "database schema has changed" during reflection,
+    # or "database is locked" while the DDL lock is held — measured as a
+    # failing worker and a dead container (2026-10-24). create_all is
+    # idempotent, so a bounded retry converges; anything else re-raises.
+    retryable = ("already exists", "database schema has changed", "database is locked")
+    last: Exception | None = None
+    for _ in range(50):  # <= ~10s
+        try:
+            init_db(engine)
+            return
+        except Exception as exc:
+            if not any(phrase in str(exc) for phrase in retryable):
+                raise
+            last = exc
+            time.sleep(0.2)
+    if last is not None:
+        raise last
 
 
 def _bootstrap_admin(session_factory: Callable[[], Session], settings: Settings) -> None:
