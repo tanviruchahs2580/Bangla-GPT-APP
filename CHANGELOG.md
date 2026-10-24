@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): burn pending verification codes when a new one is issued
 - fix(api): close the check-then-insert race class; reap orphaned AI jobs
 - fix(api): close two moderation false negatives and cover the chat routes
+- fix(api): commit the NFC-normalised red-team dataset; raise the SQLite busy timeout to 15s
 - fix(api): derive the school analytics day window in Asia/Dhaka
 - fix(api): drop an unused variable the new RUF059 rule caught
 - fix(api): emit SSE heartbeat comments so silent streams survive proxy timeouts
@@ -195,6 +196,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate CHANGELOG to cover the vercel.json headers fix branch
 - docs: regenerate the CHANGELOG for the 2026-10-17 audit fixes
 - docs: regenerate the CHANGELOG for the CI-format fixes
+- docs: regenerate the CHANGELOG for the CI-greening branch
 - docs: regenerate the CHANGELOG for the QA-record amendment
 - docs: regenerate the CHANGELOG for the RAG retrieval rework
 - docs: regenerate the CHANGELOG for the acceptance-testing fixes

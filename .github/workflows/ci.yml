@@ -615,7 +615,10 @@ jobs:
         # amd64, resolved from the registry 2026-10-23; refresh with
         # scripts/update_image_digests.py discipline (verify before pinning).
         run: |
-          docker run --rm --network smoke             -v "$PWD/load:/load:ro"             grafana/k6@sha256:15763404ccf3c7b93d8ff7f91a90566b589be81272c9423e94677380c3c88d4e             run -e BASE_URL=http://api-smoke:8000 -e VUS=2 -e DURATION=20s /load/k6-tutor.js
+          # Share the api-smoke network NAMESPACE: Docker's embedded DNS
+          # misresolved the container alias for the k6 image (measured
+          # "server misbehaving", 2026-10-24); namespace sharing needs no DNS.
+          docker run --rm --network container:api-smoke             -v "$PWD/load:/load:ro"             grafana/k6@sha256:15763404ccf3c7b93d8ff7f91a90566b589be81272c9423e94677380c3c88d4e             run -e BASE_URL=http://127.0.0.1:8000 -e VUS=2 -e DURATION=20s /load/k6-tutor.js
 
       - name: Cleanup
         if: always()
