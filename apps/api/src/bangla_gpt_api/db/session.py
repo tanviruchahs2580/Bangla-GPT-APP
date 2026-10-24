@@ -34,7 +34,10 @@ from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.base import Base
 
 #: How long a SQLite write waits for the write lock before raising.
-SQLITE_BUSY_TIMEOUT_MS = 5000
+# 15s: the coverage CI leg and single-file production deployments both
+# hit multi-second write contention under load; 5s measured "database is
+# locked" flakes (CI 2026-10-24, two suites) where 15s absorbed them.
+SQLITE_BUSY_TIMEOUT_MS = 15000
 #: TCP connect budget for PostgreSQL — a hung host fails the connection
 #: attempt instead of blocking the (boot-time or request) caller indefinitely.
 POSTGRES_CONNECT_TIMEOUT_SECONDS = 10
