@@ -1,6 +1,7 @@
 /** teacher Create hub — generate, filter, delete flows. */
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 import { CreateHub } from "../components/teacher/CreateHub";
@@ -73,7 +74,14 @@ beforeEach(() => {
 });
 
 it("renders the saved library and the workload estimate", async () => {
-  render(<CreateHub />);
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: 30_000 } },
+  });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <CreateHub />
+    </QueryClientProvider>,
+  );
   expect(
     await screen.findByText("Photosynthesis worksheet"),
   ).toBeInTheDocument();
@@ -82,7 +90,14 @@ it("renders the saved library and the workload estimate", async () => {
 
 it("generates a worksheet synchronously with the chosen class and subject", async () => {
   const user = userEvent.setup();
-  render(<CreateHub />);
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: 30_000 } },
+  });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <CreateHub />
+    </QueryClientProvider>,
+  );
   await screen.findByText("Photosynthesis worksheet");
   await user.click(screen.getByRole("button", { name: t("genNow") }));
   await waitFor(() =>
@@ -98,9 +113,22 @@ it("generates a worksheet synchronously with the chosen class and subject", asyn
 
 it("answer key kind asks for questions; background run queues a job", async () => {
   const user = userEvent.setup();
-  render(<CreateHub />);
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: 30_000 } },
+  });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <CreateHub />
+    </QueryClientProvider>,
+  );
   await screen.findByText("Photosynthesis worksheet");
-  await user.click(screen.getByRole("tab", { name: t("genAnswerKey") }));
+  // Segmented is a labelled toggle group now (M-17): role=button +
+  // aria-pressed. The saved-library filter chips share the kind names, so
+  // scope the query to the labelled group.
+  const kindGroup = screen.getByRole("group", { name: t("genKind") });
+  await user.click(
+    within(kindGroup).getByRole("button", { name: t("genAnswerKey") }),
+  );
   expect(screen.getByText(t("genQuestionsHint"))).toBeInTheDocument();
   fireEvent.change(
     screen.getByRole("textbox", { name: t("genQuestionsHint") }),
@@ -119,7 +147,14 @@ it("answer key kind asks for questions; background run queues a job", async () =
 
 it("delete removes the row via DELETE /teacher/documents/{id}", async () => {
   const user = userEvent.setup();
-  render(<CreateHub />);
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: 30_000 } },
+  });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <CreateHub />
+    </QueryClientProvider>,
+  );
   await screen.findByText("Photosynthesis worksheet");
   // Deleting a saved document is irreversible and regenerating it is work, so
   // it takes a second tap: the first arms the confirm, the second sends the

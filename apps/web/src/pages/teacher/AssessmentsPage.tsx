@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { get, post } from "../../api";
 import type {
   AssignmentProgressRow,
@@ -22,17 +23,50 @@ const errText = (err: unknown): string =>
 type Tab = "papers" | "shorttests" | "assignments";
 
 export default function AssessmentsPage() {
+  const queryClient = useQueryClient();
   const [params, setParams] = useSearchParams();
   const tab = (params.get("tab") as Tab | null) ?? "papers";
 
-  const [rooms, setRooms] = useState<ClassRoom[]>([]);
   const [roomId, setRoomId] = useState<number | null>(null);
-  const [roster, setRoster] = useState<RosterEntry[]>([]);
-  const [error, setError] = useState<string | null>(null);
 
   // QP library + selected review target.
-  const [qps, setQps] = useState<QPaper[]>([]);
   const [openQp, setOpenQp] = useState<QPaper | null>(null);
+
+  // Shared cache (audit H-04): classrooms/roster/qpapers keys match the other
+  // teacher pages, so one cache serves Home, Classes and Assessments alike.
+  const roomsQuery = useQuery({
+    queryKey: ["teacher", "classrooms"],
+    queryFn: () => get<ClassRoom[]>("/teacher/classrooms"),
+    select: (rs) =>
+      [...rs].sort(
+        (a, b) =>
+          a.class_level - b.class_level || a.section.localeCompare(b.section),
+      ),
+  });
+  const rooms = useMemo(() => roomsQuery.data ?? [], [roomsQuery.data]);
+  const rosterQuery = useQuery({
+    queryKey: ["teacher", "roster", roomId],
+    queryFn: () => get<RosterEntry[]>(`/teacher/classrooms/${roomId}/roster`),
+    enabled: roomId !== null,
+  });
+  const roster = useMemo(() => rosterQuery.data ?? [], [rosterQuery.data]);
+  const assignsQuery = useQuery({
+    queryKey: ["teacher", "assignments"],
+    queryFn: () => get<AssignmentRow[]>("/teacher/assignments"),
+  });
+  const assigns = useMemo(() => assignsQuery.data ?? [], [assignsQuery.data]);
+  const qpsQuery = useQuery({
+    queryKey: ["teacher", "qpapers"],
+    queryFn: () => get<QPaper[]>("/teacher/qpapers"),
+  });
+  const qps = useMemo(() => qpsQuery.data ?? [], [qpsQuery.data]);
+
+  // Reset the bulk selection when the roster underneath it changes room.
+  useEffect(() => {
+    setSelIds(new Set());
+    setAsOpen(null);
+    setAsProg({});
+  }, [roomId]);
 
   // C16 per-student quiz assignment (roster row action).
   const [assignTo, setAssignTo] = useState<number | null>(null);
@@ -49,7 +83,6 @@ export default function AssessmentsPage() {
   const [asDue, setAsDue] = useState("");
   const [asBusy, setAsBusy] = useState(false);
   const [asMsg, setAsMsg] = useState<string | null>(null);
-  const [assigns, setAssigns] = useState<AssignmentRow[]>([]);
   const [asProg, setAsProg] = useState<Record<number, AssignmentProgressRow[]>>(
     {},
   );
@@ -57,61 +90,19 @@ export default function AssessmentsPage() {
 
   const selected = rooms.find((r) => r.id === roomId) ?? null;
 
-  const loadRooms = useCallback(() => {
-    get<ClassRoom[]>("/teacher/classrooms")
-      .then((rs) => {
-        setRooms(rs);
-        setRoomId((cur) =>
-          cur !== null && rs.some((r) => r.id === cur)
-            ? cur
-            : (rs[0]?.id ?? null),
-        );
-      })
-      .catch((err: unknown) => setError(errText(err)));
-  }, []);
+  const queryError = roomsQuery.error ?? rosterQuery.error;
+  const error = queryError ? errText(queryError) : null;
 
+  // Auto-select the first room (or keep the selection valid after a refetch).
   useEffect(() => {
-    loadRooms();
-  }, [loadRooms]);
-
-  const load = useCallback(() => {
-    if (roomId === null) {
-      setRoster([]);
-      setSelIds(new Set());
+    if (rooms.length === 0) {
+      setRoomId(null);
       return;
     }
-    setError(null);
-    Promise.all([
-      get<RosterEntry[]>(`/teacher/classrooms/${roomId}/roster`),
-      get<AssignmentRow[]>("/teacher/assignments").catch(() => []),
-    ])
-      .then(([r, rows]) => {
-        setRoster(r);
-        setAssigns(rows ?? []);
-        setSelIds(new Set());
-        setAsOpen(null);
-        setAsProg({});
-      })
-      .catch((err: unknown) => setError(errText(err)));
-  }, [roomId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  useEffect(() => {
-    let live = true;
-    get<QPaper[]>("/teacher/qpapers")
-      .then((rows) => {
-        if (live) setQps(rows ?? []);
-      })
-      .catch(() => {
-        if (live) setQps([]);
-      });
-    return () => {
-      live = false;
-    };
-  }, []);
+    setRoomId((cur) =>
+      cur !== null && rooms.some((r) => r.id === cur) ? cur : rooms[0].id,
+    );
+  }, [rooms]);
 
   async function assignQuiz(e: React.FormEvent) {
     e.preventDefault();
@@ -170,7 +161,7 @@ export default function AssessmentsPage() {
         // hours late. Sending an instant removes the disagreement.
         due_at: new Date(asDue).toISOString(),
       });
-      setAssigns((ls) => [row, ...ls]);
+      void queryClient.invalidateQueries({ queryKey: ["teacher", "assignments"] });
       setSelIds(new Set());
       setAsMsg(t("baSelected", { n: row.attempts.length }));
     } catch (err) {
@@ -250,8 +241,12 @@ export default function AssessmentsPage() {
                 qp={openQp}
                 onChange={(next) => {
                   setOpenQp(next);
-                  setQps((list) =>
-                    list.map((q) => (q.id === next.id ? next : q)),
+                  queryClient.setQueryData<QPaper[]>(
+                    ["teacher", "qpapers"],
+                    (list) =>
+                      (list ?? []).map((q) =>
+                        q.id === next.id ? next : q,
+                      ),
                   );
                 }}
               />
@@ -586,26 +581,20 @@ function AssignmentResult({ rows }: { rows: AssignmentProgressRow[] }) {
 
 /** Short-test list (read-only here; creation lives in Create). */
 function ShortTestList() {
-  const [rows, setRows] = useState<
-    Array<{
-      id: number;
-      chapter: string;
-      subject: string;
-      questions: unknown[];
-      attempts: unknown[];
-    }>
-  >([]);
-  useEffect(() => {
-    let live = true;
-    get("/teacher/shorttests")
-      .then((r) => {
-        if (live) setRows((r as typeof rows) ?? []);
-      })
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, []);
+  const { data } = useQuery({
+    queryKey: ["teacher", "shorttests"],
+    queryFn: () =>
+      get<
+        Array<{
+          id: number;
+          chapter: string;
+          subject: string;
+          questions: unknown[];
+          attempts: unknown[];
+        }>
+      >("/teacher/shorttests"),
+  });
+  const rows = data ?? [];
   if (rows.length === 0) return <p className="muted">{t("stEmpty")}</p>;
   return (
     <ul>

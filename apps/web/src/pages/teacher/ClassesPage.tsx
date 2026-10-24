@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { get, post } from "../../api";
 import type {
   ClassAnalytics,
@@ -41,15 +42,11 @@ const HEALTH_LABEL_KEY: Record<Health, Parameters<typeof t>[0]> = {
 };
 
 export default function ClassesPage() {
-  const [rooms, setRooms] = useState<ClassRoom[]>([]);
+  const queryClient = useQueryClient();
   const [roomId, setRoomId] = useState<number | null>(null);
-  const [roster, setRoster] = useState<RosterEntry[]>([]);
-  const [analytics, setAnalytics] = useState<ClassAnalytics | null>(null);
-  const [wm, setWm] = useState<WeakMatrix | null>(null);
-  const [sps, setSps] = useState<SupportPlanRow[]>([]);
   const [spBusy, setSpBusy] = useState(false);
   const [spMsg, setSpMsg] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [mutationError, setMutationError] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "strong" | "support" | "risk">(
@@ -64,81 +61,95 @@ export default function ClassesPage() {
   const [importBusy, setImportBusy] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
 
-  const selected = rooms.find((r) => r.id === roomId) ?? null;
+  // Shared cache (audit H-04: this page ran five ad-hoc fetches per mount;
+  // TeacherHomePage reads the same classrooms list through the same key, so
+  // navigation between them no longer refetches or disagrees).
+  const roomsQuery = useQuery({
+    queryKey: ["teacher", "classrooms"],
+    queryFn: () => get<ClassRoom[]>("/teacher/classrooms"),
+    select: (rs) =>
+      [...rs].sort(
+        (a, b) =>
+          a.class_level - b.class_level || a.section.localeCompare(b.section),
+      ),
+  });
+  // stable identity while loading: the auto-select effect and the
+  // students memo key on this array
+  const rooms = useMemo(() => roomsQuery.data ?? [], [roomsQuery.data]);
 
-  const loadRooms = useCallback(() => {
-    get<ClassRoom[]>("/teacher/classrooms")
-      .then((rs) => {
-        setRooms(rs);
-        setRoomId((cur) =>
-          cur !== null && rs.some((r) => r.id === cur)
-            ? cur
-            : (rs[0]?.id ?? null),
-        );
-      })
-      .catch((err: unknown) => setError(errText(err)));
-  }, []);
-
+  // Auto-select the first room (or keep the selection valid after a refetch).
   useEffect(() => {
-    loadRooms();
-  }, [loadRooms]);
-
-  const load = useCallback(() => {
-    if (roomId === null) {
-      setRoster([]);
-      setAnalytics(null);
-      setWm(null);
+    if (rooms.length === 0) {
+      setRoomId(null);
       return;
     }
-    setError(null);
-    Promise.all([
-      get<RosterEntry[]>(`/teacher/classrooms/${roomId}/roster`),
-      selected
-        ? get<ClassAnalytics>(
-            `/teacher/classes/${selected.class_level}/analytics`,
-          )
-        : Promise.resolve(null),
-      selected
-        ? get<WeakMatrix>(
-            // Roster-scoped matrix: an empty classroom must show its own
-            // (empty) stats, not the grade-wide platform numbers.
-            `/teacher/weak-matrix?class_level=${selected.class_level}&room_id=${selected.id}`,
-          ).catch(() => null)
-        : Promise.resolve(null),
-      get<SupportPlanRow[]>("/teacher/support-plans").catch(() => []),
-    ])
-      .then(([r, a, m, plans]) => {
-        setRoster(r);
-        setAnalytics(a);
-        setWm(m ?? null);
-        setSps(plans ?? []);
-      })
-      .catch((err: unknown) => setError(errText(err)));
-  }, [roomId, selected]);
+    setRoomId((cur) =>
+      cur !== null && rooms.some((r) => r.id === cur) ? cur : rooms[0].id,
+    );
+  }, [rooms]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  const selected = rooms.find((r) => r.id === roomId) ?? null;
+
+  const rosterQuery = useQuery({
+    queryKey: ["teacher", "roster", roomId],
+    queryFn: () => get<RosterEntry[]>(`/teacher/classrooms/${roomId}/roster`),
+    enabled: roomId !== null,
+  });
+  const analyticsQuery = useQuery({
+    queryKey: ["teacher", "classAnalytics", selected?.class_level],
+    queryFn: () =>
+      get<ClassAnalytics>(`/teacher/classes/${selected?.class_level}/analytics`),
+    enabled: selected !== null,
+  });
+  const wmQuery = useQuery({
+    // Roster-scoped matrix: an empty classroom must show its own (empty)
+    // stats, not the grade-wide platform numbers.
+    queryKey: ["teacher", "weak-matrix", selected?.class_level, selected?.id],
+    queryFn: () =>
+      get<WeakMatrix>(
+        `/teacher/weak-matrix?class_level=${selected?.class_level}&room_id=${selected?.id}`,
+      ),
+    enabled: selected !== null,
+    retry: false, // an unscorable room shows its empty state, not an error
+  });
+  const plansQuery = useQuery({
+    queryKey: ["teacher", "support-plans"],
+    queryFn: () => get<SupportPlanRow[]>("/teacher/support-plans"),
+  });
+
+  const roster = rosterQuery.data ?? [];
+  const analytics = analyticsQuery.data ?? null;
+  const wm = wmQuery.data ?? null;
+  const sps = plansQuery.data ?? [];
+
+  // The banner reports what a teacher can act on: a failed rooms load (page
+  // unusable) or a failed mutation. Per-panel loads (roster/analytics/wm)
+  // render their own empty/partial states — a dead analytics panel must not
+  // blank the roster underneath it.
+  const queryError =
+    roomsQuery.error ??
+    (rosterQuery.isError && roomId !== null ? rosterQuery.error : null);
+  const error = mutationError ?? (queryError ? errText(queryError) : null);
+  const refresh = () => {
+    setMutationError(null);
+    void roomsQuery.refetch();
+    void rosterQuery.refetch();
+  };
 
   async function createRoom(e: React.FormEvent) {
     e.preventDefault();
     if (createBusy) return;
     setCreateBusy(true);
-    setError(null);
+    setMutationError(null);
     try {
       const room = await post<ClassRoom>("/teacher/classrooms", {
         class_level: newLevel,
         section: newSection || "GEN",
       });
-      setRooms((rs) =>
-        [...rs, room].sort(
-          (a, b) =>
-            a.class_level - b.class_level || a.section.localeCompare(b.section),
-        ),
-      );
       setRoomId(room.id);
+      void queryClient.invalidateQueries({ queryKey: ["teacher", "classrooms"] });
     } catch (err) {
-      setError(errText(err));
+      setMutationError(errText(err));
     } finally {
       setCreateBusy(false);
     }
@@ -159,10 +170,13 @@ export default function ClassesPage() {
       );
       setImportResult(res);
       setCsvText("");
-      load();
-      loadRooms();
+      // roster sizes, health aggregates and the weak matrix all move
+      void queryClient.invalidateQueries({ queryKey: ["teacher", "classrooms"] });
+      void queryClient.invalidateQueries({ queryKey: ["teacher", "roster"] });
+      void queryClient.invalidateQueries({ queryKey: ["teacher", "classAnalytics"] });
+      void queryClient.invalidateQueries({ queryKey: ["teacher", "weak-matrix"] });
     } catch (err) {
-      setError(errText(err));
+      setMutationError(errText(err));
     } finally {
       setImportBusy(false);
     }
@@ -173,10 +187,12 @@ export default function ClassesPage() {
     setSpBusy(true);
     setSpMsg(null);
     try {
-      const row = await post<SupportPlanRow>("/teacher/support-plans", {
+      await post<SupportPlanRow>("/teacher/support-plans", {
         student_id: studentId,
       });
-      setSps((ls) => [row, ...ls]);
+      void queryClient.invalidateQueries({
+        queryKey: ["teacher", "support-plans"],
+      });
     } catch (err) {
       setSpMsg(errText(err));
     } finally {
@@ -269,7 +285,7 @@ export default function ClassesPage() {
     <main className="shell-main">
       <section className="section-head">
         <h1 className="page-title">{t("tNavClasses")}</h1>
-        <Button variant="soft" size="sm" onClick={loadRooms}>
+        <Button variant="soft" size="sm" onClick={refresh}>
           {t("refreshBtn")}
         </Button>
       </section>

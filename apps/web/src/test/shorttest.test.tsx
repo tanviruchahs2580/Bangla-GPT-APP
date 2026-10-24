@@ -1,10 +1,10 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
 import CreatePage from "../pages/teacher/CreatePage";
 import { t } from "../i18n";
 import type { ShortTest } from "../types";
+import { renderWithQuery } from "./renderWithQuery";
 
 const apiMock = vi.hoisted(() => ({
   get: vi.fn(),
@@ -19,15 +19,10 @@ vi.mock("../api", async (importOriginal) => ({
 }));
 
 function renderPage() {
-  return render(
-    <MemoryRouter initialEntries={["/teacher/create?kind=short_test"]}>
-      <Routes>
-        <Route path="/teacher/create" element={<CreatePage />} />
-      </Routes>
-    </MemoryRouter>,
-  );
+  return renderWithQuery(<CreatePage />, { route: "/teacher/create?kind=short_test", path: "/teacher/create" });
 }
 
+let testsStore: ShortTest[] = [];
 const ROOMS = [{ id: 1, class_level: 6, section: "GEN", student_count: 2 }];
 
 const ROSTER = [
@@ -80,19 +75,25 @@ const ASSIGNED: ShortTest = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Stateful test store: the page invalidates and refetches shorttests after
+  // an assign (H-04) — a static [] would hide the new row forever.
+  testsStore = [];
   apiMock.get.mockImplementation((path: string) => {
     if (path === "/teacher/classrooms")
       return Promise.resolve(structuredClone(ROOMS));
     if (path.endsWith("/roster"))
       return Promise.resolve(structuredClone(ROSTER));
-    if (path === "/teacher/shorttests") return Promise.resolve([]);
+    if (path === "/teacher/shorttests")
+      return Promise.resolve(structuredClone(testsStore));
     if (path.includes("/analytics"))
       return Promise.resolve(structuredClone(EMPTY_ANALYTICS));
     return Promise.resolve(null);
   });
   apiMock.post.mockImplementation((path: string) => {
-    if (path === "/teacher/shorttests")
+    if (path === "/teacher/shorttests") {
+      testsStore = [structuredClone(ASSIGNED)];
       return Promise.resolve(structuredClone(ASSIGNED));
+    }
     return Promise.resolve(null);
   });
 });

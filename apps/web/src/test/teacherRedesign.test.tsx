@@ -127,6 +127,10 @@ beforeEach(() => {
     estimate: true,
     methodology: "heuristic",
   });
+  // Stateful support-plan store: the migrated page invalidates and refetches
+  // after a create (H-04), so the GET mock must model the server — a static
+  // `[]` would hide the new plan forever and the detail flow would stall.
+  supportPlans = [];
   apiMock.get.mockImplementation((path: string) => {
     if (path === "/teacher/classrooms")
       return Promise.resolve(structuredClone(ROOMS));
@@ -136,7 +140,8 @@ beforeEach(() => {
       return Promise.resolve(structuredClone(ANALYTICS));
     if (path.includes("weak-matrix"))
       return Promise.resolve(structuredClone(MATRIX));
-    if (path === "/teacher/support-plans") return Promise.resolve([]);
+    if (path === "/teacher/support-plans")
+      return Promise.resolve(structuredClone(supportPlans));
     if (path === "/teacher/assignments") return Promise.resolve([]);
     if (path === "/teacher/qpapers")
       return Promise.resolve([structuredClone(QP)]);
@@ -144,26 +149,36 @@ beforeEach(() => {
       return Promise.resolve({ subjects: [], cells: [] });
     return Promise.resolve(null);
   });
-  apiMock.post.mockResolvedValue({
-    id: 5,
-    student_id: 12,
-    teacher_id: 1,
-    class_level: 6,
-    focus_concepts: ["বল"],
-    plan: {
-      weeks: [
-        {
-          week: 1,
-          stage: "concept",
-          concepts: ["বল"],
-          action: "read",
-          detail: "",
-        },
-      ],
-    },
-    created_at: null,
+  apiMock.post.mockImplementation((path: string) => {
+    if (path === "/teacher/support-plans") {
+      supportPlans = [PLAN_ROW];
+      return Promise.resolve(PLAN_ROW);
+    }
+    return Promise.resolve(PLAN_ROW);
   });
 });
+
+const PLAN_ROW = {
+  id: 5,
+  student_id: 12,
+  teacher_id: 1,
+  class_level: 6,
+  focus_concepts: ["বল"],
+  plan: {
+    weeks: [
+      {
+        week: 1,
+        stage: "concept",
+        concepts: ["বল"],
+        action: "read",
+        detail: "",
+      },
+    ],
+  },
+  created_at: null,
+};
+
+let supportPlans: unknown[] = [];
 
 function renderAt(ui: React.ReactElement, path: string, route: string) {
   const queryClient = new QueryClient({

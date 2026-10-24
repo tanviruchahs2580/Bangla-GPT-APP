@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import {
   BookOpen,
   ClipboardList,
@@ -8,7 +9,7 @@ import {
   Sparkles,
   Timer,
 } from "lucide-react";
-import { get, getTeacherWorkload, type TeacherWorkload } from "../../api";
+import { get, getTeacherWorkload } from "../../api";
 import type { ClassRoom, QPaper, WeakMatrix } from "../../types";
 import { Card, Stat } from "../../components/ui";
 import { useAuth } from "../../AuthContext";
@@ -23,65 +24,59 @@ const QUICK = [
   { kind: "quiz", label: "cQuizEntry", icon: ClipboardList },
 ] as const;
 
+/**
+ * Teacher home on the shared query cache (audit H-04: this module ran its
+ * own useState/useEffect fetches — no dedupe against ClassesPage's identical
+ * classrooms read, no retry, and nothing invalidated the counts after a
+ * generation). Keys mirror the other teacher pages so one cache serves both.
+ */
 export default function TeacherHomePage() {
   const { me } = useAuth();
   const navigate = useNavigate();
-  const [rooms, setRooms] = useState<ClassRoom[]>([]);
-  const [drafts, setDrafts] = useState<number | null>(null);
-  const [wm, setWm] = useState<WeakMatrix | null>(null);
-  const [workload, setWorkload] = useState<TeacherWorkload | null>(null);
-  const [loadError, setLoadError] = useState(false);
-  const [reloadKey, setReloadKey] = useState(0);
 
-  useEffect(() => {
-    let live = true;
-    setLoadError(false);
-    get<ClassRoom[]>("/teacher/classrooms")
-      .then((rs) => {
-        if (!live) return;
-        setRooms(rs ?? []);
-        // AI insight rides the first class's existing weak-matrix data,
-        // scoped to that classroom's roster (not the whole grade).
-        const first = rs?.[0];
-        if (first != null) {
-          get<WeakMatrix>(
-            `/teacher/weak-matrix?class_level=${first.class_level}&room_id=${first.id}`,
-          )
-            .then((m) => {
-              if (live) setWm(m);
-            })
-            .catch(() => {
-              if (live) setWm(null);
-            });
-        }
-      })
-      .catch(() => {
-        if (live) setLoadError(true);
-      });
-    get<QPaper[]>("/teacher/qpapers")
-      .then((rows) => {
-        if (live)
-          setDrafts((rows ?? []).filter((q) => q.status !== "final").length);
-      })
-      .catch(() => {
-        if (live) setDrafts(null);
-      });
-    getTeacherWorkload()
-      .then((w) => {
-        if (live) setWorkload(w ?? null);
-      })
-      .catch(() => {
-        if (live) setLoadError(true);
-      });
-    return () => {
-      live = false;
-    };
-  }, [reloadKey]);
+  const roomsQuery = useQuery({
+    queryKey: ["teacher", "classrooms"],
+    queryFn: () => get<ClassRoom[]>("/teacher/classrooms"),
+  });
+  const draftsQuery = useQuery({
+    queryKey: ["teacher", "qpapers"],
+    queryFn: () => get<QPaper[]>("/teacher/qpapers"),
+    select: (rows) => rows.filter((q) => q.status !== "final").length,
+  });
+  const workloadQuery = useQuery({
+    queryKey: ["teacher", "workload"],
+    queryFn: () => getTeacherWorkload(),
+  });
+
+  // stable identity while loading: the auto-select effect and the
+  // students memo key on this array
+  const rooms = useMemo(() => roomsQuery.data ?? [], [roomsQuery.data]);
+  // AI insight rides the first class's existing weak-matrix data, scoped to
+  // that classroom's roster (not the whole grade).
+  const first = rooms[0];
+  const wmQuery = useQuery({
+    queryKey: ["teacher", "weak-matrix", first?.class_level, first?.id],
+    queryFn: () =>
+      get<WeakMatrix>(
+        `/teacher/weak-matrix?class_level=${first.class_level}&room_id=${first.id}`,
+      ),
+    enabled: first != null,
+    retry: false, // the insight is best-effort: an empty matrix is normal
+  });
+
+  const loadError = roomsQuery.isError || workloadQuery.isError;
+  const retry = () => {
+    void roomsQuery.refetch();
+    void workloadQuery.refetch();
+  };
 
   const students = useMemo(
     () => rooms.reduce((sum, r) => sum + r.student_count, 0),
     [rooms],
   );
+  const drafts = draftsQuery.data ?? null;
+  const wm = wmQuery.data ?? null;
+  const workload = workloadQuery.data ?? null;
 
   const insight = useMemo(() => {
     if (!wm || wm.students.length === 0) return null;
@@ -108,10 +103,7 @@ export default function TeacherHomePage() {
       {loadError && (
         <div className="muted" role="status">
           {t("thLoadError")}{" "}
-          <button
-            className="btn btn-sm btn-ghost"
-            onClick={() => setReloadKey((k) => k + 1)}
-          >
+          <button className="btn btn-sm btn-ghost" onClick={retry}>
             {t("retry")}
           </button>
         </div>

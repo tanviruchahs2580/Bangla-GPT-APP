@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   BookOpen,
@@ -297,31 +298,26 @@ export function ShortTestFlow() {
   const [duration, setDuration] = useState(10);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const [tests, setTests] = useState<ShortTest[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
+  const queryClient = useQueryClient();
+  // Shared cache (audit H-04): same keys as Classes/Assessments/Home.
+  const roomsQuery = useQuery({
+    queryKey: ["teacher", "classrooms"],
+    queryFn: () => get<Room[]>("/teacher/classrooms"),
+  });
+  const rooms = useMemo(() => roomsQuery.data ?? [], [roomsQuery.data]);
+  const testsQuery = useQuery({
+    queryKey: ["teacher", "shorttests"],
+    queryFn: () => get<ShortTest[]>("/teacher/shorttests"),
+  });
+  const tests = useMemo(() => testsQuery.data ?? [], [testsQuery.data]);
   const [roomId, setRoomId] = useState<number | null>(null);
 
   useEffect(() => {
-    let live = true;
-    get<Room[]>("/teacher/classrooms")
-      .then((rs) => {
-        if (!live) return;
-        // Default to the first classroom (the previous behaviour) but keep the
-        // list so the teacher can see and change which room receives the test —
-        // it used to post to rooms[0] silently whatever was on screen.
-        setRooms(rs ?? []);
-        setRoomId(rs[0]?.id ?? null);
-      })
-      .catch(() => {});
-    get<ShortTest[]>("/teacher/shorttests")
-      .then((rows) => {
-        if (live) setTests(rows ?? []);
-      })
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, []);
+    // Default to the first classroom (the previous behaviour) but keep the
+    // list so the teacher can see and change which room receives the test —
+    // it used to post to rooms[0] silently whatever was on screen.
+    setRoomId((cur) => cur ?? rooms[0]?.id ?? null);
+  }, [rooms]);
 
   async function assign(e: React.FormEvent) {
     e.preventDefault();
@@ -336,7 +332,7 @@ export function ShortTestFlow() {
         num_questions: num,
         duration_min: duration,
       });
-      setTests((ls) => [st, ...ls]);
+      void queryClient.invalidateQueries({ queryKey: ["teacher", "shorttests"] });
       setMsg(t("stAssigned", { n: st.attempts.length }));
     } catch (err) {
       setMsg(errText(err));
@@ -469,21 +465,11 @@ export function LessonPlanFlow() {
   const [msg, setMsg] = useState<string | null>(null);
   const [lp, setLp] = useState<LessonPlan | null>(null);
   const [edits, setEdits] = useState<Record<string, string>>({});
-  const [rooms, setRooms] = useState<
-    Array<{ id: number; class_level: number }>
-  >([]);
-
-  useEffect(() => {
-    let live = true;
-    get<{ id: number; class_level: number }[]>("/teacher/classrooms")
-      .then((rs) => {
-        if (live) setRooms(rs ?? []);
-      })
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, []);
+  const roomsQuery = useQuery({
+    queryKey: ["teacher", "classrooms"],
+    queryFn: () => get<{ id: number; class_level: number }[]>("/teacher/classrooms"),
+  });
+  const rooms = useMemo(() => roomsQuery.data ?? [], [roomsQuery.data]);
 
   async function generate(e: React.FormEvent) {
     e.preventDefault();

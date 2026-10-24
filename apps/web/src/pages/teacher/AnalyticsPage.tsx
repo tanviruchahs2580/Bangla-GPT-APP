@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { get, getTeacherWorkload, post, type TeacherWorkload } from "../../api";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { get, getTeacherWorkload, post } from "../../api";
 import type {
   ClassRoom,
   Coverage,
@@ -50,77 +51,64 @@ const covLabel = (status: string): string =>
     : status;
 
 export default function AnalyticsPage() {
-  const [rooms, setRooms] = useState<ClassRoom[]>([]);
+  const queryClient = useQueryClient();
   const [level, setLevel] = useState<number | null>(null);
-  const [wm, setWm] = useState<WeakMatrix | null>(null);
-  const [cov, setCov] = useState<Coverage | null>(null);
-  const [workload, setWorkload] = useState<TeacherWorkload | null>(null);
-  const [sps, setSps] = useState<SupportPlanRow[]>([]);
   const [spBusy, setSpBusy] = useState(false);
   const [spMsg, setSpMsg] = useState<string | null>(null);
 
+  // Shared cache (audit H-04): the same teacher/classrooms key Home and
+  // Classes use; weak-matrix keyed per level like ClassesPage (without the
+  // room scoping, which this grade-level view does not apply).
+  const roomsQuery = useQuery({
+    queryKey: ["teacher", "classrooms"],
+    queryFn: () => get<ClassRoom[]>("/teacher/classrooms"),
+  });
+  const rooms = useMemo(() => roomsQuery.data ?? [], [roomsQuery.data]);
+  const covQuery = useQuery({
+    queryKey: ["teacher", "curriculum-coverage"],
+    queryFn: () => get<Coverage>("/teacher/curriculum-coverage"),
+  });
+  const cov = covQuery.data ?? null;
+  const plansQuery = useQuery({
+    queryKey: ["teacher", "support-plans"],
+    queryFn: () => get<SupportPlanRow[]>("/teacher/support-plans"),
+  });
+  const sps = useMemo(() => plansQuery.data ?? [], [plansQuery.data]);
+  const workloadQuery = useQuery({
+    queryKey: ["teacher", "workload"],
+    queryFn: () => getTeacherWorkload(),
+  });
+  const workload = workloadQuery.data ?? null;
+
+  // default the level once rooms arrive
   useEffect(() => {
-    let live = true;
-    get<ClassRoom[]>("/teacher/classrooms")
-      .then((rs) => {
-        if (!live) return;
-        setRooms(rs);
-        setLevel((cur) => cur ?? rs[0]?.class_level ?? null);
-      })
-      .catch(() => {});
-    get<Coverage>("/teacher/curriculum-coverage")
-      .then((c) => {
-        if (live) setCov(c);
-      })
-      .catch(() => {
-        if (live) setCov(null);
-      });
-    get<SupportPlanRow[]>("/teacher/support-plans")
-      .then((rows) => {
-        if (live) setSps(rows ?? []);
-      })
-      .catch(() => {});
-    getTeacherWorkload()
-      .then((w) => {
-        if (live) setWorkload(w ?? null);
-      })
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, []);
+    setLevel((cur) => cur ?? rooms[0]?.class_level ?? null);
+  }, [rooms]);
+
+  const wmQuery = useQuery({
+    queryKey: ["teacher", "weak-matrix-grade", level],
+    queryFn: () => get<WeakMatrix>(`/teacher/weak-matrix?class_level=${level}`),
+    enabled: level !== null,
+  });
+  const wm = wmQuery.data ?? null;
 
   async function createSupportPlan(studentId: number) {
     if (spBusy) return;
     setSpBusy(true);
     setSpMsg(null);
     try {
-      const row = await post<SupportPlanRow>("/teacher/support-plans", {
+      await post<SupportPlanRow>("/teacher/support-plans", {
         student_id: studentId,
       });
-      setSps((ls) => [row, ...ls]);
+      void queryClient.invalidateQueries({
+        queryKey: ["teacher", "support-plans"],
+      });
     } catch (err) {
       setSpMsg(errText(err));
     } finally {
       setSpBusy(false);
     }
   }
-
-  useEffect(() => {
-    if (level === null) return;
-    let live = true;
-    setWm(null);
-    get<WeakMatrix>(`/teacher/weak-matrix?class_level=${level}`)
-      .then((m) => {
-        if (live) setWm(m);
-      })
-      .catch(() => {
-        if (live) setWm(null);
-      });
-    return () => {
-      live = false;
-    };
-  }, [level]);
 
   // AI Classroom Intelligence: one composite view from existing
   // weak-matrix + coverage data — no new endpoint, no new scoring.
