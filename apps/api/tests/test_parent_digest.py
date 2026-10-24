@@ -16,7 +16,10 @@ from bangla_gpt_api.services.parent_digest import (
     digest_due,
     run_weekly_digest,
 )
-from conftest import engine_url
+
+# Engine-coupled by design: this file drives fixtures through raw
+# sqlite3 connections (audit H-02 follow-up), so it pins SQLite and stays
+# out of the BGPT_TEST_DATABASE_URL parity lane.
 
 PASSWORD = "supersecret1"
 SENTINEL = "SENTINEL-private-message-text-42"
@@ -74,7 +77,7 @@ def test_build_body_aggregates_only() -> None:
 def env(tmp_path):
     settings = Settings(
         env="test",
-        database_url=engine_url(tmp_path, "digest"),
+        database_url=f"sqlite:///{tmp_path}/digest.db",
         jwt_secret="test-secret-0123456789abcdef0123456789",
         admin_email="root@example.com",
         admin_password=PASSWORD,
@@ -204,7 +207,7 @@ def test_digest_skips_without_smtp(env) -> None:
 def test_scheduler_starts_and_stops_with_app(tmp_path) -> None:
     settings = Settings(
         env="test",
-        database_url=engine_url(tmp_path, "sched"),
+        database_url=f"sqlite:///{tmp_path}/sched.db",
         jwt_secret="test-secret-0123456789abcdef0123456789",
         admin_email="root@example.com",
         admin_password=PASSWORD,

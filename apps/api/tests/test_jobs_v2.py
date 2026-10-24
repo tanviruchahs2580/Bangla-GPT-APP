@@ -19,7 +19,10 @@ import bangla_gpt_api.jobs as jobs
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.session import init_db, make_engine, make_session_factory
 from bangla_gpt_api.main import create_app
-from conftest import engine_url
+
+# Engine-coupled by design: this file drives fixtures through raw
+# sqlite3 connections (audit H-02 follow-up), so it pins SQLite and stays
+# out of the BGPT_TEST_DATABASE_URL parity lane.
 
 PASSWORD = "supersecret1"
 
@@ -31,7 +34,7 @@ MONDAY_MORNING = datetime(2026, 9, 7, 10, 0)
 def _settings(tmp_path: Path, **kw) -> Settings:
     return Settings(
         env="test",
-        database_url=engine_url(tmp_path, "jobs"),
+        database_url=f"sqlite:///{tmp_path}/jobs.db",
         jwt_secret="test-secret-0123456789abcdef0123456789",
         admin_email="root@example.com",
         admin_password=PASSWORD,

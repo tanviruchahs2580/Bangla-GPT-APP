@@ -18,7 +18,10 @@ from fastapi.testclient import TestClient
 
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app, enforce_production_safety
-from conftest import engine_url
+
+# Engine-coupled by design: this file drives fixtures through raw
+# sqlite3 connections (audit H-02 follow-up), so it pins SQLite and stays
+# out of the BGPT_TEST_DATABASE_URL parity lane.
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -38,7 +41,7 @@ DRAFT_BODY = {
 def make_client(tmp_path, db_name="sec.db", **overrides) -> tuple[TestClient, Settings]:
     settings = Settings(
         env="test",
-        database_url=engine_url(tmp_path, db_name),
+        database_url=f"sqlite:///{tmp_path}/{db_name}",
         jwt_secret=SECRET,
         admin_email="root@example.com",
         admin_password=PASSWORD,

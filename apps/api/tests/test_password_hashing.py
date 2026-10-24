@@ -26,7 +26,10 @@ from bangla_gpt_api.auth.security import (
 )
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
-from conftest import engine_url
+
+# Engine-coupled by design: this file drives fixtures through raw
+# sqlite3 connections (audit H-02 follow-up), so it pins SQLite and stays
+# out of the BGPT_TEST_DATABASE_URL parity lane.
 
 PASSWORD = "Str0ngRootPassw0rd!"
 
@@ -75,7 +78,7 @@ def test_needs_rehash_flags_legacy_and_weak_argon2() -> None:
 def env(tmp_path):
     settings = Settings(
         env="test",
-        database_url=engine_url(tmp_path, "hash"),
+        database_url=f"sqlite:///{tmp_path}/hash.db",
         jwt_secret="test-secret-0123456789abcdef0123456789",
         admin_email="root@example.com",
         admin_password=PASSWORD,

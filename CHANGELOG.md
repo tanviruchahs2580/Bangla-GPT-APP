@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - feat(rag): retrieval-quality rework - fair gate, query lanes, measured rank lift
 - feat(web): login page background image with dark/light theme sync
 - feat(web): student section background image with dark/light sync
+- feat(web): wire the revocation surface — server-side logout, password-confirmed erasure, sign-out-everywhere
 
 ### Fixed
 
@@ -31,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): close two moderation false negatives and cover the chat routes
 - fix(api): derive the school analytics day window in Asia/Dhaka
 - fix(api): drop an unused variable the new RUF059 rule caught
+- fix(api): emit SSE heartbeat comments so silent streams survive proxy timeouts
 - fix(api): gate evals on hybrid retrieval, de-tautologize golden set, precompute BM25 trigrams, single-pass redteam (A13, A8, A18)
 - fix(api): harden authentication, session end and abuse limits
 - fix(api): impersonation revocation fails closed when cache is down (F-08)
@@ -45,7 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): record an explicit auth decision on every public operation
 - fix(api): redact exception tracebacks in logs
 - fix(api): remove the dead 'answer is None' regeneration branch (A25)
+- fix(api): render the tenancy EXISTS probe with the subquery idiom
 - fix(api): repair corrupted Bengali in tutor prompts, feedback IDOR, dead code
+- fix(api): repair the provider-latency import placement broken by tooling
 - fix(api): repair the retrieval evaluation's coverage-gate call
 - fix(api): restore middleware_stack and circuit_breaker to last-green versions
 - fix(api): restore the documented build_limiter patch seam in create_app
@@ -77,6 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(db): reconcile ORM/migration drift so alembic check passes
 - fix(encoding): add .gitattributes and repair three encoding defects
 - fix(i18n): put the parent digest and the printed papers in Bangla, and correct five copy defects
+- fix(ops): make monitoring real, bound every service, drill the rollback, run the load gate
 - fix(ops): make the proxy-trust contract hold, and machine-check it
 - fix(ops): pin images by digest, make monitoring real, scan release artifacts
 - fix(ops): stop publishing the API on a random host port, and make the release gate real
@@ -85,19 +90,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(rag): locative reclassification + short-token roman guard
 - fix(rag): roman-lane floor, edit-similarity rank, MRR unit, trailing newline
 - fix(rag): runtime prompt-injection screening at the query boundary
+- fix(safety): Bengali red-team coverage, nukta-ya injection gap, real-model eval leg
 - fix(sec): refuse unsafe production defaults at boot
 - fix(sec): stop serving the OpenAPI reference in production
+- fix(security): close the S-011/S-012/F-142 gaps — revocable sessions, TOTP account throttle, erasure re-auth
 - fix(web): clear footer from bottom nav + cut a round-trip from login
 - fix(web): clear the two WCAG AA failures axe found on the tutor screen
+- fix(web): close the defects the restored E2E suite caught
 - fix(web): close-JSDoc sequence inside edge-proxy comment broke Vercel TS build
 - fix(web): configurable production API origin via edge proxy (FE-01)
 - fix(web): guarantee minimum gap between stacked page sections
 - fix(web): guard the tutor turn, bound stalled requests and clear data on sign-out
+- fix(web): honour the ARIA contracts — Segmented is a toggle group, workspace tabs get the APG model, SW updates are waiting-first
 - fix(web): invalidate study caches after quiz submit and learn-progress writes
+- fix(web): key the create-grid list items (same pattern as TeacherHomePage)
+- fix(web): key the quick-create list items, not their inner buttons
 - fix(web): language switch re-renders in place instead of remounting the tree
 - fix(web): let an anonymous visitor change the interface language
 - fix(web): localize consent/invite copy, theme icon sync, error states, icon cleanup
 - fix(web): make the ARIA roles keep their keyboard promises
+- fix(web): make the Vercel security headers actually apply (routes → rewrites) (#60)
 - fix(web): make the register screen's email-verification step usable
 - fix(web): migrate vercel.json from legacy routes to rewrites
 - fix(web): notification panel no longer clipped off the left edge
@@ -120,11 +132,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Performance
 
+- perf(api): offload sync DB/Redis segments off the event loop in async AI paths
+- perf(api): one-row tenancy probe, SQL roster paging, grouped school stats
 - perf(web): batch streamed tokens; ship the Modal primitive where it belongs
 
 ### Changed
 
 - refactor(api): bring TutorService.ask/ask_stream down from grade E
+- refactor(api): extract the GDPR export/erasure bodies into services/gdpr.py
+- refactor(api): one pagination contract module (M-08)
+- refactor(web): teacher pages join the shared query cache (H-04) + honest coverage gates (H-03)
 - refactor(web): use one data-fetching path in the admin centre and the paper review panel
 
 ### Build and dependencies
@@ -174,6 +191,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate CHANGELOG
 - docs: regenerate CHANGELOG for the branch commit
 - docs: regenerate CHANGELOG for the current batch
+- docs: regenerate CHANGELOG to cover the vercel.json headers fix branch
 - docs: regenerate the CHANGELOG for the 2026-10-17 audit fixes
 - docs: regenerate the CHANGELOG for the CI-format fixes
 - docs: regenerate the CHANGELOG for the QA-record amendment
@@ -199,12 +217,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Tests
 
 - test(api): cover school admin fallbacks and tenant guards
+- test(api): erasure-fk fixture recognises the parity env var (BGPT_TEST_DATABASE_URL)
+- test(e2e): regenerate teacher-home dark baselines after the brand-solid contrast fix
+- test(e2e): tolerate measured rasterisation variance (2% -> 5%) + regenerated teacher baselines after the contrast fix
 - test(ops): register ALERT_EMAIL_TO with the env-parity guard
 - test(school): cover the aggregation routes TST-04 flagged as unexercised
 - test(tenancy): cover school dashboard routes across two tenants
 - test(web): assert the changed behaviour instead of the old literals
 - test(web): cover the routing table and the password-reset page
 - test(web): drop remaining plan-tracker tags from suite titles
+- test: true Postgres parity + restore the Playwright E2E layer to main
 
 ### Maintenance
 
@@ -213,6 +235,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(scripts): make the shebang executable real for the five scripts that have one
 - chore(security): allowlist the reviewed ASCII-art hit in the full-history secret scan
 - chore(web): repoint /api proxy to current tunnel host (quick-tunnel rotation)
+- chore: close the low-severity register — hot-path indexes, dead code, XFF spoofing, env parity
 - chore: code honesty - unused args, un-typed db params, inert suppressions, stale comments
 - chore: satisfy the two CI guardrails main added after this branch's baseline
 - fmt: ruff format teacher.py _room_counts

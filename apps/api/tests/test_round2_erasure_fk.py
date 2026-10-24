@@ -61,9 +61,7 @@ def fk_enforced(tmp_path):
     from sqlalchemy import event
     from sqlalchemy.engine import Engine
 
-    test_db = os.environ.get("BGPT_TEST_DATABASE_URL") or os.environ.get(
-        "TEST_DATABASE_URL"
-    )
+    test_db = os.environ.get("BGPT_TEST_DATABASE_URL") or os.environ.get("TEST_DATABASE_URL")
     if test_db:
         settings = Settings(
             env="test",

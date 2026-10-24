@@ -17,7 +17,10 @@ from bangla_gpt_api.main import create_app
 from bangla_gpt_api.schemas import ReviewItem
 from bangla_gpt_api.services import adaptive, knowledge
 from bangla_gpt_api.services.quiz import ClozeQuizGenerator
-from conftest import engine_url
+
+# Engine-coupled by design: this file drives fixtures through raw
+# sqlite3 connections (audit H-02 follow-up), so it pins SQLite and stays
+# out of the BGPT_TEST_DATABASE_URL parity lane.
 
 PASSWORD = "supersecret1"
 
@@ -30,7 +33,7 @@ ALGEBRA_ALIAS = "বীজগণিত"
 def client(tmp_path) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=engine_url(tmp_path, "adaptive"),
+        database_url=f"sqlite:///{tmp_path}/adaptive.db",
         jwt_secret="test-secret-0123456789abcdef0123456789",
     )
     return TestClient(create_app(settings))
@@ -176,7 +179,7 @@ def test_apply_review_repeated_concept_in_one_review(tmp_path) -> None:
     invisible to db.get; without the explicit fresh-row cache the second
     question of the same chapter inserts a duplicate PK (IntegrityError -> 500).
     """
-    engine = create_engine(engine_url(tmp_path, "dup"))
+    engine = create_engine(f"sqlite:///{tmp_path}/dup.db")
     Base.metadata.create_all(engine)
     with Session(engine, autoflush=False) as db:
         corpus = load_sample_corpus()

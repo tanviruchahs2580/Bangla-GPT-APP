@@ -25,7 +25,10 @@ from bangla_gpt_api.services.generators.chapter_content import CONTENT_SYSTEM_PR
 from bangla_gpt_api.services.generators.lesson_plan import LESSON_SYSTEM_PROMPT
 from bangla_gpt_api.services.generators.question_paper import QP_SYSTEM_PROMPT
 from bangla_gpt_api.services.tutor import SYSTEM_PROMPT
-from conftest import engine_url
+
+# Engine-coupled by design: this file drives fixtures through raw
+# sqlite3 connections (audit H-02 follow-up), so it pins SQLite and stays
+# out of the BGPT_TEST_DATABASE_URL parity lane.
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -65,7 +68,7 @@ def _app(monkeypatch, tmp_path, db_name: str = "ctx.db") -> tuple[TestClient, _R
     monkeypatch.setattr("bangla_gpt_api.main.get_fast_provider", lambda s: provider)
     settings = Settings(
         env="test",
-        database_url=engine_url(tmp_path, db_name),
+        database_url=f"sqlite:///{tmp_path}/{db_name}",
         jwt_secret=SECRET,
     )
     return TestClient(create_app(settings)), provider

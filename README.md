@@ -175,7 +175,7 @@ Environment variables are documented in `.env.example`. Default
 
 | Workflow | What it does | Trigger |
 |---|---|---|
-| `ci.yml` | api: ruff → format → mypy → pytest (3.11+3.12) → pip-audit → alembic cycle → smoke; postgres: alembic cycle + drift + smoke/race + **full domain suite on Postgres**; golden-eval: golden retrieval + eval-v2 baseline gate + red-team gate; web: tsc + build + vitest; docker build + probes | push/PR to main |
+| `ci.yml` | api: ruff → format → mypy → pytest (3.11+3.12) → pip-audit → alembic cycle → smoke; postgres: alembic cycle + drift + smoke/race + **full domain suite on Postgres**; golden-eval: golden retrieval + eval-v2 baseline gate + red-team gate; web: tsc + build + vitest with **coverage thresholds**; e2e: **Playwright chromium against the real app**; docker build + k6 load gate + probes | push/PR to main |
 | `eval-gate.yml` | golden retrieval benchmark w/ grounded-accuracy gate + eval-v2 regression vs committed baseline | push/PR to main, or manual |
 | `codeql.yml` | CodeQL SAST (security-extended) over the API (python) and web (javascript-typescript); findings to the Security tab | push/PR to main, weekly |
 | `release.yml` | CI-gated: tag → GHCR images → optional SSH deploy w/ health-gated rollback | tag `v*.*.*`, or manual |
