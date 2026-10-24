@@ -60,6 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): scope chapter-content writes to the author's school
 - fix(api): serialise AiJob cancellation against its own DB sections
 - fix(api): serve the configured corpus and the Dhaka day in the Learn flow
+- fix(api): stop the WAL pragma race killing multi-worker SQLite boots
 - fix(api): tie the quiz ceilings to one bound so an assignment stays submittable
 - fix(api): unify the error envelope — every raise carries a machine code
 - fix(api): vision-honest refusal for openai, max_output_tokens cap, transport retries (A10, A9, A16)
