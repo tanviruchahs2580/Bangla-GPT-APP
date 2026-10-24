@@ -209,7 +209,10 @@ export default function AITutorPage() {
   }, [loadConversation, refetchConvs]);
 
   const send = useCallback(
-    async (preset?: string, opts?: { reteach?: boolean }) => {
+    async (
+      preset?: string,
+      opts?: { reteach?: boolean; strategy?: string },
+    ) => {
       const text = (preset ?? input).trim();
       // F-012: the guard is the ref, set synchronously before the first await.
       // Previously only `streaming` guarded, and it was set AFTER the
@@ -263,7 +266,12 @@ export default function AITutorPage() {
               subject,
               low_data: getLowData(),
               ...(opts?.reteach ? { reteach: true } : {}),
-              ...(strategy ? { strategy } : {}),
+              // per-turn override wins over the composer's selection: the
+              // follow-up chips ("explain simpler" / "give an example") carry
+              // their own strategy without disturbing the picker state.
+              ...((opts?.strategy ?? strategy)
+                ? { strategy: opts?.strategy ?? strategy }
+                : {}),
               ...(image ? { image } : {}),
             },
             (tok) => {
@@ -337,6 +345,20 @@ export default function AITutorPage() {
       scheduleTokenFlush,
     ],
   );
+
+  // Follow-up chips ("explain simpler" / "give an example") re-ask the
+  // PREVIOUS question with an explicit strategy. Sending the chip's own
+  // phrase as the message made retrieval search for "explain simpler", which
+  // the coverage gate rightly refused (measured on the live build,
+  // 2026-10-24). The question carries the corpus overlap; the strategy is
+  // what the user is asking for — the same split as the composer's explicit
+  // strategy chips.
+  const resendWithStrategy = (index: number, key: string) => {
+    const q = [...messages.slice(0, index)]
+      .reverse()
+      .find((x) => x.role === "user")?.content;
+    if (q) void send(q, { strategy: key });
+  };
 
   // a wrong quiz item can arrive here as `location.state.explain` —
   // ask once, then drop the explain payload so a refresh does not re-ask.
@@ -660,13 +682,13 @@ export default function AITutorPage() {
                     >
                       <button
                         className="chip"
-                        onClick={() => send(t("chipSimpler"))}
+                        onClick={() => resendWithStrategy(i, "simple")}
                       >
                         {t("chipSimpler")}
                       </button>
                       <button
                         className="chip"
-                        onClick={() => send(t("chipExample"))}
+                        onClick={() => resendWithStrategy(i, "example")}
                       >
                         {t("chipExample")}
                       </button>

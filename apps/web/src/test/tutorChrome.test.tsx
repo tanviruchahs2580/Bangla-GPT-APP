@@ -92,6 +92,32 @@ describe("tutor chrome", () => {
     );
   });
 
+  it("follow-up chips re-ask the previous question with an explicit strategy", async () => {
+    // Sending the chip phrase itself made retrieval search for "explain
+    // simpler" and the coverage gate refused (live-build measurement,
+    // 2026-10-24). The chip must re-ask the QUESTION with the strategy.
+    const user = userEvent.setup();
+    renderPage();
+    await user.type(
+      screen.getByPlaceholderText(t("askPlaceholder")),
+      "কোষ কী?",
+    );
+    await user.click(screen.getByRole("button", { name: t("send") }));
+    const simpler = await screen.findByRole("button", {
+      name: t("chipSimpler"),
+    });
+    apiMock.postStream.mockClear();
+    await user.click(simpler);
+    await waitFor(() =>
+      expect(apiMock.postStream).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ message: "কোষ কী?", strategy: "simple" }),
+        expect.anything(),
+        expect.anything(),
+      ),
+    );
+  });
+
   it("shows the low-confidence hint when the answer confidence is below 0.6", async () => {
     const user = userEvent.setup();
     renderPage();

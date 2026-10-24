@@ -249,6 +249,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(web): repoint /api proxy to current tunnel host (quick-tunnel rotation)
 - chore: close the low-severity register — hot-path indexes, dead code, XFF spoofing, env parity
 - chore: code honesty - unused args, un-typed db params, inert suppressions, stale comments
+- chore: ignore Playwright MCP tool artifacts; regenerate the CHANGELOG
 - chore: regenerate CHANGELOG; format straggler; final CI/README truth for the e2e + coverage gates
 - chore: satisfy the two CI guardrails main added after this branch's baseline
 - fmt: ruff format teacher.py _room_counts
