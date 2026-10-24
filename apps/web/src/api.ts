@@ -264,7 +264,14 @@ async function parseSse(
 export async function api<T>(
   path: string,
   options: RequestInit = {},
-  opts?: { skipUnauthorized?: boolean; signal?: AbortSignal },
+  opts?: {
+    skipUnauthorized?: boolean;
+    signal?: AbortSignal;
+    /** Per-call timeout override. The bulk roster import hashes up to 200
+     * Argon2id passwords server-side (measured >20s — past the default
+     * guard), so it is the one documented long call. */
+    timeoutMs?: number;
+  },
 ): Promise<T> {
   const headers = new Headers(options.headers);
   if (options.body !== undefined && !(options.body instanceof FormData)) {
@@ -276,7 +283,7 @@ export async function api<T>(
   // F-015: every non-streaming request is bounded. A caller signal (the
   // tutor's Stop) is combined so either can end the request.
   const caller = opts?.signal ?? options.signal ?? undefined;
-  const guard = timeoutGuard(REQUEST_TIMEOUT_MS, caller);
+  const guard = timeoutGuard(opts?.timeoutMs ?? REQUEST_TIMEOUT_MS, caller);
   try {
     let res: Response;
     try {
@@ -346,7 +353,11 @@ export const get = <T>(path: string) => api<T>(path);
 export const post = <T>(
   path: string,
   body?: unknown,
-  opts?: { skipUnauthorized?: boolean; signal?: AbortSignal },
+  opts?: {
+    skipUnauthorized?: boolean;
+    signal?: AbortSignal;
+    timeoutMs?: number;
+  },
 ) =>
   api<T>(
     path,
@@ -358,7 +369,11 @@ export const post = <T>(
   );
 export const patch = <T>(path: string, body: unknown) =>
   api<T>(path, { method: "PATCH", body: JSON.stringify(body) });
-export const del = (path: string) => api<void>(path, { method: "DELETE" });
+export const del = (path: string, body?: unknown) =>
+  api<void>(path, {
+    method: "DELETE",
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
 
 /**
  * POST an SSE endpoint and stream `token` events through `onToken`.
@@ -670,6 +685,15 @@ export function setLogoutCleanup(fn: (() => void) | null): void {
  * last-open chapter and full last quiz result.
  */
 export async function logout(): Promise<void> {
+  // S-011: revoke the session server-side first. A token left valid in a
+  // proxy log or on a shared device used to live out its full 60 minutes;
+  // POST /auth/logout parks its jti in the fail-closed revocation store.
+  // Best-effort on purpose: local sign-out must succeed even offline.
+  try {
+    await post<void>("/auth/logout", {});
+  } catch {
+    /* offline or token already gone — local wipe still happens below */
+  }
   for (const key of USER_STORAGE_KEYS) localStorage.removeItem(key);
   sessionStorage.removeItem(LAST_RESULT_KEY);
   logoutCleanup?.();
@@ -679,6 +703,14 @@ export async function logout(): Promise<void> {
     /* the in-memory fallback is already gone; IDB clearing is best-effort */
   }
 }
+
+/**
+ * Sign out EVERYWHERE (S-011): stamps the server-side token epoch, so every
+ * outstanding session of the account fails its next request. Returns once
+ * confirmed — callers then complete a local logout.
+ */
+export const revokeAllSessions = () =>
+  post<void>("/users/me/sessions/revoke", {});
 
 /* -------- Learn catalog (grounded corpus) -------- */
 export const getSubjects = (classLevel?: number) =>

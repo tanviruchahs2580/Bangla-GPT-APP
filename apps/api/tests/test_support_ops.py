@@ -21,6 +21,7 @@ from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.models import AuditLog, ChatMessage, Conversation
 from bangla_gpt_api.db.session import make_engine, make_session_factory
 from bangla_gpt_api.main import create_app
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -31,7 +32,7 @@ def pair(tmp_path):
     """Client + session factory over the SAME sqlite file (seed/assert directly)."""
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/support.db",
+        database_url=engine_url(tmp_path, "support"),
         jwt_secret=SECRET,
         admin_email="root@example.com",
         admin_password=PASSWORD,
@@ -383,7 +384,11 @@ def test_impersonation_tokens_rejected_while_revocation_store_unreachable(pair) 
         # an impersonation token whose revocation state cannot be checked
         # fails closed instead of silently passing
         assert client.get("/users/me", headers=imp).status_code == 503
-        # plain tokens never touch the revocation store — unaffected
-        assert client.get("/users/me", headers=student).status_code == 200
+        # S-011: plain tokens check the revocation store too (logout writes
+        # there), so they fail closed on the same outage. This adds no new
+        # production failure mode: the Redis rate limiter already 503s every
+        # request when the backend is down, so an unreachable store was never
+        # a state in which the API served traffic anyway.
+        assert client.get("/users/me", headers=student).status_code == 503
     finally:
         client.app.state.ctx.cache = original

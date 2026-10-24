@@ -25,10 +25,10 @@ and bn/en i18n with dark mode.
 |---|---|---|
 | `GET /health` `/live` `/ready` | — (`ready` checks DB) | Service health |
 | `GET /metrics` | env-dependent (see note) | Prometheus metrics |
-| `POST /auth/register` `/auth/login` | — | Accounts; tokens (`email_unverified` code when SMTP on) |
+| `POST /auth/register` `/auth/login` `/auth/logout` | — (`logout` any) | Accounts; tokens (`email_unverified` code when SMTP on); `logout` revokes the presented token's jti (fail-closed store) |
 | `POST /auth/forgot` `/auth/reset` | — | Password reset (single-use hashed tokens) |
 | `POST /auth/verify-email` `/auth/resend-verification` | mixed | Email verification flow |
-| `GET /users/me` · `DELETE /users/me` · `GET /users/me/export` | any | Profile; GDPR delete/export |
+| `GET /users/me` · `DELETE /users/me` (body: current `password`, F-142) · `GET /users/me/export` · `POST /users/me/sessions/revoke` | any | Profile; re-authed GDPR delete/export; revoke every session (epoch stamp) |
 | `POST /tutor/ask` | any | Grounded Q&A; safety screen; coverage-gated refusal |
 | `POST /tutor/conversations` · `GET /tutor/conversations` | student | Multi-turn chat sessions |
 | `GET /tutor/conversations/{id}/messages` | owner | Chat history |
@@ -175,7 +175,7 @@ Environment variables are documented in `.env.example`. Default
 
 | Workflow | What it does | Trigger |
 |---|---|---|
-| `ci.yml` | api: ruff → format → mypy → pytest (3.11+3.12) → pip-audit → alembic cycle → smoke; postgres: alembic cycle + drift + smoke/race + **full domain suite on Postgres**; golden-eval: golden retrieval + eval-v2 baseline gate + red-team gate; web: tsc + build + vitest; docker build + probes | push/PR to main |
+| `ci.yml` | api: ruff → format → mypy → pytest (3.11+3.12) → pip-audit → alembic cycle → smoke; postgres: alembic cycle + drift + smoke/race + **full domain suite on Postgres**; golden-eval: golden retrieval + eval-v2 baseline gate + red-team gate; web: tsc + build + vitest with **coverage thresholds**; e2e: **Playwright chromium against the real app**; docker build + k6 load gate + probes | push/PR to main |
 | `eval-gate.yml` | golden retrieval benchmark w/ grounded-accuracy gate + eval-v2 regression vs committed baseline | push/PR to main, or manual |
 | `codeql.yml` | CodeQL SAST (security-extended) over the API (python) and web (javascript-typescript); findings to the Security tab | push/PR to main, weekly |
 | `release.yml` | CI-gated: tag → GHCR images → optional SSH deploy w/ health-gated rollback | tag `v*.*.*`, or manual |

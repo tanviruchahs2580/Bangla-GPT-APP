@@ -72,12 +72,15 @@ describe("impersonation credentials", () => {
     expect(isImpersonating()).toBe(true);
   });
 
-  it("logout drops the parked admin token too, not just the session token", () => {
+  it("logout drops the parked admin token too, not just the session token", async () => {
     localStorage.setItem("bgpt_token", IMPERSONATED);
     localStorage.setItem("bgpt_admin_token_backup", ADMIN_TOKEN);
     localStorage.setItem("bgpt_impersonating", "7");
 
-    logout();
+    // S-011: logout revokes server-side BEFORE the local wipe, so the whole
+    // flow is async now — the wipe (what these assertions check) happens
+    // after the revoke attempt settles.
+    await logout();
 
     expect(getToken()).toBeNull();
     // The regression: both of these used to survive logout().
@@ -86,9 +89,9 @@ describe("impersonation credentials", () => {
     expect(isImpersonating()).toBe(false);
   });
 
-  it("logout on an ordinary session leaves no impersonation keys behind", () => {
+  it("logout on an ordinary session leaves no impersonation keys behind", async () => {
     localStorage.setItem("bgpt_token", TOKEN);
-    logout();
+    await logout();
     expect(getToken()).toBeNull();
     expect(isImpersonating()).toBe(false);
     expect(Object.keys(localStorage)).toHaveLength(0);

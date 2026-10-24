@@ -1,0 +1,15 @@
+# Dashboard auto-provisioning: serve every JSON in the mounted dashboards
+# directory without a hand import.
+apiVersion: 1
+
+providers:
+  - name: bangla-gpt
+    orgId: 1
+    folder: ""
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 60
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

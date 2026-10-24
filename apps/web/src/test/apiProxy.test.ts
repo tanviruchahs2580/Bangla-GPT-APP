@@ -88,6 +88,34 @@ describe("handleApiProxy", () => {
     );
   });
 
+  it("strips client-supplied forwarding headers (rate-limit identity spoofing)", async () => {
+    // A caller must not choose its own X-Forwarded-For: the API reads its
+    // last entry as the caller identity when TRUST_PROXY_HEADERS=true, and an
+    // appending proxy would let the spoofed value rotate the rate-limit key.
+    const fetchMock = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const request = new Request("https://spa.vercel.app/api/auth/login", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-forwarded-for": "1.2.3.4, 5.6.7.8",
+        "x-real-ip": "1.2.3.4",
+        "x-forwarded-host": "evil.example",
+      },
+      body: "{}",
+    });
+    await handleApiProxy(request, { API_ORIGIN: "https://api.example.com" });
+
+    const upstreamHeaders = new Headers(
+      (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].headers,
+    );
+    expect(upstreamHeaders.get("x-forwarded-for")).toBeNull();
+    expect(upstreamHeaders.get("x-real-ip")).toBeNull();
+    expect(upstreamHeaders.get("x-forwarded-host")).toBeNull();
+    expect(upstreamHeaders.get("content-type")).toBe("application/json");
+  });
+
   it("never forwards hop-by-hop headers upstream or back", async () => {
     const fetchMock = vi.fn(async () => {
       return new Response("streamed", {

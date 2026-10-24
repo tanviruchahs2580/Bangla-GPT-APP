@@ -1,0 +1,29 @@
+- button "ভাষা"
+- paragraph: বাংলাদেশের শিক্ষার্থীদের জন্য নির্মিত
+- heading "বাংলা GPT টিউটর" [level=1]
+- paragraph: আপনার শেখার নতুন সঙ্গী
+- list:
+  - listitem: NCTB পাঠ্যবই-ভিত্তিক
+  - listitem: প্রমাণসহ AI ব্যাখ্যা
+  - listitem: অফলাইনে পড়া যায়
+- paragraph: শিক্ষার্থী, শিক্ষক, অভিভাবক ও স্কুল প্রশাসক — সবার জন্য একই প্ল্যাটফর্ম।
+- heading "লগইন" [level=2]
+- text: ইমেইল
+- textbox "ইমেইল"
+- text: পাসওয়ার্ড (কমপক্ষে ৮ অক্ষর)
+- textbox "পাসওয়ার্ড (কমপক্ষে ৮ অক্ষর)"
+- button "লগইন"
+- link "পাসওয়ার্ড ভুলে গেছেন?":
+  - /url: /forgot
+- link "নিবন্ধন":
+  - /url: /register
+- contentinfo:
+  - link "গোপনীয়তা":
+    - /url: /privacy
+  - text: ·
+  - link "শর্তাবলি":
+    - /url: /terms
+  - text: ·
+  - link "সিস্টেমের অবস্থা":
+    - /url: /status
+  - text: /© \d+ বাংলা GPT টিউটর/

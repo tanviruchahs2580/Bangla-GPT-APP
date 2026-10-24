@@ -1,9 +1,9 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ClassesPage from "../pages/teacher/ClassesPage";
 import { t } from "../i18n";
+import { renderWithQuery } from "./renderWithQuery";
 
 const apiMock = vi.hoisted(() => ({
   get: vi.fn(),
@@ -16,13 +16,15 @@ vi.mock("../api", async (importOriginal) => ({
 }));
 
 function renderPage() {
-  return render(
-    <MemoryRouter>
-      <ClassesPage />
-    </MemoryRouter>,
-  );
+  return renderWithQuery(<ClassesPage />);
 }
 
+let roomsStore: Array<{
+  id: number;
+  class_level: number;
+  section: string;
+  student_count: number;
+}> = [];
 const ROOMS = [
   { id: 1, class_level: 6, section: "GEN", student_count: 2 },
   { id: 2, class_level: 7, section: "GEN", student_count: 1 },
@@ -78,9 +80,12 @@ const IMPORT_RESULT = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Stateful room store: the page invalidates and refetches classrooms after
+  // a create/import (H-04) — a static ROOMS list would never show the new room.
+  roomsStore = structuredClone(ROOMS);
   apiMock.get.mockImplementation((path: string) => {
     if (path === "/teacher/classrooms")
-      return Promise.resolve(structuredClone(ROOMS));
+      return Promise.resolve(structuredClone(roomsStore));
     if (path.endsWith("/roster")) {
       return Promise.resolve(
         path === "/teacher/classrooms/1/roster"
@@ -96,11 +101,14 @@ beforeEach(() => {
     }
     return Promise.resolve(null);
   });
-  apiMock.post.mockResolvedValue({
-    id: 3,
-    class_level: 8,
-    section: "B",
-    student_count: 0,
+  apiMock.post.mockImplementation((path: string) => {
+    if (path === "/teacher/classrooms") {
+      const room = { id: 3, class_level: 8, section: "B", student_count: 0 };
+      roomsStore = [...roomsStore, room];
+      return Promise.resolve(structuredClone(room));
+    }
+    if (path.includes("/import")) return Promise.resolve(IMPORT_RESULT);
+    return Promise.resolve(null);
   });
 });
 
@@ -178,11 +186,13 @@ describe("classroom chips + roster + CSV import", () => {
     await user.click(screen.getByRole("button", { name: t("importBtn") }));
 
     await waitFor(() =>
+      // third arg: the sanctioned 120s per-call timeout (200 Argon2id rows)
       expect(apiMock.post).toHaveBeenCalledWith(
         "/teacher/classrooms/1/import",
         {
           csv_text: expect.stringContaining("a@school.edu"),
         },
+        { timeoutMs: 120_000 },
       ),
     );
     expect(

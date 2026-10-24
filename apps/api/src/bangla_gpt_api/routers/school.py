@@ -40,6 +40,8 @@ from bangla_gpt_api.db.models import (
 from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded
 from bangla_gpt_api.schemas import (
+    ROSTER_PAGE_DEFAULT_LIMIT,
+    ROSTER_PAGE_MAX_LIMIT,
     AdminSchoolStatsOut,
     ClassRoomCreateIn,
     ClassRoomOut,
@@ -132,55 +134,68 @@ def admin_school_list(db: DbSession, admin: AdminUser) -> list[SchoolOut]:
 
 @router.get("/admin/schools/stats", response_model=list[AdminSchoolStatsOut])
 def admin_school_stats(db: DbSession, admin: AdminUser) -> list[AdminSchoolStatsOut]:
-    """school list with per-school counts (aggregates only, )."""
+    """School list with per-school counts (aggregates only).
+
+    Was 3-4 queries PER SCHOOL in a loop (N+1): a platform with 100 schools
+    paid 400 queries per admin page load. Now four grouped aggregate queries
+    total, joined back onto the school list in Python.
+    """
     schools = db.execute(select(School).order_by(School.id)).scalars().all()
     since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=7)
-    rows: list[AdminSchoolStatsOut] = []
-    for school in schools:
-        classrooms = int(
-            db.execute(
-                select(func.count(ClassRoom.id)).where(ClassRoom.school_id == school.id)
-            ).scalar_one()
+
+    classroom_counts = {
+        int(sid): int(n)
+        for sid, n in db.execute(
+            select(ClassRoom.school_id, func.count(ClassRoom.id)).group_by(ClassRoom.school_id)
         )
-        student_ids = [
-            int(sid)
-            for (sid,) in db.execute(
-                select(ClassStudent.student_id)
-                .join(ClassRoom, ClassRoom.id == ClassStudent.classroom_id)
-                .where(ClassRoom.school_id == school.id)
-                .distinct()
-            )
-        ]
-        teachers = int(
-            db.execute(
-                select(func.count(User.id)).where(
-                    User.school_id == school.id, User.role.in_(["teacher", "school_admin"])
-                )
-            ).scalar_one()
+    }
+    # distinct students per school, straight from the enrollment rows
+    student_counts = {
+        int(sid): int(n)
+        for sid, n in db.execute(
+            select(ClassRoom.school_id, func.count(func.distinct(ClassStudent.student_id)))
+            .join(ClassStudent, ClassStudent.classroom_id == ClassRoom.id)
+            .group_by(ClassRoom.school_id)
         )
-        sessions_7d = 0
-        if student_ids:
-            sessions_7d = int(
-                db.execute(
-                    select(func.count(Conversation.id)).where(
-                        Conversation.student_id.in_(student_ids),
-                        Conversation.created_at >= since,
-                    )
-                ).scalar_one()
-            )
-        rows.append(
-            AdminSchoolStatsOut(
-                id=school.id,
-                name=school.name,
-                code=school.code,
-                created_at=school.created_at,
-                teachers=teachers,
-                classrooms=classrooms,
-                students=len(student_ids),
-                sessions_7d=sessions_7d,
-            )
+    }
+    teacher_counts = {
+        int(sid): int(n)
+        for sid, n in db.execute(
+            select(User.school_id, func.count(User.id))
+            .where(User.role.in_(["teacher", "school_admin"]))
+            .group_by(User.school_id)
         )
-    return rows
+        if sid is not None
+    }
+    # conversations in the last 7 days, attributed to the school through the
+    # owning student's enrollment (a student in two rooms counts once —
+    # COUNT(DISTINCT conversation))
+    session_counts = {
+        int(sid): int(n)
+        for sid, n in db.execute(
+            select(
+                ClassRoom.school_id,
+                func.count(func.distinct(Conversation.id)),
+            )
+            .join(ClassStudent, ClassStudent.classroom_id == ClassRoom.id)
+            .join(Conversation, Conversation.student_id == ClassStudent.student_id)
+            .where(Conversation.created_at >= since)
+            .group_by(ClassRoom.school_id)
+        )
+    }
+    return [
+        AdminSchoolStatsOut(
+            id=s.id,
+            name=s.name,
+            code=s.code,
+            created_at=s.created_at,
+            teachers=teacher_counts.get(s.id, 0),
+            classrooms=classroom_counts.get(s.id, 0),
+            students=student_counts.get(s.id, 0),
+            sessions_7d=session_counts.get(s.id, 0),
+        )
+        for s in schools
+    ]
 
 
 @router.get("/admin/schools/{school_id}/invites", response_model=list[SchoolInviteAdminOut])
@@ -756,7 +771,7 @@ def school_students(
     user: SchoolStaffUser,
     school_id: Annotated[int | None, Query()] = None,
     class_level: Annotated[int | None, Query(ge=1, le=12)] = None,
-    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    limit: Annotated[int, Query(ge=1, le=ROSTER_PAGE_MAX_LIMIT)] = ROSTER_PAGE_DEFAULT_LIMIT,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> SchoolStudentPage:
     """Paginated school roster: id, name, grade, section, approximate last
@@ -766,14 +781,45 @@ def school_students(
     newer of the last tracked activity day and the last quiz attempt.
     """
     school = _actor_school(db, user, school_id)
-    rooms = _school_rooms(db, school.id)
-    students, room_of = _school_students_by_room(db, [r.id for r in rooms])
-    room_by_id = {r.id: r for r in rooms}
+    # SQL-side paging over the enrollment join (school membership is
+    # classroom membership). Was: the WHOLE roster materialised, then sliced
+    # in Python — every page cost O(school size). Order (student id) and the
+    # one-room-per-student rule (lowest room id wins, matching the previous
+    # setdefault-first behavior) are preserved.
+    membership = (
+        select(
+            ClassStudent.student_id.label("student_id"),
+            func.min(ClassStudent.classroom_id).label("room_id"),
+        )
+        .join(ClassRoom, ClassRoom.id == ClassStudent.classroom_id)
+        .where(ClassRoom.school_id == school.id)
+        .group_by(ClassStudent.student_id)
+    )
     if class_level is not None:
-        students = [s for s in students if s.class_level == class_level]
-    total = len(students)
-    page = students[offset : offset + limit]
-    ids = [s.id for s in page]
+        membership = membership.where(
+            ClassStudent.student_id.in_(
+                select(Student.id).where(Student.class_level == class_level)
+            )
+        )
+    total = int(db.execute(select(func.count()).select_from(membership.subquery())).scalar_one())
+    page_rows = (
+        db.execute(membership.order_by(ClassStudent.student_id).offset(offset).limit(limit))
+        .mappings()
+        .all()
+    )
+    page_ids = [int(r["student_id"]) for r in page_rows]
+    room_by_id = {
+        r.id: r
+        for r in db.execute(
+            select(ClassRoom).where(ClassRoom.id.in_([int(r["room_id"]) for r in page_rows] or [0]))
+        ).scalars()
+    }
+    students = {
+        s.id: s
+        for s in db.execute(select(Student).where(Student.id.in_(page_ids or [0]))).scalars()
+    }
+    room_of = {int(r["student_id"]): int(r["room_id"]) for r in page_rows}
+    ids = [i for i in page_ids if i in students]
     last_day: dict[int, str] = {}
     attempts: dict[int, int] = {}
     if ids:
@@ -811,7 +857,8 @@ def school_students(
             last_active=last_day.get(s.id),
             quiz_attempts=attempts.get(s.id, 0),
         )
-        for s in page
+        for i in ids
+        if (s := students[i]) is not None
     ]
     return SchoolStudentPage(total=total, limit=limit, offset=offset, items=items)
 

@@ -149,20 +149,31 @@ def get_current_user(
         user_id = int(payload["sub"])
     except (pyjwt.PyJWTError, KeyError, TypeError, ValueError) as exc:
         raise _unauthorized("Invalid or expired token") from exc
-    # impersonation tokens are revocable BEFORE their short expiry.
-    # The jti lands in the shared cache (Redis when configured: revocation
-    # then holds across workers/restarts; memory backend: per-worker) with
-    # a TTL that matches the token's own remaining life. The lookup is
-    # strict (F-08): if the revocation store is unreachable we fail CLOSED
-    # for these privileged tokens — an uncheckable impersonation session
-    # must not pass — while every other cache read in the app stays soft.
-    if payload.get("imp") and isinstance(payload.get("jti"), str):
+    # Every minted token carries a jti, and a logout (POST /auth/logout)
+    # or an account-wide revoke parks it in the shared cache (Redis when
+    # configured: revocation then holds across workers/restarts; memory
+    # backend: per-worker) with a TTL that matches the token's own
+    # remaining life — so a bearer token is revocable BEFORE its expiry
+    # (S-011), not only via a password change that rotates the epoch for
+    # every session at once. Impersonation tokens keep their own stricter
+    # namespace (`imp_revoke:`, F-08). Both lookups are strict: if the
+    # revocation store is unreachable we fail CLOSED — an uncheckable
+    # session must not pass — and in production Redis is already a hard
+    # dependency (the rate limiter fails closed on the same outage), so
+    # this adds no new failure mode. Every other cache read stays soft.
+    jti = payload.get("jti")
+    if isinstance(jti, str):
         try:
-            revoked = ctx.cache.get_json_strict(f"imp_revoke:{payload['jti']}")
+            if payload.get("imp"):
+                revoked = ctx.cache.get_json_strict(f"imp_revoke:{jti}")
+            else:
+                revoked = ctx.cache.get_json_strict(f"revoke:{jti}")
         except CacheUnavailable as exc:
             raise revocation_store_unavailable() from exc
         if revoked is True:
-            raise _unauthorized("Impersonation session has ended")
+            if payload.get("imp"):
+                raise _unauthorized("Impersonation session has ended")
+            raise _unauthorized("Session ended; please log in again")
     # AUTH-001: MFA step-up tokens (mfa:true, token_type "mfa") are accepted
     # ONLY by POST /auth/mfa/challenge — never as API credentials.
     if payload.get("mfa") is True:
@@ -296,17 +307,20 @@ def _tenant_school_id(db: Session, user: User) -> int | None:
     return None
 
 
-def _school_student_id_set(db: Session, school_id: int) -> set[int]:
-    rows = (
-        db.execute(
-            select(ClassStudent.student_id)
-            .join(ClassRoom, ClassRoom.id == ClassStudent.classroom_id)
-            .where(ClassRoom.school_id == school_id)
-        )
-        .scalars()
-        .all()
+def _student_in_school(db: Session, school_id: int, student_id: int) -> bool:
+    """One EXISTS membership probe for the tenancy gate.
+
+    Was: the school's ENTIRE roster loaded into a Python set per request —
+    O(school enrollment) on every quiz submit/progress read. A 2,000-student
+    school paid 2,000 rows to answer a one-row question.
+    """
+    probe = (
+        select(ClassStudent.student_id)
+        .join(ClassRoom, ClassRoom.id == ClassStudent.classroom_id)
+        .where(ClassRoom.school_id == school_id, ClassStudent.student_id == student_id)
+        .exists()
     )
-    return set(rows)
+    return db.scalar(select(probe)) is True
 
 
 def _assert_student_in_school(db: Session, user: User, student: Student) -> Student:
@@ -314,7 +328,7 @@ def _assert_student_in_school(db: Session, user: User, student: Student) -> Stud
     school_id = _tenant_school_id(db, user)
     if school_id is None:
         return student
-    if student.id not in _school_student_id_set(db, school_id):
+    if not _student_in_school(db, school_id, student.id):
         raise HTTPException(
             status_code=403,
             detail={"code": "other_school", "message": "Student is outside your school"},

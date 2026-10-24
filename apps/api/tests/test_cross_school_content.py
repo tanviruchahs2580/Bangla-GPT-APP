@@ -20,6 +20,7 @@ from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.models import ChapterContent
 from bangla_gpt_api.db.session import make_engine, make_session_factory
 from bangla_gpt_api.main import create_app
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 JWT = "test-secret-0123456789abcdef0123456789"
@@ -33,7 +34,7 @@ CHAPTER = "কোষ"
 def client(tmp_path) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/xschool.db",
+        database_url=engine_url(tmp_path, "xschool"),
         jwt_secret=JWT,
         admin_email="root@example.com",
         admin_password=PASSWORD,
@@ -197,7 +198,7 @@ def test_platform_seeded_content_is_read_only_for_teachers(client, two_schools, 
     """``created_by`` NULL means no tenancy to match -> read-only."""
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/xschool.db",
+        database_url=engine_url(tmp_path, "xschool"),
         jwt_secret=JWT,
     )
     engine = make_engine(settings)

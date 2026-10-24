@@ -23,6 +23,7 @@ from bangla_gpt_api.services.router import (
     route_distribution,
     simple_share,
 )
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -82,7 +83,7 @@ def _app(monkeypatch, tmp_path, *, fast: bool = True):
     monkeypatch.setattr("bangla_gpt_api.main.get_fast_provider", lambda s: fast_provider)
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/router.db",
+        database_url=engine_url(tmp_path, "router"),
         jwt_secret=SECRET,
     )
     client = TestClient(create_app(settings))

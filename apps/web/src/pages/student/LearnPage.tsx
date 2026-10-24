@@ -575,17 +575,41 @@ export function LearnChapterPage() {
             </span>
           </div>
 
-          {/* in-page tabs — read / practice / ask without leaving the chapter */}
+          {/* in-page tabs — read / practice / ask without leaving the chapter.
+              APG tabs model: roving tabindex + arrow keys move selection and
+              focus together; each button controls its panel by id. */}
           <div
             className="chips workspace-tabs"
             role="tablist"
             aria-label={t("locWorkspace")}
+            tabIndex={-1}
+            onKeyDown={(e) => {
+              const keys = ["read", "practice", "ask"] as const;
+              const at = keys.indexOf(tab);
+              let next: (typeof keys)[number] | null = null;
+              if (e.key === "ArrowRight" || e.key === "ArrowDown")
+                next = keys[(at + 1) % keys.length];
+              else if (e.key === "ArrowLeft" || e.key === "ArrowUp")
+                next = keys[(at + keys.length - 1) % keys.length];
+              else if (e.key === "Home") next = keys[0];
+              else if (e.key === "End") next = keys[keys.length - 1];
+              if (next === null) return;
+              e.preventDefault();
+              setTab(next);
+              // selection follows focus; the panel host carries the id
+              requestAnimationFrame(() =>
+                document.getElementById(`workspace-tab-${next}`)?.focus(),
+              );
+            }}
           >
             {(["read", "practice", "ask"] as const).map((k) => (
               <button
                 key={k}
+                id={`workspace-tab-${k}`}
                 role="tab"
                 aria-selected={tab === k}
+                aria-controls="workspace-tab-panel"
+                tabIndex={tab === k ? 0 : -1}
                 className={cn("chip", tab === k && "active")}
                 onClick={() => setTab(k)}
               >
@@ -598,73 +622,80 @@ export function LearnChapterPage() {
             ))}
           </div>
 
-          {tab === "read" && (
-            <>
-              <h1 className="card-title reader-title">{content.chapter}</h1>
-              <p className="muted">
-                <BookOpen size={15} className="reader-book" aria-hidden />{" "}
-                {content.book}
-              </p>
-              <div
-                className="md stack reader-md"
-                style={{
-                  fontSize: `${fontScale}em`,
-                }}
-              >
-                {content.sections.map((s, i) => (
-                  <div key={i}>
-                    {s.section && <h3>{s.section}</h3>}
-                    <SafeMarkdown content={s.text} />
-                  </div>
-                ))}
+          <div
+            id="workspace-tab-panel"
+            role="tabpanel"
+            tabIndex={-1}
+            hidden={false}
+          >
+            {tab === "read" && (
+              <>
+                <h1 className="card-title reader-title">{content.chapter}</h1>
+                <p className="muted">
+                  <BookOpen size={15} className="reader-book" aria-hidden />{" "}
+                  {content.book}
+                </p>
+                <div
+                  className="md stack reader-md"
+                  style={{
+                    fontSize: `${fontScale}em`,
+                  }}
+                >
+                  {content.sections.map((s, i) => (
+                    <div key={i}>
+                      {s.section && <h3>{s.section}</h3>}
+                      <SafeMarkdown content={s.text} />
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+            {tab !== "ask" && (
+              /* visible "AI suggestion: continue with X" card. */
+              <div className="ai-suggest-card" role="status">
+                <span className="ai-suggest-label" aria-hidden>
+                  <Bookmark size={14} /> {t("aiSuggestion")}
+                </span>
+                <span className="ai-suggest-text">
+                  {(progressQuery.data ?? []).find((x) => x.chapter === chapter)
+                    ?.completed
+                    ? t("nextSuggestionAsk")
+                    : t("nextSuggestionPractice")}
+                </span>
+                <button
+                  className="btn btn-soft btn-sm"
+                  onClick={() =>
+                    setTab(
+                      (progressQuery.data ?? []).find(
+                        (x) => x.chapter === chapter,
+                      )?.completed
+                        ? "ask"
+                        : "practice",
+                    )
+                  }
+                >
+                  {(progressQuery.data ?? []).find((x) => x.chapter === chapter)
+                    ?.completed
+                    ? t("tabAsk")
+                    : t("tabPractice")}
+                </button>
               </div>
-            </>
-          )}
-          {tab !== "ask" && (
-            /* visible "AI suggestion: continue with X" card. */
-            <div className="ai-suggest-card" role="status">
-              <span className="ai-suggest-label" aria-hidden>
-                <Bookmark size={14} /> {t("aiSuggestion")}
-              </span>
-              <span className="ai-suggest-text">
-                {(progressQuery.data ?? []).find((x) => x.chapter === chapter)
-                  ?.completed
-                  ? t("nextSuggestionAsk")
-                  : t("nextSuggestionPractice")}
-              </span>
-              <button
-                className="btn btn-soft btn-sm"
-                onClick={() =>
-                  setTab(
-                    (progressQuery.data ?? []).find(
-                      (x) => x.chapter === chapter,
-                    )?.completed
-                      ? "ask"
-                      : "practice",
-                  )
-                }
-              >
-                {(progressQuery.data ?? []).find((x) => x.chapter === chapter)
-                  ?.completed
-                  ? t("tabAsk")
-                  : t("tabPractice")}
-              </button>
-            </div>
-          )}
-          {tab === "practice" && (
-            <ChapterPractice
-              subject={content.subject}
-              chapter={content.chapter}
-              classLevel={content.class_level}
-            />
-          )}
-          {tab === "ask" && (
-            <ChapterAsk
-              subject={content.subject}
-              chapter={content.chapter}
-              classLevel={content.class_level}
-            />
-          )}
+            )}
+            {tab === "practice" && (
+              <ChapterPractice
+                subject={content.subject}
+                chapter={content.chapter}
+                classLevel={content.class_level}
+              />
+            )}
+            {tab === "ask" && (
+              <ChapterAsk
+                subject={content.subject}
+                chapter={content.chapter}
+                classLevel={content.class_level}
+              />
+            )}
+          </div>
         </Card>
       )}
     </main>

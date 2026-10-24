@@ -1,5 +1,6 @@
 """Shared route helpers — split from the main.py god-module."""
 
+import asyncio
 import base64
 import hashlib
 import json
@@ -509,25 +510,22 @@ def _doc_in_for(kind: str, body: dict) -> Any:
     return model.model_validate(body)
 
 
-async def _generate_document(
-    app_ctx: Ctx, db: Session, actor: User, kind: str, gen: Any
-) -> tuple[dict, list[SourceRef], str | None]:
-    """THE single execution path of the document generators: the sync
-    endpoints and the AiJob runner below share it, so a background job
-    behaves exactly like the synchronous call.
-
-    Because every generator funnels through here, this is also where the
-    per-user AI budget is enforced and the spend ledgered (SEC-002). Doing it in
-    the route handlers instead would leave ``POST /teacher/jobs`` -- which runs
-    this on a detached task with its own session -- unbudgeted and unmetered,
-    and ``/admin/ai/quality`` would under-report every teacher generation.
-    """
-    if app_ctx.tutor is None:
-        raise ProviderError("provider not configured")
+def _generate_document_prepare(
+    app_ctx: Ctx,
+    db: Session,
+    actor: User,
+    kind: str,
+    gen: Any,
+    *,
+    class_level: int,
+    subject: str,
+    chapter: str | None,
+) -> tuple[list[str], str | None, RequestContext]:
+    """DB prelude of the document generators (budget, answer-key paper
+    load, education context). Runs off the event loop via to_thread —
+    the generators themselves are async and must not share the loop
+    with blocking DB round-trips."""
     check_ai_budget(db, user_id=actor.id, settings=app_ctx.settings)
-    class_level = int(gen.class_level)
-    subject = str(gen.subject)
-    chapter: str | None = getattr(gen, "chapter", None)
     questions: list[str] = []
     if kind == "answer_key":
         questions = [q.strip() for q in (gen.questions or []) if q.strip()]
@@ -551,6 +549,38 @@ async def _generate_document(
         chapter=chapter,
         # lesson_plan keeps its S2 goal string; the new kinds are prefixed
         goal="lesson_plan" if kind == "lesson_plan" else f"generate_{kind}",
+    )
+    return questions, chapter, ctx
+
+
+async def _generate_document(
+    app_ctx: Ctx, db: Session, actor: User, kind: str, gen: Any
+) -> tuple[dict, list[SourceRef], str | None]:
+    """THE single execution path of the document generators: the sync
+    endpoints and the AiJob runner below share it, so a background job
+    behaves exactly like the synchronous call.
+
+    Because every generator funnels through here, this is also where the
+    per-user AI budget is enforced and the spend ledgered (SEC-002). Doing it in
+    the route handlers instead would leave ``POST /teacher/jobs`` -- which runs
+    this on a detached task with its own session -- unbudgeted and unmetered,
+    and ``/admin/ai/quality`` would under-report every teacher generation.
+    """
+    if app_ctx.tutor is None:
+        raise ProviderError("provider not configured")
+    class_level = int(gen.class_level)
+    subject = str(gen.subject)
+    chapter: str | None = getattr(gen, "chapter", None)
+    questions, chapter, ctx = await asyncio.to_thread(
+        _generate_document_prepare,
+        app_ctx,
+        db,
+        actor,
+        kind,
+        gen,
+        class_level=class_level,
+        subject=subject,
+        chapter=chapter,
     )
     doc_payload: dict
     sources: list[SourceRef]
@@ -614,7 +644,8 @@ async def _generate_document(
     # marks the AiJob ready) commits this row with it. The prompt side is the
     # retrieval context actually sent; the answer side is the serialised
     # document, which is what the tokens were spent producing.
-    record_ai_usage(
+    await asyncio.to_thread(
+        record_ai_usage,
         db,
         user_id=actor.id,
         route=f"teacher/{kind}",

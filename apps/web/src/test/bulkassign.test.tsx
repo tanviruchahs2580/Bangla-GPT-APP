@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import AssessmentsPage from "../pages/teacher/AssessmentsPage";
 import { t } from "../i18n";
 import type { AssignmentProgressRow, AssignmentRow } from "../types";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const apiMock = vi.hoisted(() => ({
   get: vi.fn(),
@@ -19,16 +20,26 @@ vi.mock("../api", async (importOriginal) => ({
 }));
 
 function renderPage() {
+  // react-query provider: the migrated teacher pages read the shared cache
+  // (audit H-04); the app's own defaults (no retry, 30s stale) keep tests fast.
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: 30_000 } },
+  });
   return render(
-    <MemoryRouter initialEntries={["/teacher/assessments?tab=assignments"]}>
-      <Routes>
-        <Route path="/teacher/assessments" element={<AssessmentsPage />} />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={["/teacher/assessments?tab=assignments"]}>
+        <Routes>
+          <Route path="/teacher/assessments" element={<AssessmentsPage />} />
+        </Routes>
+      </MemoryRouter>
+      ,
+    </QueryClientProvider>,
   );
 }
 
 const ROOMS = [{ id: 1, class_level: 6, section: "GEN", student_count: 2 }];
+
+let assignmentsStore: unknown[] = [];
 
 const ROSTER = [
   {
@@ -97,12 +108,16 @@ const PROGRESS: AssignmentProgressRow[] = [
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Stateful assignment store: the migrated page invalidates and refetches
+  // after a create (H-04), so the GET mock must model the server.
+  assignmentsStore = [];
   apiMock.get.mockImplementation((path: string) => {
     if (path === "/teacher/classrooms")
       return Promise.resolve(structuredClone(ROOMS));
     if (path.endsWith("/roster"))
       return Promise.resolve(structuredClone(ROSTER));
-    if (path === "/teacher/assignments") return Promise.resolve([]);
+    if (path === "/teacher/assignments")
+      return Promise.resolve(structuredClone(assignmentsStore));
     if (path.startsWith("/teacher/assignments/"))
       return Promise.resolve(structuredClone(PROGRESS));
     if (path.includes("/analytics"))
@@ -110,8 +125,10 @@ beforeEach(() => {
     return Promise.resolve(null);
   });
   apiMock.post.mockImplementation((path: string) => {
-    if (path === "/teacher/assignments")
+    if (path === "/teacher/assignments") {
+      assignmentsStore = [structuredClone(NEW_ASSIGNMENT)];
       return Promise.resolve(structuredClone(NEW_ASSIGNMENT));
+    }
     return Promise.resolve(null);
   });
 });

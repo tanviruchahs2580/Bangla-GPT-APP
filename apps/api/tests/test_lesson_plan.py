@@ -16,6 +16,7 @@ from bangla_gpt_api.services.generators.lesson_plan import (
     LESSON_KEYS,
     parse_lesson_payload,
 )
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -50,7 +51,7 @@ def _valid_payload() -> dict[str, object]:
 def _make_client(tmp_path) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/lesson.db",
+        database_url=engine_url(tmp_path, "lesson"),
         jwt_secret=SECRET,
     )
     return TestClient(create_app(settings))

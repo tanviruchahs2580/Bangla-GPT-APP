@@ -29,8 +29,11 @@ DOCKER_BUILDKIT=1 docker build \
   --push .
 ```
 
-**Dockerfile:** Multi-stage build (builder → runner). `python:3.12-slim`
-base, pinned by digest (`Dockerfile:11`).
+**Dockerfile:** Single-stage runtime image on a digest-pinned
+`python:3.12-slim` base (`Dockerfile:11`), non-root uid 10001, with the
+hash-verified dependency layer ordered BEFORE the source copy so source
+changes do not invalidate it. (Only `apps/web/Dockerfile` is multi-stage:
+node build → nginx.)
 
 ### Web
 

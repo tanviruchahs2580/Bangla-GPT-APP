@@ -18,6 +18,10 @@ from bangla_gpt_api.schemas import ReviewItem
 from bangla_gpt_api.services import adaptive, knowledge
 from bangla_gpt_api.services.quiz import ClozeQuizGenerator
 
+# Engine-coupled by design: this file drives fixtures through raw
+# sqlite3 connections (audit H-02 follow-up), so it pins SQLite and stays
+# out of the BGPT_TEST_DATABASE_URL parity lane.
+
 PASSWORD = "supersecret1"
 
 FRACTION = "ভগ্নাংশ"

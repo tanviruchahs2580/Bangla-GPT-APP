@@ -26,6 +26,7 @@ from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.models import Base
 from bangla_gpt_api.db.session import make_engine, make_session_factory
 from bangla_gpt_api.main import create_app
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -53,13 +54,14 @@ def fk_enforced(tmp_path):
     for the duration of this fixture and is removed afterwards, which covers
     every engine the app creates.
 
-    With ``TEST_DATABASE_URL`` set (the CI Postgres job) PostgreSQL does the
-    enforcing natively and no PRAGMA is involved.
+    With a parity database configured (``BGPT_TEST_DATABASE_URL`` — the CI
+    Postgres job, or a local run of the same) PostgreSQL does the enforcing
+    natively and no PRAGMA is involved.
     """
     from sqlalchemy import event
     from sqlalchemy.engine import Engine
 
-    test_db = os.environ.get("TEST_DATABASE_URL")
+    test_db = os.environ.get("BGPT_TEST_DATABASE_URL") or os.environ.get("TEST_DATABASE_URL")
     if test_db:
         settings = Settings(
             env="test",
@@ -84,7 +86,7 @@ def fk_enforced(tmp_path):
     try:
         settings = Settings(
             env="test",
-            database_url=f"sqlite:///{tmp_path}/fk.db",
+            database_url=engine_url(tmp_path, "fk"),
             jwt_secret=SECRET,
             admin_email="root@example.test",
             admin_password=PASSWORD,
@@ -128,7 +130,12 @@ def test_erasure_succeeds_despite_another_users_feedback(fk_enforced) -> None:
     login = client.post("/auth/login", json={"email": "owner@example.test", "password": PASSWORD})
     token = login.json()["access_token"]
 
-    res = client.delete("/users/me", headers={"Authorization": f"Bearer {token}"})
+    res = client.request(
+        "DELETE",
+        "/users/me",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"password": "supersecret1"},
+    )
 
     assert res.status_code == 204, (
         f"erasure failed with {res.status_code}: {res.text}. "
@@ -153,7 +160,13 @@ def test_feedback_row_survives_but_its_pointer_is_cleared(fk_enforced) -> None:
     login = client.post("/auth/login", json={"email": "owner2@example.test", "password": PASSWORD})
     token = login.json()["access_token"]
     assert (
-        client.delete("/users/me", headers={"Authorization": f"Bearer {token}"}).status_code == 204
+        client.request(
+            "DELETE",
+            "/users/me",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"password": "supersecret1"},
+        ).status_code
+        == 204
     )
 
     with factory() as db:

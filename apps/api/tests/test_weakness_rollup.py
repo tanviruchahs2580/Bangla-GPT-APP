@@ -21,6 +21,10 @@ from bangla_gpt_api.routers import common
 from bangla_gpt_api.services import knowledge, weakness
 from bangla_gpt_api.services.parent_digest import run_weekly_digest
 
+# Engine-coupled by design: this file drives fixtures through raw
+# sqlite3 connections (audit H-02 follow-up), so it pins SQLite and stays
+# out of the BGPT_TEST_DATABASE_URL parity lane.
+
 PASSWORD = "supersecret1"
 
 # alpha 0/4 (0%, weak) | beta 1/4 (25%, weak) | gamma 2/4 (50%, NOT < 50)

@@ -186,7 +186,7 @@ _INJECTION_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(
         "(\u09a8\u09a4\u09c1\u09a8|\u09a8\u09a4\u09c1\u09a8)\\s*"
         "(\u09b8\u09bf\u09b8\u09cd\u099f\u09c7\u09ae\\s*)?"
-        "(\u09a8\u09bf\u09df\u09ae|\u09a8\u09bf\u09b0\u09cd\u09a6\u09c7\u09b6"
+        "(\u09a8\u09bf[\u09af\u09df]\u09bc?\u09ae|\u09a8\u09bf\u09b0\u09cd\u09a6\u09c7\u09b6"
         "|\u09aa\u09cd\u09b0\u09ae\u09cd\u09aa\u099f)"
     ),
 )

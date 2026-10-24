@@ -10,6 +10,8 @@ from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
 
 # "ko-sh" (cell) -- top-level science chapter in the sample corpus.
+from conftest import engine_url
+
 KOSH = chr(0x0995) + chr(0x09CB) + chr(0x09B7)
 # "kii" (what is) -- trailing interrogative used in section titles.
 KII = chr(0x0995) + chr(0x09C0)
@@ -19,7 +21,7 @@ KII = chr(0x0995) + chr(0x09C0)
 def client(tmp_path) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/search.db",
+        database_url=engine_url(tmp_path, "search"),
         jwt_secret="test-secret-0123456789abcdef0123456789",
     )
     return TestClient(create_app(settings))

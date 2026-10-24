@@ -23,13 +23,14 @@ from bangla_gpt_api.services.costs import (
     month_cost_usd,
     record_ai_usage,
 )
+from conftest import engine_url
 
 SECRET = "test-secret-0123456789abcdef0123456789"
 PASSWORD = "StrongPass123!"
 
 
 def _settings(tmp_path, **over) -> Settings:
-    base = dict(env="test", database_url=f"sqlite:///{tmp_path}/costs.db", jwt_secret=SECRET)
+    base = dict(env="test", database_url=engine_url(tmp_path, "costs"), jwt_secret=SECRET)
     base.update(over)
     return Settings(**base)
 
@@ -165,7 +166,12 @@ def test_delete_me_cleans_ledger(tmp_path) -> None:
         "/tutor/ask", json={"question": "ভগ্নাংশ কী?", "class_level": 6}, headers=headers
     )
     assert res.status_code == 200
-    assert client.delete("/users/me", headers=headers).status_code == 204
+    assert (
+        client.request(
+            "DELETE", "/users/me", headers=headers, json={"password": "StrongPass123!"}
+        ).status_code
+        == 204
+    )
     engine = make_engine(_settings(tmp_path))
     session_factory = make_session_factory(engine)
     with session_factory() as db:

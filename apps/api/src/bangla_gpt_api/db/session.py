@@ -25,6 +25,9 @@ transaction, so it must run on the raw connection before SQLAlchemy starts
 one).
 """
 
+import sqlite3
+import time
+
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -34,7 +37,10 @@ from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.base import Base
 
 #: How long a SQLite write waits for the write lock before raising.
-SQLITE_BUSY_TIMEOUT_MS = 5000
+# 15s: the coverage CI leg and single-file production deployments both
+# hit multi-second write contention under load; 5s measured "database is
+# locked" flakes (CI 2026-10-24, two suites) where 15s absorbed them.
+SQLITE_BUSY_TIMEOUT_MS = 15000
 #: TCP connect budget for PostgreSQL — a hung host fails the connection
 #: attempt instead of blocking the (boot-time or request) caller indefinitely.
 POSTGRES_CONNECT_TIMEOUT_SECONDS = 10
@@ -55,7 +61,23 @@ def _apply_sqlite_pragmas(target: Engine, url: str) -> None:
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
             if not memory:
-                cursor.execute("PRAGMA journal_mode=WAL")
+                # journal_mode=WAL requires exclusive access and does NOT go
+                # through the busy handler: two gunicorn workers booting
+                # simultaneously against one file (WEB_CONCURRENCY=2, the
+                # shipped default) raced here — the losing worker failed to
+                # boot, gunicorn's master gave up, and the container exited
+                # ~17s after start (reproduced deterministically, 2026-10-24).
+                # Read the current mode first (cheap, lock-free in WAL) and
+                # only attempt the switch with a bounded retry loop.
+                for _ in range(50):  # <= ~5s, like the busy timeout
+                    mode = cursor.execute("PRAGMA journal_mode").fetchone()
+                    if str(mode[0]).lower() == "wal":
+                        break
+                    try:
+                        cursor.execute("PRAGMA journal_mode=WAL")
+                        break
+                    except sqlite3.OperationalError:
+                        time.sleep(0.1)
                 cursor.execute("PRAGMA synchronous=NORMAL")
         finally:
             cursor.close()

@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
 from bangla_gpt_api.providers.mock import MockLLMProvider
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -60,7 +61,7 @@ def _valid_payload() -> dict:
 def client(tmp_path) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/content.db",
+        database_url=engine_url(tmp_path, "content"),
         jwt_secret=SECRET,
     )
     return TestClient(create_app(settings))
@@ -96,7 +97,7 @@ def test_generate_single_ai_call_all_sections(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr("bangla_gpt_api.main.get_provider", lambda s: provider)
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/content.db",
+        database_url=engine_url(tmp_path, "content"),
         jwt_secret=SECRET,
     )
     client = TestClient(create_app(settings))
@@ -118,7 +119,7 @@ def test_teacher_edit_persists_as_new_version(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr("bangla_gpt_api.main.get_provider", lambda s: provider)
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/content.db",
+        database_url=engine_url(tmp_path, "content"),
         jwt_secret=SECRET,
     )
     client = TestClient(create_app(settings))
@@ -162,7 +163,7 @@ def test_invalid_provider_output_is_502_and_persists_nothing(monkeypatch, tmp_pa
     monkeypatch.setattr("bangla_gpt_api.main.get_provider", lambda s: provider)
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/content.db",
+        database_url=engine_url(tmp_path, "content"),
         jwt_secret=SECRET,
     )
     client = TestClient(create_app(settings))
@@ -182,7 +183,7 @@ def test_unknown_chapter_is_502_without_ai_call(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr("bangla_gpt_api.main.get_provider", lambda s: provider)
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/content.db",
+        database_url=engine_url(tmp_path, "content"),
         jwt_secret=SECRET,
     )
     client = TestClient(create_app(settings))

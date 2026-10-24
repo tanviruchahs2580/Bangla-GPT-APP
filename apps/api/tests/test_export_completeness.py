@@ -15,7 +15,8 @@ from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.models import Notification
 from bangla_gpt_api.db.session import make_engine, make_session_factory
 from bangla_gpt_api.main import create_app
-from bangla_gpt_api.routers.users import EXPORT_SCHEMA_VERSION
+from bangla_gpt_api.services.gdpr import EXPORT_SCHEMA_VERSION
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 JWT = "test-secret-0123456789abcdef0123456789"
@@ -51,7 +52,7 @@ V2_SECTIONS = (
 def client(tmp_path) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/export-v2.db",
+        database_url=engine_url(tmp_path, "export-v2"),
         jwt_secret=JWT,
     )
     return TestClient(create_app(settings))
@@ -93,7 +94,7 @@ def test_export_contains_note_progress_and_notification(client: TestClient, tmp_
 
     # Notifications are written by other flows; seed one directly to keep this
     # test focused on the export.
-    settings = Settings(database_url=f"sqlite:///{tmp_path}/export-v2.db")
+    settings = Settings(database_url=engine_url(tmp_path, "export-v2"))
     with make_session_factory(make_engine(settings))() as db:
         db.add(
             Notification(

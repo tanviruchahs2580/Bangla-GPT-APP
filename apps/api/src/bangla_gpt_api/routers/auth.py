@@ -7,6 +7,7 @@ Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 import hashlib
 import logging
 import secrets
+import time
 from datetime import UTC, datetime, timedelta
 
 import jwt as pyjwt
@@ -66,6 +67,7 @@ from .deps import (
     Ctx,
     CurrentUser,
     DbSession,
+    revocation_store_unavailable,
 )
 
 router = APIRouter()
@@ -394,12 +396,70 @@ def login(app_ctx: Ctx, response: Response, payload: LoginRequest, db: DbSession
     return TokenResponse(access_token=token, must_change_password=user.must_change_password)
 
 
+@router.post("/auth/logout", status_code=204, responses=coded(400))
+def logout(app_ctx: Ctx, request: Request, user: CurrentUser) -> None:
+    """End THIS session now (S-011).
+
+    The presented token's jti is parked in the fail-closed revocation store
+    with a TTL matching the token's remaining life, so it stops
+    authenticating immediately instead of living out its 60-minute expiry
+    (a password change rotates the epoch for ALL sessions; this is the
+    per-session kill switch). Every token carries a jti; one that does not
+    is a legacy mint and is refused — silently accepting it would let a
+    caller believe a session was ended when it was not.
+    """
+    claims = getattr(request.state, "jwt_claims", None) or {}
+    jti = claims.get("jti")
+    if not isinstance(jti, str) or not jti:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "not_revocable", "message": "Token cannot be revoked; log in again"},
+        )
+    exp = claims.get("exp")
+    ttl = max(1.0, float(exp) - time.time()) if isinstance(exp, (int, float)) else 900.0
+    # Strict (F-08 discipline): returning 204 while the write failed would
+    # claim an end that did not happen.
+    try:
+        app_ctx.cache.set_json_strict(f"revoke:{jti}", True, ttl)
+    except CacheUnavailable as exc:
+        raise revocation_store_unavailable() from exc
+
+
 def _hash_reset_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
 #: Cache key prefix for a consumed MFA step-up token.
 _MFA_USED_PREFIX = "mfa_used:"
+
+#: S-012 per-account TOTP throttle: failures counted in a 15-minute window,
+#: and the lock that crossing the threshold stamps (also 15 minutes).
+_MFA_FAIL_WINDOW_SECONDS = 900
+_MFA_FAIL_MAX = 10
+_MFA_LOCK_SECONDS = 900
+
+
+def _mfa_account_locked(app_ctx: AppContext, user_id: int) -> bool:
+    """True while the account's MFA challenge is throttled (S-012)."""
+    try:
+        return app_ctx.cache.get_json(f"mfa_lock:{user_id}") is True
+    except CacheUnavailable:
+        # Soft by design — see the S-012 note in mfa_challenge.
+        return False
+
+
+def _record_failed_mfa_code(app_ctx: AppContext, user_id: int) -> None:
+    """Count one invalid TOTP code; stamp the lock when the window is full."""
+    key = f"mfa_fail:{user_id}"
+    try:
+        count = app_ctx.cache.get_json(key) or 0
+        count = int(count) + 1
+        app_ctx.cache.set_json(key, count, _MFA_FAIL_WINDOW_SECONDS)
+        if count >= _MFA_FAIL_MAX:
+            app_ctx.cache.set_json(f"mfa_lock:{user_id}", True, _MFA_LOCK_SECONDS)
+            json_log(logger, logging.WARNING, "mfa_throttle_locked", user_id=user_id)
+    except CacheUnavailable:
+        pass  # degraded mode: the per-IP rule remains the bound
 
 
 def _claim_mfa_step_up(app_ctx: AppContext, jti: str, claims: dict) -> bool:
@@ -636,7 +696,7 @@ def mfa_disable(app_ctx: Ctx, payload: MfaDisableIn, db: DbSession, user: Curren
     return {"disabled": True}
 
 
-@router.post("/auth/mfa/challenge", response_model=TokenResponse)
+@router.post("/auth/mfa/challenge", response_model=TokenResponse, responses=coded(429))
 def mfa_challenge(app_ctx: Ctx, payload: MfaChallengeIn, db: DbSession) -> TokenResponse:
     try:
         claims = decode_token(payload.mfa_token, settings=app_ctx.settings)
@@ -665,7 +725,23 @@ def mfa_challenge(app_ctx: Ctx, payload: MfaChallengeIn, db: DbSession) -> Token
             status_code=401,
             detail={"code": "bad_mfa_token", "message": "Invalid or expired MFA token"},
         )
+    # S-012: per-ACCOUNT TOTP throttle. The /auth/mfa/challenge rate rule is
+    # per-IP, so a botnet could parallelise 6-digit guesses across IPs with
+    # no account-level cutoff. Ten failures in the 15-minute window lock
+    # this account's MFA challenge for 15 minutes (coded 429, like the
+    # S-002 password lockout — not a 401 oracle). Soft on cache outage: the
+    # per-IP rule already fails closed upstream on the same backend, so the
+    # degraded mode is "IP ceiling only", never "no bound at all".
+    if _mfa_account_locked(app_ctx, user_id):
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "code": "mfa_locked",
+                "message": "Too many invalid codes; try again in a few minutes",
+            },
+        )
     if not verify_code(user.totp_secret, payload.code):
+        _record_failed_mfa_code(app_ctx, user_id)
         raise HTTPException(
             status_code=401,
             detail={"code": "bad_mfa_code", "message": "Invalid authenticator code"},

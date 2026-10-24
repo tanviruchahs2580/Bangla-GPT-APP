@@ -33,6 +33,7 @@ from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
 from bangla_gpt_api.providers.mock import MockLLMProvider
 from bangla_gpt_api.services.safety import SAFETY_ANSWER, SELF_HARM_ANSWER
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 JWT_SECRET = "test-secret-0123456789abcdef0123456789"
@@ -91,7 +92,7 @@ def app_client(
     monkeypatch.setattr("bangla_gpt_api.main.get_fast_provider", lambda s: provider)
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/chat-safety.db",
+        database_url=engine_url(tmp_path, "chat-safety"),
         jwt_secret=JWT_SECRET,
     )
     client = TestClient(create_app(settings))

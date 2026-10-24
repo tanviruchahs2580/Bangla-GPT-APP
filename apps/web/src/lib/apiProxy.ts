@@ -42,6 +42,22 @@ const HOP_BY_HOP = new Set([
   "upgrade",
 ]);
 
+/**
+ * Client-supplied forwarding headers must never be relayed either. The API
+ * reads the LAST X-Forwarded-For entry as the caller identity when
+ * TRUST_PROXY_HEADERS=true; the bundled Caddy overwrites the header, but a
+ * Vercel deployment pointing at an origin behind an APPENDING proxy would
+ * otherwise let any caller prepend a chosen IP and rotate its rate-limit
+ * identity. Stripping here makes the edge the header's only legitimate
+ * source (Vercel injects the real client IP downstream of us).
+ */
+const CLIENT_SUPPLIED_FORWARDING = new Set([
+  "x-forwarded-for",
+  "x-forwarded-host",
+  "x-forwarded-proto",
+  "x-real-ip",
+]);
+
 export function resolveApiOrigin(env: ProxyEnv): string | null {
   const raw = (env.API_ORIGIN ?? "").trim().replace(/\/+$/, "");
   if (!raw) {
@@ -63,7 +79,12 @@ export function apiTargetUrl(requestUrl: string, origin: string): string {
 function forwardHeaders(headers: Headers): Headers {
   const out = new Headers();
   headers.forEach((value, key) => {
-    if (!HOP_BY_HOP.has(key.toLowerCase()) && key.toLowerCase() !== "host") {
+    const name = key.toLowerCase();
+    if (
+      !HOP_BY_HOP.has(name) &&
+      !CLIENT_SUPPLIED_FORWARDING.has(name) &&
+      name !== "host"
+    ) {
       out.set(key, value);
     }
   });

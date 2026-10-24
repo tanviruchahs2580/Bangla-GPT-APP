@@ -12,6 +12,10 @@
   --brand-strong: #14532d;
   --brand-ink: #052e16;
   --brand-soft: #dcfce7;
+  /* Solid button backgrounds only (white-label text must clear 4.5:1).
+     Same value as --brand in light; the dark theme darkens it. */
+  --brand-solid: #166534;
+  --brand-solid-strong: #14532d;
   --brand-soft-2: #bbf7d0;
 
   /* Brand gradients + glow (WP-01: hue-correct, tokenized) */
@@ -136,6 +140,12 @@
   --brand-ink: #bbf7d0;
   --brand-soft: #14321f;
   --brand-soft-2: #1a4027;
+  /* Solid button backgrounds only. The dark accent green is too light for
+     white label text (1.74:1 — the axe sweep failed every .primary in dark
+     mode); #15803d under white text is 5.02:1. Accent/text usages of
+     --brand are unchanged. */
+  --brand-solid: #15803d;
+  --brand-solid-strong: #166534;
 
   --teal: #38bdf8;
   --teal-strong: #7dd3fc;
@@ -280,13 +290,28 @@ a:hover {
   text-decoration: underline;
 }
 
+/* axe link-in-text-block: a link buried in a paragraph must be distinguishable
+   without colour alone (and colour-only distinction fails the 4.5:1
+   link-vs-surroundings check in both themes). Underline links that live
+   inside flowing text; standalone/button-styled links keep the cleaner look. */
+p a,
+li a,
+td a,
+label a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 h1,
 h2,
 h3,
 h4 {
   line-height: var(--lh-head);
   font-weight: 800;
-  letter-spacing: -0.005em;
+  /* No negative tracking on headings: engines.spec asserts zero
+     letter-spacing on Bangla text in any engine — condensed Latin tracking
+     breaks Bangla conjunct letterforms, and this product's headings are
+     mostly Bangla. */
   margin: 0 0 0.4em;
   text-wrap: balance;
 }
@@ -3050,11 +3075,11 @@ button.secondary {
   transition: background var(--m-fast) var(--ease);
 }
 button.primary {
-  background: var(--brand);
+  background: var(--brand-solid);
   color: #fff;
 }
 button.primary:hover {
-  background: var(--brand-strong);
+  background: var(--brand-solid-strong);
 }
 button.primary:disabled {
   opacity: 0.6;
@@ -4128,7 +4153,6 @@ button.small {
 }
 
 .hero h2 {
-  letter-spacing: -0.015em;
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.22);
 }
 

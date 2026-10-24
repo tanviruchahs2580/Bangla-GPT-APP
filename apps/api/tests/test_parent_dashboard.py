@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -12,7 +13,7 @@ SECRET = "test-secret-0123456789abcdef0123456789"
 def client(tmp_path) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/parent.db",
+        database_url=engine_url(tmp_path, "parent"),
         allow_direct_parent_link=True,  # legacy mode under test
         jwt_secret=SECRET,
     )

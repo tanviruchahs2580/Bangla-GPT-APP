@@ -49,6 +49,13 @@ RUN apt-get update \
 # talks to the server over the wire and tolerates newer servers.
 
 COPY apps/api/constraints.txt ./apps/api/constraints.txt
+
+# Dependency layer FIRST, source LAST: the hash-verified install below is the
+# most expensive layer in the image, and it used to sit AFTER `COPY src`, so
+# every source change invalidated it and rebuilt the whole dependency tree.
+# constraints.txt alone now defines this layer's cache key.
+RUN pip install --no-cache-dir --require-hashes -r ./apps/api/constraints.txt
+
 COPY apps/api/pyproject.toml ./apps/api/
 COPY apps/api/worker.py ./apps/api/worker.py
 COPY apps/api/src ./apps/api/src
@@ -61,8 +68,7 @@ COPY apps/api/alembic.ini ./apps/api/alembic.ini
 # every third-party package has been verified against its hash (AUD-0010).
 # gunicorn and uvicorn-worker come from the lock too, so nothing in this image
 # is resolved at build time.
-RUN pip install --no-cache-dir --require-hashes -r ./apps/api/constraints.txt \
-    && pip install --no-cache-dir --no-deps ./apps/api
+RUN pip install --no-cache-dir --no-deps ./apps/api
 
 # Fixed numeric uid/gid (hadolint DL3066): a named user resolves to a
 # different id on different base images, which silently breaks bind-mounted

@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 JOIN_PASSWORD = "joinsecret9"
@@ -23,7 +24,7 @@ JWT = "test-secret-0123456789abcdef0123456789"
 def _settings(tmp_path, **over) -> Settings:
     base = dict(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/remediation.db",
+        database_url=engine_url(tmp_path, "remediation"),
         jwt_secret=JWT,
         admin_email="root@example.com",
         admin_password=PASSWORD,
@@ -40,7 +41,7 @@ def _prod_settings(tmp_path, **over) -> Settings:
     os.environ["WEB_CONCURRENCY"] = "1"
     base = dict(
         env="production",
-        database_url=f"sqlite:///{tmp_path}/prod.db",
+        database_url=engine_url(tmp_path, "prod"),
         jwt_secret=JWT,
         admin_email="a@b.com",
         admin_password="longenoughpass1",
@@ -171,7 +172,7 @@ def test_cors_preflight_allows_patch(tmp_path) -> None:
         create_app(
             _settings(
                 tmp_path,
-                database_url=f"sqlite:///{tmp_path}/cors.db",
+                database_url=engine_url(tmp_path, "cors"),
                 allowed_origins="https://app.example.edu.bd",
             )
         )

@@ -20,6 +20,10 @@ from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.session import init_db, make_engine, make_session_factory
 from bangla_gpt_api.main import create_app
 
+# Engine-coupled by design: this file drives fixtures through raw
+# sqlite3 connections (audit H-02 follow-up), so it pins SQLite and stays
+# out of the BGPT_TEST_DATABASE_URL parity lane.
+
 PASSWORD = "supersecret1"
 
 # A Sunday at/after 16:00 UTC -> digest_due is true (see test_parent_digest).

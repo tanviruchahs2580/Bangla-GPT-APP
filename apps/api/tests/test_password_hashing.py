@@ -27,6 +27,10 @@ from bangla_gpt_api.auth.security import (
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
 
+# Engine-coupled by design: this file drives fixtures through raw
+# sqlite3 connections (audit H-02 follow-up), so it pins SQLite and stays
+# out of the BGPT_TEST_DATABASE_URL parity lane.
+
 PASSWORD = "Str0ngRootPassw0rd!"
 
 

@@ -38,6 +38,7 @@ from bangla_gpt_api.services.knowledge import (
     resolve_gaps,
     student_gaps,
 )
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 
@@ -53,7 +54,7 @@ EXPONENT = "সূচক ও সূচকীয় রাশি"
 def client(tmp_path) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/kg.db",
+        database_url=engine_url(tmp_path, "kg"),
         jwt_secret="test-secret-0123456789abcdef0123456789",
         admin_email="root@example.com",
         admin_password=PASSWORD,

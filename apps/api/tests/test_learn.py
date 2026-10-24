@@ -22,6 +22,7 @@ from bangla_gpt_api.services.learn import (
     list_subjects,
     subject_chapters,
 )
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -31,7 +32,7 @@ SECRET = "test-secret-0123456789abcdef0123456789"
 def admin_client(tmp_path) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/learn.db",
+        database_url=engine_url(tmp_path, "learn"),
         jwt_secret=SECRET,
         admin_email="root@example.com",
         admin_password=PASSWORD,
@@ -155,7 +156,7 @@ def corpus_client(tmp_path) -> TestClient:
     _write_synthetic_corpus(tmp_path / "nctb")
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/learn-corpus.db",
+        database_url=engine_url(tmp_path, "learn-corpus"),
         jwt_secret=SECRET,
         admin_email="root@example.com",
         admin_password=PASSWORD,

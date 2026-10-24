@@ -19,6 +19,7 @@ from bangla_gpt_api.services.generators.question_paper import (
     validate_paper,
 )
 from bangla_gpt_api.services.qp_pdf import render_qp_html
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -81,7 +82,7 @@ class _StubProvider:
 def _client_for(monkeypatch, provider, tmp_path) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/qpfake.db",
+        database_url=engine_url(tmp_path, "qpfake"),
         jwt_secret=SECRET,
     )
     monkeypatch.setattr("bangla_gpt_api.main.get_provider", lambda s: provider)
@@ -92,7 +93,7 @@ def _client_for(monkeypatch, provider, tmp_path) -> TestClient:
 def client(tmp_path) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/qp.db",
+        database_url=engine_url(tmp_path, "qp"),
         jwt_secret=SECRET,
     )
     return TestClient(create_app(settings))

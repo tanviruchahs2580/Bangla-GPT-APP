@@ -1,9 +1,9 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
 import CreatePage from "../pages/teacher/CreatePage";
 import { t } from "../i18n";
+import { renderWithQuery } from "./renderWithQuery";
 
 const apiMock = vi.hoisted(() => ({
   get: vi.fn(),
@@ -18,13 +18,10 @@ vi.mock("../api", async (importOriginal) => ({
 }));
 
 function renderPage() {
-  return render(
-    <MemoryRouter initialEntries={["/teacher/create?kind=question_paper"]}>
-      <Routes>
-        <Route path="/teacher/create" element={<CreatePage />} />
-      </Routes>
-    </MemoryRouter>,
-  );
+  return renderWithQuery(<CreatePage />, {
+    route: "/teacher/create?kind=question_paper",
+    path: "/teacher/create",
+  });
 }
 
 const ROOMS = [{ id: 1, class_level: 6, section: "GEN", student_count: 2 }];

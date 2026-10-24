@@ -11,13 +11,14 @@ from bangla_gpt_api.services.teach_strategy import (
     reteach_instruction,
     strategy_name,
 )
+from conftest import engine_url
 
 
 @pytest.fixture
 def client(tmp_path) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/reteach.db",
+        database_url=engine_url(tmp_path, "reteach"),
         jwt_secret="test-secret-0123456789abcdef0123456789",
     )
     return TestClient(create_app(settings))

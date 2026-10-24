@@ -6,6 +6,7 @@ import { MemoryRouter } from "react-router-dom";
 import AnalyticsPage from "../pages/teacher/AnalyticsPage";
 import { t } from "../i18n";
 import type { ClassRoom, Coverage } from "../types";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const apiMock = vi.hoisted(() => ({
   get: vi.fn(),
@@ -20,10 +21,18 @@ vi.mock("../api", async (importOriginal) => ({
 }));
 
 function renderPage() {
+  // react-query provider: the migrated teacher pages read the shared cache
+  // (audit H-04); the app's own defaults (no retry, 30s stale) keep tests fast.
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: 30_000 } },
+  });
   return render(
-    <MemoryRouter>
-      <AnalyticsPage />
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>
+        <AnalyticsPage />
+      </MemoryRouter>
+      ,
+    </QueryClientProvider>,
   );
 }
 
@@ -93,9 +102,10 @@ beforeEach(() => {
 describe("curriculum coverage card", () => {
   it("renders one row per class with a status badge per subject", async () => {
     renderPage();
-    await screen.findByText(t("covTitle"));
-
-    expect(screen.getByText("6 · GEN")).toBeInTheDocument();
+    // The card frame renders unconditionally; the rows arrive with the
+    // coverage query — assert with findBy, not getBy (react-query resolves
+    // a few hops later than the raw promise the old page awaited).
+    await screen.findByText("6 · GEN");
     expect(screen.getByText("7 · GREEN")).toBeInTheDocument();
     expect(screen.getByText(t("covMastered"))).toBeInTheDocument();
     expect(screen.getByText(t("covPracticed"))).toBeInTheDocument();

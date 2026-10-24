@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 
@@ -11,7 +12,7 @@ PASSWORD = "supersecret1"
 def client(tmp_path) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/tutor.db",
+        database_url=engine_url(tmp_path, "tutor"),
         jwt_secret="test-secret-0123456789abcdef0123456789",
     )
     return TestClient(create_app(settings))
@@ -154,7 +155,7 @@ def test_provider_failure_maps_to_502(tmp_path) -> None:
 
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/p502.db",
+        database_url=engine_url(tmp_path, "p502"),
         jwt_secret="test-secret-0123456789abcdef0123456789",
     )
     original = main_module.TutorService.__init__

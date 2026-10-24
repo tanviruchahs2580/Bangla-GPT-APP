@@ -22,6 +22,7 @@ from bangla_gpt_api.db.models import User
 from bangla_gpt_api.db.session import make_engine, make_session_factory
 from bangla_gpt_api.main import create_app
 from bangla_gpt_api.routers.auth import _LOGIN_LOCKOUT_THRESHOLD, LOGIN_LOCKED_CODE
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 JWT = "test-secret-0123456789abcdef0123456789"
@@ -31,7 +32,7 @@ WRONG = "definitely-wrong"
 def make_client(tmp_path, **overrides) -> tuple[TestClient, Settings]:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/lockout.db",
+        database_url=engine_url(tmp_path, "lockout"),
         jwt_secret=JWT,
         **overrides,
     )

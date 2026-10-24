@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.initialize.middleware_stack import _effective_rules
 from bangla_gpt_api.main import create_app
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 JWT = "test-secret-0123456789abcdef0123456789"
@@ -34,7 +35,7 @@ def _rule_for(rules: dict[str, tuple[int, str]], path: str) -> tuple[int, str] |
 def _make_client(tmp_path, **overrides) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/quiz-rl.db",
+        database_url=engine_url(tmp_path, "quiz-rl"),
         jwt_secret=JWT,
         **overrides,
     )

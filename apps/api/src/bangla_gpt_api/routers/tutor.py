@@ -4,12 +4,13 @@ Behavior-identical extraction: same paths, validation, status codes.
 Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 """
 
+import asyncio
 import contextlib
 import json
 import logging
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Any, Literal, NamedTuple
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -51,9 +52,10 @@ from bangla_gpt_api.services import teach_strategy as teach
 from bangla_gpt_api.services.activity import (
     record_activity,
 )
+from bangla_gpt_api.services.context import RequestContext
 from bangla_gpt_api.services.costs import check_ai_budget, record_ai_usage
 from bangla_gpt_api.services.quiz_explain import quiz_explain_instruction
-from bangla_gpt_api.services.tutor import VISION_UNSUPPORTED_ANSWER
+from bangla_gpt_api.services.tutor import VISION_UNSUPPORTED_ANSWER, StreamEvent
 
 from .common import (
     _answer_confidence,
@@ -76,6 +78,58 @@ router = APIRouter(responses=AUTH_GUARD_RESPONSES)
 
 logger = logging.getLogger(__name__)
 
+#: Idle seconds before the SSE stream emits a `: ping` comment line. Proxies
+#: and load balancers commonly drop a silent connection at 30-60s; retrieval
+#: plus provider time-to-first-token can legitimately exceed that.
+SSE_HEARTBEAT_SECONDS = 15.0
+
+
+def _ask_prepare(
+    app_ctx: Ctx, db: Session, user: User, payload: AskRequest
+) -> tuple[str | None, str, str | None, RequestContext]:
+    """DB prelude to /tutor/ask: budget gate + education context."""
+    # AI-002: budget gate before spending upstream tokens.
+    check_ai_budget(db, user_id=user.id, settings=app_ctx.settings)
+    explain_instruction = quiz_explain_instruction(payload.explain) if payload.explain else None
+    # retrieve on the quiz topic itself — the generic
+    # 'explain this' phrasing carries no subject keywords. the
+    # phrasing is dropped from the RETRIEVE/gate query entirely (it
+    # diluted coverage below the grounding gate); it stays in the
+    # prompt so the model still sees the student's own words.
+    question = payload.question
+    search_query: str | None = None
+    if payload.explain:
+        question = f"{payload.question}\n{payload.explain.question}"
+        search_query = payload.explain.question
+    # every AI call carries the central education context.
+    ctx = _request_context(
+        db,
+        user,
+        class_level=payload.class_level,
+        subject=canonical_subject(payload.subject),
+        chapter=payload.chapter,
+        goal="quiz_explain" if payload.explain else "question",
+    )
+    return explain_instruction, question, search_query, ctx
+
+
+def _ask_ledger(db: Session, user: User, *, question: str, answer: str, model: str) -> None:
+    """DB postlude to /tutor/ask: usage ledger + activity counters + commit."""
+    # AI-002: ledger the generation (adds only; this commit persists it).
+    record_ai_usage(
+        db,
+        user_id=user.id,
+        route="tutor.ask",
+        model=model,
+        prompt_text=question,
+        answer_text=answer,
+    )
+    # one tutoring question ≈ one minute of study for the daily
+    # counters (the chat routes already record; ask must not be a gap).
+    if user.role == "student":
+        record_activity(db, _student_profile(db, user).id, questions=1, minutes=1)
+    db.commit()
+
 
 @router.post("/tutor/ask", response_model=AskResponse)
 async def ask(app_ctx: Ctx, payload: AskRequest, db: DbSession, user: CurrentUser) -> AskResponse:
@@ -85,29 +139,13 @@ async def ask(app_ctx: Ctx, payload: AskRequest, db: DbSession, user: CurrentUse
             status_code=503,
             detail={"code": "tutor_unavailable", "message": "Tutor service unavailable"},
         )
-    # AI-002: budget gate before spending upstream tokens.
-    check_ai_budget(db, user_id=user.id, settings=app_ctx.settings)
+    # The DB segments below run on the shared sync Session; each is
+    # offloaded to a worker thread so a Postgres round-trip never stalls
+    # the event loop (and every concurrent SSE stream on this worker).
+    explain_instruction, question, search_query, ctx = await asyncio.to_thread(
+        _ask_prepare, app_ctx, db, user, payload
+    )
     try:
-        explain_instruction = quiz_explain_instruction(payload.explain) if payload.explain else None
-        # retrieve on the quiz topic itself — the generic
-        # 'explain this' phrasing carries no subject keywords. the
-        # phrasing is dropped from the RETRIEVE/gate query entirely (it
-        # diluted coverage below the grounding gate); it stays in the
-        # prompt so the model still sees the student's own words.
-        question = payload.question
-        search_query: str | None = None
-        if payload.explain:
-            question = f"{payload.question}\n{payload.explain.question}"
-            search_query = payload.explain.question
-        # every AI call carries the central education context.
-        ctx = _request_context(
-            db,
-            user,
-            class_level=payload.class_level,
-            subject=canonical_subject(payload.subject),
-            chapter=payload.chapter,
-            goal="quiz_explain" if payload.explain else "question",
-        )
         response = await tutor.ask(
             question,
             payload.class_level,
@@ -118,20 +156,14 @@ async def ask(app_ctx: Ctx, payload: AskRequest, db: DbSession, user: CurrentUse
             context=ctx,
             search_query=search_query,
         )
-        # AI-002: ledger the generation (adds only; this commit persists it).
-        record_ai_usage(
+        await asyncio.to_thread(
+            _ask_ledger,
             db,
-            user_id=user.id,
-            route="tutor.ask",
+            user,
+            question=question,
+            answer=response.answer,
             model=getattr(tutor.provider, "model", None) or tutor.provider.name,
-            prompt_text=question,
-            answer_text=response.answer,
         )
-        # one tutoring question ≈ one minute of study for the daily
-        # counters (the chat routes already record; ask must not be a gap).
-        if user.role == "student":
-            record_activity(db, _student_profile(db, user).id, questions=1, minutes=1)
-        db.commit()
         return response
     except ProviderError as exc:
         # Upstream LLM failure (timeout/exhausted retries/blocked) must be a
@@ -362,17 +394,35 @@ def _chat_history(app_ctx: Ctx, db: Session, conversation_id: int) -> list[dict[
     return history
 
 
-@router.post("/tutor/conversations/{conversation_id}/messages", response_model=ChatMessageOut)
-async def send_chat_message(
-    app_ctx: Ctx, conversation_id: int, payload: ChatSendRequest, db: DbSession, user: CurrentUser
-) -> ChatMessageOut:
-    """Non-streaming chat turn: persists both sides and returns the reply."""
-    tutor = app_ctx.tutor
-    if tutor is None:
-        raise HTTPException(
-            status_code=503,
-            detail={"code": "tutor_unavailable", "message": "Tutor service unavailable"},
-        )
+class _PreparedTurn(NamedTuple):
+    """Everything the two chat-turn routes need after their DB prelude."""
+
+    conv: Conversation
+    class_level: int
+    history: list[dict[str, str]]
+    extra_instruction: str | None
+    goal: str
+    user_msg: ChatMessage
+    image_payload: dict[str, Any] | None
+    ctx: RequestContext
+    no_vision: bool
+
+
+def _prepare_chat_turn(
+    app_ctx: Ctx,
+    db: Session,
+    user: User,
+    conversation_id: int,
+    payload: ChatSendRequest,
+    *,
+    persist: Literal["flush", "commit"],
+) -> _PreparedTurn:
+    """DB prelude shared by the JSON and SSE chat turns.
+
+    Runs in a worker thread (asyncio.to_thread): the shared Session is
+    sync, and these reads/writes must not stall the event loop that is
+    concurrently streaming other users' tokens.
+    """
     # AI-002: budget gate before spending upstream tokens.
     check_ai_budget(db, user_id=user.id, settings=app_ctx.settings)
     conv = _own_conversation(db, conversation_id, user)
@@ -397,47 +447,53 @@ async def send_chat_message(
 
     user_msg = ChatMessage(conversation_id=conv.id, role="user", content=payload.message)
     db.add(user_msg)
-    # Flush (not commit): the user turn must not survive a failed LLM call,
-    # otherwise the provider error leaves an orphan message behind.
-    db.flush()
-
-    if image_payload is not None and _provider_lacks_vision(app_ctx):
-        # Honest refusal: the mock provider cannot see images at all.
-        result = AskResponse(
-            answer=VISION_UNSUPPORTED_ANSWER,
-            grounded=False,
-            sources=[],
-            refused_reason="vision_unsupported",
-        )
+    if persist == "flush":
+        # Flush (not commit): the user turn must not survive a failed LLM
+        # call, otherwise the provider error leaves an orphan message behind.
+        db.flush()
     else:
-        try:
-            result = await tutor.ask(
-                payload.message,
-                class_level,
-                canonical_subject(payload.subject),
-                history,
-                chapter=payload.chapter,
-                extra_instruction=extra_instruction,
-                low_data=payload.low_data,
-                context=_request_context(
-                    db,
-                    user,
-                    class_level=class_level,
-                    subject=canonical_subject(payload.subject),
-                    chapter=payload.chapter,
-                    goal=goal,
-                    history=history,
-                    strategy=conv.last_strategy,
-                ),
-                image=image_payload,
-            )
-        except ProviderError as exc:
-            db.rollback()
-            raise HTTPException(
-                status_code=502,
-                detail={"code": "llm_unavailable", "message": "LLM provider unavailable"},
-            ) from exc
+        # commit before streaming to release DB session/connection during
+        # LLM stream (was flush-only, holding transaction for up to 30s).
+        # User turn is persisted alone; assistant turn will be persisted in
+        # a short second transaction after the stream.
+        db.commit()
+        db.refresh(user_msg)
+    # build the context before streaming so the log line lands once.
+    ctx = _request_context(
+        db,
+        user,
+        class_level=class_level,
+        subject=canonical_subject(payload.subject),
+        chapter=payload.chapter,
+        goal=goal,
+        history=history,
+        strategy=conv.last_strategy,
+    )
+    return _PreparedTurn(
+        conv=conv,
+        class_level=class_level,
+        history=history,
+        extra_instruction=extra_instruction,
+        goal=goal,
+        user_msg=user_msg,
+        image_payload=image_payload,
+        ctx=ctx,
+        no_vision=image_payload is not None and _provider_lacks_vision(app_ctx),
+    )
 
+
+def _persist_chat_reply(
+    db: Session,
+    user: User,
+    conv: Conversation,
+    payload: ChatSendRequest,
+    result: AskResponse,
+    *,
+    route: str,
+    model: str,
+    no_vision: bool,
+) -> ChatMessage:
+    """DB postlude shared by the JSON and SSE chat turns."""
     assistant_msg = ChatMessage(
         conversation_id=conv.id,
         role="assistant",
@@ -450,18 +506,74 @@ async def send_chat_message(
     if conv.title is None:
         conv.title = payload.message[:80]
     # AI-002: ledger the generation (vision refusals never reach a provider).
-    if image_payload is None or not _provider_lacks_vision(app_ctx):
+    if not no_vision:
         record_ai_usage(
             db,
             user_id=user.id,
-            route="tutor.chat",
-            model=getattr(tutor.provider, "model", None) or tutor.provider.name,
+            route=route,
+            model=model,
             prompt_text=payload.message,
             answer_text=result.answer,
         )
     db.commit()
     # one question ≈ one minute of study for the daily counters.
     record_activity(db, conv.student_id, questions=1, minutes=1)
+    return assistant_msg
+
+
+@router.post("/tutor/conversations/{conversation_id}/messages", response_model=ChatMessageOut)
+async def send_chat_message(
+    app_ctx: Ctx, conversation_id: int, payload: ChatSendRequest, db: DbSession, user: CurrentUser
+) -> ChatMessageOut:
+    """Non-streaming chat turn: persists both sides and returns the reply."""
+    tutor = app_ctx.tutor
+    if tutor is None:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "tutor_unavailable", "message": "Tutor service unavailable"},
+        )
+    prepared = await asyncio.to_thread(
+        _prepare_chat_turn, app_ctx, db, user, conversation_id, payload, persist="flush"
+    )
+    if prepared.no_vision:
+        # Honest refusal: the mock provider cannot see images at all.
+        result = AskResponse(
+            answer=VISION_UNSUPPORTED_ANSWER,
+            grounded=False,
+            sources=[],
+            refused_reason="vision_unsupported",
+        )
+    else:
+        try:
+            result = await tutor.ask(
+                payload.message,
+                prepared.class_level,
+                canonical_subject(payload.subject),
+                prepared.history,
+                chapter=payload.chapter,
+                extra_instruction=prepared.extra_instruction,
+                low_data=payload.low_data,
+                context=prepared.ctx,
+                image=prepared.image_payload,
+            )
+        except ProviderError as exc:
+            await asyncio.to_thread(db.rollback)
+            raise HTTPException(
+                status_code=502,
+                detail={"code": "llm_unavailable", "message": "LLM provider unavailable"},
+            ) from exc
+
+    assistant_msg = await asyncio.to_thread(
+        _persist_chat_reply,
+        db,
+        user,
+        prepared.conv,
+        payload,
+        result,
+        route="tutor.chat",
+        model=getattr(tutor.provider, "model", None) or tutor.provider.name,
+        no_vision=prepared.no_vision,
+    )
     return ChatMessageOut(
         id=assistant_msg.id,
         role=assistant_msg.role,
@@ -488,51 +600,16 @@ async def stream_chat_message(
             status_code=503,
             detail={"code": "tutor_unavailable", "message": "Tutor service unavailable"},
         )
-    # AI-002: budget gate before spending upstream tokens.
-    check_ai_budget(db, user_id=user.id, settings=app_ctx.settings)
-    conv = _own_conversation(db, conversation_id, user)
-    student = _student_profile(db, user)
-    class_level = payload.class_level or student.class_level or 6
-    history = _chat_history(app_ctx, db, conv.id)
-    # vision contract: validated BEFORE anything is persisted.
-    image_payload = _validate_chat_image(payload.image)
-
-    # 'আমি বুঝিন': swap to the next explanation strategy and remember it.
-    # explicit strategy OVERRIDES the rotation (persisted likewise).
-    extra_instruction: str | None = None
-    goal = "chat"
-    if payload.strategy:
-        extra_instruction = teach.explicit_strategy_instruction(payload.strategy)
-        conv.last_strategy = payload.strategy
-    elif payload.reteach:
-        strategy_key, extra_instruction = teach.reteach_instruction(conv.last_strategy)
-        conv.last_strategy = strategy_key
-        goal = "reteach"
-
-    user_msg = ChatMessage(conversation_id=conv.id, role="user", content=payload.message)
-    db.add(user_msg)
-    # commit before streaming to release DB session/connection during LLM stream
-    # (was flush-only, holding transaction for up to 30s). User turn is persisted alone;
-    # assistant turn will be persisted in a short second transaction after stream.
-    db.commit()
-    db.refresh(user_msg)
-    # build the context before streaming so the log line lands once.
-    ctx = _request_context(
-        db,
-        user,
-        class_level=class_level,
-        subject=canonical_subject(payload.subject),
-        chapter=payload.chapter,
-        goal=goal,
-        history=history,
-        strategy=conv.last_strategy,
+    prepared = await asyncio.to_thread(
+        _prepare_chat_turn, app_ctx, db, user, conversation_id, payload, persist="commit"
     )
-    no_vision = image_payload is not None and _provider_lacks_vision(app_ctx)
+    conv = prepared.conv
+    user_msg = prepared.user_msg
 
     async def event_stream() -> AsyncIterator[str]:
         try:
             final_response: AskResponse | None = None
-            if no_vision:
+            if prepared.no_vision:
                 # Honest refusal: the mock provider cannot see images at
                 # all -- emitted as one token + the normal done event.
                 final_response = AskResponse(
@@ -544,22 +621,58 @@ async def stream_chat_message(
                 token_payload = json.dumps({"text": VISION_UNSUPPORTED_ANSWER}, ensure_ascii=False)
                 yield f"event: token\ndata: {token_payload}\n\n"
             else:
-                async for event in tutor.ask_stream(
-                    payload.message,
-                    class_level,
-                    canonical_subject(payload.subject),
-                    history,
-                    chapter=payload.chapter,
-                    extra_instruction=extra_instruction,
-                    low_data=payload.low_data,
-                    context=ctx,
-                    image=image_payload,
-                ):
-                    if event.type == "token":
-                        token_payload = json.dumps({"text": event.text}, ensure_ascii=False)
-                        yield f"event: token\ndata: {token_payload}\n\n"
-                    elif event.response is not None:
-                        final_response = event.response
+                # The stream is drained through a queue + producer task so a
+                # heartbeat can be emitted while NOTHING has arrived yet:
+                # retrieval + time-to-first-token can legitimately take tens
+                # of seconds, and proxy/LB idle timeouts would otherwise cut
+                # the connection before the first token. A `: ping` comment
+                # line is SSE-standard and ignored by browsers and by this
+                # app's own parser (it only reads `event:`/`data:` lines).
+                # (Wrapping __anext__ in wait_for instead would cancel the
+                # generator mid-flight on the first timeout — not an option.)
+                queue: asyncio.Queue[StreamEvent | ProviderError | None] = asyncio.Queue()
+
+                async def _produce() -> None:
+                    try:
+                        async for event in tutor.ask_stream(
+                            payload.message,
+                            prepared.class_level,
+                            canonical_subject(payload.subject),
+                            prepared.history,
+                            chapter=payload.chapter,
+                            extra_instruction=prepared.extra_instruction,
+                            low_data=payload.low_data,
+                            context=prepared.ctx,
+                            image=prepared.image_payload,
+                        ):
+                            await queue.put(event)
+                    except ProviderError as exc:
+                        await queue.put(exc)
+                    finally:
+                        await queue.put(None)
+
+                producer = asyncio.create_task(_produce())
+                try:
+                    while True:
+                        try:
+                            item = await asyncio.wait_for(queue.get(), SSE_HEARTBEAT_SECONDS)
+                        except TimeoutError:
+                            yield ": ping\n\n"
+                            continue
+                        if item is None:
+                            break
+                        if isinstance(item, ProviderError):
+                            raise item
+                        if item.type == "token":
+                            token_payload = json.dumps({"text": item.text}, ensure_ascii=False)
+                            yield f"event: token\ndata: {token_payload}\n\n"
+                        elif item.response is not None:
+                            final_response = item.response
+                finally:
+                    # Client disconnected mid-stream: stop the provider work.
+                    producer.cancel()
+                    with contextlib.suppress(BaseException):
+                        await producer
             if final_response is None:  # never leak a naked 500 under -O
                 # user_msg already committed before stream; no rollback needed
                 yield (
@@ -568,29 +681,17 @@ async def stream_chat_message(
                     + "\n\n"
                 )
                 return
-            assistant_msg = ChatMessage(
-                conversation_id=conv.id,
-                role="assistant",
-                content=final_response.answer,
-                grounded=final_response.grounded,
-                refused_reason=final_response.refused_reason,
-                sources_json=[s.model_dump() for s in final_response.sources],
+            assistant_msg = await asyncio.to_thread(
+                _persist_chat_reply,
+                db,
+                user,
+                conv,
+                payload,
+                final_response,
+                route="tutor.chat.stream",
+                model=getattr(tutor.provider, "model", None) or tutor.provider.name,
+                no_vision=prepared.no_vision,
             )
-            db.add(assistant_msg)
-            if conv.title is None:
-                conv.title = payload.message[:80]
-            # AI-002: ledger the generation (mock-vision refusals cost nothing).
-            if not no_vision:
-                record_ai_usage(
-                    db,
-                    user_id=user.id,
-                    route="tutor.chat.stream",
-                    model=getattr(tutor.provider, "model", None) or tutor.provider.name,
-                    prompt_text=payload.message,
-                    answer_text=final_response.answer,
-                )
-            db.commit()
-            record_activity(db, conv.student_id, questions=1, minutes=1)
             done_payload = {
                 "user_message_id": user_msg.id,
                 "message_id": assistant_msg.id,
@@ -607,7 +708,7 @@ async def stream_chat_message(
         except ProviderError:
             # user turn already persisted; do not rollback
             with contextlib.suppress(Exception):  # rollback is best-effort here
-                db.rollback()
+                await asyncio.to_thread(db.rollback)
             yield (
                 "event: error\ndata: "
                 + json.dumps({"code": "llm_unavailable"}, ensure_ascii=False)

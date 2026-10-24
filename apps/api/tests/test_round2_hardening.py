@@ -30,12 +30,13 @@ from bangla_gpt_api.middleware import (
     BodySizeLimitMiddleware,
     unhandled_exception_response,
 )
+from conftest import engine_url
 
 
 def _settings(tmp_path, **overrides) -> Settings:
     base = {
         "env": "test",
-        "database_url": f"sqlite:///{tmp_path}/mw.db",
+        "database_url": engine_url(tmp_path, "mw"),
         "jwt_secret": "test-secret-0123456789abcdef0123456789",
     }
     base.update(overrides)

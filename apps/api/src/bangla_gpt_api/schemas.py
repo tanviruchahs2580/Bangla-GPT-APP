@@ -244,9 +244,44 @@ class ResendVerificationRequest(BaseModel):
     email: str | None = Field(default=None, min_length=5, max_length=255)
 
 
+# --- pagination contract (M-08) ---------------------------------------------
+# ONE place defines the list-endpoint limits so they cannot drift silently
+# per endpoint again (the audit found defaults 20/50/100/200 and caps
+# 50/1000 across 135 operations). Three tiers, all offset-based:
+#   * SMALL — progress/detail feeds (default 20, cap 50)
+#   * STANDARD — interactive lists, the default for NEW paginated endpoints
+#     (default 100, cap 200)
+#   * ROSTER — school roster pages (default 50, cap 200)
+# Fixed-window endpoints (message search 25, conversations 100) are capped
+# lists by design, not pages; their values live here too so the whole
+# surface is greppable from one module. Envelope: every endpoint that
+# paginates MUST return total/limit/offset (see the *Page models below);
+# bare capped arrays are allowed only for fixed windows.
+SMALL_PAGE_DEFAULT_LIMIT = 20
+SMALL_PAGE_MAX_LIMIT = 50
+STANDARD_PAGE_DEFAULT_LIMIT = 100
+STANDARD_PAGE_MAX_LIMIT = 200
+ROSTER_PAGE_DEFAULT_LIMIT = 50
+ROSTER_PAGE_MAX_LIMIT = 200
+MESSAGE_SEARCH_WINDOW = 25
+CONVERSATIONS_WINDOW = 100
+
+
 class ChangePasswordRequest(BaseModel):
     current_password: str = Field(min_length=1, max_length=128)
     new_password: str = Field(min_length=8, max_length=128)
+
+
+class AccountDeleteConfirm(BaseModel):
+    """F-142: irreversible self-service erasure re-authenticates the caller.
+
+    A bearer token alone used to be enough to destroy an account (and, for
+    a student, their entire learning history) permanently — a stolen
+    60-minute token was a one-shot erasure weapon. The current password is
+    required, exactly like /auth/mfa/disable.
+    """
+
+    password: str = Field(min_length=1, max_length=128)
 
 
 # --- AUTH-001: TOTP multi-factor authentication -------------------------------

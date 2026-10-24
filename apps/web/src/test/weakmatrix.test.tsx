@@ -1,12 +1,12 @@
 /** weakness heatmap + at-risk support plans render in the teacher UI. */
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
 import AnalyticsPage from "../pages/teacher/AnalyticsPage";
 import { t } from "../i18n";
 import type { SupportPlanRow, WeakMatrix } from "../types";
+import { renderWithQuery } from "./renderWithQuery";
 
 const apiMock = vi.hoisted(() => ({
   get: vi.fn(),
@@ -21,11 +21,7 @@ vi.mock("../api", async (importOriginal) => ({
 }));
 
 function renderPage() {
-  return render(
-    <MemoryRouter>
-      <AnalyticsPage />
-    </MemoryRouter>,
-  );
+  return renderWithQuery(<AnalyticsPage />);
 }
 
 const ROOMS = [{ id: 1, class_level: 6, section: "GEN", student_count: 2 }];
@@ -49,6 +45,8 @@ const ROSTER = [
     avg_score_pct: 25,
   },
 ];
+
+let plansStore: unknown[] = [];
 
 const MATRIX: WeakMatrix = {
   class_level: 6,
@@ -119,20 +117,26 @@ const PLAN_ROW: SupportPlanRow = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Stateful plan store: the page invalidates and refetches support plans
+  // after a create (H-04) — a static [] would hide the new plan forever.
+  plansStore = [];
   apiMock.get.mockImplementation((path: string) => {
     if (path === "/teacher/classrooms")
       return Promise.resolve(structuredClone(ROOMS));
     if (path.endsWith("/roster"))
       return Promise.resolve(structuredClone(ROSTER));
     if (path === "/teacher/shorttests") return Promise.resolve([]);
-    if (path === "/teacher/support-plans") return Promise.resolve([]);
+    if (path === "/teacher/support-plans")
+      return Promise.resolve(structuredClone(plansStore));
     if (path.includes("weak-matrix"))
       return Promise.resolve(structuredClone(MATRIX));
     return Promise.resolve(null);
   });
   apiMock.post.mockImplementation((path: string) => {
-    if (path === "/teacher/support-plans")
+    if (path === "/teacher/support-plans") {
+      plansStore = [structuredClone(PLAN_ROW)];
       return Promise.resolve(structuredClone(PLAN_ROW));
+    }
     return Promise.resolve(null);
   });
 });

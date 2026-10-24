@@ -38,12 +38,18 @@ function makeCaches(matchResult?: Response) {
 }
 
 /** Evaluates the SW with injected globals and returns its recorded handlers. */
-function loadSw(cachesMock: unknown, fetchImpl: unknown) {
+function loadSw(
+  cachesMock: unknown,
+  fetchImpl: unknown,
+  selfExtras?: { registration?: unknown; skipWaiting?: () => Promise<void> },
+) {
   const handlers: Record<string, (event: unknown) => void> = {};
   const self = {
     addEventListener: (type: string, handler: (event: unknown) => void) => {
       handlers[type] = handler;
     },
+    registration: selfExtras?.registration ?? { active: undefined },
+    ...(selfExtras?.skipWaiting ? { skipWaiting: selfExtras.skipWaiting } : {}),
   };
   // The globals are parameters here: the Function constructor is the only way
   // to run a worker script in-process with them injected.
@@ -70,6 +76,43 @@ function fireFetch(
   handlers.fetch({ request, respondWith });
   return respondWith;
 }
+
+describe("public/sw.js update flow (waiting-first, audit M-18)", () => {
+  function makeInstallEvent() {
+    const waitUntil = vi.fn(async (p: Promise<unknown>) => p);
+    return { waitUntil };
+  }
+
+  it("FIRST install takes control immediately (skipWaiting)", async () => {
+    const { cachesMock } = makeCaches();
+    const skipWaiting = vi.fn(async () => {});
+    // no active worker on the registration: this is the first install
+    const handlers = loadSw(cachesMock, fetch, {
+      registration: { active: undefined },
+      skipWaiting,
+    });
+    const install = makeInstallEvent();
+    handlers.install(install);
+    await install.waitUntil.mock.calls[0][0];
+    expect(skipWaiting).toHaveBeenCalledTimes(1);
+  });
+
+  it("an UPDATE over a live session does NOT take control (no skipWaiting)", async () => {
+    const { cachesMock } = makeCaches();
+    const skipWaiting = vi.fn(async () => {});
+    // an active worker exists: the new worker is an update, not an install —
+    // taking over mid-session would serve a new index.html referencing
+    // trimmed hashed chunks; the update waits for the tabs to close instead.
+    const handlers = loadSw(cachesMock, fetch, {
+      registration: { active: { scriptURL: "/sw.js" } },
+      skipWaiting,
+    });
+    const install = makeInstallEvent();
+    handlers.install(install);
+    await install.waitUntil.mock.calls[0][0];
+    expect(skipWaiting).not.toHaveBeenCalled();
+  });
+});
 
 describe("public/sw.js navigation handling", () => {
   it("caches a successful navigation as /index.html", async () => {

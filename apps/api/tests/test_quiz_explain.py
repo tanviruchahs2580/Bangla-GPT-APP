@@ -7,13 +7,14 @@ from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
 from bangla_gpt_api.schemas import QuizExplainContext
 from bangla_gpt_api.services.quiz_explain import quiz_explain_instruction
+from conftest import engine_url
 
 
 @pytest.fixture
 def client(tmp_path) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/explain.db",
+        database_url=engine_url(tmp_path, "explain"),
         jwt_secret="test-secret-0123456789abcdef0123456789",
     )
     return TestClient(create_app(settings))

@@ -17,6 +17,10 @@ from bangla_gpt_api.services.parent_digest import (
     run_weekly_digest,
 )
 
+# Engine-coupled by design: this file drives fixtures through raw
+# sqlite3 connections (audit H-02 follow-up), so it pins SQLite and stays
+# out of the BGPT_TEST_DATABASE_URL parity lane.
+
 PASSWORD = "supersecret1"
 SENTINEL = "SENTINEL-private-message-text-42"
 

@@ -26,6 +26,10 @@ from bangla_gpt_api.services.generators.lesson_plan import LESSON_SYSTEM_PROMPT
 from bangla_gpt_api.services.generators.question_paper import QP_SYSTEM_PROMPT
 from bangla_gpt_api.services.tutor import SYSTEM_PROMPT
 
+# Engine-coupled by design: this file drives fixtures through raw
+# sqlite3 connections (audit H-02 follow-up), so it pins SQLite and stays
+# out of the BGPT_TEST_DATABASE_URL parity lane.
+
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
 SENTINEL = "SENTINEL-PII-must-never-reach-logs"

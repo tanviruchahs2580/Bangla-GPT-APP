@@ -82,7 +82,9 @@ class Student(Base):
         ForeignKey("users.id"), nullable=True, unique=True, index=True
     )
     name: Mapped[str] = mapped_column(String(120))
-    class_level: Mapped[int] = mapped_column(Integer)
+    # indexed: roster loads filter by grade (_load_class_students); a school
+    # of any size must not full-scan the students table for a class page.
+    class_level: Mapped[int] = mapped_column(Integer, index=True)
     # per-student learning preferences and the memory opt-out flag.
     # Both are additive; existing rows keep working via the server defaults.
     # the JSON payload is a keyed dict (whitelisted keys:
@@ -420,7 +422,9 @@ class ChapterContent(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     subject: Mapped[str] = mapped_column(String(60), index=True)
-    class_level: Mapped[int] = mapped_column(Integer)
+    # indexed: school_coverage filters by class_level per grade in one pass
+    # (was a full scan on the only hot column without one).
+    class_level: Mapped[int] = mapped_column(Integer, index=True)
     chapter: Mapped[str] = mapped_column(String(200), index=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
     source: Mapped[str] = mapped_column(String(12), default="ai")  # ai | teacher

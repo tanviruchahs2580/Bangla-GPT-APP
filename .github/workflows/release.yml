@@ -408,6 +408,12 @@ jobs:
             # that runs -- previously the rollback sat inside the `compose up`
             # branch only, so a release that started but failed its health gate
             # was reported as a failed job with the bad release still serving.
+            #
+            # Ordering note (M-11): rollback `up`s the previous tag DIRECTLY,
+            # without a `compose down` first. A `down`-then-rollback left the
+            # stack STOPPED (not at the previous version) whenever the rollback
+            # itself failed; `up` over the running stack keeps the old
+            # containers serving until the new (old-tag) ones replace them.
             rollback() {
               PREV=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
               if [ -z "$PREV" ]; then
@@ -417,7 +423,11 @@ jobs:
               echo "rolling back to $PREV"
               git checkout "$PREV"
               export API_TAG="$PREV"; export WEB_TAG="$PREV"
-              docker compose --profile core up -d --wait --wait-timeout 120
+              docker compose --profile core pull || true
+              if ! docker compose --profile core up -d --wait --wait-timeout 120; then
+                echo "ROLLBACK FAILED — previous tag did not come up; investigating required"
+                return 1
+              fi
             }
 
             # Gate on the health the api container reports about itself, not on
@@ -442,15 +452,14 @@ jobs:
             docker compose --profile core pull || true
 
             if ! docker compose --profile core up -d --wait --wait-timeout 120; then
-              echo "DEPLOY FAILED — rolling back to previous running state"
-              docker compose --profile core down || true
-              rollback || true
+              echo "DEPLOY FAILED — rolling back to the previous tag in place"
+              rollback
               exit 1
             fi
 
             if ! wait_healthy; then
-              echo "HEALTH GATE FAILED — rolling back to previous tag"
-              rollback || true
+              echo "HEALTH GATE FAILED — rolling back to the previous tag in place"
+              rollback
               exit 1
             fi
 

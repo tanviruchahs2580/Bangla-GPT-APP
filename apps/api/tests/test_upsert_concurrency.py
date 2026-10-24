@@ -35,6 +35,10 @@ from bangla_gpt_api.initialize.lifespan import (
 from bangla_gpt_api.services.activity import dhaka_date, record_activity
 from bangla_gpt_api.services.upsert import get_or_create, increment
 
+# Engine-coupled by design: this file drives fixtures through raw
+# sqlite3 connections (audit H-02 follow-up), so it pins SQLite and stays
+# out of the BGPT_TEST_DATABASE_URL parity lane.
+
 
 @pytest.fixture
 def engine(tmp_path):

@@ -4,6 +4,7 @@ Moved verbatim from main.py; the drifted duplicate at ``core/middleware.py``
 (static CSP, divergent Prometheus labels) is deleted. Behavior unchanged.
 """
 
+import asyncio
 import ipaddress
 import logging
 import re
@@ -143,7 +144,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             if not (path == path_prefix or path.startswith(path_prefix + "/")):
                 continue
             try:
-                allowed = self.limiter.check(f"{path_prefix}|{key_source}", limit)
+                # The Redis limiter is a sync client (socket_timeout=1s); a
+                # degraded backend must cost a worker-thread stall, not an
+                # event-loop stall of every concurrent stream on this worker.
+                allowed = await asyncio.to_thread(
+                    self.limiter.check, f"{path_prefix}|{key_source}", limit
+                )
             except RateLimitBackendError:
                 return JSONResponse({"detail": "Rate limiter unavailable"}, status_code=503)
             if not allowed:

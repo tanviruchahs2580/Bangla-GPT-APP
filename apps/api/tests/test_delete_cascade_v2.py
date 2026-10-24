@@ -51,6 +51,7 @@ from bangla_gpt_api.db.models import (
 )
 from bangla_gpt_api.db.session import make_engine, make_session_factory
 from bangla_gpt_api.main import create_app
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -62,7 +63,7 @@ def pair(tmp_path):
     """Client + session factory over the SAME sqlite file (seed/assert directly)."""
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/cascade.db",
+        database_url=engine_url(tmp_path, "cascade"),
         jwt_secret=SECRET,
         admin_email="root@example.com",
         admin_password=PASSWORD,
@@ -139,7 +140,12 @@ def test_student_delete_removes_every_child_row(pair) -> None:
     assert _count(factory, DailyActivity, DailyActivity.student_id == sid) == 1
     assert _count(factory, StudentAbility, StudentAbility.student_id == sid) == 1
 
-    deleted = client.delete("/users/me", headers=_headers(client, "s@example.com"))
+    deleted = client.request(
+        "DELETE",
+        "/users/me",
+        headers=_headers(client, "s@example.com"),
+        json={"password": "supersecret1"},
+    )
     assert deleted.status_code == 204
 
     for model in (
@@ -214,7 +220,12 @@ def test_teacher_delete_removes_artifacts_keeps_anonymised_audit(pair) -> None:
         )
         s.commit()
 
-    deleted = client.delete("/users/me", headers=_headers(client, "t@example.com"))
+    deleted = client.request(
+        "DELETE",
+        "/users/me",
+        headers=_headers(client, "t@example.com"),
+        json={"password": "supersecret1"},
+    )
     assert deleted.status_code == 204
 
     assert _count(factory, Teacher, Teacher.id == tid) == 0
@@ -261,7 +272,12 @@ def test_parent_delete_nulls_redeemed_invite_pointer(pair) -> None:
         )
         s.commit()
 
-    deleted = client.delete("/users/me", headers=_headers(client, "p@example.com"))
+    deleted = client.request(
+        "DELETE",
+        "/users/me",
+        headers=_headers(client, "p@example.com"),
+        json={"password": "supersecret1"},
+    )
     assert deleted.status_code == 204
     assert _count(factory, Parent, Parent.id == pid) == 0
     with factory() as s:

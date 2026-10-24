@@ -9,6 +9,7 @@ from bangla_gpt_api.ratelimit import (
     RateLimitBackendError,
     RedisRateLimiter,
 )
+from conftest import engine_url
 
 
 def test_memory_limiter_enforces_window() -> None:
@@ -84,7 +85,7 @@ def test_app_answers_503_when_backend_down_and_fail_closed(
 
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/rl.db",
+        database_url=engine_url(tmp_path, "rl"),
         jwt_secret="test-secret-0123456789abcdef0123456789",
         rate_limit_backend="redis",
         redis_url="redis://localhost:6379/0",

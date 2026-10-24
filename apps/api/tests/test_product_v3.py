@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
+from conftest import engine_url
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -20,7 +21,7 @@ SECRET = "test-secret-0123456789abcdef0123456789"
 def client(tmp_path) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/v3.db",
+        database_url=engine_url(tmp_path, "v3"),
         jwt_secret=SECRET,
     )
     return TestClient(create_app(settings))
@@ -30,7 +31,7 @@ def client(tmp_path) -> TestClient:
 def admin_client(tmp_path) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/v3admin.db",
+        database_url=engine_url(tmp_path, "v3admin"),
         jwt_secret=SECRET,
         admin_email="root@example.com",
         admin_password=PASSWORD,
@@ -322,7 +323,7 @@ def test_email_verification_gate(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr("bangla_gpt_api.services.verification.send_mail", fake_send_mail)
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/verify.db",
+        database_url=engine_url(tmp_path, "verify"),
         jwt_secret=SECRET,
         smtp_enabled=True,
         smtp_host="smtp.example.edu.bd",
@@ -374,7 +375,7 @@ def test_resend_verification_reachable_without_session(monkeypatch, tmp_path) ->
     monkeypatch.setattr("bangla_gpt_api.services.verification.send_mail", fake_send_mail)
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/resend.db",
+        database_url=engine_url(tmp_path, "resend"),
         jwt_secret=SECRET,
         smtp_enabled=True,
         smtp_host="smtp.example.edu.bd",
@@ -457,7 +458,7 @@ def test_admin_users_pagination_and_search(admin_client: TestClient) -> None:
 def test_tutor_limit_is_per_user_not_per_ip(monkeypatch, tmp_path) -> None:
     settings = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/rl.db",
+        database_url=engine_url(tmp_path, "rl"),
         jwt_secret=SECRET,
         rate_limit_tutor_per_minute=2,
         rate_limit_backend="memory",
@@ -555,7 +556,7 @@ def test_events_rate_limited(tmp_path) -> None:
     """V3 regression: /events is IP-capped to stop log flooding."""
     s = Settings(
         env="test",
-        database_url=f"sqlite:///{tmp_path}/ev.db",
+        database_url=engine_url(tmp_path, "ev"),
         jwt_secret=SECRET,
     )
     c = TestClient(create_app(s))
