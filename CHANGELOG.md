@@ -105,6 +105,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): close the defects the restored E2E suite caught
 - fix(web): close-JSDoc sequence inside edge-proxy comment broke Vercel TS build
 - fix(web): configurable production API origin via edge proxy (FE-01)
+- fix(web): follow-up chips re-ask the question, not their own phrase
 - fix(web): guarantee minimum gap between stacked page sections
 - fix(web): guard the tutor turn, bound stalled requests and clear data on sign-out
 - fix(web): honour the ARIA contracts — Segmented is a toggle group, workspace tabs get the APG model, SW updates are waiting-first

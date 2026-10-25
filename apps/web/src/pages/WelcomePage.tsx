@@ -17,10 +17,14 @@ import { BrandMark } from "../components/BrandMark";
  * Blueprint §11 screens 01-02 (national-scale landing): brand mark,
  * headline, feature grid, stat strip and the two primary calls to action
  * (register / login). Decorative aurora is CSS-only and motion-safe.
+ *
+ * `splash-login` carries the same photo backdrop as the login/register
+ * pages (desktop artwork + mobile portrait artwork, theme veil, low-data
+ * kill switch) — one shared class, so the treatment cannot drift apart.
  */
 export default function WelcomePage() {
   return (
-    <main className="splash landing">
+    <main className="splash landing splash-login">
       <div className="splash-pattern" aria-hidden />
       <div className="landing-inner">
         <section className="landing-hero">

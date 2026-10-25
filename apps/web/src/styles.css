@@ -1247,9 +1247,11 @@ p {
     var(--bg);
 }
 
-/* Login-only photo backdrop (.splash-login, set in LoginPage) — theme-
-   synced veil, same color-mix technique as .shell-student::before so the
-   artwork reads warm-paper in light mode and fades into ink in dark mode.
+/* Auth + Get Started photo backdrop (.splash-login, set in LoginPage,
+   RegisterPage and WelcomePage — one shared class so the treatment cannot
+   drift between the three) — theme-synced veil, same color-mix technique
+   as .shell-student::before so the artwork reads warm-paper in light mode
+   and fades into ink in dark mode.
    Desktop (≥900px): the 1920×1080 landscape artwork covers the full page —
    a 16:9 screen is an exact fit, so the whole artwork shows uncut.
    Mobile (≤899px): the portrait 1080×1920 artwork uses contain (never
