@@ -4,6 +4,7 @@ from uuid import uuid4
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     DateTime,
     Float,
     ForeignKey,
@@ -25,6 +26,16 @@ def _utcnow() -> datetime:
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint(
+            "failed_login_count >= 0",
+            name="ck_users_failed_login_count",
+        ),
+        CheckConstraint(
+            "role IN ('student', 'teacher', 'parent', 'admin', 'school_admin')",
+            name="ck_users_role",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
@@ -76,6 +87,16 @@ class PasswordReset(Base):
 
 class Student(Base):
     __tablename__ = "students"
+    __table_args__ = (
+        CheckConstraint(
+            "length(name) > 0",
+            name="ck_students_name_not_blank",
+        ),
+        CheckConstraint(
+            "class_level BETWEEN 1 AND 12",
+            name="ck_students_class_level",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int | None] = mapped_column(
@@ -130,13 +151,35 @@ class ParentStudentLink(Base):
     __table_args__ = (UniqueConstraint("parent_id", "student_id", name="uq_parent_student"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    parent_id: Mapped[int] = mapped_column(ForeignKey("parents.id"), index=True)
+    parent_id: Mapped[int] = mapped_column(ForeignKey("parents.id"))
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 
 class QuizAttempt(Base):
     __tablename__ = "quiz_attempts"
+    __table_args__ = (
+        CheckConstraint(
+            "score_pct IS NULL OR (score_pct >= 0 AND score_pct <= 100)",
+            name="ck_quiz_attempts_score_pct",
+        ),
+        CheckConstraint(
+            "correct IS NULL OR correct >= 0",
+            name="ck_quiz_attempts_correct",
+        ),
+        CheckConstraint(
+            "class_level BETWEEN 1 AND 12",
+            name="ck_quiz_attempts_class_level",
+        ),
+        CheckConstraint(
+            "total IS NULL OR correct IS NULL OR correct <= total",
+            name="ck_quiz_attempts_correct_le_total",
+        ),
+        CheckConstraint(
+            "total IS NULL OR total >= 0",
+            name="ck_quiz_attempts_total",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
@@ -154,6 +197,20 @@ class QuizAttempt(Base):
 
 class AnswerLog(Base):
     __tablename__ = "answer_log"
+    __table_args__ = (
+        CheckConstraint(
+            "chosen >= 0",
+            name="ck_answer_log_chosen",
+        ),
+        CheckConstraint(
+            "seq >= 0",
+            name="ck_answer_log_seq",
+        ),
+        CheckConstraint(
+            "correct_index >= 0",
+            name="ck_answer_log_correct_index",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     attempt_id: Mapped[int] = mapped_column(ForeignKey("quiz_attempts.id"), index=True)
@@ -196,6 +253,16 @@ class Conversation(Base):
 
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('user', 'assistant')",
+            name="ck_chat_messages_role",
+        ),
+        CheckConstraint(
+            "rating IS NULL OR rating IN (-1, 1)",
+            name="ck_chat_messages_rating",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     conversation_id: Mapped[int] = mapped_column(ForeignKey("conversations.id"), index=True)
@@ -221,7 +288,9 @@ class ParentInvite(Base):
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime)
     used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    used_by_parent_id: Mapped[int | None] = mapped_column(ForeignKey("parents.id"), nullable=True)
+    used_by_parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("parents.id"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 
@@ -229,6 +298,16 @@ class Feedback(Base):
     """Thumbs up/down product feedback on tutor answers."""
 
     __tablename__ = "feedback"
+    __table_args__ = (
+        CheckConstraint(
+            "triaged = false OR triaged_at IS NOT NULL",
+            name="ck_feedback_triaged_at",
+        ),
+        CheckConstraint(
+            "rating BETWEEN -1 AND 1",
+            name="ck_feedback_rating",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
@@ -255,13 +334,21 @@ class ChapterProgress(Base):
 
     __tablename__ = "chapter_progress"
     __table_args__ = (
+        CheckConstraint(
+            "class_level BETWEEN 1 AND 12",
+            name="ck_chapter_progress_class_level",
+        ),
+        CheckConstraint(
+            "read_pct BETWEEN 0 AND 100",
+            name="ck_chapter_progress_read_pct",
+        ),
         UniqueConstraint(
             "student_id", "subject", "chapter", "class_level", name="uq_chapter_progress"
         ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"))
     subject: Mapped[str] = mapped_column(String(60))
     chapter: Mapped[str] = mapped_column(String(200))
     class_level: Mapped[int] = mapped_column(Integer)
@@ -280,11 +367,27 @@ class DailyActivity(Base):
 
     __tablename__ = "daily_activity"
     __table_args__ = (
+        CheckConstraint(
+            "quizzes >= 0",
+            name="ck_daily_activity_quizzes",
+        ),
+        CheckConstraint(
+            "questions >= 0",
+            name="ck_daily_activity_questions",
+        ),
+        CheckConstraint(
+            "minutes >= 0",
+            name="ck_daily_activity_minutes",
+        ),
+        CheckConstraint(
+            "length(date) = 10",
+            name="ck_daily_activity_date_iso",
+        ),
         UniqueConstraint("student_id", "date", name="uq_daily_activity_student_date"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"))
     date: Mapped[str] = mapped_column(String(10), index=True)  # ISO date in Asia/Dhaka
     questions: Mapped[int] = mapped_column(Integer, default=0)
     quizzes: Mapped[int] = mapped_column(Integer, default=0)
@@ -296,11 +399,31 @@ class RevisionItem(Base):
 
     __tablename__ = "revision_queue"
     __table_args__ = (
+        CheckConstraint(
+            "ease_factor > 0",
+            name="ck_revision_queue_ease_factor",
+        ),
+        CheckConstraint(
+            "reps >= 0",
+            name="ck_revision_queue_reps",
+        ),
+        CheckConstraint(
+            "correct_index >= 0",
+            name="ck_revision_queue_correct_index",
+        ),
+        CheckConstraint(
+            "length(due_date) = 10",
+            name="ck_revision_queue_due_date_iso",
+        ),
+        CheckConstraint(
+            "interval_days >= 0",
+            name="ck_revision_queue_interval_days",
+        ),
         UniqueConstraint("student_id", "question", name="uq_revision_queue_student_question"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"))
     question: Mapped[str] = mapped_column(Text)
     options_json: Mapped[list] = mapped_column(JSON, default=list)
     correct_index: Mapped[int] = mapped_column(Integer, default=0)
@@ -326,7 +449,7 @@ class School(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(200))
-    code: Mapped[str] = mapped_column(String(32), index=True)
+    code: Mapped[str] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 
@@ -341,7 +464,7 @@ class ClassRoom(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), index=True)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"))
     class_level: Mapped[int] = mapped_column(Integer)
     section: Mapped[str] = mapped_column(String(8), default="GEN", server_default="GEN")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
@@ -357,8 +480,8 @@ class ClassStudent(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), index=True)
-    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"))
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 
@@ -371,7 +494,7 @@ class ClassTeacher(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), index=True)
+    classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"))
     teacher_id: Mapped[int] = mapped_column(ForeignKey("teachers.id"), index=True)
     subject: Mapped[str] = mapped_column(
         String(60), default="", server_default="", comment="'' means all subjects"
@@ -411,6 +534,14 @@ class ChapterContent(Base):
 
     __tablename__ = "chapter_contents"
     __table_args__ = (
+        CheckConstraint(
+            "version >= 1",
+            name="ck_chapter_contents_version",
+        ),
+        CheckConstraint(
+            "class_level BETWEEN 1 AND 12",
+            name="ck_chapter_contents_class_level",
+        ),
         UniqueConstraint(
             "subject",
             "class_level",
@@ -421,7 +552,7 @@ class ChapterContent(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    subject: Mapped[str] = mapped_column(String(60), index=True)
+    subject: Mapped[str] = mapped_column(String(60))
     # indexed: school_coverage filters by class_level per grade in one pass
     # (was a full scan on the only hot column without one).
     class_level: Mapped[int] = mapped_column(Integer, index=True)
@@ -429,7 +560,9 @@ class ChapterContent(Base):
     version: Mapped[int] = mapped_column(Integer, default=1)
     source: Mapped[str] = mapped_column(String(12), default="ai")  # ai | teacher
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
-    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 
@@ -442,6 +575,24 @@ class QuestionPaper(Base):
     """
 
     __tablename__ = "question_papers"
+    __table_args__ = (
+        CheckConstraint(
+            "duration_min > 0",
+            name="ck_question_papers_duration_min",
+        ),
+        CheckConstraint(
+            "status IN ('draft', 'final')",
+            name="ck_question_papers_status",
+        ),
+        CheckConstraint(
+            "marks > 0",
+            name="ck_question_papers_marks",
+        ),
+        CheckConstraint(
+            "class_level BETWEEN 1 AND 12",
+            name="ck_question_papers_class_level",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     teacher_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
@@ -470,6 +621,16 @@ class ShortTest(Base):
     """
 
     __tablename__ = "short_tests"
+    __table_args__ = (
+        CheckConstraint(
+            "num_questions > 0",
+            name="ck_short_tests_num_questions",
+        ),
+        CheckConstraint(
+            "duration_min > 0",
+            name="ck_short_tests_duration_min",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), index=True)
@@ -491,6 +652,12 @@ class SupportPlan(Base):
     """
 
     __tablename__ = "support_plans"
+    __table_args__ = (
+        CheckConstraint(
+            "class_level BETWEEN 1 AND 12",
+            name="ck_support_plans_class_level",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
@@ -511,6 +678,12 @@ class Assignment(Base):
     """
 
     __tablename__ = "assignments"
+    __table_args__ = (
+        CheckConstraint(
+            "num_questions > 0",
+            name="ck_assignments_num_questions",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     teacher_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
@@ -560,6 +733,20 @@ class QuestionBankEntry(Base):
     """
 
     __tablename__ = "question_bank"
+    __table_args__ = (
+        CheckConstraint(
+            "times_reused >= 0",
+            name="ck_question_bank_times_reused",
+        ),
+        CheckConstraint(
+            "answer_index IS NULL OR answer_index >= 0",
+            name="ck_question_bank_answer_index",
+        ),
+        CheckConstraint(
+            "class_level BETWEEN 1 AND 12",
+            name="ck_question_bank_class_level",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     teacher_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
@@ -586,13 +773,19 @@ class SchoolInvite(Base):
     """
 
     __tablename__ = "school_invites"
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('teacher', 'school_admin')",
+            name="ck_school_invites_role",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     code_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     school_id: Mapped[int] = mapped_column(ForeignKey("schools.id"), index=True)
     role: Mapped[str] = mapped_column(String(16), default="teacher")
-    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    used_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    used_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -604,7 +797,7 @@ class Concept(Base):
     __tablename__ = "concepts"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String(200), index=True)
+    name: Mapped[str] = mapped_column(String(200))
     class_level: Mapped[int] = mapped_column(Integer, index=True)
     subject: Mapped[str] = mapped_column(String(60), index=True)
     chapter: Mapped[str] = mapped_column(String(200))
@@ -615,6 +808,10 @@ class Concept(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     __table_args__ = (
+        CheckConstraint(
+            "class_level BETWEEN 1 AND 12",
+            name="ck_concepts_class_level",
+        ),
         UniqueConstraint("name", "class_level", "subject", name="uq_concept_identity"),
     )
 
@@ -625,7 +822,7 @@ class ConceptPrerequisite(Base):
     __tablename__ = "concept_prerequisites"
 
     concept_id: Mapped[int] = mapped_column(ForeignKey("concepts.id"), primary_key=True)
-    prereq_id: Mapped[int] = mapped_column(ForeignKey("concepts.id"), primary_key=True)
+    prereq_id: Mapped[int] = mapped_column(ForeignKey("concepts.id"), primary_key=True, index=True)
 
 
 class ConceptMastery(Base):
@@ -634,7 +831,7 @@ class ConceptMastery(Base):
     __tablename__ = "concept_mastery"
 
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), primary_key=True)
-    concept_id: Mapped[int] = mapped_column(ForeignKey("concepts.id"), primary_key=True)
+    concept_id: Mapped[int] = mapped_column(ForeignKey("concepts.id"), primary_key=True, index=True)
     correct: Mapped[int] = mapped_column(Integer, default=0)
     total: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
@@ -649,6 +846,28 @@ class PracticeItem(Base):
     """
 
     __tablename__ = "practice_items"
+    __table_args__ = (
+        CheckConstraint(
+            "class_level BETWEEN 1 AND 12",
+            name="ck_practice_items_class_level",
+        ),
+        CheckConstraint(
+            "elo > 0",
+            name="ck_practice_items_elo",
+        ),
+        CheckConstraint(
+            "attempts >= 0",
+            name="ck_practice_items_attempts",
+        ),
+        CheckConstraint(
+            "correct <= attempts",
+            name="ck_practice_items_correct_le_attempts",
+        ),
+        CheckConstraint(
+            "correct >= 0",
+            name="ck_practice_items_correct",
+        ),
+    )
 
     fingerprint: Mapped[str] = mapped_column(String(16), primary_key=True)
     chapter: Mapped[str] = mapped_column(String(200))
@@ -668,6 +887,20 @@ class StudentAbility(Base):
     """
 
     __tablename__ = "student_abilities"
+    __table_args__ = (
+        CheckConstraint(
+            "class_level BETWEEN 1 AND 12",
+            name="ck_student_abilities_class_level",
+        ),
+        CheckConstraint(
+            "ability > 0",
+            name="ck_student_abilities_ability",
+        ),
+        CheckConstraint(
+            "attempts >= 0",
+            name="ck_student_abilities_attempts",
+        ),
+    )
 
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), primary_key=True)
     concept: Mapped[str] = mapped_column(String(200), primary_key=True)
@@ -809,6 +1042,12 @@ class AiJob(Base):
     """
 
     __tablename__ = "ai_jobs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued', 'generating', 'validating', 'ready', 'failed')",
+            name="ck_ai_jobs_status",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
@@ -831,6 +1070,20 @@ class AiUsage(Base):
     """
 
     __tablename__ = "ai_usage"
+    __table_args__ = (
+        CheckConstraint(
+            "prompt_tokens >= 0",
+            name="ck_ai_usage_prompt_tokens",
+        ),
+        CheckConstraint(
+            "completion_tokens >= 0",
+            name="ck_ai_usage_completion_tokens",
+        ),
+        CheckConstraint(
+            "estimated_cost_usd >= 0",
+            name="ck_ai_usage_estimated_cost_usd",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
