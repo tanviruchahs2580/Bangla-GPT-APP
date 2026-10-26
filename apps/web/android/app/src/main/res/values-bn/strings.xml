@@ -1,9 +1,11 @@
 <?xml version='1.0' encoding='utf-8'?>
 <!-- Bengali launcher label for the Bengali-first audience; the Latin brand
      acronym stays, the descriptive words are Bengali. The Play listing name
-     ("bn-BD" store listing) matches this string -- see docs/playstore/listing.md.
-     Locale qualifier: values-bn applies to any Bengali locale, values-bn-rBD
-     is not needed because the copy is identical across bn variants. -->
+     ("bn-BD" store listing) matches this string; see docs/playstore/listing.md.
+     Locale qualifier: values-bn applies to any Bengali locale, and
+     values-bn-rBD is not needed because the copy is identical across bn
+     variants. (An XML comment may not contain a double hyphen: AAPT2 rejects
+     it, which is why this one uses ordinary punctuation.) -->
 <resources>
     <string name="app_name">বাংলা GPT টিউটর</string>
     <string name="title_activity_main">বাংলা GPT টিউটর</string>
