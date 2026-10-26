@@ -48,7 +48,10 @@
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <!-- Optional: Google speech services backs the recogniser. Play Services
-         is not required to install the app -- dictation degrades to typing. -->
+         is not required to install the app; dictation degrades to typing.
+         (No double hyphen inside an XML comment: AAPT2 rejects it, and this
+         file shipped that way, which is why the Android project had never
+         been buildable.) -->
     <queries>
         <intent>
             <action android:name="android.speech.RecognitionService" />
