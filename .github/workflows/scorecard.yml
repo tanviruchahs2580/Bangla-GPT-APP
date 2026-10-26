@@ -1,0 +1,59 @@
+name: OpenSSF Scorecard
+
+# AUD-EF-13 / F-16: nothing in the tree measured the repository's supply-chain
+# posture. Scorecard scores branch protection, pinned dependencies, token
+# permissions, dangerous workflows, SAST, fuzzing and more, and publishes the
+# result as SARIF so the findings land in the Security tab with the CodeQL
+# alerts. It needs no repository secrets: keyless OIDC proves the run's origin.
+
+on:
+  branch_protection_rule:
+  schedule:
+    - cron: "19 2 * * 6" # weekly, Saturday 02:19 UTC
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: read-all
+
+concurrency:
+  group: scorecard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      # SARIF upload into the Security tab.
+      security-events: write
+      # Keyless signing of the result bundle; proves the data came from here.
+      id-token: write
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Run the Scorecard analysis
+        uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a # v2.4.3
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          # publish_results makes the score retrievable from the public API
+          # (api.securityscorecards.dev) and the badge below meaningful.
+          publish_results: true
+
+      - name: Upload the SARIF results as an artifact
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: scorecard-results
+          path: results.sarif
+          retention-days: 30
+
+      - name: Upload the findings to the Security tab
+        uses: github/codeql-action/upload-sarif@d0bae162f31f17dd92c46ccdc4dfee5710f8dc67 # v3
+        with:
+          sarif_file: results.sarif
