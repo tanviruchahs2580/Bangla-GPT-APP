@@ -83,6 +83,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(ci): repair two gates that could not fail, and stop the impossible redis bump
 - fix(ci): resolve README links portably so the docs guard works on Linux
 - fix(ci): serialise release and deploy runs per git ref
+- fix(ci): the Android build needs JDK 21, not 17
 - fix(ci): trim the trailing whitespace pre-commit found in vercel-deploy.yml
 - fix(ci): unblock Dependabot PRs and name the Vercel credential failure (#9)
 - fix(ci): upgrade setuptools before pip-audit; refresh lock to current resolution
@@ -104,6 +105,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(sec): refuse unsafe production defaults at boot
 - fix(sec): stop serving the OpenAPI reference in production
 - fix(security): close the S-011/S-012/F-142 gaps — revocable sessions, TOTP account throttle, erasure re-auth
+- fix(tests): make the teacher-jobs rate-limit test deterministic
 - fix(web): clear footer from bottom nav + cut a round-trip from login
 - fix(web): clear the two WCAG AA failures axe found on the tutor screen
 - fix(web): close the defects the restored E2E suite caught
@@ -275,6 +277,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Audit remediation, round 2: 38 findings closed across backend, privacy, auth and UX (#10)
 - Full engineering audit + remediation: 47 findings fixed, 0 open (#1)
+- Merge branch 'main' into fix/flaky-rate-limit-test
 - Merge pull request #15 from tanviruchahs2580/audit/2026-10-16-live-verification
 - Merge pull request #16 from tanviruchahs2580/docs/2026-10-16-live-outcome
 - Merge pull request #17 from tanviruchahs2580/docs/2026-10-16-live-enablement
@@ -284,6 +287,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #25 from tanviruchahs2580/docs/2026-10-17-vercel-redeploy
 - Merge pull request #26 from tanviruchahs2580/feat/rag-retrieval-quality
 - Merge pull request #61 from tanviruchahs2580/fix/audit-remediation-2026-10-23
+- Merge pull request #67 from tanviruchahs2580/feat/android-play-store-release
 
 ## v0.9.2 - 2026-09-15
 
