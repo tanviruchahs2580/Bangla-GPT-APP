@@ -34,6 +34,15 @@ VITE_API_BASE=https://api.YOUR-DOMAIN/api npm run build
 npx cap sync android          # copies dist into the native project
 ```
 
+The sync step is the one that decays silently: `android/app/src/main/assets/public`
+is gitignored, so a stale copy looks exactly like a fresh one until a device
+tests it. Two CI paths now cover that. On any PR that touches `apps/web/**`,
+`android-release.yml`'s `debug-assemble` job builds the bundle, syncs it,
+**hashes it against `dist/`** and assembles a debug APK — so "the Android shell
+builds from this codebase" is a gate, not a hope. On a `v*` tag the same
+workflow produces the signed `.aab` + release `.apk`; the Play Store runbook is
+[docs/playstore/LAUNCH.md](playstore/LAUNCH.md).
+
 Backend CORS: add the WebView origins — `capacitor://localhost` (iOS) and
 `https://localhost` (Android) — to `ALLOWED_ORIGINS` on the API before
 shipping the APK. Without them the APK's login calls fail CORS preflight
@@ -42,23 +51,29 @@ a generic network failure). The API must also be reachable at a STABLE
 origin: the current Cloudflare quick-tunnel hostname rotates and kills
 both web and APK logins when it dies — promote a named tunnel or a
 VM/PaaS domain and point both `API_ORIGIN` (Vercel) and `VITE_API_BASE`
-(APK build) at it.
+(APK build) at it. A rotated origin strands every installed APK, because the
+base is baked at build time; the rebuild is the only repair (docs/runbook.md,
+"API origin down").
 
-### 🖐 Human build/signing steps (NOT possible in this environment)
+### Built in CI; what is still human
 
-This machine has no JDK or Android SDK (`java` absent, `ANDROID_HOME`
-unset), so no APK was produced — deliberately not faked. On a build
-machine:
+The Android build runs on GitHub's runners (JDK 17 + the preinstalled Android
+SDK), so it no longer needs a workstation: see `.github/workflows/android-release.yml`.
+This machine has no JDK or Android SDK (`java` absent, `ANDROID_HOME` unset), so
+no APK is produced locally — that is recorded, not faked, and CI is the build
+path. What remains owner-side:
 
-1. Install JDK 21 + Android Studio (SDK 35). `cd apps/web/android &&
-./gradlew assembleDebug` for a test APK.
-2. Release signing: create a keystore (store it OUTSIDE the repo, never
-   in git/CI logs), set `keystore.properties` (git-ignored), then
-   `./gradlew assembleRelease` / `bundleRelease`. Play Store prefers
-   Play App Signing.
-3. App icon/label localization: replace `app_name` string with the
-   Bengali name "বাংলা GPT টিউটর" and feed `android/app/src/main/res`
-   mipmap icons (same artwork as the PWA icons).
+1. **Upload key** — create it once, store it outside the repo, set the four
+   `ANDROID_*` repository secrets. Signing is fail-closed: a release task
+   without credentials throws instead of producing a debug-signed artifact.
+   Steps in [docs/playstore/LAUNCH.md](playstore/LAUNCH.md) §1.
+2. **Play Console** — create the app, fill App content (data safety, content
+   rating, privacy policy URL), upload the `.aab`, decide the rollout. The
+   answers are pre-written in `docs/playstore/`.
+3. **Icon artwork** — `android/app/src/main/res` still ships the Capacitor
+   template mipmaps; feed it the same artwork as the PWA icons. The launcher
+   label is done: `res/values-bn/strings.xml` carries "বাংলা GPT টিউটর" for
+   Bengali locales, with the English fallback in `values/strings.xml`.
 
 ### 🖐 Push notifications (FCM) — intentionally not wired yet
 
