@@ -43,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): indexable assignment membership; /assignments/mine no longer loses work
 - fix(api): issue verification codes to invited school staff
 - fix(api): let a student clear their subject focus
+- fix(api): make account erasure complete and MFA binding unreachable from a stolen token
 - fix(api): make login lockout and MFA step-up burn atomic
 - fix(api): make question-paper marks, difficulty buckets and integer parsing truthful
 - fix(api): make the account export complete
@@ -64,6 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): serialise AiJob cancellation against its own DB sections
 - fix(api): serve the configured corpus and the Dhaka day in the Learn flow
 - fix(api): stop the WAL pragma race killing multi-worker SQLite boots
+- fix(api): strip photo metadata before an image reaches the model provider
 - fix(api): tie the quiz ceilings to one bound so an assignment stays submittable
 - fix(api): unify the error envelope — every raise carries a machine code
 - fix(api): vision-honest refusal for openai, max_output_tokens cap, transport retries (A10, A9, A16)
@@ -91,6 +93,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(db): reconcile ORM/migration drift so alembic check passes
 - fix(encoding): add .gitattributes and repair three encoding defects
 - fix(i18n): put the parent digest and the printed papers in Bangla, and correct five copy defects
+- fix(load): stop the smoke gate failing when the rate limiter works
 - fix(mobile): drop the double hyphen AAPT2 rejects in the Bengali label comment
 - fix(mobile): make the Android manifest parseable, so the project can build
 - fix(ops): make monitoring real, bound every service, drill the rollback, run the load gate
@@ -106,6 +109,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(sec): refuse unsafe production defaults at boot
 - fix(sec): stop serving the OpenAPI reference in production
 - fix(security): close the S-011/S-012/F-142 gaps — revocable sessions, TOTP account throttle, erasure re-auth
+- fix(tests): make the teacher-jobs rate-limit test deterministic
 - fix(web): clear footer from bottom nav + cut a round-trip from login
 - fix(web): clear the two WCAG AA failures axe found on the tutor screen
 - fix(web): close the defects the restored E2E suite caught
@@ -130,9 +134,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): recover from page errors, report load failures, and never show another child's data
 - fix(web): report a dead API origin accurately, not as a busy server (#14)
 - fix(web): route /api/* explicitly to the edge proxy function
+- fix(web): say the backend is down, not that the app has none
 - fix(web): share the login photo backdrop with Get Started; document Capacitor origins
 - fix(web): ship the CSP the code claimed, and bound the edge proxy
 - fix(web): stop rendering remote images in answers and announce each answer once
+- fix(web): stop reporting states the code never computed
 - fix(web): stop showing failures as facts, and read API timestamps as UTC
 - fix(web): stop the service worker caching error pages as the app shell
 - fix: close the full audit register — atomicity, envelope, a11y, ops; clear all 42 advisories (#57)
@@ -155,6 +161,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - refactor(api): bring TutorService.ask/ask_stream down from grade E
 - refactor(api): extract the GDPR export/erasure bodies into services/gdpr.py
 - refactor(api): one pagination contract module (M-08)
+- refactor(web): one contract and one implementation per concept
 - refactor(web): teacher pages join the shared query cache (H-04) + honest coverage gates (H-03)
 - refactor(web): use one data-fetching path in the admin centre and the paper review panel
 
@@ -182,6 +189,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Documentation
 
 - docs(audit): record the merge and live-production outcome
+- docs(i18n): give the Bangla copy review something to review, and keep it current
+- docs(ops): record the API-origin rotation that logged everyone out
 - docs(playstore): correct the store answers against this tree
 - docs(qa): publish the 2026-10-16 audit report; refresh the lockfile within its ranges
 - docs(qa): publish the 2026-10-17 QA record and archive its predecessor
@@ -252,6 +261,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Maintenance
 
 - chore(api): remove unresolvable plan-tracker tags from comments
+- chore(ci): add the supply-chain and secret-masking checks, and document the pipeline
 - chore(deps): clear all 42 known advisories in the pinned set
 - chore(scripts): make the shebang executable real for the five scripts that have one
 - chore(security): allowlist the reviewed ASCII-art hit in the full-history secret scan
@@ -259,8 +269,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore: close the low-severity register — hot-path indexes, dead code, XFF spoofing, env parity
 - chore: code honesty - unused args, un-typed db params, inert suppressions, stale comments
 - chore: ignore Playwright MCP tool artifacts; regenerate the CHANGELOG
+- chore: merge main and regenerate the CHANGELOG
 - chore: regenerate CHANGELOG; format straggler; final CI/README truth for the e2e + coverage gates
 - chore: regenerate the CHANGELOG after merging main
+- chore: regenerate the CHANGELOG for the CI coverage gate
 - chore: regenerate the CHANGELOG for the two mobile build fixes
 - chore: satisfy the two CI guardrails main added after this branch's baseline
 - fmt: ruff format teacher.py _room_counts
@@ -271,6 +283,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - style(api): reformat SchoolInvite claim call
 - style(api): ruff format four test files (format-gate drift)
 - style(api): ruff format mock provider and lesson plan prompt
+- style(web): format the new progress-bar test (prettier gate in CI)
 - style(web): give the registration screen login's photo backdrop
 - style: satisfy the repository's own pre-commit hooks
 
@@ -278,7 +291,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Audit remediation, round 2: 38 findings closed across backend, privacy, auth and UX (#10)
 - Full engineering audit + remediation: 47 findings fixed, 0 open (#1)
+- Merge branch 'main' into chore/supply-chain-checks
+- Merge branch 'main' into docs/native-review-sheet
 - Merge branch 'main' into feat/schema-invariants
+- Merge branch 'main' into fix/account-lifecycle-integrity
+- Merge branch 'main' into fix/android-login-api-origin
+- Merge branch 'main' into fix/flaky-rate-limit-test
+- Merge branch 'main' into fix/honest-ui-states
+- Merge branch 'main' into fix/image-metadata-stripping
+- Merge branch 'main' into refactor/web-contracts
 - Merge pull request #15 from tanviruchahs2580/audit/2026-10-16-live-verification
 - Merge pull request #16 from tanviruchahs2580/docs/2026-10-16-live-outcome
 - Merge pull request #17 from tanviruchahs2580/docs/2026-10-16-live-enablement
@@ -289,6 +310,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #26 from tanviruchahs2580/feat/rag-retrieval-quality
 - Merge pull request #61 from tanviruchahs2580/fix/audit-remediation-2026-10-23
 - Merge pull request #67 from tanviruchahs2580/feat/android-play-store-release
+- Merge pull request #71 from tanviruchahs2580/fix/image-metadata-stripping
+- Merge pull request #74 from tanviruchahs2580/feat/schema-invariants
+- Merge remote-tracking branch 'origin/chore/supply-chain-checks' into merge-train2
+- Merge remote-tracking branch 'origin/docs/native-review-sheet' into merge-train2
+- Merge remote-tracking branch 'origin/fix/account-lifecycle-integrity' into merge-train2
+- Merge remote-tracking branch 'origin/fix/android-login-api-origin' into merge-train2
+- Merge remote-tracking branch 'origin/fix/flaky-rate-limit-test' into merge-train2
+- Merge remote-tracking branch 'origin/fix/honest-ui-states' into merge-train2
+- Merge remote-tracking branch 'origin/fix/load-gate-throttle' into merge-train2
+- Merge remote-tracking branch 'origin/refactor/web-contracts' into merge-train2
 
 ## v0.9.2 - 2026-09-15
 
