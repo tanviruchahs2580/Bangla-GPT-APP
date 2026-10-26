@@ -127,3 +127,46 @@ describe("admin user search debounce (F-023)", () => {
     expect(searchCalls()).toHaveLength(1);
   });
 });
+
+/**
+ * The search input sits in the same query key as the pagination offset, and
+ * the debounce means a typed query fires on its own. Typing from page 2 used
+ * to keep `offset=20`, so the request went out as `?q=…&offset=20` and the
+ * table rendered zero rows: the screen reported "no such user" for a user who
+ * exists.
+ */
+describe("admin user search resets pagination", () => {
+  it("drops the offset when the query changes", async () => {
+    // Two pages of results, so the pager is live.
+    apiMock.get.mockImplementation((path: string) => {
+      if (path.startsWith("/admin/users"))
+        return Promise.resolve({ total: 40, items: [] });
+      return Promise.resolve(null);
+    });
+    renderPage();
+    await screen.findByText(t("admSchools"));
+
+    // Go to page 2.
+    const next = await screen.findByRole("button", { name: "›" });
+    await waitFor(() => expect(next).toBeEnabled());
+    fireEvent.click(next);
+    await waitFor(() =>
+      expect(
+        apiMock.get.mock.calls.some(([p]) => String(p).includes("offset=20")),
+      ).toBe(true),
+    );
+
+    // Now type: the search must not inherit page 2 of the unfiltered list.
+    fireEvent.change(screen.getByLabelText(t("searchEmail")), {
+      target: { value: "teacher@school.edu.bd" },
+    });
+
+    await waitFor(() => {
+      const searched = searchCalls();
+      expect(searched.length).toBeGreaterThan(0);
+      expect(searched.some((p) => p.includes("offset=0"))).toBe(true);
+    });
+    // and no search request may ask for a page offset
+    expect(searchCalls().every((p) => !p.includes("offset=20"))).toBe(true);
+  });
+});

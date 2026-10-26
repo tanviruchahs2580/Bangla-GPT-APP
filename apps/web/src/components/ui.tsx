@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useId,
   useRef,
   type ButtonHTMLAttributes,
   type ReactNode,
@@ -256,14 +257,26 @@ export function Modal({
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const restoreRef = useRef<HTMLElement | null>(null);
+  // Names the dialog from its own heading. `aria-label` was skipped whenever
+  // the title was an element rather than a string, leaving those dialogs
+  // unnamed; the heading is the name in every case.
+  const titleId = useId();
 
   useEffect(() => {
     if (!open) return;
     restoreRef.current = document.activeElement as HTMLElement | null;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    // focus the dialog itself so Tab cycles start inside
-    boxRef.current?.focus();
+    // Focus the first real control inside the dialog, not the dialog box:
+    // focusing the container left the dialog's OWN first Shift+Tab landing
+    // outside the trap, which is the defect this component is documented as
+    // having fixed. Fall back to the box (tabIndex={-1}) when it holds no
+    // focusable child, so the dialog still receives the next Tab.
+    const focusables = boxRef.current?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
+    );
+    if (focusables && focusables.length > 0) focusables[0].focus();
+    else boxRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
@@ -295,16 +308,16 @@ export function Modal({
 
   if (!open) return null;
   return createPortal(
+    // The backdrop is a mouse dismissal surface, not a control. The rule's
+    // remedy for a click handler — `role="button"` + `tabIndex={0}` — was
+    // itself the defect here: it added a tab stop OUTSIDE the focus trap (the
+    // Shift+Tab escape the trap exists to prevent) and nested a role=dialog
+    // inside a role=button. Keyboard dismissal is Escape, handled by the
+    // document listener above (and the dialog's own close button), which is
+    // where a keyboard user reaches it.
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
     <div
       className="modal-backdrop"
-      role="button"
-      tabIndex={0}
-      aria-label={t("locCloseDialog")}
-      onKeyDown={(e) => {
-        // The backdrop dismisses on click, so it must be reachable and
-        // dismissible by keyboard too.
-        if (e.key === "Escape" || e.key === "Enter" || e.key === " ") onClose();
-      }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -313,12 +326,14 @@ export function Modal({
         ref={boxRef}
         role="dialog"
         aria-modal="true"
-        aria-label={typeof title === "string" ? title : undefined}
+        aria-labelledby={titleId}
         className={cn("modal", wide && "modal-wide")}
         tabIndex={-1}
       >
         <div className="modal-head">
-          <h3 className="modal-title">{title}</h3>
+          <h3 className="modal-title" id={titleId}>
+            {title}
+          </h3>
           <button
             type="button"
             className="icon-btn modal-close"

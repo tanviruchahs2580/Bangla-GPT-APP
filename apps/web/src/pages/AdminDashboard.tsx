@@ -682,7 +682,15 @@ export default function AdminDashboard() {
             id="q"
             value={query}
             placeholder={t("searchEmail")}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              // Typing IS a new search: the debounced query sits in the query
+              // key, so the request goes out without a submit. Keeping the old
+              // offset sent `?q=…&offset=20` from page 2 onwards and the table
+              // rendered zero rows — a search reporting "no such user" for
+              // users who exist.
+              setOffset(0);
+            }}
           />
           <label htmlFor="rfilter">{t("role")}</label>
           <select

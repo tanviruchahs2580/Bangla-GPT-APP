@@ -4,31 +4,33 @@
  *  - Navigations: network-first, offline fallback page.
  *  - API calls: never cached.
  */
-const CACHE = 'bgpt-v2';
+const CACHE = "bgpt-v2";
 const MAX_RUNTIME_ENTRIES = 50; // hashed build assets rotate; cap the cache
 // Last-resort navigation when the network fails and no shell was ever cached
 // (first visit on a broken connection). Mirrors the in-app offline banner.
 const OFFLINE_HTML =
   '<!doctype html><html lang="bn"><head><meta charset="utf-8">' +
   '<meta name="viewport" content="width=device-width,initial-scale=1">' +
-  '<title>অফলাইন</title></head><body>' +
-  '<h1>অফলাইন — সংযোগ ফিরলে আবার চেষ্টা করুন</h1></body></html>';
+  "<title>অফলাইন</title></head><body>" +
+  "<h1>অফলাইন — সংযোগ ফিরলে আবার চেষ্টা করুন</h1></body></html>";
 const SHELL = [
-  '/',
-  '/index.html',
-  '/icon.svg',
-  '/icon-192.png',
-  '/icon-512.png',
-  '/manifest.webmanifest',
+  "/",
+  "/index.html",
+  "/icon.svg",
+  "/icon-192.png",
+  "/icon-512.png",
+  "/manifest.webmanifest",
 ];
 
-self.addEventListener('install', (event) => {
+self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
       .open(CACHE)
       // One missing shell URL must not abort the whole install (addAll is
       // all-or-nothing): a stale icon path would leave the app with no SW.
-      .then((cache) => Promise.all(SHELL.map((url) => cache.add(url).catch(() => {}))))
+      .then((cache) =>
+        Promise.all(SHELL.map((url) => cache.add(url).catch(() => {}))),
+      )
       .then(() => {
         // Waiting-first updates (audit M-18): skipWaiting is for FIRST
         // installs only (nothing is controlled yet, so taking over is free
@@ -38,21 +40,28 @@ self.addEventListener('install', (event) => {
         // MAX_RUNTIME_ENTRIES trimming, chunks the cache no longer holds:
         // a broken page until a manual reload. An updated worker now waits
         // until every old tab has closed (browser default) instead.
-        const hadController =
-          self.registration && typeof self.registration.active === 'object';
+        // `active` is null on a first install and `typeof null === 'object'`,
+        // so the old shape (`typeof ... === 'object'`) was ALWAYS true and
+        // skipWaiting never ran: the behaviour this comment describes was
+        // unreachable. Ask the question directly.
+        const hadController = self.registration?.active != null;
         if (!hadController && self.skipWaiting) return self.skipWaiting();
         return undefined;
-      })
+      }),
   );
 });
 
-self.addEventListener('activate', (event) => {
+self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) =>
+        Promise.all(
+          keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)),
+        ),
+      )
       .then(trimRuntimeCache)
-      .then(() => self.clients.claim())
+      .then(() => self.clients.claim()),
   );
 });
 
@@ -60,17 +69,22 @@ self.addEventListener('activate', (event) => {
 async function trimRuntimeCache() {
   const cache = await caches.open(CACHE);
   const keys = await cache.keys();
-  const runtime = keys.filter((req) => !SHELL.includes(new URL(req.url).pathname));
-  const excess = runtime.slice(0, Math.max(0, runtime.length - MAX_RUNTIME_ENTRIES));
+  const runtime = keys.filter(
+    (req) => !SHELL.includes(new URL(req.url).pathname),
+  );
+  const excess = runtime.slice(
+    0,
+    Math.max(0, runtime.length - MAX_RUNTIME_ENTRIES),
+  );
   await Promise.all(excess.map((req) => cache.delete(req)));
 }
 
-self.addEventListener('fetch', (event) => {
+self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
-  if (event.request.method !== 'GET') return;
-  if (url.pathname.startsWith('/api/')) return; // API: always live
+  if (event.request.method !== "GET") return;
+  if (url.pathname.startsWith("/api/")) return; // API: always live
 
-  if (event.request.mode === 'navigate') {
+  if (event.request.mode === "navigate") {
     event.respondWith(
       fetch(event.request)
         .then((res) => {
@@ -78,14 +92,14 @@ self.addEventListener('fetch', (event) => {
           // 500/error page (or an opaque cross-origin response) written over
           // /index.html would be served by every offline navigation until the
           // cache version is bumped.
-          if (res.ok && (res.type === 'basic' || res.type === 'default')) {
+          if (res.ok && (res.type === "basic" || res.type === "default")) {
             const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put('/index.html', copy));
+            caches.open(CACHE).then((c) => c.put("/index.html", copy));
           }
           return res;
         })
         .catch(() =>
-          caches.match('/index.html').then(
+          caches.match("/index.html").then(
             (hit) =>
               hit ||
               // Before the first successful navigation there is no shell to
@@ -93,10 +107,10 @@ self.addEventListener('fetch', (event) => {
               // answer an explicit 503 offline page instead.
               new Response(OFFLINE_HTML, {
                 status: 503,
-                headers: { 'Content-Type': 'text/html; charset=utf-8' },
-              })
-          )
-        )
+                headers: { "Content-Type": "text/html; charset=utf-8" },
+              }),
+          ),
+        ),
     );
     return;
   }
@@ -114,7 +128,7 @@ self.addEventListener('fetch', (event) => {
           })
           .catch(() => hit);
         return hit || fetched;
-      })
+      }),
     );
   }
 });

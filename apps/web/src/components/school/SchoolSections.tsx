@@ -1,4 +1,5 @@
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
+import { formatServerDateTime } from "../../lib/datetime";
 import {
   getSchoolAnalytics,
   getSchoolClasses,
@@ -101,7 +102,9 @@ export function SchoolSections() {
                       {s.class_level} · {s.section}
                     </td>
                     <td>{s.quiz_attempts}</td>
-                    <td className="muted">{s.last_active ?? "—"}</td>
+                    <td className="muted">
+                      {formatServerDateTime(s.last_active) || "—"}
+                    </td>
                   </tr>
                 ))}
               </tbody>

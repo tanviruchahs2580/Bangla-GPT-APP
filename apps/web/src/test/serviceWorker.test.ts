@@ -86,9 +86,11 @@ describe("public/sw.js update flow (waiting-first, audit M-18)", () => {
   it("FIRST install takes control immediately (skipWaiting)", async () => {
     const { cachesMock } = makeCaches();
     const skipWaiting = vi.fn(async () => {});
-    // no active worker on the registration: this is the first install
+    // First install: `registration.active` is null (the platform never
+    // exposes `undefined`, which is what made this test pass while the real
+    // branch was unreachable).
     const handlers = loadSw(cachesMock, fetch, {
-      registration: { active: undefined },
+      registration: { active: null },
       skipWaiting,
     });
     const install = makeInstallEvent();
