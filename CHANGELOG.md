@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - feat(api): production connection posture, truthful readiness, boot index metric; full-suite Postgres parity in CI (#29)
 - feat(i18n): land Bangla copy for the status and impersonation strings
+- feat(mobile): a Play Store launch pack and an Android build gate
 - feat(rag): event-loop hardening, hot-path observability, follow-up retrieval; gate CI on retrieval baselines + CodeQL SAST (#27)
 - feat(rag): retrieval-quality rework - fair gate, query lanes, measured rank lift
 - feat(web): login page background image with dark/light theme sync
@@ -75,6 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(ci): commit the k6 namespace-share fix; regenerate the CHANGELOG
 - fix(ci): exempt changelog-regenerating commits by changed paths, not subject text
 - fix(ci): green the pipeline — security bumps, k6 on the compose network, Linux visual skip, tracing start
+- fix(ci): make the Android gate runnable and cover the new commits
 - fix(ci): make the doc-path guard cover the classes of path it claims to
 - fix(ci): make the lockfile guardrail deterministic
 - fix(ci): pin every action to a commit SHA and scope registry permission
@@ -88,6 +90,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(db): reconcile ORM/migration drift so alembic check passes
 - fix(encoding): add .gitattributes and repair three encoding defects
 - fix(i18n): put the parent digest and the printed papers in Bangla, and correct five copy defects
+- fix(mobile): drop the double hyphen AAPT2 rejects in the Bengali label comment
+- fix(mobile): make the Android manifest parseable, so the project can build
 - fix(ops): make monitoring real, bound every service, drill the rollback, run the load gate
 - fix(ops): make the proxy-trust contract hold, and machine-check it
 - fix(ops): pin images by digest, make monitoring real, scan release artifacts
@@ -177,6 +181,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Documentation
 
 - docs(audit): record the merge and live-production outcome
+- docs(playstore): correct the store answers against this tree
 - docs(qa): publish the 2026-10-16 audit report; refresh the lockfile within its ranges
 - docs(qa): publish the 2026-10-17 QA record and archive its predecessor
 - docs(qa): record the 2026-10-17 deployment and how it was verified
@@ -254,6 +259,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore: code honesty - unused args, un-typed db params, inert suppressions, stale comments
 - chore: ignore Playwright MCP tool artifacts; regenerate the CHANGELOG
 - chore: regenerate CHANGELOG; format straggler; final CI/README truth for the e2e + coverage gates
+- chore: regenerate the CHANGELOG for the two mobile build fixes
 - chore: satisfy the two CI guardrails main added after this branch's baseline
 - fmt: ruff format teacher.py _room_counts
 
