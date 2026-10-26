@@ -79,7 +79,11 @@ describe("chapter progress bar reports the recorded progress", () => {
     // Generous timeout on purpose: the bar renders once the progress query
     // settles, and the full suite runs 69 files in parallel. A tight budget
     // here would make this gate flaky, which is worse than no gate.
-    const bar = await screen.findByRole("img", { name: "20%" }, { timeout: 8000 });
+    const bar = await screen.findByRole(
+      "img",
+      { name: "20%" },
+      { timeout: 8000 },
+    );
     expect(bar.querySelector("span")).toHaveStyle({ width: "20%" });
     expect(screen.queryByRole("img", { name: "45%" })).toBeNull();
   });
