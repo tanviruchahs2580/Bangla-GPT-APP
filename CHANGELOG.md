@@ -75,6 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(ci): commit the k6 namespace-share fix; regenerate the CHANGELOG
 - fix(ci): exempt changelog-regenerating commits by changed paths, not subject text
 - fix(ci): green the pipeline — security bumps, k6 on the compose network, Linux visual skip, tracing start
+- fix(ci): make the Android gate runnable and cover the new commits
 - fix(ci): make the doc-path guard cover the classes of path it claims to
 - fix(ci): make the lockfile guardrail deterministic
 - fix(ci): pin every action to a commit SHA and scope registry permission
@@ -88,6 +89,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(db): reconcile ORM/migration drift so alembic check passes
 - fix(encoding): add .gitattributes and repair three encoding defects
 - fix(i18n): put the parent digest and the printed papers in Bangla, and correct five copy defects
+- fix(mobile): drop the double hyphen AAPT2 rejects in the Bengali label comment
+- fix(mobile): make the Android manifest parseable, so the project can build
 - fix(ops): make monitoring real, bound every service, drill the rollback, run the load gate
 - fix(ops): make the proxy-trust contract hold, and machine-check it
 - fix(ops): pin images by digest, make monitoring real, scan release artifacts
