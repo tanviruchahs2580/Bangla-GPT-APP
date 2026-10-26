@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - feat(api): production connection posture, truthful readiness, boot index metric; full-suite Postgres parity in CI (#29)
+- feat(db): enforce the value invariants, and make the FK indexes real
 - feat(i18n): land Bangla copy for the status and impersonation strings
 - feat(mobile): a Play Store launch pack and an Android build gate
 - feat(rag): event-loop hardening, hot-path observability, follow-up retrieval; gate CI on retrieval baselines + CodeQL SAST (#27)
@@ -63,7 +64,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): serialise AiJob cancellation against its own DB sections
 - fix(api): serve the configured corpus and the Dhaka day in the Learn flow
 - fix(api): stop the WAL pragma race killing multi-worker SQLite boots
-- fix(api): strip photo metadata before an image reaches the model provider
 - fix(api): tie the quiz ceilings to one bound so an assignment stays submittable
 - fix(api): unify the error envelope — every raise carries a machine code
 - fix(api): vision-honest refusal for openai, max_output_tokens cap, transport retries (A10, A9, A16)
@@ -260,6 +260,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore: code honesty - unused args, un-typed db params, inert suppressions, stale comments
 - chore: ignore Playwright MCP tool artifacts; regenerate the CHANGELOG
 - chore: regenerate CHANGELOG; format straggler; final CI/README truth for the e2e + coverage gates
+- chore: regenerate the CHANGELOG after merging main
 - chore: regenerate the CHANGELOG for the two mobile build fixes
 - chore: satisfy the two CI guardrails main added after this branch's baseline
 - fmt: ruff format teacher.py _room_counts
@@ -277,7 +278,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Audit remediation, round 2: 38 findings closed across backend, privacy, auth and UX (#10)
 - Full engineering audit + remediation: 47 findings fixed, 0 open (#1)
-- Merge branch 'main' into fix/image-metadata-stripping
+- Merge branch 'main' into feat/schema-invariants
 - Merge pull request #15 from tanviruchahs2580/audit/2026-10-16-live-verification
 - Merge pull request #16 from tanviruchahs2580/docs/2026-10-16-live-outcome
 - Merge pull request #17 from tanviruchahs2580/docs/2026-10-16-live-enablement
