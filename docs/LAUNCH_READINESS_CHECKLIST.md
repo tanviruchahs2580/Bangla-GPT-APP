@@ -4,6 +4,15 @@
 > execute in-repo is done; the items below require real-world action by the
 > project owner. No code changes are needed for them.
 
+## 0. Language review (BLOCKING for the store submission)
+
+- [ ] **Native-speaker review of the Bangla copy**: `docs/native-review/ui-strings.md`
+      lists every user-facing Bangla string with its file and key (generated,
+      CI-checked for staleness). Record decisions in
+      `docs/native-review-sheet.md`, correct the dictionary in the same change,
+      and re-run `python scripts/gen_native_review.py`. The Play listing copy
+      needs the same review — it is user-visible text like any other.
+
 ## 1. Legal & child-safety (BLOCKING for launch)
 
 - [ ] **Consent-flow legal review**: have a Bangladesh-based lawyer review the
