@@ -64,22 +64,29 @@ export function QPaperValidation({ qp }: { qp: QPaper }) {
     meta.difficulty_actual != null
       ? (meta.difficulty_actual as Record<string, number>)
       : null;
-  const rows: Array<{ label: string; ok: boolean; note: string }> = [
+  // Three states, because the server reports three different things here.
+  // `ok: true` used to be hardcoded for the first two rows, so a paper was
+  // declared duplicate-free and correctly balanced because nothing was
+  // checked — a fabricated verification shown to teachers as the output of
+  // an automated gate. Where the server sends no per-paper verdict the row
+  // is neutral and says where the check really happens, and the NCTB row
+  // derives its verdict from the number the server did send.
+  const rows: Array<{ label: string; ok: boolean | null; note: string }> = [
     {
       label: t("valDup"),
-      ok: true,
-      note: qp.questions.length > 0 ? t("valPass") : "—",
+      ok: null,
+      note: t("valGenerationGate"),
     },
     {
       label: t("valDifficulty"),
-      ok: true,
+      ok: null,
       note: actual
         ? `${actual.easy ?? 0}/${actual.medium ?? 0}/${actual.hard ?? 0}`
         : "—",
     },
     {
       label: t("valNctb"),
-      ok: minAlign === null || minAlign >= 0.35,
+      ok: minAlign === null ? null : minAlign >= 0.35,
       note:
         minAlign !== null
           ? `${t("valMin")} ${Math.round(minAlign * 100)}%`
@@ -91,8 +98,11 @@ export function QPaperValidation({ qp }: { qp: QPaper }) {
       <div className="card-title">{t("valTitle")}</div>
       {rows.map((r) => (
         <div key={r.label} role="listitem" className="qp-val-row">
-          <span className={`qp-val-dot ${r.ok ? "ok" : "warn"}`} aria-hidden>
-            {r.ok ? "✓" : "!"}
+          <span
+            className={`qp-val-dot ${r.ok === true ? "ok" : r.ok === false ? "warn" : "muted"}`}
+            aria-hidden
+          >
+            {r.ok === true ? "✓" : r.ok === false ? "!" : "–"}
           </span>
           <span className="qp-val-label">{r.label}</span>
           <span className="muted muted-sm">{r.note}</span>

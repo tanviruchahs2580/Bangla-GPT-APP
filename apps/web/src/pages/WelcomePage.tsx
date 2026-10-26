@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import { t } from "../i18n";
 import { track } from "../lib/analytics";
-import { Button } from "../components/ui";
 import { BrandMark } from "../components/BrandMark";
 
 /**
@@ -35,21 +34,22 @@ export default function WelcomePage() {
           <h1 className="landing-title">{t("landingHeroTitle")}</h1>
           <p className="landing-sub">{t("landingHeroSub")}</p>
           <div className="welcome-actions">
+            {/* A <Button> inside a <Link> nests interactive content: two tab
+                stops per call to action and a focus ring inside an anchor.
+                The link carries the button's own classes instead. */}
             <Link
               to="/register"
+              className="btn btn-primary btn-lg btn-block"
               onClick={() => track("welcome_cta", { cta: "register" })}
             >
-              <Button variant="primary" size="lg" block>
-                {t("welcomeStart")}
-              </Button>
+              {t("welcomeStart")}
             </Link>
             <Link
               to="/login"
+              className="btn btn-soft btn-lg btn-block"
               onClick={() => track("welcome_cta", { cta: "login" })}
             >
-              <Button variant="soft" size="lg" block>
-                {t("welcomeLogin")}
-              </Button>
+              {t("welcomeLogin")}
             </Link>
           </div>
           <ul className="trust-row" aria-label={t("locHighlights")}>

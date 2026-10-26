@@ -237,7 +237,14 @@ export function LearnPage() {
                     : badgeKind === "reading"
                       ? "▶"
                       : "○";
-                const pct = prog?.completed ? 100 : prog ? 45 : 0;
+                // The bar reports the progress the reader actually recorded.
+                // It used to read `prog ? 45 : 0`, so every in-progress
+                // chapter claimed the same invented 45%: a chapter read to 20%
+                // and one read to 90% looked identical, and the aria-label
+                // announced "45%" as if it were measured. `read_pct` is
+                // written by the reader (40 on open, then the scroll
+                // position) and is what `chapterBadge` already trusts.
+                const pct = prog?.completed ? 100 : (prog?.read_pct ?? 0);
                 return (
                   <Card key={ch.chapter} className="row chapter-card">
                     <span className="quick-icon tile-teal" aria-hidden>
