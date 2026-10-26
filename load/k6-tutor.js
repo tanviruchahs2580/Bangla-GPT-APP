@@ -14,8 +14,16 @@ import http from 'k6/http'
 // error (CI runs without the full NCTB corpus, so most load questions take
 // the refusal branch). Count 200 and 400 as "expected" so http_req_failed
 // measures real failures (5xx, network); the ask check below pins the
-// semantic: grounded answer OR coded refusal.
-http.setResponseCallback(http.expectedStatuses(200, 201, 400))
+// semantic: grounded answer, coded refusal, or throttle.
+//
+// 429 belongs in the same set, and leaving it out made this gate lie: the
+// app rate-limits by design, /tutor is capped at 60/min PER IP
+// (RATE_LIMIT_TUTOR_IP_PER_MINUTE), and this smoke drives ~60 asks/min from
+// ONE IP by construction — so the per-IP ceiling is reached, legitimately,
+// inside the run. On 2026-10-26 that produced "1 failed check of 61" against
+// a rate<0.01 threshold (twice, on two unrelated PRs) for the limiter doing
+// its job. A throttled request is not a regression; a 5xx still is.
+http.setResponseCallback(http.expectedStatuses(200, 201, 400, 429))
 import { check, sleep } from 'k6'
 import { Rate } from 'k6/metrics'
 
@@ -23,14 +31,17 @@ const BASE_URL = __ENV.BASE_URL || 'http://127.0.0.1:8080'
 const VUS = Number(__ENV.VUS || 20)
 const DURATION = __ENV.DURATION || '1m'
 // The app rate-limits by design: /auth/register and /auth/login at 10/min
-// per IP, /tutor/ask at 30/min per USER. A load mix over ONE account is a
-// 429 generator, and a setup burst over 10 accounts trips the register
-// ceiling — the first time this script actually ran (against a live API) it
-// failed at 57% because nobody had ever executed the "CI gate" it
-// advertised. The defaults stay under every ceiling: 8 users (register/login
-// headroom), iteration pacing that keeps each account under 30 asks/min.
-// To push aggregate throughput beyond ~8x30 asks/min, raise the limits on
-// the load target (RATE_LIMIT_* env) or run k6 from multiple IPs.
+// per IP, /tutor/ask at 30/min per USER, and /tutor at 60/min per IP. A load
+// mix over ONE account is a 429 generator, and a setup burst over 10
+// accounts trips the register ceiling — the first time this script actually
+// ran (against a live API) it failed at 57% because nobody had ever executed
+// the "CI gate" it advertised. The defaults stay under the per-account
+// ceilings: 8 users (register/login headroom) and iteration pacing that
+// keeps each account under 30 asks/min. The per-IP /tutor ceiling is the one
+// this mix *reaches* (≈60 asks/min from one IP), which is why a 429 is
+// accepted rather than counted as an error — see the response callback
+// above. To push aggregate throughput beyond ~8x30 asks/min, raise the
+// limits on the load target (RATE_LIMIT_* env) or run k6 from multiple IPs.
 const USERS = Number(__ENV.USERS || 8)
 
 export const options = {
@@ -105,9 +116,12 @@ export default function (data) {
       headers,
     )
     check(ask, {
-      'ask answered or gated-refused': (r) =>
+      // 429 is the per-IP ceiling answering correctly, not a failure: this
+      // smoke is one IP by construction and drives the ceiling on purpose.
+      'ask answered, gated-refused or throttled': (r) =>
         r.status === 200 ||
-        (r.status === 400 && r.json('refused_reason') === 'insufficient_evidence'),
+        (r.status === 400 && r.json('refused_reason') === 'insufficient_evidence') ||
+        r.status === 429,
     })
   } else {
     const health = http.get(`${BASE_URL}/health`)
