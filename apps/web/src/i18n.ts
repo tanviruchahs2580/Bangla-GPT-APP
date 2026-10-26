@@ -646,6 +646,8 @@ const bn = {
   errApiOriginDown:
     "সার্ভারে সংযোগ করা যাচ্ছে না — অ্যাপটি এখনো কোনো ব্যাকএন্ড সার্ভারের সঙ্গে যুক্ত হয়নি।",
   errImageInvalid: "ছবিটি পড়া যায়নি — অন্য একটি ছবি দিয়ে আবার চেষ্টা করুন।",
+  errApiOriginUnreachable:
+    "সার্ভারটি এই মুহূর্তে সাড়া দিচ্ছে না — আপনার ইন্টারনেট বা ফোনে সমস্যা নেই। কিছুক্ষণ পরে আবার চেষ্টা করুন।",
   errApiUnconfigured:
     "অ্যাপের সার্ভার ঠিকানা বসানো হয়নি — সঠিক ঠিকানা দিয়ে APK আবার বানাতে হবে।",
   errVerifyFailed: "লগইন হলেও সেশন যাচাই হয়নি — আবার চেষ্টা করুন।",
@@ -1303,6 +1305,8 @@ const en: Dict = {
   errApiOriginDown:
     "Can't reach the server — this app isn't connected to a backend yet.",
   errImageInvalid: "That image could not be read — please try another photo.",
+  errApiOriginUnreachable:
+    "The server isn't responding right now — the problem is not your phone or connection. Please try again shortly.",
   errApiUnconfigured:
     "The app's server address is not set — rebuild the APK with the right address.",
   errVerifyFailed: "Login succeeded but the session check failed — try again.",

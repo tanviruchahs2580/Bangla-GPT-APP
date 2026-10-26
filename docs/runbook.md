@@ -406,6 +406,94 @@ Note that this token deploys with whatever `VERCEL_ORG_ID` and `VERCEL_PROJECT_I
 at. Those are also repository secrets and neither has been rotated; if the Vercel project
 was ever recreated under a new team, rotate all three together rather than one at a time.
 
+### API origin down: diagnose and rotate the tunnel
+
+**Symptom.** Nobody can log in — including from a phone, which is where it is usually
+noticed first. Every `/api/*` call through the alias answers `502
+{"code":"api_origin_unreachable"}` and the app shows "the server isn't responding"; the
+static pages still load, so the deployment looks healthy.
+
+**Cause.** The API origin behind the edge proxy is an ephemeral `cloudflared` quick
+tunnel. When Cloudflare invalidates it the hostname stops resolving entirely (DNS
+NXDOMAIN, not just a refused connection) while the Vercel `API_ORIGIN` variable keeps
+pointing at it. `apps/web/vercel.json` holds no host, so nothing in the repo can see the
+breakage. Rotation is a recurring chore in the audit trail (Sept–Oct 2026); on 2026-10-26
+the probe went red at 01:13 and the origin was repaired at 07:00.
+
+**Confirm it** (one request; `502` means the origin, `200` means look elsewhere):
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://bangla-gpt-app.vercel.app/api/health
+```
+
+The scheduled probe (`.github/workflows/uptime.yml`) checks exactly this every 15 min and
+fails in Actions. Do not rely on it for detection latency: GitHub throttles schedules
+hard (2026-10-26: runs at 01:13 and 06:16, a five-hour gap on a `*/15` cron).
+
+**Repair** (verified 2026-10-26, Windows/Git Bash; `$URL` becomes a fresh hostname):
+
+```bash
+# 1. A quick tunnel mints a NEW hostname on every start; the old one is gone for good.
+docker rm -f api-tunnel
+docker run -d --name api-tunnel --restart unless-stopped \
+  --add-host=host.docker.internal:host-gateway \
+  cloudflare/cloudflared:latest \
+  tunnel --no-autoupdate --protocol quic --url http://host.docker.internal:8000
+
+# 2. Read the hostname it registered (wait for "Registered tunnel connection").
+URL=$(docker logs api-tunnel 2>&1 | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1)
+
+# 3. Prove the origin serves the API before pointing anything at it.
+curl -fsS "$URL/health"    # {"status":"ok"}
+
+# 4. Point production at it. Bare origin, no /api suffix — the edge proxy strips /api.
+printf '%s' "$URL" | vercel env add API_ORIGIN production   # after: vercel env rm API_ORIGIN production --yes
+
+# 5. Env changes only apply to NEW deployments. Redeploy the current production
+#    deployment (top row of `vercel ls --prod`), or push to main to take the
+#    CI-gated path in .github/workflows/vercel-deploy.yml.
+vercel redeploy bangla-gpt-<hash>-<team>.vercel.app --target production
+```
+
+Deploy-CLI gotchas on this machine, both hit on 2026-10-26: `vercel --prod` run from
+`apps/web` fails with a doubled path (`The provided path "~\projects\...
+\apps\web\apps\web" does not exist`) because the linked project already carries
+`rootDirectory: apps/web`; run it from the repo root instead, where it then needs
+`--archive=tgz` (the tree exceeds Vercel's 15000-file limit). `vercel redeploy
+<deployment-or-alias-url> --target production` avoids both and is the shortest path.
+`HOME` may need to be set to a Windows-style path (`HOME='C:/Users/<you>'`) for any
+`vercel` subcommand that resolves paths.
+
+**Verify the repair — login, not just health:**
+
+```bash
+curl -sS -o /dev/null -w '%{http_code}\n' https://bangla-gpt-app.vercel.app/api/health   # 200
+curl -sS -X POST https://bangla-gpt-app.vercel.app/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"nobody@example.com","password":"wrong-password-123"}' \
+  -w '\n%{http_code}\n'                                                                   # 401 bad_credentials
+```
+
+A 401 with `bad_credentials` proves the whole chain (DNS → TLS → tunnel → proxy → API →
+auth); a 502 means the origin is still dead.
+
+**Same symptom, local cause.** `http://127.0.0.1:8081/api/*` 502s when the API container
+is not reachable under the name the preview's nginx proxies to (`api:8000`). A container
+started by hand as `api-live` needs that alias or every local `/api` call fails while the
+API itself is healthy:
+
+```bash
+docker network connect --alias api bgpt-live api-live   # after: docker network disconnect
+```
+
+**A rotated origin breaks native builds.** An APK bakes `VITE_API_BASE` at build time, so
+it keeps calling the dead hostname until it is rebuilt and `npx cap sync`ed
+(`docs/mobile_release.md`). Existing installs cannot be repaired server-side.
+
+**Durable fix (not yet authorized).** A named tunnel or a VM/PaaS address makes the origin
+stable and removes this whole failure class; it needs the budget and residency sign-off
+recorded in `docs/hosting_decision.md`.
+
 ### Capacity plan & load testing
 - Baseline: 2 uvicorn workers handle ~120 concurrent quiz journeys at
   p95<300 ms (DB-bound). The LLM path is upstream-bound: budget ~2-8 s p95
