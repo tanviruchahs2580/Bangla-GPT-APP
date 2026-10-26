@@ -85,7 +85,16 @@ _CHECKS: dict[str, tuple[tuple[str, str], ...]] = {
         ("ck_ai_usage_estimated_cost_usd", "estimated_cost_usd >= 0"),
     ),
     "answer_log": (
-        ("ck_answer_log_chosen", "chosen >= 0"),
+        # `chosen = -1` means "I did not answer" and is part of the API
+        # contract (schemas.RevisionReviewIn: `chosen: int = Field(ge=-1, le=7)`,
+        # documented as "one revision attempt; -1 means 'I did not answer'").
+        # The proposal carried `chosen >= 0`, which contradicts it: the live
+        # database has four such rows, so that constraint would have made the
+        # migration abort on real data — and, once added, would have failed
+        # every skipped-question insert. A dry run of this revision against a
+        # copy of the production database is what surfaced it; the constraint
+        # now mirrors the schema's own bounds.
+        ("ck_answer_log_chosen", "chosen BETWEEN -1 AND 7"),
         ("ck_answer_log_seq", "seq >= 0"),
         ("ck_answer_log_correct_index", "correct_index >= 0"),
     ),

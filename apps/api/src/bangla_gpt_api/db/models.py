@@ -199,7 +199,7 @@ class AnswerLog(Base):
     __tablename__ = "answer_log"
     __table_args__ = (
         CheckConstraint(
-            "chosen >= 0",
+            "chosen BETWEEN -1 AND 7",
             name="ck_answer_log_chosen",
         ),
         CheckConstraint(
