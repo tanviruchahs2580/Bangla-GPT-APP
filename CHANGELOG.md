@@ -272,6 +272,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore: ignore Playwright MCP tool artifacts; regenerate the CHANGELOG
 - chore: merge main and regenerate the CHANGELOG
 - chore: regenerate CHANGELOG; format straggler; final CI/README truth for the e2e + coverage gates
+- chore: regenerate the CHANGELOG
 - chore: regenerate the CHANGELOG after merging main
 - chore: regenerate the CHANGELOG and the native-review sheet for the train
 - chore: regenerate the CHANGELOG for the CI coverage gate
