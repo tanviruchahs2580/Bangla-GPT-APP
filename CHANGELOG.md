@@ -254,6 +254,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore: code honesty - unused args, un-typed db params, inert suppressions, stale comments
 - chore: ignore Playwright MCP tool artifacts; regenerate the CHANGELOG
 - chore: regenerate CHANGELOG; format straggler; final CI/README truth for the e2e + coverage gates
+- chore: regenerate the CHANGELOG for the CI coverage gate
 - chore: satisfy the two CI guardrails main added after this branch's baseline
 - fmt: ruff format teacher.py _room_counts
 
@@ -263,6 +264,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - style(api): reformat SchoolInvite claim call
 - style(api): ruff format four test files (format-gate drift)
 - style(api): ruff format mock provider and lesson plan prompt
+- style(web): format the new progress-bar test (prettier gate in CI)
 - style(web): give the registration screen login's photo backdrop
 - style: satisfy the repository's own pre-commit hooks
 
