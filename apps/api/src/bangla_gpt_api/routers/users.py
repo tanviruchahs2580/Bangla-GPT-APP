@@ -40,6 +40,7 @@ from .deps import (
     _assert_student_in_school,
     _build_me_response,
     authorize_student_access,
+    forbid_impersonation,
 )
 
 router = APIRouter(responses=AUTH_GUARD_RESPONSES)
@@ -80,7 +81,10 @@ def revoke_my_sessions(db: DbSession, user: CurrentUser) -> Response:
 
 @router.delete("/users/me", status_code=204, responses=coded(401, 409))
 def delete_me(
-    db: DbSession, user: CurrentUser, payload: AccountDeleteConfirm | None = None
+    request: Request,
+    db: DbSession,
+    user: CurrentUser,
+    payload: AccountDeleteConfirm | None = None,
 ) -> Response:
     """GDPR-style self-service account deletion.
 
@@ -96,7 +100,18 @@ def delete_me(
     A missing body or wrong password is a coded 401, the same contract as
     /auth/mfa/disable; a body-stripping intermediary therefore fails SAFE
     (no deletion), never open.
+
+    Refused from an impersonated session: a support session is 15 minutes
+    and read-shaped, the erasure is forever, and the erased student cannot
+    be restored to check what the admin saw.
+
+    The erasure is the most destructive action in the product, so it leaves
+    an audit row (actor + target) *before* the account rows go. AuditLog
+    survives by design — its pointers to the erased account are anonymised
+    inside erase_account_everything — which is what makes a DSR review or an
+    incident post-mortem possible at all.
     """
+    forbid_impersonation(request)
     if payload is None or not verify_password(payload.password, user.password_hash):
         raise HTTPException(
             status_code=401,
@@ -115,6 +130,20 @@ def delete_me(
                 detail={"code": "last_admin_guard", "message": "Cannot delete the last admin"},
             )
 
+    write_audit(
+        db,
+        action="account_erase",
+        actor_user_id=user.id,
+        actor_role=user.role,
+        target=f"user:{user.id}",
+        detail={"self_service": True},
+    )
+    # Flush before the cascade: the anonymisation inside
+    # erase_account_everything is a Core UPDATE against the database, so it
+    # only spares attribution rows that are already THERE. Left pending, this
+    # row would insert after the users row was deleted and raise a foreign-key
+    # violation — the erasure would fail because it tried to record itself.
+    db.flush()
     erase_account_everything(db, user)
     db.commit()
     return Response(status_code=204)

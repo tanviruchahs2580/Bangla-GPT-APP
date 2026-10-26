@@ -21,6 +21,7 @@ from bangla_gpt_api.db.models import (
     AnalyticsEventRow,
     AnswerLog,
     Assignment,
+    AssignmentRecipient,
     AuditLog,
     ChapterContent,
     ChapterProgress,
@@ -625,6 +626,15 @@ def erase_account_everything(db: Session, user: User) -> None:
         )
         if attempt_ids:
             db.execute(delete(AnswerLog).where(AnswerLog.attempt_id.in_(attempt_ids)))
+        # Bulk-assignment membership (BUG-4 recurrence): assignment_recipients
+        # holds student_id -> students and attempt_id -> quiz_attempts, and no
+        # erasure path ever deleted it. Every student who had received a bulk
+        # assignment therefore hit a foreign-key violation here — the whole
+        # transaction rolled back and DELETE /users/me answered 500, so the
+        # students most likely to need erasure (a teacher's whole roster) were
+        # exactly the ones who could not have it. The row goes before the
+        # attempts it points at, and before the student row.
+        db.execute(delete(AssignmentRecipient).where(AssignmentRecipient.student_id == student.id))
         conv_ids = (
             db.execute(select(Conversation.id).where(Conversation.student_id == student.id))
             .scalars()
@@ -676,6 +686,18 @@ def erase_account_everything(db: Session, user: User) -> None:
     db.execute(delete(Feedback).where(Feedback.user_id == user.id))
     db.execute(delete(QuestionPaper).where(QuestionPaper.teacher_id == user.id))
     db.execute(delete(ShortTest).where(ShortTest.teacher_id == user.id))
+    # Every roster member's recipient row points at the assignment rule below,
+    # so the teacher's assignments cannot go before these rows do — the same
+    # FK that broke the student side, seen from the other end. The recipients
+    # belong to this teacher's assignments, not to the students, and the
+    # attempts they reference are untouched.
+    db.execute(
+        delete(AssignmentRecipient).where(
+            AssignmentRecipient.assignment_id.in_(
+                select(Assignment.id).where(Assignment.teacher_id == user.id)
+            )
+        )
+    )
     db.execute(delete(Assignment).where(Assignment.teacher_id == user.id))
     db.execute(delete(QuestionBankEntry).where(QuestionBankEntry.teacher_id == user.id))
     db.execute(delete(SupportPlan).where(SupportPlan.teacher_id == user.id))

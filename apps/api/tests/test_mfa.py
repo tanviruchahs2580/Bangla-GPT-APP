@@ -83,17 +83,44 @@ def test_full_mfa_lifecycle(tmp_path) -> None:
     assert still_plain.json()["token_type"] == "bearer"
 
     # 2. wrong code rejected; right code enables
+    # 2a. binding a factor is a security-state change: a bearer token alone
+    # is not enough (F-142), and neither is the wrong password.
+    no_pw = client.post(
+        "/auth/mfa/verify",
+        json={"secret": secret, "code": _current_code(secret)},
+        headers=headers,
+    )
+    assert no_pw.status_code == 422  # schema requires the password field
+    wrong_pw = client.post(
+        "/auth/mfa/verify",
+        json={"secret": secret, "code": _current_code(secret), "password": "not-it-1234"},
+        headers=headers,
+    )
+    assert wrong_pw.status_code == 401
+    assert wrong_pw.json()["detail"]["code"] == "bad_current_password"
+    still_plain = client.post(
+        "/auth/login", json={"email": "mfa@example.com", "password": PASSWORD}
+    )
+    assert still_plain.json()["token_type"] == "bearer"  # nothing was bound
+
+    # 2b. wrong code rejected; right code + password enables
     bad = client.post(
-        "/auth/mfa/verify", json={"secret": secret, "code": "000000"}, headers=headers
+        "/auth/mfa/verify",
+        json={"secret": secret, "code": "000000", "password": PASSWORD},
+        headers=headers,
     )
     assert bad.status_code == 401
     good = client.post(
-        "/auth/mfa/verify", json={"secret": secret, "code": _current_code(secret)}, headers=headers
+        "/auth/mfa/verify",
+        json={"secret": secret, "code": _current_code(secret), "password": PASSWORD},
+        headers=headers,
     )
     assert good.status_code == 200
     assert good.json() == {"enabled": True}
     dup = client.post(
-        "/auth/mfa/verify", json={"secret": secret, "code": _current_code(secret)}, headers=headers
+        "/auth/mfa/verify",
+        json={"secret": secret, "code": _current_code(secret), "password": PASSWORD},
+        headers=headers,
     )
     assert dup.status_code == 409
 

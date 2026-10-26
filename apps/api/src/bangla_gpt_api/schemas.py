@@ -295,6 +295,11 @@ class MfaEnrollOut(BaseModel):
 class MfaVerifyIn(BaseModel):
     secret: str = Field(min_length=16, max_length=64)
     code: str = Field(min_length=6, max_length=6)
+    # F-142 discipline, same contract as /auth/mfa/disable and DELETE
+    # /users/me: binding a factor to the account is a security-state change,
+    # so a bearer token alone (possibly a stolen 60-minute one) is not
+    # enough — the current password must be re-supplied.
+    password: str = Field(min_length=1, max_length=128)
 
 
 class MfaDisableIn(BaseModel):
