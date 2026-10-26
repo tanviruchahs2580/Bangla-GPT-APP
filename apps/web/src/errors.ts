@@ -39,8 +39,19 @@ const KEY: Record<string, Parameters<typeof t>[0]> = {
   bad_mfa_token: "errBadMfaToken",
   // A dead or unconfigured API origin is NOT a busy server: it will not
   // recover on its own, so it gets its own copy instead of "busy, try again".
+  //
+  // The two codes are one outage apart and must not share a sentence.
+  // `api_origin_unconfigured` (edge 503) means this deployment was never
+  // pointed at a backend — a build/configuration fault. `api_origin_unreachable`
+  // (edge 502) means the configured backend is down right now: on 2026-10-26
+  // the ephemeral API origin died overnight, every public /api call 502'd, and
+  // the single "app isn't connected to a backend yet" string sent the operator
+  // looking at the Android client instead of at the dead origin. The
+  // unreachable case now says the service is down and that it is not the
+  // device, which is what the edge itself reports ("an upstream outage, not a
+  // client error").
   api_origin_unconfigured: "errApiOriginDown",
-  api_origin_unreachable: "errApiOriginDown",
+  api_origin_unreachable: "errApiOriginUnreachable",
   // The edge proxy's deadline fired (connect held open, no response):
   // transient by nature, so it reads as the retryable timeout, not as an
   // outage the user cannot act on.

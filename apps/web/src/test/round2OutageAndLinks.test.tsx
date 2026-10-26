@@ -270,7 +270,11 @@ describe("a dead API origin is reported as 'not connected', not 'server busy'", 
     expect(err?.message).toContain("upstream outage");
     const copy = friendlyError({ code: err?.code, message: err?.message });
     expect(copy.text).not.toBe(t("errServiceUnavailable"));
-    expect(copy.text).toBe(t("errApiOriginDown"));
+    // Configured-but-down is its own fault: the copy says the service is down
+    // and clears the device, rather than borrowing the "this app isn't
+    // connected to a backend yet" line that means an unconfigured deployment.
+    expect(copy.text).toBe(t("errApiOriginUnreachable"));
+    expect(copy.text).not.toBe(t("errApiOriginDown"));
     expect(copy.action).toBe("retry");
   });
 

@@ -30,16 +30,32 @@ describe("friendlyError", () => {
     ).toBeGreaterThan(5);
   });
 
-  it("reports a dead/unconfigured API origin as not-connected, not as a busy server", () => {
+  it("separates a backend that is down from a deployment that has none", () => {
     const busy = t("errServiceUnavailable");
-    for (const code of ["api_origin_unreachable", "api_origin_unconfigured"]) {
-      const out = friendlyError({ code, message: code });
-      // A dead origin does not recover on its own; "busy, try again shortly"
-      // would promise something that cannot happen.
-      expect(out.text).not.toBe(busy);
-      expect(out.text).toBe(t("errApiOriginDown"));
-      expect(out.action).toBe("retry");
-    }
+    const unreachable = friendlyError({
+      code: "api_origin_unreachable",
+      message: "api_origin_unreachable",
+    });
+    const unconfigured = friendlyError({
+      code: "api_origin_unconfigured",
+      message: "api_origin_unconfigured",
+    });
+    // Neither is a busy server: "busy, try again shortly" promises a recovery
+    // that a dead origin does not deliver on its own.
+    expect(unreachable.text).not.toBe(busy);
+    expect(unconfigured.text).not.toBe(busy);
+    expect(unreachable.action).toBe("retry");
+    expect(unconfigured.action).toBe("retry");
+    // ...but they are different faults and must not share a sentence. On
+    // 2026-10-26 the ephemeral API origin died and the edge answered 502
+    // api_origin_unreachable for every public /api call; the shared "this app
+    // isn't connected to a backend yet" copy reads as a build fault and sent
+    // the search to the Android client instead of the dead origin. A
+    // configured-but-down origin has to say the service is down and that the
+    // device is not at fault.
+    expect(unconfigured.text).toBe(t("errApiOriginDown"));
+    expect(unreachable.text).toBe(t("errApiOriginUnreachable"));
+    expect(unreachable.text).not.toBe(unconfigured.text);
   });
 
   it("falls back to generic copy for unknown codes", () => {
