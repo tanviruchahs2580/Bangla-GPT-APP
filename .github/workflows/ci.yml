@@ -476,6 +476,12 @@ jobs:
       - name: i18n parity and English-in-Bangla guard
         run: python3 scripts/check_i18n.py
 
+      - name: Native-review sheet is current
+        # The sheet is what a native speaker reviews; a stale sheet means the
+        # review covers strings that no longer exist and misses the ones that
+        # do. Regenerate with `python scripts/gen_native_review.py` and commit.
+        run: python3 scripts/gen_native_review.py --check
+
       - name: Repository mojibake scan
         # Double-encoded UTF-8 (a Windows-1252 round trip) anywhere in tracked
         # text. Found 7 em dashes in docker-compose.yml on 2026-10-09.
