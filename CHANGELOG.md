@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): indexable assignment membership; /assignments/mine no longer loses work
 - fix(api): issue verification codes to invited school staff
 - fix(api): let a student clear their subject focus
+- fix(api): make account erasure complete and MFA binding unreachable from a stolen token
 - fix(api): make login lockout and MFA step-up burn atomic
 - fix(api): make question-paper marks, difficulty buckets and integer parsing truthful
 - fix(api): make the account export complete
@@ -124,6 +125,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): recover from page errors, report load failures, and never show another child's data
 - fix(web): report a dead API origin accurately, not as a busy server (#14)
 - fix(web): route /api/* explicitly to the edge proxy function
+- fix(web): share the login photo backdrop with Get Started; document Capacitor origins
 - fix(web): ship the CSP the code claimed, and bound the edge proxy
 - fix(web): stop rendering remote images in answers and announce each answer once
 - fix(web): stop showing failures as facts, and read API timestamps as UTC
