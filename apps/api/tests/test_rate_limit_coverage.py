@@ -19,10 +19,15 @@ coming back, by enumerating the app's own routes instead of a hand-written
 list that could rot.
 """
 
+import time
+
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from bangla_gpt_api.config import Settings
+from bangla_gpt_api.db.models import AiJob
+from bangla_gpt_api.db.session import make_engine, make_session_factory
 from bangla_gpt_api.initialize.middleware_stack import _effective_rules
 from bangla_gpt_api.main import PUBLIC_OPERATIONS, create_app
 from conftest import engine_url
@@ -172,23 +177,58 @@ def test_expensive_teacher_paths_have_a_default_rule(path: str) -> None:
 
 
 def test_teacher_jobs_are_rate_limited_end_to_end(tmp_path) -> None:
-    client = _client(tmp_path, rate_limit_rules={"/teacher/jobs": (3, "user")})
-    client.post(
-        "/auth/register",
-        json={
-            **_register_payload("t1@example.com"),
-            "role": "teacher",
-            "class_level": None,
-            "guardian_consent": False,
-        },
-    )
-    headers = _login(client, "t1@example.com")
+    """The route is throttled per user; the throttle is what is measured.
 
-    statuses = [
-        client.post("/teacher/jobs", json={"kind": "worksheet"}, headers=headers) for _ in range(4)
-    ]
-    assert statuses[3].status_code == 429
-    assert statuses[3].json()["detail"]["code"] == "rate_limited"
+    Two things about this route shape the test, and both bit before:
+
+    * `POST /teacher/jobs` answers 202 and runs the generation as a DETACHED
+      asyncio task on the app's portal loop (`routers/workspace.py`), so the
+      client must be a context manager (the convention documented in
+      `test_ai_jobs.py`) or the task is still writing to the same SQLite file
+      when the next request writes — the CI flake of 2026-10-26 was
+      `database is locked`, not a limiter failure.
+    * the rule is a strict PREFIX match, so polling `GET /teacher/jobs/{id}`
+      to wait for the job spends the same per-user budget the test is trying
+      to exhaust. The wait therefore reads the job table directly, through a
+      session over the same database.
+    """
+    settings = _settings(tmp_path, rate_limit_rules={"/teacher/jobs": (3, "user")})
+    factory = make_session_factory(make_engine(settings))
+    with TestClient(create_app(settings)) as client:
+        client.post(
+            "/auth/register",
+            json={
+                **_register_payload("t1@example.com"),
+                "role": "teacher",
+                "class_level": None,
+                "guardian_consent": False,
+            },
+        )
+        headers = _login(client, "t1@example.com")
+
+        for _ in range(3):
+            queued = client.post("/teacher/jobs", json={"kind": "worksheet"}, headers=headers)
+            assert queued.status_code == 202, queued.text
+            _wait_job_settled(factory, queued.json()["id"])
+
+        blocked = client.post("/teacher/jobs", json={"kind": "worksheet"}, headers=headers)
+        assert blocked.status_code == 429
+        assert blocked.json()["detail"]["code"] == "rate_limited"
+
+
+def _wait_job_settled(factory, job_id: str, timeout: float = 30.0) -> None:
+    """Wait for the detached job task to stop writing (see the docstring)."""
+    deadline = time.monotonic() + timeout
+    last = None
+    while time.monotonic() < deadline:
+        with factory() as session:
+            last = session.execute(
+                select(AiJob.status).where(AiJob.id == job_id)
+            ).scalar_one_or_none()
+        if last in ("ready", "failed"):
+            return
+        time.sleep(0.05)
+    pytest.fail(f"job {job_id} never settled (last status: {last})")
 
 
 # --- the invariant ----------------------------------------------------------
