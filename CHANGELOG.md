@@ -82,6 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(ci): make the doc-path guard cover the classes of path it claims to
 - fix(ci): make the lockfile guardrail deterministic
 - fix(ci): pin every action to a commit SHA and scope registry permission
+- fix(ci): pin the CodeQL actions to a commit, not a re-pointable tag object
 - fix(ci): prettier-format the web sources; drop the digest script's shebang
 - fix(ci): repair two gates that could not fail, and stop the impossible redis bump
 - fix(ci): resolve README links portably so the docs guard works on Linux
@@ -315,6 +316,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #67 from tanviruchahs2580/feat/android-play-store-release
 - Merge pull request #71 from tanviruchahs2580/fix/image-metadata-stripping
 - Merge pull request #74 from tanviruchahs2580/feat/schema-invariants
+- Merge pull request #77 from tanviruchahs2580/fix/codeql-action-pin
 - Merge remote-tracking branch 'origin/chore/supply-chain-checks' into merge-train2
 - Merge remote-tracking branch 'origin/docs/native-review-sheet' into merge-train2
 - Merge remote-tracking branch 'origin/fix/account-lifecycle-integrity' into merge-train2

@@ -61,6 +61,9 @@ function renderPage() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // The language is module state: pin it so this file cannot inherit a
+  // switch made by whichever test file ran before it.
+  setLang("bn");
   authMock.useAuth.mockReturnValue({
     me: {
       user_id: 1,
