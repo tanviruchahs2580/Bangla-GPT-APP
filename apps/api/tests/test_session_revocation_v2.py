@@ -133,7 +133,11 @@ def _enable_mfa(client: TestClient, headers: dict) -> str:
     assert enroll.status_code == 200
     secret = enroll.json()["secret"]
     code = _hotp(secret, int(time.time()) // 30)
-    ok = client.post("/auth/mfa/verify", json={"secret": secret, "code": code}, headers=headers)
+    ok = client.post(
+        "/auth/mfa/verify",
+        json={"secret": secret, "code": code, "password": PASSWORD},
+        headers=headers,
+    )
     assert ok.status_code == 200
     return secret
 

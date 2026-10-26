@@ -27,13 +27,13 @@ Every non-preflight response carries `X-Request-ID` (echoed if supplied, otherwi
 | POST | `/auth/verify-email` | - | `{token}` → marks the account verified, returns `{access_token}`. Single-use, 24 h expiry |
 | POST | `/auth/resend-verification` | — (optional Bearer) | `{email?}` → always `202 {"status":"accepted"}` (anti-enumeration). Works WITHOUT a session (login issues no token for unverified accounts); an attached session wins over the body email |
 | POST | `/auth/change-password` | Bearer | `{current_password, new_password}` → rotates password and clears the forced-change flag |
-| POST | `/auth/mfa/enroll` | Bearer | Returns unstored `{secret, otpauth_uri}` for the authenticator app; nothing is enabled yet |
-| POST | `/auth/mfa/verify` | Bearer | `{secret, code}` → proves possession and stores the secret (= MFA enabled). 409 if already enabled |
-| POST | `/auth/mfa/disable` | Bearer | `{password}` → clears the secret (= disabled). 409 if not enabled |
-| POST | `/auth/mfa/challenge` | - | `{mfa_token, code}` → real bearer `{access_token}`. 401 on wrong/expired token or code |
+| POST | `/auth/mfa/enroll` | Bearer | Returns unstored `{secret, otpauth_uri}` for the authenticator app; nothing is enabled yet. Refused (403 `impersonation_forbidden`) from an impersonated session |
+| POST | `/auth/mfa/verify` | Bearer | `{secret, code, password}` → proves possession and stores the secret (= MFA enabled). The current password is required (401 `bad_current_password`), because binding a factor outlives the token that binds it. 409 if already enabled; 403 from an impersonated session |
+| POST | `/auth/mfa/disable` | Bearer | `{password}` → clears the secret (= disabled). 409 if not enabled; 403 from an impersonated session |
+| POST | `/auth/mfa/challenge` | - | `{mfa_token, code}` → real bearer `{access_token}`. 401 on wrong/expired token or code; the step-up token is burned atomically, and one without a `jti` is refused rather than accepted un-burned |
 | GET | `/users/me` | any | Profile of the caller: `{user_id, email, role, profile_id, name, class_level}` |
 | GET | `/users/me/export` | any | GDPR-style data export: account, profile, quiz attempts, parent links (`Content-Disposition: attachment`) |
-| DELETE | `/users/me` | any | Self-service account deletion (GDPR-style). **Requires the current password in the body** (`{"password": ...}`, F-142 — a bearer token alone must never erase an account irreversibly; missing/wrong password → 401 `bad_current_password`). Removes profile, quiz attempts + answer logs, parent links. Last remaining admin is refused (409). Returns 204 |
+| DELETE | `/users/me` | any | Self-service account deletion (GDPR-style). **Requires the current password in the body** (`{"password": ...}`, F-142 — a bearer token alone must never erase an account irreversibly; missing/wrong password → 401 `bad_current_password`). Removes profile, quiz attempts + answer logs, parent links, bulk-assignment recipients. Last remaining admin is refused (409); an impersonated session is refused (403 `impersonation_forbidden`); the erasure writes an `account_erase` audit row. Returns 204 |
 | POST | `/users/me/sessions/revoke` | any | Sign out everywhere: stamps the token epoch so every outstanding session token fails its next request. Returns 204 |
 | POST | `/auth/logout` | any | End THIS session: parks the presented token's jti in the fail-closed revocation store for its remaining life. Returns 204 |
 

@@ -41,7 +41,7 @@ from bangla_gpt_api.routers._error_contract import (
     coded,
     message,
 )
-from bangla_gpt_api.routers.deps import AppContext
+from bangla_gpt_api.routers.deps import AppContext, forbid_impersonation
 from bangla_gpt_api.schemas import (
     ChangePasswordRequest,
     ForgotPasswordRequest,
@@ -651,16 +651,33 @@ def change_password(
 # --- AUTH-001: TOTP multi-factor authentication -------------------------------
 # Enroll returns a fresh secret WITHOUT storing it; verify proves possession
 # and stores it (= enabled). Presence of users.totp_secret IS the enabled flag.
+#
+# Both state changes are gated twice, and the gates are independent:
+#   * never from an impersonated session — the binding OUTLIVES the 15-minute
+#     support session that made it, so a visiting admin would leave the
+#     account holder needing a code they cannot generate;
+#   * never on a bearer token alone — F-142's rule, which /auth/mfa/disable and
+#     DELETE /users/me already apply: a security-state change re-supplies the
+#     current password. Binding was the one member of that family without it.
 
 
 @router.post("/auth/mfa/enroll", response_model=MfaEnrollOut, responses=AUTH_GUARD_RESPONSES)
-def mfa_enroll(app_ctx: Ctx, user: CurrentUser) -> MfaEnrollOut:
+def mfa_enroll(app_ctx: Ctx, user: CurrentUser, request: Request) -> MfaEnrollOut:
+    forbid_impersonation(request)
     secret = new_secret()
     return MfaEnrollOut(secret=secret, otpauth_uri=otpauth_uri(secret, user.email))
 
 
 @router.post("/auth/mfa/verify", response_model=dict, responses=AUTH_GUARD_RESPONSES)
-def mfa_verify(app_ctx: Ctx, payload: MfaVerifyIn, db: DbSession, user: CurrentUser) -> dict:
+def mfa_verify(
+    app_ctx: Ctx, payload: MfaVerifyIn, db: DbSession, user: CurrentUser, request: Request
+) -> dict:
+    forbid_impersonation(request)
+    if not verify_password(payload.password, user.password_hash):
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "bad_current_password", "message": "Current password is incorrect"},
+        )
     if user.totp_secret:
         raise HTTPException(
             status_code=409,
@@ -681,7 +698,10 @@ def mfa_verify(app_ctx: Ctx, payload: MfaVerifyIn, db: DbSession, user: CurrentU
     response_model=dict,
     responses={**AUTH_GUARD_RESPONSES, **message(409)},
 )
-def mfa_disable(app_ctx: Ctx, payload: MfaDisableIn, db: DbSession, user: CurrentUser) -> dict:
+def mfa_disable(
+    app_ctx: Ctx, payload: MfaDisableIn, db: DbSession, user: CurrentUser, request: Request
+) -> dict:
+    forbid_impersonation(request)
     if not user.totp_secret:
         raise HTTPException(
             status_code=409, detail={"code": "mfa_not_enabled", "message": "MFA is not enabled"}
@@ -749,7 +769,14 @@ def mfa_challenge(app_ctx: Ctx, payload: MfaChallengeIn, db: DbSession) -> Token
     # Burn the step-up token only AFTER the second factor checks out, so a
     # mistyped code does not cost the user their login. The claim is atomic:
     # of N concurrent replays of the same token, exactly one proceeds.
-    if isinstance(jti, str) and not _claim_mfa_step_up(app_ctx, jti, claims):
+    #
+    # A token with no jti cannot be claimed, and "cannot be claimed" used to
+    # mean "skipped": `isinstance(jti, str) and not _claim(...)` let a
+    # jti-less step-up mint real sessions without ever being burned, so the
+    # single-use guarantee silently did not apply to it. /auth/logout refuses
+    # exactly this shape (400 not_revocable) for the same reason — refusing
+    # is the only answer that cannot be believed-and-wrong.
+    if not isinstance(jti, str) or not jti or not _claim_mfa_step_up(app_ctx, jti, claims):
         raise HTTPException(
             status_code=401,
             detail={

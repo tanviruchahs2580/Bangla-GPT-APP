@@ -22,6 +22,7 @@ from sqlalchemy import func, select
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.models import (
     Assignment,
+    AssignmentRecipient,
     AuditLog,
     ChapterContent,
     ChapterProgress,
@@ -38,6 +39,7 @@ from bangla_gpt_api.db.models import (
     PasswordReset,
     QuestionBankEntry,
     QuestionPaper,
+    QuizAttempt,
     RevisionItem,
     School,
     SchoolInvite,
@@ -234,9 +236,15 @@ def test_teacher_delete_removes_artifacts_keeps_anonymised_audit(pair) -> None:
     assert _count(factory, SchoolInvite) == 0
     # audit survives but loses attribution to the erased account
     with factory() as s:
-        row = s.execute(select(AuditLog)).scalar_one()
+        row = s.execute(select(AuditLog).where(AuditLog.action == "qp_finalize")).scalar_one()
         assert row.actor_user_id is None
-        assert row.action == "qp_finalize"
+    # the erasure itself is audited: the most destructive action in the
+    # product must leave a trace even though the actor row is gone
+    with factory() as s:
+        erase = s.execute(select(AuditLog).where(AuditLog.action == "account_erase")).scalar_one()
+        assert erase.actor_user_id is None
+        assert erase.target == f"user:{uid}"
+        assert erase.detail == {"self_service": True}
     # shared content survives, authorless
     with factory() as s:
         content = s.execute(select(ChapterContent)).scalar_one()
@@ -283,3 +291,92 @@ def test_parent_delete_nulls_redeemed_invite_pointer(pair) -> None:
     with factory() as s:
         invite = s.execute(select(ParentInvite)).scalar_one()
         assert invite.used_by_parent_id is None
+
+
+def test_student_delete_removes_assignment_recipients(pair) -> None:
+    """Bulk-assignment membership is an FK child of both the student and the attempt.
+
+    assignment_recipients carries three FKs (assignment_id -> assignments,
+    student_id -> students, attempt_id -> quiz_attempts) and the erasure
+    never touched the table, so every student who had ever received a bulk
+    assignment hit a foreign-key violation on DELETE /users/me -- on the
+    engine production runs, for the most common teacher workflow.
+    """
+    client, factory = pair
+    prof = _register(client, "s2@example.com", "student")
+    sid = prof["profile_id"]
+    teacher = _register(client, "t2@example.com", "teacher")
+
+    with factory() as s:
+        assignment = Assignment(
+            teacher_id=teacher["user_id"],
+            subject="math",
+            chapter="a",
+            due_at=NOW + timedelta(days=1),
+        )
+        s.add(assignment)
+        s.flush()
+        attempt = QuizAttempt(student_id=sid, class_level=6, status="open")
+        s.add(attempt)
+        s.flush()
+        s.add(
+            AssignmentRecipient(assignment_id=assignment.id, student_id=sid, attempt_id=attempt.id)
+        )
+        s.commit()
+
+    assert _count(factory, AssignmentRecipient, AssignmentRecipient.student_id == sid) == 1
+
+    deleted = client.request(
+        "DELETE",
+        "/users/me",
+        headers=_headers(client, "s2@example.com"),
+        json={"password": "supersecret1"},
+    )
+    assert deleted.status_code == 204, deleted.text
+
+    for model in (Student, QuizAttempt, AssignmentRecipient):
+        assert _count(factory, model) == 0, f"{model.__tablename__} survived the erasure"
+    # the assignment belongs to the teacher and survives the student's erasure
+    assert _count(factory, Assignment) == 1
+
+
+def test_teacher_delete_removes_recipients_of_their_assignments(pair) -> None:
+    """The teacher side deletes assignments; their recipient rows must go first."""
+    client, factory = pair
+    student = _register(client, "s3@example.com", "student")
+    prof = _register(client, "t3@example.com", "teacher")
+    uid = prof["user_id"]
+
+    with factory() as s:
+        assignment = Assignment(
+            teacher_id=uid, subject="math", chapter="a", due_at=NOW + timedelta(days=1)
+        )
+        s.add(assignment)
+        s.flush()
+        attempt = QuizAttempt(student_id=student["profile_id"], class_level=6, status="open")
+        s.add(attempt)
+        s.flush()
+        s.add(
+            AssignmentRecipient(
+                assignment_id=assignment.id,
+                student_id=student["profile_id"],
+                attempt_id=attempt.id,
+            )
+        )
+        s.commit()
+
+    assert _count(factory, AssignmentRecipient) == 1
+
+    deleted = client.request(
+        "DELETE",
+        "/users/me",
+        headers=_headers(client, "t3@example.com"),
+        json={"password": "supersecret1"},
+    )
+    assert deleted.status_code == 204, deleted.text
+
+    assert _count(factory, Assignment) == 0
+    assert _count(factory, AssignmentRecipient) == 0
+    # the student who received the assignment is untouched
+    assert _count(factory, Student, Student.id == student["profile_id"]) == 1
+    assert _count(factory, QuizAttempt, QuizAttempt.student_id == student["profile_id"]) == 1

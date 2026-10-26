@@ -114,6 +114,34 @@ def revocation_store_unavailable() -> HTTPException:
     )
 
 
+def forbid_impersonation(request: Request) -> None:
+    """Refuse an action that must not be taken from a support session.
+
+    An impersonated token IS a session as far as ``get_current_user`` is
+    concerned (`imp` only changes which revocation namespace is consulted),
+    so every route an impersonated admin can reach is a route where the
+    target's account can be changed by someone who is not them. Support
+    sessions exist to READ a user's situation; the token is 15 minutes and
+    the audit trail attributes it to the admin, but a state change survives
+    the session. Security-state changes (TOTP secret, account erasure) and
+    irreversible destruction are refused here.
+
+    Used as a plain call at the top of a handler (the handler needs the
+    ``Request`` anyway) rather than as a dependency, because a dependency
+    would run before the body is available and the refusal must be
+    unconditional and first.
+    """
+    claims = getattr(request.state, "jwt_claims", None) or {}
+    if claims.get("imp") is True:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "impersonation_forbidden",
+                "message": "This action is not available while impersonating a user; exit impersonation first",
+            },
+        )
+
+
 # bumping this string makes every previously-consented student
 # needs_reconfirm=true until they accept via POST /students/{id}/consent/reconfirm
 # (see tests/test_compliance_v2.py for the flow).

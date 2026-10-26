@@ -219,7 +219,9 @@ def _enable_mfa(client: TestClient, email: str) -> str:
     code = mfa_mod._hotp(secret, int(time.time()) // mfa_mod._STEP_SECONDS)
     assert (
         client.post(
-            "/auth/mfa/verify", json={"secret": secret, "code": code}, headers=headers
+            "/auth/mfa/verify",
+            json={"secret": secret, "code": code, "password": PASSWORD},
+            headers=headers,
         ).status_code
         == 200
     )
