@@ -279,8 +279,8 @@ export default function ClassesPage() {
                 setDetailId(null);
               }}
             >
-              {t("className").replace(/\s*\(.*\)/, "")} {r.class_level} ·{" "}
-              {r.section} ({r.student_count})
+              {t("classNameShort")} {r.class_level} · {r.section} (
+              {r.student_count})
             </button>
           ))}
           {rooms.length === 0 && <p className="muted">{t("noStudents")}</p>}
@@ -521,9 +521,7 @@ export default function ClassesPage() {
                   <tr>
                     <th scope="col">#</th>
                     <th scope="col">{t("name")}</th>
-                    <th scope="col">
-                      {t("className").replace(/\s*\(.*\)/, "")}
-                    </th>
+                    <th scope="col">{t("classNameShort")}</th>
                     <th scope="col">{t("quizTitle")}</th>
                     <th scope="col">{t("avgScore")}</th>
                     <th scope="col"></th>

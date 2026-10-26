@@ -42,6 +42,10 @@ const bn = {
   regenerate: "আবার তৈরি করুন",
   saveAsNote: "নোট হিসেবে সেভ করুন",
   noteSaved: "সেভ হয়েছে",
+  savedNotesTitle: "সংরক্ষিত নোট",
+  savedNotesEmpty:
+    "এখনো কোনো নোট সংরক্ষণ করা হয়নি — টিউটরের উত্তরের পাশে বুকমার্ক আইকনে চাপ দিলে এখানে জমা হবে।",
+  noteDelete: "নোট মুছুন",
   createHubTitle: "টিচিং কনটেন্ট তৈরি করুন",
   genKind: "ধরন",
   genWorksheet: "ওয়ার্কশীট",
@@ -383,6 +387,10 @@ const bn = {
   email: "ইমেইল",
   password: "পাসওয়ার্ড (কমপক্ষে ৮ অক্ষর)",
   className: "শ্রেণি (১-১২)",
+  // Paren-free variant for in-sentence use ("Class 7 · Section A").
+  // Call sites used to strip the parenthetical with a regex, which
+  // silently breaks in any language whose label does not end in one.
+  classNameShort: "শ্রেণি",
   subject: "বিষয়",
   consentPrefix: "আমি অভিভাবক হিসেবে বা অভিভাবকের সম্মতিতে নিবন্ধন করছি এবং",
   consentSuffix: "পড়ে সম্মত হচ্ছি।",
@@ -468,6 +476,7 @@ const bn = {
   admReopen: "পুনরায় খুলুন",
   admTriaged: "পর্যালোচিত",
   admNoteLabel: "নোট (শুধু অ্যাডমিন)",
+  admNoteLabelShort: "নোট",
   admNoFeedback: "এই ভিউতে কোনো ফিডব্যাক নেই",
   admOpenCount: "খোলা: {n} / {t}",
   // /new microcopy (bn+en parity, Bangla-first)
@@ -698,6 +707,10 @@ const en: Dict = {
   regenerate: "Regenerate",
   saveAsNote: "Save as note",
   noteSaved: "Saved",
+  savedNotesTitle: "Saved notes",
+  savedNotesEmpty:
+    "Nothing saved yet — the bookmark button next to a tutor answer stores it here.",
+  noteDelete: "Delete note",
   createHubTitle: "Create teaching content",
   genKind: "Kind",
   genWorksheet: "Worksheet",
@@ -1036,6 +1049,7 @@ const en: Dict = {
   email: "Email",
   password: "Password (min 8 chars)",
   className: "Class (1-12)",
+  classNameShort: "Class",
   subject: "Subject",
   consentPrefix:
     "I am the guardian or register with guardian consent, and I agree to the",
@@ -1117,6 +1131,7 @@ const en: Dict = {
   admReopen: "Reopen",
   admTriaged: "Triaged",
   admNoteLabel: "Note (admin only)",
+  admNoteLabelShort: "Note",
   admNoFeedback: "No feedback in this view",
   admOpenCount: "Open: {n} of {t}",
   trustNctb: "NCTB textbook-grounded",

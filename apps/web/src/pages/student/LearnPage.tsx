@@ -31,6 +31,7 @@ import { invalidateStudyCaches } from "../../lib/invalidate";
 import { t, tSubject } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { chapterBadge, ttsSupported as ttsAvailable } from "../../lib/progress";
+import { QuizOptionGroup } from "../../components/QuizOptionGroup";
 import { SafeMarkdownLazy as SafeMarkdown } from "../../lib/safeMarkdownLazy";
 import {
   fetchChapterWithOfflineFallback,
@@ -822,19 +823,15 @@ function ChapterPractice({
           <span className="muted muted-sm">{chapter}</span>
         </div>
         <div className="row-title quiz-q-title">{q.question_text}</div>
-        <div className="stack" role="radiogroup" aria-label={q.question_text}>
-          {q.options.map((opt, oi) => (
-            <button
-              key={oi}
-              role="radio"
-              aria-checked={chosen === oi}
-              className={cn("quiz-option", chosen === oi && "selected")}
-              onClick={() => setAnswers((a) => ({ ...a, [current]: oi }))}
-            >
-              {opt}
-            </button>
-          ))}
-        </div>
+        {/* Same component as the quiz page: the tab used to announce
+            role="radio" with every option in the tab order and no arrow keys,
+            which is the defect QuizPage was fixed for. */}
+        <QuizOptionGroup
+          options={q.options}
+          chosen={chosen}
+          label={q.question_text}
+          onChoose={(oi) => setAnswers((a) => ({ ...a, [current]: oi }))}
+        />
         <div className="row-flex quiz-pager">
           <button
             className="btn btn-ghost btn-sm"

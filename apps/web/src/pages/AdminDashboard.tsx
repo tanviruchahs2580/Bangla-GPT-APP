@@ -445,9 +445,7 @@ export default function AdminDashboard() {
                   <th scope="col">#</th>
                   <th scope="col">{t("role")}</th>
                   <th scope="col">±</th>
-                  <th scope="col">
-                    {t("admNoteLabel").replace(/\s*\(.*\)$/, "")}
-                  </th>
+                  <th scope="col">{t("admNoteLabelShort")}</th>
                   <th scope="col">{t("admStatus")}</th>
                   <th scope="col"></th>
                 </tr>

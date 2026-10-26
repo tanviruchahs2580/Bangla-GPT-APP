@@ -329,10 +329,7 @@ export function CreateHub({
           <PayloadView payload={result.payload} />
           {result.sources.length > 0 && (
             <p className="muted text-sm mt-2">
-              {t("genSourcesCount").replace(
-                "{n}",
-                String(result.sources.length),
-              )}
+              {t("genSourcesCount", { n: result.sources.length })}
             </p>
           )}
           {PDF_KINDS.has(result.kind) && (

@@ -1,4 +1,5 @@
 import { asText, suggestionSentence } from "../../lib/text";
+import { downloadBlob } from "../../lib/download";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -24,8 +25,11 @@ import {
   getMyReport,
   patchMyPrefs,
   revokeAllSessions,
+  deleteNote,
+  getNotes,
 } from "../../api";
 import { track } from "../../lib/analytics";
+import { formatServerDateTime } from "../../lib/datetime";
 import type { ActivitySummary } from "../../types";
 import { useAuth } from "../../AuthContext";
 import { Avatar, Badge, Button, Card, Segmented } from "../../components/ui";
@@ -99,6 +103,21 @@ export default function MePage() {
   const [reportPeriod, setReportPeriod] = useState<"weekly" | "monthly">(
     "weekly",
   );
+  // The tutor's bookmark button has always written notes; until now nothing
+  // could read them back, so "Saved" was a claim the product could not honour.
+  const { data: notes, refetch: refetchNotes } = useQuery({
+    queryKey: ["my-notes"],
+    queryFn: () => getNotes(),
+  });
+  const removeNote = async (id: number) => {
+    try {
+      await deleteNote(id);
+      await refetchNotes();
+      track("note_deleted");
+    } catch {
+      /* the list refetch is the source of truth; a failed delete stays visible */
+    }
+  };
   const { data: report } = useQuery({
     queryKey: ["my-report", reportPeriod],
     queryFn: () => getMyReport(reportPeriod),
@@ -198,14 +217,10 @@ export default function MePage() {
     setExportError(null);
     try {
       const data = await get<Record<string, unknown>>("/users/me/export");
-      const url = URL.createObjectURL(
+      downloadBlob(
         new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }),
+        "bangla-gpt-data-export.json",
       );
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "bangla-gpt-data-export.json";
-      a.click();
-      URL.revokeObjectURL(url);
     } catch (e) {
       setExportError(
         friendlyError((e as { rawDetail?: unknown }).rawDetail)?.text ??
@@ -318,6 +333,38 @@ export default function MePage() {
               );
             })}
           </div>
+        </Card>
+      )}
+
+      {(isStudent || (notes ?? []).length > 0) && (
+        <Card>
+          <div className="card-title">{t("savedNotesTitle")}</div>
+          {(notes ?? []).length === 0 ? (
+            <p className="muted text-sm m-0">{t("savedNotesEmpty")}</p>
+          ) : (
+            <ul className="stack notes-list">
+              {(notes ?? []).map((n) => (
+                <li key={n.id} className="row">
+                  <div className="row-main">
+                    <div className="row-title">
+                      {n.title || n.body.slice(0, 80)}
+                    </div>
+                    <div className="muted muted-sm">
+                      {formatServerDateTime(n.created_at)}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    aria-label={`${t("noteDelete")}: ${n.title || n.body.slice(0, 40)}`}
+                    onClick={() => removeNote(n.id)}
+                  >
+                    <Trash2 size={16} aria-hidden />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
       )}
 

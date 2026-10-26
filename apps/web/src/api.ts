@@ -1,3 +1,4 @@
+import { downloadBlob } from "./lib/download";
 import { asText } from "./lib/text";
 import { LAST_RESULT_KEY } from "./lib/quizExplain";
 import { clearOfflineChapters } from "./lib/offlineStore";
@@ -881,17 +882,6 @@ export interface GeneratedDocument extends TeacherDocument {
   sources: import("./types").SourceRef[];
 }
 
-export const generateDocument = (kind: string, body: Record<string, unknown>) =>
-  post<GeneratedDocument>(`/teacher/generate/${kind}`, body);
-export const getTeacherDocuments = (kind?: string, limit = 100) =>
-  get<TeacherDocument[]>(
-    `/teacher/documents?limit=${limit}${kind ? `&kind=${encodeURIComponent(kind)}` : ""}`,
-  );
-export const getTeacherDocument = (id: number) =>
-  get<TeacherDocument>(`/teacher/documents/${id}`);
-export const deleteTeacherDocument = (id: number) =>
-  del(`/teacher/documents/${id}`);
-
 /**
  * Authed binary GET through the shared client (F-032): same base-URL guard,
  * 401 handling, error envelope and timeout as every JSON call. Raw `fetch`
@@ -951,17 +941,9 @@ export async function downloadTeacherDocumentPdf(
   const { blob, contentType } = await getBlob(
     `/teacher/documents/${doc.id}/pdf`,
   );
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  if (contentType.includes("html")) {
-    a.href = url;
-    a.target = "_blank";
-  } else {
-    a.href = url;
-    a.download = `document-${doc.id}-${doc.kind}.pdf`;
-  }
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadBlob(blob, `document-${doc.id}-${doc.kind}.pdf`, {
+    openInTab: contentType.includes("html"),
+  });
 }
 
 export interface AiJob {
@@ -977,13 +959,6 @@ export interface AiJob {
   updated_at: string | null;
 }
 
-export const createTeacherJob = (
-  kind: string,
-  payload: Record<string, unknown>,
-) => post<AiJob>("/teacher/jobs", { kind, payload });
-export const getTeacherJobs = () => get<AiJob[]>("/teacher/jobs");
-export const getTeacherJob = (id: string) => get<AiJob>(`/teacher/jobs/${id}`);
-
 export interface TeacherWorkload {
   counts: Record<string, number>;
   minutes_saved: Record<string, number>;
@@ -997,22 +972,6 @@ export const getTeacherWorkload = () =>
 
 // --- school section (school_admin = own school; admin = platform) --------
 
-export interface SchoolStaffRow {
-  id: number;
-  name: string;
-  email: string;
-  role: string;
-  classroom_count: number;
-}
-export interface SchoolOverview {
-  school_id: number;
-  name: string;
-  code: string;
-  students: number;
-  teachers: number;
-  classrooms: number;
-  staff: SchoolStaffRow[];
-}
 export interface SchoolStudentRow {
   student_id: number;
   name: string;
@@ -1068,7 +1027,6 @@ export interface SchoolAnalytics {
   avg_quiz_score_pct: number | null;
 }
 
-export const getSchoolOverview = () => get<SchoolOverview>("/school/overview");
 export const getSchoolStudents = (limit = 50, offset = 0) =>
   get<SchoolStudentPage>(`/school/students?limit=${limit}&offset=${offset}`);
 export const getSchoolTeachers = () =>

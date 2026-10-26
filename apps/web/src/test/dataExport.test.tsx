@@ -81,7 +81,10 @@ describe("data export button (BUG-2 regression)", () => {
 
     expect(apiMock.get).toHaveBeenCalledWith("/users/me/export");
     expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:mock-export");
+    // The object URL is released on a later task, not on the line after
+    // click(): revoking immediately can cancel a download the browser
+    // resolved asynchronously (lib/download.ts documents the race).
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
   });
 
   it("surfaces a friendly error when the export call fails", async () => {
