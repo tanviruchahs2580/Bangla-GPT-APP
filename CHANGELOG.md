@@ -260,6 +260,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore: code honesty - unused args, un-typed db params, inert suppressions, stale comments
 - chore: ignore Playwright MCP tool artifacts; regenerate the CHANGELOG
 - chore: regenerate CHANGELOG; format straggler; final CI/README truth for the e2e + coverage gates
+- chore: regenerate the CHANGELOG after merging main
 - chore: regenerate the CHANGELOG for the CI coverage gate
 - chore: regenerate the CHANGELOG for the two mobile build fixes
 - chore: satisfy the two CI guardrails main added after this branch's baseline

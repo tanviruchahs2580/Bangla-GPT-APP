@@ -50,6 +50,11 @@ const KEY: Record<string, Parameters<typeof t>[0]> = {
   revocation_unavailable: "errServiceUnavailable",
   verify_failed: "errVerifyFailed",
   api_base_unconfigured: "errApiUnconfigured",
+  // A photo the server could not decode or re-encode. Distinct from the
+  // client-side size/type checks (which answer before the upload): this
+  // one means the file itself was unusable, so the advice is a different
+  // photo, not a smaller one.
+  image_invalid: "errImageInvalid",
   // Codes the API-wide envelope pass introduced for flows the UI already
   // distinguishes (previously bare strings that fell through to the generic
   // copy): change-password, MFA settings, parent linking, last-admin guard.
@@ -77,6 +82,7 @@ const ACTION: Record<string, ErrorCopy["action"]> = {
   api_origin_unconfigured: "retry",
   api_origin_unreachable: "retry",
   api_origin_timeout: "retry",
+  image_invalid: "retry",
   revocation_unavailable: "retry",
   verify_failed: "retry",
 };
