@@ -15,8 +15,8 @@ adds content questions that do not apply.
 | Question (IARC wording varies slightly) | Answer | Why |
 |---|---|---|
 | Does the app contain violence? | No | Curriculum content only; the tutor's safety layer refuses violent requests (`services/safety.py`). |
-| Sexual content or nudity? | No | Same refusal layer; the red-team set covers sexual content in Bangla, Banglish and English. |
-| Profanity or crude humour? | No | No user-visible copy uses it; the safety layer refuses requests for it. |
+| Sexual content or nudity? | No | Same refusal layer; the safety layer carries a Bangla sexual-content refusal category (`services/safety.py`) while the committed red-team set (`apps/api/eval/redteam_v2.json`) covers override/leak prompts in Bangla and English plus drug, weapon and self-harm prompts. |
+| Profanity or crude humour? | No | No user-visible copy uses it. The safety layer has no profanity category (`services/safety.py` refuses self-harm, weapon/drug synthesis, sexual content, violence and personal-data requests); the answer rests on the copy and the school context, not on a filter. |
 | References to drugs, alcohol or tobacco? | No | Textbook science may *mention* substances in a biology context; that is not promotion and IARC's question is about glamorisation/promotion. Answer No; if the console offers a free-text note, say the app is a textbook tutor. |
 | Gambling, simulated gambling, or real-money purchases? | No | No payment path exists in the app at all. |
 | Horror, fear or threatening content? | No | |
@@ -30,7 +30,8 @@ adds content questions that do not apply.
 ## What the answers imply for the listing
 
 - **Target audience & content**: do **not** declare "Designed for Families".
-  The target-audience answer is 13+, and the register flow is guardian-consented,
+  The target-audience answer is an owner decision (13+ is the proposal) — the
+  app itself has **no age gate and collects no date of birth** — and the register flow is guardian-consented,
   but the app is not built to the Families policy's content and ads
   requirements. Declaring it would be a false claim, and Play enforces that
   policy with removals.
@@ -40,7 +41,8 @@ adds content questions that do not apply.
 - The "users can interact" answer enables Play's **user-generated content**
   policy requirements: the app must have a content moderation path and a
   reporting mechanism. Both exist — the safety layer refuses unsafe prompts
-  server-side, and `POST /tutor/feedback` (👍/👎 + reason + comment) feeds the
+  server-side, and `POST /feedback` (👍/👎 and/or a comment, attached to a message
+  or an attempt) feeds the
   admin AI-quality queue with triage SLAs in `docs/runbook.md`. Point the Play
   review notes at that flow if the reviewer asks.
 
@@ -49,6 +51,6 @@ adds content questions that do not apply.
 | Requirement | Where it lives |
 |---|---|
 | Moderation of user content | `apps/api/src/bangla_gpt_api/services/safety.py` (deterministic child-safety layer, refusal copy, academic-context override) |
-| Reporting mechanism in-app | `POST /tutor/feedback`; admin queue `GET /admin/ai-quality`; triage SLAs in `docs/runbook.md` |
+| Reporting mechanism in-app | `POST /feedback` (rating + optional comment, attached to a message or attempt); the queue admins work is `GET /admin/feedback`, and `GET /admin/ai/quality` is the quality dashboard; triage SLAs in `docs/runbook.md` |
 | Data collected / shared | `docs/playstore/data-safety.md` (the answer sheet), backed by the owner-side data-inventory record |
 | Child-data handling | Privacy page child-data section (`/privacy`, bn + en) and the guardian-consent requirement at registration |

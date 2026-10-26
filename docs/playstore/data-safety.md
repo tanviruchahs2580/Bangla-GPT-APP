@@ -25,7 +25,7 @@ Two questions to answer the same way everywhere:
 | Personal info → Email | Account email | **Required** | App functionality, account security (verification, password reset) | `db/models.py:User.email` |
 | Personal info → Phone number | Guardian phone, supplied by a parent account | Optional (only for the parent↔student link) | App functionality | `models.py:Parent.phone_enc`; encrypted at rest with Fernet when `PII_ENC_KEY` is set (`security.py:encrypt_pii`) |
 | Messages → In-app messages | Tutor conversations and quiz answers | Optional (you only send what you type) | App functionality | `db/models.py:Conversation/ChatMessage`; retention sweep `services/retention.py` |
-| Photos → Photos | A photo of a question, when the student chooses to use the camera path | Optional | App functionality (vision question) | `routers/tutor.py` image path; validated (mime allowlist, size cap, magic-byte sniff) before it is sent |
+| Photos → Photos | A photo the student attaches from their device — a question paper or a whiteboard. The app has **no in-app camera** (`accept=...` file input only, no `capture`, no camera permission, no camera plugin) | Optional | App functionality (vision question) | `apps/web/src/pages/student/AITutorPage.tsx` file input; `routers/common.py:_validate_chat_image` (mime allowlist, size cap, magic-byte sniff) before it is sent |
 | App activity → In-app search history / other actions | Product events (event name + sanitized primitive properties) | Optional | Analytics — which features get used, where students get stuck | `routers/common.py:_sanitize_event_props` (PII-flavoured keys dropped, strings capped at 40 chars); swept on the same retention policy |
 | App info and performance → Crash logs, Diagnostics | Error events (and a 10% performance-trace sample) sent to Sentry, **only when the build was compiled with `VITE_SENTRY_DSN`** | Optional | Stability | `apps/web/src/main.tsx` — `Sentry.init` is a no-op without a DSN. **There is no consent switch and no `beforeSend` scrubbing yet**, so this row follows the build you ship: a DSN-less build answers **No**; a build with a DSN must declare crash logs/diagnostics. Consent-gating is tracked work — do not claim "consent-gated" until it exists |
 
@@ -37,7 +37,7 @@ Two questions to answer the same way everywhere:
 | Financial info | No payments, no purchase path in the app. |
 | Health and fitness | None. |
 | Contacts, Calendar | None; no permission is requested. |
-| Device or other IDs | No advertising ID, no device-ID collection, no third-party ad or analytics SDK. |
+| Device or other IDs | No advertising ID and no device-ID collection. No ad SDK and no product-analytics SDK; the only third-party SDK in the shipped bundle is `@sentry/react` for error monitoring, active only in DSN builds (see the Crash-logs row). |
 | Web browsing history | None. |
 
 ## Sharing with third parties
@@ -49,9 +49,9 @@ existing, so treat this as an owner/counsel decision, not an engineering one:
 
 | Recipient | Data | Status to declare |
 |---|---|---|
-| Google Gemini API (LLM) | The redacted question, retrieved textbook passages, conversation history; the student's photo when they attach one | Sent as a **service provider** for the tutoring answer. Redaction of phone/email/NID spans happens before the call (`services/tutor.py`, `bgpt_pii_redacted_total`). The provider's data-use/retention terms must be recorded, with a date, before launch — see `docs/dpa_template.md` catalog item A7-04 — because the free tier uses submitted content to improve Google products: **a paid-tier key is required before launch** (or a documented guardian-consent basis for free-tier use). An attached photo is forwarded as the student's own bytes: metadata stripping is tracked work (see the Location row), so do not claim it here yet. |
+| Google Gemini API (LLM) | The redacted question, retrieved textbook passages, conversation history; the student's photo when they attach one | Sent as a **service provider** for the tutoring answer. Redaction of phone/email/NID spans happens before the call (`services/tutor.py`, `bgpt_pii_redacted_total`). The provider's data-use/retention terms must be recorded, with a date, before launch — the vendor's data-use and retention terms must be **confirmed in the billing console and recorded with a date** (the tier is not established anywhere in this repo) — the free tier uses submitted content to improve Google products, so **a paid-tier key is required before launch** unless a guardian-consent basis for free-tier use is documented. An attached photo is forwarded as the student's own bytes: metadata stripping is tracked work (see the Location row), so do not claim it here yet. |
 | SMTP provider | Recipient address + transactional email body | Service provider. |
-| Sentry (error/RUM) | Only after consent: error events and vitals, scrubbed as above | Service provider; **only if `VITE_SENTRY_DSN` is set in the build**. |
+| Sentry (error monitoring) | Sent whenever the build set `VITE_SENTRY_DSN` — **no consent switch and no scrubbing hook exist yet** (see the Crash-logs row above); no web-vitals package is installed | Service provider; **only if `VITE_SENTRY_DSN` is set in the build**. |
 
 ## Open items that must be closed before you submit
 

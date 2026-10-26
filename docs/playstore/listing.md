@@ -11,7 +11,7 @@ and the coverage gate abstains instead of guessing.
 
 ## bn-BD (default)
 
-**অ্যাপের নাম (≤30):** `বাংলা GPT টিউটর` (13 characters)
+**অ্যাপের নাম (≤30):** `বাংলা GPT টিউটর` (15 characters)
 
 **সংক্ষিপ্ত বিবরণ (≤80):**
 `শ্রেণি ৬-১০ · পাঠ্যবইভিত্তিক উত্তর, সূত্রসহ`
@@ -22,15 +22,15 @@ and the coverage gate abstains instead of guessing.
 বাংলা GPT টিউটর — ষষ্ঠ থেকে দশম শ্রেণির পাঠ্যবইভিত্তিক পড়াশোনার সহায়ক।
 
 যা করে:
-• প্রশ্ন লিখুন বা ছবি তুলে পাঠান — উত্তর আসে পাঠ্যবইয়ের অংশ থেকে, সাথে সূত্র দেখানো হয়
-• প্রতিটি উত্তরের নিচে সূত্র থাকে; পাঠ্যবইয়ে উত্তর না থাকলে অনুমান না করে "জানি না" বলতে পারে
+• প্রশ্ন লিখুন বা ছবি সংযুক্ত করুন — উত্তর আসে পাঠ্যবইয়ের অংশ থেকে, সাথে সূত্র দেখানো হয়
+• প্রতিটি উত্তরের নিচে সূত্র থাকে; পাঠ্যবইয়ে ভিত্তি না থাকলে অনুমান না করে সরাসরি জানিয়ে দেয় যে উত্তরটি দেওয়া সম্ভব নয়
 • অনুশীলনী, কুইজ ও অগ্রগতির হিসাব
 • শিক্ষকের জন্য ক্লাসরুম, প্রশ্নপত্র ও কনটেন্ট তৈরি
 • অভিভাবকের জন্য সন্তানের অগ্রগতির সারসংক্ষেপ
 
 যা নয়:
 • এটি পাঠ্যবই বা শিক্ষকের বিকল্প নয়
-• ব্যক্তিগত তথ্য (নাম, ফোন, ঠিকানা) চাওয়া হয় না — শুধু পড়াশোনার প্রশ্ন
+• নাম আর ইমেইল দিয়েই অ্যাকাউন্ট — ফোন নম্বর বা ঠিকানা দিতে হয় না
 
 গোপনীয়তা: https://<your-web-host>/privacy
 শর্তাবলি: https://<your-web-host>/terms
@@ -40,9 +40,9 @@ and the coverage gate abstains instead of guessing.
 
 > **Native review gate.** The Bengali copy above is engineering-written and is
 > marked **NEEDS NATIVE REVIEW**: a Bangla-native reviewer must approve it (and
-> the in-app strings it mirrors) before upload. Track it as a launch item in
-> `docs/LAUNCH_READINESS_CHECKLIST.md` alongside the in-app copy review — the
-> listing is user-visible text like any other.
+> the in-app strings it mirrors) before upload. The listing is user-visible text
+> like any other, so it needs the same review as the in-app copy — add it as a
+> line item to `docs/LAUNCH_READINESS_CHECKLIST.md` when the review is booked.
 
 ## en-US
 
@@ -66,7 +66,7 @@ What it does:
 
 What it is not:
 • Not a replacement for a textbook or a teacher
-• No personal details are required - just the study question
+• A name and email create the account - no phone number or address needed
 
 Privacy: https://<your-web-host>/privacy
 Terms: https://<your-web-host>/terms
