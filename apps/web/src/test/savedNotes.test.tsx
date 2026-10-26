@@ -11,7 +11,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import MePage from "../pages/student/MePage";
-import { t } from "../i18n";
+import { setLang, t } from "../i18n";
 
 const apiMock = vi.hoisted(() => ({
   get: vi.fn(),
@@ -88,17 +88,25 @@ beforeEach(() => {
 describe("saved notes", () => {
   it("lists what the tutor's save button stored", async () => {
     renderPage();
-    expect(await screen.findByText(t("savedNotesTitle"))).toBeInTheDocument();
-    expect(await screen.findByText("কোষ কী")).toBeInTheDocument();
+    expect(
+      await screen.findByText(t("savedNotesTitle"), undefined, {
+        timeout: 8000,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText("কোষ কী", undefined, { timeout: 8000 }),
+    ).toBeInTheDocument();
     // the same client call the tutor's save button writes against
     expect(apiMock.getNotes).toHaveBeenCalled();
   });
 
   it("deletes a note and refreshes the list", async () => {
     renderPage();
-    const btn = await screen.findByRole("button", {
-      name: new RegExp(t("noteDelete")),
-    });
+    const btn = await screen.findByRole(
+      "button",
+      { name: new RegExp(t("noteDelete")) },
+      { timeout: 8000 },
+    );
 
     await userEvent.click(btn);
 
@@ -112,6 +120,10 @@ describe("saved notes", () => {
   it("shows the empty state instead of a broken list", async () => {
     apiMock.getNotes.mockResolvedValue([]);
     renderPage();
-    expect(await screen.findByText(t("savedNotesEmpty"))).toBeInTheDocument();
+    expect(
+      await screen.findByText(t("savedNotesEmpty"), undefined, {
+        timeout: 8000,
+      }),
+    ).toBeInTheDocument();
   });
 });

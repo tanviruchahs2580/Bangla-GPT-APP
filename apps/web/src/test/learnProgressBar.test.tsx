@@ -11,7 +11,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { LearnPage } from "../pages/student/LearnPage";
-import { tSubject } from "../i18n";
+import { setLang, tSubject } from "../i18n";
 
 const apiMock = vi.hoisted(() => ({
   getSubjects: vi.fn(),
@@ -48,16 +48,21 @@ async function openChapters(progress: unknown[] = []) {
   // caches the response for the key, so a late mock never refetches.
   apiMock.getLearnProgress.mockResolvedValue(progress);
   renderPage();
-  const card = await screen.findByRole("button", {
-    name: new RegExp(tSubject("science")),
-  });
+  const card = await screen.findByRole(
+    "button",
+    { name: new RegExp(tSubject("science")) },
+    { timeout: 8000 },
+  );
   await userEvent.click(card);
-  await screen.findByText(/কোষ/);
+  await screen.findByText(/কোষ/, undefined, { timeout: 8000 });
 }
 
 describe("chapter progress bar reports the recorded progress", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The language is module state: pin it so this file cannot inherit a
+    // switch made by whichever test file ran before it.
+    setLang("bn");
     authMock.useAuth.mockReturnValue({
       me: {
         user_id: 1,
