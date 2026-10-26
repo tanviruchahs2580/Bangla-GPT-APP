@@ -63,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): serialise AiJob cancellation against its own DB sections
 - fix(api): serve the configured corpus and the Dhaka day in the Learn flow
 - fix(api): stop the WAL pragma race killing multi-worker SQLite boots
+- fix(api): strip photo metadata before an image reaches the model provider
 - fix(api): tie the quiz ceilings to one bound so an assignment stays submittable
 - fix(api): unify the error envelope — every raise carries a machine code
 - fix(api): vision-honest refusal for openai, max_output_tokens cap, transport retries (A10, A9, A16)
@@ -276,6 +277,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Audit remediation, round 2: 38 findings closed across backend, privacy, auth and UX (#10)
 - Full engineering audit + remediation: 47 findings fixed, 0 open (#1)
+- Merge branch 'main' into fix/image-metadata-stripping
 - Merge pull request #15 from tanviruchahs2580/audit/2026-10-16-live-verification
 - Merge pull request #16 from tanviruchahs2580/docs/2026-10-16-live-outcome
 - Merge pull request #17 from tanviruchahs2580/docs/2026-10-16-live-enablement
@@ -285,6 +287,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #25 from tanviruchahs2580/docs/2026-10-17-vercel-redeploy
 - Merge pull request #26 from tanviruchahs2580/feat/rag-retrieval-quality
 - Merge pull request #61 from tanviruchahs2580/fix/audit-remediation-2026-10-23
+- Merge pull request #67 from tanviruchahs2580/feat/android-play-store-release
 
 ## v0.9.2 - 2026-09-15
 
