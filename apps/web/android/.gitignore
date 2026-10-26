@@ -52,10 +52,14 @@ captures/
 # Comment next line if keeping position of elements in Navigation Editor is relevant for you
 .idea/navEditor.xml
 
-# Keystore files
-# Uncomment the following lines if you do not want to check your keystore files in.
-#*.jks
-#*.keystore
+# Keystore files — release signing material must never be committed.
+# The Capacitor template ships these commented out; docs/playstore/LAUNCH.md
+# tells the operator the keystore "is gitignored", so uncommented here it is.
+*.jks
+*.keystore
+keystore.properties
+# …except the documented template, which carries no secret.
+!keystore.properties.example
 
 # External native build folder generated in Android Studio 2.2 and later
 .externalNativeBuild

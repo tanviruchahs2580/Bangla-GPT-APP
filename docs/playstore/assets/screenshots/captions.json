@@ -1,0 +1,32 @@
+[
+  {
+    "slug": "welcome",
+    "bn": "শ্রেণি ৬-১০ এর জন্য বাংলা টিউটর",
+    "en": "A Bangla tutor for classes 6-10"
+  },
+  {
+    "slug": "login",
+    "bn": "শিক্ষার্থী, শিক্ষক ও অভিভাবকের আলাদা অ্যাকাউন্ট",
+    "en": "Separate accounts for students, teachers and parents"
+  },
+  {
+    "slug": "student-home",
+    "bn": "পাঠ্যবইভিত্তিক উত্তর, সূত্রসহ",
+    "en": "Textbook-grounded answers, with sources"
+  },
+  {
+    "slug": "student-tutor",
+    "bn": "প্রশ্ন লিখুন বা ছবি তুলুন",
+    "en": "Ask by typing or by photo"
+  },
+  {
+    "slug": "student-practice",
+    "bn": "অনুশীলন ও অগ্রগতি",
+    "en": "Practice and progress"
+  },
+  {
+    "slug": "teacher-dashboard",
+    "bn": "শিক্ষকের ক্লাসরুম ও প্রশ্নপত্র",
+    "en": "Teacher classroom and question papers"
+  }
+]
