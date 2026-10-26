@@ -3,15 +3,23 @@
 ``_validate_chat_image`` accepted any bytes whose declared ``mime_type`` was
 one of the allowed strings: a text blob labelled ``image/png`` was forwarded
 unchanged to the third-party vision model, and so were GIF bytes. These tests
-pin magic-byte sniffing (stdlib only) plus the declared/sniffed match, at the
-unit level and end to end through the chat route.
+pin magic-byte sniffing plus the declared/sniffed match, at the unit level and
+end to end through the chat route.
+
+Since AUD-A2-17 the validator also decodes and re-encodes what it accepts, so
+the bytes that leave the API are metadata-free (see
+``test_image_metadata_stripping.py`` for that contract). Two consequences are
+visible here: the accepted fixtures are real decodable images, and the payload
+is a re-encode rather than a copy of the input.
 """
 
 import base64
+import io
 
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from PIL import Image
 from pydantic import ValidationError
 
 from bangla_gpt_api.config import Settings
@@ -23,13 +31,21 @@ from conftest import engine_url
 PASSWORD = "supersecret1"
 JWT = "test-secret-0123456789abcdef0123456789"
 
-# 1x1 transparent PNG.
+
+def _real_image(fmt: str, size: tuple[int, int] = (48, 48)) -> bytes:
+    """A decodable fixture: since AUD-A2-17 the validator decodes what it takes."""
+    buf = io.BytesIO()
+    Image.new("RGB", size, (180, 120, 60)).save(buf, format=fmt)
+    return buf.getvalue()
+
+
+# 1x1 transparent PNG (a real, decodable image).
 TINY_PNG = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk"
     "YPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
 )
-JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 16
-WEBP = b"RIFF" + (16).to_bytes(4, "little") + b"WEBPVP8 " + b"\x00" * 8
+JPEG = _real_image("JPEG")
+WEBP = _real_image("WEBP")
 GIF = b"GIF89a" + b"\x00" * 16
 TEXT = b"this is not an image, just text"
 
@@ -49,12 +65,18 @@ def test_valid_png_is_accepted() -> None:
     out = _validate_chat_image(_image("image/png", TINY_PNG))
     assert out is not None
     assert out["mime_type"] == "image/png"
-    assert base64.b64decode(out["data"]) == TINY_PNG
+    # a re-encode, not a copy: the point is that nothing of the original file
+    # (its metadata included) is forwarded
+    with Image.open(io.BytesIO(base64.b64decode(out["data"]))) as clean:
+        assert clean.format == "PNG"
+        assert not dict(clean.getexif())
 
 
 def test_valid_jpeg_and_webp_are_accepted() -> None:
     assert _validate_chat_image(_image("image/jpeg", JPEG))["mime_type"] == "image/jpeg"  # type: ignore[index]
-    assert _validate_chat_image(_image("image/webp", WEBP))["mime_type"] == "image/webp"  # type: ignore[index]
+    # WebP is re-encoded: PNG keeps transparency, JPEG does not, and an opaque
+    # photo is far smaller as JPEG (see image_safety._output_format).
+    assert _validate_chat_image(_image("image/webp", WEBP))["mime_type"] == "image/jpeg"  # type: ignore[index]
 
 
 def test_text_labelled_png_is_rejected() -> None:

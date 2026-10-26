@@ -42,6 +42,16 @@ describe("friendlyError", () => {
     }
   });
 
+  it("gives an unreadable photo its own advice, not the generic line", () => {
+    // The API answers 422 image_invalid when the server could not decode or
+    // re-encode an attached image (providers/image_safety.py). The client's
+    // own checks answer first for size and type, so this code means "the file
+    // itself was unusable" and the copy has to say which photo to send next.
+    const out = friendlyError({ code: "image_invalid", message: "x" });
+    expect(out.text).toBe(t("errImageInvalid"));
+    expect(out.action).toBe("retry");
+  });
+
   it("falls back to generic copy for unknown codes", () => {
     const out = friendlyError({ code: "zzz_unknown", message: "weird" });
     expect(out.text.length).toBeGreaterThan(5);
