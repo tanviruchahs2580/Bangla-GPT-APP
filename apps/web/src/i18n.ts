@@ -635,6 +635,7 @@ const bn = {
   errServiceUnavailable: "সার্ভার এখন ব্যস্ত — একটু পরে আবার চেষ্টা করুন।",
   errApiOriginDown:
     "সার্ভারে সংযোগ করা যাচ্ছে না — অ্যাপটি এখনো কোনো ব্যাকএন্ড সার্ভারের সঙ্গে যুক্ত হয়নি।",
+  errImageInvalid: "ছবিটি পড়া যায়নি — অন্য একটি ছবি দিয়ে আবার চেষ্টা করুন।",
   errApiUnconfigured:
     "অ্যাপের সার্ভার ঠিকানা বসানো হয়নি — সঠিক ঠিকানা দিয়ে APK আবার বানাতে হবে।",
   errVerifyFailed: "লগইন হলেও সেশন যাচাই হয়নি — আবার চেষ্টা করুন।",
@@ -1284,6 +1285,7 @@ const en: Dict = {
   errServiceUnavailable: "The server is busy right now — try again shortly.",
   errApiOriginDown:
     "Can't reach the server — this app isn't connected to a backend yet.",
+  errImageInvalid: "That image could not be read — please try another photo.",
   errApiUnconfigured:
     "The app's server address is not set — rebuild the APK with the right address.",
   errVerifyFailed: "Login succeeded but the session check failed — try again.",

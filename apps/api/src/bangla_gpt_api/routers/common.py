@@ -279,7 +279,52 @@ def _validate_chat_image(image: ChatImageIn | None) -> dict[str, Any] | None:
     # The decode above is validation only. Providers embed this dict in JSON
     # payloads (Gemini inline_data), so it must carry the base64 STRING —
     # raw bytes would raise TypeError at request-encoding time.
-    return {"mime_type": mime, "data": base64.b64encode(raw).decode("ascii")}
+    #
+    # The bytes themselves are NOT forwarded as sent. A phone photo of a
+    # homework page carries GPS, a capture timestamp and often a device
+    # serial; every one of those left the API toward a third-party vision
+    # model. The image is re-encoded without metadata here — at the one
+    # boundary that turns outside bytes into a provider payload — so no
+    # caller has to remember to do it.
+    return _sanitized_image_payload(mime, raw)
+
+
+def _sanitized_image_payload(mime: str, raw: bytes) -> dict[str, Any]:
+    """Re-encode a validated image without metadata, or answer honestly.
+
+    Kept separate from `_validate_chat_image` so a sanitizer failure has its
+    own code path: unreadable/unsupported content is the caller's fault (422
+    ``image_invalid``), a missing Pillow is the deployment's (503
+    ``image_support_unavailable``).
+    """
+    from bangla_gpt_api.providers.image_safety import (
+        ImageSanitizeError,
+        ImageSupportUnavailable,
+        sanitize_image,
+    )
+
+    try:
+        sanitized = sanitize_image(raw, mime)
+    except ImageSupportUnavailable as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "image_support_unavailable",
+                "message": "Image processing is unavailable on the server",
+            },
+        ) from exc
+    except ImageSanitizeError as exc:
+        # The class name stays in the log line the sanitizer already writes;
+        # the API message is for the client, not for a stack trace.
+        logger.info("chat image rejected: %s", exc)
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "image_invalid",
+                "message": "Image could not be decoded or re-encoded",
+            },
+        ) from exc
+    return {"mime_type": sanitized.mime_type, "data": sanitized.base64()}
 
 
 # --- minimal honest personalization --------------------------------------

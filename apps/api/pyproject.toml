@@ -42,6 +42,11 @@ dependencies = [
     "alembic>=1.13",
     "prometheus-client>=0.21",
     "pypdf>=5.0",
+    # Declared because it is imported directly: the chat image path
+    # decodes and re-encodes every attached photo to strip its metadata
+    # (providers/image_safety.py). It used to arrive transitively via
+    # reportlab, which is not a contract.
+    "pillow>=11",
     "bijoy2unicode>=0.1.1",
     # The ceiling is arq's, not ours: arq (0.28.0, the newest release) requires
     # `redis[hiredis]<6`, so no redis 6/7/8 can be installed beside it. Spelling
