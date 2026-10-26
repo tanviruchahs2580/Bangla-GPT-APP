@@ -92,6 +92,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(ci): unblock Dependabot PRs and name the Vercel credential failure (#9)
 - fix(ci): upgrade setuptools before pip-audit; refresh lock to current resolution
 - fix(db): reconcile ORM/migration drift so alembic check passes
+- fix(db): the answer_log constraint contradicted the API's own sentinel
 - fix(encoding): add .gitattributes and repair three encoding defects
 - fix(i18n): put the parent digest and the printed papers in Bangla, and correct five copy defects
 - fix(load): stop the smoke gate failing when the rate limiter works

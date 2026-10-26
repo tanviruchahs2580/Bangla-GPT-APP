@@ -223,6 +223,72 @@ Validates:
 
 ---
 
+## 9a. What a fresh host must have (verified 2026-10-26)
+
+Everything below was measured while bringing the live deployment onto the
+current code, and each line is a failure that actually happened.
+
+**The API refuses to boot on a production-strict config that is missing any of
+these** (`initialize/dependencies.py`), by design — the message names the
+field:
+
+| Missing | The guard says | Why it refuses |
+|---|---|---|
+| `JWT_SECRET` (>= 32 chars) | — | sessions would be forgeable |
+| `ADMIN_PASSWORD` | — | bootstrap credentials |
+| `PII_ENC_KEY` | "PII_ENC_KEY must be set in production (guardian phone encryption)" | guardian phone numbers are Fernet-encrypted |
+| `SMTP_ENABLED` + `SMTP_HOST` + `SMTP_FROM` | "SMTP must be configured in production ... otherwise email verification is bypassed" | verification is the only proof the address is real |
+| `METRICS_REQUIRE_AUTH=true` | "METRICS_REQUIRE_AUTH must be true in production (/metrics must not be public)" | `/metrics` leaks usage shape |
+
+**Order matters on Postgres: migrate, then start.** The app does NOT create
+tables in production-strict environments (`_safe_init_db` returns early when
+`is_production` and the URL is postgres) — that is deliberate, so a schema
+change is always a reviewed migration. Starting the API before
+`alembic upgrade head` therefore gives you workers that fail to boot against an
+empty schema:
+
+```bash
+docker compose run --rm --no-deps api sh -c "cd /app/apps/api && alembic upgrade head"
+docker compose --profile core --profile postgres --profile web up -d
+```
+
+**The corpus is not optional.** Without `NCTB_CORPUS_DIR` pointing at a mounted
+corpus the app falls back to a sample corpus and the tutor refuses nearly every
+question ("উত্তরটি পাঠ্যবইয়ের বিষয়বস্তুর ভিত্তিতে দেওয়া সম্ভব নয়") — a correct
+refusal for the wrong reason. Mount it and confirm the log line
+`rag_corpus_loaded` reports the real chunk count (2599 on the current corpus).
+
+**`LLM_PROVIDER` must not stay at its default.** `mock` is the code default and
+it answers with canned text; production needs `LLM_PROVIDER=gemini` plus
+`GEMINI_API_KEY`/`GEMINI_MODEL`, and the Play data-safety record asks for a
+**paid** tier because the free tier uses submitted content for product
+improvement.
+
+**`SSL_CERT_FILE` must be a bundle, not a single cert.** It was pointed at the
+self-signed certificate of the local SMTP (mailpit) so STARTTLS would verify;
+the side effect was that **every outbound HTTPS call failed**, which surfaced as
+`502 llm_unavailable` on every ask while `/status` still reported the assistant
+as configured. Build the trust store as the image's CA bundle plus the private
+cert:
+
+```bash
+cat /etc/ssl/certs/ca-certificates.crt /certs/cert.pem > /data/ca-bundle.pem
+# SSL_CERT_FILE=/data/ca-bundle.pem
+```
+
+**A fresh account cannot log in until it verifies its email**, so
+`scripts/smoke.sh` and `scripts/concurrency_probe.py` need a way to complete
+that: the probe takes `--mailpit http://127.0.0.1:8025` (or
+`--email/--password` for an account that is already verified). The smoke script
+expects a development environment that auto-verifies.
+
+**Load numbers from that host shape** (2 workers, Postgres + Redis, corpus
+loaded, laptop-grade CPU): the concurrency probe reports **0% errors at 1, 5, 10
+and 25 concurrent** mixed ask/read requests, p50 51 ms → 1.7 s and ~14 rps at 25
+concurrent — the ask path (retrieval + provider) is the cost, and the rate
+limiter, not the app, is what a probe hits first unless its ceilings are raised
+on the load target.
+
 ## 10. Known Operational Caveats
 
 1. **The web app has no origin of its own.** The Vercel edge proxy forwards
