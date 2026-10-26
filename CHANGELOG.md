@@ -112,6 +112,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(security): close the S-011/S-012/F-142 gaps — revocable sessions, TOTP account throttle, erasure re-auth
 - fix(tests): make the teacher-jobs rate-limit test deterministic
 - fix(tests): make the two new UI tests independent of ambient state
+- fix(web): add the language pin the import promised, and unbreak main
 - fix(web): clear footer from bottom nav + cut a round-trip from login
 - fix(web): clear the two WCAG AA failures axe found on the tutor screen
 - fix(web): close the defects the restored E2E suite caught
