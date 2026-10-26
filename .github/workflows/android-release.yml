@@ -142,6 +142,7 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
+          chmod +x gradlew
           ./gradlew --no-daemon bundleRelease assembleRelease \
             -PversionCode="$VERSION_CODE"
 
@@ -236,7 +237,12 @@ jobs:
 
       - name: Assemble the debug APK
         working-directory: apps/web/android
-        run: ./gradlew --no-daemon assembleDebug
+        # The bit is now set in git, but a checkout that loses it (or an
+        # archive export) fails with "Permission denied" at exit 126 — the
+        # same shape of failure this job exists to surface, one layer down.
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
 
       - name: Report the artifact
         run: |

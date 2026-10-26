@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - feat(api): production connection posture, truthful readiness, boot index metric; full-suite Postgres parity in CI (#29)
 - feat(i18n): land Bangla copy for the status and impersonation strings
+- feat(mobile): a Play Store launch pack and an Android build gate
 - feat(rag): event-loop hardening, hot-path observability, follow-up retrieval; gate CI on retrieval baselines + CodeQL SAST (#27)
 - feat(rag): retrieval-quality rework - fair gate, query lanes, measured rank lift
 - feat(web): login page background image with dark/light theme sync
@@ -124,6 +125,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): recover from page errors, report load failures, and never show another child's data
 - fix(web): report a dead API origin accurately, not as a busy server (#14)
 - fix(web): route /api/* explicitly to the edge proxy function
+- fix(web): share the login photo backdrop with Get Started; document Capacitor origins
 - fix(web): ship the CSP the code claimed, and bound the edge proxy
 - fix(web): stop rendering remote images in answers and announce each answer once
 - fix(web): stop showing failures as facts, and read API timestamps as UTC
@@ -175,6 +177,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Documentation
 
 - docs(audit): record the merge and live-production outcome
+- docs(playstore): correct the store answers against this tree
 - docs(qa): publish the 2026-10-16 audit report; refresh the lockfile within its ranges
 - docs(qa): publish the 2026-10-17 QA record and archive its predecessor
 - docs(qa): record the 2026-10-17 deployment and how it was verified
