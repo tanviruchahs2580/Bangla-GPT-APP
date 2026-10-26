@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { get } from "../../api";
+import { getAdminAiQuality } from "../../api";
 import type { AdminAiQuality } from "../../api";
 import { Badge } from "../ui";
 import { t } from "../../i18n";
@@ -13,8 +13,11 @@ export function AiQualityCard() {
   useEffect(() => {
     let alive = true;
     track("report_viewed", { role: "admin", period: "30d" });
-    get<AdminAiQuality>("/admin/ai/quality?days=30")
-      .then((r) => alive && setQ(r ?? null))
+    // One contract per endpoint: the typed client owns this path (it used to
+    // be spelled out here as well, which is how two copies of a contract
+    // start disagreeing).
+    getAdminAiQuality(30)
+      .then((r) => alive && setQ(r))
       .catch(() => {});
     return () => {
       alive = false;

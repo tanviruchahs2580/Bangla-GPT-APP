@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -86,6 +86,41 @@ describe("unified workspace tabs", () => {
         }),
       ),
     );
+  });
+
+  it("practice options keep the quiz page's keyboard contract", async () => {
+    // The tab used to render its own radiogroup: role="radio" on every option
+    // with all of them in the tab order and no arrow keys — the defect
+    // QuizPage was fixed for, still present here because the widget had been
+    // duplicated instead of shared.
+    const user = userEvent.setup();
+    apiMock.post.mockResolvedValue({
+      attempt_id: 2,
+      questions: [
+        { id: "q1", question_text: "কোষ কী?", options: ["a", "b", "c"] },
+      ],
+      requested: 5,
+    });
+    renderChapter();
+
+    await user.click(await screen.findByRole("tab", { name: /অনুশীলন/ }));
+    await user.click(await screen.findByRole("button", { name: /কুইজ শুরু/ }));
+
+    const group = await screen.findByRole("radiogroup", { name: "কোষ কী?" });
+    const radios = within(group).getAllByRole("radio");
+    expect(radios).toHaveLength(3);
+    // one tab stop for the group, and it is the first option before a choice
+    expect(
+      radios.filter((r) => r.getAttribute("tabindex") === "0"),
+    ).toHaveLength(1);
+    expect(radios[0].getAttribute("tabindex")).toBe("0");
+
+    radios[0].focus();
+    await user.keyboard("{ArrowDown}");
+    expect(radios[1]).toHaveAttribute("aria-checked", "true");
+    expect(document.activeElement).toBe(radios[1]);
+    await user.keyboard("{ArrowUp}");
+    expect(radios[0]).toHaveAttribute("aria-checked", "true");
   });
 
   it("ask tab sends tutor request with chapter context", async () => {

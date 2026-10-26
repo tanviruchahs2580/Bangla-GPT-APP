@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { getBlob, post } from "../../api";
+import { downloadBlob } from "../../lib/download";
 import type { QPaper } from "../../types";
 import { Badge, Button, Card } from "../ui";
 import { friendlyError } from "../../errors";
@@ -210,12 +211,7 @@ export function QPaperReviewPanel({
       const { blob } = await getBlob(
         `/teacher/qpapers/${qp.id}/pdf?kind=${encodeURIComponent(kind)}`,
       );
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `qp-${qp.id}-${kind}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      downloadBlob(blob, `qp-${qp.id}-${kind}.pdf`);
     } catch (err) {
       setMsg(errText(err));
     }

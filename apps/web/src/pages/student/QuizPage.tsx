@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -34,6 +34,7 @@ import {
   ProgressRing,
   Stat,
 } from "../../components/ui";
+import { QuizOptionGroup } from "../../components/QuizOptionGroup";
 import { friendlyError } from "../../errors";
 import { t, tSubject } from "../../i18n";
 import { cn } from "../../lib/cn";
@@ -94,9 +95,6 @@ export default function QuizPage() {
   const [result, setResult] = useState<QuizResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Focus targets for the radiogroup's arrow-key navigation (roving tab
-  // stop); an array ref is enough because options are position-stable.
-  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   const queryClient = useQueryClient();
   const { data: progress } = useQuery({
@@ -384,56 +382,12 @@ export default function QuizPage() {
               <div className="muted muted-sm">{t("chooseAnswers")}</div>
             </div>
           </div>
-          <div
-            className="stack"
-            role="radiogroup"
-            aria-label={q.question_text}
-            // Programmatically focusable (not a tab stop): the keydown
-            // handler runs on events bubbling from the radios, and this
-            // satisfies the jsx-a11y focus contract for an interactive role.
-            tabIndex={-1}
-            // APG radio-group contract: ONE tab stop (roving tabIndex) and
-            // arrow keys move the selection. Announcing role="radio" while
-            // every option sat in the tab order taught a screen reader the
-            // wrong thing — a keyboard-only student answered a 20-question
-            // quiz with 80+ Tab presses, and the arrows it promised did
-            // nothing.
-            onKeyDown={(e) => {
-              const last = q.options.length - 1;
-              if (last < 0) return;
-              const focused = chosen ?? 0;
-              let next: number | null = null;
-              if (e.key === "ArrowDown" || e.key === "ArrowRight")
-                next = focused === last ? 0 : focused + 1;
-              else if (e.key === "ArrowUp" || e.key === "ArrowLeft")
-                next = focused === 0 ? last : focused - 1;
-              else if (e.key === "Home") next = 0;
-              else if (e.key === "End") next = last;
-              if (next === null) return;
-              e.preventDefault();
-              setAnswers((a) => ({ ...a, [current]: next }));
-              // Selection follows focus, so the roving tab stop moves too.
-              optionRefs.current[next]?.focus();
-            }}
-          >
-            {q.options.map((opt, oi) => (
-              <button
-                key={oi}
-                ref={(el) => {
-                  optionRefs.current[oi] = el;
-                }}
-                role="radio"
-                aria-checked={chosen === oi}
-                // Roving tab stop: the chosen option (or the first, before a
-                // choice exists) is the group's single tab entry point.
-                tabIndex={(chosen === null ? oi === 0 : chosen === oi) ? 0 : -1}
-                className={cn("quiz-option", chosen === oi && "selected")}
-                onClick={() => setAnswers((a) => ({ ...a, [current]: oi }))}
-              >
-                {opt}
-              </button>
-            ))}
-          </div>
+          <QuizOptionGroup
+            options={q.options}
+            chosen={chosen}
+            label={q.question_text}
+            onChoose={(oi) => setAnswers((a) => ({ ...a, [current]: oi }))}
+          />
           <div className="row-flex quiz-pager">
             <Button
               variant="ghost"

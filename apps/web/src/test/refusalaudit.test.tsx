@@ -28,6 +28,9 @@ const apiMock = vi.hoisted(() => ({
 
 vi.mock("../api", () => ({
   ...apiMock,
+  // AdminDashboard renders AiQualityCard, which calls the typed
+  // client for this endpoint (it used to spell the path out here too).
+  getAdminAiQuality: vi.fn(() => Promise.resolve(null)),
   apiBase: "/api",
   getToken: () => "tok",
 }));

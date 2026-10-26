@@ -165,10 +165,7 @@ function QuestionPaperFlow() {
               onChange={(e) => setExamType(e.target.value)}
             />
           </Field>
-          <Field
-            label={t("className").replace(/\s*\(.*\)/, "")}
-            htmlFor="qplvl"
-          >
+          <Field label={t("classNameShort")} htmlFor="qplvl">
             <select
               id="qplvl"
               className="select"

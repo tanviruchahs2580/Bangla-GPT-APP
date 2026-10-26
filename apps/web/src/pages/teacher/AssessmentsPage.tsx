@@ -315,8 +315,8 @@ export default function AssessmentsPage() {
                   aria-pressed={r.id === roomId}
                   onClick={() => setRoomId(r.id)}
                 >
-                  {t("className").replace(/\s*\(.*\)/, "")} {r.class_level} ·{" "}
-                  {r.section} ({r.student_count})
+                  {t("classNameShort")} {r.class_level} · {r.section} (
+                  {r.student_count})
                 </button>
               ))}
               {rooms.length === 0 && <p className="muted">{t("noStudents")}</p>}
