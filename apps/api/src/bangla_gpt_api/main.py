@@ -78,6 +78,19 @@ def enforce_production_safety(settings: Settings) -> None:
     if not settings.is_production:
         return
 
+    if settings.rate_limit_backend.strip().lower() == "memory":
+        # The multi-worker case is refused by _validate_rate_limit_redis, so
+        # this is the single-worker production deployment: logs must name
+        # what it gives up, because the README's "revocation fails closed"
+        # claim is a Redis guarantee. A memory deny-list dies with the
+        # process, and every access token minted before the restart becomes
+        # valid again until its own expiry. Audit SEC-02.
+        logger.warning(
+            "RATE_LIMIT_BACKEND=memory in production: token revocation and "
+            "single-use MFA burns are per-process. A restart re-accepts "
+            "tokens revoked before it. Use Redis for the fail-closed store."
+        )
+
     problems: list[str] = []
 
     for validator in (
@@ -230,13 +243,21 @@ def _worker_count(settings: Settings) -> int:
 
 
 def _validate_pii(settings: Settings) -> list[str]:
-    """PII_ENC_KEY must be a real Fernet key in production.
+    """PII_ENC_KEY must be a real Fernet key in production, and the
+    plaintext fallback must be off.
 
     The old check was ``if not settings.pii_enc_key``. A value that is present
     but malformed -- "not-a-fernet-key" -- passed the boot gate and then raised
     ``ValueError`` on the first guardian phone that needed encrypting, i.e.
     the guard failed at the worst possible moment rather than at startup.
+    The plaintext fallback (PII_ALLOW_PLAINTEXT) is a dev/test convenience;
+    booting a production pilot with it enabled must not be possible.
     """
+    if settings.pii_allow_plaintext:
+        return [
+            "PII_ALLOW_PLAINTEXT must be false in production: guardian phones "
+            "would be stored unencrypted. Set PII_ENC_KEY (a valid Fernet key) instead."
+        ]
     if not settings.pii_enc_key:
         return ["PII_ENC_KEY must be set in production (guardian phone encryption)"]
     try:

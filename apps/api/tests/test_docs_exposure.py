@@ -33,6 +33,7 @@ def _production_settings(tmp_path, **overrides) -> Settings:
     os.environ["WEB_CONCURRENCY"] = "1"
     base = {
         "env": "production",
+        "pii_allow_plaintext": False,
         "jwt_secret": "Zk7Qp2XvN8mR4tYcW1bH6jL3sD9fG5aE0uI2oP7xV4qM8nC6rT1wY3zB5",
         "database_url": f"sqlite:///{(tmp_path / 'prod.db').as_posix()}",
         "allowed_origins": "https://app.example.test",

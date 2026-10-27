@@ -24,6 +24,7 @@ def _prod_settings(**over):
     os.environ["WEB_CONCURRENCY"] = "1"
     base = dict(
         env="production",
+        pii_allow_plaintext=False,
         database_url="sqlite://",
         jwt_secret=SECRET,
         admin_email="a@b.com",

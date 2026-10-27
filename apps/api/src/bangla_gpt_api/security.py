@@ -25,6 +25,32 @@ logger = logging.getLogger(__name__)
 _FERNET_PREFIX = "fernet:"
 
 
+class PiiKeyUnconfigured(RuntimeError):
+    """A PII write path was reached with no PII_ENC_KEY and no explicit
+    plaintext consent (``PII_ALLOW_PLAINTEXT``)."""
+
+
+def encrypt_pii_strict(
+    value: str | None, key: str | None, *, allow_plaintext: bool = True
+) -> str | None:
+    """``encrypt_pii`` with an explicit consent gate on the plaintext
+    fallback.
+
+    The passthrough era stored guardian phones unencrypted whenever the
+    key was absent -- silently, everywhere (audit B-04). Writes now opt
+    in explicitly via this call; ``main.py::_validate_pii`` refuses to
+    boot production with the consent flag on, so a mis-configured pilot
+    fails this one request with a coded 503 instead of quietly writing
+    children's guardian PII in the clear.
+    """
+    if value is not None and not key and not allow_plaintext:
+        raise PiiKeyUnconfigured(
+            "PII_ENC_KEY is not configured and PII_ALLOW_PLAINTEXT is "
+            "not enabled; refusing to store PII unencrypted"
+        )
+    return encrypt_pii(value, key)
+
+
 def encrypt_pii(value: str | None, key: str | None) -> str | None:
     """Encrypt for storage. None in, None out; empty key -> passthrough."""
     if value is None:

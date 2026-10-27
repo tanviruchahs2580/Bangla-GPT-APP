@@ -57,7 +57,7 @@ from bangla_gpt_api.schemas import (
     TokenResponse,
     VerifyEmailRequest,
 )
-from bangla_gpt_api.security import encrypt_pii
+from bangla_gpt_api.security import PiiKeyUnconfigured, encrypt_pii_strict
 from bangla_gpt_api.services.mailer import send_mail, smtp_configured
 from bangla_gpt_api.services.verification import send_verification_email
 
@@ -85,6 +85,34 @@ _LOGIN_LOCKOUT_BASE_SECONDS = 60
 _LOGIN_LOCKOUT_MAX_SECONDS = 3600
 #: Stable machine code for the 429 refusal while locked.
 LOGIN_LOCKED_CODE = "account_locked"
+
+
+def _encrypt_guardian_phone(app_ctx: Ctx, phone: str | None) -> str | None:
+    """Store-side gate for the guardian phone (audit B-04).
+
+    Encryption requires a real decision: a key (``PII_ENC_KEY``) or an
+    explicit plaintext consent (``PII_ALLOW_PLAINTEXT``, refused in
+    production). A mis-configured deployment fails this one request with a
+    coded 503 instead of silently writing a child's guardian contact
+    unencrypted.
+    """
+    try:
+        return encrypt_pii_strict(
+            phone,
+            app_ctx.settings.pii_enc_key,
+            allow_plaintext=app_ctx.settings.pii_allow_plaintext,
+        )
+    except PiiKeyUnconfigured as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "pii_key_unconfigured",
+                "message": (
+                    "Guardian phone cannot be stored: PII_ENC_KEY is not "
+                    "configured and plaintext storage is not allowed"
+                ),
+            },
+        ) from exc
 
 
 @router.post(
@@ -159,7 +187,7 @@ def register(
             name=payload.name.strip(),
             user_id=user.id,
             # guardian phone encrypted at rest when PII_ENC_KEY is set.
-            phone_enc=encrypt_pii(phone, app_ctx.settings.pii_enc_key),
+            phone_enc=_encrypt_guardian_phone(app_ctx, phone),
         )
     else:
         profile = Teacher(name=payload.name.strip(), user_id=user.id)

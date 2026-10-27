@@ -30,6 +30,7 @@ PG = "postgresql+psycopg://u:p@localhost:5432/db"
 def prod(**overrides) -> Settings:
     base = {
         "env": "production",
+        "pii_allow_plaintext": False,
         "jwt_secret": "Zk7Qp2XvN8mR4tYcW1bH6jL3sD9fG5aE0uI2oP7xV4qM8nC6rT1wY3zB5",
         "database_url": PG,
         "allowed_origins": "https://app.example.test",

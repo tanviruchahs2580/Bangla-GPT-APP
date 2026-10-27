@@ -161,6 +161,7 @@ def test_production_safety_rejects_weak_config(tmp_path) -> None:
     # Weak JWT
     s = Settings(
         env="production",
+        pii_allow_plaintext=False,
         database_url="sqlite:////tmp/app.db",
         jwt_secret="short",
         admin_email="a@b.com",
@@ -174,6 +175,7 @@ def test_production_safety_rejects_weak_config(tmp_path) -> None:
     # Missing gemini key
     s2 = Settings(
         env="production",
+        pii_allow_plaintext=False,
         database_url="sqlite:////tmp/app.db",
         jwt_secret="a" * 32,
         admin_email="a@b.com",
@@ -188,6 +190,7 @@ def test_production_safety_rejects_weak_config(tmp_path) -> None:
     # Missing CORS
     s3 = Settings(
         env="production",
+        pii_allow_plaintext=False,
         database_url="sqlite:////tmp/app.db",
         jwt_secret="a" * 32,
         admin_email="a@b.com",

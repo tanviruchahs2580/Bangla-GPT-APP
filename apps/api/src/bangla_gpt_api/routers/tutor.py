@@ -406,6 +406,9 @@ class _PreparedTurn(NamedTuple):
     image_payload: dict[str, Any] | None
     ctx: RequestContext
     no_vision: bool
+    # What conv.last_strategy was before prepare mutated it, so the JSON
+    # route can restore it when the LLM call fails after the turn committed.
+    prev_strategy: str | None
 
 
 def _prepare_chat_turn(
@@ -435,6 +438,7 @@ def _prepare_chat_turn(
     # 'আমি বুঝিন': swap to the next explanation strategy and remember it.
     # an explicit strategy request OVERRIDES the rotation and is
     # persisted as last_strategy so the next turn keeps learning from it.
+    prev_strategy = conv.last_strategy
     extra_instruction: str | None = None
     goal = "chat"
     if payload.strategy:
@@ -479,6 +483,7 @@ def _prepare_chat_turn(
         image_payload=image_payload,
         ctx=ctx,
         no_vision=image_payload is not None and _provider_lacks_vision(app_ctx),
+        prev_strategy=prev_strategy,
     )
 
 
@@ -532,8 +537,17 @@ async def send_chat_message(
             status_code=503,
             detail={"code": "tutor_unavailable", "message": "Tutor service unavailable"},
         )
+    # persist="commit" for the same reason the SSE route commits (there it
+    # is the comment on _prepare_chat_turn): with "flush" this route held
+    # the pooled Postgres connection and its write lock across the whole
+    # provider budget (up to 30s), so ~30 concurrent turns exhausted
+    # pool_size=10 + overflow=20 per worker and stalled every other
+    # endpoint. Audit B-05. The all-or-nothing turn contract is kept by
+    # explicitly deleting the committed user turn when the provider fails
+    # (see _discard_failed_user_turn) -- the flush path got that behaviour
+    # for free from its rollback.
     prepared = await asyncio.to_thread(
-        _prepare_chat_turn, app_ctx, db, user, conversation_id, payload, persist="flush"
+        _prepare_chat_turn, app_ctx, db, user, conversation_id, payload, persist="commit"
     )
     if prepared.no_vision:
         # Honest refusal: the mock provider cannot see images at all.
@@ -557,7 +571,7 @@ async def send_chat_message(
                 image=prepared.image_payload,
             )
         except ProviderError as exc:
-            await asyncio.to_thread(db.rollback)
+            await asyncio.to_thread(_discard_failed_user_turn, db, prepared)
             raise HTTPException(
                 status_code=502,
                 detail={"code": "llm_unavailable", "message": "LLM provider unavailable"},
@@ -587,6 +601,23 @@ async def send_chat_message(
         rating=None,
         created_at=assistant_msg.created_at,
     )
+
+
+def _discard_failed_user_turn(db: Session, prepared: _PreparedTurn) -> None:
+    """Roll the committed user turn back for the JSON route after a provider
+    failure (runs in a worker thread; the shared Session is sync).
+
+    The flush path used to get "no orphan turn" for free from its rollback.
+    Committing before the LLM call -- necessary so a pooled connection is
+    not pinned across a 30s provider request -- moves the cleanup here:
+    delete the user message and restore the strategy rotation the prepare
+    step had advanced. The external contract for POST .../messages is
+    unchanged: a failed provider call leaves neither a reply nor a
+    dangling question behind.
+    """
+    db.delete(prepared.user_msg)
+    prepared.conv.last_strategy = prepared.prev_strategy
+    db.commit()
 
 
 @router.post("/tutor/conversations/{conversation_id}/messages/stream")

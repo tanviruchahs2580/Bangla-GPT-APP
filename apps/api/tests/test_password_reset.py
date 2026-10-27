@@ -244,6 +244,7 @@ def test_production_boot_guard_refuses_insecure_settings(tmp_path) -> None:
         create_app(
             Settings(
                 env="production",
+                pii_allow_plaintext=False,
                 jwt_secret="short",
                 admin_email="a@b.com",
                 admin_password="longenoughpass1",
@@ -253,6 +254,7 @@ def test_production_boot_guard_refuses_insecure_settings(tmp_path) -> None:
         create_app(
             Settings(
                 env="production",
+                pii_allow_plaintext=False,
                 jwt_secret="Zk7Qp2XvN8mR4tYcW1bH6jL3sD9fG5aE0uI2oP7xV4qM8nC6rT1wY3zB5",
             )
         )
@@ -260,6 +262,7 @@ def test_production_boot_guard_refuses_insecure_settings(tmp_path) -> None:
         create_app(
             Settings(
                 env="production",
+                pii_allow_plaintext=False,
                 jwt_secret="Zk7Qp2XvN8mR4tYcW1bH6jL3sD9fG5aE0uI2oP7xV4qM8nC6rT1wY3zB5",
                 admin_email="a@b.com",
                 admin_password="short12",
@@ -269,6 +272,7 @@ def test_production_boot_guard_refuses_insecure_settings(tmp_path) -> None:
         create_app(
             Settings(
                 env="production",
+                pii_allow_plaintext=False,
                 database_url=f"sqlite:///{tmp_path}/prod-guard-nokey.db",
                 jwt_secret="Zk7Qp2XvN8mR4tYcW1bH6jL3sD9fG5aE0uI2oP7xV4qM8nC6rT1wY3zB5",
                 admin_email="a@b.com",
@@ -279,6 +283,7 @@ def test_production_boot_guard_refuses_insecure_settings(tmp_path) -> None:
     app = create_app(
         Settings(
             env="production",
+            pii_allow_plaintext=False,
             database_url=f"sqlite:///{tmp_path}/prod-guard.db",  # persistent (V8)
             jwt_secret="Zk7Qp2XvN8mR4tYcW1bH6jL3sD9fG5aE0uI2oP7xV4qM8nC6rT1wY3zB5",
             admin_email="a@b.com",

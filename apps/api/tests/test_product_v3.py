@@ -578,6 +578,7 @@ def test_production_boot_rejects_inmemory_database(tmp_path) -> None:
         create_app(
             Settings(
                 env="production",
+                pii_allow_plaintext=False,
                 database_url="sqlite://",
                 jwt_secret="x" * 40,
                 admin_email="a@b.c",

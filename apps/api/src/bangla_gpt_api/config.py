@@ -131,9 +131,15 @@ class Settings(BaseSettings):
     # fake rate-limit identities.
     trust_proxy_headers: bool = False
     # Fernet key (PII_ENC_KEY) for encrypting guardian phone at rest.
-    # Without it values pass through unchanged (dev/test); production boot
-    # refuses to start without a key (enforce_production_safety).
+    # Production boot refuses to start without a valid key (enforce_production_safety).
     pii_enc_key: str | None = None
+    # B-04: the old behaviour passed guardian phones through unencrypted
+    # whenever no key was configured -- silently, everywhere. Dev/test keep
+    # that convenience, but only because this flag names the choice;
+    # production refuses to boot with it on, and with it off a missing key
+    # makes the write fail with a coded 503 instead of storing PII in the
+    # clear (security.py::encrypt_pii_strict).
+    pii_allow_plaintext: bool = True
 
     # --- chat ---
     chat_history_messages: int = 8
