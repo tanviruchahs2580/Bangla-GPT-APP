@@ -291,6 +291,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore: regenerate the CHANGELOG and the native-review sheet for the train
 - chore: regenerate the CHANGELOG for the CI coverage gate
 - chore: regenerate the CHANGELOG for the two mobile build fixes
+- chore: remove the resurrected smoke script; prettier the wave-1b sources
 - chore: satisfy the two CI guardrails main added after this branch's baseline
 - fmt: ruff format teacher.py _room_counts
 
