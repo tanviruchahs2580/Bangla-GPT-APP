@@ -50,10 +50,12 @@ function sseResponse(chunks: string[]): Response {
 describe("impersonation credentials", () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     vi.restoreAllMocks();
   });
   afterEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
   });
 
   it("startImpersonation parks the admin token and flags the session", async () => {
@@ -69,11 +71,19 @@ describe("impersonation credentials", () => {
     const out = await startImpersonation(7, "support call");
     expect(out.user_id).toBe(7);
     expect(getToken()).toBe(IMPERSONATED);
+    // FE-01: the parked credential pair is per-tab by design now
+    expect(sessionStorage.getItem("bgpt_impersonating")).toBe("7");
+    expect(sessionStorage.getItem("bgpt_admin_token_backup")).toBe(ADMIN_TOKEN);
     expect(isImpersonating()).toBe(true);
   });
 
   it("logout drops the parked admin token too, not just the session token", async () => {
+    // Seed BOTH storages: the current credentials live in sessionStorage,
+    // but a logout must also scrub the legacy localStorage keys an older
+    // tab may have written (F-036 shared-device wipe).
     localStorage.setItem("bgpt_token", IMPERSONATED);
+    sessionStorage.setItem("bgpt_admin_token_backup", ADMIN_TOKEN);
+    sessionStorage.setItem("bgpt_impersonating", "7");
     localStorage.setItem("bgpt_admin_token_backup", ADMIN_TOKEN);
     localStorage.setItem("bgpt_impersonating", "7");
 
@@ -83,9 +93,11 @@ describe("impersonation credentials", () => {
     await logout();
 
     expect(getToken()).toBeNull();
-    // The regression: both of these used to survive logout().
+    // The regression: all of these used to survive logout().
     expect(localStorage.getItem("bgpt_admin_token_backup")).toBeNull();
     expect(localStorage.getItem("bgpt_impersonating")).toBeNull();
+    expect(sessionStorage.getItem("bgpt_admin_token_backup")).toBeNull();
+    expect(sessionStorage.getItem("bgpt_impersonating")).toBeNull();
     expect(isImpersonating()).toBe(false);
   });
 

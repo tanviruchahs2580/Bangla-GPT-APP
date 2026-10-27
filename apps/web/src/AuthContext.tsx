@@ -60,9 +60,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     setUnauthorizedHandler(() => {
       // Clear this user's stored data (F-036) before bouncing to login — the
-      // reload must not race the storage wipe on a shared device.
+      // reload must not race the storage wipe on a shared device. FE-02
+      // (B-02 client half): the bounce carries ?next= so the re-login returns
+      // to where the session died instead of dumping the user at their role
+      // home — a quiz finish or a saved note must survive the hour, not be
+      // abandoned by the clock.
       void logout().finally(() => {
-        window.location.href = "/login";
+        const here = `${window.location.pathname}${window.location.search}`;
+        const target = here.startsWith("/login") ? "/login" : `/login?next=${encodeURIComponent(here)}`;
+        window.location.href = target;
       });
     });
     return () => {

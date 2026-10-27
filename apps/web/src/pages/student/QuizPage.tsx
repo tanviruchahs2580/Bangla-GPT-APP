@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -40,6 +40,11 @@ import { t, tSubject } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { formatServerDateTime } from "../../lib/datetime";
 import { celebrate } from "../../lib/confetti";
+import {
+  clearQuizDraft,
+  readQuizDraft,
+  QUIZ_DRAFT_KEY,
+} from "../../lib/quizDraft";
 
 // labels from i18n, evaluated per render (lang switch remounts).
 const subjectOptions = () => [
@@ -89,12 +94,70 @@ export default function QuizPage() {
   const [subject, setSubject] = useState<string>(
     searchParams.get("subject") ?? subjectOptions()[0].value,
   );
-  const [started, setStarted] = useState<QuizStarted | null>(null);
-  const [answers, setAnswers] = useState<Record<number, number>>({});
-  const [current, setCurrent] = useState(0);
+  // B-03: restored from the draft, a reload drops the student back into the
+  // exact question they were on with every answer intact.
+  const [started, setStarted] = useState<QuizStarted | null>(
+    () => readQuizDraft()?.started ?? null,
+  );
+  const [answers, setAnswers] = useState<Record<number, number>>(
+    () => readQuizDraft()?.answers ?? {},
+  );
+  const [current, setCurrent] = useState<number>(() => readQuizDraft()?.current ?? 0);
   const [result, setResult] = useState<QuizResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // B-03: "Finish" with unanswered questions used to submit them all as
+  // wrong with no warning — a child tapping Finish on question 1 of 10 saw
+  // a confident 0%. Confirm first, announce via role="alert".
+  const [confirmSubmit, setConfirmSubmit] = useState(false);
+
+  // B-03: write-through draft — every answered question is durable within
+  // the tab before the next render matters, and a successful submit (or a
+  // fresh start) replaces/clears it via the same effect.
+  useEffect(() => {
+    try {
+      if (started)
+        sessionStorage.setItem(
+          QUIZ_DRAFT_KEY,
+          JSON.stringify({ started, answers, current }),
+        );
+      else clearQuizDraft();
+    } catch {
+      /* storage may be unavailable in low-data/incognito mode */
+    }
+  }, [started, answers, current]);
+
+  const unanswered = started
+    ? started.questions.reduce((n, _, i) => n + (answers[i] === undefined ? 1 : 0), 0)
+    : 0;
+
+  const requestSubmit = () => {
+    if (unanswered > 0 && !confirmSubmit) {
+      setConfirmSubmit(true);
+      return;
+    }
+    setConfirmSubmit(false);
+    void submit();
+  };
+
+  // FE-06: the visual tabs promise tab semantics, so the keyboard gets
+  // them too — roving focus with arrow keys, exactly the contract
+  // LearnPage implements for the same controls.
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const tabOrder = ["quiz", "revision", "assigned"] as const;
+  const onTablistKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const idx = tabOrder.indexOf(tab);
+    const next =
+      e.key === "ArrowRight"
+        ? tabOrder[(idx + 1) % tabOrder.length]
+        : e.key === "ArrowLeft"
+          ? tabOrder[(idx + tabOrder.length - 1) % tabOrder.length]
+          : null;
+    if (next === null) return;
+    e.preventDefault();
+    setTab(next);
+    tabRefs.current[tabOrder.indexOf(next)]?.focus();
+  };
 
   const queryClient = useQueryClient();
   const { data: progress } = useQuery({
@@ -147,6 +210,7 @@ export default function QuizPage() {
     setAnswers({});
     setCurrent(0);
     setResult(null);
+    setConfirmSubmit(false);
   };
   const openAssigned = (a: AssignmentMine) => {
     if (a.done) return;
@@ -233,6 +297,7 @@ export default function QuizPage() {
       );
       setResult(res);
       setStarted(null);
+      setConfirmSubmit(false);
       // The submit is what the streak, average and heatmap are derived from;
       // without this the hub behind the result screen renders pre-quiz
       // numbers for the whole staleTime window.
@@ -406,12 +471,41 @@ export default function QuizPage() {
                 {t("nextQuestion")} <ArrowRight size={16} aria-hidden />
               </Button>
             ) : (
-              <Button variant="teal" size="sm" onClick={submit} disabled={busy}>
+              <Button variant="teal" size="sm" onClick={requestSubmit} disabled={busy}>
                 {t("finishQuiz")}
               </Button>
             )}
           </div>
-          {error && <p className="error section-gap-top">{error}</p>}
+          {error && (
+            <p className="error section-gap-top" role="alert">
+              {error}
+            </p>
+          )}
+          {confirmSubmit && unanswered > 0 && (
+            <div className="warn-strip section-gap-top" role="alert">
+              <p>{t("quizUnansweredConfirm", { n: unanswered })}</p>
+              <div className="row-flex">
+                <Button
+                  variant="teal"
+                  size="sm"
+                  loading={busy}
+                  onClick={() => {
+                    setConfirmSubmit(false);
+                    void submit();
+                  }}
+                >
+                  {t("quizSubmitAnyway")}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setConfirmSubmit(false)}
+                >
+                  {t("quizKeepAnswering")}
+                </Button>
+              </div>
+            </div>
+          )}
         </Card>
       </main>
     );
@@ -491,10 +585,15 @@ export default function QuizPage() {
         className="chips chips-gap"
         role="tablist"
         aria-label={t("practiceTitle")}
+        onKeyDown={onTablistKeyDown}
       >
         <button
           role="tab"
           aria-selected={tab === "quiz"}
+          tabIndex={tab === "quiz" ? 0 : -1}
+          ref={(el) => {
+            tabRefs.current[0] = el;
+          }}
           className={cn("chip", tab === "quiz" && "active")}
           onClick={() => setTab("quiz")}
         >
@@ -503,6 +602,10 @@ export default function QuizPage() {
         <button
           role="tab"
           aria-selected={tab === "revision"}
+          tabIndex={tab === "revision" ? 0 : -1}
+          ref={(el) => {
+            tabRefs.current[1] = el;
+          }}
           className={cn("chip", tab === "revision" && "active")}
           onClick={() => setTab("revision")}
         >
@@ -514,6 +617,10 @@ export default function QuizPage() {
         <button
           role="tab"
           aria-selected={tab === "assigned"}
+          tabIndex={tab === "assigned" ? 0 : -1}
+          ref={(el) => {
+            tabRefs.current[2] = el;
+          }}
           className={cn("chip", tab === "assigned" && "active")}
           onClick={() => setTab("assigned")}
         >

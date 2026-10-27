@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "lib": ["ES2022"]
+  },
+  "include": ["api", "capacitor.config.ts", "vercel.json"]
+}

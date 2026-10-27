@@ -16,7 +16,7 @@ import type {
   StudentProgress,
 } from "../../types";
 import { useAuth } from "../../AuthContext";
-import { Card, ProgressRing, Stat } from "../../components/ui";
+import { Card, LoadError, ProgressRing, Stat } from "../../components/ui";
 import { t, tSubject } from "../../i18n";
 
 function useProgress(me: MeResponse | null) {
@@ -49,7 +49,10 @@ export default function HomePage() {
   const { me } = useAuth();
   const navigate = useNavigate();
   const [prompt, setPrompt] = useState("");
-  const { data: progress, isLoading } = useProgress(me);
+  // FE-03: a failed progress query must not read as "you have no quizzes
+  // yet" — a child's streak vanishing because the network hiccupped is
+  // the most demotivating false message the home screen could show.
+  const { data: progress, isLoading, isError, refetch } = useProgress(me);
   const { data: dashboard } = useDashboard(me);
   const { data: activity } = useActivity(me);
 
@@ -230,6 +233,8 @@ export default function HomePage() {
             <div className="skeleton" />
             <div className="skeleton skeleton-text" />
           </div>
+        ) : isError ? (
+          <LoadError message={t("errorGeneric")} onRetry={() => void refetch()} />
         ) : progress && progress.attempts_graded > 0 ? (
           <div className="row-flex">
             <ProgressRing

@@ -11,6 +11,7 @@ import {
 } from "../api";
 import { friendlyError } from "../errors";
 import { AiQualityCard } from "../components/admin/AiQualityCard";
+import { LoadError } from "../components/ui";
 import { t } from "../i18n";
 import { roleLabel } from "../lib/roles";
 import { useDebounced } from "../lib/useDebounced";
@@ -95,13 +96,11 @@ export default function AdminDashboard() {
   // center cards ride the same refresh; auxiliary on failure.
   const schoolsQuery = useQuery({
     queryKey: ["admin-schools"],
-    queryFn: () =>
-      get<AdminSchoolStats[]>("/admin/schools/stats").catch(() => []),
+    queryFn: () => get<AdminSchoolStats[]>("/admin/schools/stats"),
   });
   const versionsQuery = useQuery({
     queryKey: ["admin-versions"],
-    queryFn: () =>
-      get<ContentVersionRow[]>("/admin/content/versions").catch(() => []),
+    queryFn: () => get<ContentVersionRow[]>("/admin/content/versions"),
   });
   // The refusal card treats "no data yet" as loading (F-027, out of scope
   // here): preserve the swallow-to-null so a failure keeps that state.
@@ -210,7 +209,11 @@ export default function AdminDashboard() {
       const res = await post<Record<string, number>>(
         "/admin/maintenance/purge",
       );
-      setPurgeMsg(`${t("purged")}: ${JSON.stringify(res)}`);
+      const parts = Object.entries(res)
+        .map(([key, n]) => `${key}: ${n}`)
+        .join(", ");
+      setPurgeMsg(`${t("purged")} — ${parts}`);
+      console.info("admin purge payload", res);
       setPurgeConfirming(false);
     } catch (err) {
       setPurgeMsg(errOf(err));
@@ -427,7 +430,11 @@ export default function AdminDashboard() {
         {triageErr ? (
           <p className="error" role="alert">
             {triageErr}{" "}
-            <button className="btn btn-sm btn-ghost" onClick={loadTriage}>
+            <button
+              className="btn btn-sm btn-ghost"
+              onClick={loadTriage}
+              aria-label={`${t("admTriage")} — ${t("retry")}`}
+            >
               {t("retry")}
             </button>
           </p>
@@ -527,7 +534,12 @@ export default function AdminDashboard() {
             {admMsg}
           </p>
         )}
-        {schools.length === 0 ? (
+        {schoolsQuery.isError ? (
+          <LoadError
+            message={errOf(schoolsQuery.error)}
+            onRetry={() => void schoolsQuery.refetch()}
+          />
+        ) : schools.length === 0 ? (
           <p className="muted">{t("admNoSchools")}</p>
         ) : (
           <div className="table-wrap">
@@ -630,7 +642,12 @@ export default function AdminDashboard() {
 
       <div className="card">
         <h2>{t("admVersions")}</h2>
-        {versions.length === 0 ? (
+        {versionsQuery.isError ? (
+          <LoadError
+            message={errOf(versionsQuery.error)}
+            onRetry={() => void versionsQuery.refetch()}
+          />
+        ) : versions.length === 0 ? (
           <p className="muted">{t("admNoVersions")}</p>
         ) : (
           <div className="table-wrap">
@@ -759,6 +776,7 @@ export default function AdminDashboard() {
           <button
             className="small secondary"
             disabled={offset === 0}
+            aria-label={t("prevPage")}
             onClick={() => setOffset(Math.max(0, offset - LIMIT))}
           >
             ‹
@@ -766,6 +784,7 @@ export default function AdminDashboard() {
           <button
             className="small secondary"
             disabled={offset + LIMIT >= page.total}
+            aria-label={t("nextPage")}
             onClick={() => setOffset(offset + LIMIT)}
           >
             ›

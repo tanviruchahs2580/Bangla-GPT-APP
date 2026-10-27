@@ -29,6 +29,13 @@ const STUDY_KEYS = [
   "revision-due",
   "learnProgressAll",
   "learnProgressOne",
+  // FE-05: the "assigned by teacher" hub (short tests + bulk assignments)
+  // keeps its own keys, and the teacher-assigned tab's badge and Start
+  // buttons read them. Submitting from inside that tab used to leave the
+  // finished work sitting there as open for the whole staleTime window —
+  // the student's honest "did it go through?" moment answered with a lie.
+  "shorttests-mine",
+  "assignments-mine",
 ] as const;
 
 export function invalidateStudyCaches(queryClient: QueryClient): void {
