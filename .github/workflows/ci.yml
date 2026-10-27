@@ -282,10 +282,16 @@ jobs:
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
 
-      - name: Generate web SBOM (native npm, from the package lock)
+      - name: Install web dependencies (SBOM validation needs the tree)
+        working-directory: apps/web
+        run: npm ci --no-audit --ignore-scripts
+
+      - name: Generate web SBOM (native npm, from the installed tree)
         # npm >=10.9 ships CycloneDX natively; the third-party cyclonedx-npm
-        # route failed on the lock's intentional esbuild override
-        # (ELSPROBLEMS -- vite pins its own esbuild).
+        # route aborted on the lock's intentional esbuild override
+        # (ELSPROBLEMS), which native npm sbom accepts -- but it still
+        # validates the lock against the installed tree, so npm ci runs
+        # first. --ignore-scripts keeps this install side-effect free.
         working-directory: apps/web
         run: npm sbom --sbom-format cyclonedx > sbom-web.json
 
