@@ -26,10 +26,9 @@ Bengali literals are Unicode escapes only (house rule for API tests).
 
 from __future__ import annotations
 
-import sqlite3
-
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
@@ -77,47 +76,28 @@ def _seed_classroom_student(client: TestClient, *, student_user_email: str | Non
     row-level student insert mirrors ``POST .../import``:
     ``student_user_email=None`` is the proctored paper roster
     (``students.user_id IS NULL``); an email attaches a real account.
-    Engine-coupled raw sqlite3 by design (same posture as
-    test_security_v2).
+    Seeding goes through the app's own session_factory so the test runs on
+    BOTH engines (the Postgres parity lane runs the full domain suite).
     """
+    from bangla_gpt_api.db.models import ClassStudent, Student, User
+
     teacher = _login_headers(client, "teach@example.com")
     room = client.post(
         "/teacher/classrooms", json={"class_level": 6, "section": "A"}, headers=teacher
     )
     assert room.status_code == 201, room.text
     room_id = room.json()["id"]
-    db_path = client.app.state.ctx.settings.database_url.replace("sqlite:///", "")
-    con = sqlite3.connect(db_path)
-    try:
+    factory = client.app.state.ctx.session_factory
+    with factory() as db, db.begin():
         if student_user_email is None:
-            user_id: int | None = None
+            student = Student(name="Roster Student", class_level=6, user_id=None)
+            db.add(student)
+            db.flush()
         else:
-            user_id = con.execute(
-                "select id from users where email = ?", (student_user_email,)
-            ).fetchone()[0]
-        # self-registration already created the Student profile; attaching
-        # an existing account reuses its row, the paper roster inserts one
-        existing = (
-            None
-            if user_id is None
-            else con.execute("select id from students where user_id = ?", (user_id,)).fetchone()
-        )
-        if existing is not None:
-            student_id = existing[0]
-        else:
-            student_id = con.execute(
-                "insert into students (name, class_level, user_id, created_at) "
-                "values ('Roster Student', 6, ?, datetime('now'))",
-                (user_id,),
-            ).lastrowid
-        con.execute(
-            "insert into class_students (classroom_id, student_id, created_at) "
-            "values (?, ?, datetime('now'))",
-            (room_id, student_id),
-        )
-        con.commit()
-    finally:
-        con.close()
+            user = db.execute(select(User).where(User.email == student_user_email)).scalar_one()
+            student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one()
+        db.add(ClassStudent(classroom_id=room_id, student_id=student.id))
+        student_id = student.id
     return int(student_id)
 
 
