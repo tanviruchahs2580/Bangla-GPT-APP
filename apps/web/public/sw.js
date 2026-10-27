@@ -4,23 +4,29 @@
  *  - Navigations: network-first, offline fallback page.
  *  - API calls: never cached.
  */
-const CACHE = "bgpt-v2";
+const CACHE = "bgpt-v3";
 const MAX_RUNTIME_ENTRIES = 50; // hashed build assets rotate; cap the cache
-// Last-resort navigation when the network fails and no shell was ever cached
-// (first visit on a broken connection). Mirrors the in-app offline banner.
-const OFFLINE_HTML =
-  '<!doctype html><html lang="bn"><head><meta charset="utf-8">' +
-  '<meta name="viewport" content="width=device-width,initial-scale=1">' +
-  "<title>অফলাইন</title></head><body>" +
-  "<h1>অফলাইন — সংযোগ ফিরলে আবার চেষ্টা করুন</h1></body></html>";
+// Offline navigation fallback. Chrome's installability check requires the
+// service worker to answer an OFFLINE navigation with HTTP 200 — the old
+// inline 503 page silently revoked the browser's install prompt (audit
+// waves-2-4 UAT). Always 200 from here on.
+const OFFLINE_URL = "/offline.html";
 const SHELL = [
   "/",
   "/index.html",
+  "/offline.html",
   "/icon.svg",
   "/icon-192.png",
   "/icon-512.png",
   "/manifest.webmanifest",
 ];
+
+const OFFLINE_FALLBACK_HTML =
+  '<!doctype html><html lang="bn"><head><meta charset="utf-8">' +
+  '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+  "<title>অফলাইন — বাংলা GPT টিউটর</title></head><body>" +
+  "<h1>আপনি এখন অফলাইনে আছেন</h1>" +
+  "<p>সংযোগ ফিরলে অ্যাপটি নিজেই লোড হবে।</p></body></html>";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -99,16 +105,21 @@ self.addEventListener("fetch", (event) => {
           return res;
         })
         .catch(() =>
+          // Order: the real app shell first (it carries the in-app offline
+          // banner and full UI), then the dedicated offline page, then a
+          // guaranteed 200 inline document — Chrome counts an installation
+          // as broken the moment an offline navigation answers 5xx.
           caches.match("/index.html").then(
             (hit) =>
               hit ||
-              // Before the first successful navigation there is no shell to
-              // match; respondWith(undefined) would reject the navigation, so
-              // answer an explicit 503 offline page instead.
-              new Response(OFFLINE_HTML, {
-                status: 503,
-                headers: { "Content-Type": "text/html; charset=utf-8" },
-              }),
+              caches.match(OFFLINE_URL).then(
+                (offline) =>
+                  offline ||
+                  new Response(OFFLINE_FALLBACK_HTML, {
+                    status: 200,
+                    headers: { "Content-Type": "text/html; charset=utf-8" },
+                  }),
+              ),
           ),
         ),
     );

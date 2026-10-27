@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="bn">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>অফলাইন — বাংলা GPT টিউটর</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        margin: 0; min-height: 100vh; display: grid; place-items: center;
+        font-family: "Noto Sans Bengali", "Hind Siliguri", system-ui, sans-serif;
+        background: #f5f1e8; color: #17201a; text-align: center; padding: 24px;
+      }
+      @media (prefers-color-scheme: dark) {
+        body { background: #12140e; color: #e8e6df; }
+      }
+      main { max-width: 26rem; }
+      .icon { font-size: 3rem; margin-bottom: 0.5rem; }
+      h1 { font-size: 1.4rem; margin: 0.2rem 0 0.6rem; }
+      p { margin: 0.3rem 0; line-height: 1.6; }
+      button {
+        margin-top: 1rem; padding: 0.6rem 1.4rem; font: inherit; cursor: pointer;
+        border-radius: 10px; border: 1px solid #166534; background: #166534; color: #fff;
+      }
+      button[disabled] { opacity: 0.6; cursor: default; }
+      .status { font-size: 0.85rem; opacity: 0.75; margin-top: 0.8rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="icon" aria-hidden="true">📶</div>
+      <h1>আপনি এখন অফলাইনে আছেন</h1>
+      <p>সংযোগ ফিরলে অ্যাপটি নিজেই নতুন করে লোড হবে।</p>
+      <p>ওয়াই-ফাই বা মোবাইল ডেটা চালু করে আবার চেষ্টা করুন।</p>
+      <button id="retry" type="button">আবার চেষ্টা করুন</button>
+      <p class="status" id="status" role="status" aria-live="polite">
+        সংযোগের অপেক্ষায়…
+      </p>
+    </main>
+    <script>
+      // Auto-reload the moment connectivity returns; manual retry always available.
+      var retryBtn = document.getElementById("retry");
+      var statusEl = document.getElementById("status");
+      function attempt() {
+        retryBtn.disabled = true;
+        statusEl.textContent = "সংযোগ পরীক্ষা করা হচ্ছে…";
+        fetch("/", { method: "HEAD", cache: "no-store" })
+          .then(function () { window.location.reload(); })
+          .catch(function () {
+            statusEl.textContent = "এখনো অফলাইন — সংযোগের অপেক্ষায়…";
+            retryBtn.disabled = false;
+          });
+      }
+      retryBtn.addEventListener("click", attempt);
+      window.addEventListener("online", function () {
+        statusEl.textContent = "সংযোগ ফিরেছে — লোড হচ্ছে…";
+        setTimeout(function () { window.location.reload(); }, 400);
+      });
+    </script>
+  </body>
+</html>
