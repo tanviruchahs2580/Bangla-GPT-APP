@@ -144,6 +144,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): recover from page errors, report load failures, and never show another child's data
 - fix(web): report a dead API origin accurately, not as a busy server (#14)
 - fix(web): route /api/* explicitly to the edge proxy function
+- fix(web): satisfy the zero-warning lint gate on the wave-1b batch
 - fix(web): say the backend is down, not that the app has none
 - fix(web): share the login photo backdrop with Get Started; document Capacitor origins
 - fix(web): ship the CSP the code claimed, and bound the edge proxy
