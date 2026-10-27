@@ -284,6 +284,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(security): allowlist the reviewed ASCII-art hit in the full-history secret scan
 - chore(tests): park orphan specs that pin contracts not yet built
 - chore(web): repoint /api proxy to current tunnel host (quick-tunnel rotation)
+- chore: archive the stray root QA record; SBOM installs before it validates
 - chore: close the low-severity register — hot-path indexes, dead code, XFF spoofing, env parity
 - chore: code honesty - unused args, un-typed db params, inert suppressions, stale comments
 - chore: ignore Playwright MCP tool artifacts; regenerate the CHANGELOG
