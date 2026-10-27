@@ -343,9 +343,9 @@ def test_register_parent_refused_when_no_key_and_plaintext_consent_off(tmp_path)
     # boot, so assert by email -- the registering parent's rows must not exist.
     con = sqlite3.connect(tmp_path / "strict.db")
     try:
-        users = con.execute(
-            "select count(*) from users where email = 'p@example.com'"
-        ).fetchone()[0]
+        users = con.execute("select count(*) from users where email = 'p@example.com'").fetchone()[
+            0
+        ]
         parents = con.execute("select count(*) from parents").fetchone()[0]
     finally:
         con.close()
