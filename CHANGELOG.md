@@ -255,6 +255,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Tests
 
+- test(api): CI parity for the wave-2/3/4 batch -- ruff, sbom, seeder
 - test(api): autocommit the raw fixture connections in new-tables deletion tests
 - test(api): cover school admin fallbacks and tenant guards
 - test(api): erasure-fk fixture recognises the parity env var (BGPT_TEST_DATABASE_URL)
