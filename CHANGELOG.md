@@ -148,6 +148,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): stop reporting states the code never computed
 - fix(web): stop showing failures as facts, and read API timestamps as UTC
 - fix(web): stop the service worker caching error pages as the app shell
+- fix(web): wave-1b client trust batch -- session renewal, quiz durability, honest empty states, SSE reset
 - fix: close the full audit register — atomicity, envelope, a11y, ops; clear all 42 advisories (#57)
 - fix: complete admin password-change flow, tutor typo gate, roster-scoped stats, quiz distractors, i18n
 - fix: land the verified remediation on current main (CORS-adjacent, budget, UI states)
