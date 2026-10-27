@@ -346,6 +346,7 @@ export default function AITutorPage() {
       }
     },
     [
+      applyStreamedText,
       input,
       conversationId,
       subject,

@@ -585,6 +585,7 @@ export default function QuizPage() {
         className="chips chips-gap"
         role="tablist"
         aria-label={t("practiceTitle")}
+        tabIndex={-1}
         onKeyDown={onTablistKeyDown}
       >
         <button

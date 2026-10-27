@@ -213,7 +213,6 @@ export default function AdminDashboard() {
         .map(([key, n]) => `${key}: ${n}`)
         .join(", ");
       setPurgeMsg(`${t("purged")} — ${parts}`);
-      console.info("admin purge payload", res);
       setPurgeConfirming(false);
     } catch (err) {
       setPurgeMsg(errOf(err));
