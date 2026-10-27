@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Fixed
+
+- fix(release): authenticate the attestation verifier against GHCR
+
+## v0.9.3 - 2026-10-27
+
 ### Added
 
 - feat(api): production connection posture, truthful readiness, boot index metric; full-suite Postgres parity in CI (#29)
@@ -283,6 +289,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(deps): clear all 42 known advisories in the pinned set
 - chore(docs): regenerate the native-review sheet
 - chore(ops): make the load probe usable against strict stacks, and record what a fresh host needs
+- chore(release): v0.9.3
 - chore(scripts): make the shebang executable real for the five scripts that have one
 - chore(security): allowlist the reviewed ASCII-art hit in the full-history secret scan
 - chore(tests): park orphan specs that pin contracts not yet built
@@ -342,6 +349,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #81 from tanviruchahs2580/fix/concurrency-probe-verified-account
 - Merge pull request #84 from tanviruchahs2580/fix/audit-2026-10-27-wave1b
 - Merge pull request #88 from tanviruchahs2580/fix/audit-2026-10-27-wave2
+- Merge pull request #90 from tanviruchahs2580/chore/release-0.9.3
 - Merge remote-tracking branch 'origin/chore/supply-chain-checks' into merge-train2
 - Merge remote-tracking branch 'origin/docs/native-review-sheet' into merge-train2
 - Merge remote-tracking branch 'origin/fix/account-lifecycle-integrity' into merge-train2
@@ -350,6 +358,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge remote-tracking branch 'origin/fix/honest-ui-states' into merge-train2
 - Merge remote-tracking branch 'origin/fix/load-gate-throttle' into merge-train2
 - Merge remote-tracking branch 'origin/refactor/web-contracts' into merge-train2
+
 
 ## v0.9.2 - 2026-09-15
 
