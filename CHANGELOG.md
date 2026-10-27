@@ -71,6 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): vision-honest refusal for openai, max_output_tokens cap, transport retries (A10, A9, A16)
 - fix(api): wall school-less staff into the shared default school (F-04)
 - fix(api): wave-0 audit remediations -- pii gate, chat pool pin, gitleaks anchor, stale-deploy guard
+- fix(api): wave-1a hardening -- env gate denylist, mail quota, atomic counters, quiz submit gate, screening, session renewal
 - fix(api,web): audit remediations — breaker recovery, MFA/chat rate limits, CORS PATCH, model-refusal honesty, test runner
 - fix(auth): bind JWTs to an issuer and audience
 - fix(auth): hash passwords with Argon2id and upgrade legacy hashes on login
