@@ -271,6 +271,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(api): remove unresolvable plan-tracker tags from comments
 - chore(ci): add the supply-chain and secret-masking checks, and document the pipeline
 - chore(deps): clear all 42 known advisories in the pinned set
+- chore(docs): regenerate the native-review sheet
 - chore(ops): make the load probe usable against strict stacks, and record what a fresh host needs
 - chore(scripts): make the shebang executable real for the five scripts that have one
 - chore(security): allowlist the reviewed ASCII-art hit in the full-history secret scan
