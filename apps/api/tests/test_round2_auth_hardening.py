@@ -421,7 +421,9 @@ def test_production_refuses_a_malformed_pii_key() -> None:
 
 def test_production_accepts_a_real_fernet_key() -> None:
     key = Fernet.generate_key().decode()
-    assert _validate_pii(_settings_standalone(pii_enc_key=key)) == []
+    # B-04/PII_ALLOW_PLAINTEXT: the happy path names the escape hatch off
+    # explicitly -- a real key AND plaintext storage refused.
+    assert _validate_pii(_settings_standalone(pii_enc_key=key, pii_allow_plaintext=False)) == []
 
 
 # ---------------------------------------------------------------------------
