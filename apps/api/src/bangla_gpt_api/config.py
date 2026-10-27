@@ -8,6 +8,17 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 logger = logging.getLogger(__name__)
 
 PRODUCTION_ENVS = frozenset({"production", "prod", "staging"})
+# BE/ENV-gate audit: PRODUCTION_ENVS is kept for reference, but it is no
+# longer what is_production checks. The old allowlist ("these names ARE
+# production") made safety a free-text spelling contest: boot a pilot with
+# ENV=uat, ENV=live, or a typo like ENV=prodction and every guard silently
+# switched off -- open /metrics, default JWT secret accepted, the mock
+# provider serving fabricated answers to children, SMTP verification
+# bypassed. The gate is now a DENYLIST of explicitly unguarded names:
+# anything unknown boots guarded. staging keeps production parity by
+# construction instead of by enumeration. Enforced by
+# tests/test_env_parity.py.
+UNGARDED_ENVS = frozenset({"development", "dev", "test"})
 # staging/prod parity: staging runs the SAME strict boot guard and secret
 # suppression as production (no default JWT_SECRET, no raw reset-token logs);
 # only the data is non-authoritative. Enforced by tests/test_env_parity.py.
@@ -255,7 +266,12 @@ class Settings(BaseSettings):
 
     @property
     def is_production(self) -> bool:
-        return self.env.strip().lower() in PRODUCTION_ENVS
+        # Denylist, not allowlist: see UNGARDED_ENVS at the top of this file.
+        # The frozenset is inlined here on purpose -- this is the one decision
+        # every guard reads, and it must not depend on a module-global lookup
+        # resolving at call time. Keep the two in sync (test_env_parity pins
+        # the behaviour on both ends).
+        return self.env.strip().lower() not in frozenset({"development", "dev", "test"})
 
     @property
     def cors_origins(self) -> list[str]:

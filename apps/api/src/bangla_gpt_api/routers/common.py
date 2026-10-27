@@ -7,6 +7,7 @@ import json
 import logging
 import re
 from collections import defaultdict
+from collections.abc import Iterable, Iterator
 from typing import Any
 
 from fastapi import HTTPException
@@ -598,6 +599,65 @@ def _generate_document_prepare(
     return questions, chapter, ctx
 
 
+#: Structured fields that carry a question addressed to a student. Everything
+#: else in a generated payload is teacher-facing prose (lesson plans, rubric
+#: criteria) and is deliberately not screened word-for-word -- see B-08.
+_QUESTION_TEXT_KEYS = frozenset({"question", "question_text", "stem"})
+
+
+def _iter_question_texts(node: Any) -> Iterator[str]:
+    """Yield question-form text from a generated payload, depth-first.
+
+    Handles every generator shape without per-kind knowledge: MCQ objects
+    (``{"question": ...}``), cloze stems, and inline string question lists
+    under any ``questions``-style key.
+    """
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if (
+                isinstance(key, str)
+                and key.lower() in _QUESTION_TEXT_KEYS
+                and isinstance(value, str)
+            ):
+                yield value
+                continue
+            yield from _iter_question_texts(value)
+    elif isinstance(node, (list, tuple)):
+        for item in node:
+            yield from _iter_question_texts(item)
+
+
+def _screen_free_text(texts: Iterable[str], *, where: str) -> None:
+    """Refuse when any free-text fragment trips the child-safety panel.
+
+    The same ``screen_question`` the student tutor runs on every turn
+    (prompt-injection, self-harm, weapons, drugs, sexual content -- with the
+    academic-science exemptions). A teacher generator used to be the one
+    LLM path without it (B-08), while its documents are handed to minors.
+    The 400 code is the unsafe-content contract the tutor refusal uses;
+    the AiJob runner records the same code in the failed job.
+    """
+    from bangla_gpt_api.services.safety import screen_question
+
+    for text in texts:
+        if not text or not text.strip():
+            continue
+        verdict = screen_question(text)
+        if not verdict.safe:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "unsafe_content",
+                    "message": (
+                        "One or more texts failed the child-safety screen; "
+                        "nothing was generated or charged for this request"
+                    ),
+                    "reason": verdict.reason or "unsafe_content",
+                    "where": where,
+                },
+            )
+
+
 async def _generate_document(
     app_ctx: Ctx, db: Session, actor: User, kind: str, gen: Any
 ) -> tuple[dict, list[SourceRef], str | None]:
@@ -616,6 +676,19 @@ async def _generate_document(
     class_level = int(gen.class_level)
     subject = str(gen.subject)
     chapter: str | None = getattr(gen, "chapter", None)
+    # B-08: the child-safety screen is not student-turn-only. Teacher
+    # free-text (subject/chapter and up to 50 inline answer-key questions)
+    # used to reach the provider unscreened. Screen the free-text INPUTS
+    # BEFORE any retrieval or provider spend -- an unsafe chapter is also a
+    # chapter with no textbook evidence, so screening after prepare would
+    # answer 404 no-evidence and never name the real reason -- and the
+    # generated QUESTION texts after the provider, before the document is
+    # persisted. Same compiled patterns every student tutor turn runs.
+    gen_inline_questions = getattr(gen, "questions", None) or []
+    _screen_free_text(
+        [subject, chapter or "", *[str(q) for q in gen_inline_questions]],
+        where=f"teacher/{kind} input",
+    )
     questions, chapter, ctx = await asyncio.to_thread(
         _generate_document_prepare,
         app_ctx,
@@ -685,6 +758,14 @@ async def _generate_document(
         }
     else:
         raise ValueError(f"unsupported generator kind: {kind!r}")
+    # B-08 output side: screen the generated QUESTION texts before the
+    # document is persisted or ledgered. The provider is prompted for
+    # curriculum content, but a jailbreak mirrored through the retrieval
+    # context or a plain model slip must not reach a classroom printout.
+    # Only structured question fields are screened -- lesson-plan prose
+    # (deliberately open-ended teaching text) goes to the teacher hub, not
+    # to a quiz paper handed to students.
+    _screen_free_text(_iter_question_texts(doc_payload), where=f"teacher/{kind} output")
     # Ledger the spend. Adds only -- whichever caller persists the document (or
     # marks the AiJob ready) commits this row with it. The prompt side is the
     # retrieval context actually sent; the answer side is the serialised

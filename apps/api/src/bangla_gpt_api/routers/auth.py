@@ -86,6 +86,36 @@ _LOGIN_LOCKOUT_MAX_SECONDS = 3600
 #: Stable machine code for the 429 refusal while locked.
 LOGIN_LOCKED_CODE = "account_locked"
 
+# BE-05: an unauthenticated mail endpooint reachable per-IP at
+# 10/min (trivially rotated through a national ISP) is a mail-bomb
+# primitive aimed at a guardian inbox. The addresses themselves must be
+# the second bound: N mails per account per rolling window, quietly --
+# the bodies stay generic either way, so this leaks nothing. Chosen as a
+# quota rather than a cooldown on purpose: the documented resend contract
+# ("a resend must invalidate the previous code AND re-send immediately")
+# is what a student waiting on a lost email is relying on, and a
+# cool-down would break it. 5/hour absorbs every legitimate flow (a lost
+# first mail, a typo fix, one retry) while capping the bomb.
+_MAIL_QUOTA_PER_ADDRESS_PER_HOUR = 5
+
+
+def _address_mail_quota_allows(app_ctx: Ctx, email: str, kind: str) -> bool:
+    """True while ``email`` still has room in its rolling mail window.
+
+    Fail-soft on a backend outage on purpose: a cache that is down must
+    not take a public, enumeration-safe endpoint down with it, and the
+    per-IP limiter remains the bound in degraded mode (mirrors how the
+    MFA throttle degrades).
+    """
+    key = f"mailq:{kind}:{email.strip().lower()}"
+    try:
+        count = int(app_ctx.cache.incr(key, ttl=3600.0))
+    except CacheUnavailable:
+        return True
+    except Exception:  # pragma: no cover - defensive, same posture as above
+        return True
+    return count <= _MAIL_QUOTA_PER_ADDRESS_PER_HOUR
+
 
 def _encrypt_guardian_phone(app_ctx: Ctx, phone: str | None) -> str | None:
     """Store-side gate for the guardian phone (audit B-04).
@@ -268,7 +298,12 @@ def resend_verification(
         email = payload.email.strip().lower()
         target = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if target is not None and smtp_configured(app_ctx.settings) and not target.email_verified:
-        send_verification_email(db, app_ctx.settings, target)
+        if _address_mail_quota_allows(app_ctx, target.email, "verify"):
+            send_verification_email(db, app_ctx.settings, target)
+        else:
+            # Quota: the 202 body is identical either way (enumeration-safe);
+            # only the SMTP send is withheld. Logged for ops visibility.
+            json_log(logger, logging.WARNING, "mail_quota_exhausted", kind="verify")
     return {"status": "accepted"}
 
 
@@ -453,6 +488,46 @@ def logout(app_ctx: Ctx, request: Request, user: CurrentUser) -> None:
         raise revocation_store_unavailable() from exc
 
 
+@router.post("/auth/renew", response_model=TokenResponse, responses=coded(400, 403))
+def renew_token(
+    app_ctx: Ctx,
+    user: CurrentUser,
+    credentials: BearerCredentials,
+) -> TokenResponse:
+    """Slide the session forward: mint a fresh token for the caller (B-02).
+
+    The web client renews PROACTIVELY while the presented token still
+    verifies -- a 40-minute class session on one login used to hard-expire
+    at minute 60 and bounce the user to /login, losing a quiz in progress.
+    An EXPIRED token cannot renew: this is fail-secure by construction (a
+    renewal grace window is a replay window; the proactive client contract
+    is what keeps honest users out of it). The returned token carries a new
+    jti and a full ``jwt_expire_minutes`` from now; the old token dies of
+    natural causes at its own expiry and is not force-revoked -- revoking
+    it would kill an in-flight request racing this renewal.
+
+    MFA step-up tokens are rejected as API credentials upstream (the
+    CurrentUser dependency answers before this runs); impersonation tokens
+    must NOT renew -- the 15-minute impersonated window is that design's
+    safety bound, so this route refuses them explicitly.
+    """
+    claims = None
+    if credentials is not None and credentials.scheme.lower() == "bearer":
+        try:
+            claims = decode_token(credentials.credentials, settings=app_ctx.settings)
+        except Exception:
+            claims = None
+    if claims and claims.get("imp"):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "renew_unavailable",
+                "message": "Impersonation sessions cannot be renewed",
+            },
+        )
+    return TokenResponse(access_token=create_access_token(user, settings=app_ctx.settings))
+
+
 def _hash_reset_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
@@ -477,12 +552,18 @@ def _mfa_account_locked(app_ctx: AppContext, user_id: int) -> bool:
 
 
 def _record_failed_mfa_code(app_ctx: AppContext, user_id: int) -> None:
-    """Count one invalid TOTP code; stamp the lock when the window is full."""
+    """Count one invalid TOTP code; stamp the lock when the window is full.
+
+    The counter moved from a bare ``get_json``/``set_json`` pair to
+    ``Cache.incr``: N concurrent guesses (or rotated clients) all read the
+    same pre-increment count, all wrote back the same incremented value,
+    and the documented 10-failure lock treated the burst as one failure
+    (the S-012 guarantee, defeated by exactly the concurrency it existed
+    for). The increment is now one atomic operation on both backends.
+    """
     key = f"mfa_fail:{user_id}"
     try:
-        count = app_ctx.cache.get_json(key) or 0
-        count = int(count) + 1
-        app_ctx.cache.set_json(key, count, _MFA_FAIL_WINDOW_SECONDS)
+        count = app_ctx.cache.incr(key, _MFA_FAIL_WINDOW_SECONDS)
         if count >= _MFA_FAIL_MAX:
             app_ctx.cache.set_json(f"mfa_lock:{user_id}", True, _MFA_LOCK_SECONDS)
             json_log(logger, logging.WARNING, "mfa_throttle_locked", user_id=user_id)
@@ -547,6 +628,12 @@ def forgot_password(app_ctx: Ctx, payload: ForgotPasswordRequest, db: DbSession)
     email = payload.email.strip().lower()
     user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if user is None:
+        return {"status": "accepted"}
+    if not _address_mail_quota_allows(app_ctx, user.email, "reset"):
+        # BE-05 mail quota: identical generic 202 either way (enumeration
+        # safety is untouched); tokens and SMTP are both withheld so a
+        # bomb attempt cannot churn pending-token rows for the victim.
+        json_log(logger, logging.WARNING, "mail_quota_exhausted", kind="reset")
         return {"status": "accepted"}
 
     now = datetime.now(UTC).replace(tzinfo=None)

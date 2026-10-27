@@ -20,10 +20,13 @@ from bangla_gpt_api.curriculum.models import Chunk
 from bangla_gpt_api.db.models import (
     AnswerLog,
     ChapterProgress,
+    ClassStudent,
+    ClassTeacher,
     DailyActivity,
     QuizAttempt,
     RevisionItem,
     Student,
+    Teacher,
     User,
 )
 from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded, message
@@ -57,6 +60,7 @@ from bangla_gpt_api.schemas import (
     StudentProgress,
     StudentResponse,
 )
+from bangla_gpt_api.security import write_audit
 from bangla_gpt_api.services import (
     adaptive,
     knowledge,
@@ -96,6 +100,64 @@ from .deps import (
 router = APIRouter(responses=AUTH_GUARD_RESPONSES)
 
 logger = logging.getLogger(__name__)
+
+#: Roles whose in-school scope passes ``authorize_student_access`` (reads AND
+#: writes). The submission gate below narrows the WRITE case.
+_STAFF_ROLES = ("teacher", "admin", "school_admin")
+
+
+def _staff_classroom_assigned(db: Session, user: User, student_id: int) -> bool:
+    """True when this teacher is an assigned ClassTeacher of a classroom the
+    student is enrolled in ('' subject covers all). One EXISTS probe."""
+    probe = (
+        select(ClassStudent.student_id)
+        .join(ClassTeacher, ClassTeacher.classroom_id == ClassStudent.classroom_id)
+        .join(Teacher, Teacher.id == ClassTeacher.teacher_id)
+        .where(ClassStudent.student_id == student_id, Teacher.user_id == user.id)
+        .exists()
+    )
+    return db.scalar(select(probe)) is True
+
+
+def _authorize_quiz_submission(db: Session, attempt: QuizAttempt, user: User) -> None:
+    """Writes to a student's attempt are the student's own act (audit B-07).
+
+    ``authorize_student_access`` is the READ/WRITE gate for progress and
+    profile surfaces -- in-school staff pass it for a student's data, and
+    nothing distinguished a read from a teacher CHOOSING ANSWERS on behalf
+    of an account-holding student, silently moving the child out of the
+    at-risk bucket the weak-matrix, support plans, parent digests and
+    government reports all read. Submission writes now split:
+
+    * the owning student always may submit their own attempt;
+    * staff act only for the proctored roster: students with no login of
+      their own (``user_id IS NULL``, the CSV-import paper flow), or the
+      classroom's own assigned teacher (ClassTeacher -- minted at
+      ``POST /teacher/classrooms``), and school admins -- every such proxy
+      submission lands in the audit trail (action=quiz_proxy_submit);
+    * a teacher outside the classroom is a coded 403.
+    """
+    student = authorize_student_access(db, attempt.student_id, user)
+    if user.role not in _STAFF_ROLES:
+        return
+    write_audit(
+        db,
+        action="quiz_proxy_submit",
+        actor_user_id=user.id,
+        actor_role=user.role,
+        target=f"quiz_attempt:{attempt.id}",
+        detail={"student_id": student.id, "attempt_id": attempt.id},
+    )
+    if student.user_id is None:
+        return  # proctored roster: no login exists, staff hands the paper in
+    if user.role == "teacher" and not _staff_classroom_assigned(db, user, student.id):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "staff_cannot_submit_student_quiz",
+                "message": "Only the student or their class teacher can submit this attempt",
+            },
+        )
 
 
 @router.get("/learn/subjects", response_model=list[SubjectOut])
@@ -230,7 +292,7 @@ def submit_quiz(
         raise HTTPException(
             status_code=404, detail={"code": "attempt_not_found", "message": "Attempt not found"}
         )
-    authorize_student_access(db, attempt.student_id, user)
+    _authorize_quiz_submission(db, attempt, user)
 
     # Atomic claim: exactly one concurrent submission may transition
     # open -> graded. Losers get a clean 400 instead of corrupting state.
