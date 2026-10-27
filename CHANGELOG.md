@@ -114,6 +114,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(security): close the S-011/S-012/F-142 gaps — revocable sessions, TOTP account throttle, erasure re-auth
 - fix(tests): make the teacher-jobs rate-limit test deterministic
 - fix(tests): make the two new UI tests independent of ambient state
+- fix(tests): the production pii happy path opts out of plaintext storage
 - fix(web): add the language pin the import promised, and unbreak main
 - fix(web): clear footer from bottom nav + cut a round-trip from login
 - fix(web): clear the two WCAG AA failures axe found on the tutor screen
@@ -293,6 +294,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - style(api): ruff format mock provider and lesson plan prompt
 - style(web): format the new progress-bar test (prettier gate in CI)
 - style(web): give the registration screen login's photo backdrop
+- style: ruff format the wave-0 test additions
 - style: satisfy the repository's own pre-commit hooks
 
 ### Other
