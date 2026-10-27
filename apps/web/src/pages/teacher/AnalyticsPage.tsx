@@ -93,7 +93,8 @@ export default function AnalyticsPage() {
   const wm = wmQuery.data ?? null;
   // FE-02: an outage must never read as an empty classroom (see cards below).
   const friendlywmError = wmQuery.isError
-    ? friendlyError((wmQuery.error as { rawDetail?: unknown }).rawDetail)?.text ?? t("errorGeneric")
+    ? (friendlyError((wmQuery.error as { rawDetail?: unknown }).rawDetail)
+        ?.text ?? t("errorGeneric"))
     : null;
 
   async function createSupportPlan(studentId: number) {
@@ -180,7 +181,10 @@ export default function AnalyticsPage() {
 
       <Card title={t("anaCiTitle")}>
         {wmQuery.isError ? (
-          <LoadError message={friendlywmError} onRetry={() => void wmQuery.refetch()} />
+          <LoadError
+            message={friendlywmError}
+            onRetry={() => void wmQuery.refetch()}
+          />
         ) : wm === null ? null : ci === null ? (
           <p className="muted">{t("wmEmpty")}</p>
         ) : (
@@ -200,7 +204,10 @@ export default function AnalyticsPage() {
 
       <Card title={t("wmTitle")}>
         {wmQuery.isError ? (
-          <LoadError message={friendlywmError} onRetry={() => void wmQuery.refetch()} />
+          <LoadError
+            message={friendlywmError}
+            onRetry={() => void wmQuery.refetch()}
+          />
         ) : wm === null || wm.concepts.length === 0 ? (
           <p className="muted">{t("wmEmpty")}</p>
         ) : (

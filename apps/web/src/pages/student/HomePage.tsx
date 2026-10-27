@@ -234,7 +234,10 @@ export default function HomePage() {
             <div className="skeleton skeleton-text" />
           </div>
         ) : isError ? (
-          <LoadError message={t("errorGeneric")} onRetry={() => void refetch()} />
+          <LoadError
+            message={t("errorGeneric")}
+            onRetry={() => void refetch()}
+          />
         ) : progress && progress.attempts_graded > 0 ? (
           <div className="row-flex">
             <ProgressRing

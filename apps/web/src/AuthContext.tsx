@@ -67,7 +67,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // abandoned by the clock.
       void logout().finally(() => {
         const here = `${window.location.pathname}${window.location.search}`;
-        const target = here.startsWith("/login") ? "/login" : `/login?next=${encodeURIComponent(here)}`;
+        const target = here.startsWith("/login")
+          ? "/login"
+          : `/login?next=${encodeURIComponent(here)}`;
         window.location.href = target;
       });
     });

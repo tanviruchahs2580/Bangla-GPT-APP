@@ -178,7 +178,8 @@ function safeNextPath(search: string): string | null {
 function RoutesSwitch() {
   const { me, loading } = useAuth();
   const home = me ? (ROLE_HOME[me.role] ?? "/login") : "/welcome";
-  if (loading) return <Loading />;  return (
+  if (loading) return <Loading />;
+  return (
     <>
       {/* I18N-12: an anonymous visitor sees these pages without AppShell, so
           the language switch has to be rendered here or not at all. */}

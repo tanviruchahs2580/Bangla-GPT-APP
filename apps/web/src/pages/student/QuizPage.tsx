@@ -102,7 +102,9 @@ export default function QuizPage() {
   const [answers, setAnswers] = useState<Record<number, number>>(
     () => readQuizDraft()?.answers ?? {},
   );
-  const [current, setCurrent] = useState<number>(() => readQuizDraft()?.current ?? 0);
+  const [current, setCurrent] = useState<number>(
+    () => readQuizDraft()?.current ?? 0,
+  );
   const [result, setResult] = useState<QuizResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -128,7 +130,10 @@ export default function QuizPage() {
   }, [started, answers, current]);
 
   const unanswered = started
-    ? started.questions.reduce((n, _, i) => n + (answers[i] === undefined ? 1 : 0), 0)
+    ? started.questions.reduce(
+        (n, _, i) => n + (answers[i] === undefined ? 1 : 0),
+        0,
+      )
     : 0;
 
   const requestSubmit = () => {
@@ -471,7 +476,12 @@ export default function QuizPage() {
                 {t("nextQuestion")} <ArrowRight size={16} aria-hidden />
               </Button>
             ) : (
-              <Button variant="teal" size="sm" onClick={requestSubmit} disabled={busy}>
+              <Button
+                variant="teal"
+                size="sm"
+                onClick={requestSubmit}
+                disabled={busy}
+              >
                 {t("finishQuiz")}
               </Button>
             )}

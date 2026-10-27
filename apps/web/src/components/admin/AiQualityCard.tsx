@@ -32,10 +32,7 @@ export function AiQualityCard() {
         if (alive) setQ(r);
       })
       .catch(() => {
-        if (alive)
-          setError(
-            t("errorGeneric"),
-          );
+        if (alive) setError(t("errorGeneric"));
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -44,7 +41,10 @@ export function AiQualityCard() {
       alive = false;
     };
   }, [attempt]);
-  if (error) return <LoadError message={error} onRetry={() => setAttempt((n) => n + 1)} />;
+  if (error)
+    return (
+      <LoadError message={error} onRetry={() => setAttempt((n) => n + 1)} />
+    );
   if (loading) return null;
   if (!q || typeof q.answers_total !== "number") return null;
   const reasons = Object.entries(q.refusals_by_reason ?? {});
