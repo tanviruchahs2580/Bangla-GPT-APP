@@ -86,11 +86,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(ci): make the doc-path guard cover the classes of path it claims to
 - fix(ci): make the lockfile guardrail deterministic
 - fix(ci): pin every action to a commit SHA and scope registry permission
+- fix(ci): pin sbom-action to the real v0.20.11 commit
 - fix(ci): pin the CodeQL actions to a commit, not a re-pointable tag object
 - fix(ci): prettier-format the web sources; drop the digest script's shebang
 - fix(ci): repair two gates that could not fail, and stop the impossible redis bump
 - fix(ci): resolve README links portably so the docs guard works on Linux
 - fix(ci): serialise release and deploy runs per git ref
+- fix(ci): syft attaches its own artifact; the upload carries python only
+- fix(ci): syft for the web SBOM; regenerate the review sheet and CHANGELOG
 - fix(ci): the Android build needs JDK 21, not 17
 - fix(ci): trim the trailing whitespace pre-commit found in vercel-deploy.yml
 - fix(ci): unblock Dependabot PRs and name the Vercel credential failure (#9)
