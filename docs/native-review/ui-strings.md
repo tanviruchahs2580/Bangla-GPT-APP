@@ -743,8 +743,8 @@ translation that changes the meaning of the English original.
 | 719 | apps/api/src/bangla_gpt_api/retrieval/query_analysis.py:464 | (literal) | বীজগণিতীয় রাশি | |
 | 720 | apps/api/src/bangla_gpt_api/retrieval/query_analysis.py:466 | (literal) | বীজগণিতীয় রাশি | |
 | 721 | apps/api/src/bangla_gpt_api/retrieval/query_analysis.py:469 | (literal) | বৃত্তের ক্ষেত্রফল | |
-| 722 | apps/api/src/bangla_gpt_api/routers/auth.py:550 | (literal) | পাসওয়ার্ড রিসেট / Password reset | |
-| 723 | apps/api/src/bangla_gpt_api/routers/auth.py:551 | (literal) | পাসওয়ার্ড রিসেট করতে নিচের টোকেনটি ব্যবহার করুন (৩০ মিনিটের জন্য বৈধ):\n\n{token}\n | |
+| 722 | apps/api/src/bangla_gpt_api/routers/auth.py:578 | (literal) | পাসওয়ার্ড রিসেট / Password reset | |
+| 723 | apps/api/src/bangla_gpt_api/routers/auth.py:579 | (literal) | পাসওয়ার্ড রিসেট করতে নিচের টোকেনটি ব্যবহার করুন (৩০ মিনিটের জন্য বৈধ):\n\n{token}\n | |
 | 724 | apps/api/src/bangla_gpt_api/routers/common.py:337 | (literal) | সবচাইতে সহজ শব্দে ছোট করে বল। | |
 | 725 | apps/api/src/bangla_gpt_api/routers/common.py:338 | (literal) | স্বাভাবিক ধারাবাহিক বিবরণ দাও। | |
 | 726 | apps/api/src/bangla_gpt_api/routers/common.py:339 | (literal) | প্রয়োজনীয় সব ধাপ ও উদাহরণসহ বিস্তারিত বল। | |
