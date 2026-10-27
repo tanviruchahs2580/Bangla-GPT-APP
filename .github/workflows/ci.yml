@@ -298,13 +298,13 @@ jobs:
           format: cyclonedx-json
           artifact-name: sbom-web.json
 
-      - name: Upload SBOM artifacts
+      # the web SBOM itself is attached by sbom-action (artifact
+      # sbom-web.json); this upload carries the python manifest.
+      - name: Upload python SBOM artifact
         uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
         with:
-          name: sbom
-          path: |
-            apps/api/sbom-python.json
-            apps/web/sbom-web.json
+          name: sbom-python
+          path: apps/api/sbom-python.json
 
   web:
     name: Web build & test (apps/web)
