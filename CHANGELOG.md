@@ -153,6 +153,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): stop showing failures as facts, and read API timestamps as UTC
 - fix(web): stop the service worker caching error pages as the app shell
 - fix(web): wave-1b client trust batch -- session renewal, quiz durability, honest empty states, SSE reset
+- fix: audit remediation waves 2-4 -- the data layer ages, the gates run, the polish lands
 - fix: close the full audit register — atomicity, envelope, a11y, ops; clear all 42 advisories (#57)
 - fix: complete admin password-change flow, tutor typo gate, roster-scoped stats, quiz distractors, i18n
 - fix: land the verified remediation on current main (CORS-adjacent, budget, UI states)
@@ -334,6 +335,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #74 from tanviruchahs2580/feat/schema-invariants
 - Merge pull request #77 from tanviruchahs2580/fix/codeql-action-pin
 - Merge pull request #81 from tanviruchahs2580/fix/concurrency-probe-verified-account
+- Merge pull request #84 from tanviruchahs2580/fix/audit-2026-10-27-wave1b
 - Merge remote-tracking branch 'origin/chore/supply-chain-checks' into merge-train2
 - Merge remote-tracking branch 'origin/docs/native-review-sheet' into merge-train2
 - Merge remote-tracking branch 'origin/fix/account-lifecycle-integrity' into merge-train2
