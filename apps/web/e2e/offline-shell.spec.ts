@@ -56,8 +56,11 @@ test('the service worker installs, caches the hashed bundle, and boots offline',
   // worker warms the hashed assets out of index.html. Assert it did: without
   // this, "offline" is an HTML page that boots no React at all.
   const cachedAssets = await page.evaluate(async () => {
-    const cache = await caches.open('bgpt-v2')
-    const keys = await cache.keys()
+    // Discover the worker's cache by prefix instead of hardcoding the name:
+    // the cache name carries a maintenance-bump suffix (bgpt-v2 -> bgpt-v3)
+    // and the assertion is about *content*, not the label.
+    const names = (await caches.keys()).filter((name) => name.startsWith('bgpt-'))
+    const keys = (await Promise.all(names.map((name) => caches.open(name).then((c) => c.keys())))).flat()
     return keys.filter((request) => new URL(request.url).pathname.startsWith('/assets/')).length
   })
   expect(cachedAssets, 'the service worker cached no /assets/* entry').toBeGreaterThan(0)

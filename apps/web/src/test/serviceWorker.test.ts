@@ -145,14 +145,18 @@ describe("public/sw.js navigation handling", () => {
     expect(put).not.toHaveBeenCalled();
   });
 
-  it("returns a 503 offline page when fetch rejects and no shell is cached", async () => {
+  it("answers an guaranteed-200 offline page when fetch rejects and no shell is cached", async () => {
+    // Installed-app criteria: an offline navigation answering 5xx marks the
+    // PWA non-installable — the browser install prompt vanished with the old
+    // 503 shape. The emergency document is now explicitly 200.
     const { cachesMock } = makeCaches(); // match → undefined: nothing cached
     const fetchImpl = vi.fn(() => Promise.reject(new Error("offline")));
     const respondWith = fireFetch(loadSw(cachesMock, fetchImpl), NAVIGATION);
 
     const res = await respondWith.mock.calls[0][0];
     expect(res).toBeDefined(); // undefined here would reject the navigation
-    expect(res.status).toBe(503);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("অফলাইন");
   });
 
   it("returns the cached shell when fetch rejects and one exists", async () => {
