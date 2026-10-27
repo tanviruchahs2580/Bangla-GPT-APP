@@ -171,6 +171,14 @@ class Settings(BaseSettings):
     # carrying user_id (F-058). Same window as chat by default; the trail is
     # coarser data than the conversation itself.
     analytics_retention_days: int = 180
+    # DB-04: the answer log is the child's graded-answer record — it gets a
+    # LONG window (two school years) but it GETS one now; the table shipped
+    # without a timestamp at all, so nothing could ever age it out.
+    answer_log_retention_days: int = 730
+    # The AI spend ledger. The budget math only reads the current month, so
+    # a year of history is generous for dashboards and audits while keeping
+    # the table bounded for accounts that live for years.
+    ai_usage_retention_days: int = 365
 
     # --- parent invites ---
     invite_ttl_minutes: int = 1440

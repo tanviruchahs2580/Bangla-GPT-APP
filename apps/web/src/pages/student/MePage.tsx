@@ -307,32 +307,59 @@ export default function MePage() {
               <div className="row-sub">{t("activityHint")}</div>
             </div>
           </div>
-          <div
-            className="heatmap"
-            data-testid="activity-heatmap"
-            aria-label={t("streakLabel", { days: activity.streak })}
-          >
-            {activity.days.map((d) => {
-              const total = d.questions + d.quizzes;
-              const lvl = total === 0 ? 0 : total <= 2 ? 1 : total <= 5 ? 2 : 3;
-              const title = [
-                d.date,
-                t(
-                  d.questions === 1 ? "activityQuestion" : "activityQuestions",
-                  { n: d.questions },
-                ),
-                t("activityQuizzes", { n: d.quizzes }),
-                t("activityMinutes", { n: d.minutes }),
-              ].join(" · ");
-              return (
-                <span
-                  key={d.date}
-                  className={`heat-cell lvl-${lvl}`}
-                  title={title}
-                />
-              );
-            })}
-          </div>
+          {(() => {
+            // FE-11: the per-day data lived only in title tooltips —
+            // invisible to keyboards and screen readers. The grid is now
+            // a labelled image equivalent: one summary name carries the
+            // counts a glance would take from the colors.
+            const totals = activity.days.reduce(
+              (acc, d) => {
+                acc.questions += d.questions;
+                acc.quizzes += d.quizzes;
+                if (d.questions + d.quizzes > 0) acc.active += 1;
+                return acc;
+              },
+              { questions: 0, quizzes: 0, active: 0 },
+            );
+            const gridLabel = t("heatmapSummary", {
+              questions: totals.questions,
+              active: totals.active,
+              days: activity.days.length,
+            });
+            return (
+              <div
+                className="heatmap"
+                data-testid="activity-heatmap"
+                role="img"
+                aria-label={gridLabel}
+              >
+                <span className="sr-only">{gridLabel}</span>
+                {activity.days.map((d) => {
+                  const total = d.questions + d.quizzes;
+                  const lvl =
+                    total === 0 ? 0 : total <= 2 ? 1 : total <= 5 ? 2 : 3;
+                  const title = [
+                    d.date,
+                    t(
+                      d.questions === 1
+                        ? "activityQuestion"
+                        : "activityQuestions",
+                      { n: d.questions },
+                    ),
+                    t("activityQuizzes", { n: d.quizzes }),
+                    t("activityMinutes", { n: d.minutes }),
+                  ].join(" · ");
+                  return (
+                    <span
+                      key={d.date}
+                      className={`heat-cell lvl-${lvl}`}
+                      title={title}
+                    />
+                  );
+                })}
+              </div>
+            );
+          })()}
         </Card>
       )}
 

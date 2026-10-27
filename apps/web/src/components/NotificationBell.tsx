@@ -53,8 +53,34 @@ export function NotificationBell() {
 
   useEffect(() => {
     void refresh();
-    const id = setInterval(() => void refresh(), 60_000);
-    return () => clearInterval(id);
+    // FE-09: a phone in a backpack kept polling every minute — battery and
+    // mobile data burned by a screen nobody is looking at. The interval
+    // runs only while the page is visible; visibilitychange fires an
+    // immediate refresh on return so the badge is not stale on unlock.
+    let id: number | undefined;
+    const start = () => {
+      if (id === undefined)
+        id = window.setInterval(() => void refresh(), 60_000);
+    };
+    const stop = () => {
+      if (id !== undefined) {
+        window.clearInterval(id);
+        id = undefined;
+      }
+    };
+    start();
+    document.addEventListener("visibilitychange", onVisible);
+    function onVisible() {
+      if (document.hidden) stop();
+      else {
+        void refresh();
+        start();
+      }
+    }
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      stop();
+    };
   }, [refresh]);
 
   useEffect(() => {

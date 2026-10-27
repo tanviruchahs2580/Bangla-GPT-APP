@@ -1,3 +1,5 @@
+import { resolve } from "node:path";
+
 import { describe, expect, it } from "vitest";
 import { render } from "@testing-library/react";
 import { SafeMarkdown } from "../lib/safeMarkdown";
@@ -54,5 +56,31 @@ describe("SafeMarkdown", () => {
       <SafeMarkdown content="![x](//evil.example/pixel.png)" />,
     );
     expect(container.querySelectorAll("img")).toHaveLength(0);
+  });
+});
+
+// CodeQL js/bad-tag-filter triage (docs/security/codeql-triage-2026-10-27.md):
+// the primary xss control is the *absence* of rehype-raw -- react-markdown
+// renders raw HTML as text while that plugin list stays clean. The regex
+// scrub in safeMarkdown.tsx is only the belt-and-suspenders pass. Pin the
+// invariant here so a future "add rehype-raw" change cannot slide the whole
+// guard away without failing CI.
+describe("safeMarkdown plugin invariants", () => {
+  it("never enables the raw-HTML rehype lane", async () => {
+    const module = await import("../../src/lib/safeMarkdown");
+    // no configurable plugin surface exposed: re-render is the assertion
+    expect(typeof module.SafeMarkdown).toBe("function");
+    const src = (await import("node:fs"))
+      .readFileSync(resolve(process.cwd(), "src/lib/safeMarkdown.tsx"), "utf8")
+      // strip comments first: the guard exists precisely so even a comment
+      // mentioning the plugin keeps documenting WHY it must not appear.
+      .replace(/\/\/[^\n]*/g, "")
+      .replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(src, "rehype-raw must never enter the plugin lane").not.toContain(
+      "rehype-raw",
+    );
+    expect(src, "sanitizer must never parse HTML into the DOM").not.toContain(
+      "dangerouslySetInnerHTML",
+    );
   });
 });

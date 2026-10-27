@@ -400,7 +400,11 @@ p {
       color-mix(in srgb, var(--bg-elev) 30%, transparent),
       color-mix(in srgb, var(--bg-elev) 30%, transparent)
     ),
-    url("./assets/student-bg.jpg") center / cover no-repeat;
+    image-set(
+        url("./assets/student-bg.webp") type("image/webp") 1x,
+        url("./assets/student-bg.jpg") type("image/jpeg") 1x
+      )
+      center / cover no-repeat;
 }
 
 [data-theme="dark"] .shell-student::before {
@@ -409,7 +413,11 @@ p {
       color-mix(in srgb, var(--bg) 80%, transparent),
       color-mix(in srgb, var(--bg) 80%, transparent)
     ),
-    url("./assets/student-bg.jpg") center / cover no-repeat;
+    image-set(
+        url("./assets/student-bg.webp") type("image/webp") 1x,
+        url("./assets/student-bg.jpg") type("image/jpeg") 1x
+      )
+      center / cover no-repeat;
 }
 
 [data-lowdata="1"] .shell-student::before {
@@ -1276,7 +1284,10 @@ p {
    cropped), top-anchored, over a pre-blurred ambient fill of the same
    artwork so no letterbox bars show. Low-data drops every photo layer. */
 .splash-login {
-  --splash-bg-image: url("./assets/login-bg-desktop.jpg");
+  --splash-bg-image: image-set(
+    url("./assets/login-bg-desktop.webp") type("image/webp") 1x,
+    url("./assets/login-bg-desktop.jpg") type("image/jpeg") 1x
+  );
   --splash-bg-veil: linear-gradient(
     color-mix(in srgb, var(--bg-elev) 26%, transparent),
     color-mix(in srgb, var(--bg-elev) 26%, transparent)
@@ -1317,7 +1328,10 @@ p {
 /* Narrow viewports: portrait artwork, contain over blurred ambient fill */
 @media (max-width: 899px) {
   .splash-login {
-    --splash-bg-image: url("./assets/login-bg-mobile.jpg");
+    --splash-bg-image: image-set(
+      url("./assets/login-bg-mobile.webp") type("image/webp") 1x,
+      url("./assets/login-bg-mobile.jpg") type("image/jpeg") 1x
+    );
     --splash-bg-ambient: url("./assets/login-bg-blur.jpg");
     background-image:
       var(--splash-bg-veil), var(--splash-bg-image), var(--splash-bg-ambient),
