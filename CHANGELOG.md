@@ -67,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): serve the configured corpus and the Dhaka day in the Learn flow
 - fix(api): stop the WAL pragma race killing multi-worker SQLite boots
 - fix(api): strip photo metadata before an image reaches the model provider
+- fix(api): the two parity contracts the submission-authority rows bent
 - fix(api): tie the quiz ceilings to one bound so an assignment stays submittable
 - fix(api): unify the error envelope — every raise carries a machine code
 - fix(api): vision-honest refusal for openai, max_output_tokens cap, transport retries (A10, A9, A16)
@@ -276,6 +277,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(ops): make the load probe usable against strict stacks, and record what a fresh host needs
 - chore(scripts): make the shebang executable real for the five scripts that have one
 - chore(security): allowlist the reviewed ASCII-art hit in the full-history secret scan
+- chore(tests): park orphan specs that pin contracts not yet built
 - chore(web): repoint /api proxy to current tunnel host (quick-tunnel rotation)
 - chore: close the low-severity register — hot-path indexes, dead code, XFF spoofing, env parity
 - chore: code honesty - unused args, un-typed db params, inert suppressions, stale comments
