@@ -185,7 +185,6 @@ def test_answer_log_ages_on_its_own_timestamp(tmp_path) -> None:
 
 
 def test_erasure_strips_student_from_attempts_json(tmp_path) -> None:
-    settings = _settings(tmp_path, db_name="erasure")
     engine = _engine(tmp_path, db_name="erasure")
     with make_session_factory(engine)() as db, db.begin():
         teacher = User(
@@ -236,7 +235,6 @@ def test_erasure_strips_student_from_attempts_json(tmp_path) -> None:
         short_test.attempts = [{"student_id": student.id, "score": 10}]
 
         child_user_id = child.id
-        child_student_id = student.id
 
     with make_session_factory(engine)() as db, db.begin():
         target = db.get(User, child_user_id)

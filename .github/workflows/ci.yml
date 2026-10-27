@@ -282,9 +282,12 @@ jobs:
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
 
-      - name: Generate web SBOM (from the package lock)
+      - name: Generate web SBOM (native npm, from the package lock)
+        # npm >=10.9 ships CycloneDX natively; the third-party cyclonedx-npm
+        # route failed on the lock's intentional esbuild override
+        # (ELSPROBLEMS -- vite pins its own esbuild).
         working-directory: apps/web
-        run: npx --yes @cyclonedx/cyclonedx-npm --package-lock-only --output-file sbom-web.json
+        run: npm sbom --sbom-format cyclonedx > sbom-web.json
 
       - name: Upload SBOM artifacts
         uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0

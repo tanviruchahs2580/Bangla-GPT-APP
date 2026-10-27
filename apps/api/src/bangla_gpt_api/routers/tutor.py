@@ -213,7 +213,12 @@ async def ask(app_ctx: Ctx, payload: AskRequest, db: DbSession, user: CurrentUse
                 pending=pending,
             )
         except Exception:  # pragma: no cover - ledger must not mask the 502
-            pass
+            json_log(
+                logger,
+                logging.WARNING,
+                "ledger_finalize_failed",
+                error="ask_path",
+            )
         # Upstream LLM failure (timeout/exhausted retries/blocked) must be a
         # controlled 502, never an unhandled 500.
         raise HTTPException(
@@ -650,8 +655,13 @@ async def send_chat_message(
                     answer_text=None,
                 )
                 db.commit()
-            except Exception:  # pragma: no cover - ledger must not mask the 502
-                pass
+            except Exception as ledger_exc:  # pragma: no cover - defensive
+                json_log(
+                    logger,
+                    logging.WARNING,
+                    "ledger_finalize_failed",
+                    error=type(ledger_exc).__name__,
+                )
             raise HTTPException(
                 status_code=502,
                 detail={"code": "llm_unavailable", "message": "LLM provider unavailable"},
@@ -776,7 +786,8 @@ async def stream_chat_message(
                             break
                         if isinstance(item, ProviderError):
                             raise item
-                        if item.type == "token":
+                        if item.type == "token" and item.text:
+                            streamed_text.append(item.text)
                             token_payload = json.dumps({"text": item.text}, ensure_ascii=False)
                             yield f"event: token\ndata: {token_payload}\n\n"
                         elif item.response is not None:
@@ -786,6 +797,28 @@ async def stream_chat_message(
                     producer.cancel()
                     with contextlib.suppress(BaseException):
                         await producer
+                    # BE-01: whatever reached the student (even nothing) sits
+                    # in the ledger -- the reserve is finalized with the
+                    # partial text so a disconnect is accounted for instead
+                    # of printing money on one side and burning it on the
+                    # other.
+                    partial = "".join(streamed_text)
+                    try:
+                        await asyncio.to_thread(
+                            finalize_ai_usage,
+                            db,
+                            prepared.pending_usage,
+                            model=getattr(tutor.provider, "model", None) or tutor.provider.name,
+                            answer_text=partial or None,
+                        )
+                        db.commit()
+                    except Exception as ledger_exc:  # pragma: no cover
+                        json_log(
+                            logger,
+                            logging.WARNING,
+                            "ledger_finalize_failed",
+                            error=type(ledger_exc).__name__,
+                        )
             if final_response is None:  # never leak a naked 500 under -O
                 # user_msg already committed before stream; no rollback needed
                 yield (
