@@ -292,7 +292,7 @@ jobs:
         # esbuild for vite (ELSPROBLEMS is a red herring for an SBOM read).
         # Syft scans the installed directory without touching npm's
         # validator; pinned for supply-chain integrity like every action.
-        uses: anchore/sbom-action@d94f46e13aa862326ff5d61af2350053edcfdef7 # v0.20.11
+        uses: anchore/sbom-action@43a17d6e7add2b5535efe4dcae9952337c479a93 # v0.20.11
         with:
           path: ./apps/web
           format: cyclonedx-json
