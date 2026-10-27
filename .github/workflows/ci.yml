@@ -282,18 +282,21 @@ jobs:
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
 
-      - name: Install web dependencies (SBOM validation needs the tree)
+      - name: Install web dependencies (SBOM scans the installed tree)
         working-directory: apps/web
         run: npm ci --no-audit --ignore-scripts
 
-      - name: Generate web SBOM (native npm, from the installed tree)
-        # npm >=10.9 ships CycloneDX natively; the third-party cyclonedx-npm
-        # route aborted on the lock's intentional esbuild override
-        # (ELSPROBLEMS), which native npm sbom accepts -- but it still
-        # validates the lock against the installed tree, so npm ci runs
-        # first. --ignore-scripts keeps this install side-effect free.
-        working-directory: apps/web
-        run: npm sbom --sbom-format cyclonedx > sbom-web.json
+      - name: Generate web SBOM (syft, from the installed tree)
+        # npm's own SBOM emitters (cyclonedx-npm and npm sbom) both run
+        # Arborist validation first, and this lock intentionally overrides
+        # esbuild for vite (ELSPROBLEMS is a red herring for an SBOM read).
+        # Syft scans the installed directory without touching npm's
+        # validator; pinned for supply-chain integrity like every action.
+        uses: anchore/sbom-action@d94f46e13aa862326ff5d61af2350053edcfdef7 # v0.20.11
+        with:
+          path: ./apps/web
+          format: cyclonedx-json
+          artifact-name: sbom-web.json
 
       - name: Upload SBOM artifacts
         uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
