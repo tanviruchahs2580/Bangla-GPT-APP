@@ -350,6 +350,9 @@ jobs:
           gh attestation verify "oci://${{ needs.build-push.outputs.api_image }}@${{ needs.build-push.outputs.api_digest }}" --repo "$GITHUB_REPOSITORY"
           gh attestation verify "oci://${{ needs.build-push.outputs.web_image }}@${{ needs.build-push.outputs.web_digest }}" --repo "$GITHUB_REPOSITORY"
 
+      - name: Log in to GHCR (read, for Trivy pull)
+        run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
       - name: Trivy on both release digests (HIGH/CRITICAL, fixed only)
         run: |
           set -euo pipefail
