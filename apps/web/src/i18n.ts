@@ -444,6 +444,14 @@ const bn = {
   nextQuestion: "পরের প্রশ্ন",
   previousQuestion: "আগের প্রশ্ন",
   finishQuiz: "শেষ করুন",
+  // B-03: unanswered-submit confirmation — a Finish press used to score
+  // every unanswered question as wrong with no warning.
+  quizUnansweredConfirm:
+    "{n} টি প্রশ্নের উত্তর দেওয়া হয়নি। যা আছে তা দিয়েই জমা দেবেন?",
+  quizSubmitAnyway: "যা আছে তা-ই জমা দিন",
+  quizKeepAnswering: "উত্তর দিতে থাকুন",
+  prevPage: "আগের পৃষ্ঠা",
+  nextPage: "পরের পৃষ্ঠা",
   notStarted: "এখনো কোনো কুইজ দেওয়া হয়নি।",
   continueTutor: "চ্যাট চালিয়ে যান",
   // refusal audit (admin safety view). These are literal Bengali
@@ -1109,6 +1117,13 @@ const en: Dict = {
   nextQuestion: "Next question",
   previousQuestion: "Previous question",
   finishQuiz: "Finish quiz",
+  // B-03: unanswered-submit confirmation (mirrors the bn block).
+  quizUnansweredConfirm:
+    "{n} question(s) have no answer yet. Submit with what you have?",
+  quizSubmitAnyway: "Submit anyway",
+  quizKeepAnswering: "Keep answering",
+  prevPage: "Previous page",
+  nextPage: "Next page",
   notStarted: "No quiz taken yet.",
   continueTutor: "Continue chat",
   admSafety: "Safety audit",
@@ -1117,9 +1132,8 @@ const en: Dict = {
   admRefusalClass: "Class",
   admLastRefusal: "Last refusal",
   admNoRefusals: "No refusals in the window.",
-  // support-ops status + impersonation strings. Six of these now carry
-  // Bangla copy in the bn block; statusPage/statusAllOk stay English until
-  // the AUD-0047 pass finishes (scripts/check_i18n.py PENDING_BANGLA_REVIEW).
+  // support-ops status + impersonation strings. The Bangla copy lives in
+  // the bn block alongside its English twin here.
   statusPage: "System status",
   statusAllOk: "All systems operational",
   statusDegraded: "Some systems are degraded",

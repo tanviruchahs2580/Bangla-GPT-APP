@@ -7,7 +7,7 @@ import type {
   SupportPlanRow,
   WeakMatrix,
 } from "../../types";
-import { Badge, Button, Card } from "../../components/ui";
+import { Badge, Button, Card, LoadError } from "../../components/ui";
 import { friendlyError } from "../../errors";
 import { t } from "../../i18n";
 
@@ -91,6 +91,11 @@ export default function AnalyticsPage() {
     enabled: level !== null,
   });
   const wm = wmQuery.data ?? null;
+  // FE-02: an outage must never read as an empty classroom (see cards below).
+  const friendlywmError = wmQuery.isError
+    ? (friendlyError((wmQuery.error as { rawDetail?: unknown }).rawDetail)
+        ?.text ?? t("errorGeneric"))
+    : null;
 
   async function createSupportPlan(studentId: number) {
     if (spBusy) return;
@@ -175,7 +180,12 @@ export default function AnalyticsPage() {
       )}
 
       <Card title={t("anaCiTitle")}>
-        {wm === null ? null : ci === null ? (
+        {wmQuery.isError ? (
+          <LoadError
+            message={friendlywmError}
+            onRetry={() => void wmQuery.refetch()}
+          />
+        ) : wm === null ? null : ci === null ? (
           <p className="muted">{t("wmEmpty")}</p>
         ) : (
           <div role="status">
@@ -193,7 +203,12 @@ export default function AnalyticsPage() {
       </Card>
 
       <Card title={t("wmTitle")}>
-        {wm === null || wm.concepts.length === 0 ? (
+        {wmQuery.isError ? (
+          <LoadError
+            message={friendlywmError}
+            onRetry={() => void wmQuery.refetch()}
+          />
+        ) : wm === null || wm.concepts.length === 0 ? (
           <p className="muted">{t("wmEmpty")}</p>
         ) : (
           <div className="table-wrap">

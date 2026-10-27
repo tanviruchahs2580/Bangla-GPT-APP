@@ -112,3 +112,29 @@ def test_a_first_issue_is_not_disturbed_by_the_invalidation(
     _register(client, "first@example.com")
     assert len(mails) == 1
     assert client.post("/auth/verify-email", json={"token": _code(mails, 0)}).status_code == 200
+
+
+def test_resend_quota_stops_sending_but_body_stays_generic(
+    client: TestClient, mails: list[dict], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """BE-05: the per-address mail quota caps volume without changing the
+    enumeration-safe contract -- every response is the same generic 202,
+    and the contract test above (a resend RE-SENDS) still holds under the
+    default quota. Only the abusive tail is silenced."""
+    from bangla_gpt_api.routers import auth as auth_module
+
+    monkeypatch.setattr(auth_module, "_MAIL_QUOTA_PER_ADDRESS_PER_HOUR", 2)
+    _register(client, "quota@example.com")  # registration mail is not quota'd
+    assert (
+        client.post("/auth/resend-verification", json={"email": "quota@example.com"}).status_code
+        == 202
+    )
+    assert len(mails) == 2  # resend 1 of 2
+    assert (
+        client.post("/auth/resend-verification", json={"email": "quota@example.com"}).status_code
+        == 202
+    )
+    assert len(mails) == 3  # resend 2 of 2
+    res = client.post("/auth/resend-verification", json={"email": "quota@example.com"})
+    assert res.status_code == 202 and res.json() == {"status": "accepted"}
+    assert len(mails) == 3  # the third resend sends nothing, still says accepted

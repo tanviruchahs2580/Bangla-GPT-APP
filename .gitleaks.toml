@@ -48,10 +48,20 @@ regexes = [
   # Fixture secrets are explicitly marked as test values.
   '''(SECRET|KEY|TOKEN|PASSWORD)\s*[:=]\s*["'](test|unit|dummy|fake)''',
   '''jwt_secret\s*[:=]\s*["'](test|other)''',
-  '''admin_password\s*[:=]\s*["']''',
+  # AUD-2026-10-27: was value-unanchored, which whitelisted ANY
+  # `admin_password = "<anything>"` assignment tree-wide -- exactly the
+  # platform's highest-value credential. Anchored to the seven reviewed
+  # weak test-fixture literals (all under apps/api/tests/); any other
+  # admin password literal is now reportable.
+  '''admin_password["']?\s*[:=]\s*["'](longenoughpass1|longenough123|supersecret1|short12|longpassword123|StrongPass123|Str0ngAdminPassw0rd!)''',
   # RFC 4226/6238 public HOTP test vector, not a deployed secret.
   '''RFC_SECRET_B32''',
   '''RFC\d{6}''',
+  # AUD-B-17: the deleted smoke script's literal test secret, judged a
+  # non-credential (owner rotation decision recorded in issue #51). It is
+  # referenced only by extinct history commits; anchoring to the value
+  # prefix keeps this a no-op for anything real.
+  '''SECRET\s*=\s*["']smoke-secret''',
   # T-029: the exact text gitleaks matches inside the archived ASCII-art
   # diagram line `Auth: JWT+RBAC+tenancy guards` (commit 8bd0556 at the file's
   # pre-move root path). Content-scoped, so only this reviewed value is

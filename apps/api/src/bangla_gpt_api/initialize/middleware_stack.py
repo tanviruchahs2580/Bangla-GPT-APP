@@ -44,6 +44,12 @@ def _derive_default_rules(settings: Settings) -> dict[str, tuple[int, str]]:
         "/auth/reset": (10, "ip"),
         "/auth/resend-verification": (10, "ip"),
         "/auth/verify-email": (10, "ip"),
+        # B-02: renewal is an authenticated, user-scoped rotation. A school
+        # NAT shares one IP across a class -- a per-IP bound here would
+        # throttle the very proactive renewal loop the web client runs
+        # before every request; a per-user bound still caps automated
+        # renewal spam from one account.
+        "/auth/renew": (60, "user"),
         "/events": (60, "ip"),
     }
 

@@ -95,6 +95,9 @@ function renderPage() {
 
 describe("practice hub", () => {
   beforeEach(() => {
+    // B-03 draft restore is ambient state by design: an earlier test's
+    // in-flight quiz must not bleed into this one's render.
+    sessionStorage.clear();
     vi.clearAllMocks();
     authMock.useAuth.mockReturnValue({ me, signOut: vi.fn() });
     apiMock.get.mockImplementation((path: string) => {

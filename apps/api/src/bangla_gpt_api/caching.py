@@ -83,6 +83,21 @@ class Cache(Protocol):
         """
         ...
 
+    def incr(self, key: str, ttl: float) -> int:
+        """Atomically increment ``key`` (starting at 1) and return the count.
+
+        The read-increment-write counters (MFA failure throttle, per-address
+        mail quota) were check-then-act even after ``add_if_absent``
+        existed: N concurrent callers all read the same count, all wrote
+        count+1, and the Nth guess arrived inside the same window. The
+        counter must move as one indivisible operation. The TTL is a
+        sliding window from the first increment (SET EXPIRE NX semantics:
+        a fresh counter arms the window, existing ones keep theirs).
+        Raises ``CacheUnavailable`` when the backend cannot be reached;
+        callers must decide their own failure posture.
+        """
+        ...
+
     def clear(self) -> None: ...
 
     def ping(self) -> bool:
@@ -127,6 +142,20 @@ class MemoryCache:
                 del self._data[key]
             self._insert_locked(key, value, ttl)
             return True
+
+    def incr(self, key: str, ttl: float) -> int:
+        # MemoryCache got its lock the same day add_if_absent did; the
+        # counter that used to be a bare get/set never did. Under the lock
+        # the read-increment-write is one indivisible step.
+        with self._lock:
+            entry = self._data.get(key)
+            now = time.monotonic()
+            if entry is not None and now < entry[0]:
+                count = int(entry[1]) + 1
+                self._data[key] = (entry[0], count)
+                return count
+            self._insert_locked(key, 1, ttl)
+            return 1
 
     def _insert_locked(self, key: str, value: Any, ttl: float) -> None:
         """Insert under the caller-held lock; evicts like ``set_json`` did."""
@@ -233,6 +262,25 @@ class RedisCache:
             logger.warning("cache_backend_unreachable", extra={"op": "add_if_absent"})
             raise CacheUnavailable("redis set-nx failed") from exc
         return bool(acquired)
+
+    def incr(self, key: str, ttl: float) -> int:
+        import redis.exceptions
+
+        try:
+            # INCR is atomic server-side; EXPIRE NX arms the window only on
+            # the first increment, so the counter's window is not reset by
+            # later calls (a sliding window from first use).
+            count = self._redis.incr(key)
+            if count == 1:
+                self._redis.expire(key, max(1, int(ttl)), nx=True)
+        except redis.exceptions.RedisError as exc:
+            logger.warning("cache_backend_unreachable", extra={"op": "incr"})
+            raise CacheUnavailable("redis incr failed") from exc
+        if not isinstance(count, int):
+            # decode_responses clients still type INCR as Awaitable|Any; a
+            # non-integer reply is a protocol violation, not a count of zero.
+            raise CacheUnavailable("redis incr returned a non-integer")
+        return count
 
     def clear(self) -> None:
         logger.warning("cache_clear_skipped_on_shared_backend", extra={"op": "clear"})

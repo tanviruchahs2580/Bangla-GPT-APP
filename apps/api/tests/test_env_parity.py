@@ -92,3 +92,17 @@ def test_staging_shares_production_strictness() -> None:
     ).is_production  # type: ignore[call-arg]
     assert not Settings(env="dev").is_production
     assert not Settings(env="test").is_production
+
+
+def test_unknown_env_names_boot_guarded() -> None:
+    # BE/ENV-gate audit: is_production is a DENYLIST of unguarded names, not
+    # an allowlist of production spellings. Any name that is not one of the
+    # three documented unguarded environments must run with every guard on --
+    # deployments/aliases ("uat", "live", "qa"), the pilot's own spelling of
+    # "prod", and empty values included. The old allowlist made the guards a
+    # spelling contest ("prodction" quietly booted unguarded).
+    for env in ("uat", "live", "qa", "stage", "prod", "production", "prodction", ""):
+        assert Settings(env=env).is_production, f"ENV={env!r} must boot guarded"
+    assert not Settings(env="DEV").is_production
+    assert not Settings(env="  Dev  ").is_production
+    assert not Settings(env="TEST").is_production

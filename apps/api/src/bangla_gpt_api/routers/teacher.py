@@ -23,10 +23,12 @@ from bangla_gpt_api.db.models import (
     AnswerLog,
     ClassRoom,
     ClassStudent,
+    ClassTeacher,
     QuizAttempt,
     School,
     Student,
     StudentInvite,
+    Teacher,
     User,
 )
 from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES
@@ -187,6 +189,18 @@ def teacher_create_classroom(
     room = ClassRoom(school_id=school.id, class_level=payload.class_level, section=section)
     db.add(room)
     try:
+        # B-07 companion invariant: the creator teaches the class they
+        # create. The quiz-submission gate keys on this ClassTeacher row,
+        # so a classroom without one would strand its roster -- nobody
+        # could hand in a proctored paper for it. Admins create rooms
+        # without teaching them; the assignment is minted only for a
+        # role=teacher creator. Same transaction as the room so the
+        # invariant cannot end up half-applied.
+        db.flush()
+        if teacher.role == "teacher":
+            profile = db.scalar(select(Teacher).where(Teacher.user_id == teacher.id))
+            if profile is not None:
+                db.add(ClassTeacher(classroom_id=room.id, teacher_id=profile.id, subject=""))
         db.commit()
     except IntegrityError:
         db.rollback()

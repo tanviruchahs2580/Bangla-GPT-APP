@@ -890,7 +890,11 @@ def school_teachers(
                 ClassTeacher.teacher_id.in_(teacher_ids)
             )
         ).all():
-            subjects[int(tid)].add(subject or "all")
+            if subject:
+                # B-07 companion: subject='' minted by classroom creation is
+                # the homeroom/submission-authority marker, not a subject
+                # assignment — the staff report lists only real subjects.
+                subjects[int(tid)].add(subject)
             rooms[int(tid)].add(int(cid))
     return [
         SchoolTeacherRow(

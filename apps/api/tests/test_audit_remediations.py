@@ -41,6 +41,7 @@ def _prod_settings(tmp_path, **over) -> Settings:
     os.environ["WEB_CONCURRENCY"] = "1"
     base = dict(
         env="production",
+        pii_allow_plaintext=False,
         database_url=engine_url(tmp_path, "prod"),
         jwt_secret=JWT,
         admin_email="a@b.com",

@@ -469,8 +469,16 @@ def teacher_curriculum_coverage(db: DbSession, teacher: TeacherOrAdminUser) -> C
             key = (room.id, subject)
             att = attempts.get(key, 0)
             avg = coverage.avg_of(graded.get(key, []))
+            # B-07 companion: ClassTeacher rows minted by classroom creation
+            # (subject='') record OWNERSHIP -- who may proctor submissions --
+            # not subject coverage. Stripping the marker here keeps "taught"
+            # honest: an auto-created classroom whose teacher never touched
+            # english must not report english as taught. (test_env fixture
+            # rows with a real subject still behave exactly as before.)
             taught = coverage.is_taught(
-                subject in level_content, assigned.get(room.id, set()), subject
+                subject in level_content,
+                assigned.get(room.id, set()) - {""},
+                subject,
             )
             status = coverage.derive_status(taught, att > 0, avg)
             subjects.add(subject)

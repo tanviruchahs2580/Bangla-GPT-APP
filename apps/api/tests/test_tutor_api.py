@@ -198,3 +198,79 @@ def test_provider_failure_maps_to_502(tmp_path) -> None:
         }
     finally:
         main_module.TutorService.__init__ = original  # type: ignore[method-assign]
+
+
+def test_chat_turn_failure_leaves_no_dangling_user_message(tmp_path) -> None:
+    """Audit B-05 counterpart contract: the chat route now commits the user
+    turn BEFORE the provider call (so the pooled connection is not pinned
+    across a 30s LLM request), and external behaviour is unchanged -- a
+    failed provider call must leave neither a reply nor a dangling question
+    in the conversation, and the visible history must stay empty.
+    """
+    import bangla_gpt_api.main as main_module
+    from bangla_gpt_api.providers.base import LLMProvider as _Base
+    from bangla_gpt_api.providers.base import ProviderError as _ProviderError
+
+    class ExplodingProvider(_Base):
+        name = "exploding"
+
+        async def generate(self, prompt: str, *, system: str | None = None) -> str:
+            raise _ProviderError("upstream down")
+
+    settings = Settings(
+        env="test",
+        database_url=engine_url(tmp_path, "chat502"),
+        jwt_secret="test-secret-0123456789abcdef0123456789",
+    )
+    original = main_module.TutorService.__init__
+
+    def inject(self, *args, **kwargs):
+        kwargs["provider"] = ExplodingProvider()
+        kwargs["fast_provider"] = ExplodingProvider()
+        original(self, *args, **kwargs)
+
+    main_module.TutorService.__init__ = inject  # type: ignore[method-assign]
+    try:
+        client = TestClient(main_module.create_app(settings))
+        client.post(
+            "/auth/register",
+            json={
+                "email": "x@y.com",
+                "password": PASSWORD,
+                "name": "শিক্ষার্থী",
+                "role": "student",
+                "class_level": 6,
+                "guardian_consent": True,
+            },
+        ).raise_for_status()
+        tok = client.post("/auth/login", json={"email": "x@y.com", "password": PASSWORD}).json()[
+            "access_token"
+        ]
+        headers = {"Authorization": f"Bearer {tok}"}
+        conv = client.post(
+            "/tutor/conversations",
+            json={"title": "যাচাই"},
+            headers=headers,
+        )
+        assert conv.status_code in (200, 201), conv.text
+        conv_id = conv.json()["id"]
+
+        res = client.post(
+            f"/tutor/conversations/{conv_id}/messages",
+            # In the sample corpus so the coverage gate passes and the turn
+            # actually reaches the (exploding) provider -- an off-corpus
+            # question would refuse earlier with insufficient_evidence and
+            # never exercise the discard path.
+            json={"message": "কোষ কী?", "subject": "science"},
+            headers=headers,
+        )
+        assert res.status_code == 502, res.text
+        assert res.json()["detail"]["code"] == "llm_unavailable"
+
+        # The committed-then-discarded user turn must be truly gone: the
+        # message list is empty, as it was under the old flush+rollback path.
+        msgs = client.get(f"/tutor/conversations/{conv_id}/messages", headers=headers)
+        assert msgs.status_code == 200
+        assert msgs.json() == []
+    finally:
+        main_module.TutorService.__init__ = original  # type: ignore[method-assign]

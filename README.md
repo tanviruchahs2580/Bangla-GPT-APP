@@ -28,6 +28,7 @@ and bn/en i18n with dark mode.
 | `POST /auth/register` `/auth/login` `/auth/logout` | — (`logout` any) | Accounts; tokens (`email_unverified` code when SMTP on); `logout` revokes the presented token's jti (fail-closed store) |
 | `POST /auth/forgot` `/auth/reset` | — | Password reset (single-use hashed tokens) |
 | `POST /auth/verify-email` `/auth/resend-verification` | mixed | Email verification flow |
+| `POST /auth/renew` | any authenticated | Session slide: fresh jti + full window while the presented token still verifies (expired and impersonated tokens refused; the web client renews proactively so a class session survives past minute 60) |
 | `GET /users/me` · `DELETE /users/me` (body: current `password`, F-142) · `GET /users/me/export` · `POST /users/me/sessions/revoke` | any | Profile; re-authed GDPR delete/export; revoke every session (epoch stamp) |
 | `POST /tutor/ask` | any | Grounded Q&A; safety screen; coverage-gated refusal |
 | `POST /tutor/conversations` · `GET /tutor/conversations` | student | Multi-turn chat sessions |
@@ -61,11 +62,11 @@ Operations: [docs/runbook.md](docs/runbook.md).
 Launch gates for the owner: [docs/LAUNCH_READINESS_CHECKLIST.md](docs/LAUNCH_READINESS_CHECKLIST.md).
 RAG design: [docs/RAG_ARCHITECTURE.md](docs/RAG_ARCHITECTURE.md).
 NCTB pipeline: [docs/NCTB_DATA_PIPELINE.md](docs/NCTB_DATA_PIPELINE.md).
-Current QA record: [docs/qa/QA_REPORT_2026-10-17.md](docs/qa/QA_REPORT_2026-10-17.md)
+Current QA record: [docs/qa/QA_REPORT_2026-10-27.md](docs/qa/QA_REPORT_2026-10-27.md)
 (superseded records archived:
+[docs/archive/QA_REPORT_2026-10-17.md](docs/archive/QA_REPORT_2026-10-17.md),
 [docs/archive/qa-audit-2026-10-16.md](docs/archive/qa-audit-2026-10-16.md),
-[docs/archive/qa-audit-2026-10-14.md](docs/archive/qa-audit-2026-10-14.md),
-[docs/archive/qa-audit-2026-10-06.md](docs/archive/qa-audit-2026-10-06.md)).
+[docs/archive/qa-audit-2026-10-14.md](docs/archive/qa-audit-2026-10-14.md)).
 
 ## Quick start
 

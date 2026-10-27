@@ -323,6 +323,35 @@ def test_phone_passthrough_without_key(client: TestClient) -> None:
     assert me.json()["phone"] == PHONE
 
 
+def test_register_parent_refused_when_no_key_and_plaintext_consent_off(tmp_path) -> None:
+    # Audit B-04: the write path must refuse with a coded 503 instead of
+    # silently storing a guardian phone in the clear, once the operator has
+    # withdrawn the plaintext consent (PII_ALLOW_PLAINTEXT=false) without
+    # providing a key. This is the failure state the old passthrough hid.
+    app_client, _ = make_client(tmp_path, db_name="strict.db", pii_allow_plaintext=False)
+    payload = {
+        "email": "p@example.com",
+        "password": PASSWORD,
+        "name": "অভিভাবক",
+        "role": "parent",
+        "phone": PHONE,
+    }
+    res = app_client.post("/auth/register", json=payload)
+    assert res.status_code == 503, res.text
+    assert res.json()["detail"]["code"] == "pii_key_unconfigured"
+    # ...and nothing half-written remains: create_app seeds the admin user at
+    # boot, so assert by email -- the registering parent's rows must not exist.
+    con = sqlite3.connect(tmp_path / "strict.db")
+    try:
+        users = con.execute("select count(*) from users where email = 'p@example.com'").fetchone()[
+            0
+        ]
+        parents = con.execute("select count(*) from parents").fetchone()[0]
+    finally:
+        con.close()
+    assert users == 0 and parents == 0
+
+
 def _dump_db(path) -> str:
     with open(path, "rb") as fh:
         return fh.read().decode("latin-1")
@@ -338,6 +367,7 @@ def _prod_settings(**overrides) -> Settings:
     os.environ["WEB_CONCURRENCY"] = "1"
     base = {
         "env": "production",
+        "pii_allow_plaintext": False,
         "database_url": "sqlite:////data/app.db",
         "jwt_secret": "Zk7Qp2XvN8mR4tYcW1bH6jL3sD9fG5aE0uI2oP7xV4qM8nC6rT1wY3zB5",
         "admin_email": "a@b.com",
@@ -361,6 +391,15 @@ def test_production_boot_requires_pii_enc_key() -> None:
         enforce_production_safety(_prod_settings(pii_enc_key=None))
     # and passes once a key is configured
     enforce_production_safety(_prod_settings(pii_enc_key=Fernet.generate_key().decode()))
+
+
+def test_production_refuses_plaintext_pii() -> None:
+    # Audit B-04/S5.6: PII_ALLOW_PLAINTEXT is a dev/test convenience only;
+    # the production boot battery must refuse it even WITH a valid key, so a
+    # later "simplification" cannot quietly reintroduce unencrypted PII.
+    with pytest.raises(RuntimeError, match="PII_ALLOW_PLAINTEXT"):
+        enforce_production_safety(_prod_settings(pii_allow_plaintext=True))
+    enforce_production_safety(_prod_settings())  # flag off in the shipped base -> boots
 
 
 # --- CSP per-response nonce --------------------------------------------------

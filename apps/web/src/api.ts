@@ -2,6 +2,7 @@ import { downloadBlob } from "./lib/download";
 import { asText } from "./lib/text";
 import { LAST_RESULT_KEY } from "./lib/quizExplain";
 import { clearOfflineChapters } from "./lib/offlineStore";
+import { clearQuizDraft } from "./lib/quizDraft";
 
 const API_BASE: string = import.meta.env.VITE_API_BASE ?? "/api";
 
@@ -35,6 +36,17 @@ export interface MeResponse {
 }
 
 const TOKEN_KEY = "bgpt_token";
+/**
+ * Audit B-02/FE-01: the platform-admin token parked during impersonation is
+ * the single highest-value credential in the browser. It now lives in
+ * sessionStorage — per-tab, wiped when the tab closes — instead of
+ * localStorage. An impersonation survives a reload inside its tab (the
+ * feature) but no longer leaves an admin token in permanent storage that
+ * any XSS on the shared school computer could exfiltrate later. The main
+ * session token stays in localStorage: students sign in once per device and
+ * expect the tab OR a reopened browser to keep them (a per-tab session
+ * would log out every background navigation on old Android WebViews).
+ */
 const ADMIN_TOKEN_KEY = "bgpt_admin_token_backup";
 const IMP_ACTIVE_KEY = "bgpt_impersonating";
 
@@ -42,6 +54,68 @@ const IMP_ACTIVE_KEY = "bgpt_impersonating";
 let onUnauthorized: (() => void) | null = null;
 export function setUnauthorizedHandler(fn: () => void): void {
   onUnauthorized = fn;
+}
+
+/**
+ * B-02: renew the session BEFORE it expires. The backend's
+ * POST /auth/renew (wave 1a) slides a valid token forward; an expired one
+ * cannot renew (fail-secure), so the client must renew proactively — the
+ * check runs at the top of every api() call, so any real activity in the
+ * last five minutes of token life extends the session instead of letting a
+ * 40-minute quiz die at minute 60 with a hard bounce to /login.
+ */
+const RENEW_AHEAD_MS = 5 * 60_000;
+let renewInFlight: Promise<boolean> | null = null;
+
+function jwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    // Plain base64url decode of the middle segment: signature verification
+    // is the server's job, this only reads exp/jti for scheduling.
+    const part = token.split(".")[1] ?? "";
+    const json = atob(part.replace(/-/g, "+").replace(/_/g, "/"));
+    const parsed: unknown = JSON.parse(json);
+    return parsed && typeof parsed === "object"
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+async function rawRenew(token: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/auth/renew`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!res.ok) return false;
+    const body = (await res.json()) as { access_token?: string };
+    if (!body.access_token || typeof body.access_token !== "string")
+      return false;
+    localStorage.setItem(TOKEN_KEY, body.access_token);
+    return true;
+  } catch {
+    // Fail-soft: a flaky renewal must not break the request that triggered
+    // it. The still-valid token keeps working; the next call retries.
+    return false;
+  }
+}
+
+/** Renew-once single flight; safe to call on every API call. */
+export function maybeRenewSession(): void {
+  const token = getToken();
+  if (!token) return;
+  const exp = jwtPayload(token)?.["exp"];
+  if (typeof exp !== "number") return;
+  if (exp * 1000 - Date.now() > RENEW_AHEAD_MS) return;
+  // Impersonation sessions are refused by the server anyway; skipping saves
+  // a doomed round-trip on every call during a support session.
+  if (isImpersonating()) return;
+  if (renewInFlight) return;
+  renewInFlight = rawRenew(token).finally(() => {
+    renewInFlight = null;
+  });
 }
 
 // Auth endpoints where a 401 is part of the API contract (bad credentials / bad code).
@@ -202,6 +276,14 @@ async function parseSse(
   response: Response,
   onToken: (text: string) => void,
   onChunk?: () => void,
+  /**
+   * Called on an SSE `reset` frame: the primary provider died mid-turn and
+   * the server restarted the turn on the fallback. Everything streamed
+   * before the reset is orphaned partial text from a turn the assistant no
+   * longer considers its own — the caller must drop it, or the fallback's
+   * answer renders appended to a sentence from the dead turn.
+   */
+  onReset?: () => void,
 ): Promise<Record<string, unknown> | null> {
   const reader = response.body?.getReader();
   if (!reader) return null;
@@ -223,6 +305,7 @@ async function parseSse(
           unknown
         >;
         if (event === "token") onToken(asText(data.text ?? ""));
+        else if (event === "reset") onReset?.();
         else if (event === "done") done = data;
         else if (event === "error") done = { __error: true, ...data };
       } catch {
@@ -274,6 +357,9 @@ export async function api<T>(
     timeoutMs?: number;
   },
 ): Promise<T> {
+  // B-02: proactive session renewal. Runs before the request so a token in
+  // its last five minutes is swapped while it still verifies.
+  maybeRenewSession();
   const headers = new Headers(options.headers);
   if (options.body !== undefined && !(options.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
@@ -390,7 +476,13 @@ export async function postStream<T>(
   path: string,
   body: unknown,
   onToken: (text: string) => void,
-  options?: { signal?: AbortSignal },
+  options?: {
+    signal?: AbortSignal;
+    /** Called on the SSE `reset` frame: the turn restarted on the fallback
+     * provider and everything streamed so far is orphaned partial text that
+     * the caller must drop. */
+    onReset?: () => void;
+  },
 ): Promise<T> {
   const headers = new Headers({ "Content-Type": "application/json" });
   const token = getToken();
@@ -451,8 +543,11 @@ export async function postStream<T>(
       throw new ApiError(res.status, "stream unavailable", "llm_unavailable");
     // Still inside the first-byte window until the first chunk arrives; each
     // chunk then resets the (shorter-windowed) inter-chunk stall deadline.
-    const done = await parseSse(res, onToken, () =>
-      arm(STREAM_STALL_TIMEOUT_MS),
+    const done = await parseSse(
+      res,
+      onToken,
+      () => arm(STREAM_STALL_TIMEOUT_MS),
+      options?.onReset,
     );
     if (done && "__error" in done)
       throw new ApiError(502, "stream failed", "llm_unavailable");
@@ -696,6 +791,17 @@ export async function logout(): Promise<void> {
     /* offline or token already gone — local wipe still happens below */
   }
   for (const key of USER_STORAGE_KEYS) localStorage.removeItem(key);
+  // FE-01: the impersonation credential pair now lives in sessionStorage
+  // (per-tab). A logout — and the F-036 shared-device scrub — must wipe
+  // BOTH storages: legacy keys in case an older tab wrote them, the
+  // current ones because that is where the parked admin token sits now.
+  for (const key of [ADMIN_TOKEN_KEY, IMP_ACTIVE_KEY]) {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  }
+  // B-03: the in-flight quiz draft is study content on a shared device —
+  // the F-036 scrub covers it with the rest.
+  clearQuizDraft();
   sessionStorage.removeItem(LAST_RESULT_KEY);
   logoutCleanup?.();
   try {
@@ -776,14 +882,16 @@ export async function startImpersonation(
   const res = await post<ImpersonateOut>(`/admin/users/${userId}/impersonate`, {
     reason,
   });
-  if (adminToken) localStorage.setItem(ADMIN_TOKEN_KEY, adminToken);
-  localStorage.setItem(IMP_ACTIVE_KEY, String(res.user_id));
+  // FE-01: the parked admin token lives in sessionStorage (audit note on
+  // ADMIN_TOKEN_KEY above) — per-tab, no longer in permanent storage.
+  if (adminToken) sessionStorage.setItem(ADMIN_TOKEN_KEY, adminToken);
+  sessionStorage.setItem(IMP_ACTIVE_KEY, String(res.user_id));
   localStorage.setItem(TOKEN_KEY, res.access_token);
   return res;
 }
 
 export function isImpersonating(): boolean {
-  return localStorage.getItem(IMP_ACTIVE_KEY) !== null;
+  return sessionStorage.getItem(IMP_ACTIVE_KEY) !== null;
 }
 
 /**
@@ -797,10 +905,10 @@ export async function exitImpersonation(): Promise<void> {
   } catch {
     /* expired or already-revoked tokens still leave the local state fixable */
   }
-  const adminToken = localStorage.getItem(ADMIN_TOKEN_KEY);
+  const adminToken = sessionStorage.getItem(ADMIN_TOKEN_KEY);
   if (adminToken) localStorage.setItem(TOKEN_KEY, adminToken);
-  localStorage.removeItem(ADMIN_TOKEN_KEY);
-  localStorage.removeItem(IMP_ACTIVE_KEY);
+  sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+  sessionStorage.removeItem(IMP_ACTIVE_KEY);
 }
 
 export const getFeedbackQueue = (

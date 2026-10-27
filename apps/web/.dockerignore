@@ -1,0 +1,38 @@
+# Build context excludes for the web image.
+#
+# The web Dockerfile runs `COPY . .`, so without this file every file in
+# apps/web enters the build stage -- including a locally-created
+# apps/web/.env.local holding a real VERCEL_OIDC_TOKEN. A multi-stage build
+# would not put it in the final image, but `cache-to: type=gha,mode=max`
+# exports every intermediate stage, and release.yml wrote build stages to the
+# Actions cache, where anyone with actions:read on the repo can read it.
+#
+# This file is a security control. Do not relax the .env rules.
+
+# Secrets
+.env
+.env.*
+!.env.example
+.vercel
+
+# Installed/derived trees: `npm ci` above already produced the right one, and
+# copying the host's would overlay it with a possibly wrong-arch stale copy.
+node_modules
+dist
+build
+coverage
+
+# Android/Capacitor is not part of the web image
+android
+
+# Local agent/tooling state and logs
+*.log
+.vscode
+.idea
+.zcode
+live_evidence
+
+# Docs and tests are not build inputs
+*.md
+src/test
+run_web_tests.ps1

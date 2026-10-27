@@ -158,11 +158,27 @@ function Loading() {
   );
 }
 
+/**
+ * The ?next= destination from a `/login?next=…` bounce. Same-origin relative
+ * paths only: an absolute URL (https://…), a protocol-relative one (//…),
+ * or a backslash variant fails this check and falls back to the role home —
+ * an open redirect on a government login page is a phishing primitive.
+ */
+function safeNextPath(search: string): string | null {
+  try {
+    const next = new URLSearchParams(search).get("next");
+    if (!next || !next.startsWith("/")) return null;
+    if (next.startsWith("//") || next.startsWith("/\\")) return null;
+    return next;
+  } catch {
+    return null;
+  }
+}
+
 function RoutesSwitch() {
   const { me, loading } = useAuth();
   const home = me ? (ROLE_HOME[me.role] ?? "/login") : "/welcome";
   if (loading) return <Loading />;
-
   return (
     <>
       {/* I18N-12: an anonymous visitor sees these pages without AppShell, so
@@ -186,7 +202,15 @@ function RoutesSwitch() {
           path="/login"
           element={
             me ? (
-              <Navigate to={home} replace />
+              // B-02 client half: a session that died mid-task bounces to
+              // /login?next=… and comes back HERE after re-login, so a quiz
+              // finish or a mid-edit note survives the clock. Same-origin
+              // paths only — an open redirect through ?next would turn a
+              // trusted government login page into a phishing launcher.
+              <Navigate
+                to={safeNextPath(window.location.search) ?? home}
+                replace
+              />
             ) : (
               <RouteErrorBoundary>
                 <LoginPage />

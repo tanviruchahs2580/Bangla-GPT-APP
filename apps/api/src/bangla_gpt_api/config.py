@@ -8,6 +8,23 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 logger = logging.getLogger(__name__)
 
 PRODUCTION_ENVS = frozenset({"production", "prod", "staging"})
+# BE/ENV-gate audit: PRODUCTION_ENVS is kept for reference, but it is no
+# longer what is_production checks. The old allowlist ("these names ARE
+# production") made safety a free-text spelling contest: boot a pilot with
+# ENV=uat, ENV=live, or a typo like ENV=prodction and every guard silently
+# switched off -- open /metrics, default JWT secret accepted, the mock
+# provider serving fabricated answers to children, SMTP verification
+# bypassed. The gate is now a DENYLIST of explicitly unguarded names:
+# anything unknown boots guarded. staging keeps production parity by
+# construction instead of by enumeration.
+#
+# These are the ONLY names that skip the guard, and each is a genuine
+# development/CI lane: the test suite and dev loops, the developer's own
+# machine, the CI container smoke, and Vercel preview builds. Anything
+# else -- a deployment name, a typo -- runs the strict production boot
+# battery and the denylist goes into the boot error so the operator can
+# see which names WOULD have been unguarded. Pinned by tests/test_env_gate.py.
+NON_PRODUCTION_ENVS = frozenset({"development", "dev", "local", "test", "ci", "preview"})
 # staging/prod parity: staging runs the SAME strict boot guard and secret
 # suppression as production (no default JWT_SECRET, no raw reset-token logs);
 # only the data is non-authoritative. Enforced by tests/test_env_parity.py.
@@ -131,9 +148,15 @@ class Settings(BaseSettings):
     # fake rate-limit identities.
     trust_proxy_headers: bool = False
     # Fernet key (PII_ENC_KEY) for encrypting guardian phone at rest.
-    # Without it values pass through unchanged (dev/test); production boot
-    # refuses to start without a key (enforce_production_safety).
+    # Production boot refuses to start without a valid key (enforce_production_safety).
     pii_enc_key: str | None = None
+    # B-04: the old behaviour passed guardian phones through unencrypted
+    # whenever no key was configured -- silently, everywhere. Dev/test keep
+    # that convenience, but only because this flag names the choice;
+    # production refuses to boot with it on, and with it off a missing key
+    # makes the write fail with a coded 503 instead of storing PII in the
+    # clear (security.py::encrypt_pii_strict).
+    pii_allow_plaintext: bool = True
 
     # --- chat ---
     chat_history_messages: int = 8
@@ -198,6 +221,11 @@ class Settings(BaseSettings):
         "/tutor/ask": (30, "user"),
         "/tutor/conversations": (30, "user"),
         "/tutor": (60, "ip"),
+        # B-02: session renewal. User-scoped: a school NAT shares one IP
+        # across a class, and the proactive renewal loop fires on every api()
+        # call near the token's last five minutes -- a per-IP bound would
+        # throttle a whole classroom's honest sessions at once.
+        "/auth/renew": (60, "user"),
         "/auth/forgot": (10, "ip"),
         "/auth/reset": (10, "ip"),
         # The password-verifying counterpart of /auth/login had NO rule: a
@@ -249,7 +277,14 @@ class Settings(BaseSettings):
 
     @property
     def is_production(self) -> bool:
-        return self.env.strip().lower() in PRODUCTION_ENVS
+        # Denylist, not allowlist: see NON_PRODUCTION_ENVS at the top of
+        # this file. The frozenset is inlined here on purpose -- this is the
+        # one decision every guard reads, and it must not depend on a
+        # module-global lookup resolving at call time. Keep the two in sync
+        # (tests/test_env_gate.py pins the behaviour on both ends).
+        return self.env.strip().lower() not in frozenset(
+            {"development", "dev", "local", "test", "ci", "preview"}
+        )
 
     @property
     def cors_origins(self) -> list[str]:

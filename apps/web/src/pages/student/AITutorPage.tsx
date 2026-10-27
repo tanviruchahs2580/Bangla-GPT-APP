@@ -278,7 +278,18 @@ export default function AITutorPage() {
               acc.text += tok;
               scheduleTokenFlush(acc.text);
             },
-            { signal: controller.signal },
+            {
+              signal: controller.signal,
+              // The turn restarted on the fallback provider: the partial
+              // text from the dead primary is orphaned half a sentence from
+              // a turn the assistant no longer considers its own. Drop it
+              // now, or the fallback answer renders appended to it.
+              onReset: () => {
+                acc.text = "";
+                flushTokens();
+                applyStreamedText("");
+              },
+            },
           );
           flushTokens();
           setMessages((m) => {
@@ -335,6 +346,7 @@ export default function AITutorPage() {
       }
     },
     [
+      applyStreamedText,
       input,
       conversationId,
       subject,
@@ -724,28 +736,35 @@ export default function AITutorPage() {
                   </div>
                 )}
                 {m.role === "assistant" &&
-                  m.sources &&
-                  m.sources.length > 0 && (
+                  ((m.sources && m.sources.length > 0) ||
+                    m.grounded === false) && (
                     <div className="sources">
-                      {m.refused_reason ? (
+                      {/* Grounding honesty: a server-verdict of ungrounded is
+                         the student-visible truth even when the server sends
+                         ZERO sources with it — an unverified answer must not
+                         look identical to a cited one just because its
+                         sources were withheld. */}
+                      {m.grounded === false || m.refused_reason ? (
                         <Badge tone="warn">{t("unsupportedBadge")}</Badge>
                       ) : (
                         <Badge tone="teal">
                           <Check size={12} aria-hidden /> {t("supportedBadge")}
                         </Badge>
                       )}
-                      <div className="row-flex source-row">
-                        {m.sources.map((s: SourceRef, si) => (
-                          <button
-                            className="source-chip"
-                            key={si}
-                            onClick={() => setEvidence(s)}
-                            aria-label={`${t("evidenceTitle")}: ${s.chapter || s.book}`}
-                          >
-                            {s.chapter || s.book}
-                          </button>
-                        ))}
-                      </div>
+                      {m.sources && m.sources.length > 0 && (
+                        <div className="row-flex source-row">
+                          {m.sources.map((s: SourceRef, si) => (
+                            <button
+                              className="source-chip"
+                              key={si}
+                              onClick={() => setEvidence(s)}
+                              aria-label={`${t("evidenceTitle")}: ${s.chapter || s.book}`}
+                            >
+                              {s.chapter || s.book}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                       {m.id !== 0 && (
                         <div className="row-flex rate-row">
                           <button

@@ -243,11 +243,17 @@ describe("admin center", () => {
 
     // The failure must be visible, not an endless "loading" state. Before the
     // fix this role never appeared: the queue stayed null and re-rendered
-    // t("loading") forever.
-    const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toContain(t("errGeneric"));
+    // t("loading") forever. The AI-quality card now renders its own alert on
+    // a failed fetch (FE-04), so match the text (plural) — both panels are
+    // honestly reporting the same outage, which is the point.
+    const alerts = await screen.findAllByText(t("errGeneric"));
+    expect(alerts.length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole("button", { name: t("retry") }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: `${t("admTriage")} — ${t("retry")}`,
+      }),
+    );
     await waitFor(() =>
       expect(apiMock.getFeedbackQueue).toHaveBeenCalledTimes(2),
     );

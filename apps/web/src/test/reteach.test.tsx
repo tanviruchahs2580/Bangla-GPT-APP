@@ -86,6 +86,9 @@ function renderPage() {
 
 describe("re-teach cards in the quiz flow", () => {
   beforeEach(() => {
+    // B-03 draft restore is ambient state by design: the quiz written to
+    // sessionStorage by an earlier test must not bleed into this render.
+    sessionStorage.clear();
     vi.clearAllMocks();
     authMock.useAuth.mockReturnValue({ me, signOut: vi.fn() });
     apiMock.get.mockImplementation((path: string) => {

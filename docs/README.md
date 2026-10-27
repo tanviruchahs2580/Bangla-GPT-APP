@@ -16,7 +16,7 @@ next is written.
 | [adr/ADRs.md](adr/ADRs.md) | Architecture decision records |
 | [runbook.md](runbook.md) | Operations runbook |
 | [route_baseline.md](route_baseline.md) | Route inventory captured 2026-09-11 from the running app — no in-repo generator; re-verify against `/openapi.json` when routes change |
-| [qa/QA_REPORT_2026-10-17.md](qa/QA_REPORT_2026-10-17.md) | Current QA record |
+| [qa/QA_REPORT_2026-10-27.md](qa/QA_REPORT_2026-10-27.md) | Current QA record |
 
 ## AI / data
 

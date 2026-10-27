@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - fix(api): P4 cleanup batch — chunk-id content hash, lesson echo gate, proportional Latin penalty, corpus-scoped RAG keys, history char cap (A20-A25)
+- fix(api): adopt the tracked env-gate contract -- NON_PRODUCTION_ENVS with named CI lanes
 - fix(api): align the served OpenAPI contract with runtime behaviour
 - fix(api): burn pending verification codes when a new one is issued
 - fix(api): close the check-then-insert race class; reap orphaned AI jobs
@@ -66,10 +67,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): serve the configured corpus and the Dhaka day in the Learn flow
 - fix(api): stop the WAL pragma race killing multi-worker SQLite boots
 - fix(api): strip photo metadata before an image reaches the model provider
+- fix(api): the two parity contracts the submission-authority rows bent
 - fix(api): tie the quiz ceilings to one bound so an assignment stays submittable
 - fix(api): unify the error envelope — every raise carries a machine code
 - fix(api): vision-honest refusal for openai, max_output_tokens cap, transport retries (A10, A9, A16)
 - fix(api): wall school-less staff into the shared default school (F-04)
+- fix(api): wave-0 audit remediations -- pii gate, chat pool pin, gitleaks anchor, stale-deploy guard
+- fix(api): wave-1a hardening -- env gate denylist, mail quota, atomic counters, quiz submit gate, screening, session renewal
 - fix(api,web): audit remediations — breaker recovery, MFA/chat rate limits, CORS PATCH, model-refusal honesty, test runner
 - fix(auth): bind JWTs to an issuer and audience
 - fix(auth): hash passwords with Argon2id and upgrade legacy hashes on login
@@ -113,6 +117,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(security): close the S-011/S-012/F-142 gaps — revocable sessions, TOTP account throttle, erasure re-auth
 - fix(tests): make the teacher-jobs rate-limit test deterministic
 - fix(tests): make the two new UI tests independent of ambient state
+- fix(tests): the production pii happy path opts out of plaintext storage
+- fix(tests): the standalone pii validator test meets the new plaintext contract
 - fix(web): add the language pin the import promised, and unbreak main
 - fix(web): clear footer from bottom nav + cut a round-trip from login
 - fix(web): clear the two WCAG AA failures axe found on the tutor screen
@@ -138,6 +144,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): recover from page errors, report load failures, and never show another child's data
 - fix(web): report a dead API origin accurately, not as a busy server (#14)
 - fix(web): route /api/* explicitly to the edge proxy function
+- fix(web): satisfy the zero-warning lint gate on the wave-1b batch
 - fix(web): say the backend is down, not that the app has none
 - fix(web): share the login photo backdrop with Get Started; document Capacitor origins
 - fix(web): ship the CSP the code claimed, and bound the edge proxy
@@ -145,6 +152,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): stop reporting states the code never computed
 - fix(web): stop showing failures as facts, and read API timestamps as UTC
 - fix(web): stop the service worker caching error pages as the app shell
+- fix(web): wave-1b client trust batch -- session renewal, quiz durability, honest empty states, SSE reset
 - fix: close the full audit register — atomicity, envelope, a11y, ops; clear all 42 advisories (#57)
 - fix: complete admin password-change flow, tutor typo gate, roster-scoped stats, quiz distractors, i18n
 - fix: land the verified remediation on current main (CORS-adjacent, budget, UI states)
@@ -251,6 +259,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - test(api): erasure-fk fixture recognises the parity env var (BGPT_TEST_DATABASE_URL)
 - test(api): pin both nukta-ya encodings in the injection screen (M-19)
 - test(api): seed the ai_jobs row directly — no background writer in the deletion test
+- test(api): the submission-gate seeder runs on both engines
 - test(e2e): regenerate teacher-home dark baselines after the brand-solid contrast fix
 - test(e2e): reshape the CSV perf budget to measure typing latency, not driver mechanics
 - test(e2e): tolerate measured rasterisation variance (2% -> 5%) + regenerated teacher baselines after the contrast fix
@@ -267,8 +276,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(api): remove unresolvable plan-tracker tags from comments
 - chore(ci): add the supply-chain and secret-masking checks, and document the pipeline
 - chore(deps): clear all 42 known advisories in the pinned set
+- chore(docs): regenerate the native-review sheet
+- chore(ops): make the load probe usable against strict stacks, and record what a fresh host needs
 - chore(scripts): make the shebang executable real for the five scripts that have one
 - chore(security): allowlist the reviewed ASCII-art hit in the full-history secret scan
+- chore(tests): park orphan specs that pin contracts not yet built
 - chore(web): repoint /api proxy to current tunnel host (quick-tunnel rotation)
 - chore: close the low-severity register — hot-path indexes, dead code, XFF spoofing, env parity
 - chore: code honesty - unused args, un-typed db params, inert suppressions, stale comments
@@ -280,6 +292,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore: regenerate the CHANGELOG and the native-review sheet for the train
 - chore: regenerate the CHANGELOG for the CI coverage gate
 - chore: regenerate the CHANGELOG for the two mobile build fixes
+- chore: remove the resurrected smoke script; prettier the wave-1b sources
 - chore: satisfy the two CI guardrails main added after this branch's baseline
 - fmt: ruff format teacher.py _room_counts
 
@@ -291,6 +304,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - style(api): ruff format mock provider and lesson plan prompt
 - style(web): format the new progress-bar test (prettier gate in CI)
 - style(web): give the registration screen login's photo backdrop
+- style: ruff format the wave-0 test additions
 - style: satisfy the repository's own pre-commit hooks
 
 ### Other
@@ -319,6 +333,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #71 from tanviruchahs2580/fix/image-metadata-stripping
 - Merge pull request #74 from tanviruchahs2580/feat/schema-invariants
 - Merge pull request #77 from tanviruchahs2580/fix/codeql-action-pin
+- Merge pull request #81 from tanviruchahs2580/fix/concurrency-probe-verified-account
 - Merge remote-tracking branch 'origin/chore/supply-chain-checks' into merge-train2
 - Merge remote-tracking branch 'origin/docs/native-review-sheet' into merge-train2
 - Merge remote-tracking branch 'origin/fix/account-lifecycle-integrity' into merge-train2

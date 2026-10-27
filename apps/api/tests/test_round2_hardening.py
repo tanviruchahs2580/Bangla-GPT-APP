@@ -388,6 +388,7 @@ def test_json_log_secret_is_refused_in_production(tmp_path) -> None:
         create_app(
             Settings(
                 env="production",
+                pii_allow_plaintext=False,
                 jwt_secret="Zk7Qp2XvN8mR4tYcW1bH6jL3sD9fG5aE0uI2oP7xV4qM8nC6rT1wY3zB5",  # must survive the production entropy guard (F-067)
                 database_url=f"sqlite:///{(tmp_path / 'prod.db').as_posix()}",
                 allowed_origins="https://app.example.test",

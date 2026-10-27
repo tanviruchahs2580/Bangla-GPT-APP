@@ -69,6 +69,12 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
+      # S5.6 guardian-phone encryption. The production boot gate refuses to
+      # start without a valid Fernet key, so the operator must be able to
+      # supply one here without hand-editing compose (audit B-04: the
+      # api service previously never received PII_ENC_KEY at all).
+      PII_ENC_KEY: ${PII_ENC_KEY:-}
+      PII_ALLOW_PLAINTEXT: ${PII_ALLOW_PLAINTEXT:-}
     volumes:
       - api_data:/data
     # Host-side port. This is for a tunnel or proxy that runs ON THE HOST, not

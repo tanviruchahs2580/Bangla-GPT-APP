@@ -48,11 +48,42 @@ jobs:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
     steps:
+      - name: Resolve deploy SHA (refuse stale workflow_run deliveries)
+        # QE-01/Critical CodeQL: workflow_run deliveries arrive in queue
+        # order, not SHA order. A delayed delivery for push A after push B's
+        # deploy finished would otherwise check out and `--prod` the OLDER
+        # sha -- a silent, permanent production rollback nothing later
+        # repairs. The only shas allowed through are manual dispatches and
+        # a push event whose head sha is still exactly what main points at
+        # right now (resolve the ref's own sha before checkout).
+        id: deploy_sha
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "manual dispatch: deploying ${{ github.sha }}"
+            exit 0
+          fi
+          current=$(gh api "repos/${{ github.repository }}/commits/${{ github.ref_name }}" --jq '.sha')
+          triggered="${{ github.event.workflow_run.head_sha }}"
+          if [ -z "$triggered" ]; then
+            echo "::error title=Missing head_sha::workflow_run event carried no head_sha; refusing to guess."
+            exit 1
+          fi
+          if [ "$current" != "$triggered" ]; then
+            echo "::error title=Stale deploy request::Triggered for $triggered but main is now $current. Refusing to deploy an older SHA over a newer production; the newer push will trigger its own deploy."
+            exit 1
+          fi
+          echo "sha=$current" >> "$GITHUB_OUTPUT"
+          echo "main tip matches the triggering sha: deploying $current"
+
       - name: Checkout code
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ steps.deploy_sha.outputs.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4

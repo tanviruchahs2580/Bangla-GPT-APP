@@ -147,7 +147,7 @@ describe("admin user search resets pagination", () => {
     await screen.findByText(t("admSchools"));
 
     // Go to page 2.
-    const next = await screen.findByRole("button", { name: "›" });
+    const next = await screen.findByRole("button", { name: t("nextPage") });
     await waitFor(() => expect(next).toBeEnabled());
     fireEvent.click(next);
     await waitFor(() =>
