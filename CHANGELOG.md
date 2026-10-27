@@ -13,7 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-Nothing yet.
+### Fixed
+
+- fix(release): pass GHCR credentials to the Trivy container
 
 ## v0.9.3 - 2026-10-27
 
