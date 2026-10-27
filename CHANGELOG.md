@@ -70,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): unify the error envelope — every raise carries a machine code
 - fix(api): vision-honest refusal for openai, max_output_tokens cap, transport retries (A10, A9, A16)
 - fix(api): wall school-less staff into the shared default school (F-04)
+- fix(api): wave-0 audit remediations -- pii gate, chat pool pin, gitleaks anchor, stale-deploy guard
 - fix(api,web): audit remediations — breaker recovery, MFA/chat rate limits, CORS PATCH, model-refusal honesty, test runner
 - fix(auth): bind JWTs to an issuer and audience
 - fix(auth): hash passwords with Argon2id and upgrade legacy hashes on login
@@ -267,6 +268,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(api): remove unresolvable plan-tracker tags from comments
 - chore(ci): add the supply-chain and secret-masking checks, and document the pipeline
 - chore(deps): clear all 42 known advisories in the pinned set
+- chore(ops): make the load probe usable against strict stacks, and record what a fresh host needs
 - chore(scripts): make the shebang executable real for the five scripts that have one
 - chore(security): allowlist the reviewed ASCII-art hit in the full-history secret scan
 - chore(web): repoint /api proxy to current tunnel host (quick-tunnel rotation)
@@ -319,6 +321,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #71 from tanviruchahs2580/fix/image-metadata-stripping
 - Merge pull request #74 from tanviruchahs2580/feat/schema-invariants
 - Merge pull request #77 from tanviruchahs2580/fix/codeql-action-pin
+- Merge pull request #81 from tanviruchahs2580/fix/concurrency-probe-verified-account
 - Merge remote-tracking branch 'origin/chore/supply-chain-checks' into merge-train2
 - Merge remote-tracking branch 'origin/docs/native-review-sheet' into merge-train2
 - Merge remote-tracking branch 'origin/fix/account-lifecycle-integrity' into merge-train2
