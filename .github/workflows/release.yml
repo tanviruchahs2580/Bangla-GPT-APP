@@ -239,6 +239,25 @@ jobs:
       # The pushed digest is the only stable identity of what shipped; record it
       # in the job summary so an operator running a host months later can map
       # the running image back to this release.
+      # The provenance/SBOM created by build-push live inside the OCI
+      # registry; `gh attestation verify` reads GitHub's ATTESTATION STORE
+      # instead. Attach store-level build provenance for both digests so the
+      # published verify command actually resolves (the workflow itself
+      # documents this as the verification contract).
+      - name: Attest API image provenance (GitHub store)
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-name: "ghcr.io/${{ github.repository_owner }}/bangla-gpt-app/api"
+          subject-digest: ${{ steps.api.outputs.digest }}
+          push-to-registry: true
+
+      - name: Attest Web image provenance (GitHub store)
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-name: "ghcr.io/${{ github.repository_owner }}/bangla-gpt-app/web"
+          subject-digest: ${{ steps.web.outputs.digest }}
+          push-to-registry: true
+
       - name: Record image digests
         env:
           API_IMAGE: ${{ steps.images.outputs.api }}
