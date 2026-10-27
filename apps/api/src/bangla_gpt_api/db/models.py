@@ -8,12 +8,14 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
 )
 from sqlalchemy import false as sa_false
+from sqlalchemy import text as sa_text
 from sqlalchemy import true as sa_true
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -221,6 +223,21 @@ class AnswerLog(Base):
     is_correct: Mapped[bool] = mapped_column(Boolean)
     chapter: Mapped[str] = mapped_column(String(200))
     book: Mapped[str] = mapped_column(String(200))
+    # DB-04: a child's academic record needs an age. This column did not
+    # exist for the first months of the platform (the capacity plan even
+    # claimed retention "bounds DB growth" while this table could not be
+    # aged at all); the migration backfills it from the attempt's own
+    # timestamp, so every historical row is purgeable by the same policy
+    # as new ones.
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        index=True,
+        default=_utcnow,
+        # server-side default keeps RAW-SQL writes (test seeders, ops
+        # scripts) timestamped too -- the ORM default alone never fires on
+        # a INSERT that names no columns.
+        server_default=sa_text("CURRENT_TIMESTAMP"),
+    )
 
 
 class EmailVerification(Base):
@@ -1071,6 +1088,14 @@ class AiUsage(Base):
 
     __tablename__ = "ai_usage"
     __table_args__ = (
+        # DB-05: the budget gate sums the current month's ledger on EVERY
+        # generation; without this composite the scan walks the user's
+        # lifetime rows via two separate single-column indexes.
+        Index(
+            "ix_ai_usage_user_created",
+            "user_id",
+            "created_at",
+        ),
         CheckConstraint(
             "prompt_tokens >= 0",
             name="ck_ai_usage_prompt_tokens",

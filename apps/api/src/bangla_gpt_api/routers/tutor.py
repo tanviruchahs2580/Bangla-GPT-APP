@@ -18,6 +18,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from bangla_gpt_api.db.models import (
+    AiUsage,
     AnalyticsEventRow,
     ChatMessage,
     Conversation,
@@ -53,7 +54,11 @@ from bangla_gpt_api.services.activity import (
     record_activity,
 )
 from bangla_gpt_api.services.context import RequestContext
-from bangla_gpt_api.services.costs import check_ai_budget, record_ai_usage
+from bangla_gpt_api.services.costs import (
+    check_ai_budget,
+    finalize_ai_usage,
+    reserve_ai_usage,
+)
 from bangla_gpt_api.services.quiz_explain import quiz_explain_instruction
 from bangla_gpt_api.services.tutor import VISION_UNSUPPORTED_ANSWER, StreamEvent
 
@@ -86,8 +91,8 @@ SSE_HEARTBEAT_SECONDS = 15.0
 
 def _ask_prepare(
     app_ctx: Ctx, db: Session, user: User, payload: AskRequest
-) -> tuple[str | None, str, str | None, RequestContext]:
-    """DB prelude to /tutor/ask: budget gate + education context."""
+) -> tuple[str | None, str, str | None, RequestContext, AiUsage]:
+    """DB prelude to /tutor/ask: budget gate + reserve + education context."""
     # AI-002: budget gate before spending upstream tokens.
     check_ai_budget(db, user_id=user.id, settings=app_ctx.settings)
     explain_instruction = quiz_explain_instruction(payload.explain) if payload.explain else None
@@ -110,20 +115,46 @@ def _ask_prepare(
         chapter=payload.chapter,
         goal="quiz_explain" if payload.explain else "question",
     )
-    return explain_instruction, question, search_query, ctx
-
-
-def _ask_ledger(db: Session, user: User, *, question: str, answer: str, model: str) -> None:
-    """DB postlude to /tutor/ask: usage ledger + activity counters + commit."""
-    # AI-002: ledger the generation (adds only; this commit persists it).
-    record_ai_usage(
+    # BE-01: reserve the ledger row now (BEFORE the provider call) so the
+    # budget gate of any concurrent generation counts this in-flight spend.
+    # Committed in its own transaction: the row is only budget-visible once
+    # it is durable. The route refuses a missing tutor before calling here;
+    # the local guard keeps the type checker honest too.
+    tutor = app_ctx.tutor
+    if tutor is None:  # pragma: no cover - route-level 503 precedes this
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "tutor_unavailable", "message": "Tutor service unavailable"},
+        )
+    model = getattr(tutor.provider, "model", None) or tutor.provider.name
+    pending = reserve_ai_usage(
         db,
         user_id=user.id,
         route="tutor.ask",
         model=model,
         prompt_text=question,
-        answer_text=answer,
     )
+    db.commit()
+    return explain_instruction, question, search_query, ctx, pending
+
+
+def _ask_ledger(
+    db: Session,
+    user: User,
+    *,
+    question: str,
+    answer: str | None,
+    model: str,
+    pending: AiUsage | None = None,
+) -> None:
+    """DB postlude to /tutor/ask: finalize the reserved ledger row (or
+    append, legacy shape), activity counters, commit. ``answer=None`` is
+    the provider-failure path: the prompt-side spend is real and stays
+    ledgered at zero completion tokens."""
+    # BE-01: the reserve, finalized in place — one row per generation, with
+    # the answer the provider actually produced (a refusal answer included:
+    # it went through the model's safety path, and its tokens were real).
+    finalize_ai_usage(db, pending, model=model, answer_text=answer)
     # one tutoring question ≈ one minute of study for the daily
     # counters (the chat routes already record; ask must not be a gap).
     if user.role == "student":
@@ -142,7 +173,7 @@ async def ask(app_ctx: Ctx, payload: AskRequest, db: DbSession, user: CurrentUse
     # The DB segments below run on the shared sync Session; each is
     # offloaded to a worker thread so a Postgres round-trip never stalls
     # the event loop (and every concurrent SSE stream on this worker).
-    explain_instruction, question, search_query, ctx = await asyncio.to_thread(
+    explain_instruction, question, search_query, ctx, pending = await asyncio.to_thread(
         _ask_prepare, app_ctx, db, user, payload
     )
     try:
@@ -163,9 +194,31 @@ async def ask(app_ctx: Ctx, payload: AskRequest, db: DbSession, user: CurrentUse
             question=question,
             answer=response.answer,
             model=getattr(tutor.provider, "model", None) or tutor.provider.name,
+            pending=pending,
         )
         return response
     except ProviderError as exc:
+        # BE-01: the provider never produced tokens, but the prompt-side
+        # spend is real and already reserved — finalize at zero completion
+        # instead of leaving the row an estimate forever.
+        model = getattr(tutor.provider, "model", None) or tutor.provider.name
+        try:
+            await asyncio.to_thread(
+                _ask_ledger,
+                db,
+                user,
+                question=question,
+                answer=None,
+                model=model,
+                pending=pending,
+            )
+        except Exception:  # pragma: no cover - ledger must not mask the 502
+            json_log(
+                logger,
+                logging.WARNING,
+                "ledger_finalize_failed",
+                error="ask_path",
+            )
         # Upstream LLM failure (timeout/exhausted retries/blocked) must be a
         # controlled 502, never an unhandled 500.
         raise HTTPException(
@@ -409,6 +462,9 @@ class _PreparedTurn(NamedTuple):
     # What conv.last_strategy was before prepare mutated it, so the JSON
     # route can restore it when the LLM call fails after the turn committed.
     prev_strategy: str | None
+    # BE-01: the ledger row reserved at prepare time (committed separately),
+    # finalized in place by _persist_chat_reply / the stream finally.
+    pending_usage: AiUsage | None
 
 
 def _prepare_chat_turn(
@@ -428,6 +484,24 @@ def _prepare_chat_turn(
     """
     # AI-002: budget gate before spending upstream tokens.
     check_ai_budget(db, user_id=user.id, settings=app_ctx.settings)
+    # BE-01: reserve the ledger row BEFORE the provider call and make it
+    # durable in its own transaction -- the budget gate of a concurrent
+    # generation must count this in-flight spend, and a disconnect later
+    # still leaves the partial spend on the books.
+    tutor = app_ctx.tutor
+    if tutor is None:  # pragma: no cover - route-level 503 precedes this
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "tutor_unavailable", "message": "Tutor service unavailable"},
+        )
+    pending_usage: AiUsage | None = reserve_ai_usage(
+        db,
+        user_id=user.id,
+        route="tutor.chat",
+        model=getattr(tutor.provider, "model", None) or tutor.provider.name,
+        prompt_text=payload.message,
+    )
+    db.commit()
     conv = _own_conversation(db, conversation_id, user)
     student = _student_profile(db, user)
     class_level = payload.class_level or student.class_level or 6
@@ -484,6 +558,7 @@ def _prepare_chat_turn(
         ctx=ctx,
         no_vision=image_payload is not None and _provider_lacks_vision(app_ctx),
         prev_strategy=prev_strategy,
+        pending_usage=pending_usage,
     )
 
 
@@ -497,6 +572,7 @@ def _persist_chat_reply(
     route: str,
     model: str,
     no_vision: bool,
+    pending_usage: AiUsage | None = None,
 ) -> ChatMessage:
     """DB postlude shared by the JSON and SSE chat turns."""
     assistant_msg = ChatMessage(
@@ -510,16 +586,11 @@ def _persist_chat_reply(
     db.add(assistant_msg)
     if conv.title is None:
         conv.title = payload.message[:80]
-    # AI-002: ledger the generation (vision refusals never reach a provider).
+    # AI-002/BE-01: finalize the reserve in place (one row per generation
+    # with the answer actually produced). Vision refusals never reach a
+    # provider: their reserve finalizes at zero completion tokens.
     if not no_vision:
-        record_ai_usage(
-            db,
-            user_id=user.id,
-            route=route,
-            model=model,
-            prompt_text=payload.message,
-            answer_text=result.answer,
-        )
+        finalize_ai_usage(db, pending_usage, model=model, answer_text=result.answer)
     db.commit()
     # one question ≈ one minute of study for the daily counters.
     record_activity(db, conv.student_id, questions=1, minutes=1)
@@ -572,6 +643,25 @@ async def send_chat_message(
             )
         except ProviderError as exc:
             await asyncio.to_thread(_discard_failed_user_turn, db, prepared)
+            # BE-01: a failed provider call still spent the prompt-side
+            # reserve; finalize it at zero completion in its own transaction
+            # so the ledger shows the attempt instead of a phantom estimate.
+            try:
+                await asyncio.to_thread(
+                    finalize_ai_usage,
+                    db,
+                    prepared.pending_usage,
+                    model=getattr(tutor.provider, "model", None) or tutor.provider.name,
+                    answer_text=None,
+                )
+                db.commit()
+            except Exception as ledger_exc:  # pragma: no cover - defensive
+                json_log(
+                    logger,
+                    logging.WARNING,
+                    "ledger_finalize_failed",
+                    error=type(ledger_exc).__name__,
+                )
             raise HTTPException(
                 status_code=502,
                 detail={"code": "llm_unavailable", "message": "LLM provider unavailable"},
@@ -587,6 +677,7 @@ async def send_chat_message(
         route="tutor.chat",
         model=getattr(tutor.provider, "model", None) or tutor.provider.name,
         no_vision=prepared.no_vision,
+        pending_usage=prepared.pending_usage,
     )
     return ChatMessageOut(
         id=assistant_msg.id,
@@ -683,6 +774,7 @@ async def stream_chat_message(
                         await queue.put(None)
 
                 producer = asyncio.create_task(_produce())
+                streamed_text: list[str] = []
                 try:
                     while True:
                         try:
@@ -694,7 +786,8 @@ async def stream_chat_message(
                             break
                         if isinstance(item, ProviderError):
                             raise item
-                        if item.type == "token":
+                        if item.type == "token" and item.text:
+                            streamed_text.append(item.text)
                             token_payload = json.dumps({"text": item.text}, ensure_ascii=False)
                             yield f"event: token\ndata: {token_payload}\n\n"
                         elif item.response is not None:
@@ -704,6 +797,28 @@ async def stream_chat_message(
                     producer.cancel()
                     with contextlib.suppress(BaseException):
                         await producer
+                    # BE-01: whatever reached the student (even nothing) sits
+                    # in the ledger -- the reserve is finalized with the
+                    # partial text so a disconnect is accounted for instead
+                    # of printing money on one side and burning it on the
+                    # other.
+                    partial = "".join(streamed_text)
+                    try:
+                        await asyncio.to_thread(
+                            finalize_ai_usage,
+                            db,
+                            prepared.pending_usage,
+                            model=getattr(tutor.provider, "model", None) or tutor.provider.name,
+                            answer_text=partial or None,
+                        )
+                        db.commit()
+                    except Exception as ledger_exc:  # pragma: no cover
+                        json_log(
+                            logger,
+                            logging.WARNING,
+                            "ledger_finalize_failed",
+                            error=type(ledger_exc).__name__,
+                        )
             if final_response is None:  # never leak a naked 500 under -O
                 # user_msg already committed before stream; no rollback needed
                 yield (
@@ -722,6 +837,7 @@ async def stream_chat_message(
                 route="tutor.chat.stream",
                 model=getattr(tutor.provider, "model", None) or tutor.provider.name,
                 no_vision=prepared.no_vision,
+                pending_usage=prepared.pending_usage,
             )
             done_payload = {
                 "user_message_id": user_msg.id,

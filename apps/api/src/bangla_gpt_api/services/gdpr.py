@@ -9,7 +9,9 @@ Content-Disposition) and delegate.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
+from typing import Any
 
 from pydantic import Field
 from sqlalchemy import delete, or_, select, update
@@ -594,6 +596,40 @@ def build_data_export(db: Session, user: User) -> _DataExportV2:
     )
 
 
+def _strip_student_from_attempts_json(db: Session, student_id: int) -> None:
+    """DB-01: Assignment/ShortTest carry an untyped ``attempts`` JSON list of
+    ``{student_id, attempt_id}`` entries alongside the relational recipients
+    table. Erasure cleaned the relational rows but left the JSON blobs
+    holding the erased child's references — the teacher hub rendered a
+    departed student's participation straight out of the untyped payload
+    long after every relational trace was gone (a data-held-about-a-person
+    residue). Entries naming the erased student are pruned in place; every
+    other student's history in the same list is untouched.
+    """
+    from bangla_gpt_api.db.models import Assignment as _Assignment
+    from bangla_gpt_api.db.models import ShortTest as _ShortTest
+
+    def _prune(rows: Sequence[Any]) -> None:
+        # The payload entries are untyped JSON (Any by contract here), so the
+        # attribute access goes through getattr -- mypy cannot follow the
+        # two-model union, and the shape really is checked at runtime below.
+        for row in rows:
+            entries = getattr(row, "attempts", None) or []
+            kept = [
+                entry
+                for entry in entries
+                if not (
+                    isinstance(entry, dict) and str(entry.get("student_id", "")) == str(student_id)
+                )
+            ]
+            if len(kept) != len(entries):
+                row.attempts = kept
+                db.add(row)
+
+    _prune(db.execute(select(_Assignment).where(_Assignment.attempts.isnot(None))).scalars().all())
+    _prune(db.execute(select(_ShortTest).where(_ShortTest.attempts.isnot(None))).scalars().all())
+
+
 def erase_account_everything(db: Session, user: User) -> None:
     """Cascade-erase every row owned by the account, then the account row.
 
@@ -678,6 +714,7 @@ def erase_account_everything(db: Session, user: User) -> None:
         db.execute(delete(SupportPlan).where(SupportPlan.student_id == student.id))
         db.execute(delete(ConceptMastery).where(ConceptMastery.student_id == student.id))
         db.execute(delete(StudentAbility).where(StudentAbility.student_id == student.id))
+        _strip_student_from_attempts_json(db, student.id)
         db.delete(student)
 
     # User-scoped rows (any role), removed before the users row itself.

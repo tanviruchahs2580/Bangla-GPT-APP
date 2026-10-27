@@ -406,7 +406,9 @@ export default function AITutorPage() {
       track("tutor_feedback", { rating });
       setTimeout(() => setThanks(null), 2000);
     } catch {
-      /* ignore */
+      // FE-07: a silently dropped thumbs rating reads as "registered" —
+      // the student never learns their feedback went nowhere.
+      toast(t("errorGeneric"));
     }
   };
 
@@ -423,7 +425,9 @@ export default function AITutorPage() {
       toast(t("noteSaved"));
       setTimeout(() => setSavedId(null), 2000);
     } catch {
-      /* ignore */
+      // FE-07: the bookmark flipping back without a word made a lost note
+      // indistinguishable from a slow network.
+      toast(t("errorGeneric"));
     }
   };
 
@@ -463,7 +467,10 @@ export default function AITutorPage() {
         ),
       );
     } catch {
+      // FE-07: a failed search used to render exactly like "no results" —
+      // the student concluded their old chat did not exist.
       setHits([]);
+      toast(t("errorGeneric"));
     }
   };
 
@@ -475,7 +482,8 @@ export default function AITutorPage() {
       await patch<ConversationOut>(`/tutor/conversations/${id}`, { title });
       await refetchConvs();
     } catch {
-      /* keep old title on failure */
+      // FE-07: the label snapped back to the old title with no feedback.
+      toast(t("errorGeneric"));
     }
   };
 
@@ -489,7 +497,9 @@ export default function AITutorPage() {
       }
       await refetchConvs();
     } catch {
-      /* ignore */
+      // FE-07: the chat vanished on screen then reappeared later — say the
+      // delete did not go through.
+      toast(t("errorGeneric"));
     }
   };
 

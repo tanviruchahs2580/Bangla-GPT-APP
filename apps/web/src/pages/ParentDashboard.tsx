@@ -268,31 +268,53 @@ export default function ParentDashboard() {
           <p className="muted m-0">
             {t("streakLabel", { days: activity.streak })} · {t("activityHint")}
           </p>
-          <div
-            className="heatmap"
-            aria-label={t("streakLabel", { days: activity.streak })}
-          >
-            {activity.days.map((d) => {
-              const total = d.questions + d.quizzes;
-              const lvl = total === 0 ? 0 : total <= 2 ? 1 : total <= 5 ? 2 : 3;
-              const title = [
-                d.date,
-                t(
-                  d.questions === 1 ? "activityQuestion" : "activityQuestions",
-                  { n: d.questions },
-                ),
-                t("activityQuizzes", { n: d.quizzes }),
-                t("activityMinutes", { n: d.minutes }),
-              ].join(" · ");
-              return (
-                <span
-                  key={d.date}
-                  className={`heat-cell lvl-${lvl}`}
-                  title={title}
-                />
-              );
-            })}
-          </div>
+          {(() => {
+            // FE-11: same contract as the student heatmap — the per-day
+            // counts leave the title-only channel for a labelled image
+            // equivalent a screen reader can actually announce.
+            const totals = activity.days.reduce(
+              (acc, d) => {
+                acc.questions += d.questions;
+                acc.quizzes += d.quizzes;
+                if (d.questions + d.quizzes > 0) acc.active += 1;
+                return acc;
+              },
+              { questions: 0, quizzes: 0, active: 0 },
+            );
+            const gridLabel = t("heatmapSummary", {
+              questions: totals.questions,
+              active: totals.active,
+              days: activity.days.length,
+            });
+            return (
+              <div className="heatmap" role="img" aria-label={gridLabel}>
+                <span className="sr-only">{gridLabel}</span>
+                {activity.days.map((d) => {
+                  const total = d.questions + d.quizzes;
+                  const lvl =
+                    total === 0 ? 0 : total <= 2 ? 1 : total <= 5 ? 2 : 3;
+                  const title = [
+                    d.date,
+                    t(
+                      d.questions === 1
+                        ? "activityQuestion"
+                        : "activityQuestions",
+                      { n: d.questions },
+                    ),
+                    t("activityQuizzes", { n: d.quizzes }),
+                    t("activityMinutes", { n: d.minutes }),
+                  ].join(" · ");
+                  return (
+                    <span
+                      key={d.date}
+                      className={`heat-cell lvl-${lvl}`}
+                      title={title}
+                    />
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
       )}
       {selected !== null && (

@@ -452,6 +452,9 @@ const bn = {
   quizKeepAnswering: "উত্তর দিতে থাকুন",
   prevPage: "আগের পৃষ্ঠা",
   nextPage: "পরের পৃষ্ঠা",
+  // FE-11: the activity heatmap's screen-reader summary (role="img" name).
+  heatmapSummary:
+    "গত {days} দিনে {questions} টি প্রশ্ন ও কুইজ অনুশীলন, {active} টি সক্রিয় দিন",
   notStarted: "এখনো কোনো কুইজ দেওয়া হয়নি।",
   continueTutor: "চ্যাট চালিয়ে যান",
   // refusal audit (admin safety view). These are literal Bengali
@@ -1124,6 +1127,9 @@ const en: Dict = {
   quizKeepAnswering: "Keep answering",
   prevPage: "Previous page",
   nextPage: "Next page",
+  // FE-11: the activity heatmap's screen-reader summary (role="img" name).
+  heatmapSummary:
+    "Last {days} days: {questions} questions and quizzes practiced across {active} active days",
   notStarted: "No quiz taken yet.",
   continueTutor: "Continue chat",
   admSafety: "Safety audit",

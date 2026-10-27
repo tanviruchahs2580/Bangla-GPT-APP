@@ -53,7 +53,11 @@ from bangla_gpt_api.services.context import (
     history_summary,
     snapshot_mastery,
 )
-from bangla_gpt_api.services.costs import check_ai_budget, record_ai_usage
+from bangla_gpt_api.services.costs import (
+    check_ai_budget,
+    finalize_ai_usage,
+    reserve_ai_usage,
+)
 from bangla_gpt_api.services.generators import (
     generate_answer_key,
     generate_homework,
@@ -689,6 +693,18 @@ async def _generate_document(
         [subject, chapter or "", *[str(q) for q in gen_inline_questions]],
         where=f"teacher/{kind} input",
     )
+    # BE-01: reserve the ledger row before retrieval or provider spend and
+    # commit it -- a concurrent generation's budget gate must count this
+    # in-flight teacher spend, and a provider failure keeps the honest
+    # prompt-side line instead of a row that never was.
+    pending_usage = reserve_ai_usage(
+        db,
+        user_id=actor.id,
+        route=f"teacher/{kind}",
+        model=getattr(app_ctx.tutor.provider, "model", None) or app_ctx.tutor.provider.name,
+        prompt_text=f"{subject} {chapter or ''} class {class_level}",
+    )
+    await asyncio.to_thread(db.commit)
     questions, chapter, ctx = await asyncio.to_thread(
         _generate_document_prepare,
         app_ctx,
@@ -766,17 +782,16 @@ async def _generate_document(
     # (deliberately open-ended teaching text) goes to the teacher hub, not
     # to a quiz paper handed to students.
     _screen_free_text(_iter_question_texts(doc_payload), where=f"teacher/{kind} output")
-    # Ledger the spend. Adds only -- whichever caller persists the document (or
-    # marks the AiJob ready) commits this row with it. The prompt side is the
-    # retrieval context actually sent; the answer side is the serialised
-    # document, which is what the tokens were spent producing.
+    # Ledger the spend: finalize the reserve -- one row per generation.
+    # The prompt side is the retrieval context actually sent; the answer
+    # side is the serialised document, which is what the tokens were spent
+    # producing. Caller persists the document (or marks the AiJob ready)
+    # and commits this row with it.
     await asyncio.to_thread(
-        record_ai_usage,
+        finalize_ai_usage,
         db,
-        user_id=actor.id,
-        route=f"teacher/{kind}",
-        model=getattr(app_ctx.provider, "name", None),
-        prompt_text=f"{subject} {chapter or ''} class {class_level}",
+        pending_usage,
+        model=getattr(app_ctx.tutor.provider, "model", None) or app_ctx.tutor.provider.name,
         answer_text=json.dumps(doc_payload, ensure_ascii=False, default=str),
     )
     return doc_payload, sources, chapter

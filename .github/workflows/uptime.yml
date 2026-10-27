@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  issues: write  # QE-11: a probe failure pages via a filed issue
 
 jobs:
   probe:
@@ -38,3 +39,65 @@ jobs:
             echo "::error title=Unexpected health body::200 without the API's own health payload."
             exit 1
           }
+          # QE-11: the alias probe cannot distinguish "proxy dead" from
+          # "origin dead". When ORIGIN_PROBE_URL is configured (repository
+          # variable, the SSH-host/tunnel address), probe it too so the
+          # failure names the half that is actually down.
+          origin_url="${{ vars.ORIGIN_PROBE_URL }}"
+          if [ -n "$origin_url" ]; then
+            ocode="$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$origin_url" || true)"
+            echo "origin $origin_url -> $ocode"
+            [ "$ocode" = "200" ] || {
+              echo "::error title=API origin unreachable::The alias served the probe but the ORIGIN ($origin_url) answered ${ocode} -- the tunnel/host side is down, not the Vercel proxy."
+              exit 1
+            }
+          fi
+
+  page:
+    # QE-11: "fails loudly in Actions" paged nobody. A failed probe files a
+    # deduped issue in the repository the maintainers already watch; the
+    # next green probe closes it, so paging self-resolves instead of
+    # accumulating.
+    name: Page on probe failure
+    needs: probe
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: File (or refresh) the outage issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          title="Production API probe FAILED ($(date -u +%F))"
+          existing="$(gh issue list --search "$title in:title" --state open --json number --jq '.[0].number' || true)"
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          body="The scheduled production health probe failed at $(date -u +%FT%TZ). Run: $run_url. Runbook: docs/runbook.md (outage triage). This issue tracks the current outage and closes on the next green probe."
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "Probe failed again at $(date -u +%FT%TZ) — run $run_url"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi
+
+  resolve:
+    # self-resolving paging: a green probe closes the standing outage issue
+    name: Resolve outage issue on green probe
+    needs: probe
+    if: success()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Close the standing outage issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          title="Production API probe FAILED ($(date -u +%F))"
+          existing="$(gh issue list --search "$title in:title" --state open --json number --jq '.[0].number' || true)"
+          if [ -n "$existing" ]; then
+            gh issue close "$existing" --comment "Probe green at $(date -u +%FT%TZ) — outage resolved."
+          fi

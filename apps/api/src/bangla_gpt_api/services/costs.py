@@ -72,6 +72,61 @@ def record_ai_usage(
     return row
 
 
+def reserve_ai_usage(
+    db: Session,
+    *,
+    user_id: int,
+    route: str,
+    model: str | None,
+    prompt_text: str | None,
+) -> AiUsage:
+    """Insert the ledger row BEFORE the provider call (BE-01).
+
+    The old shape ledgered only after completion, which broke budgeting
+    twice: two parallel generations both passed ``check_ai_budget`` off a
+    ledger that had not grown yet (check-then-commit race), and a stream
+    the student disconnected mid-way never landed a row at all — tokens
+    the platform paid for vanished from the books. The reserve is a real
+    ledger row at the estimated prompt cost; ``finalize_ai_usage`` updates
+    it in place with the answer, so a completed generation still owns
+    exactly one row, and the budget gate now sees in-flight spend.
+
+    The CALLER must commit right after reserving (their own short
+    transaction — the reserve is only budget-visible once committed) and
+    must finalize in every path: success, refusal, provider failure, and
+    stream disconnect (with the partial text — a truncated answer is still
+    the student's ledger line, never a silent zero).
+    """
+    return record_ai_usage(
+        db,
+        user_id=user_id,
+        route=route,
+        model=model,
+        prompt_text=prompt_text,
+        answer_text=None,
+    )
+
+
+def finalize_ai_usage(
+    db: Session,
+    row: AiUsage | None,
+    *,
+    model: str | None,
+    answer_text: str | None,
+) -> None:
+    """Update a reserved ledger row in place with the (possibly partial)
+    answer. ``row=None`` falls back to appending a fresh row — the legacy
+    shape for call sites without a reserve. Adds or updates only; the
+    CALLER's commit persists it."""
+    if row is None:
+        raise ValueError("finalize_ai_usage requires a reserved row")
+    completion_tokens = estimate_tokens(answer_text)
+    row.model = (model or row.model or "mock")[:80]
+    row.completion_tokens = completion_tokens
+    row.estimated_cost_usd = estimate_cost_usd(row.model, row.prompt_tokens, completion_tokens)
+    db.add(row)
+
+
 def month_cost_usd(db: Session, user_id: int, now: datetime | None = None) -> float:
     """Current-UTC-month ledger total for one user."""
     now = now or datetime.now(UTC)

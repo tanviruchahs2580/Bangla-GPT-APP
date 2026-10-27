@@ -7,6 +7,14 @@ Single implementation used by BOTH:
 
 Everything is counts-only: the report and the audit row may say HOW
 MANY rows expired, never what they contained.
+
+Deletion batching (DB-03): every large delete runs in bounded chunks with
+a commit per chunk. The first shape of this job selected ALL expired ids
+and issued one mega-``DELETE ... WHERE id IN (...)`` in one transaction —
+a WAL burst and lock window that grew with the whole table, plus a
+SQLite variable-count ceiling. The chunk size bounds both the lock
+window and the transaction, so a mid-sweep crash leaves smaller
+per-chunk transactions behind instead of one unbounded one.
 """
 
 from __future__ import annotations
@@ -19,7 +27,9 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from bangla_gpt_api.db.models import (
+    AiUsage,
     AnalyticsEventRow,
+    AnswerLog,
     ChatMessage,
     Conversation,
     EmailVerification,
@@ -31,6 +41,12 @@ from bangla_gpt_api.db.models import (
 # (audit/replay window); chat follows the configured retention days.
 TOKEN_GRACE_DAYS = 30
 
+#: Rows deleted per chunk/transaction. Small enough to bound the write
+#: lock on a loaded production DB (and comfortably above the SQLite
+#: variable-count ceiling per statement), large enough that sweep runtime
+#: stays dominated by actual expiry rather than per-chunk overhead.
+DELETE_CHUNK = 5_000
+
 
 def retention_report(
     db: Session,
@@ -38,6 +54,8 @@ def retention_report(
     now: datetime,
     chat_retention_days: int,
     analytics_retention_days: int | None = None,
+    answer_log_retention_days: int | None = None,
+    ai_usage_retention_days: int | None = None,
 ) -> dict[str, int]:
     """Counts of rows the sweep WOULD delete (no writes)."""
     chat_cutoff = now - timedelta(days=chat_retention_days)
@@ -46,6 +64,10 @@ def retention_report(
         chat_retention_days if analytics_retention_days is None else (analytics_retention_days)
     )
     analytics_cutoff = now - timedelta(days=analytics_days)
+    answer_days = 730 if answer_log_retention_days is None else (answer_log_retention_days)
+    answer_cutoff = now - timedelta(days=answer_days)
+    usage_days = 365 if ai_usage_retention_days is None else (ai_usage_retention_days)
+    usage_cutoff = now - timedelta(days=usage_days)
 
     conversations = db.execute(
         select(func.count(Conversation.id)).where(Conversation.created_at < chat_cutoff)
@@ -72,6 +94,14 @@ def retention_report(
             AnalyticsEventRow.created_at < analytics_cutoff
         )
     ).scalar_one()
+    # DB-04: the graded-answer record ages on its own timestamp (backfilled
+    # from the attempt for rows written before the column existed).
+    answer_log = db.execute(
+        select(func.count(AnswerLog.id)).where(AnswerLog.created_at < answer_cutoff)
+    ).scalar_one()
+    ai_usage = db.execute(
+        select(func.count(AiUsage.id)).where(AiUsage.created_at < usage_cutoff)
+    ).scalar_one()
     return {
         "conversations_deleted": int(conversations),
         "chat_messages_deleted": int(messages),
@@ -79,6 +109,8 @@ def retention_report(
         "email_verifications_deleted": int(verifications),
         "used_invites_deleted": int(invites),
         "analytics_events_deleted": int(analytics_events),
+        "answer_log_deleted": int(answer_log),
+        "ai_usage_deleted": int(ai_usage),
     }
 
 
@@ -93,11 +125,15 @@ def run_retention_sweep(
     if now is None:
         now = datetime.now(UTC).replace(tzinfo=None)
     analytics_days = getattr(settings, "analytics_retention_days", None)
+    answer_days = getattr(settings, "answer_log_retention_days", None)
+    usage_days = getattr(settings, "ai_usage_retention_days", None)
     report = retention_report(
         db,
         now=now,
         chat_retention_days=settings.chat_retention_days,
         analytics_retention_days=analytics_days,
+        answer_log_retention_days=answer_days,
+        ai_usage_retention_days=usage_days,
     )
     if dry_run:
         return {"dry_run": True, **report}
@@ -107,6 +143,9 @@ def run_retention_sweep(
     analytics_cutoff = now - timedelta(
         days=settings.chat_retention_days if analytics_days is None else analytics_days
     )
+    answer_cutoff = now - timedelta(days=730 if answer_days is None else answer_days)
+    usage_cutoff = now - timedelta(days=365 if usage_days is None else usage_days)
+
     old_convs = (
         db.execute(select(Conversation.id).where(Conversation.created_at < chat_cutoff))
         .scalars()
@@ -117,20 +156,85 @@ def run_retention_sweep(
         # into chat_messages, so deleting the messages directly is the same
         # ForeignKeyViolation that broke account erasure (F-093).
         _detach_feedback_from_messages(db, old_convs)
-        db.execute(delete(ChatMessage).where(ChatMessage.conversation_id.in_(old_convs)))
-        db.execute(delete(Conversation).where(Conversation.id.in_(old_convs)))
-    db.execute(delete(PasswordReset).where(PasswordReset.expires_at < token_cutoff))
-    db.execute(delete(EmailVerification).where(EmailVerification.expires_at < token_cutoff))
-    db.execute(
-        delete(ParentInvite).where(
-            ParentInvite.expires_at < token_cutoff,
-            ParentInvite.used_at.isnot(None),
+        _delete_ranked(
+            db,
+            ChatMessage,
+            ChatMessage.id,
+            ChatMessage.conversation_id.in_(old_convs),
         )
+        _delete_ranked(
+            db,
+            Conversation,
+            Conversation.id,
+            Conversation.id.in_(old_convs),
+        )
+    _delete_ranked(db, PasswordReset, PasswordReset.id, PasswordReset.expires_at < token_cutoff)
+    _delete_ranked(
+        db,
+        EmailVerification,
+        EmailVerification.id,
+        EmailVerification.expires_at < token_cutoff,
     )
-    db.execute(delete(AnalyticsEventRow).where(AnalyticsEventRow.created_at < analytics_cutoff))
+    _delete_ranked(
+        db,
+        ParentInvite,
+        ParentInvite.id,
+        (ParentInvite.expires_at < token_cutoff) & (ParentInvite.used_at.isnot(None)),
+    )
+    _delete_ranked(
+        db,
+        AnalyticsEventRow,
+        AnalyticsEventRow.id,
+        AnalyticsEventRow.created_at < analytics_cutoff,
+    )
+    _delete_ranked(
+        db,
+        AnswerLog,
+        AnswerLog.id,
+        AnswerLog.created_at < answer_cutoff,
+    )
+    _delete_ranked(
+        db,
+        AiUsage,
+        AiUsage.id,
+        AiUsage.created_at < usage_cutoff,
+    )
     # The pre-delete retention_report counts ARE the report (dialect-safe;
     # bulk-delete rowcount varies across drivers).
     return {"dry_run": False, **report}
+
+
+def _delete_ranked(
+    db: Session,
+    model: type,
+    id_col: Any,
+    where: Any,
+    *,
+    chunk_size: int = DELETE_CHUNK,
+) -> None:
+    """Delete matching rows in bounded chunks, one commit per chunk (DB-03).
+
+    Selection walks the table by primary-key cursor (``id > last_id ORDER
+    BY id LIMIT chunk``), so each batch is an index seek + a small IN
+    delete instead of one unbounded transaction. The caller's surrounding
+    transaction is committed as part of each chunk: a mid-sweep crash
+    leaves only completed chunks behind, which a pure-DELETE sweep treats
+    exactly the same on the next run (expired-only, idempotent).
+    """
+    last_id = 0
+    while True:
+        ids = (
+            db.execute(
+                select(id_col).where(where, id_col > last_id).order_by(id_col).limit(chunk_size)
+            )
+            .scalars()
+            .all()
+        )
+        if not ids:
+            break
+        last_id = int(ids[-1])
+        db.execute(delete(model).where(id_col.in_(ids)))
+        db.commit()
 
 
 def _detach_feedback_from_messages(db: Session, conversation_ids: Sequence[int]) -> None:

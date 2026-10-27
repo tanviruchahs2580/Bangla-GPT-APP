@@ -86,11 +86,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(ci): make the doc-path guard cover the classes of path it claims to
 - fix(ci): make the lockfile guardrail deterministic
 - fix(ci): pin every action to a commit SHA and scope registry permission
+- fix(ci): pin sbom-action to the real v0.20.11 commit
 - fix(ci): pin the CodeQL actions to a commit, not a re-pointable tag object
 - fix(ci): prettier-format the web sources; drop the digest script's shebang
 - fix(ci): repair two gates that could not fail, and stop the impossible redis bump
 - fix(ci): resolve README links portably so the docs guard works on Linux
 - fix(ci): serialise release and deploy runs per git ref
+- fix(ci): syft attaches its own artifact; the upload carries python only
+- fix(ci): syft for the web SBOM; regenerate the review sheet and CHANGELOG
 - fix(ci): the Android build needs JDK 21, not 17
 - fix(ci): trim the trailing whitespace pre-commit found in vercel-deploy.yml
 - fix(ci): unblock Dependabot PRs and name the Vercel credential failure (#9)
@@ -153,6 +156,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): stop showing failures as facts, and read API timestamps as UTC
 - fix(web): stop the service worker caching error pages as the app shell
 - fix(web): wave-1b client trust batch -- session renewal, quiz durability, honest empty states, SSE reset
+- fix: audit remediation waves 2-4 -- the data layer ages, the gates run, the polish lands
 - fix: close the full audit register — atomicity, envelope, a11y, ops; clear all 42 advisories (#57)
 - fix: complete admin password-change flow, tutor typo gate, roster-scoped stats, quiz distractors, i18n
 - fix: land the verified remediation on current main (CORS-adjacent, budget, UI states)
@@ -254,6 +258,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Tests
 
+- test(api): CI parity for the wave-2/3/4 batch -- ruff, sbom, seeder
 - test(api): autocommit the raw fixture connections in new-tables deletion tests
 - test(api): cover school admin fallbacks and tenant guards
 - test(api): erasure-fk fixture recognises the parity env var (BGPT_TEST_DATABASE_URL)
@@ -282,6 +287,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(security): allowlist the reviewed ASCII-art hit in the full-history secret scan
 - chore(tests): park orphan specs that pin contracts not yet built
 - chore(web): repoint /api proxy to current tunnel host (quick-tunnel rotation)
+- chore: archive the stray root QA record; SBOM installs before it validates
 - chore: close the low-severity register — hot-path indexes, dead code, XFF spoofing, env parity
 - chore: code honesty - unused args, un-typed db params, inert suppressions, stale comments
 - chore: ignore Playwright MCP tool artifacts; regenerate the CHANGELOG
@@ -334,6 +340,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #74 from tanviruchahs2580/feat/schema-invariants
 - Merge pull request #77 from tanviruchahs2580/fix/codeql-action-pin
 - Merge pull request #81 from tanviruchahs2580/fix/concurrency-probe-verified-account
+- Merge pull request #84 from tanviruchahs2580/fix/audit-2026-10-27-wave1b
 - Merge remote-tracking branch 'origin/chore/supply-chain-checks' into merge-train2
 - Merge remote-tracking branch 'origin/docs/native-review-sheet' into merge-train2
 - Merge remote-tracking branch 'origin/fix/account-lifecycle-integrity' into merge-train2
