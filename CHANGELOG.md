@@ -341,6 +341,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #77 from tanviruchahs2580/fix/codeql-action-pin
 - Merge pull request #81 from tanviruchahs2580/fix/concurrency-probe-verified-account
 - Merge pull request #84 from tanviruchahs2580/fix/audit-2026-10-27-wave1b
+- Merge pull request #88 from tanviruchahs2580/fix/audit-2026-10-27-wave2
 - Merge remote-tracking branch 'origin/chore/supply-chain-checks' into merge-train2
 - Merge remote-tracking branch 'origin/docs/native-review-sheet' into merge-train2
 - Merge remote-tracking branch 'origin/fix/account-lifecycle-integrity' into merge-train2
