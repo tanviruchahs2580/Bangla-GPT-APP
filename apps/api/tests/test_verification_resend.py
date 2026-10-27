@@ -125,13 +125,15 @@ def test_resend_quota_stops_sending_but_body_stays_generic(
 
     monkeypatch.setattr(auth_module, "_MAIL_QUOTA_PER_ADDRESS_PER_HOUR", 2)
     _register(client, "quota@example.com")  # registration mail is not quota'd
-    assert client.post(
-        "/auth/resend-verification", json={"email": "quota@example.com"}
-    ).status_code == 202
+    assert (
+        client.post("/auth/resend-verification", json={"email": "quota@example.com"}).status_code
+        == 202
+    )
     assert len(mails) == 2  # resend 1 of 2
-    assert client.post(
-        "/auth/resend-verification", json={"email": "quota@example.com"}
-    ).status_code == 202
+    assert (
+        client.post("/auth/resend-verification", json={"email": "quota@example.com"}).status_code
+        == 202
+    )
     assert len(mails) == 3  # resend 2 of 2
     res = client.post("/auth/resend-verification", json={"email": "quota@example.com"})
     assert res.status_code == 202 and res.json() == {"status": "accepted"}
