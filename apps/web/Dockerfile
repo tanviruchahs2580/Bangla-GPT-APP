@@ -11,7 +11,7 @@ ENV VITE_API_BASE=$VITE_API_BASE
 RUN npm run build
 
 # Digest-pinned (audit F9). Refresh with scripts/update_image_digests.py.
-FROM nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de
+FROM nginx:1.31-alpine@sha256:a3554c0d0b48177b1413c26e01f695334428020d9df01243fbae3e11cfd17417
 # apk upgrade: the pinned base carries months-old alpine packages
 # (brotli/c-ares/curl HIGH/CRITICAL findings blocked the release scan).
 RUN apk upgrade --no-cache
