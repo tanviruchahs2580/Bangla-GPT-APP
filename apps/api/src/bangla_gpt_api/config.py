@@ -221,6 +221,11 @@ class Settings(BaseSettings):
         "/tutor/ask": (30, "user"),
         "/tutor/conversations": (30, "user"),
         "/tutor": (60, "ip"),
+        # B-02: session renewal. User-scoped: a school NAT shares one IP
+        # across a class, and the proactive renewal loop fires on every api()
+        # call near the token's last five minutes -- a per-IP bound would
+        # throttle a whole classroom's honest sessions at once.
+        "/auth/renew": (60, "user"),
         "/auth/forgot": (10, "ip"),
         "/auth/reset": (10, "ip"),
         # The password-verifying counterpart of /auth/login had NO rule: a

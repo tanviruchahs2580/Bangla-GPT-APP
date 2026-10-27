@@ -108,7 +108,7 @@ bangla_gpt_api = [
 line-length = 100
 src = ["src", "tests"]
 target-version = "py311"
-exclude = ["alembic"]
+exclude = ["alembic", "eval/parked_specs"]
 
 [tool.ruff.lint]
 # Families added in CQ-01, each with the violations it surfaces either fixed
