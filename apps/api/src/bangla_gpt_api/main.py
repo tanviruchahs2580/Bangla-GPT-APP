@@ -24,7 +24,13 @@ from typing import TYPE_CHECKING, Any
 from cryptography.fernet import Fernet
 
 from bangla_gpt_api import caching, initialize
-from bangla_gpt_api.config import DEFAULT_JWT_SECRET, Settings, get_settings
+from bangla_gpt_api.config import (
+    DEFAULT_JWT_SECRET,
+    NON_PRODUCTION_ENVS,
+    PRODUCTION_ENVS,
+    Settings,
+    get_settings,
+)
 
 if TYPE_CHECKING:  # typing-only: never executed, so no import cycles
     from bangla_gpt_api.providers.base import LLMProvider
@@ -92,6 +98,19 @@ def enforce_production_safety(settings: Settings) -> None:
         )
 
     problems: list[str] = []
+
+    # ENV-gate guidance (tests/test_env_gate.py): the settings landed here
+    # because ENV is not one of the recognized development names -- often a
+    # TYPO. Name the offending value and the legit names, so an operator a
+    # minute from a launch sees the fix instead of a generic refusal.
+    if settings.env.strip().lower() not in PRODUCTION_ENVS:
+        problems.append(
+            f"ENV={settings.env!r} is not a recognized production name "
+            f"({', '.join(sorted(PRODUCTION_ENVS))}); it is being guarded as "
+            "production because anything unrecognized is treated as one. "
+            f"Development lanes that skip the guard: "
+            f"{', '.join(sorted(NON_PRODUCTION_ENVS))}."
+        )
 
     for validator in (
         _validate_smtp,

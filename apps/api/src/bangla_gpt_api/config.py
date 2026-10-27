@@ -16,9 +16,15 @@ PRODUCTION_ENVS = frozenset({"production", "prod", "staging"})
 # provider serving fabricated answers to children, SMTP verification
 # bypassed. The gate is now a DENYLIST of explicitly unguarded names:
 # anything unknown boots guarded. staging keeps production parity by
-# construction instead of by enumeration. Enforced by
-# tests/test_env_parity.py.
-UNGARDED_ENVS = frozenset({"development", "dev", "test"})
+# construction instead of by enumeration.
+#
+# These are the ONLY names that skip the guard, and each is a genuine
+# development/CI lane: the test suite and dev loops, the developer's own
+# machine, the CI container smoke, and Vercel preview builds. Anything
+# else -- a deployment name, a typo -- runs the strict production boot
+# battery and the denylist goes into the boot error so the operator can
+# see which names WOULD have been unguarded. Pinned by tests/test_env_gate.py.
+NON_PRODUCTION_ENVS = frozenset({"development", "dev", "local", "test", "ci", "preview"})
 # staging/prod parity: staging runs the SAME strict boot guard and secret
 # suppression as production (no default JWT_SECRET, no raw reset-token logs);
 # only the data is non-authoritative. Enforced by tests/test_env_parity.py.
@@ -266,12 +272,14 @@ class Settings(BaseSettings):
 
     @property
     def is_production(self) -> bool:
-        # Denylist, not allowlist: see UNGARDED_ENVS at the top of this file.
-        # The frozenset is inlined here on purpose -- this is the one decision
-        # every guard reads, and it must not depend on a module-global lookup
-        # resolving at call time. Keep the two in sync (test_env_parity pins
-        # the behaviour on both ends).
-        return self.env.strip().lower() not in frozenset({"development", "dev", "test"})
+        # Denylist, not allowlist: see NON_PRODUCTION_ENVS at the top of
+        # this file. The frozenset is inlined here on purpose -- this is the
+        # one decision every guard reads, and it must not depend on a
+        # module-global lookup resolving at call time. Keep the two in sync
+        # (tests/test_env_gate.py pins the behaviour on both ends).
+        return self.env.strip().lower() not in frozenset(
+            {"development", "dev", "local", "test", "ci", "preview"}
+        )
 
     @property
     def cors_origins(self) -> list[str]:

@@ -591,13 +591,10 @@ jobs:
       - name: Run container
         # On a shared network so the k6 step can reach it by name: the k6
         # container's --network host could not dial the host-published port
-        # on the runner (connection refused, measured 2026-10-24). ENV is a
-        # guarded production environment in this codebase since the 2026-10-27
-        # audit (unknown names boot with the strict battery); "test" keeps the
-        # smoke container on the unguarded lane it was unknowingly using.
+        # on the runner (connection refused, measured 2026-10-24).
         run: |
           docker network create smoke
-          docker run -d --name api-smoke --network smoke -p 8080:8000 -e ENV=test bangla-gpt-api:ci
+          docker run -d --name api-smoke --network smoke -p 8080:8000 -e ENV=ci bangla-gpt-api:ci
 
       - name: Wait for health endpoint
         run: |
