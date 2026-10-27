@@ -116,6 +116,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(tests): make the teacher-jobs rate-limit test deterministic
 - fix(tests): make the two new UI tests independent of ambient state
 - fix(tests): the production pii happy path opts out of plaintext storage
+- fix(tests): the standalone pii validator test meets the new plaintext contract
 - fix(web): add the language pin the import promised, and unbreak main
 - fix(web): clear footer from bottom nav + cut a round-trip from login
 - fix(web): clear the two WCAG AA failures axe found on the tutor screen
