@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - fix(api): P4 cleanup batch — chunk-id content hash, lesson echo gate, proportional Latin penalty, corpus-scoped RAG keys, history char cap (A20-A25)
+- fix(api): adopt the tracked env-gate contract -- NON_PRODUCTION_ENVS with named CI lanes
 - fix(api): align the served OpenAPI contract with runtime behaviour
 - fix(api): burn pending verification codes when a new one is issued
 - fix(api): close the check-then-insert race class; reap orphaned AI jobs
