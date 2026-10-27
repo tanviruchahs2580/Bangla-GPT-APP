@@ -317,6 +317,12 @@ jobs:
       packages: read
       attestations: read
     steps:
+      # gh attestation verify resolves the OCI digests through crane, which
+      # needs an explicit registry session: the freshly pushed packages live
+      # behind GHCR auth even for the same repository's token.
+      - name: Log in to GHCR (read)
+        run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
       - name: Verify build provenance for both digests
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
