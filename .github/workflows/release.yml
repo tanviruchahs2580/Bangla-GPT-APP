@@ -358,7 +358,7 @@ jobs:
           set -euo pipefail
           for ref in "${{ needs.build-push.outputs.api_image }}@${{ needs.build-push.outputs.api_digest }}" "${{ needs.build-push.outputs.web_image }}@${{ needs.build-push.outputs.web_digest }}"; do
             echo "Scanning $ref"
-            docker run --rm "aquasec/trivy@sha256:b88012e2a0a309d6a8a00463d4e63e5e513377fb74eccbc8f9b0f8f81940ebeb" image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$ref"
+            docker run --rm               -e TRIVY_USERNAME="${{ github.actor }}"               -e TRIVY_PASSWORD="${{ github.token }}"               "aquasec/trivy@sha256:b88012e2a0a309d6a8a00463d4e63e5e513377fb74eccbc8f9b0f8f81940ebeb" image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$ref"
           done
   deploy:
     name: Deploy to production host (SSH)
