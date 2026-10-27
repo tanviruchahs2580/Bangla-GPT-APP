@@ -743,16 +743,16 @@ translation that changes the meaning of the English original.
 | 719 | apps/api/src/bangla_gpt_api/retrieval/query_analysis.py:464 | (literal) | বীজগণিতীয় রাশি | |
 | 720 | apps/api/src/bangla_gpt_api/retrieval/query_analysis.py:466 | (literal) | বীজগণিতীয় রাশি | |
 | 721 | apps/api/src/bangla_gpt_api/retrieval/query_analysis.py:469 | (literal) | বৃত্তের ক্ষেত্রফল | |
-| 722 | apps/api/src/bangla_gpt_api/routers/auth.py:550 | (literal) | পাসওয়ার্ড রিসেট / Password reset | |
-| 723 | apps/api/src/bangla_gpt_api/routers/auth.py:551 | (literal) | পাসওয়ার্ড রিসেট করতে নিচের টোকেনটি ব্যবহার করুন (৩০ মিনিটের জন্য বৈধ):\n\n{token}\n | |
-| 724 | apps/api/src/bangla_gpt_api/routers/common.py:337 | (literal) | সবচাইতে সহজ শব্দে ছোট করে বল। | |
-| 725 | apps/api/src/bangla_gpt_api/routers/common.py:338 | (literal) | স্বাভাবিক ধারাবাহিক বিবরণ দাও। | |
-| 726 | apps/api/src/bangla_gpt_api/routers/common.py:339 | (literal) | প্রয়োজনীয় সব ধাপ ও উদাহরণসহ বিস্তারিত বল। | |
-| 727 | apps/api/src/bangla_gpt_api/routers/learn.py:657 | (literal) | পাঠ্যবই পড়ুন | |
-| 728 | apps/api/src/bangla_gpt_api/routers/learn.py:658 | (literal) | AI-কে প্রশ্ন করুন | |
-| 729 | apps/api/src/bangla_gpt_api/routers/learn.py:659 | (literal) | কুইজ দিন | |
-| 730 | apps/api/src/bangla_gpt_api/routers/learn.py:747 | (literal) | দুর্বল অধ্যায় | |
-| 731 | apps/api/src/bangla_gpt_api/routers/learn.py:750 | (literal) | নতুন কুইজ চেষ্টা করুন | |
+| 722 | apps/api/src/bangla_gpt_api/routers/auth.py:665 | (literal) | পাসওয়ার্ড রিসেট / Password reset | |
+| 723 | apps/api/src/bangla_gpt_api/routers/auth.py:666 | (literal) | পাসওয়ার্ড রিসেট করতে নিচের টোকেনটি ব্যবহার করুন (৩০ মিনিটের জন্য বৈধ):\n\n{token}\n | |
+| 724 | apps/api/src/bangla_gpt_api/routers/common.py:338 | (literal) | সবচাইতে সহজ শব্দে ছোট করে বল। | |
+| 725 | apps/api/src/bangla_gpt_api/routers/common.py:339 | (literal) | স্বাভাবিক ধারাবাহিক বিবরণ দাও। | |
+| 726 | apps/api/src/bangla_gpt_api/routers/common.py:340 | (literal) | প্রয়োজনীয় সব ধাপ ও উদাহরণসহ বিস্তারিত বল। | |
+| 727 | apps/api/src/bangla_gpt_api/routers/learn.py:719 | (literal) | পাঠ্যবই পড়ুন | |
+| 728 | apps/api/src/bangla_gpt_api/routers/learn.py:720 | (literal) | AI-কে প্রশ্ন করুন | |
+| 729 | apps/api/src/bangla_gpt_api/routers/learn.py:721 | (literal) | কুইজ দিন | |
+| 730 | apps/api/src/bangla_gpt_api/routers/learn.py:809 | (literal) | দুর্বল অধ্যায় | |
+| 731 | apps/api/src/bangla_gpt_api/routers/learn.py:812 | (literal) | নতুন কুইজ চেষ্টা করুন | |
 | 732 | apps/api/src/bangla_gpt_api/services/answer_structure.py:7 | (literal) | সহজ ব্যাখ্যা: | |
 | 733 | apps/api/src/bangla_gpt_api/services/answer_structure.py:9 | (literal) | মূল বিষয়: | |
 | 734 | apps/api/src/bangla_gpt_api/services/answer_structure.py:10 | (literal) | তুমি বুঝেছ? | |
