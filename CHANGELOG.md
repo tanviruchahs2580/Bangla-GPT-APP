@@ -13,9 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-### Fixed
-
-- fix(release): authenticate the attestation verifier against GHCR
+Nothing yet.
 
 ## v0.9.3 - 2026-10-27
 
@@ -120,6 +118,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(rag): locative reclassification + short-token roman guard
 - fix(rag): roman-lane floor, edit-similarity rank, MRR unit, trailing newline
 - fix(rag): runtime prompt-injection screening at the query boundary
+- fix(release): attest provenance into the GitHub store; real action pin
+- fix(release): authenticate the attestation verifier against GHCR
 - fix(safety): Bengali red-team coverage, nukta-ya injection gap, real-model eval leg
 - fix(sec): refuse unsafe production defaults at boot
 - fix(sec): stop serving the OpenAPI reference in production
@@ -350,6 +350,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #84 from tanviruchahs2580/fix/audit-2026-10-27-wave1b
 - Merge pull request #88 from tanviruchahs2580/fix/audit-2026-10-27-wave2
 - Merge pull request #90 from tanviruchahs2580/chore/release-0.9.3
+- Merge pull request #91 from tanviruchahs2580/ci/release-attestation-login
 - Merge remote-tracking branch 'origin/chore/supply-chain-checks' into merge-train2
 - Merge remote-tracking branch 'origin/docs/native-review-sheet' into merge-train2
 - Merge remote-tracking branch 'origin/fix/account-lifecycle-integrity' into merge-train2
