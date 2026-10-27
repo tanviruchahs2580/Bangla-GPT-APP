@@ -120,6 +120,7 @@ Nothing yet.
 - fix(rag): runtime prompt-injection screening at the query boundary
 - fix(release): attest provenance into the GitHub store; real action pin
 - fix(release): authenticate the attestation verifier against GHCR
+- fix(release): log in to GHCR before Trivy pulls the release digests
 - fix(safety): Bengali red-team coverage, nukta-ya injection gap, real-model eval leg
 - fix(sec): refuse unsafe production defaults at boot
 - fix(sec): stop serving the OpenAPI reference in production
