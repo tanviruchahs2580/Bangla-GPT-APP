@@ -15,7 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- fix(release): pass GHCR credentials to the Trivy container
+- fix(release): digest-pin the 1.29 runtime
+- fix(release): nginx 1.29-alpine runtime + apk upgrade for the scan gate
 
 ## v0.9.3 - 2026-10-27
 
@@ -123,6 +124,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(release): attest provenance into the GitHub store; real action pin
 - fix(release): authenticate the attestation verifier against GHCR
 - fix(release): log in to GHCR before Trivy pulls the release digests
+- fix(release): pass GHCR credentials to the Trivy container
 - fix(safety): Bengali red-team coverage, nukta-ya injection gap, real-model eval leg
 - fix(sec): refuse unsafe production defaults at boot
 - fix(sec): stop serving the OpenAPI reference in production
