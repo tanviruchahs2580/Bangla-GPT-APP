@@ -1,11 +1,16 @@
 # RAG Architecture — Bangla GPT APP (NCTB subsystem)
 
-Status: **verified as implemented** (2026-10-17, after the retrieval-quality
-rework). Every component below maps to code in `apps/api/src/bangla_gpt_api/`;
-the measured numbers in "Measured baseline" were regenerated on this commit
-against the committed `data/nctb/retrieval_eval.json` (the script is
-`apps/api/scripts/evaluate_nctb_retrieval.py`, run locally over the full 2,508-chunk
-corpus — see "Corpus flow" for why the corpus text itself is not in git).
+> **Read first (2026-10-29):** this document is the *historical* written
+> architecture. The verified as-built map is `docs/rag/architecture.md`, and
+> the plan is `docs/rag/target-architecture.md`. Several claims below did not
+> match the code when audited — they are itemised under "Corrections
+> (2026-10-29)" at the end of this file, and the specific paragraphs that
+> carried them now point at that section.
+
+Status: **partly verified**. The component map below matches the code for the
+retrieval stack (hybrid BM25+vector, query analysis, reranker, gate); the
+"Measured baseline" section and the CI-enforcement paragraph did not, and are
+corrected below. See the corrections section for the file:line evidence.
 
 ## Implemented architecture (hybrid, frequency-aware gate, query understanding)
 
@@ -46,6 +51,8 @@ Student question (Bangla / Banglish / English terms)
         │     indexed text (heading included), threshold 0.5
         │   • out-of-domain budget: ≥ 2 content terms absent from the corpus
         │     → refuse (cannot verify an answer for absent concepts)
+        │     (implemented 2026-10-29; before that only an ALL-terms-absent
+        │      question refused — see Corrections #1)
         │   • trigram fuzzy allowed per term (≥ 0.6, e.g. a dropped conjunct)
         │   ├── fail → INSUFFICIENT_EVIDENCE_ANSWER, grounded=false (abstain)
         ↓ pass
@@ -57,7 +64,8 @@ Student question (Bangla / Banglish / English terms)
         │   circuit breaker + fallback chain; partial streams discarded
         ↓
   AskResponse{answer, grounded, sources[book/chapter/section/page/score],
-              citation_verified (stem coverage ≥ 0.25 vs evidence),
+              citation_verified (citation-id resolution + per-chunk support,
+              see Corrections #4),
               confidence (documented formula)}
 
 Runtime execution notes (2026-10-18 hardening):
@@ -143,13 +151,15 @@ that require human/infra decisions remain exactly two: the embedding model +
 vector store, and an LLM faithfulness judge (see evaluation/metrics.py,
 `mode="local_overlap"` until then).
 
-## Measured baseline (real corpus, 2,508 chunks, this commit)
+## Measured baseline (see the corrections section before quoting these)
 
 The committed `data/nctb/retrieval_eval.json` is the record of truth for
-these numbers: this table quotes it verbatim (the earlier text sat on values
-from an interim local run — build 23.9 s, latency 127/224 ms — that the
-committed artifact superseded), and any retrieval change regenerates the
-artifact locally, with the diff reviewed as retrieval evidence.
+these numbers: this table quotes it verbatim. **It was produced by a corpus
+build that is not reproducible from the current raw files** (committed
+artifact: 2,508 chunks; a rebuild of the raw tree in `.qa-work` yields 2,599
+chunks and different family-B/corpus numbers — see Corrections #2). Any
+retrieval change regenerates the artifact locally, with the diff reviewed as
+retrieval evidence.
 
 | Metric | Before rework | After rework (committed artifact) |
 |---|---|---|
@@ -161,14 +171,15 @@ artifact locally, with the diff reviewed as retrieval evidence.
 | Adversarial refusal rate | 1.00 | **1.00** |
 | Search latency p50 / p95 (hybrid, real corpus) | — | 120 ms / 253 ms |
 
-Golden-set regression discipline (unchanged contract, still enforced in CI):
-the 634-item golden suite + 16-item red-team set run through the hermetic mock
-provider — both as the dedicated `eval-gate.yml` workflow and as steps of the
-`ci.yml` golden-eval job (the 24-question hit@3 gate runs alongside them) — and
-every metric is compared against the committed baseline
-(`eval/baseline_v2.json`); any drop > 2 percentage points fails. After the
-rework: grounded_rate 1.00, faithfulness 0.8549 (up from 0.8547), grammar
-0.9881, red-team refusal 16/16, zero system-prompt leakage.
+Golden-set regression discipline (corrected wording): the 634-item golden
+suite and the 23-item red-team set run hermetically under the mock provider
+via the `eval-gate.yml` workflow (steps: `python -m bangla_gpt_api.evaluation.cli`,
+`python scripts/evaluate_golden.py`, `python -m bangla_gpt_api.evaluation.cli
+--redteam`), and `python -m bangla_gpt_api.evaluation.cli --gate` runs all of
+them plus the retrieval hit@k floor in one command. Every metric is compared
+against the committed baseline (`eval/baseline_v2.json`); any drop > 2
+percentage points fails. The earlier text claimed a `ci.yml` golden-eval job
+and a 16-item red-team set — neither existed (Corrections #5).
 
 The sample-corpus robustness matrix (`tests/test_bangla_matrix.py`) was
 re-measured per its own contract: standard, colloquial, mixed, Banglish,
@@ -181,9 +192,12 @@ refuse. That test file records which expectation flipped and why.
 1. **Semantic recall**: the vector lane is still the deterministic phonetic
    lane. A real multilingual embedding model + vector store is the staged
    infra decision (factory change in `retrieval/embedding.py`).
-2. **Chunking**: fixed ~700-char section chunking, no overlap, character
-   units. Changing it invalidates every committed eval artifact; it must be
-   its own corpus revision with regenerated baselines.
+2. **Chunking**: structure-aware section chunking with a word budget
+   (220 target / 60 min / 400 max) and chapter-parent boundaries — the earlier
+   text here claimed "fixed ~700-char section chunking", which the code does
+   not do (`nctb/chunking.py`). Changing the budget invalidates every
+   committed eval artifact; it must be its own corpus revision with
+   regenerated baselines.
 3. **Faithfulness judge**: `mode="local_overlap"` until an LLM provider is
    configured; `_JUDGE_INSTRUCTION` and the scoring contract are ready.
 4. **Index lifecycle**: full in-memory rebuild at boot (~26 s on the real
@@ -198,3 +212,70 @@ refuse. That test file records which expectation flipped and why.
    short-follow-up case (≤1 content term → prior user turn's terms appended).
    Full coreference resolution (pronoun substitution mid-sentence, multi-turn
    embedding rewriter) remains an embedding-model-staged decision.
+7. **Class attribution of the secondary sources**: the five secondary
+   curriculum documents on disk have legacy-font-garbled covers, so their
+   class set is the declared level range (6–10), logged as `level-range` at
+   load; the four HSC physics/chemistry/biology/higher-mathematics books
+   carry a real cover statement ("একাদশ ও দ্বাদশ শ্রেণি") and are detected.
+   A source with no class signal at all is refused, not expanded
+   (`data/nctb_loader.resolve_class_targets`).
+
+## Corrections (2026-10-29)
+
+Verified against the code during the enterprise QA audit
+(`.qa-work/audit/RAG/report.md`) and the fixes landed on this branch. Each row
+names the claim that did not hold and the measurement or file that shows the
+truth.
+
+1. **"Out-of-domain budget: ≥ 2 content terms absent → refuse"** was documented
+   but not implemented: `TutorService._coverage_details` kept only terms with
+   `df > 0` and refused only when EVERY content term was absent. Measured
+   (`.qa-work/evidence/E-RAG-15`): 3 of the 4 family-C questions were answered
+   with unrelated citations at coverage 1.0 (e.g. ক্রিকেট বিশ্বকাপ ফাইনালে কে
+   জিতেছিল? grounded on কে, df=183). Fixed: the budget is a named constant
+   (`OUT_OF_CORPUS_ABSENT_BUDGET = 2`) applied before the `df > 0` filter;
+   re-measured false-answer 3/4 → 0/4 with no change to the in-corpus
+   false-refusal rate (5/624, pre-existing).
+2. **"Measured baseline … regenerated on this commit against the committed
+   retrieval_eval.json"** did not reproduce: the committed artifact says 2,508
+   chunks with family-B MRR 1.00, while a rebuild of the raw tree in
+   `.qa-work` yields 2,599 chunks with family-B recall@1 0.675 and MRR 1.275
+   (`.qa-work/evidence/E-RAG-20/retrieval_eval_run.log`). The MRR above 1.0
+   was a defect — `scripts/evaluate_nctb_retrieval.py:133` reciprocated a
+   value that the `mrr()` helper reciprocates again; family A had already
+   been fixed for exactly this and family B was missed. Fixed (ranks are fed
+   to `mrr()`; the report asserts every metric is a fraction); the corrected
+   run on the same corpus build gives family-B MRR 0.8052 and family-C
+   refusal 1.00.
+3. **Class detection**: `nctb/normalize.detect_class_level` returned None for
+   every source of the corpus on disk, and `data/nctb_loader` then replicated
+   each chunk across the source's whole declared level range (423 chunks per
+   secondary class, equal by construction). What the old detector rejected as
+   "ambiguous" was the real book-level statement — the HSC covers read
+   "পদার্থবিদ্যা একাদশ ও দ্বাদশ শ্রেণি". Fixed: `detect_class_levels` reads
+   range cover statements, the loader resolves cover statement → declared
+   level range (explicit flag) → refuse, and never invents a class.
+4. **`citation_verified` was "stem coverage ≥ 0.25 vs evidence"**: a
+   whole-answer overlap over all retrieved chunks concatenated, which a
+   fabricated sentence riding on shared stems passed (probe: verified True for
+   "কোষ হলো … ক্লোরোপ্লাস্ট থাকে যা সালোকসংশ্লেষণ করে" against কোষ evidence).
+   Now `services/safety.citation_check`: citation markers must resolve to a
+   retrieved chunk id (or index) and every declarative sentence must be
+   supported by ONE chunk over its content terms. The response policy stays
+   warn-level: the verdict is honest (`citation_verified`) and metered, but an
+   unsupported answer is not yet discarded or regenerated.
+5. **"the 634-item golden suite + 16-item red-team set run … as steps of the
+   `ci.yml` golden-eval job"** was false in both halves: `ci.yml` had no
+   golden-eval job and the red-team set is 23 items. The red-team and the
+   golden retrieval gates now run in `eval-gate.yml`, and
+   `python -m bangla_gpt_api.evaluation.cli --gate` runs golden + hit@k floor
+   + red-team as one command.
+6. **"fixed ~700-char section chunking"** in the open items: the chunker is
+   structure-aware with a word budget (220/60/400) — corrected in place.
+7. **Tutor answers were not output-screened** while teacher documents were:
+   the tutor now runs the same `screen_question` on the composed answer (and
+   on the accumulated stream buffer) and refuses with reason `output_screen`.
+8. **Text inside an uploaded image was never declared untrusted**: the prompt
+   now declares the vision part inside `<attached_image>` delimiters and
+   `SYSTEM_PROMPT` carries a matching data-only rule.
+
