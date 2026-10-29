@@ -1,0 +1,57 @@
+# Semgrep scan scope and the SEC-18 triaged allowlist.
+#
+# Semgrep reads this file from the scan root; the guardrails job runs the
+# scan from the repository root, so one file defines scope for both CI and
+# local runs. Entries are gitignore patterns. Every "scope" entry is a tree
+# that is not reviewed product source (vendored, generated, frozen or
+# scratch); every "allowlist" entry is a triaged finding whose reason is
+# recorded in docs/security/security_scans.md.
+
+# ---- scope: vendored / generated / build output ----
+node_modules/
+apps/web/node_modules/
+apps/web/dist/
+apps/web/coverage/
+apps/web/test-results/
+apps/web/android/
+apps/web/ios/
+.venv/
+apps/api/.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+
+# ---- scope: frozen archives and scratch trees ----
+docs/archive/
+.audit/
+.audit-work/
+.qa-deploy/
+.qa-work/
+.apk-latest/
+apps/api/eval/
+data/nctb/
+
+# ---- allowlist, entry 1: alembic migrations ----
+# Append-only historical DDL. `sa.text()` with f-string interpolation is
+# inherent to identifier-only DDL, the values are module-level constants in
+# the same file, and no request path reaches a migration. Covers the
+# avoid-sqlalchemy-text finding on
+# alembic/versions/e1f2a3b4c5d6_unique_single_use_hashes_feedback_attempt_idx.py.
+apps/api/alembic/versions/
+
+# ---- allowlist, entry 2: backup container offsite command ----
+# OFFSITE_SYNC_CMD is operator configuration for the backup container,
+# documented in docs/runbook.md; semgrep's
+# dangerous-subprocess-use-tainted-env-args flags the subprocess call, but
+# the operator's own environment is the intended command source and no
+# request or user input reaches this script.
+scripts/backup_loop.py
+
+# ---- allowlist, entry 3: web image runs stock nginx ----
+# The master process must be root to bind :80 and the workers drop to the
+# nginx user; nginx only honours `user` in the master. The unprivileged
+# image + port change is a deployment decision tracked with the DOCK stream.
+# Dockerfile linting is still covered by the blocking hadolint step.
+apps/web/Dockerfile

@@ -59,15 +59,27 @@ jobs:
         id: deploy_sha
         env:
           GH_TOKEN: ${{ github.token }}
+          # Context values reach the shell through the environment, never
+          # through the script text: `${{ }}` interpolation in a `run:` block
+          # splices the value into the command line before any quoting, so a
+          # ref name containing shell metacharacters would execute here. The
+          # job-level `if` narrows the allowed events, but narrowing is not a
+          # sanitizer, and semgrep's run-shell-injection rule flags the splice
+          # (SEC-18 triage).
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+          TRIGGER_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
-            echo "manual dispatch: deploying ${{ github.sha }}"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+            echo "manual dispatch: deploying $HEAD_SHA"
             exit 0
           fi
-          current=$(gh api "repos/${{ github.repository }}/commits/${{ github.ref_name }}" --jq '.sha')
-          triggered="${{ github.event.workflow_run.head_sha }}"
+          current=$(gh api "repos/$REPO/commits/$REF_NAME" --jq '.sha')
+          triggered="$TRIGGER_SHA"
           if [ -z "$triggered" ]; then
             echo "::error title=Missing head_sha::workflow_run event carried no head_sha; refusing to guess."
             exit 1
