@@ -140,6 +140,15 @@ class Settings(BaseSettings):
     jwt_issuer: str = "bangla-gpt-api"
     jwt_audience: str = "bangla-gpt-clients"
     password_reset_token_minutes: int = 30
+    # SEC-02: the length floor of the documented password policy (NIST
+    # SP 800-63B-4 s3.1.1.2; see auth/security.py for the full citation).
+    # 8 is the product's documented contract and the figure the policy allows
+    # for a password used only as one factor of MFA; the policy requires 15
+    # for single-factor passwords, so an operator running without mandatory
+    # MFA raises this to 15. Length is the ONLY structural rule -- no
+    # composition requirements, and passphrases up to PASSWORD_MAX_LENGTH
+    # (128) are accepted.
+    password_min_length: int = 8
 
     # --- admin bootstrap / lifecycle ---
     admin_email: str | None = None

@@ -12,12 +12,49 @@ from argon2.exceptions import InvalidHashError, VerificationError
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.models import User
 
-# OWASP Password Storage Cheat Sheet (fetched 2026-10-09): "Argon2id with a
-# minimum configuration of 19 MiB of memory, an iteration count of 2, and 1
-# degree of parallelism." PBKDF2-HMAC-SHA256, which this codebase used before,
-# is only the fallback recommendation at 600,000 iterations; the older 200,000
-# iterations were below even that floor.
-_ARGON2 = PasswordHasher(time_cost=2, memory_cost=19 * 1024, parallelism=1)
+# Password hashing and password policy.
+#
+# Hashing: OWASP Password Storage Cheat Sheet (fetched 2026-10-09):
+# "Argon2id with a minimum configuration of 19 MiB of memory, an iteration
+# count of 2, and 1 degree of parallelism." PBKDF2-HMAC-SHA256, which this
+# codebase used before, is only the fallback recommendation at 600,000
+# iterations; the older 200,000 iterations were below even that floor. The
+# parameters are named constants (not literals at the constructor) because
+# the encoded hashes carry them and a test pins the two together.
+#
+# Policy: NIST SP 800-63B, Revision 4 (published 2025-08-26; retrieved
+# 2026-10-29 from https://pages.nist.gov/800-63-4/sp800-63b.html), section
+# 3.1.1.2 "Password Verifiers", which this module implements as follows:
+#   * a length floor, and NO composition rules -- "SHALL NOT impose other
+#     composition rules (e.g., requiring mixtures of different character
+#     types)"; see password_length_problem and the tests in
+#     tests/test_w2_authz_policy.py;
+#   * passphrases must be usable: "SHOULD permit a maximum password length
+#     of at least 64 characters" -- PASSWORD_MAX_LENGTH is 128, and nothing
+#     truncates or normalises the input before hashing;
+#   * a blocklist of commonly used / compromised secrets, checked as a whole
+#     ("SHALL compare the prospective secret against a blocklist ... not
+#     substrings"): COMMON_PASSWORDS below, with leetspeak folding and
+#     structure rules; breached-corpus checking would be the next step and
+#     needs an offline corpus (owner decision, see the stream report);
+#   * the floor itself: SP 800-63B-4 requires 15 characters for a password
+#     used as a SINGLE factor and allows 8 where the password is only ever
+#     part of multi-factor authentication. This deployment offers MFA but
+#     does not require it, and 8 is the product's documented contract
+#     (docs/API.md), so the default stays 8 and PASSWORD_MIN_LENGTH lets an
+#     operator raise it to the single-factor figure without a code change.
+PASSWORD_MAX_LENGTH = 128
+
+#: Argon2id parameters, named so the encoded hash and this policy cannot
+#: drift: the format is $argon2id$v=19$m=<KiB>,t=<passes>,p=<lanes>$salt$hash
+ARGON2_TIME_COST = 2
+ARGON2_MEMORY_COST_KIB = 19 * 1024
+ARGON2_PARALLELISM = 1
+_ARGON2 = PasswordHasher(
+    time_cost=ARGON2_TIME_COST,
+    memory_cost=ARGON2_MEMORY_COST_KIB,
+    parallelism=ARGON2_PARALLELISM,
+)
 
 #: A real Argon2id hash of a value nobody knows, verified against on the
 #: "no such user" login path so that path costs the same as a real one
@@ -154,6 +191,22 @@ def reject_common_password(password: str) -> None:
     """
     if is_common_password(password):
         raise CommonPasswordError
+
+
+def password_length_problem(password: str, *, minimum: int) -> str | None:
+    """The one length rule the policy imposes, or None when the password fits.
+
+    Length is the only structural requirement: SP 800-63B-4 section 3.1.1.2
+    forbids composition rules, so an all-lowercase passphrase of sufficient
+    length is a VALID password here, and the only upper bound is
+    ``PASSWORD_MAX_LENGTH`` (which exists to bound the hashing cost, and is
+    twice the 64 characters the policy says to permit).
+    """
+    if len(password) < max(1, int(minimum)):
+        return f"Password must be at least {max(1, int(minimum))} characters"
+    if len(password) > PASSWORD_MAX_LENGTH:
+        return f"Password must be at most {PASSWORD_MAX_LENGTH} characters"
+    return None
 
 
 def hash_password(password: str) -> str:
