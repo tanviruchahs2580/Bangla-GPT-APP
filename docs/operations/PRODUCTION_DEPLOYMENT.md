@@ -22,10 +22,13 @@
 ### API
 
 ```bash
-# Build Docker image (same as CI)
+# Build Docker image (same as CI). There is no APP_VERSION build-arg: the
+# image is version-independent and the release tag drives the tags and the
+# metadata labels (release.yml). The version number's single source is
+# apps/api/pyproject.toml, so derive it here instead of copying it.
+VERSION="$(python3 -c 'import tomllib;print(tomllib.load(open("apps/api/pyproject.toml","rb"))["project"]["version"])')"
 DOCKER_BUILDKIT=1 docker build \
-  --build-arg APP_VERSION=0.9.2 \
-  --tag ghcr.io/tanviruchahs2580/bangla-gpt-app/api:v0.9.2 \
+  --tag "ghcr.io/tanviruchahs2580/bangla-gpt-app/api:v${VERSION}" \
   --push .
 ```
 
@@ -86,8 +89,11 @@ ADMIN_PASSWORD=<12+ chars>
 ### Option C: GHCR pull (verified in CI)
 
 ```bash
-docker pull ghcr.io/tanviruchahs2580/bangla-gpt-app/api:v0.9.2
-docker pull ghcr.io/tanviruchahs2580/bangla-gpt-app/web:v0.9.2
+# The released tag carries the version from apps/api/pyproject.toml (0.9.3
+# today). Derive the tag so this page cannot drift from the manifests.
+VERSION="$(python3 -c 'import tomllib;print(tomllib.load(open("apps/api/pyproject.toml","rb"))["project"]["version"])')"
+docker pull "ghcr.io/tanviruchahs2580/bangla-gpt-app/api:v${VERSION}"
+docker pull "ghcr.io/tanviruchahs2580/bangla-gpt-app/web:v${VERSION}"
 ```
 
 ---
@@ -179,8 +185,9 @@ npx vercel rollback
 ### API (Docker)
 
 ```bash
-# Pull and restart with previous image tag
-docker pull ghcr.io/tanviruchahs2580/bangla-gpt-app/api:v0.9.0
+# Pull and restart with the previous image tag (the tag the previous release
+# shipped -- read it from the git tags, never from a number in this document)
+docker pull ghcr.io/tanviruchahs2580/bangla-gpt-app/api:<previous-release-tag>
 # Update docker-compose.yml or deployment config
 docker compose up -d api
 ```
