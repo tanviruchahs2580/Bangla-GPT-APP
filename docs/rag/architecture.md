@@ -86,9 +86,10 @@ unset-directory case in `main._validate_corpus`).
 | Golden v2 regression (634 items, mock) | `python -m bangla_gpt_api.evaluation.cli` | gate PASS vs `eval/baseline_v2.json` |
 | Red-team suite (23 items, mock) | `python -m bangla_gpt_api.evaluation.cli --redteam` | PASS, no leak |
 
-Search latency and index build time are machine-dependent (measured
-p50 261 ms / p95 367 ms and a 44 s build on the 2,599-chunk corpus build used
-for these runs); the committed `data/nctb/retrieval_eval.json` is an older,
+Search latency and index build time are machine-dependent (measured on the
+2,599-chunk corpus build used for these runs: p50 261-293 ms, p95 367-495 ms
+and a 44 s build across the verification runs); the committed
+`data/nctb/retrieval_eval.json` is an older,
 smaller build (2,508 chunks) and is not reproducible from the current raw
 files — see `docs/rag/target-architecture.md` P1.
 
