@@ -50,7 +50,10 @@ async def ready(app_ctx: Ctx, db: DbSession) -> dict:
             f"LLM_PROVIDER={app_ctx.settings.llm_provider!r} is not implemented yet. "
             "Set LLM_PROVIDER=mock or configure a supported provider."
         )
-        raise HTTPException(status_code=503, detail=detail)
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "provider_misconfigured", "message": detail},
+        )
     # The retrieval index is what every tutoring turn runs on. A boot whose
     # index failed to build used to answer "ready" while /tutor/ask returned
     # 503 for every student; readiness must state the dependency the product

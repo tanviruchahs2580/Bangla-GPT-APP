@@ -572,15 +572,31 @@ def _classroom_or_404(db: Session, room_id: int) -> ClassRoom:
     return room
 
 
+class DocumentInputError(Exception):
+    """A document request the caller can fix, with a caller-safe body.
+
+    Raised instead of the bare ``LookupError``/``ValueError`` this path used
+    to throw: the routes answer with the coded envelope, so the exception
+    carries the status, the machine-readable code and a message that is
+    written for the client -- arbitrary exception text never reaches the
+    response body (F-074).
+    """
+
+    def __init__(self, status_code: int, code: str, message: str) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.code = code
+
+
 def _doc_in_for(kind: str, body: dict) -> Any:
     """Validate a raw body against the per-kind input model.
 
-    Unknown kinds raise LookupError and malformed bodies raise
+    Unknown kinds raise :class:`DocumentInputError` and malformed bodies raise
     pydantic.ValidationError; callers map them to HTTP codes (sync) or
     to the failed job state (background)."""
     model = _DOC_IN_MODELS.get(kind)
     if model is None:
-        raise LookupError(f"unsupported generator kind: {kind!r}")
+        raise DocumentInputError(404, "unknown_kind", "unknown generator kind")
     return model.model_validate(body)
 
 
@@ -606,7 +622,7 @@ def _generate_document_prepare(
         if gen.paper_id is not None:
             qp = db.get(QuestionPaper, gen.paper_id)
             if qp is None or (qp.teacher_id != actor.id and actor.role != "admin"):
-                raise LookupError("question paper not found")
+                raise DocumentInputError(404, "not_found", "question paper not found")
             questions = [
                 str(q.get("text", "")).strip()
                 for q in qp.questions
@@ -614,7 +630,7 @@ def _generate_document_prepare(
             ]
             chapter = chapter or (str(qp.chapters[0]) if qp.chapters else None)
         if not questions:
-            raise ValueError("answer key needs at least one question")
+            raise DocumentInputError(422, "invalid_input", "answer key needs at least one question")
     ctx = _request_context(
         db,
         actor,
@@ -797,7 +813,7 @@ async def _generate_document(
             "level": str(gen.level),
         }
     else:
-        raise ValueError(f"unsupported generator kind: {kind!r}")
+        raise DocumentInputError(404, "unknown_kind", "unknown generator kind")
     # B-08 output side: screen the generated QUESTION texts before the
     # document is persisted or ledgered. The provider is prompted for
     # curriculum content, but a jailbreak mirrored through the retrieval

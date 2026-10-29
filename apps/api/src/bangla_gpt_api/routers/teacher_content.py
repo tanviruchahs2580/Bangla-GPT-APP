@@ -74,6 +74,7 @@ from bangla_gpt_api.services.question_bank import (
 )
 
 from .common import (
+    DocumentInputError,
     _doc_in_for,
     _generate_document,
     _persist_document,
@@ -955,24 +956,34 @@ async def teacher_generate_document(
     try:
         gen_in = _doc_in_for(kind, body)
     except ValidationError as exc:
+        # Coded 422 like every other rejection (F-074): the pydantic error
+        # list leaked the internal validation shape and was the last list-
+        # shaped detail in routers/. Field locations are logged, not echoed.
+        json_log(
+            logger,
+            logging.INFO,
+            "teacher_document_payload_invalid",
+            kind=kind,
+            fields=[str(e["loc"][0]) if e["loc"] else "?" for e in exc.errors()[:5]],
+        )
         raise HTTPException(
             status_code=422,
-            detail=[
-                {"loc": [str(p) for p in e["loc"]], "msg": str(e["msg"])} for e in exc.errors()[:5]
-            ],
+            detail={"code": "invalid_payload", "message": f"invalid {kind} payload"},
         ) from exc
     started = time.perf_counter()
     try:
         doc_payload, sources, chapter = await _generate_document(app_ctx, db, teacher, kind, gen_in)
-    except LookupError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except DocumentInputError as exc:
+        # status/code/message are authored for the client in common.py; no
+        # str(exc) of an arbitrary exception reaches the body (F-074).
+        raise HTTPException(
+            status_code=exc.status_code, detail={"code": exc.code, "message": str(exc)}
+        ) from exc
     except ProviderError as exc:
         raise HTTPException(
             status_code=502,
             detail={"code": "llm_unavailable", "message": f"{kind} generation failed"},
         ) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     def _finalize(doc_payload: dict, chapter: str | None) -> TeacherDocument:
         doc = _persist_document(

@@ -90,10 +90,19 @@ bearer_scheme = HTTPBearer(auto_error=False)
 BearerCredentials = Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)]
 
 
-def _unauthorized(detail: str = "Not authenticated") -> HTTPException:
+def _unauthorized(
+    detail: str = "Not authenticated", *, code: str = "unauthenticated"
+) -> HTTPException:
+    """401 in the same coded envelope as every business-rule failure.
+
+    Auth guards used to answer ``{"detail": "<string>"}``, so a client
+    branching on ``detail.code`` (see apps/web errors.ts) could not classify
+    a 401 the way it classifies a coded rejection; the machine-readable code
+    is now stable and the human message is preserved (F-067).
+    """
     return HTTPException(
         status_code=401,
-        detail=detail,
+        detail={"code": code, "message": detail},
         headers={"WWW-Authenticate": "Bearer"},
     )
 
@@ -176,7 +185,7 @@ def get_current_user(
         payload = decode_token(credentials.credentials, settings=ctx.settings)
         user_id = int(payload["sub"])
     except (pyjwt.PyJWTError, KeyError, TypeError, ValueError) as exc:
-        raise _unauthorized("Invalid or expired token") from exc
+        raise _unauthorized("Invalid or expired token", code="invalid_token") from exc
     # Every minted token carries a jti, and a logout (POST /auth/logout)
     # or an account-wide revoke parks it in the shared cache (Redis when
     # configured: revocation then holds across workers/restarts; memory
@@ -200,16 +209,16 @@ def get_current_user(
             raise revocation_store_unavailable() from exc
         if revoked is True:
             if payload.get("imp"):
-                raise _unauthorized("Impersonation session has ended")
-            raise _unauthorized("Session ended; please log in again")
+                raise _unauthorized("Impersonation session has ended", code="session_ended")
+            raise _unauthorized("Session ended; please log in again", code="session_ended")
     # AUTH-001: MFA step-up tokens (mfa:true, token_type "mfa") are accepted
     # ONLY by POST /auth/mfa/challenge — never as API credentials.
     if payload.get("mfa") is True:
-        raise _unauthorized("MFA verification required")
+        raise _unauthorized("MFA verification required", code="mfa_required")
     request.state.jwt_claims = payload
     user = db.get(User, user_id)
     if user is None:
-        raise _unauthorized("Invalid or expired token")
+        raise _unauthorized("Invalid or expired token", code="invalid_token")
     # F-05 token epoch: a password change/reset refuses every token issued
     # in an EARLIER second than the rotation. The rotation response token is
     # minted naturally (PyJWT rejects future iat), so same-second mints
@@ -225,7 +234,7 @@ def get_current_user(
         )
         iat = payload.get("iat")
         if not isinstance(iat, int) or iat < inv_ts:
-            raise _unauthorized("Session expired; please log in again")
+            raise _unauthorized("Session expired; please log in again", code="session_expired")
     if user.must_change_password and request.url.path not in _FORCE_CHANGE_EXEMPT_PATHS:
         raise HTTPException(
             status_code=403,

@@ -61,8 +61,12 @@ def test_auth_guard_errors_are_documented_on_every_protected_operation(client):
     for method, path in unauthenticated:
         responses = _op(schema, method, path)["responses"]
         assert "401" in responses, f"{method.upper()} {path} does not document 401"
+        # F-067: the guard answers in the same coded envelope as business
+        # rules ({"detail": {"code", "message"}}), so the documented 401 body
+        # is CodedDetail; the old assertion pinned the string-shaped
+        # MessageDetail that a client could not classify.
         assert responses["401"]["content"]["application/json"]["schema"]["$ref"].endswith(
-            "MessageDetail"
+            "CodedDetail"
         )
 
 

@@ -60,7 +60,10 @@ def test_ready_returns_503_for_unconfigured_provider() -> None:
     client = TestClient(create_app(Settings(llm_provider="does-not-exist")))
     res = client.get("/ready")
     assert res.status_code == 503
-    assert "does-not-exist" in res.json()["detail"]
+    # F-074: the /ready refusal carries the coded envelope like every other
+    # error; the provider name (config, not a secret) stays in the message.
+    assert res.json()["detail"]["code"] == "provider_misconfigured"
+    assert "does-not-exist" in res.json()["detail"]["message"]
 
 
 @pytest.mark.asyncio
