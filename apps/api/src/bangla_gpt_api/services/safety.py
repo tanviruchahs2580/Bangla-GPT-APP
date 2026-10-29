@@ -19,10 +19,24 @@ SAFETY_ANSWER = "এই প্রশ্নের উত্তর এই প্�
 UNSAFE_ANSWER_REFUSAL = (
     "দুঃখিত, উত্তরটি এই প্ল্যাটফর্মে দেখানো যাচ্ছে না। অনুগ্রহ করে প্রশ্নটি অন্যভাবে লিখে আবার চেষ্টা করো।"
 )
+# Helpline policy (F-001): only numbers the government itself publishes may be
+# shown to a child. The 2026-10-29 audit could not verify the previously
+# shipped mental-health line "09666-777222" against any official source (the
+# Directorate General of Health Services' own hotline pages list 16263, 999,
+# 333 and 102, and not that number: https://www.dghs.gov.bd hotline pages,
+# retrieved 2026-10-29), so the copy now names only DGHS-documented services:
+# the 24-hour health call centre 16263 and the national emergency service 999.
+# ``tests/test_qa_helpline_policy.py`` blocks any future edit that pastes an
+# unlisted number here; an owner who has a verified mental-health-specific
+# line adds it to SAFE_HELPLINES with its source and date first.
+HELPLINE_HEALTH_CALL_CENTRE = "১৬২৬৩"  # DGHS health call centre, 24/7
+HELPLINE_EMERGENCY = "৯৯৯"  # national emergency service
+SAFE_HELPLINES: tuple[str, ...] = (HELPLINE_HEALTH_CALL_CENTRE, HELPLINE_EMERGENCY)
 SELF_HARM_ANSWER = (
     "আপনি নিজেকে কষ্ট দিতে চাইলে অনুগ্রহ করে কাছের কোনো বড় মানুষ, "
     "অভিভাবক বা শিক্ষককে সঙ্গে কথা বলুন। আপনি গুরুত্বপূর্ণ — সাহায্য পাওয়া সম্ভব। "
-    "জাতীয় মানসিক স্বাস্থ্য সহায়তা: ০৯৬৬৬-৭৭৭২২২।"
+    f"সরকারি স্বাস্থ্য সেবা: স্বাস্থ্য কল সেন্টার {HELPLINE_HEALTH_CALL_CENTRE} (২৪ ঘণ্টা), "
+    f"জরুরি সেবা {HELPLINE_EMERGENCY}।"
 )
 
 # Category -> compiled regex over the normalized question text.
