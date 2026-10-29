@@ -28,8 +28,21 @@ services:
       LLM_PROVIDER: ${LLM_PROVIDER:-mock}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
+      # S4.2/S4.3 routing + provider fallback: documented in
+      # .env.production.example and read by Settings, but compose never passed
+      # them, so setting them in .env was silently ignored (audit F-020).
+      GEMINI_FAST_MODEL: ${GEMINI_FAST_MODEL:-}
+      LLM_FALLBACK_PROVIDER: ${LLM_FALLBACK_PROVIDER:-}
+      LLM_MAX_OUTPUT_TOKENS: ${LLM_MAX_OUTPUT_TOKENS:-2048}
+      RETRIEVAL_MODE: ${RETRIEVAL_MODE:-hybrid}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
       DATABASE_URL: ${DATABASE_URL:-sqlite:////data/app.db}
       JWT_SECRET: ${JWT_SECRET:-}
+      JWT_ISSUER: ${JWT_ISSUER:-bangla-gpt-api}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-bangla-gpt-clients}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
       # IP-scoped rate limits must key on the real client, not the proxy.
       # True is safe HERE (and is the shipped default) because the bundled
@@ -50,8 +63,13 @@ services:
       RATE_LIMIT_TUTOR_PER_MINUTE: ${RATE_LIMIT_TUTOR_PER_MINUTE:-30}
       RATE_LIMIT_TUTOR_IP_PER_MINUTE: ${RATE_LIMIT_TUTOR_IP_PER_MINUTE:-60}
       CHAT_HISTORY_MESSAGES: ${CHAT_HISTORY_MESSAGES:-8}
+      CHAT_HISTORY_MESSAGE_CHAR_LIMIT: ${CHAT_HISTORY_MESSAGE_CHAR_LIMIT:-2000}
       CHAT_RETENTION_DAYS: ${CHAT_RETENTION_DAYS:-180}
+      ANALYTICS_RETENTION_DAYS: ${ANALYTICS_RETENTION_DAYS:-180}
       INVITE_TTL_MINUTES: ${INVITE_TTL_MINUTES:-1440}
+      # Legacy bare-ID parent linking is insecure; invite codes are the
+      # default flow (documented in .env.production.example).
+      ALLOW_DIRECT_PARENT_LINK: ${ALLOW_DIRECT_PARENT_LINK:-false}
       LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-30}
       LLM_MAX_RETRIES: ${LLM_MAX_RETRIES:-2}
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
@@ -75,6 +93,22 @@ services:
       # api service previously never received PII_ENC_KEY at all).
       PII_ENC_KEY: ${PII_ENC_KEY:-}
       PII_ALLOW_PLAINTEXT: ${PII_ALLOW_PLAINTEXT:-}
+      # SEC-001: _validate_metrics refuses to boot in production unless
+      # METRICS_REQUIRE_AUTH is true and METRICS_TOKEN is set, so the
+      # documented `docker compose --profile core up -d --wait` path used to
+      # crash-loop until the operator hand-edited compose (audit F-020). The
+      # true default matches the guard; in ENV=test|development the metrics
+      # route only checks is_production, so a local stack is unaffected.
+      METRICS_REQUIRE_AUTH: ${METRICS_REQUIRE_AUTH:-true}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      # Unset/0 means the per-user AI budget is off (deploy contract test).
+      AI_MONTHLY_BUDGET_USD_PER_USER: ${AI_MONTHLY_BUDGET_USD_PER_USER:-0}
+      # JSON override of the served rate-limit table; an empty string is not
+      # valid JSON for this Settings field, so the default is an empty object.
+      RATE_LIMIT_RULES: ${RATE_LIMIT_RULES:-{}}
+      # Optional error tracking; both apps init Sentry only when these are set.
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENV: ${SENTRY_ENV:-}
     volumes:
       - api_data:/data
     # Host-side port. This is for a tunnel or proxy that runs ON THE HOST, not
@@ -113,7 +147,10 @@ services:
           memory: 1g
           cpus: "1.0"
     healthcheck:
-      test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status==200 else 1)"]
+      # /ready, not /health: /health is the constant {"status":"ok"} and used
+      # to stay green while the database, cache or provider were down. The
+      # release workflow's post-deploy gate reads this healthcheck.
+      test: ["CMD", "python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3).status==200 else 1)"]
       interval: 30s
       timeout: 5s
       start_period: 10s

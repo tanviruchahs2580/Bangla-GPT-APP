@@ -141,8 +141,11 @@ docker build -t bangla-gpt-api:local .
 #   docker compose --profile core --profile web --profile postgres --profile tls up -d --wait
 #
 # ENV defaults to "production", and the app refuses to boot in production
-# without a real JWT_SECRET and admin credentials - that gate is deliberate.
-# For a local stack, run as test. The API is published to the host on
+# without a real JWT_SECRET, admin credentials, PII_ENC_KEY and the
+# METRICS_REQUIRE_AUTH/METRICS_TOKEN pair - that gate is deliberate.
+# For a local stack, run as test. A production run needs the full key list
+# from deploy/DEPLOYMENT.md section 6 in .env; compose forwards every one of
+# them, so no compose edit is needed. The API is published to the host on
 # 127.0.0.1:8000 by default (only a host-side tunnel needs that; Caddy reaches
 # it as api:8000 over the Compose network). API_HOST_PORT moves the port and
 # API_HOST_BIND widens the interface - 0.0.0.0 exposes the API to the network.
