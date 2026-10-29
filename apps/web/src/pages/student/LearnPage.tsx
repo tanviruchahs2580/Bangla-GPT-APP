@@ -27,6 +27,7 @@ import type {
 } from "../../types";
 import { useAuth } from "../../AuthContext";
 import { Card, LoadError } from "../../components/ui";
+import { OfflineLibrary } from "../../components/OfflineLibrary";
 import { invalidateStudyCaches } from "../../lib/invalidate";
 import { t, tSubject } from "../../i18n";
 import { cn } from "../../lib/cn";
@@ -39,6 +40,7 @@ import {
   saveChapter,
 } from "../../lib/offlineStore";
 import { getLowData } from "../../lib/lowData";
+import { toast } from "../../lib/toast";
 
 const SUBJECT_TONE: Record<string, string> = {
   science: "tile-teal",
@@ -206,6 +208,17 @@ export function LearnPage() {
         </div>
       )}
 
+      {me && (
+        <OfflineLibrary
+          userId={me.user_id}
+          onOpen={(rec) =>
+            void navigate(
+              `/student/learn/${encodeURIComponent(rec.subject)}/${encodeURIComponent(rec.chapter)}?class=${rec.classLevel}`,
+            )
+          }
+        />
+      )}
+
       {activeSubject && (
         <>
           <section className="section-head">
@@ -310,20 +323,32 @@ export function LearnPage() {
 
 export function LearnChapterPage() {
   const { subject, chapter, searchParams } = useRouteParams();
+  const { me } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const classLevel = Number(searchParams.get("class")) || undefined;
   // one normalized class number keeps the offline key stable
   const offlineClass = classLevel ?? 6;
+  // Offline copies are user-scoped (PWA-03): a shared device must never serve
+  // one student the chapter another downloaded.
+  const userId = me?.user_id;
 
   const query = useQuery({
     queryKey: ["chapterContent", subject, chapter, classLevel],
     // network first; a saved offline copy covers network failure.
-    queryFn: () =>
-      fetchChapterWithOfflineFallback(subject!, chapter!, offlineClass, () =>
-        getChapterContent(subject!, chapter!, classLevel),
-      ),
-    enabled: !!subject && !!chapter,
+    queryFn: () => {
+      if (!subject || !chapter || userId == null)
+        throw new Error("reader route is not ready");
+      return fetchChapterWithOfflineFallback(
+        userId,
+        subject,
+        chapter,
+        offlineClass,
+        () => getChapterContent(subject, chapter, classLevel),
+      );
+    },
+    // `enabled` gates the query, so the throw above is unreachable in practice.
+    enabled: !!subject && !!chapter && userId != null,
   });
 
   const [fontScale, setFontScale] = useState(() => {
@@ -354,9 +379,9 @@ export function LearnChapterPage() {
   }, [progressQuery.data, chapter]);
 
   useEffect(() => {
-    if (!subject || !chapter) return;
+    if (!subject || !chapter || userId == null) return;
     let alive = true;
-    loadChapter(subject, chapter, offlineClass)
+    loadChapter(userId, subject, chapter, offlineClass)
       .then((rec) => {
         if (alive) setSaved(!!rec);
       })
@@ -364,7 +389,7 @@ export function LearnChapterPage() {
     return () => {
       alive = false;
     };
-  }, [subject, chapter, offlineClass]);
+  }, [subject, chapter, offlineClass, userId]);
 
   useEffect(() => {
     if (subject && chapter && classLevel) {
@@ -475,13 +500,17 @@ export function LearnChapterPage() {
   const ttsSupported = ttsAvailable();
 
   const download = async () => {
-    if (!content || !subject || !chapter) return;
+    if (!content || !subject || !chapter || userId == null) return;
     setSaving(true);
     try {
-      await saveChapter(subject, chapter, offlineClass, content);
+      await saveChapter(userId, subject, chapter, offlineClass, content);
       setSaved(true);
     } catch {
-      /* storage may be unavailable; the offline copy stays optional */
+      // Previously swallowed: the button simply did not change and the
+      // student believed the chapter was downloaded for the journey home.
+      // C2 handoff: a dedicated "storage full" key would name the cause
+      // (the budget in offlineStore.ts); errorGeneric is the shipped copy.
+      toast(t("errorGeneric"));
     } finally {
       setSaving(false);
     }
@@ -559,6 +588,7 @@ export function LearnChapterPage() {
               onClick={download}
               disabled={saving}
               aria-label={t("downloadChapter")}
+              aria-pressed={saved}
             >
               <Download size={14} aria-hidden />{" "}
               {saved ? t("downloaded") : t("downloadChapter")}
