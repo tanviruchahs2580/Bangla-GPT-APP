@@ -40,7 +40,7 @@ from pathlib import Path
 from typing import Any
 
 from bangla_gpt_api.retrieval.bm25 import indexable_text, tokenize
-from bangla_gpt_api.retrieval.vocabulary import to_roman
+from bangla_gpt_api.retrieval.transliteration import to_roman
 
 #: Fixed identity of the committed set. A composition or template change is a
 #: version bump -- the CI baseline is compared per version, never across.
@@ -609,4 +609,5 @@ def write_golden(path: Path, chunks: list[Any]) -> dict:
 
 
 def load_golden(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
+    data: dict = json.loads(path.read_text(encoding="utf-8"))
+    return data

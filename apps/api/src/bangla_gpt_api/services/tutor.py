@@ -629,12 +629,14 @@ class TutorService:
             RAG_RETRIEVAL_DEGRADED_TOTAL.labels(stage="unavailable").inc()
             return []
         try:
-            hits = lexical.search(
-                question,
-                class_level=class_level,
-                subject=subject,
-                chapter=chapter,
-                top_k=self.top_k,
+            hits: list = list(
+                lexical.search(
+                    question,
+                    class_level=class_level,
+                    subject=subject,
+                    chapter=chapter,
+                    top_k=self.top_k,
+                )
             )
         except Exception:
             logger.warning("retrieval_lexical_fallback_failed", exc_info=True)
