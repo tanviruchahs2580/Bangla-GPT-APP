@@ -59,6 +59,44 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Tag must match the package version
+        # F-010/CICD-12: nothing compared the pushed tag with the version the
+        # artifacts actually carry, so a mistyped tag published images and a
+        # GitHub Release labelled vX.Y.Z while pyproject.toml/package.json still
+        # said something else -- permanently. The manifests are checked against
+        # each other too, so a half-done bump fails before anything is built.
+        # Non-tag runs (workflow_dispatch) have no tag to compare and skip.
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import tomllib
+          from pathlib import Path
+
+          ref = os.environ["GITHUB_REF_NAME"]
+          api_version = tomllib.loads(
+              Path("apps/api/pyproject.toml").read_text(encoding="utf-8")
+          )["project"]["version"]
+          web_version = json.loads(
+              Path("apps/web/package.json").read_text(encoding="utf-8")
+          )["version"]
+          if api_version != web_version:
+              raise SystemExit(
+                  f"::error::apps/api/pyproject.toml ({api_version}) and "
+                  f"apps/web/package.json ({web_version}) disagree; bump both "
+                  f"in one commit."
+              )
+          if ref != f"v{api_version}":
+              raise SystemExit(
+                  f"::error::tag {ref} does not match the package version "
+                  f"v{api_version}. Move the tag (git tag -f {ref} && git push "
+                  f"--force origin {ref}) after bumping the manifests, or delete "
+                  f"the tag and re-tag the right commit."
+              )
+          print(f"tag {ref} matches pyproject.toml and package.json ({api_version})")
+          PY
+
       - name: CI must have concluded success for this commit
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -172,6 +210,7 @@ jobs:
       id-token: write
     outputs:
       tag: ${{ steps.meta.outputs.version }}
+      sha_tag: ${{ steps.meta.outputs.sha_tag }}
       api_image: ${{ steps.images.outputs.api }}
       web_image: ${{ steps.images.outputs.web }}
       api_digest: ${{ steps.api.outputs.digest }}
@@ -199,13 +238,20 @@ jobs:
 
       - name: Compute version label
         id: meta
-        run: echo "version=${GITHUB_REF_NAME:-manual-$(date +%s)}" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "version=${GITHUB_REF_NAME:-manual-$(date +%s)}" >> "$GITHUB_OUTPUT"
+          # F-010/CICD-12: a sha tag pins each image to the exact commit it was
+          # built from, so a moved tag, a re-run or a manual dispatch is still
+          # addressable by commit. HEAD, not github.sha: on an annotated-tag
+          # push github.sha is the tag object, not the commit.
+          echo "sha_tag=sha-$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
 
       # No `:latest` tag. The deploy job and docker-compose both address images
       # by the release tag (${API_TAG}/${WEB_TAG}), so a floating tag bought
       # nothing and cost reproducibility: two releases could silently overwrite
       # what "latest" points at, and a rollback would not move it. Version tags
-      # are immutable, and the digest is recorded below and in the job summary.
+      # are immutable, the sha tag maps an image back to its commit even if a
+      # tag is moved, and the digest is recorded below and in the job summary.
       #
       # `sbom: true` attaches an SBOM to the image and `provenance: mode=max`
       # records how it was built; both need the attestations/id-token
@@ -216,7 +262,9 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ steps.images.outputs.api }}:${{ steps.meta.outputs.version }}
+          tags: |
+            ${{ steps.images.outputs.api }}:${{ steps.meta.outputs.version }}
+            ${{ steps.images.outputs.api }}:${{ steps.meta.outputs.sha_tag }}
           cache-from: type=gha,scope=api
           cache-to: type=gha,scope=api,mode=max
           sbom: true
@@ -230,7 +278,9 @@ jobs:
           build-args: |
             VITE_API_BASE=/api
           push: true
-          tags: ${{ steps.images.outputs.web }}:${{ steps.meta.outputs.version }}
+          tags: |
+            ${{ steps.images.outputs.web }}:${{ steps.meta.outputs.version }}
+            ${{ steps.images.outputs.web }}:${{ steps.meta.outputs.sha_tag }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,scope=web,mode=max
           sbom: true
