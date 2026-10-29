@@ -74,7 +74,7 @@ Evidence: drill output `PASS... (9s restore)`; postgres log during recovery:
 recovery complete`, new timeline 2 selected.
 
 The weekly cadence on the real staging box is the human/infra step
-(staging server itself is pending 🖐); until then run the drill locally --
+(a staging server itself is still pending); until then run the drill locally --
 it is host-agnostic (needs docker only). Schedule suggestion:
 `0 4 * * 1 cd /srv/bangla-gpt && bash scripts/pgbackrest_drill.sh`.
 

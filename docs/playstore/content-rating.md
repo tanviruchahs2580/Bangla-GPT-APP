@@ -41,7 +41,7 @@ adds content questions that do not apply.
 - The "users can interact" answer enables Play's **user-generated content**
   policy requirements: the app must have a content moderation path and a
   reporting mechanism. Both exist — the safety layer refuses unsafe prompts
-  server-side, and `POST /feedback` (👍/👎 and/or a comment, attached to a message
+  server-side, and `POST /feedback` (a positive/negative rating and/or a comment, attached to a message
   or an attempt) feeds the
   admin AI-quality queue with triage SLAs in `docs/runbook.md`. Point the Play
   review notes at that flow if the reviewer asks.

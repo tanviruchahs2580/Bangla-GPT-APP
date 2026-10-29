@@ -59,7 +59,7 @@ old code returned; caps only bind at the documented limit) so no client breaks.
   the JWT; run against staging with pre-provisioned throwaway student creds:
   `k6 run -e BASE_URL=https://STAGING -e LOAD_EMAIL=... -e LOAD_PASSWORD=... scripts/load/k6_scale.js`
 
-**Staging run is a 🖐 step**: staging URL/credentials are human-provided.
+**Staging run is a human step**: staging URL/credentials are human-provided.
 For an infra-only pass, start staging API with `PROVIDER=mock`.
 
 ### Local numbers (honest): single laptop, Windows, SQLite, uvicorn
@@ -96,7 +96,7 @@ staging (Postgres + N API replicas + Caddy + Redis caches).
   pinned by tests; 4-worker box holds p95 < 400 ms up to ~75 RPS on this mix).
 - **500/50 RPS @ p95<400 ms: NOT met locally and not claimable locally** —
   measurement environment is one laptop + SQLite. The k6 script + staging
-  instructions above are the ready-made gate; run when staging creds exist 🖐.
+  instructions above are the ready-made gate; run when staging credentials exist.
 
 ## 3. Upgrade path (in priority order)
 

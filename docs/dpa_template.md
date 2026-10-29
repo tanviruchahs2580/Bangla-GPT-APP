@@ -3,7 +3,7 @@
 > **TEMPLATE — DRAFT, NOT LEGAL ADVICE.** This is an engineering-authored
 > starting point for a controller (school) / processor (platform) agreement.
 > It must be reviewed by a Bangladeshi lawyer before any school signs it —
-> that review is a 🖐 human step tracked in
+> that review is a human step tracked in
 > [`archive/PROGRESS.md`](archive/PROGRESS.md) and **has not
 > been performed**. Bangladesh's Digital Security Act / Cyber Security Act
 > 2023 and any applicable student-data rules must be checked by counsel; the
