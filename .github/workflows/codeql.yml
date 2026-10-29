@@ -37,7 +37,7 @@ jobs:
       matrix:
         language: [javascript-typescript, python]
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -48,7 +48,7 @@ jobs:
         # "imposter commit", which silently broke result publishing. Refresh the
         # pin with: gh api repos/github/codeql-action/git/tags/<v3 tag object>
         #   --jq .object.sha
-        uses: github/codeql-action/init@ce5e7eeac396d720fe2d802714996c8ce561e311 # v3 (commit, not the tag object — see below)
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v3 (commit, not the tag object — see below)
         with:
           languages: ${{ matrix.language }}
           queries: security-extended
@@ -57,9 +57,9 @@ jobs:
           config-file: ./.github/codeql-config.yml
 
       - name: Autobuild
-        uses: github/codeql-action/autobuild@ce5e7eeac396d720fe2d802714996c8ce561e311 # v3 (commit, not the tag object — see below)
+        uses: github/codeql-action/autobuild@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v3 (commit, not the tag object — see below)
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@ce5e7eeac396d720fe2d802714996c8ce561e311 # v3 (commit, not the tag object — see below)
+        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v3 (commit, not the tag object — see below)
         with:
           category: "/language:${{ matrix.language }}"
