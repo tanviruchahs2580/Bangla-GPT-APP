@@ -9,7 +9,7 @@ import type {
   QPaper,
   RosterEntry,
 } from "../../types";
-import { Badge, Button, Card, Stat } from "../../components/ui";
+import { Badge, Button, Card, LoadError, Stat } from "../../components/ui";
 import { QPaperReviewPanel } from "../../components/teacher/QPaperReviewPanel";
 import { friendlyError } from "../../errors";
 import { t } from "../../i18n";
@@ -197,7 +197,7 @@ export default function AssessmentsPage() {
   ];
 
   return (
-    <main className="shell-main">
+    <main id="main-content" className="shell-main">
       <section className="section-head">
         <h1 className="page-title">{t("asmTitle")}</h1>
       </section>
@@ -254,7 +254,11 @@ export default function AssessmentsPage() {
           ) : (
             <Card title={t("asmTabPapers")}>
               <p className="muted muted-sm">{t("asmCreateInCreate")}</p>
-              {qps.length === 0 ? (
+              {qpsQuery.isError ? (
+                /* F-021: "no documents yet" after a failed fetch is a claim
+                   about the teacher's work, not about the request. */
+                <LoadError onRetry={() => void qpsQuery.refetch()} />
+              ) : qps.length === 0 ? (
                 <p className="muted">{t("noDocumentsYet")}</p>
               ) : (
                 <div className="stack">
@@ -486,7 +490,10 @@ export default function AssessmentsPage() {
           )}
 
           <Card title={t("asmResults")}>
-            {assigns.length === 0 ? (
+            {assignsQuery.isError ? (
+              /* F-021: a failed list used to read as "nothing assigned". */
+              <LoadError onRetry={() => void assignsQuery.refetch()} />
+            ) : assigns.length === 0 ? (
               <p className="muted">{t("baNone")}</p>
             ) : (
               <div className="stack">
@@ -581,7 +588,7 @@ function AssignmentResult({ rows }: { rows: AssignmentProgressRow[] }) {
 
 /** Short-test list (read-only here; creation lives in Create). */
 function ShortTestList() {
-  const { data } = useQuery({
+  const { data, isError, refetch } = useQuery({
     queryKey: ["teacher", "shorttests"],
     queryFn: () =>
       get<
@@ -595,6 +602,9 @@ function ShortTestList() {
       >("/teacher/shorttests"),
   });
   const rows = data ?? [];
+  // F-021: the same empty-vs-failed confusion as the paper and assignment
+  // lists on this page.
+  if (isError) return <LoadError onRetry={() => void refetch()} />;
   if (rows.length === 0) return <p className="muted">{t("stEmpty")}</p>;
   return (
     <ul>

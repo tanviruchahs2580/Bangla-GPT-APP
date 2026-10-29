@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { get, post } from "../../api";
 import type { LessonPlan, QPaper, ShortTest } from "../../types";
-import { Button, Card, Field } from "../../components/ui";
+import { Button, Card, Field, LoadError } from "../../components/ui";
 import { CreateHub } from "../../components/teacher/CreateHub";
 import { QPaperReviewPanel } from "../../components/teacher/QPaperReviewPanel";
 import { friendlyError } from "../../errors";
@@ -348,96 +348,110 @@ export function ShortTestFlow() {
           advanced={advanced}
           onToggle={() => setAdvanced((a) => !a)}
         />
-        <form onSubmit={assign} className="row-flex gap-2 section-gap-top">
-          <Field
-            label={t("stChapterLabel")}
-            htmlFor="stchap"
-            className="field-inline"
-          >
-            <input
-              id="stchap"
-              className="input w-min-field"
-              value={chapter}
-              onChange={(e) => setChapter(e.target.value)}
-            />
-          </Field>
-          <Field
-            label={t("classrooms")}
-            htmlFor="strom"
-            className="field-inline"
-          >
-            <select
-              id="strom"
-              className="select"
-              value={roomId ?? ""}
-              onChange={(e) => setRoomId(Number(e.target.value) || null)}
+        {/* F-021: without the classroom list the form cannot assign anything,
+            and an empty <select> looked like "you have no classrooms". */}
+        {roomsQuery.isError ? (
+          <LoadError onRetry={() => void roomsQuery.refetch()} />
+        ) : (
+          <form onSubmit={assign} className="row-flex gap-2 section-gap-top">
+            <Field
+              label={t("stChapterLabel")}
+              htmlFor="stchap"
+              className="field-inline"
             >
-              {rooms.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {t("classLabel")} {r.class_level}
-                  {r.section ? ` · ${r.section}` : ""}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label={t("subject")} htmlFor="stsubj" className="field-inline">
-            <select
-              id="stsubj"
-              className="select"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
+              <input
+                id="stchap"
+                className="input w-min-field"
+                value={chapter}
+                onChange={(e) => setChapter(e.target.value)}
+              />
+            </Field>
+            <Field
+              label={t("classrooms")}
+              htmlFor="strom"
+              className="field-inline"
             >
-              <option value="science">{t("subjectScience")}</option>
-              <option value="math">{t("subjectMath")}</option>
-              <option value="bangla">{t("subjectBangla")}</option>
-            </select>
-          </Field>
-          {advanced && (
-            <>
-              <Field
-                label={t("questionCount")}
-                htmlFor="stnum"
-                className="field-inline"
+              <select
+                id="strom"
+                className="select"
+                value={roomId ?? ""}
+                onChange={(e) => setRoomId(Number(e.target.value) || null)}
               >
-                <input
-                  id="stnum"
-                  className="input w-num"
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={num}
-                  onChange={(e) => setNum(Number(e.target.value) || 1)}
-                />
-              </Field>
-              <Field
-                label={t("qpDuration")}
-                htmlFor="stdur"
-                className="field-inline"
+                {rooms.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {t("classLabel")} {r.class_level}
+                    {r.section ? ` · ${r.section}` : ""}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field
+              label={t("subject")}
+              htmlFor="stsubj"
+              className="field-inline"
+            >
+              <select
+                id="stsubj"
+                className="select"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
               >
-                <input
-                  id="stdur"
-                  className="input w-num"
-                  type="number"
-                  min={1}
-                  max={60}
-                  value={duration}
-                  onChange={(e) => setDuration(Number(e.target.value) || 1)}
-                />
-              </Field>
-            </>
-          )}
-          <Button
-            variant="primary"
-            type="submit"
-            loading={busy}
-            // A test with nowhere to go used to look enabled and do nothing.
-            disabled={!chapter.trim() || roomId === null}
-          >
-            {t("stAssign")}
-          </Button>
-        </form>
+                <option value="science">{t("subjectScience")}</option>
+                <option value="math">{t("subjectMath")}</option>
+                <option value="bangla">{t("subjectBangla")}</option>
+              </select>
+            </Field>
+            {advanced && (
+              <>
+                <Field
+                  label={t("questionCount")}
+                  htmlFor="stnum"
+                  className="field-inline"
+                >
+                  <input
+                    id="stnum"
+                    className="input w-num"
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={num}
+                    onChange={(e) => setNum(Number(e.target.value) || 1)}
+                  />
+                </Field>
+                <Field
+                  label={t("qpDuration")}
+                  htmlFor="stdur"
+                  className="field-inline"
+                >
+                  <input
+                    id="stdur"
+                    className="input w-num"
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={duration}
+                    onChange={(e) => setDuration(Number(e.target.value) || 1)}
+                  />
+                </Field>
+              </>
+            )}
+            <Button
+              variant="primary"
+              type="submit"
+              loading={busy}
+              // A test with nowhere to go used to look enabled and do nothing.
+              disabled={!chapter.trim() || roomId === null}
+            >
+              {t("stAssign")}
+            </Button>
+          </form>
+        )}
         {msg && <p className="muted">{msg}</p>}
-        {tests.length === 0 ? (
+        {testsQuery.isError ? (
+          /* F-021: a failed list used to read as "you have not assigned any
+             short tests", which is a different and wrong statement. */
+          <LoadError onRetry={() => void testsQuery.refetch()} />
+        ) : tests.length === 0 ? (
           <p className="muted">{t("stEmpty")}</p>
         ) : (
           <ul>
@@ -624,7 +638,7 @@ export default function CreatePage() {
   const active = (params.get("kind") as CreateEntry | null) ?? null;
 
   return (
-    <main className="shell-main">
+    <main id="main-content" className="shell-main">
       <section className="section-head">
         <h1 className="page-title">{t("tNavCreate")}</h1>
       </section>

@@ -26,7 +26,7 @@ import type {
   SourceRef,
 } from "../../types";
 import { useAuth } from "../../AuthContext";
-import { Badge, Button, Card, Modal } from "../../components/ui";
+import { Badge, Button, Card, LoadError, Modal } from "../../components/ui";
 import { ConversationChip } from "../../components/ConversationChip";
 import { AiSparkle, BrandMark } from "../../components/BrandMark";
 import { VoiceButton } from "../../components/VoiceButton";
@@ -159,7 +159,11 @@ export default function AITutorPage() {
   // POST is still in flight; a ref can.
   const sendingRef = useRef(false);
 
-  const { data: conversations, refetch: refetchConvs } = useQuery({
+  const {
+    data: conversations,
+    isError: conversationsError,
+    refetch: refetchConvs,
+  } = useQuery({
     queryKey: ["conversations"],
     queryFn: () => get<ConversationOut[]>("/tutor/conversations"),
   });
@@ -504,7 +508,7 @@ export default function AITutorPage() {
   };
 
   return (
-    <main className="shell-main">
+    <main id="main-content" className="shell-main">
       <section className="section-head">
         <h2>{t("aiTutor")}</h2>
         <Button variant="soft" size="sm" onClick={newChat}>
@@ -577,6 +581,12 @@ export default function AITutorPage() {
             </button>
           ))}
         </div>
+      )}
+
+      {/* F-021: a failed history fetch used to remove the chip row, so old
+          chats looked deleted rather than unreachable. */}
+      {conversationsError && !conversations && (
+        <LoadError onRetry={() => void refetchConvs()} />
       )}
 
       {conversations && conversations.length > 0 && (
