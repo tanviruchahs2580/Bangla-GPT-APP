@@ -172,9 +172,12 @@ def read_json(path: Path) -> dict:
 
 def write_json(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    # newline="\n" keeps the tracked reports byte-identical across
+    # platforms: their digests are recorded in the manifest and compared in CI.
     path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
+        newline="\n",
     )
 
 
@@ -228,8 +231,10 @@ def verify_corpus_manifest(
         declared_chunks = source.get("chunks")
         if isinstance(declared_chunks, int):
             total_chunks += declared_chunks
-        normalized = corpus_root / "normalized" / f"{source_id}.chunks.jsonl"
         declared_digest = source.get("normalized_sha256")
+        if not check_files:
+            continue
+        normalized = corpus_root / "normalized" / f"{source_id}.chunks.jsonl"
         if normalized.exists():
             if declared_digest and sha256_file(normalized) != declared_digest:
                 problems.append(f"{source_id}: chunk file digest differs from the manifest")

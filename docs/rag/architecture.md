@@ -14,7 +14,7 @@ written from the code on `qa/enterprise-v2-hardening` (base SHA
 
 ```mermaid
 flowchart TD
-    Q["Student question (BN / Banglish / EN)"] --> NORM["normalize_query<br/>NFKC + zero-width strip<br/>services/tutor.py"]
+    Q["Student question (BN / Banglish / EN)"] --> NORM["normalize_query<br/>shared normalizer: NFKC + zero-width strip<br/>retrieval/normalize.py"]
     NORM --> SCREEN["screen_question<br/>deterministic regex categories<br/>services/safety.py"]
     SCREEN -->|unsafe| REF1["refusal copy + grounded=false<br/>Reason: category"]
     SCREEN -->|safe| FOLLOW["follow-up resolution<br/>_conversation_retrieval_query"]
@@ -39,10 +39,10 @@ flowchart TD
 |---|---|---|---|
 | Ingestion (NCTB) | `nctb/acquisition.py` (urllib GET, sha256 manifest, politeness delay), `nctb/extract.py` (pypdf), `nctb/bijoy.py` (legacy-font conversion) | `data/nctb/raw`, `extracted/*.pages.json`, `manifests/acquisition_manifest.jsonl` | Corpus text is gitignored (licence); the committed record is `data/nctb/retrieval_eval.json` |
 | Ingestion (uploads) | none into the index; the OCR adapter is permission-gated and unwired (`ingestion/ocr_ingester.py`) | `BGPT_OCR_CONFIRMED` gate | Uploaded/text material does not reach the served index today |
-| Normalisation | ingest `nctb/normalize.normalize_bangla` (NFC, zero-width strip, whitespace); query `services/tutor.normalize_query` (NFKC, zero-width strip); tokenizer `retrieval/hybrid.tokenize` (NFKC) | — | Two different Unicode forms by design; no offset map back to the PDF |
-| Chunking | `nctb/chunking.py`: structure-aware, chapter parent -> section child, word budget 220 target / 60 min / 400 max, dedupe by normalised-text hash | `normalized/<source>.chunks.jsonl` | Character counts are not used; sizes are words, not model tokens |
+| Normalisation | one shared normalizer in `retrieval/normalize.py` (NFKC + zero-width strip); ingest form `nctb/normalize.normalize_bangla` (adds whitespace collapse), query form `services/tutor.normalize_query`, tokenizer `retrieval/hybrid.tokenize` | — | Same Unicode form on both sides, asserted by `tests/test_w2_corpus_normalize.py`; chunks carry a span map back to the extracted page text |
+| Chunking | `nctb/chunking.py`: structure-aware, chapter parent -> section child, token budget 220 target / 60 min / 450 max (production tokenizer), dedupe by normalised-text hash, `source_spans` per chunk | `normalized/<source>.chunks.jsonl` | Sizes are tokens of `retrieval.hybrid.tokenize`, measured (`--chunk-stats`); parent-child expansion is stored but not applied |
 | Class attribution | `data/nctb_loader.resolve_class_targets`: (1) book-level cover statement via `nctb/normalize.detect_class_levels`, (2) declared level range (`LEVEL_CLASS_RANGE`) when `multi_class_fallback=True`, (3) refuse | `quality_report.json` per-source `level`/`subject_bn` | Never invents a class; refused and level-derived sources are logged |
-| Indexing | in-memory per worker at boot: `BM25Index` + `VectorIndex` + `CorpusVocabulary`; `CachedRankingIndex` wraps it when caching is on | `retrieval_mode` (`hybrid` default), `embedding_model` (empty = hashing embedder), `nctb_corpus_dir` | Metrics `bgpt_rag_index_build_seconds{mode}`, `bgpt_rag_index_chunks{corpus}`; boot identity log `rag_corpus_loaded` |
+| Indexing | in-memory per worker at boot: `BM25Index` + `VectorIndex` + `CorpusVocabulary`; `CachedRankingIndex` wraps it when caching is on | `retrieval_mode` (`hybrid` default), `embedding_model` (empty = hashing embedder), `nctb_corpus_dir` | Metrics `bgpt_rag_index_build_seconds{mode}`, `bgpt_rag_index_chunks{corpus}`; boot identity log `rag_corpus_loaded` + `nctb_corpus_identity` (corpus digest, manifest verdict); manifest-pinned embedder enforced at boot (§6) |
 | Query understanding | `retrieval/query_analysis.py` (content terms, stop-word planes BN/roman/EN, framing plane, grade-numeric rule, EN->BN glossary), `retrieval/vocabulary.py` (spelling repair, Banglish roman lane) | pure functions | Deterministic, no model, no language ID |
 | Retrieval | BM25 lane + hashed-vector lane in parallel; candidate pool = 3 x top_k; class/subject/chapter pre-filters inside `search` | `top_k=3` in the tutor | Vector lane candidates are gated on shared Bangla bigrams |
 | Fusion / rerank | RRF (k=60) then deterministic feature reranker (lexical magnitude + RRF + weighted coverage + matched-term proximity + trigram) | constants in source (`retrieval/fusion.py`, `retrieval/hybrid_index.py`) | No cross-encoder, no MMR, no parent expansion |
@@ -61,11 +61,11 @@ nctb.gov.bd listing pages
   -> nctb/acquisition.py (sha256 manifest, politeness delay)
   -> data/nctb/raw (gitignored)
   -> nctb/extract.py (pypdf) + nctb/bijoy.py (legacy conversion)
-  -> nctb/normalize.normalize_bangla (NFC, zero-width strip)
-  -> nctb/chunking.chunk_pages (chapter -> section, word budget)
-  -> data/nctb/normalized/*.chunks.jsonl + quality_report.json
-  -> data/nctb_loader.load_nctb_corpus  (class attribution ladder, injection strip)
-  -> initialize/dependencies.build_dependencies (index at boot per worker)
+  -> nctb/normalize.normalize_bangla (shared normalizer: NFKC, zero-width strip, whitespace)
+  -> nctb/chunking.chunk_pages (chapter -> section, token budget, source spans)
+  -> data/nctb/normalized/*.chunks.jsonl + quality_report.json + manifests/corpus_manifest.json
+  -> data/nctb_loader.load_nctb_corpus  (class attribution ladder, cross-source dedupe, injection strip, manifest verification)
+  -> initialize/dependencies.build_dependencies (index at boot per worker; embedder identity checked against the manifest)
 ```
 
 `NCTB_CORPUS_DIR` selects the corpus; an empty or misconfigured directory
@@ -77,36 +77,142 @@ unset-directory case in `main._validate_corpus`).
 
 | Measurement | Command | Result |
 |---|---|---|
-| Family A self-sentence recall@1 / @5 (n=100) | `python scripts/evaluate_nctb_retrieval.py <corpus copy>` | 0.98 / 0.98, MRR 0.6512 |
-| Family B chapter-title recall@1 / @5 (n=80) | same | 0.675 / 0.95, MRR 0.8052 (was 1.275 — impossible — before the F-048 fix) |
-| Family C adversarial refusal (4 questions) | same | 1.00 (was 0.25 before the F-002 gate fix) |
+| Family A self-sentence recall@1 / @5 (n=100) | `python scripts/evaluate_nctb_retrieval.py <corpus copy>` | 0.95 [0.89, 0.98] / 1.00, MRR 0.9750 (committed corpus, 1605 index chunks) |
+| Family B chapter-title recall@1 / @5 (n=80) | same | 1.00 / 1.00, MRR 1.0000 |
+| Family C adversarial refusal (4 questions) | same | 1.00 (Wilson 95% [0.51, 1.00]; was 0.25 before the F-002 gate fix) |
+| Family A recall@1 without cross-source dedupe (same 100 queries) | same with `--no-dedupe` | 0.47; paired bootstrap of the dedupe effect -0.48 [-0.58, -0.36] (the duplicate passages competed with the identical right answer) |
 | Out-of-corpus false-answer rate (4 family-C probes) | `.qa-work/evidence/E-FIX-002-1/gate_measure.py --corpus <copy>` | 0/4 (was 3/4, Wilson 95% [0.30, 0.95]) |
 | In-corpus false-refusal rate (624 golden answerable items) | `gate_measure.py --sample` | 5/624 (pre-existing, unchanged by the budget) |
 | Retrieval hit@3 over golden chapter expectations (624 items) | `python -m bangla_gpt_api.evaluation.cli --gate` | 1.0000 (floor 0.95) |
 | Golden v2 regression (634 items, mock) | `python -m bangla_gpt_api.evaluation.cli` | gate PASS vs `eval/baseline_v2.json` |
 | Red-team suite (23 items, mock) | `python -m bangla_gpt_api.evaluation.cli --redteam` | PASS, no leak |
 
-Search latency and index build time are machine-dependent (measured on the
-2,599-chunk corpus build used for these runs: p50 261-293 ms, p95 367-495 ms
-and a 44 s build across the verification runs); the committed
-`data/nctb/retrieval_eval.json` is an older,
-smaller build (2,508 chunks) and is not reproducible from the current raw
-files — see `docs/rag/target-architecture.md` P1.
+Search latency and index build time are machine-dependent and the committed
+`data/nctb/retrieval_eval.json` was recorded on a machine running several
+parallel QA jobs: p50 2267 ms / p95 22756 ms over 180 queries and a 55 s index
+build for the 1605-chunk corpus, against 261-293 ms p50 measured earlier on an
+idle machine for a 2599-chunk index. Treat the committed latency as an upper
+bound of that contended run, not as the deployed p50. The committed reports
+are reproducible: `scripts/check_corpus_manifest.py --rebuild-dir <fresh build>`
+compares them with a rebuild field by field (see §6.1), and the corpus keeps
+the raw hash of every source it was built from.
 
 ## 5. Known limits (as built, not aspirations)
 
 * The vector lane is a deterministic hashing embedder, not a semantic model.
-* No token budget or truncation in context assembly; `top_k=3` fixed.
-* No offset map from chunks back to PDF text; ingest NFC vs query NFKC.
-* Class attribution for the five secondary curriculum documents is
-  level-scoped (their covers are legacy-font garbled), which the loader logs
-  as `level-range`; chapter metadata is absent on most of those chunks.
+* Context assembly is bounded by `top_k=3` and by
+  `retrieval/context.EVIDENCE_TOKEN_BUDGET` (768 tokens, §6); the tutor's call
+  site into `assemble_evidence` is still pending (handoff), so the bound is
+  currently enforced by the callers that opt in.
+* Every chunk carries a span map back to the extracted page text
+  (`source_spans`, §6); nothing in the API or the UI consumes it yet, so a
+  highlight still cannot be rendered end to end.
+* Chapter metadata is absent on the two curriculum documents (বাংলা, ইংরেজি)
+  and partial on the other seven — measured per source in
+  `quality_report.json` (`chapter_coverage`); those two books' covers are
+  legacy-font garbled, so class detection returns UNKNOWN for all nine and the
+  loader logs the sources it attributes by declared level range.
 * The citation verdict is surfaced and metered but does not yet discard or
   regenerate an unsupported answer.
 * Retrieval has no timeout/retry/fallback isolation, and `/tutor/ask`
   degrades to 503 (not retrieval-only) when the provider is unavailable.
 
-## 6. Generation and validation (wave-2 additions)
+## 6. Corpus and index operations (wave-2 additions)
+
+Appended by the wave-2 corpus/retrieval stream. Sections 1-5 above were kept
+in the same edit (normalisation, chunking, indexing, corpus flow, limits) and
+are unchanged where they do not contradict this section.
+
+### 6.1 Reproducible corpus artifacts
+
+The tracked reports under `data/nctb/` are the built corpus's record, and the
+build now emits a manifest that ties them to the tool and sources that
+produced them (`docs/NCTB_DATA_PIPELINE.md` §7):
+
+* `manifests/corpus_manifest.json`: pipeline code fingerprint, extractor and
+  Python version, chunker budgets, edition policy, per-source raw hashes and
+  `extracted_sha256`/`normalized_sha256`, totals, the cross-source duplicate
+  section, and the `derived` digests of `quality_report.json` and
+  `retrieval_eval.json` (plus the served index chunk count, id hash and the
+  embedder the numbers were measured with);
+* artifact writes pin LF newlines and the code fingerprint reads modules with
+  universal newlines, so a Windows build and a Linux build agree byte for
+  byte;
+* `scripts/check_corpus_manifest.py` verifies the tracked reports against the
+  manifest and, with `--rebuild-dir`/`--corpus-dir`, a fresh build or a served
+  corpus against it. Exit code 1 on any drift; CI can run it with no PDFs
+  present (tracked-artifact legs only).
+
+### 6.2 Index identity at boot
+
+`load_nctb_corpus` computes the served corpus's digest (chunk file names +
+content hashes), logs it as `nctb_corpus_identity` together with the manifest
+verdict, and compares the loaded index size with `derived.index_chunks`. A
+manifest that disagrees is logged at ERROR naming each difference; a corpus
+directory without a manifest is a warning (an untracked corpus still has to
+serve). `retrieval/embedding.build_embedder` refuses to start when the corpus
+manifest records a different embedder than the configured one — a corpus
+measured with embedder A cannot be served with embedder B and keep its
+recorded numbers. The build/swap procedure is in
+`docs/NCTB_DATA_PIPELINE.md` §7.
+
+### 6.3 Cross-source dedupe and the retrieval eval
+
+`load_nctb_corpus` deduplicates on (normalized-text hash, class level) before
+class expansion, so a passage reprinted across books is indexed once per class
+level and the surviving chunk's artifact row lists the other sources
+(`shared_sources`; 392 rows and 100 shared texts on this corpus). Measured on
+the committed corpus: the index drops from 2622 to 1605 entries (-38.8%) and
+family-A self-sentence recall@1 on the same 100 queries moves 0.47 -> 0.95
+(paired bootstrap of the difference -0.48, 95% CI [-0.58, -0.36]); family B
+is unchanged at 1.00. Part of that lift is a measurement effect — with the
+duplicates present, the rank-1 hit was often an identical copy from another
+book rather than the sampled chunk — but the duplicate entries also diluted
+the candidate pool and inflated the index, which is the defect. The eval
+records `dedupe_cross_source` and per-item ranks, so a report can never be
+read as if it came from the other configuration.
+
+### 6.4 Fusion and rerank ablation
+
+`scripts/evaluate_nctb_retrieval.py --ablation` runs the four configurations
+on the same sampled queries (same seed) and writes
+`data/nctb/retrieval_ablation.json`. Per-stage latency is the per-mode p50/p95
+of `search`, plus the rerank overhead as the p50 difference between the fused
+mode with and without the reranker (the same measured quantity, not a
+separate instrumented copy of the pipeline).
+
+Measured on the committed corpus (seed 20260825, 40 family-A queries /
+80 family-B chapter titles, `label` recorded in the artifact):
+
+| Mode | A recall@1 | A recall@5 | A MRR | B recall@1 | B recall@5 | B MRR | search p50 |
+|---|---|---|---|---|---|---|---|
+| lexical only | 0.9750 | 1.0000 | 0.9875 | 1.0000 | 1.0000 | 1.0000 | 301 ms |
+| vector only (hashing) | 0.4500 | 0.6500 | 0.5333 | 0.9250 | 0.9625 | 0.9365 | 19 ms |
+| hybrid, no rerank (RRF) | 0.6000 | 0.8750 | 0.7104 | 0.9625 | 1.0000 | 0.9812 | 102 ms |
+| hybrid + rerank (served) | 0.9750 | 1.0000 | 0.9875 | 1.0000 | 1.0000 | 1.0000 | 9926 ms |
+
+Rerank overhead p50: 9824 ms in that contended run. A separate single-process
+cross-check on the same corpus and machine measured lexical 54 ms, vector
+45 ms, fused 145 ms and fused+rerank 2052 ms p50 (max 15.6 s), so the machine
+was starved during both runs: the *ranking* numbers above are deterministic
+and reproducible, the *latency* numbers are not a capacity statement. What the
+table does settle is the architecture question it was built for: RRF alone
+loses 37pp of family-A recall@1 against the lexical lane, the reranker is what
+recovers it (0.60 -> 0.975), the hashing vector lane is weaker than BM25 on
+every metric, and the vector lane's only clear contribution is its near-free
+latency. `docs/NCTB_DATA_PIPELINE.md` §5 lists what the chunk-size budgets
+were anchored on.
+
+### 6.5 Evidence budget
+
+`retrieval/context.assemble_evidence` (768 evidence tokens, derived in the
+module docstring from the capacity model's 1.2 k input budget minus the
+measured system prompt) keeps the rank order, always keeps the best-ranked
+hit, and collapses duplicate texts before the budget is applied. It is opt-in
+today: the tutor's call site is owned by the generation stream (handoff in
+`.qa-work/audit/A1/fixes_done.csv`).
+
+## 7. Generation and validation (wave-2 additions)
 
 Appended by the wave-2 generation/observability stream; sections 1-5 above are
 the retrieval stream's map and are unchanged. Everything here is as built on

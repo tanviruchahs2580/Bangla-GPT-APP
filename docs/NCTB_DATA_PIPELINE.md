@@ -116,17 +116,17 @@ not maintained by hand — re-read the JSON before trusting a number:
 python -c "import json; r=json.load(open('data/nctb/quality_report.json', encoding='utf-8')); [print(k, v['usable_pages'], '/', v['total_pages'], v['bangla_char_ratio_on_usable'], v['chunks'], v.get('chapter_coverage')) for k, v in r.items() if k != '_cross_source']"
 ```
 
-| Source | usable pages | Bangla ratio (post-conversion) | chunks | chapter coverage |
+| Source | usable pages | Bangla ratio (post-conversion) | chunks | chunks with chapter |
 |---|---|---|---|---|
-| বাংলা | 91/93 | 1.00 | 131 | see report |
-| ইংরেজি (English book) | 91/93 | 0.04 (correctly low) | 122 | see report |
-| গণিত ও উচ্চতর গণিত | 143/146 | 1.00 | 89 | see report |
-| বিজ্ঞান শাখার বিষয়সমূহ | 239/241 | 1.00 | 83 | see report |
-| আইসিটি ও ক্যারিয়ার এডুকেশন | 109/111 | 1.00 | 86 | see report |
-| পদার্থবিদ্যা | 52/52 | 0.84 | 78 | see report |
-| রসায়ন | 45/45 | 0.90 | 67 | see report |
-| জীববিজ্ঞান | 46/46 | 0.83 | 69 | see report |
-| উচ্চতর গণিত | 52/52 | 0.73 | 80 | see report |
+| বাংলা | 91/93 | 1.00 | 131 | 0/131 (0.0) |
+| ইংরেজি | 91/93 | 0.04 | 123 | 0/123 (0.0) |
+| গণিত ও উচ্চতর গণিত | 143/146 | 1.00 | 89 | 16/89 (0.1798) |
+| বিজ্ঞান শাখার বিষয়সমূহ | 239/241 | 1.00 | 82 | 22/82 (0.2683) |
+| আইসিটি ও ক্যারিয়ার এডুকেশন | 109/111 | 1.00 | 86 | 24/86 (0.2791) |
+| পদার্থবিদ্যা | 52/52 | 0.84 | 89 | 34/89 (0.382) |
+| রসায়ন | 45/45 | 0.90 | 74 | 15/74 (0.2027) |
+| জীববিজ্ঞান | 46/46 | 0.83 | 81 | 25/81 (0.3086) |
+| উচ্চতর গণিত | 52/52 | 0.73 | 97 | 33/97 (0.3402) |
 
 Indexing gate: only pages that pass the corruption heuristic are chunked —
 `PageText.usable` (non-empty text that `looks_like_garbage()` does not flag,
@@ -147,9 +147,15 @@ per-source shared counts) and stamps every source row with
 they would otherwise multiply: at index build
 (`data/nctb_loader.load_nctb_corpus` deduplicates on (normalized-text hash,
 class level), F-012), so the same passage is still served to every class
-level that needs it but is paid for once per level. Numbers for this corpus
-are in the committed report and in `retrieval_eval.json`
-(`dedupe_cross_source`, `corpus_chunks`).
+level that needs it but is paid for once per level. Measured on this corpus:
+100 shared texts, 292 duplicate chunks, 392 stamped rows; the served index
+drops from 2622 to 1605 entries (-38.8%) for the same content, and family-A
+self-sentence recall@1 on the same 100 queries moves 0.47 -> 0.95 (paired
+bootstrap -0.48, 95% CI [-0.58, -0.36]) — with the duplicates present the
+rank-1 hit was often an identical copy from another book instead of the
+sampled chunk, and the duplicates also diluted the candidate pool. Numbers are
+in the committed report and in `retrieval_eval.json` (`dedupe_cross_source`,
+`corpus_chunks`, `per_item`).
 
 ### Chapter coverage
 
@@ -172,7 +178,9 @@ measured per-source coverage is in the report's `chapter_coverage` field.
   (`retrieval.hybrid.tokenize`, F-134), not whitespace words. The budgets are
   constants in `nctb/chunking.py` (target 220, minimum 60, maximum 450
   tokens, line buffer flushed at target + 120), anchored on the measured
-  distribution of this corpus; re-measure with
+  distribution: the committed corpus's 852 chunks measure p5 82 / p50 220 /
+  p90 222 / p95 244 / max 280 tokens (indexed chunks, 1605 entries after the
+  class expansion and cross-source dedupe). Re-measure with
   `python scripts/evaluate_nctb_retrieval.py <corpus> --chunk-stats`.
 - **Every chunk carries a span map back to the extracted page text**
   (`source_spans`: ordered runs of `text[text_start:text_end]` ↔
@@ -220,7 +228,10 @@ claim, and the double-build check is a plain digest comparison
 
 ## 7. The corpus manifest and the build/swap procedure
 
-`manifests/corpus_manifest.json` is the derived-artifact record:
+`manifests/corpus_manifest.json` is the derived-artifact record for the
+committed build (852 chunks across 9 sources, 169 with a chapter,
+1 628 045 characters of usable text, 1605 served index chunks,
+`index_id_hash af2a0a21813324d3`, embedder `hash-ngram-local` dim 384):
 
 | Field | Meaning |
 |---|---|
@@ -239,7 +250,10 @@ Build and swap procedure:
 2. `evaluate_nctb_retrieval.py` (measures, writes `retrieval_eval.json`, fills
    `derived`);
 3. `check_corpus_manifest.py --data-dir ../../data/nctb --rebuild-dir <tmp>`
-   (compares the tracked metadata with a fresh build; exit 1 on any drift);
+   (compares the tracked metadata with a fresh build, field by field: source
+   hashes, chunk counts, artifact digests, tool fingerprint; exit 1 on any
+   drift). Two full rebuilds of the committed corpus were byte-identical
+   (9/9 `normalized/*.chunks.jsonl` and 9/9 `extracted/*.pages.json`);
 4. copy the build's `extracted/`, `normalized/`, `quality_report.json`,
    `retrieval_eval.json` and `manifests/corpus_manifest.json` over the corpus
    directory a deployment mounts, then restart the API workers (the index is
