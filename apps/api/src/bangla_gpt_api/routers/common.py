@@ -65,6 +65,7 @@ from bangla_gpt_api.services.generators import (
     generate_rubric,
     generate_worksheet,
 )
+from bangla_gpt_api.services.pii import redact_pii, redacted_total
 
 from .deps import Ctx
 
@@ -121,9 +122,30 @@ _EVENT_DROP_KEY_RE = re.compile(
 
 _EVENT_PROP_MAX_LEN = 40
 
+# F-039: the key drop-list alone left VALUES wide open -- a probe stored
+# {"note": "call me at 01898765432"} and {"label": "Karim Rahman"} verbatim,
+# so any authenticated client could persist child text for the 180-day
+# analytics window. The value side has an allowlist now: bool/int/float pass
+# as before, and a string passes only when it is a short machine code --
+# lowercase ASCII letters/digits plus "_.:-", no spaces, no non-ASCII (so
+# Bangla free text is dropped), no six-or-more-digit run (BD mobile numbers
+# and NID runs) and no redact_pii match. Free text is dropped, not stored.
+_EVENT_SAFE_STRING_RE = re.compile(r"^[a-z0-9][a-z0-9_.:\-]{0,39}$")
+_EVENT_DIGIT_RUN_RE = re.compile(r"\d{6,}")
+
+
+def _event_string_value_allowed(value: str) -> bool:
+    """True when a prop string is a safe machine code (F-039)."""
+    if not value or len(value) > _EVENT_PROP_MAX_LEN:
+        return False
+    if _EVENT_DIGIT_RUN_RE.search(value) or _EVENT_SAFE_STRING_RE.match(value) is None:
+        return False
+    _, counts = redact_pii(value)
+    return redacted_total(counts) == 0
+
 
 def _sanitize_event_props(props: dict[str, Any]) -> dict[str, Any]:
-    """Primitives only, keys matching the drop-list removed, strings <= 40."""
+    """Primitives only, drop-listed keys removed, strings machine-code shaped."""
     clean: dict[str, Any] = {}
     for key, value in props.items():
         if _EVENT_DROP_KEY_RE.search(str(key)):
@@ -131,8 +153,10 @@ def _sanitize_event_props(props: dict[str, Any]) -> dict[str, Any]:
         if isinstance(value, (bool, int, float)):
             clean[str(key)[:_EVENT_PROP_MAX_LEN]] = value
         elif isinstance(value, str):
-            clean[str(key)[:_EVENT_PROP_MAX_LEN]] = value[:_EVENT_PROP_MAX_LEN]
-        # anything non-primitive is dropped entirely
+            truncated = value[:_EVENT_PROP_MAX_LEN]
+            if _event_string_value_allowed(truncated):
+                clean[str(key)[:_EVENT_PROP_MAX_LEN]] = truncated
+        # anything else -- non-primitive, and free-text strings -- is dropped
     return clean
 
 
