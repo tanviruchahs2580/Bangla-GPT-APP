@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [README.md](README.md).
+
 # FINAL REPORT — Bangla GPT Master Roadmap (Progress: S0.1-0.7)
 
 **Executive Summary:** 7/64 steps complete (S0.1-0.7 code), Gate G0 code ✅ done (live gemini verified, postgres+config+observability+smoke code done, live Sentry+staging pending DSN/server). Branch `upgrade/master-roadmap` (5e6ff4f, eb2955d, 48bbabb, a4ae70a, 060e5e4, ff81159, fcf5f7f). No push per R4. Next: S1.1.

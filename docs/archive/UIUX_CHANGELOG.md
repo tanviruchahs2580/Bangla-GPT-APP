@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [README.md](README.md).
+
 # UI/UX Renovation — Working Changelog (WP-01 → WP-12)
 
 > Scope: frontend only (`apps/web/src`, `apps/web/public/icon*.svg`).

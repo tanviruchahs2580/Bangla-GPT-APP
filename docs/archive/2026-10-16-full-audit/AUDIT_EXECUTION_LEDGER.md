@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [../README.md](../README.md).
+
 # AUDIT EXECUTION LEDGER — Bangla GPT APP
 
 Working ledger for the 2026-10-16 audit round. Updated as work proceeds so the

@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [README.md](README.md).
+
 # BLUEPRINT_GAP_MATRIX — Master Implementation Prompt v1.0 vs codebase (FINAL)
 
 **Contract:** `Bangla_GPT_NCTB_AI_Tutor_Master_Implementation_Prompt_v1.0.md` · **Initial audit:** 2026-09-08 (pre-work) · **Final update:** 2026-09-08 after all implementation waves + live 5-role browser E2E · **Owner:** ZCode

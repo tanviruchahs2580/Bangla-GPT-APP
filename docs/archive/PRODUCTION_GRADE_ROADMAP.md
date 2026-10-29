@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [README.md](README.md).
+
 # PROJECT REVIEW & PRODUCTION-GRADE ROADMAP — Bangla GPT APP
 
 > Author: Enterprise full-stack review (frontend/UX focus + backend context)

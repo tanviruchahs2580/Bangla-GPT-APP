@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [README.md](README.md).
+
 # BANGLA GPT APP — FULL AUDIT REPORT (based on current condition)
 
 > Audit date: 2026-08-26 · Audited state: v0.3.1 (RC, uncommitted) · Environment: Windows 11,

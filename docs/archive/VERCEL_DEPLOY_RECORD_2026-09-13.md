@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [README.md](README.md).
+
 # Vercel Deployment Record — 2026-09-13
 
 **Live URL:** https://bangla-gpt-app.vercel.app · **Project:** `bangla-gpt-app` (Vercel account `tanviruchahs2580`)

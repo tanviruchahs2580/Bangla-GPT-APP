@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [README.md](README.md).
+
 # Final CI/CD Execution Report — Login Background Live + Full Pipeline
 
 **Date:** 2026-10-06 · **Repo:** tanviruchahs2580/Bangla-GPT-APP · **Branch:** main

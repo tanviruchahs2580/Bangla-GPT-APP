@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [README.md](README.md).
+
 # STAGE 0 REPORT — Production Foundation
 
 **Stage:** S0 (0.1-0.7) · **Branch:** `upgrade/master-roadmap` · **Date:** 2026-09-04

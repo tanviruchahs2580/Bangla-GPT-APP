@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [README.md](README.md).
+
 # PROGRESS — Bangla GPT Master Roadmap v1.0
 
 **Last updated:** 2026-09-08 — **Current:** Phase H v0.5.0 release finalization DONE (live fresh + full user-mode E2E + 4 real bugs fixed — BUG-1/2 found by live testing, BUG-3 by the local docker gate, BUG-4 by GitHub CI's Postgres engine check (FK-incomplete account deletion, invisible to local sqlite) + local CI matrix all-green: pytest 492 passed + 6 skipped exit 0, redis-gated 3 proven green against real Redis; docker ENV=ci smoke green after package-data fix BUG-3; Postgres engine check re-proven green locally on a throwaway postgres:16). No-commit directive LIFTED by user 2026-09-08 for the release train (commit+push+tag v0.5.0 authorized). Open: S6.1 (NCTB PDFs + permission, ✍), S6.7 sign-off (✍), G6 staging legs (✍)

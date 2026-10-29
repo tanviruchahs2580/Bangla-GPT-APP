@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [README.md](README.md).
+
 # GAP ANALYSIS — Fully Usable & Deployable Product
 
 **Date:** 2026-08-25 · Repo head at analysis: `0ad6833` (CI green) · Tag: `v0.1.0-rc1`

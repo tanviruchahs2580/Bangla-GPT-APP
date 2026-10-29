@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [README.md](README.md).
+
 # FINAL EXECUTION REPORT — v0.3.0 "Product-Complete MVP"
 
 > Companion to the earlier `FINAL_ENTERPRISE_VALIDATION_REPORT.md` (v0.2.1,

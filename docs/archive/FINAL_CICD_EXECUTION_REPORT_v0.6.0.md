@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [README.md](README.md).
+
 # Final CI/CD Execution Report — Release v0.6.0
 
 **Date:** 2026-09-09 · **Executor:** ZCode (autonomous, per owner instruction) · **Repo:** github.com/tanviruchahs2580/Bangla-GPT-APP

@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [README.md](README.md).
+
 # FULL QA / ENTERPRISE AUDIT — 2026-09-15
 
 > **Scope:** app, codebase, repository structure, live deployment sync, user-journey testing,

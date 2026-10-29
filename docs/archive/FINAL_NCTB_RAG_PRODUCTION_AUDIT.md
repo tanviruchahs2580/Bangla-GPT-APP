@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [README.md](README.md).
+
 # FINAL NCTB RAG PRODUCTION AUDIT — Bangla GPT APP
 
 **Date:** 2026-08-25 · **Head:** `1a8df9c` on `main` (pushed, CI green: API CI all 4 jobs success)
