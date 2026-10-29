@@ -132,7 +132,11 @@ def test_all_five_event_types_write_audit_rows(client: TestClient) -> None:
     assert export.status_code == 200
 
     # 3. purge (retention sweep)
-    assert client.post("/admin/maintenance/purge", headers=admin).status_code == 200
+    # F-140: a real sweep needs an explicit confirmation
+    assert (
+        client.post("/admin/maintenance/purge", params={"confirm": "true"}, headers=admin).status_code
+        == 200
+    )
 
     # 4. qp_finalize (draft -> all-accepted review -> FINAL); the paper's author
     # must hold a teacher profile, which admin-only users do not have.
@@ -200,7 +204,11 @@ def test_audit_view_filters_and_pages(client: TestClient) -> None:
         prof = _register(client, f"u{i}@example.com", role="teacher")
         client.patch(f"/admin/users/{prof['user_id']}/role", json={"role": "admin"}, headers=admin)
     # one more event of a different type so filtering is proven, not assumed
-    assert client.post("/admin/maintenance/purge", headers=admin).status_code == 200
+    # F-140: a real sweep needs an explicit confirmation
+    assert (
+        client.post("/admin/maintenance/purge", params={"confirm": "true"}, headers=admin).status_code
+        == 200
+    )
 
     role_rows = _audit_actions(client, action="role_change")
     assert len(role_rows) == 3 and all(r["action"] == "role_change" for r in role_rows)
@@ -418,7 +426,11 @@ def test_csp_nonce_rotates_per_response(client: TestClient) -> None:
 
 def test_purge_audit_detail_is_counts_only(client: TestClient) -> None:
     admin = _admin(client)
-    assert client.post("/admin/maintenance/purge", headers=admin).status_code == 200
+    # F-140: a real sweep needs an explicit confirmation
+    assert (
+        client.post("/admin/maintenance/purge", params={"confirm": "true"}, headers=admin).status_code
+        == 200
+    )
     row = _audit_actions(client, action="purge")[0]
     assert row["target"] == "retention_sweep"
     # detail is an aggregate dict of integers/strings -- no message content

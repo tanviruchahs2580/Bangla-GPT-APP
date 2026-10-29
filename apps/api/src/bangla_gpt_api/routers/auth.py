@@ -9,12 +9,14 @@ import logging
 import secrets
 import time
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import jwt as pyjwt
 from fastapi import APIRouter, HTTPException, Request, Response
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
+from bangla_gpt_api.auth import impersonation
 from bangla_gpt_api.auth.mfa import new_secret, otpauth_uri, verify_code
 from bangla_gpt_api.auth.security import (
     _burn_password_check,
@@ -23,6 +25,7 @@ from bangla_gpt_api.auth.security import (
     hash_password,
     is_common_password,
     needs_rehash,
+    password_length_problem,
     verify_password,
 )
 from bangla_gpt_api.auth.single_use import claim_single_use, fetch_by_hash
@@ -57,7 +60,7 @@ from bangla_gpt_api.schemas import (
     TokenResponse,
     VerifyEmailRequest,
 )
-from bangla_gpt_api.security import PiiKeyUnconfigured, encrypt_pii_strict
+from bangla_gpt_api.security import PiiKeyUnconfigured, encrypt_pii_strict, write_audit
 from bangla_gpt_api.services.mailer import send_mail, smtp_configured
 from bangla_gpt_api.services.verification import send_verification_email
 
@@ -172,7 +175,7 @@ def register(
                     "message": "guardian_consent is required when role is 'student'",
                 },
             )
-    _reject_common_password(payload.password)
+    _enforce_password_policy(app_ctx.settings, payload.password)
     email = payload.email.strip().lower()
     existing = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if existing is not None:
@@ -508,7 +511,7 @@ def login(app_ctx: Ctx, response: Response, payload: LoginRequest, db: DbSession
 
 
 @router.post("/auth/logout", status_code=204, responses=coded(400))
-def logout(app_ctx: Ctx, request: Request, user: CurrentUser) -> None:
+def logout(app_ctx: Ctx, request: Request, db: DbSession, user: CurrentUser) -> None:
     """End THIS session now (S-011).
 
     The presented token's jti is parked in the fail-closed revocation store
@@ -518,6 +521,14 @@ def logout(app_ctx: Ctx, request: Request, user: CurrentUser) -> None:
     per-session kill switch). Every token carries a jti; one that does not
     is a legacy mint and is refused — silently accepting it would let a
     caller believe a session was ended when it was not.
+
+    F-146: the namespace must match the token's claims. An impersonation
+    token is checked against ``imp_revoke:`` in ``get_current_user``, so
+    writing ``revoke:`` for it answered 204 while the token kept working —
+    a dishonest sign-out. The matching namespace is written, and any
+    impersonation window this admin session OPENED is ended with it (the
+    support window is a subset of the session that authorised it). The
+    implicit end is audited, so the trail shows why those tokens stopped.
     """
     claims = getattr(request.state, "jwt_claims", None) or {}
     jti = claims.get("jti")
@@ -531,7 +542,21 @@ def logout(app_ctx: Ctx, request: Request, user: CurrentUser) -> None:
     # Strict (F-08 discipline): returning 204 while the write failed would
     # claim an end that did not happen.
     try:
-        app_ctx.cache.set_json_strict(f"revoke:{jti}", True, ttl)
+        if claims.get("imp") is True:
+            app_ctx.cache.set_json_strict(f"imp_revoke:{jti}", True, ttl)
+        else:
+            app_ctx.cache.set_json_strict(f"revoke:{jti}", True, ttl)
+            ended = impersonation.revoke_session(app_ctx.cache, admin_jti=jti)
+            if ended:
+                write_audit(
+                    db,
+                    action="impersonation",
+                    actor_user_id=user.id,
+                    actor_role=user.role,
+                    target=f"user:{user.id}",
+                    detail={"phase": "session_end", "revoked_sessions": ended},
+                )
+                db.commit()
     except CacheUnavailable as exc:
         raise revocation_store_unavailable() from exc
 
@@ -665,6 +690,24 @@ def _reject_common_password(password: str) -> None:
         )
 
 
+def _enforce_password_policy(settings: Any, password: str) -> None:
+    """The documented policy: length floor plus the blocklist (SEC-02).
+
+    Named separately from ``_reject_common_password`` so a new credential
+    entry point cannot pick up one half of the policy and miss the other.
+    The only structural rule is length (NIST SP 800-63B-4 s3.1.1.2 forbids
+    composition rules), and the floor comes from Settings so an operator can
+    raise it to the single-factor 15 without touching code.
+    """
+    _reject_common_password(password)
+    problem = password_length_problem(password, minimum=settings.password_min_length)
+    if problem is not None:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "password_too_short", "message": problem},
+        )
+
+
 @router.post("/auth/forgot", status_code=202)
 def forgot_password(app_ctx: Ctx, payload: ForgotPasswordRequest, db: DbSession) -> dict:
     """Start a password reset.
@@ -756,7 +799,7 @@ def reset_password(app_ctx: Ctx, payload: ResetPasswordRequest, db: DbSession) -
             status_code=400,
             detail={"code": "invalid_token", "message": "Invalid or expired reset token"},
         )
-    _reject_common_password(payload.new_password)
+    _enforce_password_policy(app_ctx.settings, payload.new_password)
     user.password_hash = hash_password(payload.new_password)
     user.must_change_password = False
     # F-05: rotate the token epoch — every access token issued in an
@@ -774,8 +817,18 @@ def reset_password(app_ctx: Ctx, payload: ResetPasswordRequest, db: DbSession) -
     responses={**AUTH_GUARD_RESPONSES, **message(400), **coded(409)},
 )
 def change_password(
-    app_ctx: Ctx, payload: ChangePasswordRequest, db: DbSession, user: CurrentUser
+    app_ctx: Ctx,
+    request: Request,
+    payload: ChangePasswordRequest,
+    db: DbSession,
+    user: CurrentUser,
 ) -> TokenResponse:
+    # F-146 scope limit: a credential change is not available from a support
+    # session. The impersonated window is 15 minutes and read-shaped, the
+    # new password outlives it, and the token epoch rotation would end every
+    # session the account holder is using -- a visiting admin must not be
+    # able to do either.
+    forbid_impersonation(request)
     if not verify_password(payload.current_password, user.password_hash):
         raise HTTPException(
             status_code=400,
@@ -789,7 +842,7 @@ def change_password(
                 "message": "New password must differ from the current one",
             },
         )
-    _reject_common_password(payload.new_password)
+    _enforce_password_policy(app_ctx.settings, payload.new_password)
     now = datetime.now(UTC).replace(tzinfo=None)
     user.password_hash = hash_password(payload.new_password)
     user.must_change_password = False

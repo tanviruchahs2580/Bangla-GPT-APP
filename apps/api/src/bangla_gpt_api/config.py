@@ -299,9 +299,31 @@ class Settings(BaseSettings):
         # throttled like forgot/reset to avoid email-spam abuse.
         "/auth/resend-verification": (10, "ip"),
         "/auth/verify-email": (10, "ip"),
+        # F-147: /auth/join-school is unauthenticated, redeems a staff
+        # invite code and CREATES a staff account on success, so an
+        # unthrottled caller had a free guessing oracle (and a free
+        # account-creation pump) from one address.
+        "/auth/join-school": (10, "ip"),
         # The invite code is 64 bits, but an unthrottled redeem is still a free
         # oracle for guessing one.
         "/parents/link/invite": (10, "ip"),
+        # F-127: /users was never rated. DELETE /users/me performs an
+        # Argon2id current-password check (a guessing oracle for a stolen
+        # token), the sessions-revoke endpoint is destructive, and GET
+        # /users/me is on the hot path -- a per-user bound covers all three
+        # (school NATs share one IP, so user scope is the correct key).
+        "/users/me": (10, "user"),
+        # F-148: the export materialises every conversation/message/attempt
+        # of one account; the tighter rule is deliberate and below the
+        # /users/me bound that also matches this path.
+        "/users/me/export": (5, "user"),
+        # Platform-wide rebuild of the aggregate report; admin-only but not
+        # free (full-table aggregates).
+        "/admin/reports": (10, "user"),
+        # F-140: the retention sweep is destructive and irreversible, so it
+        # is confirmation-gated (see routers/admin.py) AND bounded -- a
+        # confirmed caller must not be able to loop it at full speed.
+        "/admin/maintenance": (5, "user"),
         # The costly teacher AI paths: each spends provider tokens on a
         # teacher's behalf, so without a per-user bound one token can loop at
         # full network speed and the bill lands on the account (SEC-002).

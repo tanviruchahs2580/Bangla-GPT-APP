@@ -11,9 +11,10 @@ from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 from sqlalchemy import func, select
 
+from bangla_gpt_api.auth import impersonation
 from bangla_gpt_api.auth.security import (
     create_access_token,
 )
@@ -28,6 +29,7 @@ from bangla_gpt_api.db.models import (
     Student,
     User,
 )
+from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES
 from bangla_gpt_api.schemas import (
     AdminAiQualityOut,
@@ -59,7 +61,10 @@ router = APIRouter(responses=AUTH_GUARD_RESPONSES)
 
 logger = logging.getLogger(__name__)
 
-IMPERSONATION_MINUTES = 15
+#: One impersonation session's lifetime. The value lives with the
+#: revocation helpers so the token, the active index and the revoke
+#: entries cannot drift apart.
+IMPERSONATION_MINUTES = impersonation.IMPERSONATION_TTL_SECONDS // 60
 
 
 @router.get("/admin/users", response_model=AdminUsersPage)
@@ -140,7 +145,12 @@ def admin_update_role(
 
 @router.post("/admin/users/{user_id}/impersonate", response_model=ImpersonateOut)
 def admin_impersonate(
-    app_ctx: Ctx, user_id: int, payload: ImpersonateRequest, db: DbSession, admin: AdminUser
+    app_ctx: Ctx,
+    request: Request,
+    user_id: int,
+    payload: ImpersonateRequest,
+    db: DbSession,
+    admin: AdminUser,
 ) -> ImpersonateOut:
     target = db.get(User, user_id)
     if target is None:
@@ -155,6 +165,20 @@ def admin_impersonate(
                 "message": "admins cannot be impersonated",
             },
         )
+    # F-146: the window is bound to the ADMIN SESSION that opens it. The
+    # impersonation token is indexed under the presented token's jti, so
+    # signing out (or revoking that session) also ends every impersonation
+    # it started -- a 15-minute support session must not outlive the
+    # session that authorised it.
+    admin_jti = (getattr(request.state, "jwt_claims", None) or {}).get("jti")
+    if not isinstance(admin_jti, str) or not admin_jti:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "session_not_bindable",
+                "message": "This admin session cannot start an impersonation; log in again",
+            },
+        )
     jti = secrets.token_hex(16)
     token = create_access_token(
         target,
@@ -163,11 +187,11 @@ def admin_impersonate(
         # jti makes this specific token revocable (exit button /
         # admin revoke), which stateless JWT alone cannot do.
         jti=jti,
-        extra_claims={"imp": True, "imp_by": admin.id},
+        extra_claims={"imp": True, "imp_by": admin.id, "imp_session": admin_jti},
     )
     # index active JTIs per target so admin revoke can find them.
     # Strict (F-08): if the revocation store is unreachable, refuse to
-    # start — a session that can never be revoked must not be minted.
+    # start -- a session that can never be revoked must not be minted.
     try:
         existing = app_ctx.cache.get_json_strict(f"imp_active:{target.id}") or []
         if not isinstance(existing, list):
@@ -176,8 +200,9 @@ def admin_impersonate(
         # keep only recent 10 to bound memory
         existing = existing[-10:]
         app_ctx.cache.set_json_strict(
-            f"imp_active:{target.id}", existing, ttl=IMPERSONATION_MINUTES * 60
+            f"imp_active:{target.id}", existing, ttl=impersonation.IMPERSONATION_TTL_SECONDS
         )
+        impersonation.remember_session(app_ctx.cache, admin_jti=admin_jti, imp_jti=jti)
     except CacheUnavailable as exc:
         raise revocation_store_unavailable() from exc
     write_audit(
@@ -186,7 +211,14 @@ def admin_impersonate(
         actor_user_id=admin.id,
         actor_role=admin.role,
         target=f"user:{target.id}",
-        detail={"phase": "start", "reason": payload.reason, "minutes": IMPERSONATION_MINUTES},
+        detail={
+            "phase": "start",
+            "reason": payload.reason,
+            "minutes": IMPERSONATION_MINUTES,
+            # ids only: which admin session authorised this window, so an
+            # incident review can join the two audit rows.
+            "admin_jti": admin_jti,
+        },
     )
     db.commit()
     return ImpersonateOut(
@@ -214,7 +246,7 @@ def admin_impersonate_end(app_ctx: Ctx, user_id: int, db: DbSession, admin: Admi
             for j in active:
                 if isinstance(j, str) and j:
                     app_ctx.cache.set_json_strict(
-                        f"imp_revoke:{j}", True, ttl=IMPERSONATION_MINUTES * 60
+                        f"imp_revoke:{j}", True, impersonation.IMPERSONATION_TTL_SECONDS
                     )
         # clear the active index
         app_ctx.cache.set_json_strict(f"imp_active:{target.id}", [], ttl=1)
@@ -444,7 +476,13 @@ def admin_ai_quality(
 
 @router.post("/admin/maintenance/purge", response_model=dict)
 def admin_purge_expired(
-    app_ctx: Ctx, db: DbSession, admin: AdminUser, dry_run: bool = False
+    app_ctx: Ctx,
+    request: Request,
+    db: DbSession,
+    admin: AdminUser,
+    dry_run: bool = False,
+    confirm: bool = False,
+    x_confirm_purge: Annotated[str | None, Header()] = None,
 ) -> dict:
     """Retention sweep (D20, ): expired tokens, stale invites, old chats.
 
@@ -452,7 +490,36 @@ def admin_purge_expired(
     ``chat_retention_days`` are deleted with their messages. With
     ``dry_run=true`` the SAME count report is returned without deleting
     anything (compliance evidence); real runs also write the audit row.
+
+    F-140: a real sweep deletes rows irreversibly, so it needs an explicit
+    confirmation -- ``?confirm=true`` or an ``X-Confirm-Purge: true``
+    header. A dry run is always allowed (it is the compliance-safe path and
+    the one an operator should run first). A refused call writes no audit
+    row (nothing happened) but is logged, and the refusal names the missing
+    confirmation so a scripted caller cannot silently no-op. The sweep
+    itself stays idempotent: it only ever deletes rows past their window,
+    so a repeat after a successful run is a no-op with all-zero counts.
     """
+    confirmed = bool(confirm) or (x_confirm_purge or "").strip().lower() in ("true", "1", "yes")
+    if not dry_run and not confirmed:
+        json_log(
+            logger,
+            logging.WARNING,
+            "purge_refused_unconfirmed",
+            actor_user_id=admin.id,
+            actor_role=admin.role,
+            path=request.url.path,
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "purge_confirmation_required",
+                "message": (
+                    "Pass confirm=true (query or X-Confirm-Purge header), or "
+                    "use dry_run=true to preview the sweep"
+                ),
+            },
+        )
     report = run_retention_sweep(db, settings=app_ctx.settings, dry_run=dry_run)
     if not dry_run:
         # audit event 3/5: purge (counts only -- never deleted content)
