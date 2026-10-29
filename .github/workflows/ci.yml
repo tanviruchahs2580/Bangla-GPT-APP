@@ -746,6 +746,45 @@ jobs:
           )
           PY
 
+      # F-073/BE-07: dead code used to be found by hand. vulture at 100 %
+      # confidence is precise enough to gate on: the two entries below are the
+      # only survivors, each with its reason, and a new finding fails. Stale
+      # entries warn instead of failing, so a cross-stream cleanup cannot red
+      # another stream's change -- but the entry must then be deleted here.
+      - name: Dead code (vulture, 100% confidence, allowlisted)
+        working-directory: apps/api
+        run: |
+          python -m pip install --quiet "vulture==2.16"
+          python - <<'PY'
+          import subprocess
+          import sys
+
+          ALLOWED = {
+              # Accepted parameter, not yet wired in the manifest verifier
+              # (owned by the corpus pipeline stream): it must be implemented
+              # or dropped, then this entry goes.
+              "src/bangla_gpt_api/nctb/manifest.py:190: unused variable 'check_files' (100% confidence)",
+              # The unreachable yield is what makes the stub an async
+              # generator, which is the interface the tutor calls.
+              "tests/test_scale_hardening.py:144: unreachable code after 'raise' (100% confidence)",
+          }
+          out = subprocess.run(
+              [sys.executable, "-m", "vulture", "src", "tests", "--min-confidence", "100"],
+              capture_output=True,
+              text=True,
+          ).stdout
+          findings = [line.strip() for line in out.splitlines() if line.strip()]
+          fresh = [line for line in findings if line not in ALLOWED]
+          for line in fresh:
+              print(f"::error::{line}")
+          for line in sorted(ALLOWED):
+              if line not in findings:
+                  print(f"::warning::stale vulture allowlist entry ({line}); delete it")
+          if fresh:
+              sys.exit(1)
+          print(f"vulture clean at 100% confidence ({len(findings)} allowlisted finding(s))")
+          PY
+
   e2e:
     name: E2E (playwright, chromium)
     # C-01: the browser layer of the pyramid had vanished from main — the
