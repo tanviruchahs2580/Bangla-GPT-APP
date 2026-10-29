@@ -13,9 +13,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Added
+
+- feat(api): add a paired-prompt fairness probe harness
+- feat(api): add an AI generation kill switch with a refusal envelope
+- feat(api): gate the golden set, retrieval hit@k floor and red team in one command
+
 ### Fixed
 
+- fix(api): carry the answer log, AI prefs and quiz_json in the export
+- fix(api): extend the moderation screen and citation verdicts
+- fix(api): feed ranks to the family-B MRR helper and assert fractions
+- fix(api): forward the AI kill switch through the compose env map
+- fix(api): ground on evidence mass, screen answers and declare image text as data
+- fix(api): log failed logins and armed account lockouts
+- fix(api): make the pyproject version reader and Sentry hook type-check
+- fix(api): narrow the identity block list to NUL and bidi controls
+- fix(api): read the NCTB class signal from the cover, never invent one
+- fix(api): refuse production boot on the bundled sample corpus
+- fix(api): reject NUL and bidi controls in identity fields
+- fix(api): require a per-user AI budget in production
+- fix(api): sanitize analytics event prop values, not just key names
+- fix(api): scrub PII from Sentry events before they are sent
+- fix(api): single-source the version fallback from pyproject
+- fix(compose): forward the production boot-guard keys from .env
+- fix(e2e): refuse to seed the shared e2e accounts outside test lanes
 - fix(pwa): offline navigations answer 200 — restore the install prompt
+- fix(pwa): the offline-shell spec discovers the cache by prefix; changelog regen
+- fix(web): keep white label text above AA on every accent fill
+- fix(web): refresh the dependency register and clear the undici alert
+- fix(web): regenerate the lockfile root version to 0.9.3
+- fix(web): restore the skip link and a main landmark on every route
+- fix(web): say a query failed instead of rendering it as empty
+- fix(web): serve the offline retry script under the shipped CSP
+- fix(web): state Argon2id and the real data flows in the privacy page
+- fix(web): stream SSE unbuffered from nginx and honour the deploy contract
+
+### CI/CD
+
+- ci(eval): run the golden hit@3 and red-team gates on every PR
+- ci(release): refuse tag/version drift and tag images by commit sha
+- ci: run the three-engine Bangla pass and guard the workflow tables
+
+### Documentation
+
+- docs(ai): add AI risk register
+- docs(ai): add incident response procedure
+- docs(ai): add system card for the tutor
+- docs(api): document the SSE contract and the pagination shape
+- docs(env): drop the stale VERSION value from the dev template
+- docs(i18n): add Bangla terminology glossary proposal
+- docs(privacy): rebuild the data-minimization doc from the real schema
+- docs(rag): map the as-built pipeline and correct the overstated claims
+- docs(rag): record the latency range of both verification runs
+- docs(security): add threat model
+- docs(security): refresh the threat model with the shipped controls
+- docs: derive the version from pyproject and drop the phantom build-arg
+- docs: index the new AI, security and language documents
+- docs: index the unlisted living documents and rebaseline the routes
+- docs: never name the derived image tag VERSION
+
+### Tests
+
+- test(web): give the activity heatmap suite a local wait budget
+- test(web): lock the offline page to what script-src 'self' allows
+
+### Maintenance
+
+- chore(dx): close the cheap pre-commit parity gaps
+- chore: ignore the Android build output at the repo root
+
+### Other
+
+- Merge pull request #93 from tanviruchahs2580/fix/pwa-install-offline-200
 
 ## v0.9.3 - 2026-10-27
 
