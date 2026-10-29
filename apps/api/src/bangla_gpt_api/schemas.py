@@ -1,5 +1,5 @@
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Any, Literal, cast
 
 from pydantic import (
@@ -7,11 +7,39 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    PlainSerializer,
     StrictBool,
+    WithJsonSchema,
     model_serializer,
     model_validator,
 )
 from pydantic_core import PydanticCustomError
+
+
+def _utc_iso_z(value: datetime) -> str:
+    """ISO-8601 UTC with a ``Z`` suffix; a naive value is read as UTC.
+
+    Columns are naive UTC (SQLite has no timezone type) but the write path
+    keeps the tz-aware in-memory default (``expire_on_commit=False``), so the
+    same row used to serialise as ``...Z`` on create and ``...`` on re-read.
+    ECMAScript parses an offset-less date-time as LOCAL time, shifting every
+    displayed timestamp by the viewer's offset, so one serialiser now
+    normalises both paths (F-063).
+    """
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
+#: Wire type for every datetime an API response carries. The serializer runs
+#: in JSON mode only, so python-mode dumps and ORM comparisons keep real
+#: datetimes; the explicit schema keeps ``format: date-time`` in the served
+#: OpenAPI document (a bare PlainSerializer would degrade it to a string).
+UtcDateTime = Annotated[
+    datetime,
+    PlainSerializer(_utc_iso_z, return_type=str, when_used="json"),
+    WithJsonSchema({"type": "string", "format": "date-time"}, mode="serialization"),
+]
 
 # --- explicit explanation strategies -----------------------------------
 
@@ -142,7 +170,7 @@ class MessageSearchHit(BaseModel):
     message_id: int
     role: str
     snippet: str
-    created_at: datetime
+    created_at: UtcDateTime
 
 
 class ConversationOut(BaseModel):
@@ -150,7 +178,7 @@ class ConversationOut(BaseModel):
     title: str | None
     # last explanation strategy (drives the 'আমি বুঝিন' re-teach cycle).
     last_strategy: str | None = None
-    created_at: datetime
+    created_at: UtcDateTime
     message_count: int = 0
 
 
@@ -182,7 +210,7 @@ class ChatMessageOut(BaseModel):
     refused_reason: str | None = None
     sources: list[SourceRef] = []
     rating: int | None = None
-    created_at: datetime
+    created_at: UtcDateTime
     # honest numeric confidence (formula documented in
     # main._answer_confidence). None for user turns / pre-wave answers read
     # before this field existed is impossible -- it is always computed.
@@ -461,7 +489,7 @@ class ConsentStatusOut(BaseModel):
     student_id: int
     current_version: str
     accepted_version: str | None
-    accepted_at: datetime | None
+    accepted_at: UtcDateTime | None
     needs_reconfirm: bool
 
 
@@ -552,7 +580,7 @@ class UserPublic(BaseModel):
     id: int
     email: str
     role: str
-    created_at: datetime
+    created_at: UtcDateTime
 
 
 class AuditRowOut(BaseModel):
@@ -560,7 +588,7 @@ class AuditRowOut(BaseModel):
     message content or PII -- only ids and outcome metadata."""
 
     id: int
-    created_at: datetime
+    created_at: UtcDateTime
     actor_user_id: int | None
     actor_role: str
     action: str
@@ -609,9 +637,9 @@ class FeedbackAdminRow(BaseModel):
     message_id: int | None
     attempt_id: int | None
     triaged: bool
-    triaged_at: datetime | None
+    triaged_at: UtcDateTime | None
     note: str | None
-    created_at: datetime
+    created_at: UtcDateTime
 
 
 class FeedbackQueuePage(BaseModel):
@@ -637,7 +665,7 @@ class StatusOut(BaseModel):
 
     status: str  # ok | degraded
     components: list[StatusComponent]
-    checked_at: datetime
+    checked_at: UtcDateTime
 
 
 class AdminOverview(BaseModel):
@@ -670,7 +698,7 @@ class RefusalAuditOut(BaseModel):
     total_refusals: int
     by_reason: dict[str, int]
     by_class: dict[str, int]
-    last_refusal_at: datetime | None = None
+    last_refusal_at: UtcDateTime | None = None
 
 
 class ContinueLearning(BaseModel):
@@ -718,7 +746,7 @@ class ChapterProgressOut(BaseModel):
     read_pct: int
     completed: bool
     bookmarked: bool
-    updated_at: datetime | None = None
+    updated_at: UtcDateTime | None = None
 
 
 class ClassRoomOut(BaseModel):
@@ -800,7 +828,7 @@ class TeacherContentOut(ChapterContentKey):
 class ChapterContentVersionOut(ChapterContentKey):
     version: int
     source: str
-    created_at: datetime | None = None
+    created_at: UtcDateTime | None = None
     created_by: int | None = None
 
 
@@ -853,9 +881,9 @@ class QPOut(BaseModel):
     status: str  # draft | final
     questions: list[QPQuestion]
     meta: dict[str, object] = {}
-    reviewed_at: datetime | None = None
-    finalized_at: datetime | None = None
-    created_at: datetime | None = None
+    reviewed_at: UtcDateTime | None = None
+    finalized_at: UtcDateTime | None = None
+    created_at: UtcDateTime | None = None
 
 
 class QPReviewDecision(BaseModel):
@@ -903,7 +931,7 @@ class ShortTestOut(BaseModel):
     duration_min: int
     questions: list[QuizQuestionPublic]
     attempts: list[dict[str, int]]
-    created_at: datetime | None = None
+    created_at: UtcDateTime | None = None
 
 
 class ShortTestMineOut(BaseModel):
@@ -915,8 +943,8 @@ class ShortTestMineOut(BaseModel):
     num_questions: int
     duration_min: int
     questions: list[QuizQuestionPublic]
-    created_at: datetime | None = None
-    expires_at: datetime | None = None
+    created_at: UtcDateTime | None = None
+    expires_at: UtcDateTime | None = None
     expired: bool = False
 
 
@@ -983,7 +1011,7 @@ class SupportPlanOut(BaseModel):
     class_level: int
     focus_concepts: list[str]
     plan: dict[str, object]
-    created_at: datetime | None = None
+    created_at: UtcDateTime | None = None
 
 
 class AssignmentIn(BaseModel):
@@ -1002,10 +1030,10 @@ class AssignmentOut(BaseModel):
     subject: str
     chapter: str
     num_questions: int
-    due_at: datetime
+    due_at: UtcDateTime
     questions: list[QuizQuestionPublic]
     attempts: list[dict[str, int]]
-    created_at: datetime | None = None
+    created_at: UtcDateTime | None = None
 
 
 class AssignmentProgressRow(BaseModel):
@@ -1025,7 +1053,7 @@ class AssignmentMineOut(BaseModel):
     subject: str
     chapter: str
     questions: list[QuizQuestionPublic]
-    due_at: datetime
+    due_at: UtcDateTime
     overdue: bool
     done: bool
 
@@ -1041,7 +1069,7 @@ class SchoolOut(BaseModel):
     id: int
     name: str
     code: str
-    created_at: datetime
+    created_at: UtcDateTime
 
 
 class SchoolInviteIn(BaseModel):
@@ -1053,8 +1081,8 @@ class SchoolInviteOut(BaseModel):
     school_id: int
     role: str
     code: str  # plaintext, returned exactly once
-    created_at: datetime
-    expires_at: datetime
+    created_at: UtcDateTime
+    expires_at: UtcDateTime
 
 
 class SchoolJoinIn(BaseModel):
@@ -1149,7 +1177,7 @@ class AdminSchoolStatsOut(BaseModel):
     id: int
     name: str
     code: str
-    created_at: datetime
+    created_at: UtcDateTime
     teachers: int
     classrooms: int
     students: int
@@ -1165,7 +1193,7 @@ class ContentVersionRowOut(BaseModel):
     current_version: int
     versions_total: int
     source: str  # ai | teacher (current version)
-    updated_at: datetime | None = None
+    updated_at: UtcDateTime | None = None
     updated_by_email: str | None = None
 
 
@@ -1176,9 +1204,9 @@ class SchoolInviteAdminOut(BaseModel):
     school_id: int
     role: str
     used: bool
-    created_at: datetime
-    used_at: datetime | None = None
-    expires_at: datetime | None = None
+    created_at: UtcDateTime
+    used_at: UtcDateTime | None = None
+    expires_at: UtcDateTime | None = None
 
 
 class KgGapOut(BaseModel):
@@ -1253,7 +1281,7 @@ class TeacherDocumentOut(BaseModel):
     chapter: str | None = None
     title: str
     payload: dict[str, Any] = {}
-    created_at: datetime | None = None
+    created_at: UtcDateTime | None = None
 
 
 class GenerateDocumentOut(TeacherDocumentOut):
@@ -1304,7 +1332,7 @@ class SavedNoteOut(BaseModel):
     body: str
     source: str
     source_ref: NoteSourceRef | None = None
-    created_at: datetime | None = None
+    created_at: UtcDateTime | None = None
 
 
 # --- notification feed -------------------------------------------------
@@ -1317,8 +1345,8 @@ class NotificationOut(BaseModel):
     code: str
     params: dict[str, Any] = {}
     link: str | None = None
-    read_at: datetime | None = None
-    created_at: datetime | None = None
+    read_at: UtcDateTime | None = None
+    created_at: UtcDateTime | None = None
 
 
 class NotificationListOut(BaseModel):
@@ -1348,8 +1376,8 @@ class AiJobOut(BaseModel):
     payload: dict[str, Any] = {}
     result: dict[str, Any] | None = None
     error: str | None = None
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
+    created_at: UtcDateTime | None = None
+    updated_at: UtcDateTime | None = None
 
 
 # --- teacher workload metric ------------------------------------------
