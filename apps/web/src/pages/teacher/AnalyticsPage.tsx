@@ -155,7 +155,7 @@ export default function AnalyticsPage() {
   const levels = Array.from(new Set(rooms.map((r) => r.class_level)));
 
   return (
-    <main id="main-content" className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       <section className="section-head">
         <h1 className="page-title">{t("tNavAnalytics")}</h1>
       </section>

@@ -118,7 +118,7 @@ export default function HomePage() {
   const rec = dashboard?.recommendation;
 
   return (
-    <main id="main-content" className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       {/* 1 — greeting + "আজ কী শিখতে চাও?" prompt bar into the AI tutor */}
       <section className="hero">
         <h2>

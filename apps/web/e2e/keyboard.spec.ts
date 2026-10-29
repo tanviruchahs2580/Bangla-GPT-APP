@@ -268,6 +268,12 @@ test('admin searches users by keyboard alone', async ({ page }) => {
 test('school admin dashboard is reachable and tabbable', async ({ page }) => {
   await signIn(page, 'schooladmin1@e2e.test')
   await expect(page).toHaveURL(/\/school$/)
+  // Wait for the dashboard's own content, not just the URL: the tab stops come
+  // from the loaded panels (the first full-suite run swept a half-rendered page
+  // and counted 3 stops). The heading is the page's stable signal.
+  await expect(
+    page.getByRole('heading', { name: /স্কুল|School/i }).first(),
+  ).toBeVisible({ timeout: 20_000 })
   const stops = await tabSweep(page, 40)
   expect(stops.length).toBeGreaterThan(3)
 })

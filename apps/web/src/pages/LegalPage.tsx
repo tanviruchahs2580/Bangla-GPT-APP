@@ -59,7 +59,7 @@ const SECTIONS: {
 export default function LegalPage({ kind }: { kind: "privacy" | "terms" }) {
   const isPrivacy = kind === "privacy";
   return (
-    <main id="main-content" className="card card-legal">
+    <main id="main-content" tabIndex={-1} className="card card-legal">
       <h2>
         {isPrivacy
           ? "গোপনীয়তা নীতি / Privacy Policy"

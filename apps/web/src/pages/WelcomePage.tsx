@@ -23,7 +23,11 @@ import { BrandMark } from "../components/BrandMark";
  */
 export default function WelcomePage() {
   return (
-    <main id="main-content" className="splash landing splash-login">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="splash landing splash-login"
+    >
       <div className="splash-pattern" aria-hidden />
       <div className="landing-inner">
         <section className="landing-hero">

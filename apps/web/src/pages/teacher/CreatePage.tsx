@@ -638,7 +638,7 @@ export default function CreatePage() {
   const active = (params.get("kind") as CreateEntry | null) ?? null;
 
   return (
-    <main id="main-content" className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       <section className="section-head">
         <h1 className="page-title">{t("tNavCreate")}</h1>
       </section>

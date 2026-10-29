@@ -712,7 +712,13 @@ test("PAR-04 another child's data cannot be read by ID", async ({ page }) => {
     ).toBe(bodies[0]);
   }
 
-  // The dashboard itself only ever renders the linked child.
+  // The dashboard itself only ever renders the linked child. Navigate rather
+  // than assume: the page was loaded before the link call above, so without a
+  // fresh load the assertion races the (already-fetched) empty child list.
+  // Found in the first full-suite run: the test passed standalone and failed
+  // after smoke.spec.ts had consumed an invite code, because the stale page
+  // still showed "My children —".
+  await page.goto("/parent", { waitUntil: "domcontentloaded" });
   await expect(page.locator("body")).toContainText("E2E Student");
   await expect(page.locator("body")).not.toContainText("E2E Visual Student");
 });

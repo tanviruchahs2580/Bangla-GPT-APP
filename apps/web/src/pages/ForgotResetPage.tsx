@@ -9,7 +9,7 @@ export default function ForgotResetPage() {
   const [tab, setTab] = useState<Tab>("forgot");
 
   return (
-    <main id="main-content" className="card auth-card">
+    <main id="main-content" tabIndex={-1} className="card auth-card">
       <h2>{tab === "forgot" ? t("resetTitle") : t("verifyTitle")}</h2>
       <p className="muted">
         <button

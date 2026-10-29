@@ -263,7 +263,7 @@ export default function AdminDashboard() {
   return (
     /* A11Y-01: the staff layout had no <main> at all, so the route had no
        landmark and the shell's skip link had nothing to jump to. */
-    <main id="main-content" className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       <h1 className="page-title">{t("adminDashboard")}</h1>
 
       <AiQualityCard />

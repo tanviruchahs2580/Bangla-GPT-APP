@@ -134,7 +134,11 @@ export default function LoginPage() {
 
   if (mfaToken) {
     return (
-      <main id="main-content" className="splash splash-login auth-shell">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="splash splash-login auth-shell"
+      >
         <Card className="auth-card">
           <h2>{t("mfaTitle")}</h2>
           <p className="muted">{t("mfaHint")}</p>
@@ -172,7 +176,11 @@ export default function LoginPage() {
 
   if (pendingMe) {
     return (
-      <main id="main-content" className="splash splash-login auth-shell">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="splash splash-login auth-shell"
+      >
         <Card className="auth-card">
           <h2>{t("forceChangeTitle")}</h2>
           <p className="muted">{t("forceChangeSub")}</p>
@@ -233,7 +241,11 @@ export default function LoginPage() {
   }
 
   return (
-    <main id="main-content" className="splash splash-login auth-shell">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="splash splash-login auth-shell"
+    >
       <section className="auth-brand">
         <div className="auth-brand-head">
           <span className="auth-brand-logo" aria-hidden>

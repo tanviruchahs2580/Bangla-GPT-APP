@@ -164,7 +164,7 @@ export default function MePage() {
     // Defensive: a prefs payload without `learning_prefs` (or without the
     // style key) must degrade to the defaults, not crash the effect -- a test
     // mock with a partial payload found this as an uncaught TypeError.
-    const learning = (prefs.learning_prefs ?? {}) as Record<string, unknown>;
+    const learning = prefs.learning_prefs ?? {};
     setStyle(asText(learning.explanation_style ?? "standard"));
     setFocus(asText(learning.subject_focus ?? ""));
     setMemory(prefs.memory_enabled);
@@ -276,7 +276,7 @@ export default function MePage() {
   };
 
   return (
-    <main id="main-content" className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       <section className="section-head">
         <h2>{t("me")}</h2>
       </section>

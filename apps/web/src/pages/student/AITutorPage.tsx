@@ -508,7 +508,7 @@ export default function AITutorPage() {
   };
 
   return (
-    <main id="main-content" className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       <section className="section-head">
         <h2>{t("aiTutor")}</h2>
         <Button variant="soft" size="sm" onClick={newChat}>

@@ -6,7 +6,7 @@ import { t } from "../i18n";
  * Without it a keyboard user tabs through the repeated topbar (up to eight
  * controls) plus the staff sidebar again and again before reaching the page,
  * and a screen reader user gets no direct way past the chrome. It targets the
- * route's `<main id="main-content">`; the link stays visually hidden until it
+ * route's `<main id="main-content" tabIndex={-1}>`; the link stays visually hidden until it
  * is focused (see `.skip-link` in styles.css).
  */
 export function SkipLink() {

@@ -40,7 +40,7 @@ export default function StatusPage() {
   const ok = data?.status === "ok";
 
   return (
-    <main id="main-content" className="card card-narrow">
+    <main id="main-content" tabIndex={-1} className="card card-narrow">
       <h2>{t("statusPage")}</h2>
       {error && (
         <p className="error" role="alert">
