@@ -171,6 +171,14 @@ golden items, 40 streaming samples; milliseconds):
 | generation (mock) | 125 | 0.0 | 8.0 | 10.8 |
 | total | 160 | 15.0 | 130.5 | 273.7 |
 
+A second run of the same command on the same machine (also in evidence)
+measured retrieval p50 14.0 / p95 159.3 / p99 293.2 ms and total p50 19.0 /
+p95 206.1 / p99 314.6 ms, i.e. this desktop under concurrent agent load varies
+by roughly 1.5x between runs. Quote the shape (retrieval dominates, rerank and
+gate are small, rewrite is sub-millisecond), not the third digit; regenerate
+the table with the command above on the deployment hardware before treating
+any number as an SLO input.
+
 Proposed targets, derived from these numbers and the audit's 2,599-chunk
 measurements (retrieval p95 367-495 ms there) -- targets, not measurements:
 

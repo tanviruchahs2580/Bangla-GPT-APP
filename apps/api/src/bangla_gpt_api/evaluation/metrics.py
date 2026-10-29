@@ -105,11 +105,12 @@ def grammar_score(text: str) -> float:
 
 
 def bengali_letter_share(text: str) -> float:
-    """Bengali share of all letters in ``text`` (0.0 when there are none).
+    """Bengali share of all Bengali-or-Latin characters in ``text``.
 
-    RAG-21 language consistency: a Bangla-medium question must get a
-    Bangla-script answer. Script detection is script-share, not a language
-    model -- deterministic, mock-capable, and pinned by unit tests.
+    Script, not language: the Bengali block (letters and digits alike) counts
+    on one side and ASCII letters on the other, so a Bangla sentence with
+    numbers is still Bangla and a Latin sentence is not. Deterministic,
+    mock-capable, pinned by unit tests; 0.0 when the text has neither.
     """
     bengali = len(_BENGALI_RE.findall(text))
     latin = len(_LATIN_RE.findall(text))
