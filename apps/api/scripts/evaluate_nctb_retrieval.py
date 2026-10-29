@@ -101,11 +101,11 @@ def _block(ranks: list[int]) -> dict[str, Any]:
     }
 
 
-def _sample_queries(chunks) -> list[tuple[str, int, str]]:
+def _sample_queries(chunks, sample: int = FAMILY_A_SAMPLE) -> list[tuple[str, int, str]]:
     """(query, class_level, evidence unit) for family A, in run order."""
     rng = random.Random(EVAL_SEED)
     queries: list[tuple[str, int, str]] = []
-    for chunk in rng.sample(chunks, min(FAMILY_A_SAMPLE, len(chunks))):
+    for chunk in rng.sample(chunks, min(sample, len(chunks))):
         query = " ".join(chunk.text.split()[:12])
         if len(query.split()) < 4:
             continue
@@ -113,7 +113,9 @@ def _sample_queries(chunks) -> list[tuple[str, int, str]]:
     return queries
 
 
-def _chapter_queries(chunks) -> list[tuple[str, int, set[str]]]:
+def _chapter_queries(
+    chunks, chapters_wanted: int = FAMILY_B_CHAPTERS
+) -> list[tuple[str, int, set[str]]]:
     """(title, class_level, wanted units) for family B, in run order."""
     chapters: dict[tuple[int, str], set[str]] = {}
     for chunk in chunks:
@@ -126,6 +128,16 @@ def _chapter_queries(chunks) -> list[tuple[str, int, set[str]]]:
         (title, class_level, chapters[(class_level, title)])
         for class_level, title in keys[:FAMILY_B_CHAPTERS]
     ]
+
+
+def _latency_ms(latencies: list[float]) -> dict[str, Any]:
+    """Percentile report of search latencies, converted to milliseconds."""
+    report = percentile_report(latencies, (50, 95))
+    return {
+        "n": report["n"],
+        "p50": round(report["p50"] * 1000, 2),
+        "p95": round(report["p95"] * 1000, 2),
+    }
 
 
 def _rank_lists(index, queries, chapters) -> tuple[list[int], list[int], list[float]]:
@@ -233,6 +245,11 @@ def _ablation(chunks, queries, chapters, *, label: str) -> dict[str, Any]:
         "n_family_a": len(queries),
         "n_family_b": len(chapters),
         "seed": EVAL_SEED,
+        "note": (
+            "per-mode index build, recall and search latency on the same sampled "
+            "queries; rerank_overhead is the p50 difference between the fused mode "
+            "with and without the reranker"
+        ),
         "modes": {},
     }
     for name, mode in modes.items():
@@ -241,10 +258,7 @@ def _ablation(chunks, queries, chapters, *, label: str) -> dict[str, Any]:
             "index_build_seconds": mode["build_seconds"],
             "family_A_self_sentence": _block(ranks_a),
             "family_B_chapter_title": _block(ranks_b),
-            "search_latency_ms": {
-                key: round(value * 1000, 2)
-                for key, value in percentile_report(latencies, (50, 95)).items()
-            },
+            "search_latency_ms": _latency_ms(latencies),
         }
         print(
             f"  ablation {name}: A@1={report['modes'][name]['family_A_self_sentence']['recall_at_1']} "
@@ -350,6 +364,18 @@ def main() -> int:
         help="load the corpus without cross-source dedupe (ablation for F-012)",
     )
     parser.add_argument("--ablation", action="store_true", help="run the four-configuration table")
+    parser.add_argument(
+        "--sample",
+        type=int,
+        default=FAMILY_A_SAMPLE,
+        help=f"family A queries to sample (default {FAMILY_A_SAMPLE}; the ablation may use fewer)",
+    )
+    parser.add_argument(
+        "--chapters",
+        type=int,
+        default=FAMILY_B_CHAPTERS,
+        help=f"family B chapter titles to sample (default {FAMILY_B_CHAPTERS})",
+    )
     parser.add_argument("--chunk-stats", action="store_true", help="chunk token distribution")
     parser.add_argument(
         "--compare",
@@ -379,8 +405,8 @@ def main() -> int:
     identity = _corpus_identity(corpus_root, chunks)
     print(f"index corpus: {len(chunks)} chunks digest={identity['corpus_digest'][:16]}")
 
-    queries = _sample_queries(chunks)
-    chapters = _chapter_queries(chunks)
+    queries = _sample_queries(chunks, args.sample)
+    chapters = _chapter_queries(chunks, args.chapters)
 
     if args.ablation:
         report = _ablation(chunks, queries, chapters, label=args.label)
@@ -415,7 +441,7 @@ def main() -> int:
     )
     gate_pass, outcomes_c = _family_c(tutor)
 
-    latency_report = percentile_report(latencies, (50, 95))
+    latency_report = _latency_ms(latencies)
     refusal_interval = interval_report(gate_pass, len(ADVERSARIAL_QUESTIONS))
     report: dict[str, Any] = {
         "schema_version": 2,
@@ -431,6 +457,7 @@ def main() -> int:
         "family_C_refusal_ci95": [refusal_interval["ci95_low"], refusal_interval["ci95_high"]],
         "search_latency_p50_ms": latency_report["p50"],
         "search_latency_p95_ms": latency_report["p95"],
+        "search_latency_n": latency_report["n"],
         "baseline_lexical": {
             "family_A_self_sentence": _block(lexical_a),
             "family_B_chapter_title": _block(lexical_b),

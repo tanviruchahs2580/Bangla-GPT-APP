@@ -19,7 +19,11 @@ from pathlib import Path
 
 from bangla_gpt_api.data.nctb_loader import load_nctb_corpus
 from bangla_gpt_api.nctb.chunking import chunk_pages
-from bangla_gpt_api.nctb.corpus import content_hash, cross_source_duplicates, record_cross_source_report
+from bangla_gpt_api.nctb.corpus import (
+    content_hash,
+    cross_source_duplicates,
+    record_cross_source_report,
+)
 from bangla_gpt_api.nctb.extract import PageText
 
 #: One long line (a page of running text) so the chunker flushes at the same
@@ -29,7 +33,9 @@ SHARED_PREAMBLE = "জাতীয় শিক্ষাক্রম ২০১�
 SUBJECT_BODY = "কোষ হলো জীবদেহের ক্ষুদ্রতম গঠনগত ও কার্যগত একক। " * 8
 
 
-def _write_source(root: Path, source_id: str, level: str, subject: str, pages: list[PageText]) -> int:
+def _write_source(
+    root: Path, source_id: str, level: str, subject: str, pages: list[PageText]
+) -> int:
     """Write the pipeline artifacts one source produces, return its chunks."""
     extracted = root / "extracted"
     normalized = root / "normalized"
@@ -67,9 +73,7 @@ def _two_sources_sharing_a_preamble(tmp_path: Path) -> Path:
     # and only then can the shared text actually collide in the index.
     body_a = PageText(2, SUBJECT_BODY + "উদ্ভিদের খাদ্য তৈরি " * 20)
     body_b = PageText(2, SUBJECT_BODY + "তড়িৎ প্রবাহ ও রোধ " * 20)
-    _write_source(
-        tmp_path, "src-a", "secondary", "বিজ্ঞান শাখার বিষয়সমূহ", [preamble, body_a]
-    )
+    _write_source(tmp_path, "src-a", "secondary", "বিজ্ঞান শাখার বিষয়সমূহ", [preamble, body_a])
     _write_source(tmp_path, "src-b", "secondary", "বাংলা", [preamble, body_b])
     return tmp_path
 
@@ -82,7 +86,9 @@ class TestLoaderDedupe:
     def test_dedupe_drops_cross_source_repeats_per_class(self, tmp_path: Path) -> None:
         root = _two_sources_sharing_a_preamble(tmp_path)
         deduped = load_nctb_corpus(
-            root / "normalized", quality_report_path=root / "quality_report.json", verify_manifest=False
+            root / "normalized",
+            quality_report_path=root / "quality_report.json",
+            verify_manifest=False,
         )
         raw = load_nctb_corpus(
             root / "normalized",
@@ -97,7 +103,9 @@ class TestLoaderDedupe:
     def test_no_two_indexed_chunks_share_text_and_class(self, tmp_path: Path) -> None:
         root = _two_sources_sharing_a_preamble(tmp_path)
         chunks = load_nctb_corpus(
-            root / "normalized", quality_report_path=root / "quality_report.json", verify_manifest=False
+            root / "normalized",
+            quality_report_path=root / "quality_report.json",
+            verify_manifest=False,
         )
         keys = _index_keys(chunks)
         assert len(set(keys)) == len(keys) == len(chunks)
@@ -108,7 +116,9 @@ class TestLoaderDedupe:
     def test_dedupe_keeps_rank_order_of_surviving_chunks(self, tmp_path: Path) -> None:
         root = _two_sources_sharing_a_preamble(tmp_path)
         chunks = load_nctb_corpus(
-            root / "normalized", quality_report_path=root / "quality_report.json", verify_manifest=False
+            root / "normalized",
+            quality_report_path=root / "quality_report.json",
+            verify_manifest=False,
         )
         ids = [chunk.id for chunk in chunks]
         assert len(ids) == len(set(ids))
@@ -118,7 +128,9 @@ class TestCrossSourceReport:
     def test_report_counts_cross_source_duplicates(self, tmp_path: Path) -> None:
         root = _two_sources_sharing_a_preamble(tmp_path)
         summary, per_source = cross_source_duplicates(root / "normalized")
-        assert summary["total_chunks"] == per_source["src-a"]["chunks"] + per_source["src-b"]["chunks"]
+        assert (
+            summary["total_chunks"] == per_source["src-a"]["chunks"] + per_source["src-b"]["chunks"]
+        )
         assert summary["cross_source_texts"] >= 1
         assert summary["cross_source_duplicate_chunks"] >= 1
         assert summary["duplicate_chunks"] == summary["total_chunks"] - summary["unique_texts"]
@@ -133,6 +145,29 @@ class TestCrossSourceReport:
         assert summary["cross_source_duplicate_chunks"] >= 1
         # per-source honesty: the field the old report left at zero
         assert report["src-a"]["shared_text_chunks_with_other_sources"] >= 1
+
+    def test_rows_carry_the_other_sources_of_a_shared_text(self, tmp_path: Path) -> None:
+        """The stamp is what preserves attribution once the index dedupes."""
+        root = _two_sources_sharing_a_preamble(tmp_path)
+        record_cross_source_report(root / "quality_report.json", root / "normalized")
+        rows = [
+            json.loads(line)
+            for line in (root / "normalized" / "src-a.chunks.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+            if line.strip()
+        ]
+        shared = [row for row in rows if row.get("shared_sources")]
+        assert shared, "the reprinted preamble must name its other source"
+        assert all(row["shared_sources"] == ["src-b"] for row in shared)
+        chunks = load_nctb_corpus(
+            root / "normalized",
+            quality_report_path=root / "quality_report.json",
+            verify_manifest=False,
+        )
+        assert len({(content_hash(chunk.text), chunk.meta.class_level) for chunk in chunks}) == len(
+            chunks
+        )
 
     def test_clean_corpus_reports_no_cross_source_duplicates(self, tmp_path: Path) -> None:
         _write_source(tmp_path, "only", "secondary", "বাংলা", [PageText(1, SUBJECT_BODY * 3)])

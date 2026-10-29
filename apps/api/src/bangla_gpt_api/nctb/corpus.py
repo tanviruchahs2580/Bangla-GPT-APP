@@ -197,8 +197,47 @@ def cross_source_duplicates(
 
 
 def record_cross_source_report(report_path: Path, normalized_dir: Path) -> dict:
-    """Write the cross-source duplicate section into ``quality_report.json``."""
+    """Write the cross-source duplicate statistics and stamp the chunk rows.
+
+    Two artifacts carry the fact: ``_cross_source`` in the quality report (what
+    was duplicated, per source and as a whole) and ``shared_sources`` on every
+    chunk row whose text another source also carries. The stamp is what keeps
+    the *attribution* intact when the index build collapses the duplicates into
+    one entry per class level: the surviving row can name every book the
+    passage is printed in, and the loader logs the merged list.
+    """
     summary, per_source = cross_source_duplicates(normalized_dir)
+    for path in sorted(normalized_dir.glob("*.chunks.jsonl")):
+        source_id = path.name.removesuffix(".chunks.jsonl")
+        rows = [
+            json.loads(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        digests = [content_hash(row["text"]) for row in rows]
+        # Which other sources carry each digest: read the sibling chunk files,
+        # not just this one, because that is exactly what the per-file report
+        # could not see.
+        other_sources_by_digest: dict[str, set[str]] = {}
+        for other in sorted(normalized_dir.glob("*.chunks.jsonl")):
+            other_id = other.name.removesuffix(".chunks.jsonl")
+            if other_id == source_id:
+                continue
+            for line in other.read_text(encoding="utf-8").splitlines():
+                if line.strip():
+                    digest = content_hash(json.loads(line)["text"])
+                    other_sources_by_digest.setdefault(digest, set()).add(other_id)
+        changed = False
+        for row, digest in zip(rows, digests, strict=True):
+            shared = sorted(other_sources_by_digest.get(digest, set()))
+            if shared and row.get("shared_sources") != shared:
+                row["shared_sources"] = shared
+                changed = True
+        if changed:
+            # newline="\n": chunk files are hashed into the manifest.
+            with path.open("w", encoding="utf-8", newline="\n") as handle:
+                for row in rows:
+                    handle.write(json.dumps(row, ensure_ascii=False) + "\n")
     reports = json.loads(report_path.read_text(encoding="utf-8")) if report_path.exists() else {}
     for source_id, stats in per_source.items():
         if source_id in reports:
