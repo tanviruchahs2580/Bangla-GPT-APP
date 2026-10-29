@@ -11,6 +11,11 @@ superseded" line: nothing here describes current state, and no file here may
 be cited as a source of truth. `scripts/check_archive_banners.py` re-checks
 that property on every run, so a file cannot lose its banner silently.
 
+**Ratings and gate claims are self-assessed.** The "x/10" tables and
+"CI green" lines in some reports were written by the session that produced
+them, not by `score.py` against the findings register; where a claim carries
+no evidence id, treat it as an assertion, not a measurement.
+
 Current sources of truth live one level up (living docs):
 
 - `../architecture.md` — verified decisions + pending items
