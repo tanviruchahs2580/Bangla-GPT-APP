@@ -55,8 +55,14 @@ _SENSITIVE_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\b(?:sk|ghp|glpat|xox[abps])-[A-Za-z0-9_-]{16,}"),  # vendor tokens
     re.compile(r"\bBearer\s+[A-Za-z0-9._~+/-]{12,}=*"),  # Authorization header
     re.compile(r"\+?[0-9]{10,15}"),  # phone numbers (guardian PII)
-    re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.]{2,}\b"),  # email addresses
 )
+
+# Email addresses (guardian PII). Kept out of the tuple above because it is
+# the only pattern that needs a precondition and a bounded shape: the previous
+# unbounded ``\b[\w.+-]+@[\w-]+\.[\w.]{2,}\b`` re-scanned a long word run from
+# every boundary and took 10 s on a 20 000-char adversarial log field (F-076).
+# Every quantifier is bounded at the RFC 5321 limits, so the scan is linear.
+_EMAIL_VALUE_PATTERN = re.compile(r"\b[\w.+-]{1,64}@[\w-]{1,255}(?:\.[\w-]{1,255}){1,8}\b")
 
 #: Keys whose values are long opaque blobs (tokens) regardless of the word match.
 _OPAQUE_KEY_RE = re.compile(r"(?i)(?:^|_)(?:bearer|auth_header|raw|raw_detail)(?:$|_)")
@@ -65,6 +71,18 @@ _OPAQUE_KEY_RE = re.compile(r"(?i)(?:^|_)(?:bearer|auth_header|raw|raw_detail)(?
 def is_sensitive_key(key: str) -> bool:
     """True when a structured-log field name denotes a secret."""
     return bool(_SENSITIVE_KEY_RE.search(key) or _OPAQUE_KEY_RE.search(key))
+
+
+def _value_looks_secret(value: str) -> bool:
+    """True when a string value matches a credential/PII shape.
+
+    The email check runs only when the value contains an '@', so the common
+    log field (an id, a name, an event) pays one subclass check per pattern
+    instead of a quadratic scan (F-076).
+    """
+    if any(pattern.search(value) for pattern in _SENSITIVE_VALUE_PATTERNS):
+        return True
+    return "@" in value and _EMAIL_VALUE_PATTERN.search(value) is not None
 
 
 def redact_value(value: Any, *, _depth: int = 0, _is_identifier: bool = False) -> Any:
@@ -96,12 +114,10 @@ def redact_value(value: Any, *, _depth: int = 0, _is_identifier: bool = False) -
     if isinstance(value, str):
         # An identifier field is exempt from the value-shape rules, but never
         # from a rule that says "this is definitely a credential".
-        if _is_identifier and not any(p.search(value) for p in _SENSITIVE_VALUE_PATTERNS):
+        secret_shape = _value_looks_secret(value)
+        if _is_identifier and not secret_shape:
             return value
-        for pattern in _SENSITIVE_VALUE_PATTERNS:
-            if pattern.search(value):
-                return REDACTED
-        return value
+        return REDACTED if secret_shape else value
     if isinstance(value, (int, float)):
         return value
     # Any other object could carry a __repr__ that exposes internals, and a
