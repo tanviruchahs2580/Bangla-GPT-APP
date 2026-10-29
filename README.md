@@ -85,9 +85,9 @@ Prerequisites:
   pins 24 for nvm users).
 - **Docker**, only for the Docker section below.
 
-Both paths below run in CI: the Linux commands in the `Lint & test` job (same
-two-step install), the PowerShell commands in the `Quick start (Windows
-PowerShell)` job.
+CI runs both install two-steps: the Linux form in the `Lint & test` job, the
+PowerShell form (venv, install, dev server, web build) in the `Quick start
+(Windows PowerShell)` job.
 
 ```powershell
 cd apps/api
