@@ -333,6 +333,17 @@ def _lock_remaining_seconds(user: User, now: datetime) -> int | None:
     return max(1, int(remaining))
 
 
+def _hashed_email(email: str) -> str:
+    """Stable pseudonym for a login-failure log line (F-056).
+
+    The raw address is PII and the repo's redaction conventions strip it from
+    logs anyway; a truncated SHA-256 lets an operator confirm "this was the
+    account I think it was" by hashing a candidate, without the log sink ever
+    holding the address itself.
+    """
+    return hashlib.sha256(email.strip().lower().encode()).hexdigest()[:16]
+
+
 def _record_failed_login(db: DbSession, user_id: int, now: datetime) -> int:
     """Count one failed sign-in in the database and arm the progressive lock.
 
@@ -393,6 +404,16 @@ def login(app_ctx: Ctx, response: Response, payload: LoginRequest, db: DbSession
     # way, against a fixed decoy hash.
     if user is None:
         _burn_password_check(payload.password)
+        # F-056/SEC-15: a failed sign-in against an unknown address wrote no
+        # trace at all, so credential stuffing was invisible to operators.
+        # Ids/counts/hashes only -- the raw email never reaches the log sink.
+        json_log(
+            logger,
+            logging.WARNING,
+            "login_failed",
+            reason="unknown_email",
+            email_sha256=_hashed_email(email),
+        )
         raise HTTPException(
             status_code=401,
             detail={"code": "bad_credentials", "message": "Incorrect email or password"},
@@ -405,6 +426,13 @@ def login(app_ctx: Ctx, response: Response, payload: LoginRequest, db: DbSession
     # response time of a locked account in the same band as a normal login.
     lock_remaining = _lock_remaining_seconds(user, now)
     if lock_remaining is not None:
+        json_log(
+            logger,
+            logging.WARNING,
+            "login_refused_locked",
+            user_id=user.id,
+            retry_after_seconds=lock_remaining,
+        )
         raise HTTPException(
             status_code=429,
             detail={
@@ -419,7 +447,27 @@ def login(app_ctx: Ctx, response: Response, payload: LoginRequest, db: DbSession
         # progressive lock. The response body stays exactly the same as for
         # an unknown address (and as before this change). The count itself is
         # atomic in the database — see ``_record_failed_login``.
-        _record_failed_login(db, user.id, now)
+        failed_count = _record_failed_login(db, user.id, now)
+        # F-056/SEC-15: the DB counter is reset to 0 by the next successful
+        # sign-in, so without a log line a brute force against one account
+        # left nothing greppable for detection or incident review.
+        json_log(
+            logger,
+            logging.WARNING,
+            "login_failed",
+            reason="bad_credentials",
+            user_id=user.id,
+            failed_count=failed_count,
+        )
+        if failed_count >= _LOGIN_LOCKOUT_THRESHOLD:
+            json_log(
+                logger,
+                logging.WARNING,
+                "account_locked",
+                user_id=user.id,
+                failed_count=failed_count,
+                lock_seconds=_lockout_seconds(failed_count),
+            )
         raise HTTPException(
             status_code=401,
             detail={"code": "bad_credentials", "message": "Incorrect email or password"},
