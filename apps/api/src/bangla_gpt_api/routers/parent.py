@@ -7,10 +7,10 @@ Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 import logging
 import secrets
 from collections import defaultdict
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -21,7 +21,6 @@ from bangla_gpt_api.db.models import (
     ChapterProgress,
     ChatMessage,
     Conversation,
-    DailyActivity,
     Parent,
     ParentInvite,
     ParentStudentLink,
@@ -32,9 +31,7 @@ from bangla_gpt_api.db.models import (
 from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded, message
 from bangla_gpt_api.schemas import (
     EXPLANATION_STYLES,
-    ActivityDay,
     ActivitySummary,
-    ChapterStat,
     MemoryFactsOut,
     ParentInviteLinkRequest,
     ParentLinkRequest,
@@ -45,15 +42,15 @@ from bangla_gpt_api.schemas import (
     StudentProgress,
     StudentResponse,
 )
+from bangla_gpt_api.security import write_audit
 from bangla_gpt_api.services import (
     atrisk,
     parent_digest,
     weakness,
 )
 from bangla_gpt_api.services.activity import (
-    dhaka_date,
-    heatmap_days,
-    streak_days,
+    activity_summary,
+    graded_attempt_stats,
 )
 
 from .common import (
@@ -185,8 +182,59 @@ def create_parent_invite(app_ctx: Ctx, db: DbSession, user: CurrentUser) -> dict
             expires_at=now + timedelta(minutes=app_ctx.settings.invite_ttl_minutes),
         )
     )
+    # F-145: issuing a guardian link code is the act that can attach an adult
+    # to a child's record, so the trail must show who issued one and when.
+    # The code itself is never written anywhere (only its hash is stored).
+    write_audit(
+        db,
+        action="parent_link",
+        actor_user_id=user.id,
+        actor_role=user.role,
+        target=f"student:{student.id}",
+        detail={"phase": "invite_created", "ttl_minutes": app_ctx.settings.invite_ttl_minutes},
+    )
     db.commit()
     return {"code": code, "expires_in_minutes": app_ctx.settings.invite_ttl_minutes}
+
+
+@router.delete("/students/me/invite-code/{invite_id}", status_code=204)
+def revoke_parent_invite(invite_id: int, db: DbSession, user: CurrentUser) -> Response:
+    """Revoke a live guardian invite code (F-145).
+
+    A leaked code used to stay redeemable for its full ``invite_ttl_minutes``
+    because only expiry or redemption could invalidate it, and no endpoint
+    existed to kill it deliberately. Revocation stamps ``used_at`` -- the
+    same single-use marker redemption writes -- so the code dies immediately
+    while the row survives as evidence that it existed and was killed rather
+    than redeemed.
+
+    Only the student who issued it may revoke it, and the answer is the same
+    404 whether the invite never existed or belongs to someone else, so the
+    endpoint cannot be used to probe invite ids. Idempotent: revoking an
+    already-dead code is a 204 (the desired end state already holds).
+    """
+    if user.role != "student":
+        raise HTTPException(
+            status_code=403, detail={"code": "students_only", "message": "Students only"}
+        )
+    student = _student_profile(db, user)
+    invite = db.get(ParentInvite, invite_id)
+    if invite is None or invite.student_id != student.id:
+        raise HTTPException(
+            status_code=404, detail={"code": "invite_not_found", "message": "Invite not found"}
+        )
+    if invite.used_at is None:
+        invite.used_at = datetime.now(UTC).replace(tzinfo=None)
+        write_audit(
+            db,
+            action="parent_link",
+            actor_user_id=user.id,
+            actor_role=user.role,
+            target=f"student:{student.id}",
+            detail={"phase": "invite_revoked", "invite_id": invite.id},
+        )
+        db.commit()
+    return Response(status_code=204)
 
 
 # --- student learning preferences + memory --------------------------
@@ -383,6 +431,16 @@ def link_via_invite(payload: ParentInviteLinkRequest, db: DbSession, parent: Par
         )
     invite.used_at = now
     invite.used_by_parent_id = parent_profile.id
+    # F-145: the redemption side of the guardian link is the event an
+    # incident review needs (who attached themselves to which child, when).
+    write_audit(
+        db,
+        action="parent_link",
+        actor_user_id=parent.id,
+        actor_role=parent.role,
+        target=f"student:{invite.student_id}",
+        detail={"phase": "linked", "invite_id": invite.id},
+    )
     try:
         db.commit()
     except IntegrityError as exc:
@@ -449,34 +507,8 @@ def parent_child_progress(student_id: int, db: DbSession, parent: ParentUser) ->
         db.execute(select(QuizAttempt).where(QuizAttempt.student_id == student_id)).scalars().all()
     )
     graded = [a for a in attempts if a.status == "graded"]
-    stats: dict[str, list[int]] = defaultdict(lambda: [0, 0])
-    if graded:
-        rows = (
-            db.execute(select(AnswerLog).where(AnswerLog.attempt_id.in_([a.id for a in graded])))
-            .scalars()
-            .all()
-        )
-        for row in rows:
-            stats[row.chapter][0] += 1
-            stats[row.chapter][1] += row.is_correct
-    by_chapter = sorted(
-        (
-            ChapterStat(
-                chapter=chapter,
-                asked=asked,
-                correct=correct_count,
-                accuracy=round(100.0 * correct_count / asked, 2),
-            )
-            for chapter, (asked, correct_count) in stats.items()
-        ),
-        key=lambda s: s.accuracy,
-    )
+    by_chapter, avg_score = graded_attempt_stats(db, graded)
     weak_chapters = weakness.weak_names(db, student.id)
-    avg_score = (
-        round(sum(a.score_pct for a in graded if a.score_pct is not None) / len(graded), 2)
-        if graded
-        else None
-    )
     return StudentProgress(
         student=StudentResponse(id=student.id, name=student.name, class_level=student.class_level),
         attempts_graded=len(graded),
@@ -521,25 +553,7 @@ def parent_child_activity(
     """the SAME activity summary the student sees on their own
     /students/{id}/activity, for one linked child (streak + Dhaka heatmap)."""
     _linked_child(db, parent, student_id)
-    today = dhaka_date(datetime.now(UTC))
-    rows = (
-        db.execute(
-            select(DailyActivity)
-            .where(DailyActivity.student_id == student_id)
-            .order_by(DailyActivity.date)
-        )
-        .scalars()
-        .all()
-    )
-    window = heatmap_days(list(rows), today, days)
-    anchor = date.fromisoformat(today)
-    date_axis = [(anchor - timedelta(days=i)).isoformat() for i in range(days - 1, -1, -1)]
-    active = {r.date for r in rows if (r.questions or r.quizzes or r.minutes)}
-    return ActivitySummary(
-        streak=streak_days(active, today),
-        today=today,
-        days=[ActivityDay(date=d, **c) for d, c in zip(date_axis, window, strict=True)],
-    )
+    return activity_summary(db, student_id, days)
 
 
 def _window_report(db: Session, student: Student, period: str) -> ParentReportOut:

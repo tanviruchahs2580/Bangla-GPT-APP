@@ -5,8 +5,7 @@ Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 """
 
 import logging
-from collections import defaultdict
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Annotated, Any, cast
 from urllib.parse import quote
 
@@ -22,7 +21,6 @@ from bangla_gpt_api.db.models import (
     ChapterProgress,
     ClassStudent,
     ClassTeacher,
-    DailyActivity,
     QuizAttempt,
     RevisionItem,
     Student,
@@ -33,11 +31,9 @@ from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded, 
 from bangla_gpt_api.schemas import (
     SMALL_PAGE_DEFAULT_LIMIT,
     SMALL_PAGE_MAX_LIMIT,
-    ActivityDay,
     ActivitySummary,
     ChapterProgressIn,
     ChapterProgressOut,
-    ChapterStat,
     ContinueLearning,
     DashboardSummary,
     KgGapOut,
@@ -68,10 +64,11 @@ from bangla_gpt_api.services import (
     weakness,
 )
 from bangla_gpt_api.services.activity import (
+    activity_summary,
     dhaka_date,
-    heatmap_days,
+    graded_attempt_stats,
     record_activity,
-    streak_days,
+    sorted_chapter_stats,
 )
 from bangla_gpt_api.services.learn import (
     ChapterContentOut,
@@ -431,18 +428,7 @@ def get_progress(student_id: int, db: DbSession, user: CurrentUser) -> StudentPr
         .group_by(AnswerLog.chapter)
     ).all()
     stats: dict[str, list[int]] = {ch: [asked, int(correct or 0)] for ch, asked, correct in g_rows}
-    by_chapter = sorted(
-        (
-            ChapterStat(
-                chapter=chapter,
-                asked=asked,
-                correct=correct_count,
-                accuracy=round(100.0 * correct_count / asked, 2),
-            )
-            for chapter, (asked, correct_count) in stats.items()
-        ),
-        key=lambda s: s.accuracy,
-    )
+    by_chapter = sorted_chapter_stats(stats)
     weak_chapters = weakness.weak_names(db, student.id)
 
     return StudentProgress(
@@ -463,25 +449,7 @@ def get_activity(
 ) -> ActivitySummary:
     """streak + GitHub-style daily heatmap (Asia/Dhaka days)."""
     authorize_student_access(db, student_id, user)
-    today = dhaka_date(datetime.now(UTC))
-    rows = (
-        db.execute(
-            select(DailyActivity)
-            .where(DailyActivity.student_id == student_id)
-            .order_by(DailyActivity.date)
-        )
-        .scalars()
-        .all()
-    )
-    window = heatmap_days(list(rows), today, days)
-    anchor = date.fromisoformat(today)
-    date_axis = [(anchor - timedelta(days=i)).isoformat() for i in range(days - 1, -1, -1)]
-    active = {r.date for r in rows if (r.questions or r.quizzes or r.minutes)}
-    return ActivitySummary(
-        streak=streak_days(active, today),
-        today=today,
-        days=[ActivityDay(date=d, **c) for d, c in zip(date_axis, window, strict=True)],
-    )
+    return activity_summary(db, student_id, days)
 
 
 # ------------------------------------------------------------------
@@ -744,29 +712,8 @@ def _build_dashboard_summary(app_ctx: Ctx, db: Session, user: User, today: str) 
         db.execute(select(QuizAttempt).where(QuizAttempt.student_id == student.id)).scalars().all()
     )
     graded = [a for a in attempts if a.status == "graded"]
-    stats: dict[str, list[int]] = defaultdict(lambda: [0, 0])
-    if graded:
-        rows = (
-            db.execute(select(AnswerLog).where(AnswerLog.attempt_id.in_([a.id for a in graded])))
-            .scalars()
-            .all()
-        )
-        for r in rows:
-            stats[r.chapter][0] += 1
-            stats[r.chapter][1] += r.is_correct
-    by_chapter = sorted(
-        (
-            ChapterStat(chapter=k, asked=v[0], correct=v[1], accuracy=round(100.0 * v[1] / v[0], 2))
-            for k, v in stats.items()
-        ),
-        key=lambda s: s.accuracy,
-    )
+    by_chapter, avg_score = graded_attempt_stats(db, graded)
     weak = weakness.weak_names(db, student.id)
-    avg_score = (
-        round(sum(a.score_pct for a in graded if a.score_pct is not None) / len(graded), 2)
-        if graded
-        else None
-    )
     progress = StudentProgress(
         student=StudentResponse(id=student.id, name=student.name, class_level=student.class_level),
         attempts_graded=len(graded),
