@@ -147,8 +147,9 @@ select = [
 #                     every call site and test to satisfy a style rule.
 #   N813            - the one camelcase import is a deliberate alias for a
 #                     lazily imported class, so the local name is lowercase.
-#   T201 (cli)     - `src/bangla_gpt_api/evaluation/cli.py` is a command-line
-#                     tool; printing is its entire output contract.
+#   T201 (cli)     - `src/bangla_gpt_api/evaluation/cli.py` and
+#                     `src/bangla_gpt_api/evaluation/fairness_probes.py` are
+#                     command-line tools; printing is their output contract.
 #   B011 (tests)    - test_phase1_exploits.py asserts that `assert False` and
 #                     friends are caught by static analysis. Removing the
 #                     literals would delete the test's subject matter.
@@ -197,6 +198,7 @@ ignore = [
 #                     are written
 [tool.ruff.lint.per-file-ignores]
 "src/bangla_gpt_api/evaluation/cli.py" = ["T201"]
+"src/bangla_gpt_api/evaluation/fairness_probes.py" = ["T201"]
 "scripts/*" = ["T201", "S101", "S603", "S311", "S607", "S404"]
 "tests/test_phase1_exploits.py" = ["B011"]
 "tests/*" = [
