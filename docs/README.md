@@ -18,7 +18,7 @@ next is written.
 | [runbook.md](runbook.md) | Operations runbook |
 | [ci.md](ci.md) | What every workflow runs, what blocks a merge, and how to reproduce it locally |
 | [route_baseline.md](route_baseline.md) | Route inventory regenerated 2026-10-29 from the app's own schema (142 method+path routes); regenerate the same way when routes change |
-| [qa/QA_REPORT_2026-10-27.md](qa/QA_REPORT_2026-10-27.md) | Current QA record |
+| [qa/QA_REPORT_2026-10-29.md](qa/QA_REPORT_2026-10-29.md) | Current QA record |
 
 ## AI / data
 

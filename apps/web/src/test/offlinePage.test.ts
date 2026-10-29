@@ -17,11 +17,15 @@ const sw = readFileSync(resolve(PUBLIC, "sw.js"), "utf8");
 
 describe("offline fallback page under script-src 'self' (F-022)", () => {
   it("ships no inline script", () => {
-    const scripts = [...html.matchAll(/<script\b[^>]*>/g)].map((m) => m[0]);
-    expect(scripts.length).toBeGreaterThan(0);
-    for (const tag of scripts) {
+    // Scanned case-insensitively over the raw tags rather than with a filtered
+    // regex: CodeQL's js/bad-tag-filter flags case-sensitive tag filters
+    // because `<SCRIPT>` would slip past them, and a tag the filter missed is
+    // exactly the CSP violation this test exists to catch.
+    const tags = [...html.matchAll(/<script\b[^>]*>/gi)].map((m) => m[0]);
+    expect(tags.length).toBeGreaterThan(0);
+    for (const tag of tags) {
       expect(tag, `inline script would be CSP-blocked: ${tag}`).toMatch(
-        /\ssrc="/,
+        /\ssrc\s*=\s*"/i,
       );
     }
   });
