@@ -3,6 +3,21 @@
 The JSONL produced by ``nctb.corpus`` is converted into
 ``curriculum.models.Chunk`` objects consumable by BM25Index/TutorService.
 
+Two corpus-level properties are enforced here, because this is the only place
+that sees every source at once:
+
+* **Cross-source dedupe** (F-012): the per-book build dedupe cannot see a
+  passage reprinted across books, so the same curriculum preamble used to be
+  indexed once per book and then multiplied by the class expansion. Chunks
+  are deduplicated on (normalized-text hash, class level) -- the same text is
+  still served to each class that needs it -- and the surviving chunk's row
+  keeps the other sources in ``shared_sources`` (build artifact); the merged
+  list is logged here.
+* **Manifest verification** (F-129): the tracked ``corpus_manifest.json``
+  pins the tool fingerprint and every chunk file's digest. A served corpus
+  that does not match is a reconstructed corpus or a stale mount; it is
+  logged as an error, and ``scripts/check_corpus_manifest.py`` fails on it.
+
 Class-level attribution is DERIVED, never invented (F-049/RAG-06). For every
 source the loader resolves one of three bases, in order:
 
@@ -29,6 +44,10 @@ import logging
 from pathlib import Path
 
 from bangla_gpt_api.curriculum.models import Chunk, CurriculumMeta
+from bangla_gpt_api.logging_config import json_log
+from bangla_gpt_api.nctb.corpus import content_hash
+from bangla_gpt_api.nctb.manifest import verify_corpus_manifest
+from bangla_gpt_api.retrieval.index_manifest import chunk_files, corpus_digest
 from bangla_gpt_api.services.safety import strip_injections
 
 logger = logging.getLogger(__name__)
@@ -146,6 +165,8 @@ def load_nctb_corpus(
     multi_class_fallback: bool = True,
     version: str = "nctb-v1",
     pages_dir: Path | None = None,
+    dedupe: bool = True,
+    verify_manifest: bool = True,
 ) -> list[Chunk]:
     """Convert pipeline chunk files into index-ready Chunks.
 
@@ -153,6 +174,10 @@ def load_nctb_corpus(
     ``chunks_dir`` when it exists) lets the loader read a source's cover page
     for its book-level class statement, so a build that predates the
     ``detected_classes`` stamp still gets truthful class attribution.
+
+    ``dedupe`` drops index entries that repeat a normalized text already
+    indexed for the same class level (F-012); ``verify_manifest`` compares
+    the corpus on disk with its tracked manifest and logs the verdict.
     """
     reports: dict[str, dict] = {}
     if quality_report_path is not None and quality_report_path.exists():
@@ -165,6 +190,11 @@ def load_nctb_corpus(
     injection_drops_total = 0
     refused_sources: list[str] = []
     level_derived_sources: list[str] = []
+    #: (normalized-text hash, class level) -> index into ``chunks``
+    seen_chunks: dict[tuple[str, int], int] = {}
+    #: (normalized-text hash, class level) -> every source that carries it
+    chunk_sources: dict[tuple[str, int], list[str]] = {}
+    duplicate_index_chunks = 0
     for path in sorted(chunks_dir.glob("*.chunks.jsonl")):
         source_id = path.name.removesuffix(".chunks.jsonl")
         report = reports.get(source_id, {})
@@ -217,7 +247,20 @@ def load_nctb_corpus(
             injection_drops_total += injection_drops
             if not text:
                 continue
+            row_sources = [source_id]
+            for other in data.get("shared_sources") or []:
+                if isinstance(other, str) and other not in row_sources:
+                    row_sources.append(other)
+            digest = content_hash(text)
             for class_level in targets:
+                key = (digest, class_level)
+                if dedupe and key in seen_chunks:
+                    duplicate_index_chunks += 1
+                    known = chunk_sources[key]
+                    for other in row_sources:
+                        if other not in known:
+                            known.append(other)
+                    continue
                 chunks.append(
                     Chunk(
                         id=f"{data['chunk_id']}-c{class_level}",
@@ -230,6 +273,9 @@ def load_nctb_corpus(
                         ),
                     )
                 )
+                if dedupe:
+                    seen_chunks[key] = len(chunks) - 1
+                    chunk_sources[key] = list(row_sources)
     if refused_sources:
         # Never silent: a source with no class signal is not indexed at all,
         # so the served corpus's scope is visible in the boot log.
@@ -251,7 +297,58 @@ def load_nctb_corpus(
             "nctb_loader: dropped %d prompt-injection sentences at load time",
             injection_drops_total,
         )
+    if dedupe and duplicate_index_chunks:
+        shared_groups = sorted(sources for sources in chunk_sources.values() if len(sources) > 1)
+        json_log(
+            logger,
+            logging.INFO,
+            "nctb_corpus_dedupe",
+            duplicate_index_chunks=duplicate_index_chunks,
+            index_chunks=len(chunks),
+            merged_groups=len(shared_groups),
+            example_groups=shared_groups[:3],
+        )
+    _log_corpus_identity(chunks_dir, chunks, index_chunks=len(chunks), verify=verify_manifest)
     return chunks
+
+
+def _log_corpus_identity(
+    chunks_dir: Path, chunks: list[Chunk], *, index_chunks: int, verify: bool
+) -> None:
+    """Log which corpus build the served index holds, and verify it.
+
+    The digest is computed from the chunk files (name + content hash) plus the
+    index chunk count, so any deployment can compare its boot line against the
+    corpus manifest. A manifest that is absent is a warning (an untracked
+    corpus directory still has to serve); a manifest that disagrees is an
+    error naming every difference, and ``scripts/check_corpus_manifest.py``
+    turns the same verdict into a failing exit code for CI.
+    """
+    corpus_root = chunks_dir.parent
+    paths = chunk_files(corpus_root)
+    digest = corpus_digest(paths)
+    manifest: dict | None = None
+    problems: list[str] = []
+    if verify and paths:
+        manifest, problems = verify_corpus_manifest(corpus_root, index_chunks=index_chunks)
+    json_log(
+        logger,
+        logging.INFO,
+        "nctb_corpus_identity",
+        corpus_digest=digest,
+        index_chunks=index_chunks,
+        sources=sorted({chunk.meta.source for chunk in chunks}),
+        manifest_sha256=(manifest or {}).get("derived", {}).get("quality_report_sha256"),
+    )
+    if manifest is None and paths and verify:
+        logger.warning(
+            "nctb_loader: %s exists but carries no corpus manifest; the served "
+            "corpus cannot be traced to a build (run scripts/build_nctb_corpus.py)",
+            corpus_root,
+        )
+    elif problems:
+        for problem in problems:
+            logger.error("nctb_loader: corpus manifest mismatch: %s", problem)
 
 
 def attach_detected_classes(pages_json_dir: Path, chunks_dir: Path) -> dict[str, int | None]:
