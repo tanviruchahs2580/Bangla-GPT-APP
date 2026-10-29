@@ -6,6 +6,8 @@ logging before any dependency is constructed.
 
 import logging
 
+from bangla_gpt_api.logging_config import redact_value
+
 logger = logging.getLogger(__name__)
 
 
@@ -18,6 +20,21 @@ def configure_observability(log_level: str = "INFO") -> None:
     from bangla_gpt_api.logging_config import configure_logging
 
     configure_logging(log_level)
+
+
+def scrub_sentry_event(event: dict, hint: object = None) -> dict:
+    """Sentry ``before_send`` hook: run the log redactor over the event (F-043).
+
+    Nothing filtered error payloads on the way to a third-party service: an
+    exception message quoting a reset token, a guardian phone or a student
+    email left the deployment as-is. ``logging_config.redact_value`` already
+    knows the credential/PII field names and value shapes this codebase uses,
+    so the event goes through the SAME redactor rather than a second, drifting
+    copy. Unknown objects are replaced wholesale by the redactor, which also
+    keeps the payload JSON-safe for Sentry.
+    """
+    scrubbed = redact_value(event)
+    return scrubbed if isinstance(scrubbed, dict) else {}
 
 
 def configure_sentry(settings: object) -> None:
@@ -35,6 +52,7 @@ def configure_sentry(settings: object) -> None:
             dsn=dsn,
             environment=getattr(settings, "sentry_env", "development"),
             traces_sample_rate=0.1,
+            before_send=scrub_sentry_event,
         )
     except Exception:
         logger.warning("sentry_init_failed", extra={"op": "init"}, exc_info=True)
