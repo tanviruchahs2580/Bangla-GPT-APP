@@ -25,7 +25,9 @@ import json
 import random
 import sys
 import time
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from bangla_gpt_api.data.nctb_loader import load_nctb_corpus
 
@@ -35,8 +37,12 @@ def mean(values: list[float]) -> float:
     return round(sum(values) / len(values), 4) if values else 0.0
 
 
-def mrr(ranks: list[int]) -> float:
-    """Mean reciprocal rank; rank 0 means "not in top-k" and contributes 0."""
+def mrr(ranks: Sequence[float]) -> float:
+    """Mean reciprocal rank; rank 0 means "not in top-k" and contributes 0.
+
+    ``ranks`` are 1-based positions (integer-valued, hence accepted as
+    numbers), the same contract family A and family B feed in.
+    """
     return round(sum(1.0 / rank for rank in ranks if rank > 0) / len(ranks), 4) if ranks else 0.0
 
 
@@ -130,7 +136,10 @@ def main() -> int:
             rank = _rank_of(hits, wanted)
             stats_b[name]["recall_at_1"].append(1.0 if rank == 1 else 0.0)
             stats_b[name]["recall_at_5"].append(1.0 if 0 < rank <= 5 else 0.0)
-            stats_b[name]["mrr"].append(1.0 / rank if rank > 0 else 0.0)
+            # The RANK feeds mrr() exactly like family A above: 1.0/rank here
+            # would be reciprocated a second time (measured 1.275 > 1, which
+            # is impossible for a mean reciprocal rank).
+            stats_b[name]["mrr"].append(rank)
 
     # --- Family C: adversarial / out-of-corpus refusals ---------------------
     from bangla_gpt_api.providers.mock import MockLLMProvider
@@ -166,7 +175,7 @@ def main() -> int:
         latencies_served[int(len(latencies_served) * 0.95) - 1] * 1000 if latencies_served else None
     )
 
-    report = {
+    report: dict[str, Any] = {
         "corpus_chunks": len(chunks),
         "index_build_seconds": build_seconds,
         "served_index": "hybrid",
@@ -180,6 +189,19 @@ def main() -> int:
             "family_B_chapter_title": block(stats_b["lexical"]),
         },
     }
+    # Guard (F-048): every reported rate/metric is a fraction by construction;
+    # a value above 1 means the metric was double-inverted (family B carried
+    # exactly that bug) or the block helper was mis-wired.
+    for family_key in ("family_A_self_sentence", "family_B_chapter_title"):
+        for metric_key, value in report[family_key].items():
+            if metric_key == "n":
+                continue
+            assert 0.0 <= float(value) <= 1.0, (family_key, metric_key, value)
+    for variant in report["baseline_lexical"].values():
+        for metric_key, value in variant.items():
+            if metric_key == "n":
+                continue
+            assert 0.0 <= float(value) <= 1.0, (metric_key, value)
     out = corpus_root / "retrieval_eval.json"
     # trailing newline: the pre-commit end-of-file-fixer requires it, and a
     # Windows text-mode write will not add one on its own.
