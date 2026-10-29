@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """bn_scan.py - read-only Bangla text hygiene scanner.
 
 Copied verbatim from Appendix C.3 of the audit prompt. Lives in the sandbox
