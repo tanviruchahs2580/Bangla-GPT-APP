@@ -17,6 +17,18 @@
   --brand-solid: #166534;
   --brand-solid-strong: #14532d;
   --brand-soft-2: #bbf7d0;
+  /* Accent fills that carry white text or white icons. --teal/--warn/--ai
+     are tuned for text ON dark surfaces and measure 1.7–3.2:1 under a white
+     label, so fills keep these dark-staying values in both themes (A11Y-04).
+     The teal pair is one step darker than the accent so it still clears 4.5:1
+     under .btn-teal's 14% top highlight. */
+  --teal-solid: #075985;
+  --teal-solid-strong: #0c4a6e;
+  --warn-solid: #b45309;
+  --warn-solid-strong: #92400e;
+  --ai-solid: #4f46e5;
+  --ai-solid-strong: #3730a3;
+  --danger-solid: #c2183a;
 
   /* Brand gradients + glow (WP-01: hue-correct, tokenized) */
   --grad-brand: linear-gradient(135deg, var(--brand), var(--brand-strong));
@@ -27,7 +39,23 @@
     var(--brand-strong) 100%
   );
   --grad-ai: linear-gradient(135deg, #6366f1, var(--ai));
-  --grad-cta: linear-gradient(135deg, var(--brand), var(--fresh));
+  /* Gradient twin of --brand-solid, for every surface that carries a white
+     label or white glyphs (.btn-primary, .chip.active, quick tiles, the user
+     bubble). The --brand/--fresh accent ends measured 2.28:1 (light) and
+     1.74:1 (dark) under white, and .btn-primary's 14% top highlight lifts the
+     light end further, so these fills stay on the solid greens in BOTH
+     themes (A11Y-04). Decorative bars keep --grad-brand. */
+  --grad-brand-solid: linear-gradient(
+    135deg,
+    var(--brand-solid),
+    var(--brand-solid-strong)
+  );
+  --grad-cta: var(--grad-brand-solid);
+  --grad-teal: linear-gradient(
+    135deg,
+    var(--teal-solid),
+    var(--teal-solid-strong)
+  );
   --brand-glow: 0 0 24px rgba(22, 101, 52, 0.18);
   --shadow-brand: 0 4px 14px rgba(22, 101, 52, 0.28);
   --shadow-brand-lg: 0 6px 20px rgba(20, 83, 45, 0.34);
@@ -142,10 +170,11 @@
   --brand-soft-2: #1a4027;
   /* Solid button backgrounds only. The dark accent green is too light for
      white label text (1.74:1 — the axe sweep failed every .primary in dark
-     mode); #15803d under white text is 5.02:1. Accent/text usages of
-     --brand are unchanged. */
-  --brand-solid: #15803d;
-  --brand-solid-strong: #166534;
+     mode); these darker greens keep every white-label fill at 5.1:1 or
+     better, including under .btn-primary's top highlight (A11Y-04). Accent
+     and text usages of --brand are unchanged. */
+  --brand-solid: #166534;
+  --brand-solid-strong: #14532d;
 
   --teal: #38bdf8;
   --teal-strong: #7dd3fc;
@@ -184,7 +213,9 @@
   --grad-brand: linear-gradient(135deg, #22c55e, #4ade80);
   --grad-hero: linear-gradient(135deg, #0b1f12 0%, #14321f 60%, #1a4027 100%);
   --grad-ai: linear-gradient(135deg, #818cf8, #6366f1);
-  --grad-cta: linear-gradient(135deg, #4ade80, #22c55e);
+  /* --grad-brand-solid/--grad-cta/--grad-teal need no dark override: their
+     --*-solid ends are theme-invariant (see the note in :root), so they keep
+     white label text above 4.5:1 in both themes. */
   --brand-glow: 0 0 24px rgba(74, 222, 128, 0.22);
   --shadow-brand: 0 4px 14px rgba(0, 0, 0, 0.45);
   --shadow-brand-lg: 0 6px 20px rgba(0, 0, 0, 0.55);
@@ -812,7 +843,7 @@ p {
 }
 
 .btn-primary {
-  background: var(--grad-brand);
+  background: var(--grad-brand-solid);
   color: #fff;
   box-shadow: var(--shadow-brand);
 }
@@ -823,7 +854,7 @@ p {
 }
 
 .btn-teal {
-  background: linear-gradient(135deg, var(--teal), var(--teal-strong));
+  background: var(--grad-teal);
   color: #fff;
   box-shadow: 0 4px 14px color-mix(in srgb, var(--teal) 30%, transparent);
 }
@@ -1198,7 +1229,9 @@ p {
 .impersonation-banner {
   font-weight: 700;
   font-size: var(--fs-sm);
-  background: var(--brand);
+  /* --brand-solid, not --brand: the label is white and the dark theme's
+     --brand accent is a light green (A11Y-04). */
+  background: var(--brand-solid);
   color: #fff;
   padding: 8px 16px;
   display: flex;
@@ -2078,7 +2111,7 @@ form .btn[type="submit"] {
 
 .bubble.user {
   align-self: flex-end;
-  background: var(--grad-brand);
+  background: var(--grad-brand-solid);
   color: #fff;
   border-top-right-radius: var(--radius-sm);
   box-shadow: var(--shadow-sm);
@@ -3205,7 +3238,7 @@ button.small {
   height: 15px;
   padding: 0 3px;
   border-radius: 999px;
-  background: var(--danger);
+  background: var(--danger-solid);
   color: #fff;
   font-size: 10px;
   font-weight: 700;
@@ -4070,7 +4103,7 @@ button.small {
 .btn-teal {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(0, 0, 0, 0.06)),
-    linear-gradient(135deg, var(--teal), var(--teal-strong));
+    var(--grad-teal);
   box-shadow:
     0 1px 2px rgba(3, 105, 161, 0.24),
     0 8px 20px -6px color-mix(in srgb, var(--teal) 55%, transparent);
@@ -4332,7 +4365,11 @@ button.small {
 
 /* gradient icon tiles per tone */
 .tile-teal {
-  background: linear-gradient(140deg, #38bdf8, var(--teal-strong));
+  background: linear-gradient(
+    140deg,
+    var(--teal-solid),
+    var(--teal-solid-strong)
+  );
   color: #fff !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.45),
@@ -4340,7 +4377,11 @@ button.small {
 }
 
 .tile-warn {
-  background: linear-gradient(140deg, #fbbf24, #d97706);
+  background: linear-gradient(
+    140deg,
+    var(--warn-solid),
+    var(--warn-solid-strong)
+  );
   color: #fff !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.45),
@@ -4348,7 +4389,7 @@ button.small {
 }
 
 .tile-ai {
-  background: linear-gradient(140deg, #818cf8, var(--ai));
+  background: linear-gradient(140deg, var(--ai-solid), var(--ai-solid-strong));
   color: #fff !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.45),
