@@ -123,6 +123,7 @@ def enforce_production_safety(settings: Settings) -> None:
         _validate_rate_limit_redis,
         _validate_llm_provider,
         _validate_corpus,
+        _validate_ai_budget,
         _validate_llm_budget,
     ):
         try:
@@ -372,6 +373,30 @@ def _validate_corpus(settings: Settings) -> list[str]:
             "built corpus, or set "
             "ALLOW_BUNDLED_SAMPLE_CORPUS_IN_PRODUCTION=true for a deliberate "
             "offline demo."
+        ]
+    return []
+
+
+def _validate_ai_budget(settings: Settings) -> list[str]:
+    """A billable production deployment must ship a per-user spend cap (F-034).
+
+    ``ai_monthly_budget_usd_per_user`` defaults to 0 = unlimited and the
+    documented production template never mentioned the key, so an operator
+    following the template ran with no ceiling at all: the reserve-before-call
+    ledger (services/costs.py) works, but the gate was switched off by
+    configuration and one looping or abusive account was bounded only by 30
+    requests/minute. Refusing boot makes the cap an explicit deployment
+    decision; the mock provider is exempt for the same reason as in
+    ``_validate_corpus`` (it bills exactly 0).
+    """
+    if not settings.has_billable_llm_provider:
+        return []
+    if float(settings.ai_monthly_budget_usd_per_user or 0.0) <= 0:
+        return [
+            "AI_MONTHLY_BUDGET_USD_PER_USER must be a positive monthly cap in "
+            "production when a billable LLM provider is configured (0 means "
+            "unlimited). A conservative starting value is 5 (USD per user per "
+            "month); raise it deliberately once real usage is measured."
         ]
     return []
 
