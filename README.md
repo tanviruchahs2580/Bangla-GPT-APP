@@ -77,6 +77,18 @@ Current QA record: [docs/qa/QA_REPORT_2026-10-29.md](docs/qa/QA_REPORT_2026-10-2
 
 ## Quick start
 
+Prerequisites:
+
+- **Python 3.11 or newer** (`requires-python = ">=3.11"` in
+  `apps/api/pyproject.toml`; CI runs 3.11 and 3.12).
+- **Node 24 with npm 11** (`engines` in `apps/web/package.json`; `.nvmrc`
+  pins 24 for nvm users).
+- **Docker**, only for the Docker section below.
+
+Both paths below run in CI: the Linux commands in the `Lint & test` job (same
+two-step install), the PowerShell commands in the `Quick start (Windows
+PowerShell)` job.
+
 ```powershell
 cd apps/api
 python -m venv .venv
@@ -188,7 +200,7 @@ All nine workflows under `.github/workflows/`, with the job ids each one runs:
 
 | Workflow | What it does (job ids) | Trigger |
 |---|---|---|
-| `ci.yml` | `api` — ruff check → ruff format → mypy → pytest on 3.11 and 3.12 (coverage gate) → pip-audit → alembic up/down/up → import smoke; `postgres` — migration cycle + `alembic check` drift + journey/race tests + the **full domain suite on Postgres**; `sbom` — CycloneDX manifests for python and web; `web` — npm audit → vitest coverage → eslint → prettier → tsc+vite build; `guardrails` — the repo-contract checks below, including the readme/workflow-table guard; `e2e` — Playwright chromium against the real app plus the offline shell; `e2e-engines` — the Bangla shaping/`Intl` specs on firefox and webkit as well (pull requests only); `docker` — image build → Trivy gate → `/health`+`/ready` probes → k6 smoke | push to `main`, pull_request to `main`, workflow_dispatch |
+| `ci.yml` | `api` — ruff check → ruff format → mypy → pytest on 3.11 and 3.12 (coverage gate) → pip-audit → alembic up/down/up → import smoke; `quickstart-windows` — the README's PowerShell quick start (venv → hash-locked install → dev server `/health` → `npm ci` + build) on `windows-latest`; `postgres` — migration cycle + `alembic check` drift + journey/race tests + the **full domain suite on Postgres**; `sbom` — CycloneDX manifests for python and web; `web` — npm audit → vitest coverage → eslint → prettier → tsc+vite build; `guardrails` — the repo-contract checks below, including the readme/workflow-table guard; `e2e` — Playwright chromium against the real app plus the offline shell; `e2e-engines` — the Bangla shaping/`Intl` specs on firefox and webkit as well (pull requests only); `docker` — image build → Trivy gate → `/health`+`/ready` probes → k6 smoke | push to `main`, pull_request to `main`, workflow_dispatch |
 | `eval-gate.yml` | `eval-gate` — golden v2 suite vs the committed baseline (>2pp regression fails), the 24-question golden retrieval gate (`apps/api/scripts/evaluate_golden.py`) and the red-team moderation gate (`evaluation.cli --redteam`); optional non-blocking real-model probe on manual dispatch | push/pull_request to `main`, workflow_dispatch |
 | `codeql.yml` | `analyze` — CodeQL SAST (security-extended) over python and javascript-typescript; SARIF lands in the Security tab | push/pull_request to `main`, schedule weekly |
 | `release.yml` | `ci-gate` — fails when green CI for the commit is missing and when the tag != the package version; `build-push` — GHCR images tagged with both the release tag and the commit sha, with SBOM + provenance; `scan-images` — Trivy + attestation verification of the pushed digests; `deploy` — SSH deploy with health-gated rollback (only when `DEPLOY_ENABLED=true`) | push tags `v*.*.*`, workflow_dispatch |

@@ -189,7 +189,7 @@ jobs:
           set -e
           base=https://bangla-gpt-app.vercel.app
           ok=0
-          for i in $(seq 1 6); do
+          for _ in $(seq 1 6); do
             code=$(curl -s -o /dev/null -w "%{http_code}" "$base/login" || true)
             if [ "$code" = "200" ]; then ok=1; break; fi
             echo "waiting for alias (got $code)"; sleep 5
