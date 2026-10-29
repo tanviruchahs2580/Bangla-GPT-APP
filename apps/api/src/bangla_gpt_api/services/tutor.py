@@ -363,6 +363,21 @@ class TutorService:
           is absent from the textbook by construction, and weighting it at
           the IDF maximum made user phrasing dilute coverage.
 
+        Cross-script resolution (measured on the golden-v3 Banglish stratum,
+        F-051): the retrieval lanes already widen a query through the glossary
+        (cell -> কোষ) and the roman lane (bhognangsho -> ভগ্নাংশ), and the gate
+        must see the SAME resolved terms or it would refuse, for script
+        reasons, a question retrieval just answered. The candidates of one
+        roman/English token are **alternatives** -- the surfaces the token may
+        stand for -- not separate requirements. They used to be appended as
+        independent must-cover terms, so "bhasha o brn ki?" had to cover
+        vaspa, bhanga, tvaraṇa, barga ... as well; measured coverage 0.1966
+        and every one of the 74 Banglish golden items was refused while
+        retrieval returned the right chapter. A raw term now forms one group:
+        it counts as absent only when NO candidate surface is in the corpus
+        (the out-of-corpus budget keeps its meaning per raw term), and it
+        counts as covered when ANY candidate matches the evidence.
+
         Out-of-corpus budget (F-002/RAG-15): the documented rule is *>= 2
         content terms absent from the corpus -> refuse*
         (docs/RAG_ARCHITECTURE.md, "out-of-domain budget"). The code used to
@@ -386,26 +401,20 @@ class TutorService:
             query_terms = tuple(
                 dict.fromkeys(light_stem(t) for t in tokenize(question) if len(t) >= 2)
             )
-        # Cross-script resolution: the retrieval lanes already widen a query
-        # through the glossary (cell → কোষ) and the roman lane (bhognangsho →
-        # ভগ্নাংশ); the gate must see the SAME resolved terms or it would
-        # refuse, for script reasons, a question retrieval just answered.
         # Graceful degradation: statistics without the matching surfaces
         # resolve nothing, and the gate proceeds on the raw terms.
         roman_matcher = getattr(self.term_stats, "match_roman", None)
-        resolved: list[str] = []
+        groups: list[tuple[str, tuple[str, ...]]] = []
         for term in query_terms:
+            candidates: tuple[str, ...] = (term,)
             if term.isascii():
                 substitutes = english_gloss_terms(term)
                 if not substitutes and roman_matcher is not None:
                     substitutes = tuple(roman_matcher(term))
-                resolved.extend(substitutes)
-                if not substitutes:
-                    resolved.append(term)
-            else:
-                resolved.append(term)
-        query_terms = tuple(dict.fromkeys(resolved))
-        if not query_terms or not hits:
+                if substitutes:
+                    candidates = tuple(dict.fromkeys((term, *substitutes)))
+            groups.append((term, candidates))
+        if not groups or not hits:
             return 0.0, False
 
         # Coverage is measured over the question's terms the corpus KNOWS
@@ -418,7 +427,12 @@ class TutorService:
         # the question's subject world is not in the corpus, and the terms
         # the corpus happens to share with it must not manufacture coverage.
         if self.term_stats is not None and self.term_stats.total_documents > 0:
-            absent = [t for t in query_terms if self.term_stats.document_frequency(t) == 0]
+            document_frequency = self.term_stats.document_frequency
+            absent = [
+                raw
+                for raw, candidates in groups
+                if not any(document_frequency(c) > 0 for c in candidates)
+            ]
             if len(absent) >= self.OUT_OF_CORPUS_ABSENT_BUDGET:
                 json_log(
                     logger,
@@ -429,33 +443,46 @@ class TutorService:
                     budget=self.OUT_OF_CORPUS_ABSENT_BUDGET,
                 )
                 return 0.0, False
-            in_corpus = tuple(t for t in query_terms if self.term_stats.document_frequency(t) > 0)
+            in_corpus = [
+                (raw, candidates)
+                for raw, candidates in groups
+                if any(document_frequency(c) > 0 for c in candidates)
+            ]
             if not in_corpus:
                 json_log(
                     logger,
                     logging.INFO,
                     "tutor_retrieval",
                     gate="out_of_domain",
-                    out_of_corpus_terms=len(query_terms),
+                    out_of_corpus_terms=len(groups),
                 )
                 return 0.0, False
-            query_terms = in_corpus
-
-        if self.term_stats is not None and self.term_stats.total_documents > 0:
+            groups = in_corpus
+            # The group's weight is its rarest in-corpus surface: the most
+            # informative spelling is what makes the term hard to satisfy, and
+            # a wrong alternative must not deflate that weight.
             weights = coverage_weights(
-                query_terms,
-                {t: self.term_stats.document_frequency(t) for t in query_terms},
+                (raw for raw, _ in groups),
+                {
+                    raw: min(document_frequency(c) for c in candidates if document_frequency(c) > 0)
+                    for raw, candidates in groups
+                },
                 self.term_stats.total_documents,
             )
         else:
-            weights = {t: 1.0 for t in query_terms}
+            weights = {raw: 1.0 for raw, _ in groups}
 
+        weighted_terms = tuple(raw for raw, _ in groups)
         best_coverage = 0.0
         passed = False
         for hit in hits:
             evidence_terms = {light_stem(t) for t in tokenize(indexable_text(hit.chunk))}
-            covered = [t for t in query_terms if self._term_covered(t, evidence_terms)]
-            coverage = weighted_coverage(query_terms, covered, weights)
+            covered = [
+                raw
+                for raw, candidates in groups
+                if any(self._term_covered(candidate, evidence_terms) for candidate in candidates)
+            ]
+            coverage = weighted_coverage(weighted_terms, covered, weights)
             best_coverage = max(best_coverage, coverage)
             if coverage >= self.min_coverage and hit.score > self.min_score:
                 passed = True
