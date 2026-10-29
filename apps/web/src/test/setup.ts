@@ -11,3 +11,6 @@ configure({ asyncUtilTimeout: 8000 });
 
 // jsdom does not implement Element.scrollTo; the chat viewport autoscrolls on update.
 Element.prototype.scrollTo = () => {};
+// ...nor Window.scrollTo, which App's ScrollToTop calls on every route change
+// (jsdom logs "Not implemented" noise otherwise).
+window.scrollTo = () => {};

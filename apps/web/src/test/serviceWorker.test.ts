@@ -114,6 +114,29 @@ describe("public/sw.js update flow (waiting-first, audit M-18)", () => {
     await install.waitUntil.mock.calls[0][0];
     expect(skipWaiting).not.toHaveBeenCalled();
   });
+
+  it("PWA-02: an accepted update (SKIP_WAITING message) takes control", () => {
+    const { cachesMock } = makeCaches();
+    const skipWaiting = vi.fn(async () => {});
+    const handlers = loadSw(cachesMock, fetch, {
+      registration: { active: { scriptURL: "/sw.js" } },
+      skipWaiting,
+    });
+    handlers.message({ data: { type: "SKIP_WAITING" } });
+    expect(skipWaiting).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores unrelated messages (no accidental takeover)", () => {
+    const { cachesMock } = makeCaches();
+    const skipWaiting = vi.fn(async () => {});
+    const handlers = loadSw(cachesMock, fetch, {
+      registration: { active: { scriptURL: "/sw.js" } },
+      skipWaiting,
+    });
+    handlers.message({ data: null });
+    handlers.message({ data: { type: "PING" } });
+    expect(skipWaiting).not.toHaveBeenCalled();
+  });
 });
 
 describe("public/sw.js navigation handling", () => {

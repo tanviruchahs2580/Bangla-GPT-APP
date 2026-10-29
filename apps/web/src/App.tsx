@@ -24,6 +24,7 @@ import { Skeleton } from "./components/ui";
 import { RouteErrorBoundary } from "./components/AppErrorBoundary";
 import { PublicLanguageToggle } from "./components/PublicLanguageToggle";
 import { SkipLink } from "./components/SkipLink";
+import { UpdateBanner } from "./components/UpdateBanner";
 import { onLangChange, t } from "./i18n";
 
 const LoginPage = lazy(() => import("./pages/LoginPage"));
@@ -63,6 +64,7 @@ const ParentDashboard = lazy(() => import("./pages/ParentDashboard"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const SchoolDashboard = lazy(() => import("./pages/SchoolDashboard"));
 const StatusPage = lazy(() => import("./pages/StatusPage"));
+const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -389,7 +391,14 @@ function RoutesSwitch() {
           }
         />
 
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route
+          path="*"
+          element={
+            <RouteErrorBoundary>
+              <NotFoundPage />
+            </RouteErrorBoundary>
+          }
+        />
       </Routes>
     </>
   );
@@ -397,8 +406,8 @@ function RoutesSwitch() {
 
 function App() {
   // I18N: a language switch re-renders this component IN PLACE. The elements
-  // below are recreated on every render, so every t() call re-evaluates in
-  // the new language while every mounted component keeps its state. The
+  // below are recreated on every render, so every t() call re-evaluates in the
+  // new language while every mounted component keeps its state. The
   // previous shape keyed a wrapper by a counter, which REMOUNTED the whole
   // tree: switching language mid-quiz discarded the in-progress attempt, a
   // streaming tutor answer was aborted, and half-filled forms reset — all
@@ -409,12 +418,27 @@ function App() {
   return (
     <BrowserRouter>
       <DocumentTitle tick={langTick} />
+      <ScrollToTop />
       <Suspense fallback={<Loading />}>
         <RoutesSwitch />
         <Footer />
       </Suspense>
+      <UpdateBanner />
     </BrowserRouter>
   );
+}
+
+/**
+ * UX-09: a bottom-nav tap from a long page used to mount the next route at
+ * the previous scroll offset. An instant jump to the top on every pathname
+ * change — no animation, so reduced-motion users see the same behaviour.
+ */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
 }
 
 /** Per-route document titles, longest prefix first. */

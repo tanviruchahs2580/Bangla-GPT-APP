@@ -114,9 +114,18 @@ describe("routing table", () => {
     expect(realAuth.ROLE_HOME.student).toBe("/student");
   });
 
-  it("resolves an unknown path through the catch-all to the role home", async () => {
+  it("renders the 404 page for an unknown path instead of silently redirecting", async () => {
+    // F-182: the catch-all used to Navigate to "/", so a mistyped deep link
+    // looked like the app ignoring the URL and support had nothing to see.
     authState.me = STUDENT;
     renderAt("/definitely-not-a-route");
-    await waitFor(() => expect(window.location.pathname).toBe("/student"));
+    expect(
+      await screen.findByText(t("noResults"), {}, { timeout: 5000 }),
+    ).toBeTruthy();
+    // The address that was not found is on the page, and the way home works.
+    expect(screen.getByText("/definitely-not-a-route")).toBeTruthy();
+    expect(window.location.pathname).toBe("/definitely-not-a-route");
+    const home = screen.getByRole("link", { name: t("brandHome") });
+    expect(home.getAttribute("href")).toBe("/student");
   });
 });

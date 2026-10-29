@@ -89,6 +89,16 @@ async function trimRuntimeCache() {
   await Promise.all(excess.map((req) => cache.delete(req)));
 }
 
+// PWA-02: an update over a live session waits (see the install handler) until
+// the page asks for it. The update banner postMessages SKIP_WAITING once the
+// student accepts, and the page reloads on controllerchange — so the new shell
+// and its hashed chunks arrive together instead of mid-session.
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING" && self.skipWaiting) {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== "GET") return;
