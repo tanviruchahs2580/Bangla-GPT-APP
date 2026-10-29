@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+import tomllib
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -31,19 +33,32 @@ NON_PRODUCTION_ENVS = frozenset({"development", "dev", "local", "test", "ci", "p
 DEFAULT_JWT_SECRET = "dev-insecure-change-me"  # noqa: S105 - an obvious placeholder or a fixture name, not a credential
 
 
+def _project_version() -> str:
+    """Read the release version from ``apps/api/pyproject.toml``.
+
+    The manifest is the repository's single source of truth (README: "Nothing
+    else may carry a version number"); the installed distribution metadata is
+    generated from it at install time.
+    """
+    manifest = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    with manifest.open("rb") as fh:
+        return tomllib.load(fh)["project"]["version"]
+
+
 def _get_version() -> str:
     """Read version from the installed package metadata.
 
-    Falls back to a hardcoded constant when the package is not installed
-    (editable install, test harness, or bare-source execution).
+    Source-tree runs (bare execution, a harness with no installed
+    distribution) fall back to the same pyproject.toml the metadata is built
+    from, so the fallback tracks the release manifest instead of a literal
+    that drifts on every version bump (F-053).
     """
     try:
         from importlib.metadata import version as _version
 
         return _version("bangla-gpt-api")
     except Exception:
-        # Fallback for bare-source execution (must track pyproject version).
-        return "0.9.2"
+        return _project_version()
 
 
 class Settings(BaseSettings):
