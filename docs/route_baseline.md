@@ -1,8 +1,10 @@
 # Route Baseline — regenerated from the live app
 
-Source: `apps/api/src/bangla_gpt_api/routers/` (split of main.py)
-Captured: 2026-09-11T19:20:44.459062+00:00
-Total unique method+path routes: 139
+Source: `apps/api/src/bangla_gpt_api/routers/`, plus the routes FastAPI serves
+outside the schema (`/docs`, `/docs/oauth2-redirect`, `/openapi.json`, `/redoc`)
+and `/metrics` (`include_in_schema=False`).
+Captured: 2026-10-29T08:46:14.141059Z (version 0.9.3; regenerate with the same in-process `create_app()` dump)
+Total unique method+path routes: 142
 
 | # | Method | Path |
 |---|---|---|
@@ -102,46 +104,49 @@ Total unique method+path routes: 139
 | 94 | POST | `/auth/impersonate/exit` |
 | 95 | POST | `/auth/join-school` |
 | 96 | POST | `/auth/login` |
-| 97 | POST | `/auth/mfa/challenge` |
-| 98 | POST | `/auth/mfa/disable` |
-| 99 | POST | `/auth/mfa/enroll` |
-| 100 | POST | `/auth/mfa/verify` |
-| 101 | POST | `/auth/register` |
-| 102 | POST | `/auth/resend-verification` |
-| 103 | POST | `/auth/reset` |
-| 104 | POST | `/auth/verify-email` |
-| 105 | POST | `/events` |
-| 106 | POST | `/feedback` |
-| 107 | POST | `/kg/rebuild` |
-| 108 | POST | `/learn/progress` |
-| 109 | POST | `/notes` |
-| 110 | POST | `/notifications/{notification_id}/read` |
-| 111 | POST | `/parents/link` |
-| 112 | POST | `/parents/link/invite` |
-| 113 | POST | `/quizzes` |
-| 114 | POST | `/quizzes/{attempt_id}/submit` |
-| 115 | POST | `/revision/{item_id}/review` |
-| 116 | POST | `/schools/{school_id}/classes` |
-| 117 | POST | `/schools/{school_id}/invites` |
-| 118 | POST | `/students/me/invite-code` |
-| 119 | POST | `/students/{student_id}/consent/reconfirm` |
-| 120 | POST | `/teacher/assignments` |
-| 121 | POST | `/teacher/classrooms` |
-| 122 | POST | `/teacher/classrooms/{room_id}/import` |
-| 123 | POST | `/teacher/content/generate` |
-| 124 | POST | `/teacher/generate/{kind}` |
-| 125 | POST | `/teacher/jobs` |
-| 126 | POST | `/teacher/lesson-plans` |
-| 127 | POST | `/teacher/qpapers` |
-| 128 | POST | `/teacher/qpapers/{qp_id}/finalize` |
-| 129 | POST | `/teacher/qpapers/{qp_id}/regenerate` |
-| 130 | POST | `/teacher/qpapers/{qp_id}/replace` |
-| 131 | POST | `/teacher/qpapers/{qp_id}/review` |
-| 132 | POST | `/teacher/qpapers/{qp_id}/shuffle` |
-| 133 | POST | `/teacher/shorttests` |
-| 134 | POST | `/teacher/support-plans` |
-| 135 | POST | `/tutor/ask` |
-| 136 | POST | `/tutor/conversations` |
-| 137 | POST | `/tutor/conversations/{conversation_id}/messages` |
-| 138 | POST | `/tutor/conversations/{conversation_id}/messages/stream` |
-| 139 | PUT | `/teacher/content` |
+| 97 | POST | `/auth/logout` |
+| 98 | POST | `/auth/mfa/challenge` |
+| 99 | POST | `/auth/mfa/disable` |
+| 100 | POST | `/auth/mfa/enroll` |
+| 101 | POST | `/auth/mfa/verify` |
+| 102 | POST | `/auth/register` |
+| 103 | POST | `/auth/renew` |
+| 104 | POST | `/auth/resend-verification` |
+| 105 | POST | `/auth/reset` |
+| 106 | POST | `/auth/verify-email` |
+| 107 | POST | `/events` |
+| 108 | POST | `/feedback` |
+| 109 | POST | `/kg/rebuild` |
+| 110 | POST | `/learn/progress` |
+| 111 | POST | `/notes` |
+| 112 | POST | `/notifications/{notification_id}/read` |
+| 113 | POST | `/parents/link` |
+| 114 | POST | `/parents/link/invite` |
+| 115 | POST | `/quizzes` |
+| 116 | POST | `/quizzes/{attempt_id}/submit` |
+| 117 | POST | `/revision/{item_id}/review` |
+| 118 | POST | `/schools/{school_id}/classes` |
+| 119 | POST | `/schools/{school_id}/invites` |
+| 120 | POST | `/students/me/invite-code` |
+| 121 | POST | `/students/{student_id}/consent/reconfirm` |
+| 122 | POST | `/teacher/assignments` |
+| 123 | POST | `/teacher/classrooms` |
+| 124 | POST | `/teacher/classrooms/{room_id}/import` |
+| 125 | POST | `/teacher/content/generate` |
+| 126 | POST | `/teacher/generate/{kind}` |
+| 127 | POST | `/teacher/jobs` |
+| 128 | POST | `/teacher/lesson-plans` |
+| 129 | POST | `/teacher/qpapers` |
+| 130 | POST | `/teacher/qpapers/{qp_id}/finalize` |
+| 131 | POST | `/teacher/qpapers/{qp_id}/regenerate` |
+| 132 | POST | `/teacher/qpapers/{qp_id}/replace` |
+| 133 | POST | `/teacher/qpapers/{qp_id}/review` |
+| 134 | POST | `/teacher/qpapers/{qp_id}/shuffle` |
+| 135 | POST | `/teacher/shorttests` |
+| 136 | POST | `/teacher/support-plans` |
+| 137 | POST | `/tutor/ask` |
+| 138 | POST | `/tutor/conversations` |
+| 139 | POST | `/tutor/conversations/{conversation_id}/messages` |
+| 140 | POST | `/tutor/conversations/{conversation_id}/messages/stream` |
+| 141 | POST | `/users/me/sessions/revoke` |
+| 142 | PUT | `/teacher/content` |

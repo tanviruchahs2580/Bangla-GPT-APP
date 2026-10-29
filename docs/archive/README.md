@@ -5,6 +5,14 @@ contradict each other and the current tree (e.g. some predate the circuit
 breaker, the router split, MFA and the usage ledger). They are kept for
 history only — **do not quote them as current status**.
 
+**Directory-level banner (recorded exemption).** Every file under
+`docs/archive/`, with or without its own banner line, is historical: nothing
+here describes current state, and no file here may be cited as a source of
+truth. Eight of the 57 files carry a per-file "historical, not current" line;
+rather than duplicate the banner 49 more times, this statement — in the
+directory the documentation index links to — is the exemption for all of
+them, and it outranks any unflagged claim inside a file below it.
+
 Current sources of truth live one level up (living docs):
 
 - `../architecture.md` — verified decisions + pending items
@@ -12,7 +20,10 @@ Current sources of truth live one level up (living docs):
   (the generated `../route_baseline.md` and the live `/openapi.json` are the
   full route list)
 - `../runbook.md` — operations runbook
-- `../qa/QA_REPORT_2026-10-17.md` — the single current QA record
+- `../qa/QA_REPORT_2026-10-27.md` — the single current QA record
+  (this pointer is updated when a record is rotated into the archive; if the
+  path does not resolve, read `../qa/` directly rather than trusting a name
+  here)
 
 Point-in-time session and audit reports belong in this directory — never
 beside the living docs, and never promoted as a source of truth. The
