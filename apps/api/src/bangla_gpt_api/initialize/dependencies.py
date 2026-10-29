@@ -262,6 +262,25 @@ def build_dependencies(
                 "chunks; the tutor is serving the bundled sample corpus",
                 settings.nctb_corpus_dir,
             )
+        # F-016: the log line above and the metric made the degradation
+        # visible, but a billable production deployment could still serve the
+        # synthetic sample to children. _validate_corpus in main.py refuses the
+        # "directory unset" case before this code runs; this is the second
+        # door -- a configured directory that yields no usable chunks.
+        if (
+            corpus_identity == "bundled-sample"
+            and settings.is_production
+            and settings.has_billable_llm_provider
+            and not settings.allow_bundled_sample_corpus_in_production
+        ):
+            raise RuntimeError(
+                "Refusing to start: the tutor would serve the bundled "
+                "synthetic sample corpus in production "
+                f"(NCTB_CORPUS_DIR={settings.nctb_corpus_dir or '<unset>'!r} "
+                "produced no usable chunks). Fix the corpus directory, or set "
+                "ALLOW_BUNDLED_SAMPLE_CORPUS_IN_PRODUCTION=true for a "
+                "deliberate offline demo."
+            )
 
         from bangla_gpt_api.caching import RAG_CACHE_TTL_SECONDS, CachedRankingIndex
         from bangla_gpt_api.retrieval.embedding import build_embedder

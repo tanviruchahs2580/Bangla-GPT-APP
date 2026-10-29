@@ -122,6 +122,7 @@ def enforce_production_safety(settings: Settings) -> None:
         _validate_metrics,
         _validate_rate_limit_redis,
         _validate_llm_provider,
+        _validate_corpus,
         _validate_llm_budget,
     ):
         try:
@@ -345,6 +346,34 @@ def _mock_allowed(settings: Settings) -> bool:
         "true",
         "yes",
     )
+
+
+def _validate_corpus(settings: Settings) -> list[str]:
+    """A billable production tutor must not answer from the bundled sample (F-016).
+
+    With NCTB_CORPUS_DIR empty -- the documented compose default -- the loader
+    falls back to the 78-chunk synthetic sample corpus and the tutor cites it
+    as evidence to children. The fallback used to be reported only by a log
+    line and a metric, so a Gemini-configured deployment could serve the
+    sample to real students with nothing in /ready showing it. The mock
+    provider is exempt: it is itself refused in production unless the offline
+    demo opt-in is set, serves no real answer, and the sample is coherent with
+    a deliberate demo.
+    """
+    if settings.allow_bundled_sample_corpus_in_production:
+        return []
+    if not settings.has_billable_llm_provider:
+        return []
+    if not (settings.nctb_corpus_dir or "").strip():
+        return [
+            "NCTB_CORPUS_DIR is empty and the LLM provider is billable: the "
+            "tutor would answer children from the bundled synthetic sample "
+            "corpus and cite it as evidence. Point NCTB_CORPUS_DIR at the "
+            "built corpus, or set "
+            "ALLOW_BUNDLED_SAMPLE_CORPUS_IN_PRODUCTION=true for a deliberate "
+            "offline demo."
+        ]
+    return []
 
 
 def _validate_llm_budget(settings: Settings) -> list[str]:

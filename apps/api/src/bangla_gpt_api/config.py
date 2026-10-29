@@ -210,6 +210,14 @@ class Settings(BaseSettings):
 
     # --- data ---
     nctb_corpus_dir: str | None = None
+    # F-016: with NCTB_CORPUS_DIR empty (the compose default) the tutor falls
+    # back to the bundled 78-chunk synthetic sample corpus and cites it as
+    # evidence. That fallback is a legitimate start-small mode, so it gets an
+    # explicit opt-in instead of being deleted; a production boot with a
+    # billable provider and no corpus is refused without it
+    # (see _validate_corpus in main.py and the load-time guard in
+    # initialize/dependencies.py).
+    allow_bundled_sample_corpus_in_production: bool = False
 
     # --- default rate limit rules (merged over per-field settings in middleware_stack) ---
     # NOTE: the chat LLM routes are /tutor/conversations/{id}/messages[/stream];
@@ -297,6 +305,21 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> list[str]:
         return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
+
+    @property
+    def has_billable_llm_provider(self) -> bool:
+        """True when a configured provider bills per token (not the mock).
+
+        Used by the production boot guards (F-016 corpus, F-034 AI budget):
+        the mock provider is itself refused in production unless the offline
+        demo opt-in is set, and its ledger cost is exactly 0, so there is no
+        spend ceiling to enforce and no real answer served from a sample
+        corpus. A named fallback provider counts too -- it can serve traffic.
+        """
+        return any(
+            name.strip().lower() not in ("", "mock")
+            for name in (self.llm_provider, self.llm_fallback_provider)
+        )
 
 
 @lru_cache
