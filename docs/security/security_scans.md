@@ -9,19 +9,21 @@ folders for the round.
 ## Semgrep (SEC-18)
 
 - Version: semgrep 1.182.1. Rulesets: `p/python`, `p/typescript`,
-  `p/react`, `p/docker`, `p/github-actions`. Run from the repository root;
-  CI pins the version and the same command.
+  `p/react`, `p/docker`, `p/github-actions`, `p/secrets`. Run from the
+  repository root; CI pins the version and the same command.
 - Command: `semgrep --config p/python --config p/typescript --config p/react
-  --config p/docker --config p/github-actions --severity ERROR --error
-  --timeout 60 --metrics=off .`
+  --config p/docker --config p/github-actions --config p/secrets
+  --severity ERROR --error --timeout 60 --metrics=off .`
 - Gate: any ERROR-severity finding fails the `guardrails` job. WARNING-level
   findings are triaged in this register but do not fail the build, so the
   gate cannot be flipped by a rule that is not a defect.
-- Scope and triaged allowlist: `.semgrepignore`. Three entries, each with
+- Scope and triaged allowlist: `.semgrepignore`. Four entries, each with
   its reason in the file: alembic migrations (append-only DDL, constants
   only), `scripts/backup_loop.py` (operator-configured offsite command),
   `apps/web/Dockerfile` (stock nginx master binds :80; see "hadolint" and
-  the DOCK stream for the unprivileged-image follow-up).
+  the DOCK stream for the unprivileged-image follow-up), and the four
+  token-construction test files whose literal fixture secrets are the same
+  convention ruff's per-file-ignores already records for tests.
 - Fixed in this round rather than allowed: `run-shell-injection` in
   `vercel-deploy.yml` (github context was interpolated straight into a
   `run:` block; it now reaches the shell through `env:`).

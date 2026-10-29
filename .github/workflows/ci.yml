@@ -679,6 +679,50 @@ jobs:
           print(f'mojibake scan clean across {len(files)} text files')
           PY
 
+      # SEC-18: the SAST gate the audit could only mark INFERRED (semgrep was
+      # not installed anywhere). Registry rulesets are pinned by the scanner
+      # version; the scan scope and the triaged allowlist live in
+      # .semgrepignore (every entry carries its reason there and in
+      # docs/security/security_scans.md). ERROR-severity findings fail the
+      # job; WARNING-level findings are triaged in the register instead, so a
+      # rule that is not a defect cannot red the build. The 60 s per-rule
+      # timeout beats semgrep's 30 s default, which timed out on the largest
+      # workflow files (28 rule files skipped) under a loaded machine.
+      - name: Semgrep (blocking, ERROR severity)
+        env:
+          SEMGREP_ENABLE_VERSION_CHECK: "0"
+          SEMGREP_SEND_METRICS: "off"
+        run: |
+          python -m pip install --quiet "semgrep==1.182.1"
+          semgrep \
+            --config p/python --config p/typescript --config p/react \
+            --config p/docker --config p/github-actions --config p/secrets \
+            --severity ERROR --error --timeout 60 --metrics=off .
+
+      # Dockerfile lint, blocking. The one accepted rule (DL3008) and its
+      # reason live in .hadolint.yaml: postgresql-client is deliberately
+      # unpinned while openssl and libssl3t64 are pinned in the Dockerfile
+      # with the refresh procedure documented there.
+      - name: Hadolint (Dockerfiles)
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work \
+            hadolint/hadolint@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d \
+            hadolint Dockerfile apps/web/Dockerfile
+
+      # SEC-18 dependency gate for the shipped web bundle. The python side is
+      # already covered by pip-audit in the api job and by the image scan in
+      # the docker job; this closes the npm tree that the static image ships
+      # with the same fixable-HIGH/CRITICAL threshold the image scan uses.
+      # trivy suppresses dev dependencies by default, which matches what the
+      # image contains and what `npm audit --omit=dev` gates one job over.
+      - name: Trivy dependency scan (shipped npm bundle)
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work \
+            aquasec/trivy:0.58.0@sha256:b88012e2a0a309d6a8a00463d4e63e5e513377fb74eccbc8f9b0f8f81940ebeb \
+            fs --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
+            --exit-code 1 --skip-dirs node_modules --skip-dirs dist \
+            apps/web/package-lock.json
+
       # F-006/BE-05: complexity used to be measured by nobody. `ruff check`
       # (C901, mccabe max-complexity 20 in apps/api/pyproject.toml) refuses new
       # offenders, but ruff's count and radon's grade disagree on boolean-heavy

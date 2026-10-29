@@ -55,3 +55,14 @@ scripts/backup_loop.py
 # image + port change is a deployment decision tracked with the DOCK stream.
 # Dockerfile linting is still covered by the blocking hadolint step.
 apps/web/Dockerfile
+
+# ---- allowlist, entry 4: token-construction test fixtures ----
+# These four files build JWTs against literal fixture secrets to exercise
+# expiry/claim/revocation paths; the same convention is already recorded in
+# pyproject's ruff per-file-ignores for tests (S105/S106 "fixture strings").
+# The rule stays enabled for every non-test path, and the p/secrets ruleset
+# is part of the scan so real credentials still gate.
+apps/api/tests/test_auth_teacher.py
+apps/api/tests/test_jwt_claims.py
+apps/api/tests/test_security.py
+apps/api/tests/test_session_renew.py
