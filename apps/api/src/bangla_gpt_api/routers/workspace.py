@@ -444,7 +444,12 @@ async def teacher_job_create(
     job, replayed = await asyncio.to_thread(_enqueue)
     if replayed:
         json_log(
-            logger, logging.INFO, "ai_job_replayed", job_id=job.id, kind=job.kind, user_id=teacher.id
+            logger,
+            logging.INFO,
+            "ai_job_replayed",
+            job_id=job.id,
+            kind=job.kind,
+            user_id=teacher.id,
         )
         return _job_out(job)
     task = asyncio.create_task(_execute_ai_job(app_ctx, job.id))

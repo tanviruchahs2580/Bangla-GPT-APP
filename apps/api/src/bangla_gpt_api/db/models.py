@@ -129,7 +129,9 @@ class Teacher(Base):
     __tablename__ = "teachers"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True
+    )
     name: Mapped[str] = mapped_column(String(120))
     # free-form teacher UI/workflow preferences (dict, additive).
     prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
@@ -140,7 +142,9 @@ class Parent(Base):
     __tablename__ = "parents"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True
+    )
     name: Mapped[str] = mapped_column(String(120))
     # guardian phone, encrypted at rest (Fernet) whenever PII_ENC_KEY is
     # configured; None when no phone was given. Never logged, never exported.
@@ -154,7 +158,9 @@ class ParentStudentLink(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     parent_id: Mapped[int] = mapped_column(ForeignKey("parents.id", ondelete="CASCADE"))
-    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    student_id: Mapped[int] = mapped_column(
+        ForeignKey("students.id", ondelete="CASCADE"), index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 
@@ -184,7 +190,9 @@ class QuizAttempt(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    student_id: Mapped[int] = mapped_column(
+        ForeignKey("students.id", ondelete="CASCADE"), index=True
+    )
     subject: Mapped[str | None] = mapped_column(String(60), nullable=True)
     class_level: Mapped[int] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(16), default="open")
@@ -215,7 +223,9 @@ class AnswerLog(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    attempt_id: Mapped[int] = mapped_column(ForeignKey("quiz_attempts.id", ondelete="CASCADE"), index=True)
+    attempt_id: Mapped[int] = mapped_column(
+        ForeignKey("quiz_attempts.id", ondelete="CASCADE"), index=True
+    )
     seq: Mapped[int] = mapped_column(Integer)
     question_text: Mapped[str] = mapped_column(String(2000))
     chosen: Mapped[int] = mapped_column(Integer)
@@ -259,7 +269,9 @@ class Conversation(Base):
     __tablename__ = "conversations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    student_id: Mapped[int] = mapped_column(
+        ForeignKey("students.id", ondelete="CASCADE"), index=True
+    )
     title: Mapped[str | None] = mapped_column(String(120), nullable=True)
     # last explanation strategy used in this conversation ('আমি বুঝিন' loop).
     last_strategy: Mapped[str | None] = mapped_column(String(24), nullable=True)
@@ -282,7 +294,9 @@ class ChatMessage(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    conversation_id: Mapped[int] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"), index=True)
+    conversation_id: Mapped[int] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"), index=True
+    )
     role: Mapped[str] = mapped_column(String(12))  # 'user' | 'assistant'
     content: Mapped[str] = mapped_column(Text)
     grounded: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
@@ -302,7 +316,9 @@ class ParentInvite(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     # Only the SHA-256 hash of the code is persisted (same scheme as resets).
     code_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    student_id: Mapped[int] = mapped_column(
+        ForeignKey("students.id", ondelete="CASCADE"), index=True
+    )
     expires_at: Mapped[datetime] = mapped_column(DateTime)
     used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     used_by_parent_id: Mapped[int | None] = mapped_column(
@@ -512,7 +528,9 @@ class ClassTeacher(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id", ondelete="CASCADE"))
-    teacher_id: Mapped[int] = mapped_column(ForeignKey("teachers.id", ondelete="CASCADE"), index=True)
+    teacher_id: Mapped[int] = mapped_column(
+        ForeignKey("teachers.id", ondelete="CASCADE"), index=True
+    )
     subject: Mapped[str] = mapped_column(
         String(60), default="", server_default="", comment="'' means all subjects"
     )
@@ -533,8 +551,12 @@ class StudentInvite(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     code_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     email: Mapped[str] = mapped_column(String(255), index=True)
-    classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id", ondelete="CASCADE"), index=True)
-    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    classroom_id: Mapped[int] = mapped_column(
+        ForeignKey("classrooms.id", ondelete="CASCADE"), index=True
+    )
+    student_id: Mapped[int] = mapped_column(
+        ForeignKey("students.id", ondelete="CASCADE"), index=True
+    )
     expires_at: Mapped[datetime] = mapped_column(DateTime)
     used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
@@ -650,7 +672,9 @@ class ShortTest(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id", ondelete="CASCADE"), index=True)
+    classroom_id: Mapped[int] = mapped_column(
+        ForeignKey("classrooms.id", ondelete="CASCADE"), index=True
+    )
     teacher_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     subject: Mapped[str] = mapped_column(String(60))
     chapter: Mapped[str] = mapped_column(String(200))
@@ -677,7 +701,9 @@ class SupportPlan(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    student_id: Mapped[int] = mapped_column(
+        ForeignKey("students.id", ondelete="CASCADE"), index=True
+    )
     teacher_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     class_level: Mapped[int] = mapped_column(Integer)
     focus_concepts: Mapped[list] = mapped_column(JSON, default=list)
@@ -734,8 +760,12 @@ class AssignmentRecipient(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    assignment_id: Mapped[int] = mapped_column(ForeignKey("assignments.id", ondelete="CASCADE"), index=True)
-    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    assignment_id: Mapped[int] = mapped_column(
+        ForeignKey("assignments.id", ondelete="CASCADE"), index=True
+    )
+    student_id: Mapped[int] = mapped_column(
+        ForeignKey("students.id", ondelete="CASCADE"), index=True
+    )
     attempt_id: Mapped[int] = mapped_column(ForeignKey("quiz_attempts.id", ondelete="CASCADE"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
@@ -802,7 +832,9 @@ class SchoolInvite(Base):
     school_id: Mapped[int] = mapped_column(ForeignKey("schools.id", ondelete="CASCADE"), index=True)
     role: Mapped[str] = mapped_column(String(16), default="teacher")
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    used_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    used_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -838,8 +870,12 @@ class ConceptPrerequisite(Base):
 
     __tablename__ = "concept_prerequisites"
 
-    concept_id: Mapped[int] = mapped_column(ForeignKey("concepts.id", ondelete="CASCADE"), primary_key=True)
-    prereq_id: Mapped[int] = mapped_column(ForeignKey("concepts.id", ondelete="CASCADE"), primary_key=True, index=True)
+    concept_id: Mapped[int] = mapped_column(
+        ForeignKey("concepts.id", ondelete="CASCADE"), primary_key=True
+    )
+    prereq_id: Mapped[int] = mapped_column(
+        ForeignKey("concepts.id", ondelete="CASCADE"), primary_key=True, index=True
+    )
 
 
 class ConceptMastery(Base):
@@ -847,8 +883,12 @@ class ConceptMastery(Base):
 
     __tablename__ = "concept_mastery"
 
-    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), primary_key=True)
-    concept_id: Mapped[int] = mapped_column(ForeignKey("concepts.id", ondelete="CASCADE"), primary_key=True, index=True)
+    student_id: Mapped[int] = mapped_column(
+        ForeignKey("students.id", ondelete="CASCADE"), primary_key=True
+    )
+    concept_id: Mapped[int] = mapped_column(
+        ForeignKey("concepts.id", ondelete="CASCADE"), primary_key=True, index=True
+    )
     correct: Mapped[int] = mapped_column(Integer, default=0)
     total: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
@@ -919,7 +959,9 @@ class StudentAbility(Base):
         ),
     )
 
-    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), primary_key=True)
+    student_id: Mapped[int] = mapped_column(
+        ForeignKey("students.id", ondelete="CASCADE"), primary_key=True
+    )
     concept: Mapped[str] = mapped_column(String(200), primary_key=True)
     class_level: Mapped[int] = mapped_column(Integer, index=True)
     ability: Mapped[float] = mapped_column(Float, default=1200.0)

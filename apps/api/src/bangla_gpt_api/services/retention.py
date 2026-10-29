@@ -37,7 +37,7 @@ from bangla_gpt_api.db.models import (
     ParentInvite,
     PasswordReset,
 )
-from bangla_gpt_api.jobs import IN_FLIGHT_STATUSES, TERMINAL_STATUSES
+from bangla_gpt_api.jobs import TERMINAL_STATUSES
 
 # Token/verification/invite rows keep a 30-day grace window after expiry
 # (audit/replay window); chat follows the configured retention days.
@@ -284,9 +284,7 @@ def _delete_by_id_batches(
     next run continues (expired-only, idempotent).
     """
     while True:
-        ids = (
-            db.execute(select(id_col).where(where).limit(chunk_size)).scalars().all()
-        )
+        ids = db.execute(select(id_col).where(where).limit(chunk_size)).scalars().all()
         if not ids:
             break
         db.execute(delete(model).where(id_col.in_(ids)))
