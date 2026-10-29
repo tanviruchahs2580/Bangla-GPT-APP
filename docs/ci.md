@@ -14,13 +14,18 @@ green. Its jobs:
 |---|---|---|
 | `api` | lint, format, mypy, tests, coverage floor, `pip-audit`, `alembic` check, import smoke | `cd apps/api && ruff check . && ruff format --check . && mypy src && pytest` |
 | `postgres` | the same domain suite on the engine production runs, plus migration drift | `BGPT_TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/bgpt_test pytest` |
-| `golden-eval` | retrieval quality against the committed golden set | `python scripts/evaluate_golden.py` |
+| `sbom` | CycloneDX manifests for the python lock and the installed web tree | `cd apps/api && python -m cyclonedx_py requirements constraints.txt --output-format JSON --output-file sbom-python.json` |
 | `web` | `tsc && vite build`, vitest, type-aware ESLint, prettier | `cd apps/web && npm run build && npm test && npm run lint && npm run format:check` |
 | `guardrails` | the repo's own doc/contract checks (see below) | the `apps/api/scripts/check_*.py` scripts |
-| `e2e` | Playwright journeys + axe sweeps on a served build | `cd apps/web && npm run test:e2e` |
+| `e2e` | Playwright journeys + axe sweeps on a served build (chromium) | `cd apps/web && npm run test:e2e` |
+| `e2e-engines` | the Bangla shaping/`Intl` specs on chromium, firefox and webkit (pull requests only) | `cd apps/web && npx playwright install firefox webkit --with-deps && npx playwright test -c playwright.engines.config.ts` |
 | `docker` | the API image builds and boots | `docker build .` |
 
-`codeql.yml` (SAST) and `eval-gate.yml` (golden-set regression) also run on PRs.
+`codeql.yml` (SAST) and `eval-gate.yml` also run on PRs. `eval-gate.yml` is
+three blocking steps now: the golden v2 suite against the committed baseline,
+the 24-question golden retrieval gate
+(`python scripts/evaluate_golden.py`, from `apps/api`) and the red-team
+moderation gate (`python -m bangla_gpt_api.evaluation.cli --redteam`).
 
 ### Repository guardrails
 
@@ -33,6 +38,10 @@ failure text is worth reading rather than re-running:
   regenerate with `python apps/api/scripts/gen_changelog.py`
 - `check_readme_contract.py`, `check_proxy_contract.py`,
   `check_lockfile.py` — README/edge-proxy/dependency-pin contracts
+- the inline `README and docs/ci.md agree with the workflows` step — every
+  workflow file must have a row in this table and in the README's CI table,
+  each row must name every job id, and the triggers must match the workflow's
+  own `on:` block
 
 ## Monitoring production
 

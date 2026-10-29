@@ -443,6 +443,91 @@ jobs:
         # deleted.
         run: python3 apps/api/scripts/check_doc_paths.py
 
+      - name: README and docs/ci.md agree with the workflows
+        # F-008: the README's CI table invented a `golden-eval` job inside
+        # ci.yml, omitted the sbom/guardrails jobs and never listed four of the
+        # nine workflows -- while asserting it had been "read off the
+        # workflow's own on: block". Derive those facts here instead: one row
+        # per workflow file, every job id named in its row, and a trigger cell
+        # that names exactly the event keys in the file's on: block.
+        run: |
+          python3 - <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          WORKFLOWS = Path(".github/workflows")
+          EVENT_KEYWORDS = (
+              "branch_protection_rule",
+              "pull_request",
+              "push",
+              "schedule",
+              "workflow_dispatch",
+              "workflow_run",
+          )
+
+          def on_keys(text: str) -> list[str]:
+              lines = text.splitlines()
+              start = lines.index("on:")
+              keys = []
+              for line in lines[start + 1 :]:
+                  if line and not line[0].isspace():
+                      break
+                  match = re.match(r"^  ([a-z_]+):", line)
+                  if match:
+                      keys.append(match.group(1))
+              return keys
+
+          def job_keys(text: str) -> list[str]:
+              lines = text.splitlines()
+              start = lines.index("jobs:")
+              keys = []
+              for line in lines[start + 1 :]:
+                  match = re.match(r"^  ([a-z][a-z0-9_-]*):\s*(?:#.*)?$", line)
+                  if match:
+                      keys.append(match.group(1))
+              return keys
+
+          problems: list[str] = []
+          rows = {}
+          for line in Path("README.md").read_text(encoding="utf-8").splitlines():
+              match = re.match(r"^\| `([a-z0-9_.-]+\.yml)`", line)
+              if match:
+                  rows[match.group(1)] = line.lower()
+
+          files = sorted(p.name for p in WORKFLOWS.glob("*.yml"))
+          for name in sorted(set(files) - set(rows)):
+              problems.append(f"README CI table has no row for workflow {name}")
+          for name in sorted(set(rows) - set(files)):
+              problems.append(f"README CI table names a workflow that does not exist: {name}")
+
+          ci_doc = Path("docs/ci.md").read_text(encoding="utf-8")
+          for name in files:
+              text = (WORKFLOWS / name).read_text(encoding="utf-8")
+              row = rows.get(name, "")
+              for job in job_keys(text):
+                  if not re.search(rf"\b{re.escape(job)}\b", row):
+                      problems.append(f"README row for {name} does not name its job `{job}`")
+              events = on_keys(text)
+              for key in events:
+                  if key not in row:
+                      problems.append(f"README row for {name} does not name its trigger `{key}`")
+              for keyword in EVENT_KEYWORDS:
+                  if keyword in row and keyword not in events:
+                      problems.append(
+                          f"README row for {name} claims trigger `{keyword}` the workflow lacks"
+                      )
+          for job in job_keys((WORKFLOWS / "ci.yml").read_text(encoding="utf-8")):
+              if f"`{job}`" not in ci_doc:
+                  problems.append(f"docs/ci.md does not document ci.yml job `{job}`")
+
+          for problem in problems:
+              print("::error::" + problem)
+          if problems:
+              sys.exit(1)
+          print(f"workflow tables agree: {len(files)} workflows, README and docs/ci.md in step")
+          PY
+
       - name: CHANGELOG covers every commit
         # VCS-08: the changelog is generated from git history, so it cannot
         # claim anything that did not happen. This fails if a released or
@@ -592,6 +677,68 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: playwright-report
+          path: apps/web/.playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  e2e-engines:
+    name: E2E (playwright, three engines)
+    # F-025: playwright.engines.config.ts (letter-spacing, conjunct/tofu
+    # clipping, font-weight and Intl assertions) was wired to no workflow, so
+    # a regression that only breaks Gecko/WebKit Bangla shaping merged green
+    # while the multi-engine claim went unchecked -- and the e2e job above
+    # installs chromium only, so it cannot run this pass. Pull requests only:
+    # the 40-minute chromium pass already gates every push, and this is the
+    # slower double-install companion to it, not a nightly.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/api/constraints.txt
+
+      - name: Install web dependencies
+        run: npm ci
+
+      # Same interpreter contract as the chromium job: the engines config
+      # inherits the base harness (seeded mock-provider API + dev server).
+      - name: Install API package (hash-verified constraints)
+        working-directory: apps/api
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --require-hashes -r constraints.txt
+          python -m pip install --no-deps -e .
+
+      - name: Install Playwright firefox and webkit
+        run: npx playwright install firefox webkit --with-deps
+
+      - name: Run the three-engine pass (chromium, firefox, webkit)
+        env:
+          E2E_PYTHON: python
+          CI: "true"
+        run: npx playwright test -c playwright.engines.config.ts
+
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-engines-report
           path: apps/web/.playwright-report/
           retention-days: 7
           if-no-files-found: ignore
