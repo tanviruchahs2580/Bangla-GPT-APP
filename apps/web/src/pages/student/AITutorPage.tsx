@@ -54,6 +54,11 @@ const STRATEGIES = [
   "steps",
   "analogy",
 ] as const;
+
+// Attachment contract. The API re-validates both server-side (422
+// image_invalid); these bounds must stay in step with docs/API.md.
+const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
+const MAX_IMAGE_BYTES = 1_500_000;
 const STRAT_LABELS: Record<
   (typeof STRATEGIES)[number],
   "stratSimple" | "stratExample" | "stratBook" | "stratSteps" | "stratAnalogy"
@@ -439,10 +444,16 @@ export default function AITutorPage() {
   // turn. Server re-validates mime + decoded size and answers 422 image_invalid.
   const attachFile = (f: File | null) => {
     if (!f) return;
-    if (
-      !["image/png", "image/jpeg", "image/webp"].includes(f.type) ||
-      f.size > 1_500_000
-    ) {
+    // Two distinct refusals with two distinct sentences: a renamed non-image
+    // (a PDF, a text snapshot) used to be reported as "too large", so the
+    // student retried with a smaller file of the same unusable kind.
+    if (!IMAGE_TYPES.includes(f.type)) {
+      // C2 handoff: replace with a type-naming key ("only PNG/JPEG/WebP")
+      // once i18n.ts has one; errImageInvalid is the closest shipped copy.
+      setError(t("errImageInvalid"));
+      return;
+    }
+    if (f.size > MAX_IMAGE_BYTES) {
       setError(t("imageTooLarge"));
       return;
     }
