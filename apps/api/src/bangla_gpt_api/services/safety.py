@@ -8,9 +8,17 @@ zero-latency); an LLM-based classifier can complement it later.
 """
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 SAFETY_ANSWER = "এই প্রশ্নের উত্তর এই প্ল্যাটফর্মে দেওয়া যাচ্ছে না। এটি আপনার জন্য ক্ষতিকর হতে পারে।"
+# The answer-side sibling of SAFETY_ANSWER (F-032): the student's *question*
+# was fine, but the composed answer failed the same deterministic screen the
+# teacher generators run on their outputs. Kept separate so the copy never
+# blames the child for what the model produced.
+UNSAFE_ANSWER_REFUSAL = (
+    "দুঃখিত, উত্তরটি এই প্ল্যাটফর্মে দেখানো যাচ্ছে না। অনুগ্রহ করে প্রশ্নটি অন্যভাবে লিখে আবার চেষ্টা করো।"
+)
 SELF_HARM_ANSWER = (
     "আপনি নিজেকে কষ্ট দিতে চাইলে অনুগ্রহ করে কাছের কোনো বড় মানুষ, "
     "অভিভাবক বা শিক্ষককে সঙ্গে কথা বলুন। আপনি গুরুত্বপূর্ণ — সাহায্য পাওয়া সম্ভব। "
@@ -19,9 +27,9 @@ SELF_HARM_ANSWER = (
 
 # Category -> compiled regex over the normalized question text.
 # Teens on mobile keyboards frequently type romanized Bangla ("Banglish"),
-# so the self-harm category — the one with a helpline response — also
-# carries romanized/English variants. Keep the set conservative: these
-# regexes refuse real children's questions.
+# so every category whose miss would reach the model carries
+# romanized/English variants (self_harm, hate_speech, bullying_harassment).
+# Keep the set conservative: these regexes refuse real children's questions.
 _PATTERNS: tuple[tuple[str, str], ...] = (
     # Self-harm / suicide ideation or method-seeking
     (
@@ -54,6 +62,47 @@ _PATTERNS: tuple[tuple[str, str], ...] = (
     ),
     # Personal-data harvesting about third parties
     ("personal_data", r"(ঠিকানা|ফোন\s*নম্বর)\s*(দাও|দে\s*যাও|বের\s*কর)"),
+    # Hate speech / communal incitement (F-027). Deliberately NARROW — the
+    # curriculum teaches "হিন্দু ধর্ম ও নৈতিক শিক্ষা", "ইসলাম ও নৈতিক শিক্ষা"
+    # and the 1971 war, so the category fires only when the question pairs a
+    # protected group with an incitement verb (spread hatred / kill them all /
+    # abuse them), never on the bare group name or the bare word ঘৃণা.
+    (
+        "hate_speech",
+        # Bangla: a protected group followed by an incitement word inside a
+        # short window, or the incitement phrase itself. A bare group name
+        # ("হিন্দু ধর্ম কী?") or a bare ঘৃণা ("ঘৃণা কী?") never fires.
+        r"(হিন্দু|মুসলিম|মুসলমান|বৌদ্ধ|খ্রিস্টান|ইহুদি)"
+        r"[^\u0964!?\n]{0,12}(ঘৃণা|বিদ্বেষ|গালি|কটূক্তি|উগ্র|ঘৃণিত|নিচু\s*জাত)"
+        r"|(ঘৃণা|বিদ্বেষ)\s*(?:প্রচার|ছড়া|ছড়ান|মূলক|ভরা|জাগানো)"
+        r"|(?i:(ghrina|bidvesh|bidhwesh)\s*(?:chhara|chhariye|chhariya|chharay|spread))"
+        r"|(?i:(hinduder|hindura|muslimder|musolmaner|muslimaner)"
+        r"\s*(?:ghrina|bidvesh|bidhwesh|gali|bang|guli|nicu))"
+        r"|(?i:(kill|attack|abuse|beat)\s+all\s+(?:the\s+)?(?:hindus|muslims|minorities))"
+        r"|(?i:spread\s+(?:hate|hatred)\s+(?:against|about|towards))"
+        r"|(?i:(hindus|muslims|minorities)\s+are\s+(?:animals|terrorists|inferior|dirty))",
+    ),
+    # Bullying / harassment of a named target, or asking for the means (F-027).
+    # Fires on "how to bully X" / "give me insults for Y" frames — never on the
+    # help-seeking side ("বুলিং হলে কী করব?", "কেউ গালি দিলে কী করব?").
+    (
+        "bullying_harassment",
+        r"(কাউকে|তাকে|ওকে|সহপাঠীকে|বন্ধুকে|কোনো\s*শিক্ষার্থীকে)\s*(?:চরম\s*)?"
+        r"(?:অপমান|হয়রানি|লাঞ্ছিত|কটূক্তি|টিপ্পনী|খেপানো|খ্যাপানো)"
+        r"(?:[^\u0964!?\n]{0,16}(?:উপায়|কৌশল|পদ্ধতি|নিয়ম|কীভাবে|কিভাবে|শেখাও|বলো)"
+        r"|[^\u0964!?\n]{0,10}করব)"
+        r"|(অপমান|হয়রানি|লাঞ্ছিত)\s*করার?\s*(?:উপায়|কৌশল|পদ্ধতি|নিয়ম|কথা)"
+        r"|(গালি|গালাগালি)\s*(?:দে|দেও|দিও|দেওয়া|দিতে|দো|শিখা|শিখাও|করার?\s*(?:উপায়|কৌশল|নিয়ম))"
+        r"|কারো\s*সম্পর্কে\s*মিথ্যা\s*(?:গুজব|গল্প|কথা)\s*(?:ছড়া|বানা|লিখ)"
+        r"|কাউকে\s*(?:ট্রল|বুলিং)\s*কর"
+        r"|(?i:(gali|gaali|galagali)\s*(?:de|dio|dewa|dite|dibo|kora|korar|shikha|shikhao)\b)"
+        r"|(?i:(mittha|micha)\s*(?:gujob|gujab|kotha)\s*(?:chhara|chhariye|banay|likh)\b)"
+        r"|(?i:(bully|bulli)\s*(?:korte|kora|koro|korar|kor|kivabe|shikhao|dite)\b)"
+        r"|(?i:(hoyrani|tiponi|opoman|troll)\s*(?:korte|kora|koro|korar|kore|dite)\b)"
+        r"|(?i:(how\s+to|can\s+i|kivabe)\s+(?:bully|harass|humiliate|threaten|troll)\b)"
+        r"|(?i:write\s+(?:an?|some)\s+(?:insulting|abusive|hateful|threatening)\s+"
+        r"(?:message|comment|post|note|letter))",
+    ),
 )
 
 _COMPILED: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
@@ -117,22 +166,168 @@ def refusal_for(reason: str) -> str:
     return SAFETY_ANSWER
 
 
-def verify_citation(answer: str, evidence_text: str) -> bool:
-    """Heuristic post-generation check: does the answer lean on the evidence?
+# ── post-generation citation verification (RAG-14) ─────────────────
+#
+# Policy (F-052): the verdict must answer two questions, not one.
+#
+# 1. **Resolution** — every citation the answer makes must point at a chunk
+#    that was actually retrieved. Answers today carry no inline citation
+#    markers (sources are attached server-side from the retrieved hits), so
+#    this layer judges the markers when they *are* present: a numbered marker
+#    ``[2]`` must be within the retrieved range and a bracketed chunk id must
+#    be a member of the retrieved set (its class-suffixed form ``<id>-c6`` or
+#    the shared evidence unit ``<id>``). A fabricated id fails.
+# 2. **Per-chunk support** — each declarative sentence of the answer must be
+#    supported by ONE retrieved chunk, measured over the sentence's *content*
+#    terms (the gate's stop-word/framing planes). The former check concatenated
+#    all retrieved text and asked a single whole-answer overlap >= 0.25, which
+#    a fabricated sentence riding on shared stems passed (E-RAG-14 probe).
+#    Interrogative sentences are skipped (the sectioned answer's closing
+#    "তুমি বুঝেছ?" check is pedagogy, not a claim) and an answer with too few
+#    content terms declines to judge rather than guessing.
+#
+# Wiring policy: the tutor keeps the *warn-level* response contract (meter
+# ``bgpt_rag_citation_checks_total``, log the reason, expose
+# ``citation_verified``) instead of discarding the answer: regeneration needs a
+# provider round trip, and the hermetic mock gate runs on the same code path.
 
-    Computes stem-level term coverage of the answer inside the retrieved
-    evidence. A grounded answer that invents unrelated material scores low.
-    This is a soft signal — callers log a warning rather than discard.
+_CITATION_MARKER_RE = re.compile(r"\[([^\[\]\n]{1,48})\]")
+_CHUNK_ID_RE = re.compile(r"^[0-9a-f]{6,}(?:-c\d{1,2})?$")
+_ANSWER_SENTENCE_RE = re.compile(r"[^।!?\n]+[।!?]?")
+#: Answer scaffolding the prompt (SYSTEM_PROMPT rule ৬) / mock layout asks for:
+#: "[mock]", a bullet and a section label ("সহজ ব্যাখ্যা:"). Formatting is not
+#: a claim about the textbook, so it is stripped before the support check.
+_ANSWER_LABEL_RE = re.compile(r"^\s*(?:\[mock\]\s*)?(?:[-•*]\s*)?(?:[^:\n।]{1,24}:)\s*")
+#: Minimum share of a judged sentence's content terms that one retrieved chunk
+#: must contain. Measured against the E-RAG-14 probes and the mock answers.
+_SENTENCE_SUPPORT_THRESHOLD = 0.6
+#: Sentences with fewer content terms are not judged: two words cannot
+#: separate grounded prose from invention.
+_MIN_JUDGED_TERMS = 2
+
+
+@dataclass(frozen=True)
+class CitationVerdict:
+    """Outcome of one post-generation citation check."""
+
+    verified: bool
+    reason: str
+    detail: tuple[str, ...] = ()
+
+
+def _citation_chunks(
+    evidence_text: str, sources: Iterable[object] | None
+) -> tuple[tuple[str, str], ...]:
+    """(chunk_id, text) pairs the answer is verified against.
+
+    ``sources`` may be retrieval hits (``.chunk``), schema source refs
+    (``.excerpt``) or plain strings; without them the joined ``evidence_text``
+    is judged as a single unnamed chunk (legacy two-argument callers).
     """
+    if not sources:
+        return (("", evidence_text),) if evidence_text.strip() else ()
+    from bangla_gpt_api.retrieval.bm25 import indexable_text
+
+    pairs: list[tuple[str, str]] = []
+    for source in sources:
+        chunk = getattr(source, "chunk", None)
+        if chunk is not None:
+            pairs.append((str(getattr(chunk, "id", "") or ""), indexable_text(chunk)))
+            continue
+        text = getattr(source, "excerpt", None) or getattr(source, "text", None) or ""
+        pairs.append((str(getattr(source, "source", "") or ""), str(text)))
+    return tuple((cid, text) for cid, text in pairs if text.strip())
+
+
+def _unresolved_citations(answer: str, chunks: tuple[tuple[str, str], ...]) -> list[str]:
+    """Citation markers in the answer that do not resolve to a retrieved chunk."""
+    ids = {cid for cid, _ in chunks if cid}
+    ids |= {cid.rsplit("-c", 1)[0] for cid in ids if "-c" in cid}
+    unresolved: list[str] = []
+    for match in _CITATION_MARKER_RE.finditer(answer):
+        token = match.group(1).strip()
+        if token.isdigit():
+            if not 1 <= int(token) <= len(chunks):
+                unresolved.append(f"[{token}]")
+            continue
+        # Only id-shaped brackets are treated as citations; the answer
+        # scaffolding the prompt asks for ("[mock]", "[১]") is not one.
+        if (_CHUNK_ID_RE.match(token) or token in ids) and token not in ids:
+            unresolved.append(f"[{token}]")
+    return unresolved
+
+
+def _answer_claims(answer: str) -> list[str]:
+    """Declarative sentences of the answer (questions are not claims)."""
+    claims: list[str] = []
+    for sentence in _ANSWER_SENTENCE_RE.findall(answer):
+        text = sentence.strip()
+        if not text or text.endswith(("?", "？")):
+            continue
+        text = _ANSWER_LABEL_RE.sub("", text).strip()
+        if not text:
+            continue
+        claims.append(text)
+    return claims
+
+
+def citation_check(
+    answer: str,
+    evidence_text: str,
+    *,
+    sources: Iterable[object] | None = None,
+) -> CitationVerdict:
+    """Verify that the answer resolves to, and is supported by, the evidence."""
     from bangla_gpt_api.retrieval.bm25 import tokenize
     from bangla_gpt_api.retrieval.hybrid import light_stem
+    from bangla_gpt_api.retrieval.query_analysis import content_terms
 
-    answer_terms = {light_stem(t) for t in tokenize(answer) if len(t) >= 3}
-    if not answer_terms:
-        return True
-    evidence_terms = {light_stem(t) for t in tokenize(evidence_text)}
-    coverage = sum(1 for t in answer_terms if t in evidence_terms) / len(answer_terms)
-    return coverage >= 0.25
+    judged: list[tuple[str, tuple[str, ...]]] = []
+    for claim in _answer_claims(answer):
+        terms = content_terms(claim)
+        if len(terms) >= _MIN_JUDGED_TERMS:
+            judged.append((claim, terms))
+
+    chunks = _citation_chunks(evidence_text, sources)
+    if not chunks:
+        # Nothing retrieved: a substantive answer cannot lean on nothing (the
+        # pre-rewrite verdict for this shape), while an answer with no
+        # checkable claim is not judged rather than failed.
+        if judged:
+            return CitationVerdict(False, "no_evidence")
+        return CitationVerdict(True, "no_evidence_to_check")
+    unresolved = _unresolved_citations(answer, chunks)
+    if unresolved:
+        return CitationVerdict(False, "unresolved_citation", tuple(unresolved))
+
+    evidence_stems = [{light_stem(token) for token in tokenize(text)} for _, text in chunks]
+    unsupported: list[str] = []
+    for claim, terms in judged:
+        best = max(
+            sum(1 for term in terms if light_stem(term) in stems) / len(terms)
+            for stems in evidence_stems
+        )
+        if best < _SENTENCE_SUPPORT_THRESHOLD:
+            unsupported.append(claim[:80])
+    if unsupported:
+        return CitationVerdict(False, "unsupported_claim", tuple(unsupported))
+    if not judged:
+        return CitationVerdict(True, "insufficient_signal")
+    return CitationVerdict(True, "ok")
+
+
+def verify_citation(
+    answer: str,
+    evidence_text: str,
+    *,
+    sources: Iterable[object] | None = None,
+) -> bool:
+    """Heuristic post-generation check: does the answer stand on the evidence?
+
+    Thin boolean form of :func:`citation_check` — see its docstring for the
+    resolution + per-chunk support policy and the warn-level wiring contract.
+    """
+    return citation_check(answer, evidence_text, sources=sources).verified
 
 
 # ── prompt-injection filter for corpus ingest ───────────────────────
