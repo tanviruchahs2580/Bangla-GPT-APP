@@ -24,6 +24,15 @@ next is written.
 |---|---|
 | [RAG_ARCHITECTURE.md](RAG_ARCHITECTURE.md) | Retrieval + grounding design |
 | [NCTB_DATA_PIPELINE.md](NCTB_DATA_PIPELINE.md) | Corpus acquisition → retrieval pipeline |
+| [ai/system-card.md](ai/system-card.md) | AI system card: purpose, users, models, data, limitations, baseline measurements |
+| [ai/risk-register.md](ai/risk-register.md) | AI risk register with owners, mitigations and testing check ids |
+| [ai/incident-response.md](ai/incident-response.md) | AI incident severities, procedures, rollback and generation-disable steps |
+
+## Language
+
+| Doc | Purpose |
+|---|---|
+| [glossary-bn.md](glossary-bn.md) | Proposed canonical Bangla terms (one per concept) and the numeral policy proposal |
 
 ## Operations & compliance
 
@@ -33,6 +42,7 @@ next is written.
 | [backup_dr.md](backup_dr.md) | Backup and disaster recovery |
 | [capacity_plan.md](capacity_plan.md) | Capacity planning |
 | [owasp_checklist.md](owasp_checklist.md) | OWASP review checklist |
+| [security/threat-model.md](security/threat-model.md) | Threat model: assets, actors, trust boundaries, mitigations by surface |
 | [security_scans.md](security_scans.md) | Security scan records |
 | [dependency_waivers.md](dependency_waivers.md) | Dependency risk waiver register |
 | [type-checking-plan.md](type-checking-plan.md) | mypy strictness plan |
