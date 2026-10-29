@@ -38,25 +38,9 @@
         সংযোগের অপেক্ষায়…
       </p>
     </main>
-    <script>
-      // Auto-reload the moment connectivity returns; manual retry always available.
-      var retryBtn = document.getElementById("retry");
-      var statusEl = document.getElementById("status");
-      function attempt() {
-        retryBtn.disabled = true;
-        statusEl.textContent = "সংযোগ পরীক্ষা করা হচ্ছে…";
-        fetch("/", { method: "HEAD", cache: "no-store" })
-          .then(function () { window.location.reload(); })
-          .catch(function () {
-            statusEl.textContent = "এখনো অফলাইন — সংযোগের অপেক্ষায়…";
-            retryBtn.disabled = false;
-          });
-      }
-      retryBtn.addEventListener("click", attempt);
-      window.addEventListener("online", function () {
-        statusEl.textContent = "সংযোগ ফিরেছে — লোড হচ্ছে…";
-        setTimeout(function () { window.location.reload(); }, 400);
-      });
-    </script>
+    <!-- PWA-02/FE-07: an external same-origin script, not an inline one: both
+         deployments ship `script-src 'self'` without a hash, and the inline
+         handler was blocked by it (the retry button did nothing). -->
+    <script src="/offline-retry.js" defer></script>
   </body>
 </html>

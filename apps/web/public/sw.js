@@ -15,6 +15,10 @@ const SHELL = [
   "/",
   "/index.html",
   "/offline.html",
+  // The fallback page's retry/auto-reload handler is an external script (the
+  // CSP forbids inline ones), so it must be in the cache too — otherwise the
+  // button is dead precisely when offline.html is served from it.
+  "/offline-retry.js",
   "/icon.svg",
   "/icon-192.png",
   "/icon-512.png",
