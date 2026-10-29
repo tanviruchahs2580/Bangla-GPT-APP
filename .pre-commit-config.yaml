@@ -11,6 +11,15 @@
 # check_readme_contract.py and check_i18n.py need the full apps/web tree and
 # so stay in CI only.
 #
+# GIT-10/F-099 (pre-commit parity): the gaps that REMAIN are deliberate, not
+# forgotten. mypy, eslint and prettier need the project's installed
+# dependencies (apps/api's dev extra) or apps/web's node_modules, which a
+# pre-commit hook environment does not have and cannot install without
+# duplicating the api/web CI jobs; gitleaks' official hook builds Go from
+# source locally (or needs Docker) and scans staged files only, while the CI
+# gate scans the full clone history -- so those four stay in CI. The cheap,
+# environment-free hooks (JSON/TOML validity) are added here.
+#
 # CI enforcement: `.github/workflows/ci.yml` (guardrails job) runs
 # `pre-commit run --all-files` against the pinned revision below, so a tree
 # that violates this file cannot merge. Keep the two in step.
@@ -23,7 +32,9 @@ repos:
     hooks:
       - id: check-added-large-files
         args: [--maxkb=512]
+      - id: check-json
       - id: check-merge-conflict
+      - id: check-toml
       - id: check-yaml
       - id: end-of-file-fixer
       - id: mixed-line-ending
