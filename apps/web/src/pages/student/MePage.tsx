@@ -161,8 +161,12 @@ export default function MePage() {
 
   useEffect(() => {
     if (!prefs) return;
-    setStyle(asText(prefs.learning_prefs.explanation_style ?? "standard"));
-    setFocus(asText(prefs.learning_prefs.subject_focus ?? ""));
+    // Defensive: a prefs payload without `learning_prefs` (or without the
+    // style key) must degrade to the defaults, not crash the effect -- a test
+    // mock with a partial payload found this as an uncaught TypeError.
+    const learning = (prefs.learning_prefs ?? {}) as Record<string, unknown>;
+    setStyle(asText(learning.explanation_style ?? "standard"));
+    setFocus(asText(learning.subject_focus ?? ""));
     setMemory(prefs.memory_enabled);
   }, [prefs]);
 
