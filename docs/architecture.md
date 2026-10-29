@@ -1,7 +1,73 @@
 # Architecture — Bangla GPT APP
 
-> Status: Phase 8 (web dashboard & production hardening). This document
-> records **actual, verified** decisions only. Pending items are explicitly marked.
+> Status: Phase 9 complete, plus the production-hardening waves through
+> 2026-10-29. This document records **actual, verified** decisions only.
+> Pending items are explicitly marked. The phase sections below are a
+> chronological decision log: where a later section contradicts an earlier
+> one, the later section wins. The C4 views at the top describe the system as
+> it exists today; the phase log under them explains how it got there.
+
+## C4 views (current, 2026-10-29)
+
+Derived from the routers, `docker-compose.yml` and the workflow files; the
+phase log below is the decision history.
+
+### L1 — System context
+
+```mermaid
+flowchart LR
+    subgraph actors["Actors"]
+        student["Student"]
+        teacher["Teacher"]
+        parent["Parent"]
+        schoolAdmin["School admin"]
+        platformAdmin["Platform admin"]
+    end
+    subgraph edge["TLS edge (trust boundary)"]
+        web["Web app<br/>React SPA / PWA / Capacitor Android"]
+        caddy["Caddy (tls profile) or nginx (web profile)"]
+    end
+    api["Bangla GPT API<br/>FastAPI, gunicorn + uvicorn workers"]
+    llm["LLM provider<br/>mock | Gemini | OpenAI"]
+    smtp["SMTP relay"]
+    sentry["Sentry (optional)"]
+    s3["S3-compatible corpus store (optional)"]
+    actors --> web
+    web -->|"/api/* over HTTPS"| caddy
+    caddy -->|"api:8000 on the compose network"| api
+    api -->|"redacted prompts"| llm
+    api -->|"verification / reset mail"| smtp
+    api -.->|"error reports (optional)"| sentry
+    api -.->|"corpus sync script"| s3
+```
+
+Production boot refuses the unsafe combinations (mock provider, SQLite with
+multiple workers, wildcard CORS, a short or default `JWT_SECRET`, missing
+metrics auth, an unbounded AI budget): `main.py::enforce_production_safety`.
+
+### L2 — Containers
+
+```mermaid
+flowchart TB
+    client["Browser / Android app"] --> edge["Caddy (tls profile)<br/>or nginx (web profile)"]
+    edge -->|"/"| nginx["web: nginx static SPA"]
+    edge -->|"/api/*"| api["api: gunicorn + uvicorn workers"]
+    api --> pg[("postgres:16 + pgBackRest<br/>postgres profile")]
+    api --> sqlite[("SQLite file<br/>single-node default")]
+    api --> redis[("redis:7<br/>rate limit, caches, token deny-list")]
+    api --> index["HybridIndex (in process)<br/>BM25 + vector, RRF fused"]
+    index --> corpus[("NCTB corpus dir<br/>data/nctb or bundled sample")]
+    worker["worker: arq<br/>worker profile"] --> redis
+    worker --> pg
+    backup["backup loop<br/>backup profile"] --> sqlite
+    backup --> pg
+    prom["prometheus + grafana + alertmanager<br/>monitoring profile"] -.->|"scrape /metrics with bearer token"| api
+```
+
+Verified against `docker-compose.yml` (profiles: core, web, tls, postgres,
+worker, monitoring, backup), `deploy/postgres/*`, `deploy/prometheus/*` and
+`apps/api/src/bangla_gpt_api/initialize/dependencies.py` (the index is built
+in process at boot, not a separate service).
 
 ## Goal
 
@@ -17,7 +83,7 @@ master plan (REQ-001..REQ-035+).
 | Python 3.12.10 | yes | Backend language |
 | Node 24 / npm 11 | yes | Frontend toolchain for the `apps/web` dashboard (Vite + React + TypeScript) |
 | Docker | yes | Containerized (Dockerfile + docker-compose.yml); CI builds and smoke-tests the image |
-| Flutter SDK | no | Mobile deferred (cannot verify locally) |
+| Flutter SDK | no | Flutter never adopted; the mobile shell that shipped is Capacitor Android (`apps/web/android`, assembled in CI) |
 | LLM API keys | no | Not provided; provider abstraction + deterministic mock |
 
 ## Stack decisions (Phase 1)
@@ -36,7 +102,7 @@ master plan (REQ-001..REQ-035+).
 ## Repository layout
 
 ```text
-BanglaGptApp/
+Bangla-GPT-APP/               # repository root (tanviruchahs2580/Bangla-GPT-APP)
 ├── apps/api/                 # FastAPI service
 │   ├── src/bangla_gpt_api/   # config, main, routers/, services/, retrieval/, nctb/
 │   └── tests/
@@ -112,7 +178,8 @@ BanglaGptApp/
 - **Tokens**: HS256 JWT (`pyjwt`), `sub`=user id, `role`, `exp`
   (`JWT_EXPIRE_MINUTES`). Secret from env (`JWT_SECRET`); the committed dev
   default is documented as insecure-on-purpose in `.env.example`.
-- **Authorization**: role gates (`student`, `teacher`; admin roles pending) +
+- **Authorization**: role gates (`student`, `teacher` at this phase; `parent`,
+  `admin` and `school_admin` arrive in the phases below) +
   object-level ownership checks — students can only read/submit their own
   data; teachers have class-wide read access and may generate quizzes for
   students. Cross-student access returns 403 (regression-tested).

@@ -30,6 +30,14 @@ next is written.
 | [ai/risk-register.md](ai/risk-register.md) | AI risk register with owners, mitigations and testing check ids |
 | [ai/incident-response.md](ai/incident-response.md) | AI incident severities, procedures, rollback and generation-disable steps |
 
+## Retrieval (rag/)
+
+| Doc | Purpose |
+|---|---|
+| [rag/architecture.md](rag/architecture.md) | As-built map of the retrieval/answering subsystem (verified against the code) |
+| [rag/golden-set-v3.md](rag/golden-set-v3.md) | Golden-set v3 design, composition, labelling and leakage rules |
+| [rag/target-architecture.md](rag/target-architecture.md) | Target retrieval architecture and phased roadmap (a plan, not current state) |
+
 ## Language
 
 | Doc | Purpose |
@@ -54,6 +62,8 @@ next is written.
 | [dpa_template.md](dpa_template.md) | Data processing agreement template |
 | [mobile_release.md](mobile_release.md) | Android/Capacitor release process |
 | [hosting_decision.md](hosting_decision.md) | Hosting choices |
+| [feature_flags.md](feature_flags.md) | Runtime switches with owner + exit condition per switch |
+| [tech_debt.md](tech_debt.md) | Technical debt register (effort / risk / owner) |
 | [LAUNCH_READINESS_CHECKLIST.md](LAUNCH_READINESS_CHECKLIST.md) | Owner launch gates |
 
 ## Store & native review

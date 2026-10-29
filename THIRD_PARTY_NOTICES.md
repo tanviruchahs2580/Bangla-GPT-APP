@@ -27,6 +27,26 @@ the index.
 These are npm dependencies, not committed files; the licence text is installed
 with each package at `node_modules/<package>/LICENSE`.
 
+## Bundled images (licence record owed)
+
+The web app ships seven UI background images and two PWA icons. Their
+provenance was not recorded when they were added, and no source, author or
+licence is stated anywhere in the tree:
+
+| File | What it is |
+| --- | --- |
+| `apps/web/src/assets/login-bg-desktop.jpg`, `apps/web/src/assets/login-bg-desktop.webp` | login/landing background, desktop |
+| `apps/web/src/assets/login-bg-mobile.jpg`, `apps/web/src/assets/login-bg-mobile.webp` | login/landing background, mobile |
+| `apps/web/src/assets/login-bg-blur.jpg` | blurred background layer |
+| `apps/web/src/assets/student-bg.jpg`, `apps/web/src/assets/student-bg.webp` | student dashboard background |
+| `apps/web/public/icon-192.png`, `apps/web/public/icon-512.png`, `apps/web/public/icon-maskable.svg` | PWA / Android launcher icons (project artwork) |
+
+**Owner action (F-137):** record each image's source and licence here, or
+replace it with generated artwork under a stated licence, before a public
+release. `scripts/check_asset_notices.py` fails when an image under
+`apps/web/src/assets/` or a `apps/web/public/icon-*.png` is not named in this
+file, so a new unrecorded asset cannot slip in behind this list.
+
 ## Runtime dependencies
 
 Taken from each project's PyPI metadata on 2026-10-10. Regenerate with
