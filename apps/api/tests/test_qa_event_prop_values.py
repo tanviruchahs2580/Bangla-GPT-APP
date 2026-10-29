@@ -9,9 +9,9 @@ safe-value side of the contract.
 """
 
 import json
-import sqlite3
 
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
@@ -52,14 +52,21 @@ def _stored_props(tmp_path) -> dict:
     settings = Settings(database_url=engine_url(tmp_path, "event-values"))
     from bangla_gpt_api.db.session import make_engine
 
-    # The endpoint commits synchronously, so a direct sqlite read is enough
-    # (same approach as tests/test_events_persistence.py).
-    conn = sqlite3.connect(make_engine(settings).url.database)
+    # Read through the engine, not a raw sqlite3 connection: this file runs in
+    # the engine-parity lane too (BGPT_TEST_DATABASE_URL), where url.database
+    # is a database name rather than a file and a sqlite3 handle cannot open it
+    # (measured: 2 failed / 1322 passed on the Postgres job of PR #94).
+    engine = make_engine(settings)
     try:
-        row = conn.execute("SELECT props FROM analytics_events ORDER BY id DESC LIMIT 1").fetchone()
+        with engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT props FROM analytics_events ORDER BY id DESC LIMIT 1")
+            ).fetchone()
     finally:
-        conn.close()
-    return json.loads(row[0])
+        engine.dispose()
+    # SQLite hands back the JSON text; psycopg deserializes JSON columns for us.
+    props = row[0]
+    return props if isinstance(props, dict) else json.loads(props)
 
 
 def test_pii_shaped_values_never_survive_any_key(tmp_path) -> None:

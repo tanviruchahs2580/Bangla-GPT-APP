@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): scrub PII from Sentry events before they are sent
 - fix(api): single-source the version fallback from pyproject
 - fix(compose): forward the production boot-guard keys from .env
+- fix(docs,test): point every QA-record link at the new report and make the inline-script guard case-insensitive
 - fix(e2e): refuse to seed the shared e2e accounts outside test lanes
 - fix(pwa): offline navigations answer 200 — restore the install prompt
 - fix(pwa): the offline-shell spec discovers the cache by prefix; changelog regen
@@ -52,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### CI/CD
 
+- ci(e2e): install all three browsers before the engines pass
 - ci(eval): run the golden hit@3 and red-team gates on every PR
 - ci(release): refuse tag/version drift and tag images by commit sha
 - ci: run the three-engine Bangla pass and guard the workflow tables
@@ -65,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(env): drop the stale VERSION value from the dev template
 - docs(i18n): add Bangla terminology glossary proposal
 - docs(privacy): rebuild the data-minimization doc from the real schema
+- docs(qa): publish the 2026-10-29 QA report and archive the predecessor
 - docs(rag): map the as-built pipeline and correct the overstated claims
 - docs(rag): record the latency range of both verification runs
 - docs(security): add threat model
