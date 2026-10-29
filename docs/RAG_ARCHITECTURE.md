@@ -278,4 +278,3 @@ truth.
 8. **Text inside an uploaded image was never declared untrusted**: the prompt
    now declares the vision part inside `<attached_image>` delimiters and
    `SYSTEM_PROMPT` carries a matching data-only rule.
-
