@@ -103,6 +103,10 @@ services:
       METRICS_TOKEN: ${METRICS_TOKEN:-}
       # Unset/0 means the per-user AI budget is off (deploy contract test).
       AI_MONTHLY_BUDGET_USD_PER_USER: ${AI_MONTHLY_BUDGET_USD_PER_USER:-0}
+      # F-031 kill switch: same silent-ignore gap as F-020 -- Settings reads
+      # AI_GENERATION_ENABLED but compose never forwarded it, so setting the
+      # switch in .env would not reach the container.
+      AI_GENERATION_ENABLED: ${AI_GENERATION_ENABLED:-true}
       # JSON override of the served rate-limit table; an empty string is not
       # valid JSON for this Settings field, so the default is an empty object.
       RATE_LIMIT_RULES: ${RATE_LIMIT_RULES:-{}}
