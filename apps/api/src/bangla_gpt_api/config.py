@@ -202,6 +202,26 @@ class Settings(BaseSettings):
     # a year of history is generous for dashboards and audits while keeping
     # the table bounded for accounts that live for years.
     ai_usage_retention_days: int = 365
+    # F-007: ai_jobs rows were only ever removed by account erasure, so the
+    # payload/result JSON of every finished job accumulated forever. Thirty
+    # days covers a teacher's own review window and any incident review that
+    # starts promptly; in-flight rows are never swept.
+    ai_jobs_retention_days: int = 30
+
+    # --- AI job lifecycle (F-007) ---
+    # Total runner executions for one job, at least 1. Transient provider
+    # failures (ProviderError / transport errors) get the remaining attempts
+    # with exponential backoff; caller-fixable failures (bad payload, unknown
+    # kind) fail on the first attempt -- see jobs.ai_job_retry_plan.
+    ai_job_max_attempts: int = 3
+    # First backoff delay in seconds; doubles per attempt, capped at 4 s (the
+    # provider chain's own ceiling), so a bounded retry chain stays inside
+    # the same order of magnitude as one provider call.
+    ai_job_retry_backoff_seconds: float = 0.5
+    # How long an Idempotency-Key stays replayable on POST /teacher/jobs. A
+    # repeat inside the window returns the SAME job (one provider call); a
+    # repeat after it is a new request.
+    ai_job_idempotency_window_minutes: int = 1440
 
     # --- parent invites ---
     invite_ttl_minutes: int = 1440

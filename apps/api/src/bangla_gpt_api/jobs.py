@@ -17,14 +17,16 @@ and the weekly digest could go out N times.
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from bangla_gpt_api.db.models import JobRun
+from bangla_gpt_api.db.models import AiJob, JobRun
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +36,122 @@ SessionFactory = Callable[[], Session]
 def _utc_naive_now() -> datetime:
     # DB datetimes are stored naive-UTC throughout this codebase.
     return datetime.now(UTC).replace(tzinfo=None)
+
+
+# --- F-007: AiJob lifecycle policy (idempotency, retry, in-flight states) ---
+# The policy lives here, next to the scheduled jobs, so the router that
+# accepts a job and the sweeper that ages one out read the same constants
+# instead of growing their own copies of them.
+
+#: Header a caller sends to make POST /teacher/jobs idempotent.
+IDEMPOTENCY_HEADER = "Idempotency-Key"
+
+#: A key shorter than this is a client bug rather than a token: it would
+#: make unrelated submissions collide. The ceiling matches the column.
+IDEMPOTENCY_KEY_MIN_LENGTH = 8
+IDEMPOTENCY_KEY_MAX_LENGTH = 64
+_KEY_PATTERN = re.compile(r"^[A-Za-z0-9._:-]+$")
+
+#: States where the runner is (or is about to be) doing work. The retention
+#: sweep must never delete one of these, however old the row looks.
+IN_FLIGHT_STATUSES = ("queued", "generating", "validating")
+#: Terminal states: the work is over and the row is history.
+TERMINAL_STATUSES = ("ready", "failed")
+#: Ceiling for one job-level backoff sleep, matching the provider chain's
+#: own ceiling (providers.base.MAX_BACKOFF_SECONDS).
+_MAX_JOB_BACKOFF_SECONDS = 4.0
+
+
+def normalize_idempotency_key(raw: str | None) -> str | None:
+    """Validate the optional Idempotency-Key header.
+
+    Returns None when the header is absent (the caller gets no replay
+    protection). Raises ValueError for a key that is present but unusable:
+    silently dropping it would make the documented replay contract a lie.
+    """
+    if raw is None:
+        return None
+    key = raw.strip()
+    if not (IDEMPOTENCY_KEY_MIN_LENGTH <= len(key) <= IDEMPOTENCY_KEY_MAX_LENGTH):
+        raise ValueError(
+            f"{IDEMPOTENCY_HEADER} must be "
+            f"{IDEMPOTENCY_KEY_MIN_LENGTH}-{IDEMPOTENCY_KEY_MAX_LENGTH} characters"
+        )
+    if not _KEY_PATTERN.match(key):
+        raise ValueError(f"{IDEMPOTENCY_HEADER} must be URL-safe printable ASCII")
+    return key
+
+
+def find_idempotent_job(
+    db: Session,
+    *,
+    user_id: int,
+    kind: str,
+    key: str,
+    window_minutes: int,
+    now: datetime | None = None,
+) -> AiJob | None:
+    """The job this (user, kind, key) already created inside the window.
+
+    The window bounds how long a key stays replayable: a key older than it
+    is a new request. Inside the window the unique index
+    (``uq_ai_jobs_idempotency``) is the authority -- a concurrent duplicate
+    that misses this read loses the INSERT and replays instead (see the
+    IntegrityError handling in POST /teacher/jobs).
+    """
+    now = now or _utc_naive_now()
+    cutoff = now - timedelta(minutes=max(1, window_minutes))
+    return (
+        db.execute(
+            select(AiJob)
+            .where(
+                AiJob.user_id == user_id,
+                AiJob.kind == kind,
+                AiJob.idempotency_key == key,
+                AiJob.created_at >= cutoff,
+            )
+            .order_by(AiJob.created_at.desc(), AiJob.id.desc())
+        )
+        .scalars()
+        .first()
+    )
+
+
+def is_transient_failure(exc: BaseException) -> bool:
+    """True for failures worth a second attempt at the job level.
+
+    The providers already retry inside one call (timeouts, 5xx, connection
+    resets) and raise ``ProviderError`` once that chain is exhausted, so at
+    the job level the question is different: was this a flaky upstream, or
+    a request the caller has to fix? ``ProviderError`` and the transport
+    errors are the flaky class. A bad payload (``DocumentInputError``, a
+    pydantic validation error, an unknown kind) and anything unexpected are
+    permanent -- retrying them burns provider budget to reproduce the same
+    failure.
+    """
+    from bangla_gpt_api.providers.base import ProviderError
+
+    return isinstance(exc, (ProviderError, TimeoutError, ConnectionError, OSError))
+
+
+def ai_job_retry_plan(settings: Any) -> tuple[int, tuple[float, ...]]:
+    """(max attempts, backoff delays) for one job, read from Settings.
+
+    ``AI_JOB_MAX_ATTEMPTS`` is the total number of runner executions, at
+    least 1 (retries disabled). The delays double from
+    ``AI_JOB_RETRY_BACKOFF_SECONDS`` and are capped, so a bounded retry
+    chain stays inside the same order of magnitude as one provider call
+    (``LLM_TOTAL_BUDGET_SECONDS`` 45 s) instead of holding a worker for
+    minutes.
+    """
+    attempts = max(1, int(getattr(settings, "ai_job_max_attempts", 1)))
+    base = max(0.0, float(getattr(settings, "ai_job_retry_backoff_seconds", 0.0)))
+    delays: list[float] = []
+    delay = base
+    for _ in range(attempts - 1):
+        delays.append(delay)
+        delay = min(delay * 2, _MAX_JOB_BACKOFF_SECONDS)
+    return attempts, tuple(delays)
 
 
 def claim_period(db: Session, job: str, period_key: str) -> bool:

@@ -378,6 +378,21 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--latency-report",
+        action="store_true",
+        help=(
+            "measure per-stage latency (rewrite, retrieval, lane decomposition,"
+            " rerank, gate, ttft, generate, total) on the hermetic stack and print"
+            " the p50/p95/p99 table (RAG-26)"
+        ),
+    )
+    parser.add_argument(
+        "--latency-items",
+        type=int,
+        default=120,
+        help="positive items the latency report measures (0 = all; default 120)",
+    )
+    parser.add_argument(
         "--real-model",
         action="store_true",
         help=(
@@ -403,6 +418,15 @@ def main() -> int:
     root = Path(__file__).resolve().parents[3]  # apps/api
     golden_path = Path(args.golden) if args.golden else root / "eval" / "golden_v3.json"
     baseline_path = Path(args.baseline) if args.baseline else root / "eval" / "baseline_v3.json"
+
+    if args.latency_report:
+        from bangla_gpt_api.evaluation.latency_report import format_table, measure
+
+        report = asyncio.run(measure(items_limit=args.latency_items))
+        print(json.dumps(report, indent=1))
+        print()
+        print(format_table(report))
+        return 0
 
     if args.build_golden_v3:
         payload = golden_v3.write_golden(golden_path, load_sample_corpus())

@@ -27,6 +27,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from bangla_gpt_api.db.models import (
+    AiJob,
     AiUsage,
     AnalyticsEventRow,
     AnswerLog,
@@ -36,6 +37,7 @@ from bangla_gpt_api.db.models import (
     ParentInvite,
     PasswordReset,
 )
+from bangla_gpt_api.jobs import IN_FLIGHT_STATUSES, TERMINAL_STATUSES
 
 # Token/verification/invite rows keep a 30-day grace window after expiry
 # (audit/replay window); chat follows the configured retention days.
@@ -56,6 +58,7 @@ def retention_report(
     analytics_retention_days: int | None = None,
     answer_log_retention_days: int | None = None,
     ai_usage_retention_days: int | None = None,
+    ai_jobs_retention_days: int | None = None,
 ) -> dict[str, int]:
     """Counts of rows the sweep WOULD delete (no writes)."""
     chat_cutoff = now - timedelta(days=chat_retention_days)
@@ -68,6 +71,8 @@ def retention_report(
     answer_cutoff = now - timedelta(days=answer_days)
     usage_days = 365 if ai_usage_retention_days is None else (ai_usage_retention_days)
     usage_cutoff = now - timedelta(days=usage_days)
+    jobs_days = 30 if ai_jobs_retention_days is None else (ai_jobs_retention_days)
+    jobs_cutoff = now - timedelta(days=jobs_days)
 
     conversations = db.execute(
         select(func.count(Conversation.id)).where(Conversation.created_at < chat_cutoff)
@@ -102,6 +107,18 @@ def retention_report(
     ai_usage = db.execute(
         select(func.count(AiUsage.id)).where(AiUsage.created_at < usage_cutoff)
     ).scalar_one()
+    # F-007: ai_jobs rows were only ever removed by account erasure, so the
+    # payload/result JSON grew without bound. Aged by updated_at (not
+    # created_at): a job that was retried or finished recently is not old
+    # history just because it was accepted a while ago. In-flight rows are
+    # excluded -- an old-looking queued row is a stuck job for the startup
+    # reaper, never something the sweeper silently deletes.
+    ai_jobs = db.execute(
+        select(func.count(AiJob.id)).where(
+            AiJob.status.in_(TERMINAL_STATUSES),
+            AiJob.updated_at < jobs_cutoff,
+        )
+    ).scalar_one()
     return {
         "conversations_deleted": int(conversations),
         "chat_messages_deleted": int(messages),
@@ -111,6 +128,7 @@ def retention_report(
         "analytics_events_deleted": int(analytics_events),
         "answer_log_deleted": int(answer_log),
         "ai_usage_deleted": int(ai_usage),
+        "ai_jobs_deleted": int(ai_jobs),
     }
 
 
@@ -127,6 +145,7 @@ def run_retention_sweep(
     analytics_days = getattr(settings, "analytics_retention_days", None)
     answer_days = getattr(settings, "answer_log_retention_days", None)
     usage_days = getattr(settings, "ai_usage_retention_days", None)
+    jobs_days = getattr(settings, "ai_jobs_retention_days", None)
     report = retention_report(
         db,
         now=now,
@@ -134,6 +153,7 @@ def run_retention_sweep(
         analytics_retention_days=analytics_days,
         answer_log_retention_days=answer_days,
         ai_usage_retention_days=usage_days,
+        ai_jobs_retention_days=jobs_days,
     )
     if dry_run:
         return {"dry_run": True, **report}
@@ -145,6 +165,7 @@ def run_retention_sweep(
     )
     answer_cutoff = now - timedelta(days=730 if answer_days is None else answer_days)
     usage_cutoff = now - timedelta(days=365 if usage_days is None else usage_days)
+    jobs_cutoff = now - timedelta(days=30 if jobs_days is None else jobs_days)
 
     old_convs = (
         db.execute(select(Conversation.id).where(Conversation.created_at < chat_cutoff))
@@ -199,6 +220,14 @@ def run_retention_sweep(
         AiUsage.id,
         AiUsage.created_at < usage_cutoff,
     )
+    # F-007: ai_jobs has a UUID primary key, so the id-cursor helper above
+    # does not apply; expired rows are removed in bounded id batches.
+    _delete_by_id_batches(
+        db,
+        AiJob,
+        AiJob.id,
+        (AiJob.status.in_(TERMINAL_STATUSES)) & (AiJob.updated_at < jobs_cutoff),
+    )
     # The pre-delete retention_report counts ARE the report (dialect-safe;
     # bulk-delete rowcount varies across drivers).
     return {"dry_run": False, **report}
@@ -233,6 +262,33 @@ def _delete_ranked(
         if not ids:
             break
         last_id = int(ids[-1])
+        db.execute(delete(model).where(id_col.in_(ids)))
+        db.commit()
+
+
+def _delete_by_id_batches(
+    db: Session,
+    model: type,
+    id_col: Any,
+    where: Any,
+    *,
+    chunk_size: int = DELETE_CHUNK,
+) -> None:
+    """Delete matching rows in bounded id batches, one commit per batch.
+
+    Used for tables whose primary key is not an ascending integer
+    (``ai_jobs.id`` is a random UUID string), where the keyset cursor of
+    :func:`_delete_ranked` cannot order rows. Each pass deletes the batch it
+    read, so the next SELECT sees strictly fewer expired rows and the loop
+    terminates; a crash mid-sweep leaves completed batches behind and the
+    next run continues (expired-only, idempotent).
+    """
+    while True:
+        ids = (
+            db.execute(select(id_col).where(where).limit(chunk_size)).scalars().all()
+        )
+        if not ids:
+            break
         db.execute(delete(model).where(id_col.in_(ids)))
         db.commit()
 

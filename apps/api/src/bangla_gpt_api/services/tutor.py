@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import logging
 import re
 import time
@@ -8,6 +9,16 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
+from bangla_gpt_api.evaluation.observability import (
+    RAG_GENERATION_OVERLOAD_TOTAL,
+    RAG_RETRIEVAL_DEGRADED_TOTAL,
+    TRACE_STORE,
+    TRACE_VERSION,
+    AnswerTraceStore,
+    observe_stage,
+    query_fingerprint,
+    record_trace,
+)
 from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.metrics import (
     PII_REDACTED_TOTAL,
@@ -118,6 +129,41 @@ def generation_disabled_response() -> AskResponse:
     )
 
 
+# F-117 (LLM-11): bounded admission for provider calls. The per-minute rate
+# limit bounds how many turns *start*; nothing bounded how many run at once, so
+# a burst of parallel streams could exhaust the provider quota and the worker's
+# stream budget (a stalled worker degrades every concurrent stream). The cap is
+# per process -- the unit that actually runs out of capacity -- and saturation
+# produces an ordinary refusal envelope, never a queue that outlives the
+# client's patience.
+MAX_CONCURRENT_GENERATIONS = 8
+#: How long a turn waits for a slot before refusing. Short on purpose: the
+#: worker timeout is 60s, and a turn that waited longer would be killed by the
+#: provider timeout anyway, taking its citations with it.
+GENERATION_QUEUE_TIMEOUT_SECONDS = 5.0
+GENERATION_BUSY_ANSWER = (
+    "এই মুহূর্তে অনেক শিক্ষার্থী একসাথে প্রশ্ন করছে, তাই উত্তর তৈরি করা যাচ্ছে না। "
+    "কিছুক্ষণ পর আবার চেষ্টা করো — তোমার প্রশ্নটি হারিয়ে যায়নি।"
+)
+
+
+class GenerationBusyError(RuntimeError):
+    """Raised when no generation slot became free inside the queue timeout."""
+
+
+def generation_busy_response() -> AskResponse:
+    """Refusal envelope for a saturated generation lane (mirrors F-031)."""
+    from bangla_gpt_api.services.safety import answer_confidence
+
+    return AskResponse(
+        answer=GENERATION_BUSY_ANSWER,
+        grounded=False,
+        sources=[],
+        refused_reason="ai_busy",
+        confidence=answer_confidence(False, "ai_busy", []),
+    )
+
+
 EVIDENCE_OPEN = "<evidence>"
 EVIDENCE_CLOSE = "</evidence>"
 # Delimiters for the vision turn (F-033/LLM-08): the attached image and any
@@ -169,6 +215,22 @@ SYSTEM_PROMPT = (
     # constant so the tests assert the sentence the prompt actually carries.
     "৮. " + IMAGE_DATA_RULE_SENTENCE
 )
+
+# Prompt identity (RAG-13): the template is a versioned artifact and its hash
+# is recorded on every answer (ai_call / ai_call_stream logs, the per-answer
+# trace). Without it an answer could not be attributed to a prompt revision
+# after the fact, and a prompt edit could change behaviour with no marker in
+# the data. Bump PROMPT_VERSION on any wording change; the hash then changes
+# on its own and any answer recorded under the old revision stays explicable.
+PROMPT_VERSION = "tutor-prompt-v1"
+
+
+def prompt_sha256(system: str = SYSTEM_PROMPT) -> str:
+    """SHA-256 of a system prompt template (the recorded prompt identity)."""
+    return hashlib.sha256(system.encode("utf-8")).hexdigest()
+
+
+PROMPT_SHA256 = prompt_sha256()
 
 _EVIDENCE_CLOSE_RE = re.compile(r"</\s*evidence\s*>", re.IGNORECASE)
 _EVIDENCE_OPEN_RE = re.compile(r"<\s*evidence\s*>", re.IGNORECASE)
@@ -285,6 +347,9 @@ class TutorService:
         circuit_breaker: CircuitBreaker | None = None,
         fallback_provider: LLMProvider | None = None,
         term_stats: TermStats | None = None,
+        trace_store: AnswerTraceStore | None = None,
+        max_concurrent_generations: int = MAX_CONCURRENT_GENERATIONS,
+        generation_queue_timeout: float = GENERATION_QUEUE_TIMEOUT_SECONDS,
     ) -> None:
         self.index = index
         # Corpus term statistics (document frequencies) that let the
@@ -309,6 +374,23 @@ class TutorService:
         self._router: ProviderFallbackRouter | None = None
         if circuit_breaker is not None:
             self._router = ProviderFallbackRouter(provider, fallback_provider, circuit_breaker)
+
+        # Per-answer traces (RAG-29): diagnostics with no student text in them.
+        # The default store is process-wide and bounded; a caller (tests, a
+        # specialised worker) can inject its own.
+        self.trace_store = trace_store or TRACE_STORE
+
+        # Bounded admission for provider calls (F-117). One semaphore per
+        # service instance == one per worker process, which is the resource
+        # that runs out. ``max_concurrent_generations <= 0`` disables the cap
+        # explicitly; the default never does.
+        self.max_concurrent_generations = int(max_concurrent_generations)
+        self.generation_queue_timeout = float(generation_queue_timeout)
+        self._generation_slots: asyncio.Semaphore | None = (
+            asyncio.Semaphore(self.max_concurrent_generations)
+            if self.max_concurrent_generations > 0
+            else None
+        )
 
     # Trigram similarity a near-identical evidence token must clear for a
     # missed query term to still count as covered. 0.6 admits single-keystroke
@@ -521,6 +603,53 @@ class TutorService:
             )
         return hits
 
+    #: Title of the lexical lane on a hybrid index; the fallback below uses it
+    #: directly when the fused pipeline (BM25 + vector + rerank) raises.
+    _LEXICAL_LANE_ATTR = "bm25"
+
+    def _retrieve_guarded(
+        self, question: str, class_level: int, subject: str | None, chapter: str | None = None
+    ) -> list:
+        """Retrieve with isolation: a failing lane degrades, never lies (RAG-28).
+
+        The hybrid pipeline is several stages in one call (two lanes, RRF,
+        rerank) and an exception in any of them used to surface as a 500. Now
+        the lexical lane serves the turn if it can, the degradation is metered
+        and logged, and if no lane can serve it the result is an empty hit list
+        -- which the grounding gate turns into a refusal. That last part is the
+        contract: a partial retrieval failure must never let an uncited answer
+        be presented as grounded.
+        """
+        try:
+            return self._retrieve(question, class_level, subject, chapter)
+        except Exception:  # a lane failure is a degraded turn, not a 500
+            logger.warning("retrieval_failed", exc_info=True)
+        lexical = getattr(self.index, self._LEXICAL_LANE_ATTR, None)
+        if lexical is None:
+            RAG_RETRIEVAL_DEGRADED_TOTAL.labels(stage="unavailable").inc()
+            return []
+        try:
+            hits = lexical.search(
+                question,
+                class_level=class_level,
+                subject=subject,
+                chapter=chapter,
+                top_k=self.top_k,
+            )
+        except Exception:
+            logger.warning("retrieval_lexical_fallback_failed", exc_info=True)
+            RAG_RETRIEVAL_DEGRADED_TOTAL.labels(stage="unavailable").inc()
+            return []
+        RAG_RETRIEVAL_DEGRADED_TOTAL.labels(stage="lexical_fallback").inc()
+        json_log(
+            logger,
+            logging.WARNING,
+            "tutor_retrieval_degraded",
+            stage="lexical_fallback",
+            evidence_chunks=len(hits),
+        )
+        return hits
+
     #: a follow-up question may at most carry this many content terms of the
     #: previous user turn; more would turn BM25 into a blurred keyword soup.
     _FOLLOWUP_CONTEXT_TERMS = 8
@@ -691,6 +820,35 @@ class TutorService:
             return None
         return verdict.reason or "unsafe_content"
 
+    @asynccontextmanager
+    async def _generation_slot(self) -> AsyncIterator[None]:
+        """Bounded admission around a provider call (F-117/LLM-11).
+
+        The wait is capped: past the queue timeout the turn refuses with the
+        busy envelope instead of occupying a worker slot that the provider
+        timeout would eventually kill anyway. Yields immediately when the cap
+        is disabled, and the slot is always released, including on provider
+        failure and client disconnect.
+        """
+        slots = self._generation_slots
+        if slots is None:
+            yield
+            return
+        try:
+            await asyncio.wait_for(slots.acquire(), timeout=self.generation_queue_timeout)
+        except TimeoutError:
+            RAG_GENERATION_OVERLOAD_TOTAL.labels(stage="queue_timeout").inc()
+            logger.warning(
+                "generation_admission_refused max_concurrent=%d timeout=%.1fs",
+                self.max_concurrent_generations,
+                self.generation_queue_timeout,
+            )
+            raise GenerationBusyError("generation lane saturated") from None
+        try:
+            yield
+        finally:
+            slots.release()
+
     @staticmethod
     def _refusal(answer: str, reason: str) -> AskResponse:
         """A refusal response, with its confidence derived the same way
@@ -721,23 +879,89 @@ class TutorService:
         chain. Raises ProviderError when nothing can serve the request."""
         fallback = self._fallback
         image_kwargs = {"image": image} if image is not None else {}
+        # The slot is held across the fallback attempt too: a failing primary
+        # provider must not multiply in-flight calls past the cap.
+        async with self._generation_slot():
+            try:
+                async with (
+                    CircuitBreakerMiddleware(self._breaker) if self._breaker else _null_ctx()
+                ):
+                    return await provider.generate(
+                        context_blocks, system=SYSTEM_PROMPT, **image_kwargs
+                    )
+            except ProviderError:
+                # Circuit breaker opened or provider error
+                if (
+                    self._router is not None
+                    and fallback is not None
+                    and self._router.fallback_active
+                ):
+                    logger.warning("tutor: primary provider failed, using fallback", exc_info=True)
+                    return await fallback.generate(
+                        context_blocks, system=SYSTEM_PROMPT, **image_kwargs
+                    )
+                raise
+            except CircuitOpenError:
+                # Circuit is open — try fallback
+                if fallback is not None:
+                    logger.warning("tutor: circuit breaker OPEN, using fallback provider")
+                    return await fallback.generate(
+                        context_blocks, system=SYSTEM_PROMPT, **image_kwargs
+                    )
+                raise ProviderError(
+                    f"AI provider unavailable (circuit OPEN for {provider.name};"
+                    " no fallback configured)"
+                ) from None
+
+    def _record_trace(
+        self,
+        *,
+        question: str,
+        outcome: str,
+        grounded: bool,
+        refused_reason: str | None,
+        hits: list | None,
+        model: str,
+        parameters: dict,
+        latency_ms: dict[str, int],
+        citation_verdict: str | None = None,
+        composed_prompt: str | None = None,
+        rewrite_applied: bool = False,
+        rewrite_terms: int = 0,
+    ) -> None:
+        """Record one privacy-safe trace (RAG-29).
+
+        Never carries student text: the question is a salted-length SHA-256
+        fingerprint, chunks are ids and scores, the prompt is a hash. A trace
+        failure must not fail an answer, so the writer is guarded -- the
+        diagnostic is worth strictly less than the response.
+        """
         try:
-            async with CircuitBreakerMiddleware(self._breaker) if self._breaker else _null_ctx():
-                return await provider.generate(context_blocks, system=SYSTEM_PROMPT, **image_kwargs)
-        except ProviderError:
-            # Circuit breaker opened or provider error
-            if self._router is not None and fallback is not None and self._router.fallback_active:
-                logger.warning("tutor: primary provider failed, using fallback", exc_info=True)
-                return await fallback.generate(context_blocks, system=SYSTEM_PROMPT, **image_kwargs)
-            raise
-        except CircuitOpenError:
-            # Circuit is open — try fallback
-            if fallback is not None:
-                logger.warning("tutor: circuit breaker OPEN, using fallback provider")
-                return await fallback.generate(context_blocks, system=SYSTEM_PROMPT, **image_kwargs)
-            raise ProviderError(
-                f"AI provider unavailable (circuit OPEN for {provider.name}; no fallback configured)"
-            ) from None
+            record_trace(
+                store=self.trace_store,
+                trace_version=TRACE_VERSION,
+                query_sha256=query_fingerprint(question),
+                prompt_sha256=PROMPT_SHA256,
+                composed_prompt_sha256=(
+                    hashlib.sha256(composed_prompt.encode("utf-8")).hexdigest()
+                    if composed_prompt is not None
+                    else None
+                ),
+                prompt_version=PROMPT_VERSION,
+                outcome=outcome,
+                grounded=grounded,
+                refused_reason=refused_reason,
+                rewrite_applied=rewrite_applied,
+                rewrite_terms=rewrite_terms,
+                chunk_ids=[str(getattr(hit.chunk, "id", "")) for hit in hits or []],
+                chunk_scores=[float(getattr(hit, "score", 0.0)) for hit in hits or []],
+                model=model,
+                parameters=parameters,
+                citation_verdict=citation_verdict,
+                latency_ms=latency_ms,
+            )
+        except Exception:  # a diagnostics failure must not fail an answer
+            logger.warning("answer_trace_failed", exc_info=True)
 
     def _assemble(
         self,
@@ -748,6 +972,10 @@ class TutorService:
         provider: LLMProvider,
         context_blocks: str,
         started: float,
+        question: str | None = None,
+        latency_ms: dict[str, int] | None = None,
+        rewrite_applied: bool = False,
+        rewrite_terms: int = 0,
     ) -> AskResponse:
         """Verify the citation, attach sources, and derive confidence.
 
@@ -760,19 +988,67 @@ class TutorService:
 
         if self._router is not None:
             self._router.record_result(True)
+        route_value = getattr(route, "value", route)
+        model = getattr(provider, "name", "unknown")
+        generation_ms = int((time.perf_counter() - started) * 1000)
+        parameters = {
+            "route": route_value,
+            "top_k": self.top_k,
+            "min_coverage": self.min_coverage,
+            "prompt_chars": len(context_blocks),
+            "prompt_version": PROMPT_VERSION,
+        }
         json_log(
             logger,
             logging.INFO,
             "ai_call",
-            route=getattr(route, "value", route),
-            model=getattr(provider, "name", "unknown"),
-            latency_ms=int((time.perf_counter() - started) * 1000),
+            route=route_value,
+            model=model,
+            latency_ms=generation_ms,
             prompt_chars=len(context_blocks),
             answer_chars=len(answer),
+            prompt_version=PROMPT_VERSION,
+            prompt_sha256=PROMPT_SHA256,
         )
+
+        def trace(
+            *,
+            outcome: str,
+            grounded: bool,
+            refused_reason: str | None,
+            citation_verdict: str | None,
+        ) -> None:
+            if question is None:
+                return
+            stages = {
+                **(latency_ms or {}),
+                "generate": generation_ms,
+                "total": sum((latency_ms or {}).values()) + generation_ms,
+            }
+            self._record_trace(
+                question=question,
+                outcome=outcome,
+                grounded=grounded,
+                refused_reason=refused_reason,
+                hits=hits,
+                model=model,
+                parameters=parameters,
+                latency_ms=stages,
+                citation_verdict=citation_verdict,
+                composed_prompt=context_blocks,
+                rewrite_applied=rewrite_applied,
+                rewrite_terms=rewrite_terms,
+            )
+
         blocked_reason = self._answer_trips_screen(answer)
         if blocked_reason is not None:
             logger.warning("output_screen_blocked_answer reason=%s", blocked_reason)
+            trace(
+                outcome="safety_refusal",
+                grounded=False,
+                refused_reason="output_screen",
+                citation_verdict=None,
+            )
             return self._refusal(UNSAFE_ANSWER_REFUSAL, "output_screen")
         refs = self._sources(hits)
         refused = _model_refused(answer)
@@ -793,6 +1069,14 @@ class TutorService:
                     verdict.reason,
                     list(verdict.detail[:3]),
                 )
+        trace(
+            outcome="model_refused" if refused else "answered",
+            grounded=not refused,
+            refused_reason="model_refused" if refused else None,
+            citation_verdict=(
+                None if refused else ("verified" if citation_ok else f"unverified:{verdict.reason}")
+            ),
+        )
         return AskResponse(
             answer=answer,
             grounded=not refused,
@@ -834,24 +1118,44 @@ class TutorService:
         question = normalize_query(question)
         if search_query is not None:
             search_query = normalize_query(search_query)
+        turn_started = time.perf_counter()
         unsafe = _screen_safety(question)
         if unsafe:
             refusal_copy, reason = unsafe
+            self._record_trace(
+                question=question,
+                outcome="safety_refusal",
+                grounded=False,
+                refused_reason=reason,
+                hits=None,
+                model=getattr(self.provider, "name", "unknown"),
+                parameters={"stage": "safety_screen"},
+                latency_ms={"total": int((time.perf_counter() - turn_started) * 1000)},
+            )
             return self._refusal(refusal_copy, reason)
 
         # search_query is a deliberate override (quiz-explain): never rewritten.
+        rewrite_started = time.perf_counter()
         retrieval_query = search_query or self._conversation_retrieval_query(question, history)
+        rewrite_ms = int((time.perf_counter() - rewrite_started) * 1000)
+        rewrite_applied = retrieval_query != question
+        rewrite_terms = len(retrieval_query.split()) - len(question.split())
         # Retrieval is synchronous CPU work (BM25 scan + rerank over the whole
         # corpus); offloaded off the event loop so a 120-250 ms p95 search no
         # longer freezes concurrent SSE streams on the same worker.
         retrieval_started = time.perf_counter()
         hits = await asyncio.to_thread(
-            self._retrieve, retrieval_query, class_level, subject, chapter
+            self._retrieve_guarded, retrieval_query, class_level, subject, chapter
         )
         retrieval_ms = int((time.perf_counter() - retrieval_started) * 1000)
         RAG_RETRIEVAL_LATENCY_SECONDS.observe(retrieval_ms / 1000.0)
+        gate_started = time.perf_counter()
         coverage_value, gate_pass = self._coverage_details(retrieval_query, hits)
+        gate_ms = int((time.perf_counter() - gate_started) * 1000)
         RAG_GATE_OUTCOMES_TOTAL.labels(gate="pass" if gate_pass else "refuse").inc()
+        stage_ms = {"rewrite": rewrite_ms, "retrieval": retrieval_ms, "gate": gate_ms}
+        for stage, value in stage_ms.items():
+            observe_stage(stage, value / 1000.0)
         # Retrieval telemetry. Logged without the question text: the privacy
         # posture of this service is that student wording is PII-adjacent and
         # is never written to logs (ask() redacts it before it leaves here).
@@ -866,6 +1170,21 @@ class TutorService:
             gate="pass" if gate_pass else "refuse",
         )
         if not gate_pass:
+            self._record_trace(
+                question=question,
+                outcome="insufficient_evidence",
+                grounded=False,
+                refused_reason="insufficient_evidence",
+                hits=hits,
+                model=getattr(self.provider, "name", "unknown"),
+                parameters={"coverage": coverage_value, "top_k": self.top_k},
+                latency_ms={
+                    **stage_ms,
+                    "total": sum(stage_ms.values()),
+                },
+                rewrite_applied=rewrite_applied,
+                rewrite_terms=rewrite_terms,
+            )
             return self._refusal(INSUFFICIENT_EVIDENCE_ANSWER, "insufficient_evidence")
         context_blocks = self._prompt_blocks(
             hits,
@@ -884,7 +1203,10 @@ class TutorService:
         )
         started = time.perf_counter()
 
-        answer = await self._generate(context_blocks, image=image, provider=provider_for_call)
+        try:
+            answer = await self._generate(context_blocks, image=image, provider=provider_for_call)
+        except GenerationBusyError:
+            return self._refusal(GENERATION_BUSY_ANSWER, "ai_busy")
         return self._assemble(
             answer,
             hits,
@@ -892,6 +1214,10 @@ class TutorService:
             provider=provider,
             context_blocks=context_blocks,
             started=started,
+            question=question,
+            latency_ms=stage_ms,
+            rewrite_applied=rewrite_applied,
+            rewrite_terms=rewrite_terms,
         )
 
     async def ask_stream(
@@ -916,6 +1242,7 @@ class TutorService:
         question = normalize_query(question)
         if search_query is not None:
             search_query = normalize_query(search_query)
+        turn_started = time.perf_counter()
         unsafe = _screen_safety(question)
         if unsafe:
             refusal_copy, reason = unsafe
@@ -925,19 +1252,38 @@ class TutorService:
                 response=AskResponse(answer=refusal_copy, grounded=False, refused_reason=reason),
             )
             RAG_GATE_REFUSALS_TOTAL.labels(reason=reason).inc()
+            self._record_trace(
+                question=question,
+                outcome="safety_refusal",
+                grounded=False,
+                refused_reason=reason,
+                hits=None,
+                model=getattr(self.provider, "name", "unknown"),
+                parameters={"stage": "safety_screen", "stream": True},
+                latency_ms={"total": int((time.perf_counter() - turn_started) * 1000)},
+            )
             return
 
+        rewrite_started = time.perf_counter()
         retrieval_query = search_query or self._conversation_retrieval_query(question, history)
+        rewrite_ms = int((time.perf_counter() - rewrite_started) * 1000)
+        rewrite_applied = retrieval_query != question
+        rewrite_terms = len(retrieval_query.split()) - len(question.split())
         # Same event-loop offload as the non-stream path: an SSE turn must not
         # stall other in-flight streams while it searches the corpus.
         retrieval_started = time.perf_counter()
         hits = await asyncio.to_thread(
-            self._retrieve, retrieval_query, class_level, subject, chapter
+            self._retrieve_guarded, retrieval_query, class_level, subject, chapter
         )
         retrieval_ms = int((time.perf_counter() - retrieval_started) * 1000)
         RAG_RETRIEVAL_LATENCY_SECONDS.observe(retrieval_ms / 1000.0)
+        gate_started = time.perf_counter()
         coverage_value, gate_pass = self._coverage_details(retrieval_query, hits)
+        gate_ms = int((time.perf_counter() - gate_started) * 1000)
         RAG_GATE_OUTCOMES_TOTAL.labels(gate="pass" if gate_pass else "refuse").inc()
+        stage_ms = {"rewrite": rewrite_ms, "retrieval": retrieval_ms, "gate": gate_ms}
+        for stage, value in stage_ms.items():
+            observe_stage(stage, value / 1000.0)
         json_log(
             logger,
             logging.INFO,
@@ -951,6 +1297,18 @@ class TutorService:
         if not gate_pass:
             yield StreamEvent(type="token", text=INSUFFICIENT_EVIDENCE_ANSWER)
             RAG_GATE_REFUSALS_TOTAL.labels(reason="insufficient_evidence").inc()
+            self._record_trace(
+                question=question,
+                outcome="insufficient_evidence",
+                grounded=False,
+                refused_reason="insufficient_evidence",
+                hits=hits,
+                model=getattr(self.provider, "name", "unknown"),
+                parameters={"coverage": coverage_value, "top_k": self.top_k, "stream": True},
+                latency_ms={**stage_ms, "total": sum(stage_ms.values())},
+                rewrite_applied=rewrite_applied,
+                rewrite_terms=rewrite_terms,
+            )
             yield StreamEvent(
                 type="final",
                 response=AskResponse(
@@ -980,36 +1338,66 @@ class TutorService:
         )
         chunks: list[str] = []
         answer_is_grounded = True
+        outage_sentinel = False
         started = time.perf_counter()
+        first_token_ms: int | None = None
         fallback_stream = self._fallback
 
         outage = False
         output_blocked = False
-        async for delta in self._stream_with_fallback(
-            context_blocks,
-            provider=provider_for_stream,
-            image=image,
-            fallback=fallback_stream,
-        ):
-            if delta is _OUTAGE:
-                # No fallback could serve the stream; the caller emits the
-                # outage notice exactly once.
-                outage = True
-                break
-            chunks.append(delta)
-            # F-032 on the streaming path: the accumulated answer is screened
-            # before each delta leaves, so the student receives at most the
-            # longest screen-clean prefix of a bad completion. The scan repeats
-            # over the buffer (O(answer^2) characters, bounded by the answer
-            # size and the simple alternations in the screen) because a pattern
-            # can span two deltas.
-            if self._answer_trips_screen("".join(chunks)) is not None:
-                output_blocked = True
-                break
-            yield StreamEvent(type="token", text=delta)
+        try:
+            # The slot is held for the whole stream: N concurrent streams are
+            # what the worker and the provider quota actually have to carry.
+            async with self._generation_slot():
+                async for delta in self._stream_with_fallback(
+                    context_blocks,
+                    provider=provider_for_stream,
+                    image=image,
+                    fallback=fallback_stream,
+                ):
+                    if delta is _OUTAGE:
+                        # No fallback could serve the stream; the caller emits
+                        # the outage notice exactly once.
+                        outage = True
+                        break
+                    if first_token_ms is None:
+                        first_token_ms = int((time.perf_counter() - started) * 1000)
+                        observe_stage("ttft", first_token_ms / 1000.0)
+                    chunks.append(delta)
+                    # F-032 on the streaming path: the accumulated answer is
+                    # screened before each delta leaves, so the student
+                    # receives at most the longest screen-clean prefix of a bad
+                    # completion. The scan repeats over the buffer
+                    # (O(answer^2) characters, bounded by the answer size and
+                    # the simple alternations in the screen) because a pattern
+                    # can span two deltas.
+                    if self._answer_trips_screen("".join(chunks)) is not None:
+                        output_blocked = True
+                        break
+                    yield StreamEvent(type="token", text=delta)
+        except GenerationBusyError:
+            RAG_GATE_REFUSALS_TOTAL.labels(reason="ai_busy").inc()
+            yield StreamEvent(type="token", text=GENERATION_BUSY_ANSWER)
+            yield StreamEvent(type="final", response=generation_busy_response())
+            return
 
         if output_blocked:
             logger.warning("output_screen_blocked_answer reason=stream_buffer")
+            self._record_trace(
+                question=question,
+                outcome="safety_refusal",
+                grounded=False,
+                refused_reason="output_screen",
+                hits=hits,
+                model=getattr(provider_for_stream, "name", "unknown"),
+                parameters={"stage": "output_screen", "stream": True},
+                latency_ms={
+                    **stage_ms,
+                    "generate": int((time.perf_counter() - started) * 1000),
+                },
+                rewrite_applied=rewrite_applied,
+                rewrite_terms=rewrite_terms,
+            )
             yield StreamEvent(type="token", text=UNSAFE_ANSWER_REFUSAL)
             yield StreamEvent(
                 type="final", response=self._refusal(UNSAFE_ANSWER_REFUSAL, "output_screen")
@@ -1018,6 +1406,7 @@ class TutorService:
 
         if outage:
             answer_is_grounded = False
+            outage_sentinel = True
             chunks = [_UNAVAILABLE_ANSWER]
             yield StreamEvent(type="token", text=_UNAVAILABLE_ANSWER)
 
@@ -1026,20 +1415,32 @@ class TutorService:
             yield StreamEvent(type="token", text=_UNAVAILABLE_ANSWER)
             chunks = [_UNAVAILABLE_ANSWER]
             answer_is_grounded = False
+            outage_sentinel = True
 
         answer = "".join(chunks).strip()
         # Record result for circuit breaker
         if self._router is not None:
             self._router.record_result(True)
+        stream_ms = int((time.perf_counter() - started) * 1000)
+        trace_stages = {
+            **stage_ms,
+            "generate": stream_ms,
+            "total": sum(stage_ms.values()) + stream_ms,
+        }
+        if first_token_ms is not None:
+            trace_stages["ttft"] = first_token_ms
         json_log(
             logger,
             logging.INFO,
             "ai_call_stream",
             route=route.value,
             model=getattr(provider_for_stream, "name", "unknown"),
-            latency_ms=int((time.perf_counter() - started) * 1000),
+            latency_ms=stream_ms,
+            ttft_ms=first_token_ms,
             prompt_chars=len(context_blocks),
             answer_chars=len(answer),
+            prompt_version=PROMPT_VERSION,
+            prompt_sha256=PROMPT_SHA256,
         )
         from bangla_gpt_api.services.safety import citation_check
 
@@ -1067,6 +1468,30 @@ class TutorService:
             answer_is_grounded = False
         if model_refused:
             RAG_GATE_REFUSALS_TOTAL.labels(reason="model_refused").inc()
+        if outage_sentinel:
+            outcome = "outage"
+        elif model_refused:
+            outcome = "model_refused"
+        else:
+            outcome = "answered"
+        self._record_trace(
+            question=question,
+            outcome=outcome,
+            grounded=answer_is_grounded,
+            refused_reason="model_refused" if model_refused else None,
+            hits=hits if answer_is_grounded else [],
+            model=getattr(provider_for_stream, "name", "unknown"),
+            parameters={"route": route.value, "top_k": self.top_k, "stream": True},
+            latency_ms=trace_stages,
+            citation_verdict=(
+                None
+                if not answer_is_grounded
+                else ("verified" if citation_ok else f"unverified:{verdict.reason}")
+            ),
+            composed_prompt=context_blocks,
+            rewrite_applied=rewrite_applied,
+            rewrite_terms=rewrite_terms,
+        )
         yield StreamEvent(
             type="final",
             response=AskResponse(

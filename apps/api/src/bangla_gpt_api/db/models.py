@@ -1056,6 +1056,25 @@ class AiJob(Base):
     queued -> generating -> validating -> ready | failed. The job row is the
     single source of truth; the inline runner opens its own session so the
     request session is never reused.
+
+    F-007: the row is also the idempotency record. A caller that supplies an
+    ``Idempotency-Key`` header gets that key stored here, and the unique
+    index below makes a second POST with the same (user, kind, key) return
+    the SAME job instead of paying for a second generation (the double-click
+    / client-retry case). Callers without the header store NULL, and NULLs
+    do not collide on either engine, so the header stays optional.
+
+    ``attempts`` counts runner executions: 1 for a first-try success, more
+    when transient provider failures were retried (bounded; see the retry
+    plan in ``bangla_gpt_api.jobs``). It is what an operator greps to tell
+    "the provider is flapping" from "the payload is bad".
+
+    What each state covers (F-171): ``queued`` is accepted-not-started,
+    ``generating`` is the provider call, and ``validating`` is the stage
+    between a validated result and its durable row -- the request payload
+    was already validated on entry to ``generating`` and the generator
+    validates its own output before returning, so the V step is
+    "validate-and-persist", not a separate scoring pass.
     """
 
     __tablename__ = "ai_jobs"
@@ -1063,6 +1082,20 @@ class AiJob(Base):
         CheckConstraint(
             "status IN ('queued', 'generating', 'validating', 'ready', 'failed')",
             name="ck_ai_jobs_status",
+        ),
+        CheckConstraint(
+            "attempts >= 0",
+            name="ck_ai_jobs_attempts",
+        ),
+        # A unique INDEX, not a table-level UniqueConstraint: it is additive
+        # on both engines (no table rebuild on SQLite) and NULL keys are
+        # exempt by SQL semantics, which is what keeps the header optional.
+        Index(
+            "uq_ai_jobs_idempotency",
+            "user_id",
+            "kind",
+            "idempotency_key",
+            unique=True,
         ),
     )
 
@@ -1073,6 +1106,8 @@ class AiJob(Base):
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
     result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     error: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
