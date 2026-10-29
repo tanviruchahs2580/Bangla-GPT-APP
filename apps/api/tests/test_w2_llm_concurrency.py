@@ -67,6 +67,10 @@ def test_cap_refuses_the_call_that_exceeds_it() -> None:
     assert second_response.refused_reason == "ai_busy"  # type: ignore[attr-defined]
     assert second_response.answer == GENERATION_BUSY_ANSWER  # type: ignore[attr-defined]
     assert provider.entered == 1
+    # A refused admission must not corrupt the semaphore: the lane serves the
+    # next turn once the holder is done.
+    tutor.provider = MockLLMProvider()
+    assert asyncio.run(tutor.ask(_QUESTION, 6, "science")).grounded is True
 
 
 def test_slot_is_released_after_a_successful_turn() -> None:
