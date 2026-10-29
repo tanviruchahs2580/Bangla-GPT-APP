@@ -99,6 +99,11 @@ def test_register_is_rate_limited(tmp_path) -> None:
     refused = client.post("/auth/register", json=_register_payload("bulk10@example.com"))
     assert refused.status_code == 429
     assert refused.json()["detail"]["code"] == "rate_limited"
+    # API-05: the other 429 producer (login lockout) already sent Retry-After;
+    # the middleware limiter must too, or a throttled client can only guess.
+    retry_after = refused.headers.get("Retry-After")
+    assert retry_after is not None, refused.headers
+    assert 1 <= int(retry_after) <= 60
 
 
 def test_register_rule_ships_by_default() -> None:

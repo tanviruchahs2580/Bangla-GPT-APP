@@ -153,9 +153,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             except RateLimitBackendError:
                 return JSONResponse({"detail": "Rate limiter unavailable"}, status_code=503)
             if not allowed:
+                # Retry-After so a throttled client waits instead of guessing
+                # (the auth lockout path already sends it; API-05).
+                wait_seconds = self.limiter.retry_after(f"{path_prefix}|{key_source}")
                 return JSONResponse(
                     {"detail": {"code": "rate_limited", "message": "Rate limit exceeded"}},
                     status_code=429,
+                    headers={"Retry-After": str(wait_seconds)},
                 )
         return await call_next(request)
 
