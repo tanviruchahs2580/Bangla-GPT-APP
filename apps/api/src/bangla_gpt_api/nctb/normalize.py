@@ -8,6 +8,7 @@ whitespace and optional numeral conversion.
 
 from __future__ import annotations
 
+import re
 import unicodedata
 
 ZERO_WIDTH_CHARS = {"\u200b", "\u200c", "\u200d", "\ufeff"}
@@ -56,6 +57,54 @@ BENGALI_CLASS_WORDS = {
     "একাদশ": 11,
     "দ্বাদশ": 12,
 }
+
+#: Longest ordinal first so "একাদশ" is never read as part of a shorter word.
+_ORDINAL = "|".join(sorted(BENGALI_CLASS_WORDS, key=len, reverse=True))
+
+#: Book-level class statements as printed on a cover/title page, including the
+#: RANGE forms real NCTB books use: "একাদশ ও দ্বাদশ শ্রেণি", "একাদশ-দ্বাদশ
+#: শ্রেণি", "নবম-দশম শ্রেণি", "ষষ্ঠ থেকে অষ্টম শ্রেণি". The ordinals and the
+#: word শ্রেণি must sit in one phrase; separate mentions ("ষষ্ঠ শ্রেণি ও সপ্তম
+#: শ্রেণি") are not a book-level statement and stay undetected by
+#: :func:`detect_class_level`.
+_CLASS_RANGE_RES = (
+    re.compile(f"({_ORDINAL})\\s*(?:-|–|—|থেকে|to)\\s*({_ORDINAL})\\s*শ্রেণী?"),
+    re.compile(f"({_ORDINAL})\\s*(?:ও|,|,|and)\\s*({_ORDINAL})\\s*শ্রেণী?"),
+)
+_CLASS_SINGLE_RE = re.compile(f"({_ORDINAL})\\s*শ্রেণী?")
+
+
+def detect_class_levels(text: str, *, scan_chars: int = 16000) -> tuple[int, ...]:
+    """Derived class levels a book's *cover statement* declares.
+
+    Returns the covered class set in ascending order — ``(11, 12)`` for a
+    combined HSC book whose cover reads "একাদশ ও দ্বাদশ শ্রেণি", ``(6,)`` for
+    "ষষ্ঠ শ্রেণি" — and ``()`` when no book-level statement is present, so a
+    caller never has to guess. Callers must pass the cover/title text only:
+    front-matter policy prose mentions many classes
+    ("ষষ্ঠ থেকে অষ্টম শ্রেণির ১৭টি ... নবম ও দশম শ্রেণির ২৭টি") and is not a
+    statement about the book itself.
+    """
+    head = normalize_bangla(text[:scan_chars])
+    for pattern in _CLASS_RANGE_RES:
+        match = pattern.search(head)
+        if match is None:
+            continue
+        low = BENGALI_CLASS_WORDS.get(match.group(1))
+        high = BENGALI_CLASS_WORDS.get(match.group(2))
+        if low is None or high is None:
+            continue
+        if low <= high:
+            return tuple(range(low, high + 1))
+        return tuple(sorted((low, high)))
+    singles = {
+        BENGALI_CLASS_WORDS[match.group(1)]
+        for match in _CLASS_SINGLE_RE.finditer(head)
+        if match.group(1) in BENGALI_CLASS_WORDS
+    }
+    if len(singles) == 1:
+        return (next(iter(singles)),)
+    return ()
 
 
 def detect_class_level(text: str, *, scan_chars: int = 16000) -> int | None:
