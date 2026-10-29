@@ -44,3 +44,29 @@ Reading guide:
    with `LLM_PROVIDER=gemini` + `GEMINI_API_KEY` set, then record the results
    here and triage every pair flagged for review. Until that run exists, bias
    remains unmeasured and this row stays UNMEASURED.
+
+## Rows added by the wave-2 generation/observability stream (2026-10-29)
+
+| # | Risk | RMF function | Owner (role) | Mitigation | Tested by | Residual status |
+|---|---|---|---|---|---|---|
+| 10 | Undiagnosable answers: a wrong or uncited answer cannot be attributed to a prompt revision, corpus revision, model or parameters after the fact | Measure / Manage | Engineering lead (AI/retrieval) | Versioned prompt template with SHA-256 recorded on every answer (`services/tutor.py` `PROMPT_VERSION`/`PROMPT_SHA256`), per-answer trace store with query fingerprint, chunk ids/scores, prompt hashes, model, parameters, citation verdict and per-stage latency (`evaluation/observability.py`; capacity 500, in-process, no student text) | RAG-13, RAG-29, F-130; `tests/test_w2_eval_trace.py`, `tests/test_w2_llm_prompt_extraction.py` | MEASURED for the answer path under mock; the aggregate is not yet served by `/admin/ai/quality` (handoff: the admin router belongs to another stream) |
+| 11 | Capacity collapse: parallel provider calls exhaust the quota or the worker, and a failing retrieval lane surfaces as a 500 | Manage | Engineering lead (AI/retrieval) | Per-process generation semaphore with a bounded queue and its own refusal envelope (`MAX_CONCURRENT_GENERATIONS`, `refused_reason="ai_busy"`), guarded retrieval that degrades to the lexical lane and refuses -- never generates -- when no lane serves, metered on `bgpt_generation_overload_total` and `bgpt_rag_retrieval_degraded_total` | RAG-28, LLM-11, F-117, F-131; `tests/test_w2_llm_concurrency.py`, `tests/test_w2_llm_retrieval_fallback.py` | MEASURED under mock; the cap value (8) and the latency targets in `docs/rag/architecture.md` section 6.3 are proposals pending load testing on real hardware |
+| 12 | Language and arithmetic integrity: a Bangla answer carries Assamese letters or switches script, or a numeric answer key contradicts its own arithmetic | Measure | Engineering lead (AI/quality) | Deterministic answer-side language legs in the eval suite (Bengali script share, U+09F0/U+09F1 count; `evaluation/metrics.py`), golden v3 construct set with Bangla/Banglish/mixed/typo strata and a leakage gate (`docs/rag/golden-set-v3.md`), semantic output-validation module (unique options, counts against the request, recomputed numeric keys; `evaluation/output_validation.py`) | RAG-21, LLM-07, RAG-19, F-118, F-120; `tests/test_w2_eval_language.py`, `tests/test_w2_llm_output_validation.py` | MEASURED: 0 Assamese letters and 1.00 language consistency on the mock; the validator is not yet wired into `services/generators/**` (handoff); reference-correctness and register legs stay UNVERIFIED-LIVE |
+
+## Licence and data inventory for the wave-2 additions
+
+The generation/observability stream added no model, no dataset, no font and no
+dependency: everything it introduces is standard-library Python plus the
+Prometheus client already constrained in `apps/api/constraints.txt`. The
+inventory of what the answer path already uses, for the record:
+
+| Asset | Where | Licence / basis | Status |
+|---|---|---|---|
+| Hashing char n-gram embedder | `retrieval/embedding.py` (repo code) | repository code, no third-party model | shipped |
+| Noto Sans Bengali | `data/fonts/`, `OFL.txt` | SIL Open Font License 1.1 | shipped with licence text |
+| Bundled sample corpus text | `data/sample_nctb/*.md` | declared original synthetic text (`docs/architecture.md:72`) | shipped; sample-corpus permission basis remains an owner item (F-046) |
+| NCTB textbook corpus | `data/nctb` (gitignored, not redistributed) | rights unresolved | OWNER-DECISION (F-046); not used by any measurement this stream committed |
+| Mock provider | `providers/mock.py` (repo code) | repository code; makes no external call | shipped |
+
+No new model download, dataset or package entered the tree from this stream's
+work, so no new licence obligation was created.

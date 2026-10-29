@@ -10,7 +10,7 @@ finding id.
 ## 1. What the system does today (implemented)
 
 - Every student free-text question passes a keyword screen before retrieval (`services/safety.py:83-106`). Six categories exist: self_harm, weapon_synthesis, drug_synthesis, sexual_content, violence, personal_data (`services/safety.py:25-57`). Romanized/English variants exist only for self_harm.
-- A refusal returns supportive copy, never an error page and never the matched pattern (`services/safety.py:109-117`). Self-harm refusals include the helpline sentence from `services/safety.py:14-18`; that number is pending owner verification (section 6) and must not be edited on assumption.
+- A refusal returns supportive copy, never an error page and never the matched pattern (`services/safety.py:109-117`). Self-harm refusals include the helpline sentence built from `SAFE_HELPLINES` in `services/safety.py`; the entries are the DGHS-documented 16263 and 999 with their source and retrieval date in the comment, and the guard test enforces that no unlisted number can be added.
 - The refusal is persisted as a reason code on the chat message (`ChatMessage.refused_reason`). The admin board aggregates it by reason and class over a window — counts only, deliberately no content and no identity (`routers/admin.py:330-365`). A self-harm disclosure therefore produces a count and a supportive answer to the child, and is visible to no human beyond those counts.
 - Answer feedback (thumbs up/down, optional comment) goes to an admin triage queue: oldest untriaged first, reporter identity withheld beyond user id, internal note field (`routers/tutor.py:944-1016`; `db/models.py:320-345`). Triage is manual.
 - There is no escalation concept in the codebase: a search for "escalat" over `apps/`, `docs/` and `scripts/` finds no path that notifies a teacher, counsellor, parent or anyone else about a disclosure or a flagged answer (audit F-LLM-12 / F-029). `SECURITY.md` covers data incidents only.
@@ -69,7 +69,7 @@ Response times are proposals; the repository records no incident timelines.
 ## 6. Notification list and the helpline
 
 - Proposed recipients, by role: platform on-call (availability), child-safety owner (SEV-1/2 safety), school safeguarding lead (school-side follow-up), data-protection owner (privacy), engineering lead (model/config regressions). Names, numbers and duty rota live with the owner, not in this repository.
-- The number shipped in `services/safety.py`, pending owner verification, is the only helpline the product shows. Do not edit it, "correct" it from memory, or validate it against unofficial sources; verification is an open owner action on the launch checklist (`docs/LAUNCH_READINESS_CHECKLIST.md:29-30`; audit F-LLM-11). A wrong number is itself a SEV-1 trigger.
+- The helplines the product shows are exactly the `SAFE_HELPLINES` entries (16263, 999), each documented by the Directorate General of Health Services with a source URL and retrieval date on the constant. Do not edit them from memory or add a number without a source: `apps/api/tests/test_qa_helpline_policy.py` blocks unlisted numbers, and a wrong number remains a SEV-1 trigger.
 
 ## 7. After an incident
 
@@ -114,3 +114,52 @@ those requires the section 5 `LLM_PROVIDER` lever (which also takes search
 down) or a future extension of this flag. There is **no admin endpoint to
 flip it** and no config reload — it is a deploy-time configuration, not a
 live control.
+
+## 9. Escalation path: implemented versus manual (2026-10-29)
+
+This section states, for the child-safety disclosure flow, exactly which parts
+a machine performs and which parts a human must perform. It is written against
+the code on this branch; nothing here describes a feature that does not exist.
+
+Implemented (automated):
+
+1. A self-harm or other unsafe disclosure is refused with supportive copy and
+   a helpline drawn from `SAFE_HELPLINES` (`services/safety.py`); the refusal
+   reason is persisted on the chat message (`ChatMessage.refused_reason`) and
+   metered on `bgpt_rag_gate_refusals_total{reason}`.
+2. `GET /admin/safety/refusals` aggregates those refusals by reason and class
+   over a window — counts only, no identity and no content
+   (`routers/admin.py:330-365`). A disclosure is therefore visible in
+   aggregate the morning after, and invisible in individual detail by design.
+3. `GET /admin/ai/quality` reports refusals by reason, thumbs up/down and the
+   share of low-confidence answers over the same window, so a rise in
+   `self_harm` refusals or in down-votes is observable without reading any
+   child's message.
+4. Every answer, including every refusal, now carries a privacy-safe trace —
+   query fingerprint, outcome, refusal reason, retrieved chunk ids, citation
+   verdict, latency (`evaluation/observability.py`, `TRACE_STORE`) — so an
+   investigation can reconstruct what the system did without retaining what
+   the child wrote.
+
+Manual (no code path exists; the escalation is a human procedure):
+
+1. Nobody is notified automatically. No email, no queue entry and no teacher
+   or counsellor task is created for a disclosure; a search for "escalat" over
+   the application code still finds no notification path, and the triage queue
+   for flagged answers (`routers/tutor.py:944-1016`) is manual as well.
+2. The on-call responder watches the refusal aggregates (section 3 of the
+   implemented list) and acts on the procedure in sections 4-6: classify
+   severity, decide on school-side follow-up, contact the safeguarding lead
+   listed by role in section 6.
+3. A refusing turn does not page anyone. Treat a self-harm refusal count above
+   the school's expected baseline as the trigger for review, and record the
+   review in the incident register. Until a notification path exists, the
+   escalation is only as fast as that review — the honest state of the
+   control, and an owner-visible gap rather than a claim of coverage.
+
+What a responder can and cannot see: reason counts, class-level splits,
+refusal timestamps, feedback ratings and per-answer traces (system-side only).
+A responder cannot see the child's question, the conversation or the child's
+identity from the AI-quality surfaces; reaching the child is a school-side,
+consent-bound process, never an API call.
+

@@ -105,3 +105,153 @@ files — see `docs/rag/target-architecture.md` P1.
   regenerate an unsupported answer.
 * Retrieval has no timeout/retry/fallback isolation, and `/tutor/ask`
   degrades to 503 (not retrieval-only) when the provider is unavailable.
+
+## 6. Generation and validation (wave-2 additions)
+
+Appended by the wave-2 generation/observability stream; sections 1-5 above are
+the retrieval stream's map and are unchanged. Everything here is as built on
+this branch and labelled where it is a proposal or unverified.
+
+### 6.1 Prompt identity (RAG-13)
+
+`services/tutor.py` owns the tutor system prompt as a versioned artifact:
+`PROMPT_VERSION` (`tutor-prompt-v1`) and `PROMPT_SHA256` (SHA-256 of the
+template). Both are emitted on every `ai_call` and `ai_call_stream` log line
+and on every per-answer trace, and the *composed* prompt (evidence + history +
+question) is hashed per answer as well. A wording change is a version bump: the
+hash then changes by itself and answers recorded under the old revision stay
+explicable. The extraction probes in `tests/test_w2_llm_prompt_extraction.py`
+assert that no answer carries a 24-character window of the prompt, including
+for extraction attempts appended to legitimate questions, which is stricter
+than the red-team suite's 40-character marker.
+
+### 6.2 Per-answer trace (RAG-29)
+
+`evaluation/observability.py` holds `AnswerTrace` / `AnswerTraceStore` and the
+process-wide `TRACE_STORE` the tutor writes to (capacity 500, in-process, never
+copied to the database). One trace per answer records: the question's SHA-256
+fingerprint (NFKC + whitespace squashed, truncated), whether a follow-up
+rewrite fired and by how many terms, the retrieved chunk ids and scores (none
+for refusals that never retrieved), the prompt version and both prompt hashes,
+the model, the parameters (`top_k`, `min_coverage`, route, `prompt_chars`), the
+citation verdict (`verified` or `unverified:<reason>`), the outcome
+(`answered`, `safety_refusal`, `insufficient_evidence`, `model_refused`,
+`outage`) and the per-stage latency. **No student text of any kind is stored**
+-- the fingerprint cannot be reversed and the chunks are ids, not text.
+
+`AnswerTraceStore.aggregate()` returns what a board should read: retained and
+total counts, grounded/refusal rates, outcomes, models, citation verdicts and
+p50/p95/p99 per stage; it contains nothing per-answer. The API surface that
+should serve it (`GET /admin/ai/quality` in `routers/admin.py`) is outside this
+stream's file ownership and is recorded as a handoff in the stream report,
+together with the exact three-line patch.
+
+### 6.3 Per-stage latency and targets (RAG-26)
+
+New histograms on the existing Prometheus registry
+(`evaluation/observability.py`, exported by `/metrics`):
+`bgpt_rag_stage_latency_seconds{stage}` with the fixed stage set
+(`rewrite`, `retrieval`, `gate`, `generate`, `ttft`, `total`) and
+`bgpt_generation_overload_total{stage}`. Labels carry no user, question, model
+or tenant value, so cardinality is bounded by construction.
+
+Measured on this tree with `python -m bangla_gpt_api.evaluation.cli
+--latency-report` (mock provider, bundled 78-chunk sample corpus, 120 positive
+golden items, 40 streaming samples; milliseconds):
+
+| stage | n | p50 | p95 | p99 |
+|---|---|---|---|---|
+| rewrite | 160 | 0.0 | 0.0 | 0.0 |
+| retrieval (tutor, threaded) | 160 | 10.0 | 107.4 | 161.6 |
+| lexical lane | 120 | 2.9 | 71.7 | 101.5 |
+| vector lane | 120 | 1.4 | 2.6 | 11.0 |
+| rerank | 120 | 4.4 | 12.5 | 36.4 |
+| gate | 160 | 2.0 | 38.1 | 57.1 |
+| time to first token | 34 | 0.0 | 0.0 | 0.0 |
+| generation (mock) | 125 | 0.0 | 8.0 | 10.8 |
+| total | 160 | 15.0 | 130.5 | 273.7 |
+
+Proposed targets, derived from these numbers and the audit's 2,599-chunk
+measurements (retrieval p95 367-495 ms there) -- targets, not measurements:
+
+| stage | target | basis |
+|---|---|---|
+| rewrite | p95 <= 5 ms | measured p95 < 1 ms; pure CPU, no model |
+| retrieval (search incl. rerank) | p95 <= 800 ms at <= 3,000 chunks | measured p95 107 ms at 78 chunks; 495 ms at 2,599 chunks |
+| rerank | p95 <= 150 ms | measured p95 12.5 ms; scales with candidate set |
+| gate | p95 <= 150 ms | measured p95 38 ms |
+| time to first token | p95 <= 2,500 ms (live provider) | UNVERIFIED-LIVE: the mock yields instantly; the worker timeout is 60 s |
+| total (non-stream) | p95 <= 3,000 ms at <= 3,000 chunks | measured p95 131 ms + live generation budget |
+
+Index capacity row to add to `docs/capacity_plan.md` (owned by the docs
+stream; recorded here as the stream's proposal):
+
+> | RAG index (per worker) | in-memory BM25 + hashed-vector over the served corpus; 78 sample chunks build in ~1 s and serve p95 107 ms; 2,599 NCTB chunks build in 44-59 s and serve p95 367-495 ms; ~0.5-2 KB RAM per chunk (text + postings + 384-dim vector) | rebuild per worker at boot, no shared store; scale by corpus size, not concurrency | `bgpt_rag_index_build_seconds`, `bgpt_rag_index_chunks`, `bgpt_rag_stage_latency_seconds{stage="retrieval"}` |
+
+### 6.4 Language integrity (RAG-21)
+
+`evaluation/metrics.py` now computes two deterministic answer-side legs on
+every grounded answer: Bengali script share (Bengali-block vs Latin characters)
+and the count of Assamese letters U+09F0/U+09F1. `language_verdict()` marks a
+Bangla-script question answered with a mostly non-Bangla reply as inconsistent,
+and the suite aggregates `language_consistency` plus
+`assamese_letter_violations`; both are printed by the eval CLI, which also
+labels the judge legs (`faithfulness` in `llm_judge` mode, reference
+correctness, register) as **UNVERIFIED-LIVE** whenever the deterministic
+overlap mode runs. Measured on the committed golden v3 set under the mock:
+language_consistency 1.0000, zero Assamese letters.
+
+### 6.5 Structured-output validation (LLM-07)
+
+`evaluation/output_validation.py` implements the semantic layer the generator
+parsers lacked: unique options and exactly one correct option per item, counts
+against the request (worksheet tiers, question-paper difficulty plan, rubric
+criteria, lesson-plan sections), marks arithmetic, and an exact
+fraction-based recomputation of arithmetic answer keys from the question text
+(`ast`-parsed, never `eval`). It returns violation lists rather than raising,
+so a caller can log the whole set. The call sites are in
+`services/generators/**`, which this stream does not own: the wiring (one call
+per generator after parsing, before persistence) is a handoff recorded in the
+stream report.
+
+### 6.6 Degraded modes (RAG-28, F-117, F-031)
+
+* **Retrieval failure**: `TutorService._retrieve_guarded` isolates the hybrid
+  pipeline. If the fused search raises, the lexical lane serves the turn
+  (`bgpt_rag_retrieval_degraded_total{stage="lexical_fallback"}`); if no lane
+  can serve it, the hit list is empty, the gate refuses, and generation is
+  never reached -- a partial retrieval failure cannot produce an uncited answer
+  marked grounded. Covered by `tests/test_w2_llm_retrieval_fallback.py`.
+* **Generation concurrency**: a per-process semaphore
+  (`MAX_CONCURRENT_GENERATIONS = 8`, held across the fallback attempt and for
+  the whole stream) with a bounded wait
+  (`GENERATION_QUEUE_TIMEOUT_SECONDS = 5`). A turn that cannot get a slot
+  refuses with its own envelope (`refused_reason="ai_busy"`, counted on
+  `bgpt_generation_overload_total`). Slots are released on success, provider
+  failure and client disconnect.
+* **Provider outage / operator kill switch**: unchanged from sections 1-5
+  (circuit breaker + fallback provider; `AI_GENERATION_ENABLED=false` answers
+  the generation surfaces with the disabled envelope while reading, search and
+  quizzes keep working). LLM-down mode still returns 503 rather than
+  retrieval-only excerpts -- that remains open (F-131) and is an owner-visible
+  gap, not a claim.
+
+### 6.7 Confidence display (LLM-10)
+
+`services/safety.answer_confidence` blends source breadth and mean retrieval
+score into a 0-1 value; it is a **heuristic signal, not a calibrated
+probability**, and no calibration against answer correctness exists. The label
+required in the UI copy (both languages) and in the API documentation is
+"retrieval confidence (heuristic)" / "সোর্স-নিশ্চয়তা (আনুমানিক)", with the
+percentage rendered against that label, never as a bare "x% confident". The UI
+strings live in `apps/web/src` (i18n) and the response-field description in
+`apps/api/src/bangla_gpt_api/schemas*.py`; neither file belongs to this stream,
+so both edits are handoffs recorded in the stream report with the exact strings.
+
+### 6.8 Evaluation set
+
+The committed set, its construction, composition, dev/test split and leakage
+rules are documented in `docs/rag/golden-set-v3.md`; the runnable integrity
+gate is `python -m bangla_gpt_api.evaluation.cli --check-golden` (part of
+`--gate`).
+
