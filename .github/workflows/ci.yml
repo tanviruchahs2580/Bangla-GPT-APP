@@ -725,8 +725,12 @@ jobs:
           python -m pip install --require-hashes -r constraints.txt
           python -m pip install --no-deps -e .
 
-      - name: Install Playwright firefox and webkit
-        run: npx playwright install firefox webkit --with-deps
+      - name: Install the browsers this pass drives
+        # All three: the config runs the spec in chromium, firefox and webkit,
+        # and chromium's headless shell is not part of the sibling job's
+        # chromium install in a fresh runner cache (measured: every test failed
+        # with "Executable doesn't exist ... chrome-headless-shell-linux64").
+        run: npx playwright install chromium firefox webkit --with-deps
 
       - name: Run the three-engine pass (chromium, firefox, webkit)
         env:
