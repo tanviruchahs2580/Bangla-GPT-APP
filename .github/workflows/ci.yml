@@ -679,6 +679,73 @@ jobs:
           print(f'mojibake scan clean across {len(files)} text files')
           PY
 
+      # F-006/BE-05: complexity used to be measured by nobody. `ruff check`
+      # (C901, mccabe max-complexity 20 in apps/api/pyproject.toml) refuses new
+      # offenders, but ruff's count and radon's grade disagree on boolean-heavy
+      # functions, so this is the independent radon view: no block at grade D
+      # (complexity 21) or worse outside a recorded budget.
+      #
+      # The budget is a ratchet. A new D+ block, or a recorded block whose
+      # score rose, fails the job. An entry that no longer offends only prints
+      # a warning, so a cross-stream refactor that splits a listed function
+      # cannot red another stream's change -- but the entry must be deleted in
+      # the next commit, and the numbers may only ever fall. Adding an entry
+      # requires the written reason in its comment.
+      - name: Complexity ratchet (radon, grade D and worse)
+        working-directory: apps/api
+        run: |
+          python -m pip install --quiet "radon==6.0.1"
+          python - <<'PY'
+          import json
+          import subprocess
+          import sys
+
+          # path::function (Class.method for methods) -> measured radon score.
+          # Owned by other wave-2 workstreams; the splits are handed to them.
+          BUDGET = {
+              "src/bangla_gpt_api/data/nctb_loader.py::load_nctb_corpus": 33,  # corpus build
+              "src/bangla_gpt_api/evaluation/fairness_probes.py::validate_fixture": 32,  # eval tooling
+              "src/bangla_gpt_api/evaluation/golden_v3.py::check_golden": 24,  # eval tooling
+              "src/bangla_gpt_api/evaluation/metrics.py::run_suite": 36,  # eval tooling
+              "src/bangla_gpt_api/nctb/manifest.py::verify_corpus_manifest": 21,  # corpus build
+              "src/bangla_gpt_api/services/gdpr.py::build_data_export": 46,  # privacy stream
+              "src/bangla_gpt_api/services/tutor.py::TutorService.ask_stream": 36,  # tutor stream
+              "src/bangla_gpt_api/services/tutor.py::TutorService._coverage_details": 34,  # tutor stream
+          }
+          raw = subprocess.run(
+              [sys.executable, "-m", "radon", "cc", "src", "-s", "-j"],
+              capture_output=True,
+              text=True,
+              check=True,
+          ).stdout
+          findings = {}
+          for path, blocks in json.loads(raw).items():
+              for block in blocks:
+                  if block["complexity"] > 20:
+                      name = block["name"]
+                      if block.get("classname"):
+                          name = f"{block['classname']}.{name}"
+                      findings[f"{path.replace(chr(92), '/')}::{name}"] = block["complexity"]
+          regressions = []
+          for key, score in sorted(findings.items()):
+              limit = BUDGET.get(key)
+              if limit is None:
+                  regressions.append(f"new block above complexity 20: {key} ({score})")
+              elif score > limit:
+                  regressions.append(f"{key} rose from {limit} to {score}")
+          for key in sorted(BUDGET):
+              if key not in findings:
+                  print(f"::warning::stale complexity budget entry ({key}); delete it")
+          if regressions:
+              for line in regressions:
+                  print(f"::error::{line}")
+              sys.exit(1)
+          print(
+              f"complexity ratchet holds: {len(findings)} block(s) above 20, "
+              "all inside the recorded budget"
+          )
+          PY
+
   e2e:
     name: E2E (playwright, chromium)
     # C-01: the browser layer of the pyramid had vanished from main — the

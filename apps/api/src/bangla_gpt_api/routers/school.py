@@ -8,8 +8,9 @@ import json
 import logging
 import secrets
 from collections import defaultdict
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Query, Response
 from sqlalchemy import func, select
@@ -588,32 +589,27 @@ def school_class_register(
 # ── school dashboard (aggregate learning health, no per-message data) ──
 
 
-@router.get("/school/overview", response_model=SchoolHealthOut)
-def school_health_overview(
-    db: DbSession, user: SchoolStaffUser, school_id: int | None = Query(default=None)
-) -> SchoolHealthOut:
-    """Whole-school counts + strong/support/risk buckets + at-risk list.
+@dataclass
+class _HealthBuckets:
+    """Strong/support/risk/ungraded counts plus the at-risk rows."""
 
-    Aggregates only: buckets and averages over graded attempts; chat data
-    contributes nothing beyond a count of sessions started in the last
-    7 days (no message content ever leaves this endpoint).
+    strong: int = 0
+    support: int = 0
+    risk: int = 0
+    ungraded: int = 0
+    at_risk: list[SchoolAtRiskRow] = field(default_factory=list)
+
+
+def _school_roster(
+    db: Session, school: School
+) -> tuple[list[ClassRoom], list[Student], dict[int, ClassRoom]]:
+    """Rooms, enrolled students (one room each) and student -> room.
+
+    The dashboard needs the room objects themselves (level + section); the
+    paged roster path has its own SQL-side variant because it pages before it
+    loads.
     """
-    if user.role == "school_admin":
-        if school_id is not None and school_id != user.school_id:
-            raise HTTPException(
-                status_code=403,
-                detail={"code": "other_school", "message": "Scoped to your own school"},
-            )
-        school = db.get(School, user.school_id) if user.school_id else None
-        if school is None:
-            raise HTTPException(
-                status_code=404, detail={"code": "school_not_found", "message": "school not found"}
-            )
-    else:  # admin: any school, default school when none requested
-        school = db.get(School, school_id) if school_id else None
-        if school is None:
-            school = _default_school(db)
-    rooms = db.execute(select(ClassRoom).where(ClassRoom.school_id == school.id)).scalars().all()
+    rooms = list(db.execute(select(ClassRoom).where(ClassRoom.school_id == school.id)).scalars())
     room_ids = [r.id for r in rooms]
     students: list[Student] = []
     room_of: dict[int, ClassRoom] = {}
@@ -632,6 +628,71 @@ def school_health_overview(
                 s.id: s for s in db.execute(select(Student).where(Student.id.in_(ids))).scalars()
             }
             students = [by_id[i] for i in ids if i in by_id]
+    return rooms, students, room_of
+
+
+def _sessions_last_7d(db: Session, student_ids: list[int]) -> int:
+    """Chat sessions started in the last 7 days (count only, no content)."""
+    if not student_ids:
+        return 0
+    since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=7)
+    return int(
+        db.execute(
+            select(func.count(Conversation.id)).where(
+                Conversation.student_id.in_(student_ids),
+                Conversation.created_at >= since,
+            )
+        ).scalar_one()
+    )
+
+
+def _health_buckets(
+    students: list[Student], room_of: dict[int, ClassRoom], percents: dict[int, list[float]]
+) -> _HealthBuckets:
+    """Bucket every roster student by their average/trend (at-risk weakest first)."""
+    out = _HealthBuckets()
+    for s in students:
+        scores = percents.get(s.id, [])
+        avg = atrisk.avg_pct(scores)
+        trend = atrisk.score_trend(scores)
+        if avg is None:
+            out.ungraded += 1
+            continue
+        room = room_of.get(s.id)
+        if not atrisk.is_at_risk(avg, trend):
+            if avg >= SCHOOL_STRONG_AVG:
+                out.strong += 1
+            else:
+                out.support += 1
+            continue
+        out.risk += 1
+        out.at_risk.append(
+            SchoolAtRiskRow(
+                student_id=s.id,
+                name=s.name,
+                class_level=room.class_level if room else (s.class_level or 0),
+                section=room.section if room else "",
+                attempts_graded=len(scores),
+                avg_score_pct=avg,
+                trend=trend,
+            )
+        )
+    out.at_risk.sort(key=lambda r: r.avg_score_pct if r.avg_score_pct is not None else 0.0)
+    return out
+
+
+@router.get("/school/overview", response_model=SchoolHealthOut)
+def school_health_overview(
+    db: DbSession, user: SchoolStaffUser, school_id: int | None = Query(default=None)
+) -> SchoolHealthOut:
+    """Whole-school counts + strong/support/risk buckets + at-risk list.
+
+    Aggregates only: buckets and averages over graded attempts; chat data
+    contributes nothing beyond a count of sessions started in the last
+    7 days (no message content ever leaves this endpoint).
+    """
+    school = _actor_school(db, user, school_id)
+    rooms, students, room_of = _school_roster(db, school)
     student_ids = [s.id for s in students]
     teachers = int(
         db.execute(
@@ -640,53 +701,13 @@ def school_health_overview(
             )
         ).scalar_one()
     )
-    sessions_7d = 0
-    if student_ids:
-        since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=7)
-        sessions_7d = int(
-            db.execute(
-                select(func.count(Conversation.id)).where(
-                    Conversation.student_id.in_(student_ids),
-                    Conversation.created_at >= since,
-                )
-            ).scalar_one()
-        )
     percents = _attempt_percents(db, student_ids)
-    strong = support = risk = ungraded = 0
-    at_risk_rows: list[SchoolAtRiskRow] = []
-    for s in students:
-        scores = percents.get(s.id, [])
-        avg = atrisk.avg_pct(scores)
-        trend = atrisk.score_trend(scores)
-        room = room_of.get(s.id)
-        class_level = room.class_level if room else (s.class_level or 0)
-        section = room.section if room else ""
-        if avg is None:
-            ungraded += 1
-            continue
-        if atrisk.is_at_risk(avg, trend):
-            risk += 1
-            at_risk_rows.append(
-                SchoolAtRiskRow(
-                    student_id=s.id,
-                    name=s.name,
-                    class_level=class_level,
-                    section=section,
-                    attempts_graded=len(scores),
-                    avg_score_pct=avg,
-                    trend=trend,
-                )
-            )
-        elif avg >= SCHOOL_STRONG_AVG:
-            strong += 1
-        else:
-            support += 1
-    graded = strong + support + risk
+    buckets = _health_buckets(students, room_of, percents)
+    graded = buckets.strong + buckets.support + buckets.risk
 
     def _pct(n: int) -> float:
         return round(100.0 * n / graded, 1) if graded else 0.0
 
-    at_risk_rows.sort(key=lambda r: r.avg_score_pct if r.avg_score_pct is not None else 0.0)
     return SchoolHealthOut(
         school_id=school.id,
         name=school.name,
@@ -694,15 +715,15 @@ def school_health_overview(
         students=len(students),
         teachers=teachers,
         classrooms=len(rooms),
-        sessions_7d=sessions_7d,
-        strong=strong,
-        support=support,
-        risk=risk,
-        ungraded=ungraded,
-        strong_pct=_pct(strong),
-        support_pct=_pct(support),
-        risk_pct=_pct(risk),
-        at_risk=at_risk_rows,
+        sessions_7d=_sessions_last_7d(db, student_ids),
+        strong=buckets.strong,
+        support=buckets.support,
+        risk=buckets.risk,
+        ungraded=buckets.ungraded,
+        strong_pct=_pct(buckets.strong),
+        support_pct=_pct(buckets.support),
+        risk_pct=_pct(buckets.risk),
+        at_risk=buckets.at_risk,
     )
 
 
@@ -765,27 +786,20 @@ def _school_students_by_room(
     return [rows[i] for i in ids if i in rows], room_of
 
 
-@router.get("/school/students", response_model=SchoolStudentPage)
-def school_students(
-    db: DbSession,
-    user: SchoolStaffUser,
-    school_id: Annotated[int | None, Query()] = None,
-    class_level: Annotated[int | None, Query(ge=1, le=12)] = None,
-    limit: Annotated[int, Query(ge=1, le=ROSTER_PAGE_MAX_LIMIT)] = ROSTER_PAGE_DEFAULT_LIMIT,
-    offset: Annotated[int, Query(ge=0)] = 0,
-) -> SchoolStudentPage:
-    """Paginated school roster: id, name, grade, section, approximate last
-    activity and quiz-attempt count. NO email/phone ever.
+def _roster_page(
+    db: Session,
+    school: School,
+    *,
+    class_level: int | None,
+    limit: int,
+    offset: int,
+) -> tuple[int, list[Any], dict[int, ClassRoom], dict[int, Student]]:
+    """One SQL-side page of the enrollment join, with total and lookups.
 
-    "last_active" is the best honest signal available server-side: the
-    newer of the last tracked activity day and the last quiz attempt.
+    School membership is classroom membership; one room per student (lowest
+    room id wins, matching the original setdefault-first behaviour) and order
+    by student id are preserved from the former whole-roster load.
     """
-    school = _actor_school(db, user, school_id)
-    # SQL-side paging over the enrollment join (school membership is
-    # classroom membership). Was: the WHOLE roster materialised, then sliced
-    # in Python — every page cost O(school size). Order (student id) and the
-    # one-room-per-student rule (lowest room id wins, matching the previous
-    # setdefault-first behavior) are preserved.
     membership = (
         select(
             ClassStudent.student_id.label("student_id"),
@@ -807,7 +821,6 @@ def school_students(
         .mappings()
         .all()
     )
-    page_ids = [int(r["student_id"]) for r in page_rows]
     room_by_id = {
         r.id: r
         for r in db.execute(
@@ -816,38 +829,73 @@ def school_students(
     }
     students = {
         s.id: s
-        for s in db.execute(select(Student).where(Student.id.in_(page_ids or [0]))).scalars()
+        for s in db.execute(
+            select(Student).where(Student.id.in_([int(r["student_id"]) for r in page_rows] or [0]))
+        ).scalars()
     }
-    room_of = {int(r["student_id"]): int(r["room_id"]) for r in page_rows}
-    ids = [i for i in page_ids if i in students]
+    return total, list(page_rows), room_by_id, students
+
+
+def _last_active_and_attempts(db: Session, ids: list[int]) -> tuple[dict[int, str], dict[int, int]]:
+    """Approximate last-active day and attempt count per student, in two queries.
+
+    "last_active" is the newer of the last tracked activity day and the last
+    quiz attempt: the best honest signal available server-side.
+    """
     last_day: dict[int, str] = {}
     attempts: dict[int, int] = {}
-    if ids:
-        for sid, day in db.execute(
-            select(DailyActivity.student_id, func.max(DailyActivity.date))
-            .where(DailyActivity.student_id.in_(ids))
-            .group_by(DailyActivity.student_id)
-        ).all():
-            last_day[sid] = str(day)
-        for sid, ts in db.execute(
-            select(QuizAttempt.student_id, func.max(QuizAttempt.created_at))
-            .where(QuizAttempt.student_id.in_(ids))
-            .group_by(QuizAttempt.student_id)
-        ).all():
-            if ts is None:
-                # Unreachable per the model (created_at is NOT NULL), but
-                # legacy SQLite rows may predate that constraint; skipping is
-                # the safe response if one appears.
-                continue  # type: ignore[unreachable]
-            iso = str(ts)[:10]
-            if sid not in last_day or iso > last_day[sid]:
-                last_day[sid] = iso
-        for sid, n in db.execute(
-            select(QuizAttempt.student_id, func.count())
-            .where(QuizAttempt.student_id.in_(ids))
-            .group_by(QuizAttempt.student_id)
-        ).all():
-            attempts[sid] = int(n)
+    if not ids:
+        return last_day, attempts
+    for sid, day in db.execute(
+        select(DailyActivity.student_id, func.max(DailyActivity.date))
+        .where(DailyActivity.student_id.in_(ids))
+        .group_by(DailyActivity.student_id)
+    ).all():
+        last_day[sid] = str(day)
+    for sid, ts in db.execute(
+        select(QuizAttempt.student_id, func.max(QuizAttempt.created_at))
+        .where(QuizAttempt.student_id.in_(ids))
+        .group_by(QuizAttempt.student_id)
+    ).all():
+        if ts is None:
+            # Unreachable per the model (created_at is NOT NULL), but legacy
+            # SQLite rows may predate that constraint; skipping is the safe
+            # response if one appears.
+            continue  # type: ignore[unreachable]
+        iso = str(ts)[:10]
+        if sid not in last_day or iso > last_day[sid]:
+            last_day[sid] = iso
+    for sid, n in db.execute(
+        select(QuizAttempt.student_id, func.count())
+        .where(QuizAttempt.student_id.in_(ids))
+        .group_by(QuizAttempt.student_id)
+    ).all():
+        attempts[sid] = int(n)
+    return last_day, attempts
+
+
+@router.get("/school/students", response_model=SchoolStudentPage)
+def school_students(
+    db: DbSession,
+    user: SchoolStaffUser,
+    school_id: Annotated[int | None, Query()] = None,
+    class_level: Annotated[int | None, Query(ge=1, le=12)] = None,
+    limit: Annotated[int, Query(ge=1, le=ROSTER_PAGE_MAX_LIMIT)] = ROSTER_PAGE_DEFAULT_LIMIT,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> SchoolStudentPage:
+    """Paginated school roster: id, name, grade, section, approximate last
+    activity and quiz-attempt count. NO email/phone ever.
+
+    "last_active" is the best honest signal available server-side: the
+    newer of the last tracked activity day and the last quiz attempt.
+    """
+    school = _actor_school(db, user, school_id)
+    total, page_rows, room_by_id, students = _roster_page(
+        db, school, class_level=class_level, limit=limit, offset=offset
+    )
+    room_of = {int(r["student_id"]): int(r["room_id"]) for r in page_rows}
+    ids = [int(r["student_id"]) for r in page_rows if int(r["student_id"]) in students]
+    last_day, attempts = _last_active_and_attempts(db, ids)
     items = [
         SchoolStudentRow(
             student_id=s.id,

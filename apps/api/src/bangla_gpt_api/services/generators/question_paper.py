@@ -127,6 +127,47 @@ def _jaccard(a: set[str], b: set[str]) -> float:
     return len(a & b) / len(union)
 
 
+def _shape_question(i: int, q: object, chapters: list[str], marks: int) -> dict[str, object]:
+    """Validate one provider question and shape it for the paper.
+
+    Every refusal names the index so a bad payload is diagnosable from the
+    502 body's log line; labels and chapters fall back instead of refusing
+    (the provider cannot know the teacher's chapter list).
+    """
+    if not isinstance(q, dict):
+        raise ProviderError(f"question {i} is not an object")
+    text = q.get("text")
+    options = q.get("options")
+    answer = q.get("answer_index")
+    if not isinstance(text, str) or not text.strip():
+        raise ProviderError(f"question {i} has no text")
+    if (
+        not isinstance(options, list)
+        or len(options) != 4
+        or not all(isinstance(o, str) and o.strip() for o in options)
+    ):
+        raise ProviderError(f"question {i} must have exactly four non-empty options")
+    # bool is an int subclass: `True` must never pass as answer option b.
+    if not isinstance(answer, int) or isinstance(answer, bool) or not 0 <= answer <= 3:
+        raise ProviderError(f"question {i} answer_index must be 0-3")
+    difficulty = q.get("difficulty", "medium")
+    if difficulty not in DIFFICULTY_LABELS:
+        difficulty = "medium"
+    chapter = q.get("chapter")
+    if not isinstance(chapter, str) or chapter not in chapters:
+        chapter = chapters[0] if chapters else ""
+    return {
+        "ref": f"q{i + 1}",
+        "text": text.strip(),
+        "options": [str(o).strip() for o in options],
+        "answer_index": int(answer),
+        "marks": marks,
+        "difficulty": str(difficulty),
+        "chapter": chapter,
+        "reviewed": False,
+    }
+
+
 def parse_qp_payload(
     raw: str, chapters: list[str], *, total_marks: int | None = None
 ) -> list[dict[str, object]]:
@@ -150,43 +191,7 @@ def parse_qp_payload(
     marks_plan = (
         allocate_marks(total_marks, len(questions)) if total_marks else [1] * len(questions)
     )
-    out: list[dict[str, object]] = []
-    for i, q in enumerate(questions):
-        if not isinstance(q, dict):
-            raise ProviderError(f"question {i} is not an object")
-        text = q.get("text")
-        options = q.get("options")
-        answer = q.get("answer_index")
-        difficulty = q.get("difficulty", "medium")
-        if not isinstance(text, str) or not text.strip():
-            raise ProviderError(f"question {i} has no text")
-        if (
-            not isinstance(options, list)
-            or len(options) != 4
-            or not all(isinstance(o, str) and o.strip() for o in options)
-        ):
-            raise ProviderError(f"question {i} must have exactly four non-empty options")
-        # bool is an int subclass: `True` must never pass as answer option b.
-        if not isinstance(answer, int) or isinstance(answer, bool) or not 0 <= answer <= 3:
-            raise ProviderError(f"question {i} answer_index must be 0-3")
-        if difficulty not in DIFFICULTY_LABELS:
-            difficulty = "medium"
-        chapter = q.get("chapter")
-        if not isinstance(chapter, str) or chapter not in chapters:
-            chapter = chapters[0] if chapters else ""
-        out.append(
-            {
-                "ref": f"q{i + 1}",
-                "text": text.strip(),
-                "options": [str(o).strip() for o in options],
-                "answer_index": int(answer),
-                "marks": marks_plan[i],
-                "difficulty": str(difficulty),
-                "chapter": chapter,
-                "reviewed": False,
-            }
-        )
-    return out
+    return [_shape_question(i, q, chapters, marks_plan[i]) for i, q in enumerate(questions)]
 
 
 def validate_paper(

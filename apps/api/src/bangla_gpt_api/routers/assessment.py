@@ -28,6 +28,7 @@ from bangla_gpt_api.db.models import (
     ShortTest,
     Student,
     SupportPlan,
+    User,
 )
 from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES
@@ -392,58 +393,61 @@ def teacher_weak_matrix(
     return _weak_matrix(db, class_level, school_id=_tenant_school_id(db, teacher), room_id=room_id)
 
 
-@router.get("/teacher/curriculum-coverage", response_model=CoverageOut)
-def teacher_curriculum_coverage(db: DbSession, teacher: TeacherOrAdminUser) -> CoverageOut:
-    """class x subject grid -- taught / practiced / mastered (>=70%).
-
-    Taught = chapter content exists for the grade-subject or a
-    ClassTeacher row assigns it ('' covers all subjects); practiced =
-    quiz attempts by students of that class; mastered = graded mean
-    >= coverage.MASTERED_MIN_PCT. Derivation lives in services.coverage
-    (pure, unit-tested).
-    """
+def _coverage_rooms(db: Session, teacher: User) -> list[ClassRoom]:
+    """Rooms in scope: own school for staff, every school for admin."""
     room_stmt = select(ClassRoom).order_by(ClassRoom.class_level, ClassRoom.section)
     if teacher.role != "admin":
         school = db.get(School, teacher.school_id) if teacher.school_id else None
         if school is None:
             school = _default_school(db)
         room_stmt = room_stmt.where(ClassRoom.school_id == school.id)
-    rooms = db.execute(room_stmt).scalars().all()
-    room_ids = [r.id for r in rooms]
+    return list(db.execute(room_stmt).scalars())
 
-    # v1 rule: one classroom per student, so this map is unambiguous.
-    room_of: dict[int, int] = {}
-    if room_ids:
-        room_of = {
-            sid: cid
-            for cid, sid in db.execute(
-                select(ClassStudent.classroom_id, ClassStudent.student_id).where(
-                    ClassStudent.classroom_id.in_(room_ids)
-                )
-            ).all()
-        }
 
-    # quiz activity aggregated per (classroom, subject)
+def _room_of_student(db: Session, room_ids: list[int]) -> dict[int, int]:
+    """student_id -> classroom_id (v1 rule: one classroom per student)."""
+    if not room_ids:
+        return {}
+    return {
+        sid: cid
+        for cid, sid in db.execute(
+            select(ClassStudent.classroom_id, ClassStudent.student_id).where(
+                ClassStudent.classroom_id.in_(room_ids)
+            )
+        ).all()
+    }
+
+
+def _attempt_aggregates(
+    db: Session, room_of: dict[int, int]
+) -> tuple[dict[tuple[int, str], int], dict[tuple[int, str], list[float]]]:
+    """Quiz attempt counts and graded scores per (classroom, subject)."""
     attempts: dict[tuple[int, str], int] = defaultdict(int)
     graded: dict[tuple[int, str], list[float]] = defaultdict(list)
-    if room_of:
-        rows = db.execute(
-            select(
-                QuizAttempt.student_id,
-                QuizAttempt.subject,
-                QuizAttempt.status,
-                QuizAttempt.score_pct,
-            ).where(QuizAttempt.student_id.in_(list(room_of)))
-        ).all()
-        for sid, subject, status, pct in rows:
-            if not subject or sid not in room_of:
-                continue
-            key = (room_of[sid], subject)
-            attempts[key] += 1
-            if status == "graded" and pct is not None:
-                graded[key].append(float(pct))
+    if not room_of:
+        return attempts, graded
+    rows = db.execute(
+        select(
+            QuizAttempt.student_id,
+            QuizAttempt.subject,
+            QuizAttempt.status,
+            QuizAttempt.score_pct,
+        ).where(QuizAttempt.student_id.in_(list(room_of)))
+    ).all()
+    for sid, subject, status, pct in rows:
+        if not subject or sid not in room_of:
+            continue
+        key = (room_of[sid], subject)
+        attempts[key] += 1
+        if status == "graded" and pct is not None:
+            graded[key].append(float(pct))
+    return attempts, graded
 
-    # assignment signals: chapter content + per-subject teacher rows
+
+def _content_and_assigned(
+    db: Session, room_ids: list[int]
+) -> tuple[dict[int, set[str]], dict[int, set[str]]]:
+    """Chapter content per class level + ClassTeacher subjects per room."""
     content: dict[int, set[str]] = defaultdict(set)
     for level, subject in db.execute(
         select(ChapterContent.class_level, ChapterContent.subject).distinct()
@@ -457,7 +461,17 @@ def teacher_curriculum_coverage(db: DbSession, teacher: TeacherOrAdminUser) -> C
             )
         ).all():
             assigned[cid].add(subject)
+    return content, assigned
 
+
+def _coverage_cells(
+    rooms: list[ClassRoom],
+    content: dict[int, set[str]],
+    assigned: dict[int, set[str]],
+    attempts: dict[tuple[int, str], int],
+    graded: dict[tuple[int, str], list[float]],
+) -> tuple[list[CoverageCell], set[str]]:
+    """One cell per (room, subject) plus the subject universe."""
     subjects: set[str] = set()
     cells: list[CoverageCell] = []
     for room in rooms:
@@ -473,14 +487,12 @@ def teacher_curriculum_coverage(db: DbSession, teacher: TeacherOrAdminUser) -> C
             # (subject='') record OWNERSHIP -- who may proctor submissions --
             # not subject coverage. Stripping the marker here keeps "taught"
             # honest: an auto-created classroom whose teacher never touched
-            # english must not report english as taught. (test_env fixture
-            # rows with a real subject still behave exactly as before.)
+            # english must not report english as taught.
             taught = coverage.is_taught(
                 subject in level_content,
                 assigned.get(room.id, set()) - {""},
                 subject,
             )
-            status = coverage.derive_status(taught, att > 0, avg)
             subjects.add(subject)
             cells.append(
                 CoverageCell(
@@ -492,9 +504,27 @@ def teacher_curriculum_coverage(db: DbSession, teacher: TeacherOrAdminUser) -> C
                     attempts=att,
                     attempts_graded=len(graded.get(key, [])),
                     avg_score_pct=avg,
-                    status=status,
+                    status=coverage.derive_status(taught, att > 0, avg),
                 )
             )
+    return cells, subjects
+
+
+@router.get("/teacher/curriculum-coverage", response_model=CoverageOut)
+def teacher_curriculum_coverage(db: DbSession, teacher: TeacherOrAdminUser) -> CoverageOut:
+    """class x subject grid -- taught / practiced / mastered (>=70%).
+
+    Taught = chapter content exists for the grade-subject or a
+    ClassTeacher row assigns it ('' covers all subjects); practiced =
+    quiz attempts by students of that class; mastered = graded mean
+    >= coverage.MASTERED_MIN_PCT. Derivation lives in services.coverage
+    (pure, unit-tested).
+    """
+    rooms = _coverage_rooms(db, teacher)
+    room_of = _room_of_student(db, [r.id for r in rooms])
+    attempts, graded = _attempt_aggregates(db, room_of)
+    content, assigned = _content_and_assigned(db, [r.id for r in rooms])
+    cells, subjects = _coverage_cells(rooms, content, assigned, attempts, graded)
     return CoverageOut(subjects=sorted(subjects), cells=cells)
 
 

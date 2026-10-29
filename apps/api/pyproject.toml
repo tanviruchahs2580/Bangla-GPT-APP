@@ -145,11 +145,9 @@ select = [
     "ASYNC",# async footguns
     "N",    # pep8-naming
     "W",    # pycodestyle warnings
-    "C901", # complexity (rated against max-complexity; see the ratchet below)
+    "C901", # complexity (rated against mccabe.max-complexity; see the ratchet)
 ]
-#: radon's D grade starts at 21, so a function at or below this is never a
-#: D-or-worse block in the CI ratchet.
-max-complexity = 20
+
 # Every entry is a deliberate decision, not a backlog:
 #   E501            - line length is enforced by `ruff format`, which does not
 #                     produce unreadable wrapping; duplicating it as a lint
@@ -214,19 +212,21 @@ ignore = [
 #                     credentials, literal SQL, subprocess calls, prints in
 #                     diagnostics and unused unpacked fixtures are how tests
 #                     are written
+[tool.ruff.lint.mccabe]
+# radon's D grade starts at 21, so a function at or below this is never a
+# D-or-worse block in the CI radon ratchet.
+max-complexity = 20
+
 [tool.ruff.lint.per-file-ignores]
-# C901 ratchet (F-006/BE-05). Each line is a debt marker with the measured
-# score at the time of writing, not an exemption policy: when the function is
-# split, the line must be deleted. The budget only falls, never rises.
-"src/bangla_gpt_api/data/nctb_loader.py" = ["C901"]      # load_nctb_corpus E(33)
-"src/bangla_gpt_api/evaluation/golden_v3.py" = ["C901"]  # check_golden D(24)
-"src/bangla_gpt_api/evaluation/metrics.py" = ["C901"]    # run_suite E(36)
-"src/bangla_gpt_api/nctb/manifest.py" = ["C901"]         # verify_corpus_manifest D(21)
-"src/bangla_gpt_api/services/gdpr.py" = ["C901"]         # build_data_export F(46)
-"src/bangla_gpt_api/services/tutor.py" = ["C901"]        # ask_stream E(36), _coverage_details E(34)
-"tests/test_mfa.py" = ["C901"]                           # test_full_mfa_lifecycle D(26)
-"tests/test_support_ops.py" = ["C901"]                   # test_feedback_triage_flow_end_to_end D(24)
-"tests/test_workload_metric.py" = ["C901"]               # test_counts_and_minutes_follow_generated_artifacts D(22)
+# C901 ratchet (F-006/BE-05). Each line is a debt marker with the score ruff
+# measured when the entry was recorded, not an exemption policy: when the
+# function is split, the line must be deleted, and the budget only falls.
+# These three hold functions above max-complexity 20 and belong to other
+# wave-2 workstreams (the nctb pipeline and the tutor service); the split is
+# handed to their owners rather than done across the boundary.
+"src/bangla_gpt_api/data/nctb_loader.py" = ["C901"]  # load_nctb_corpus 23
+"src/bangla_gpt_api/nctb/chunking.py" = ["C901"]     # chunk_pages 23
+"src/bangla_gpt_api/services/tutor.py" = ["C901"]    # ask_stream 21
 "src/bangla_gpt_api/evaluation/cli.py" = ["T201"]
 "src/bangla_gpt_api/evaluation/fairness_probes.py" = ["T201", "C901"]  # validate_fixture E(32)
 "scripts/*" = ["T201", "S101", "S603", "S311", "S607", "S404"]
@@ -255,6 +255,9 @@ markers = [
 
 [tool.coverage.run]
 source = ["bangla_gpt_api"]
+# Branch coverage belongs in the config, not only in the CI command line: a
+# local run must measure what the gate enforces (F-058).
+branch = true
 omit = [
     "*/alembic/*",
     "*/tests/*",
