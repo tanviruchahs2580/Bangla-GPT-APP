@@ -175,3 +175,32 @@ def _token(client: TestClient) -> str:
     res = client.post("/auth/login", json={"email": "root@example.com", "password": PASSWORD})
     assert res.status_code == 200, res.text
     return res.json()["access_token"]
+
+
+def test_every_operation_is_tagged(client):
+    """API-01: 137 flat untagged operations are unnavigable in /docs.
+
+    Tags are applied once per router at include time (routers/__init__.py),
+    so this also fails if a new router module is registered without one.
+    """
+    schema = _schema(client)
+    untagged = [
+        f"{method.upper()} {path}"
+        for path, operations in schema["paths"].items()
+        for method, op in operations.items()
+        if not op.get("tags")
+    ]
+    assert not untagged, f"operations without a tag: {untagged}"
+
+
+def test_core_request_models_carry_examples(client):
+    """API-01: no schema showed an example value, so generated clients and
+    the docs page had nothing concrete to render."""
+    schemas = _schema(client)["components"]["schemas"]
+    core = ["AskRequest", "ChatSendRequest", "RegisterRequest", "LoginRequest"]
+    missing = []
+    for name in core:
+        properties = schemas[name]["properties"]
+        if not any("examples" in prop for prop in properties.values()):
+            missing.append(name)
+    assert not missing, f"request models with no example value: {missing}"

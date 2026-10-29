@@ -112,8 +112,8 @@ class QuizExplainContext(BaseModel):
 
 
 class AskRequest(BaseModel):
-    question: str = Field(min_length=3, max_length=1000)
-    class_level: int = Field(ge=1, le=12)
+    question: str = Field(min_length=3, max_length=1000, examples=["কোষ কী?"])
+    class_level: int = Field(ge=1, le=12, examples=[6])
     # Bounded to the columns these are written to (subject VARCHAR(60),
     # chapter VARCHAR(200)) and to what is sensible to interpolate into the
     # provider prompt. Unbounded, a long value was a 500 on PostgreSQL
@@ -183,9 +183,9 @@ class ConversationOut(BaseModel):
 
 
 class ChatSendRequest(BaseModel):
-    message: str = Field(min_length=3, max_length=1000)
-    class_level: int | None = Field(default=None, ge=1, le=12)
-    subject: str | None = Field(default=None, max_length=60)
+    message: str = Field(min_length=3, max_length=1000, examples=["সালোকসংশ্লেষণ কীভাবে কাজ করে?"])
+    class_level: int | None = Field(default=None, ge=1, le=12, examples=[6])
+    subject: str | None = Field(default=None, max_length=60, examples=["science"])
     # optional chapter context chip.
     chapter: str | None = Field(default=None, max_length=200)
     # 'আমি বুঝিন' — force the next re-teach strategy for this turn.
@@ -223,7 +223,7 @@ class FeedbackRequest(BaseModel):
     # answer, and an aggregate that counts only -1/+1 is then correct rather
     # than incomplete. Tightening this to Literal[-1, 1] removes comment-only
     # feedback and breaks the coded 400 that a body with no target must get.
-    rating: int = Field(ge=-1, le=1)
+    rating: int = Field(ge=-1, le=1, examples=[1])
     message_id: int | None = None
     attempt_id: int | None = None
     comment: str | None = Field(default=None, max_length=500)
@@ -247,9 +247,11 @@ _EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 
 
 class RegisterRequest(BaseModel):
-    email: IdentityText = Field(min_length=5, max_length=255, pattern=_EMAIL_PATTERN)
-    password: str = Field(min_length=8, max_length=128)
-    name: IdentityText = Field(min_length=2, max_length=120)
+    email: IdentityText = Field(
+        min_length=5, max_length=255, pattern=_EMAIL_PATTERN, examples=["parent@example.com"]
+    )
+    password: str = Field(min_length=8, max_length=128, examples=["correct horse battery"])
+    name: IdentityText = Field(min_length=2, max_length=120, examples=["Rahim Uddin"])
     role: Literal["student", "teacher", "parent"]
     class_level: int | None = Field(default=None, ge=1, le=12)
     # Parental/guardian consent is mandatory for student accounts (minors).
@@ -270,8 +272,8 @@ class RegisterResponse(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email: IdentityText = Field(min_length=5, max_length=255)
-    password: str = Field(min_length=1, max_length=128)
+    email: IdentityText = Field(min_length=5, max_length=255, examples=["parent@example.com"])
+    password: str = Field(min_length=1, max_length=128, examples=["correct horse battery"])
 
 
 class TokenResponse(BaseModel):
@@ -519,7 +521,7 @@ class QuizStartRequest(BaseModel):
     subject: str | None = Field(default=None, max_length=60)
     # chapter preselect for the workspace "অনুশীলন" tab.
     chapter: str | None = Field(default=None, max_length=200)
-    num_questions: int = Field(default=5, ge=1, le=10)
+    num_questions: int = Field(default=5, ge=1, le=10, examples=[5])
 
 
 class QuizQuestionPublic(BaseModel):
