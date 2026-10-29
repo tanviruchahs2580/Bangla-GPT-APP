@@ -1,6 +1,6 @@
 {
   "manifest_version": 1,
-  "built_at": "2026-10-29T20:04:30+00:00",
+  "built_at": "2026-10-29T21:29:34+00:00",
   "edition": {
     "secondary": "প্রকাশকাল ২০১২",
     "hsc": "UNKNOWN",
@@ -13,7 +13,7 @@
   },
   "pipeline": {
     "processing_version": "v1",
-    "code_fingerprint": "sha256:bfcf5f713f7227d2ad319f0aaafdc72dc9bf8213228bb4b7d0ec37c5c8facd20",
+    "code_fingerprint": "sha256:3b3fbd702000df794b9077084999afd77584ac89a551aadf8dd2ff9d2e81eb5d",
     "extractor": "pypdf-6.21.2",
     "python": "3.12.10-CPython",
     "chunker": {

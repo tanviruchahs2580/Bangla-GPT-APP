@@ -154,13 +154,20 @@ def sha256_hex(data: str | bytes) -> str:
 
 
 def pipeline_code_fingerprint() -> str:
-    """``sha256:<hex>`` over the ordered pipeline module contents."""
+    """``sha256:<hex>`` over the ordered pipeline module contents.
+
+    Each module is hashed as its text with universal newlines, so a CRLF
+    working copy (a Windows editor, autocrlf) fingerprints exactly like an
+    LF checkout: the value is a statement about the code, not about the
+    developer's line endings.
+    """
     package_root = Path(__file__).resolve().parents[1]
     digest = hashlib.sha256()
     for relative in _FINGERPRINTED_MODULES:
         digest.update(relative.encode("utf-8"))
         digest.update(b"\0")
-        digest.update(sha256_file(package_root / relative).encode("ascii"))
+        content = (package_root / relative).read_text(encoding="utf-8")
+        digest.update(sha256_hex(content).encode("ascii"))
         digest.update(b"\n")
     return f"sha256:{digest.hexdigest()}"
 
