@@ -1,7 +1,12 @@
 # Operations Runbook — Bangla GPT APP
 
 Audience: engineer/SRE deploying or operating the platform.
-Every command below has been executed and verified on this codebase.
+
+Commands that run on a development machine were executed against this tree on
+2026-10-29: start/stop (§1), the migration cycle (§3), backup + restore (§4),
+the rolling-deploy demo (§3), the JWT rotation (§10). Commands that need a
+deploy host, an SSH key, Vercel or Cloudflare credentials are marked host-side
+and were verified against the workflow/config that implements them, not run.
 
 ## 1. Start locally (dev)
 
@@ -272,6 +277,13 @@ Alert rules ship in `deploy/prometheus/alerts.yml`:
 - `APIScrapeDown` — scrape target down 2 min (critical)
 - `UnhandledExceptions` — any unhandled exception increase
 - `DiskNearFull` — requires node_exporter (fires only when present)
+- `HighRAGRefusalRate` — the evidence gate refuses >50% of grounded attempts
+  for 15 min (warning). The corpus-degradation signal (for example a mis-set
+  `NCTB_CORPUS_DIR` leaving the 78-chunk bundled sample): check
+  `bgpt_rag_index_chunks` and the `rag_corpus_loaded` boot line first, then §8.
+- `RAGCitationCheckFailures` — a grounded answer failed citation verification
+  in the last 15 min (warning). Inspect the `ai_call` / `tutor_retrieval` logs
+  for the request id.
 
 Logs are JSON lines to stdout with `X-Request-ID` correlation. `LOG_LEVEL`
 controls verbosity (DEBUG/INFO/WARNING/ERROR/CRITICAL).
@@ -317,6 +329,11 @@ Quarterly rotation procedure:
   that the workflow did not implement.
 - **DB rollback:** `alembic downgrade <revision>` (verified cycle). Always take
   a backup (§4) before downgrading.
+- **Rehearse the release rollback** (host-side, needs two tags and a staging
+  stack): `scripts/rollback_drill.sh [CURRENT_TAG]` runs the workflow's exact
+  sequence — checkout the previous tag, `compose pull`, `compose up --wait` —
+  against a staging project and asserts the previous release comes up healthy.
+  It is the drill for the rollback path release.yml performs automatically.
 - **Bad release prevention:** CI gates (lint/format/type/tests/pip-audit/
   migrations incl. Postgres/golden-eval/container smoke) must pass before merge.
 
@@ -530,3 +547,31 @@ recorded in `docs/hosting_decision.md`.
   ended with the banner's exit button (revokes the token server-side).
   Both start and exit land in `GET /admin/audit?action=impersonation`.
   Admin-role targets are rejected server-side (support never gets powers).
+
+## 11. Incident first response (common incidents)
+
+Triage by symptom; each row names the first check and the section that carries
+the procedure.
+
+| Symptom | First check | Then |
+|---|---|---|
+| Nobody can log in | `curl -s -o /dev/null -w '%{http_code}\n' https://bangla-gpt-app.vercel.app/api/health` — `502` is the origin, `200` means look elsewhere | §10 "API origin down" (rotate the tunnel), or §7 (roll back a bad release) |
+| `HighHTTP5xxRate` / `APIScrapeDown` firing | `docker compose --profile core logs api`; every line carries `X-Request-ID` | §5, §7 |
+| `/ready` 503 `database_unavailable` | SQLite volume present / `pg_isready` for the Postgres profile | §4, §3 |
+| `/ready` 503 naming the provider | Confirm `LLM_PROVIDER` and its key; a provider outage answers `/tutor/ask` 502 `llm_unavailable` while `/ready` stays 200 | §8, §10 (key rotation) |
+| Protected routes answering 503 | Redis down and `RATE_LIMIT_FAIL_OPEN=false` fail closed by design | §8; restart `redis`, or accept the outage |
+| `DiskNearFull` or write errors | `df -h` on the host and in the container; prune backups beyond `BACKUP_KEEP_DAYS` | §4 |
+| Backup missing or restore rehearsal red | `docker compose logs backup`; rerun `restore_test.py` | §4 |
+| Release deployed, behaviour wrong | Redeploy the previous tag | §7 |
+| Suspicion that children's data was exposed | Preserve evidence (do not delete logs or the DB volume) | Report per [SECURITY.md](../SECURITY.md) with "data incident" in the subject — this table does not cover data incidents |
+| Unsafe AI answer, or generation must stop | Decide whether to disable generation (`AI_GENERATION_ENABLED=false`, restart `api`) | [ai/incident-response.md](ai/incident-response.md) |
+
+Detection latency: the scheduled uptime probe is best-effort — GitHub throttles
+`schedule` runs, and 2026-10-23..28 saw 35 runs (2-7 per day) instead of the
+nominal every 15 min, so a failure can be noticed hours late. The workflow's
+`page` job files a deduplicated issue and `resolve` closes it on the next green
+probe. Treat the probe as a backstop, not a pager.
+
+After any incident, record what happened, the impact and the follow-up action
+in the current QA record or a follow-up issue; do not edit an archived report
+to match the new facts.
