@@ -10,11 +10,11 @@
 # a dozen. Actions are pinned by SHA, so Dependabot updates the SHA and the
 # version comment together.
 #
-# LABELS (F-029): `dependencies`, `python`, `web`, `docker` and `ci` are
-# requested below. None of them existed in the repository's label set, so
-# Dependabot was creating PRs that could not be triaged or filtered -- an
-# unfiltered dependency queue is how the changelog gate blocked seven of the
-# last eight CI runs without anyone noticing (F-027). Create them once:
+# LABELS (F-GIT-7 / F-102): `dependencies`, `python`, `web`, `docker` and `ci`
+# are requested below. None of them existed in the repository's label set when
+# this was checked on 2026-10-29, and Dependabot silently drops labels that do
+# not exist -- so until an owner creates them the PRs arrive unlabelled and
+# cannot be filtered. Create them once (repository admin scope required):
 #
 #   gh label create dependencies --color 1D76DB --description "..."
 #   gh label create python        --color 1D76DB --description "..."
@@ -22,9 +22,17 @@
 #   gh label create docker        --color 2496ED --description "..."
 #   gh label create ci            --color BFDADC --description "..."
 #
-# A severity taxonomy (security / patch / minor / major) is the more
-# valuable follow-up: without one, a critical CVE and a typo fix arrive in
-# the same queue with the same urgency.
+# The alternative -- shipping labels the repository does not have and hoping
+# they appear -- is what left the queue unfiltered while the changelog gate
+# blocked seven of eight CI runs (F-027). A severity taxonomy (security /
+# patch / minor / major) remains the more valuable follow-up: without one, a
+# critical CVE and a typo fix arrive with the same urgency.
+#
+# Group review (2026-10-29): every group now carries `update-types: [minor,
+# patch]`, so a routine bump still arrives as one reviewable PR while a major
+# (react 19, vite 8, TypeScript 7, capacitor 8 -- the 2026-10 queue) arrives
+# separately. The old pattern-only groups bundled majors with patches, which is
+# how the web group went red on four jobs at once (F-SUP-3).
 
 version: 2
 
@@ -40,6 +48,7 @@ updates:
     groups:
       python-dependencies:
         patterns: ["*"]
+        update-types: [minor, patch]
     labels: [dependencies, python]
     commit-message:
       prefix: "build(python)"
@@ -69,6 +78,7 @@ updates:
     groups:
       web-dependencies:
         patterns: ["*"]
+        update-types: [minor, patch]
     labels: [dependencies, web]
     commit-message:
       prefix: "build(web)"
@@ -120,6 +130,7 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+        update-types: [minor, patch]
     labels: [dependencies, ci]
     commit-message:
       prefix: "build(ci)"

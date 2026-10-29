@@ -16,6 +16,19 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# OCI provenance labels (F-153): the pipeline attests the pushed digest, but
+# nothing inside the image let an inspector map a running container back to a
+# commit. build-push-action feeds the ARGs in release.yml and the CI docker
+# job; the defaults keep a plain `docker build .` working.
+ARG APP_VERSION=dev
+ARG APP_REVISION=unknown
+LABEL org.opencontainers.image.title="bangla-gpt-api" \
+      org.opencontainers.image.description="Bangla GPT APP API - NCTB-grounded tutor service" \
+      org.opencontainers.image.source="https://github.com/tanviruchahs2580/Bangla-GPT-APP" \
+      org.opencontainers.image.revision="${APP_REVISION}" \
+      org.opencontainers.image.version="${APP_VERSION}" \
+      org.opencontainers.image.licenses="MIT"
+
 # Security patching of base-layer packages with available vendor fixes
 # (rescanned with trivy; remaining unfixed advisories documented in the
 # validation report — no vendor fix published yet, exposure mitigated).

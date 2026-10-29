@@ -35,6 +35,10 @@ dependencies = [
     # SCS-06: pydantic and starlette are imported directly across the codebase,
     # so they are declared rather than relied on transitively via fastapi.
     "pydantic>=2.7",
+    # SCS-06: schemas.py imports PydanticCustomError from pydantic_core
+    # directly. pydantic pins its own pydantic-core exactly, so this floor
+    # only records the direct import; deptry's DEP003 was the signal.
+    "pydantic-core>=2.7",
     "starlette>=0.37",
     "pydantic-settings>=2.4",
     "sqlalchemy>=2.0",
@@ -83,6 +87,10 @@ dev = [
   "ruff>=0.6",
   "mypy>=1.11",
   "pip-audit>=2.7",
+  # F-151: scripts/check_lockfile.py parses the pins with `packaging` and runs
+  # in the guardrails job on every PR. It only arrived transitively before,
+  # so a lock refresh could have turned a green gate into an ImportError.
+  "packaging>=24",
 ]
 
 [build-system]
@@ -112,9 +120,15 @@ exclude = ["alembic", "eval/parked_specs"]
 
 [tool.ruff.lint]
 # Families added in CQ-01, each with the violations it surfaces either fixed
-# at the call site or justified below. C90 (complexity) is deliberately NOT
-# here yet: it is the subject of the CQ-03 refactor, and enabling it before
-# that refactor would only red the build. It lands with a ratcheted max.
+# at the call site or justified below.
+#
+# C901 (C90) enforces the complexity budget: max-complexity 20 is the radon
+# "no grade D or worse" line, and the same number is enforced independently by
+# the radon ratchet step in .github/workflows/ci.yml. The functions still
+# above it live in files owned by other wave-2 workstreams (or are the three
+# end-to-end test flows); each carries a per-file ignore below naming the
+# function and its score. That list is a ratchet: it may only shrink, a new
+# entry needs a written reason, and the budget itself only falls.
 select = [
     "E",    # pycodestyle errors
     "F",    # pyflakes
@@ -131,7 +145,11 @@ select = [
     "ASYNC",# async footguns
     "N",    # pep8-naming
     "W",    # pycodestyle warnings
+    "C901", # complexity (rated against max-complexity; see the ratchet below)
 ]
+#: radon's D grade starts at 21, so a function at or below this is never a
+#: D-or-worse block in the CI ratchet.
+max-complexity = 20
 # Every entry is a deliberate decision, not a backlog:
 #   E501            - line length is enforced by `ruff format`, which does not
 #                     produce unreadable wrapping; duplicating it as a lint
@@ -197,8 +215,20 @@ ignore = [
 #                     diagnostics and unused unpacked fixtures are how tests
 #                     are written
 [tool.ruff.lint.per-file-ignores]
+# C901 ratchet (F-006/BE-05). Each line is a debt marker with the measured
+# score at the time of writing, not an exemption policy: when the function is
+# split, the line must be deleted. The budget only falls, never rises.
+"src/bangla_gpt_api/data/nctb_loader.py" = ["C901"]      # load_nctb_corpus E(33)
+"src/bangla_gpt_api/evaluation/golden_v3.py" = ["C901"]  # check_golden D(24)
+"src/bangla_gpt_api/evaluation/metrics.py" = ["C901"]    # run_suite E(36)
+"src/bangla_gpt_api/nctb/manifest.py" = ["C901"]         # verify_corpus_manifest D(21)
+"src/bangla_gpt_api/services/gdpr.py" = ["C901"]         # build_data_export F(46)
+"src/bangla_gpt_api/services/tutor.py" = ["C901"]        # ask_stream E(36), _coverage_details E(34)
+"tests/test_mfa.py" = ["C901"]                           # test_full_mfa_lifecycle D(26)
+"tests/test_support_ops.py" = ["C901"]                   # test_feedback_triage_flow_end_to_end D(24)
+"tests/test_workload_metric.py" = ["C901"]               # test_counts_and_minutes_follow_generated_artifacts D(22)
 "src/bangla_gpt_api/evaluation/cli.py" = ["T201"]
-"src/bangla_gpt_api/evaluation/fairness_probes.py" = ["T201"]
+"src/bangla_gpt_api/evaluation/fairness_probes.py" = ["T201", "C901"]  # validate_fixture E(32)
 "scripts/*" = ["T201", "S101", "S603", "S311", "S607", "S404"]
 "tests/test_phase1_exploits.py" = ["B011"]
 "tests/*" = [
@@ -259,11 +289,14 @@ exclude_lines = [
 #   DEP002 - gunicorn, uvicorn-worker, psycopg, uharfbuzz (used through the
 #            Dockerfile CMD / SQLAlchemy driver URL / fpdf2 runtime shaping,
 #            never via an `import` deptry can see), and the dev tools
-#            (pytest*, ruff, mypy, pip-audit) that are executed, not imported.
+#            (pytest-asyncio, pytest-cov, ruff, mypy, pip-audit) that are
+#            executed, not imported.
 #   DEP001 - `_changelog_common`, a sibling module of the scripts in
 #            apps/api/scripts/ imported through a sys.path insert (its own
 #            module, not a distribution). Add it to known_first_party if
 #            deptry is ever wired into CI.
+# DEP003 is empty since 2026-10-29: `packaging` (scripts/check_lockfile.py)
+# and `pydantic_core` (schemas.py) are declared on purpose instead.
 known_first_party = ["bangla_gpt_api"]
 
 [tool.mypy]

@@ -265,6 +265,10 @@ jobs:
           tags: |
             ${{ steps.images.outputs.api }}:${{ steps.meta.outputs.version }}
             ${{ steps.images.outputs.api }}:${{ steps.meta.outputs.sha_tag }}
+          # F-153: the labels Dockerfile declares, fed with the release identity.
+          build-args: |
+            APP_VERSION=${{ steps.meta.outputs.version }}
+            APP_REVISION=${{ github.sha }}
           cache-from: type=gha,scope=api
           cache-to: type=gha,scope=api,mode=max
           sbom: true
