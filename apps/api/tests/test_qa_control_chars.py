@@ -119,3 +119,23 @@ def test_free_text_bodies_keep_bidi_characters() -> None:
     """Documented exemption: prose is allowed bidirectional text."""
     assert ChatSendRequest(message=f"why does {RLO}this happen?", class_level=6).message
     assert SavedNoteIn(body=f"note {LRI}with isolate\u2069").body
+
+
+def test_other_control_codes_stay_allowed_in_names() -> None:
+    """Boundary of the block list: PostgreSQL stores these and legacy rows carry them.
+
+    The guard rejects exactly U+0000 and the bidi formatting set; a blanket
+    control-character ban would start refusing mis-encoded legacy names that
+    the existing suite registers (tests/test_auth_teacher.py).
+    """
+    from bangla_gpt_api.schemas import RegisterRequest
+
+    accepted = RegisterRequest(
+        email="kid@example.test",
+        password="supersecret1",
+        name="Kid\u008dName",  # C1 char from a legacy mis-encoding
+        role="student",
+        class_level=6,
+        guardian_consent=True,
+    )
+    assert "\u008d" in accepted.name

@@ -41,17 +41,22 @@ MAX_QUIZ_QUESTIONS = 25
 
 
 # --- identity-text hygiene (F-005 / API-04) ------------------------------
-# C0/C1 controls plus the bidi embedding/override/isolate set
-# (U+202A-U+202E, U+2066-U+2069). A NUL is not storable by PostgreSQL at all,
-# so accepting one here is a 500 on the production engine; the bidi controls
-# let a value render as a different string in rosters, reports and generated
-# PDFs. Applied to identity/profile fields (names, emails, phones, invite
-# codes, school names). Free-text bodies -- chat turns, notes, feedback
-# comments -- deliberately keep the whole range: bidirectional text is
-# legitimate inside prose and those surfaces quote content instead of
-# rendering it as an identity. Rejection is a 422 whose error type carries
-# the stable code ``invalid_characters``.
-_FORBIDDEN_IDENTITY_CHARS_RE = re.compile("[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]")
+# Two classes are rejected, and only these two:
+#   * U+0000 -- not storable by PostgreSQL at all, so accepting one here is a
+#     500 on the production engine;
+#   * the bidi embedding/override/isolate controls (U+202A-U+202E,
+#     U+2066-U+2069) -- they let a value render as a different string in
+#     rosters, reports and generated PDFs.
+# Other C0/C1 characters stay allowed on purpose: PostgreSQL stores them, and
+# legacy rows and fixtures carry mis-encoded bytes that a blanket control-char
+# ban would start refusing (tests/test_auth_teacher.py registers such names).
+# Applied to identity/profile fields (names, emails, phones, invite codes,
+# school names). Free-text bodies -- chat turns, notes, feedback comments --
+# deliberately keep the whole range: bidirectional text is legitimate inside
+# prose and those surfaces quote content instead of rendering it as an
+# identity. Rejection is a 422 whose error type carries the stable code
+# ``invalid_characters``.
+_FORBIDDEN_IDENTITY_CHARS_RE = re.compile("[\u0000\u202a-\u202e\u2066-\u2069]")
 
 
 def reject_control_characters(value: str) -> str:
