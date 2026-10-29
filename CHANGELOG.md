@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(pwa): offline navigations answer 200 — restore the install prompt
 - fix(pwa): the offline-shell spec discovers the cache by prefix; changelog regen
 - fix(web): keep white label text above AA on every accent fill
+- fix(web): make the skip-link target focusable and stabilise the e2e sweeps
 - fix(web): refresh the dependency register and clear the undici alert
 - fix(web): regenerate the lockfile root version to 0.9.3
 - fix(web): restore the skip link and a main landmark on every route
@@ -72,11 +73,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: index the new AI, security and language documents
 - docs: index the unlisted living documents and rebaseline the routes
 - docs: never name the derived image tag VERSION
+- docs: refresh the native-review sheet and changelog for the hardening wave
 - docs: regenerate the changelog for the hardening wave
 
 ### Tests
 
+- test(api): remove the TTL-boundary race from the claim test
+- test(e2e): cover the audit flow matrix gaps
+- test(web): give asynchronous assertions a fair runner budget
 - test(web): give the activity heatmap suite a local wait budget
+- test(web): isolate module state so shuffled runs are deterministic
 - test(web): lock the offline page to what script-src 'self' allows
 
 ### Maintenance
