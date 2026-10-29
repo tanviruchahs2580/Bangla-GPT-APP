@@ -81,6 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Tests
 
+- test(api),docs(qa): make the event-props guard engine-agnostic and correct the report's counts
 - test(api): remove the TTL-boundary race from the claim test
 - test(e2e): cover the audit flow matrix gaps
 - test(web): give asynchronous assertions a fair runner budget
