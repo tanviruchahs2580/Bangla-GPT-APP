@@ -14,8 +14,8 @@ finding id.
 - The refusal is persisted as a reason code on the chat message (`ChatMessage.refused_reason`). The admin board aggregates it by reason and class over a window — counts only, deliberately no content and no identity (`routers/admin.py:330-365`). A self-harm disclosure therefore produces a count and a supportive answer to the child, and is visible to no human beyond those counts.
 - Answer feedback (thumbs up/down, optional comment) goes to an admin triage queue: oldest untriaged first, reporter identity withheld beyond user id, internal note field (`routers/tutor.py:944-1016`; `db/models.py:320-345`). Triage is manual.
 - There is no escalation concept in the codebase: a search for "escalat" over `apps/`, `docs/` and `scripts/` finds no path that notifies a teacher, counsellor, parent or anyone else about a disclosure or a flagged answer (audit F-LLM-12 / F-029). `SECURITY.md` covers data incidents only.
-- There is no runtime kill switch (audit F-LLM-14; `git grep KILL_SWITCH|DISABLE_AI|AI_ENABLED|GENERATION_ENABLED` has no matches).
-- Generation can only be disabled by changing `LLM_PROVIDER` at deploy time, and that also removes the retrieval index: with an unusable provider the app answers `/ready` 503, `/tutor/ask` 503 `tutor_unavailable` and `/search` 503 `index_unavailable` (probe `.qa-work/evidence/E-AIG-06/`; `initialize/dependencies.py:240-311` builds the index inside the provider-valid branch). Retrieval-only degradation does not exist.
+- A runtime kill switch exists (F-031, 2026-10-29): `AI_GENERATION_ENABLED=false` refuses tutor/chat generation with the normal refusal envelope (`refused_reason=ai_generation_disabled`) while retrieval, `/search`, the reader and quizzes stay up (section 8).
+- Generation can also be disabled by changing `LLM_PROVIDER` at deploy time, but that also removes the retrieval index: with an unusable provider the app answers `/ready` 503, `/tutor/ask` 503 `tutor_unavailable` and `/search` 503 `index_unavailable` (probe `.qa-work/evidence/E-AIG-06/`; `initialize/dependencies.py:240-311` builds the index inside the provider-valid branch). That path remains the only lever for the teacher generator routes (section 8, scope note).
 
 ## 2. Severity levels (proposed; owner must approve before these are commitments)
 
@@ -50,11 +50,21 @@ Response times are proposals; the repository records no incident timelines.
 
 ## 5. Disabling generation and rollback (documented, manual)
 
-- **Disable generation today (deploy-time only).** Set an unusable `LLM_PROVIDER` (or unset the API key) and redeploy. Known consequence: the retrieval index is not built, so `/search` also returns 503 `index_unavailable` alongside `/tutor/ask` 503 `tutor_unavailable` (E-AIG-06). This is not a partial degradation and not a runtime switch; it takes the tutor and search down together. Restore by reverting the config and redeploying.
+- **Disable generation (preferred, config-only).** Set
+  `AI_GENERATION_ENABLED=false` and restart the API: tutor/chat generation
+  returns the refusal envelope instead of calling a provider, while
+  retrieval, `/search`, the reader and quizzes keep working (section 8).
+  This is the lever for SEV-1/SEV-2 answer-quality or abuse incidents.
+- **Disable generation the old way (deploy-time, blunt).** Set an unusable
+  `LLM_PROVIDER` (or unset the API key) and redeploy. Known consequence: the
+  retrieval index is not built, so `/search` also returns 503
+  `index_unavailable` alongside `/tutor/ask` 503 `tutor_unavailable`
+  (E-AIG-06), and it is the only lever that also stops the teacher generator
+  routes. Restore by reverting the config and redeploying.
 - **Release rollback:** redeploy the previous tag per `docs/runbook.md:297-320`.
 - **Database rollback:** `alembic downgrade <revision>` after a backup (`docs/runbook.md:318-320`); never without the backup step.
 - **Provider fault isolation:** the optional fallback provider and circuit breaker exist (`providers/__init__.py:77-125`); switching primary provider is a config change and must be followed by re-running the eval gate (`docs/ai/system-card.md` section 9).
-- **Not available:** a tutor-off, retrieval-on mode (F-LLM-14). If the owner requires this for child-safety incidents, it is a code change, not a configuration change.
+- **Not available:** a restart-free switch. `AI_GENERATION_ENABLED` is read at boot (no admin endpoint flips it), and the teacher generator routes are not covered by it (section 8).
 
 ## 6. Notification list and the helpline
 
@@ -68,4 +78,39 @@ Response times are proposals; the repository records no incident timelines.
 3. Update `docs/ai/risk-register.md` residual status and the system card when a limitation changes.
 4. Keep findings traceable: reference the finding id (`.qa-work/findings.csv` while the QA run is open, the issue tracker after it closes).
 
-Open gaps this procedure cannot paper over: no human escalation path (F-LLM-12 / F-029), no runtime kill switch or retrieval-only mode (F-LLM-14), and the unverified helpline (F-LLM-11).
+Open gaps this procedure cannot paper over: no human escalation path (F-LLM-12 / F-029) and the unverified helpline (F-LLM-11). The runtime kill switch gap (F-LLM-14 / F-031) is closed for the student generation surfaces as of 2026-10-29 (section 8).
+
+## 8. Runtime kill switch (implemented 2026-10-29, F-031)
+
+`AI_GENERATION_ENABLED=false` (env var / `.env`) turns off **student-facing
+generation**: `POST /tutor/ask` and both chat-turn routes
+(`/tutor/conversations/{id}/messages[/stream]`) answer with the standard
+refusal envelope — HTTP 200, `grounded=false`,
+`refused_reason=ai_generation_disabled`, confidence 0.0, and localized copy
+saying generation is paused while the textbook, search and quizzes still
+work. Chat turns are still persisted (user message + refusal reply) so
+conversation history stays coherent, and **no ledger row is reserved**, so a
+paused generation books no phantom spend.
+
+Operator steps:
+
+1. Set `AI_GENERATION_ENABLED=false` in the deployment environment (the
+   variable lives in `.env.example` / `.env.production.example`) and restart
+   the API. The boot log records
+   `ai_generation_disabled: tutor/chat generation refuses ...` — its absence
+   means the flag did not reach the process.
+2. Verify: `/search` still answers 200 (retrieval untouched), a tutor ask
+   returns 200 with `refused_reason=ai_generation_disabled`, and `/ready`
+   stays green (provider and index construction are untouched, unlike the
+   `LLM_PROVIDER` lever in section 5).
+3. Resume by setting the flag back to `true` and restarting. No data was
+   deleted; the guard test
+   `apps/api/tests/test_qa_kill_switch.py` pins enabled/disabled behaviour,
+   the persisted refusal, and that search/ready stay 200.
+
+Scope note: the switch covers the student tutor/chat surfaces only. The
+teacher generator routes (`/teacher/*`) still call the provider; stopping
+those requires the section 5 `LLM_PROVIDER` lever (which also takes search
+down) or a future extension of this flag. There is **no admin endpoint to
+flip it** and no config reload — it is a deploy-time configuration, not a
+live control.

@@ -60,7 +60,13 @@ from bangla_gpt_api.services.costs import (
     reserve_ai_usage,
 )
 from bangla_gpt_api.services.quiz_explain import quiz_explain_instruction
-from bangla_gpt_api.services.tutor import VISION_UNSUPPORTED_ANSWER, StreamEvent
+from bangla_gpt_api.services.tutor import (
+    GENERATION_DISABLED_ANSWER,
+    VISION_UNSUPPORTED_ANSWER,
+    StreamEvent,
+    TutorService,
+    generation_disabled_response,
+)
 
 from .common import (
     _answer_confidence,
@@ -87,6 +93,14 @@ logger = logging.getLogger(__name__)
 #: and load balancers commonly drop a silent connection at 30-60s; retrieval
 #: plus provider time-to-first-token can legitimately exceed that.
 SSE_HEARTBEAT_SECONDS = 15.0
+
+
+def _effective_model(tutor: TutorService | None) -> str:
+    """Provider model name for the ledger; the kill switch has no provider
+    to name, and its refusal never finalizes a ledger row anyway (F-031)."""
+    if tutor is None:
+        return "ai-disabled"
+    return getattr(tutor.provider, "model", None) or tutor.provider.name
 
 
 def _ask_prepare(
@@ -164,6 +178,10 @@ def _ask_ledger(
 
 @router.post("/tutor/ask", response_model=AskResponse)
 async def ask(app_ctx: Ctx, payload: AskRequest, db: DbSession, user: CurrentUser) -> AskResponse:
+    if not app_ctx.settings.ai_generation_enabled:
+        # F-031 kill switch: refuse before the budget gate, the ledger
+        # reserve and the provider -- a paused generation books no spend.
+        return generation_disabled_response()
     tutor = app_ctx.tutor
     if tutor is None:
         raise HTTPException(
@@ -482,26 +500,31 @@ def _prepare_chat_turn(
     sync, and these reads/writes must not stall the event loop that is
     concurrently streaming other users' tokens.
     """
-    # AI-002: budget gate before spending upstream tokens.
-    check_ai_budget(db, user_id=user.id, settings=app_ctx.settings)
-    # BE-01: reserve the ledger row BEFORE the provider call and make it
-    # durable in its own transaction -- the budget gate of a concurrent
-    # generation must count this in-flight spend, and a disconnect later
-    # still leaves the partial spend on the books.
+    # AI-002 budget gate + BE-01 reserve, both skipped while the kill switch
+    # is off (F-031): the route answers with the localized refusal envelope
+    # instead of a provider call, so no phantom prompt-side spend may land on
+    # the ledger. The turn itself is still persisted, so history stays whole.
     tutor = app_ctx.tutor
-    if tutor is None:  # pragma: no cover - route-level 503 precedes this
-        raise HTTPException(
-            status_code=503,
-            detail={"code": "tutor_unavailable", "message": "Tutor service unavailable"},
+    pending_usage: AiUsage | None = None
+    if app_ctx.settings.ai_generation_enabled:
+        check_ai_budget(db, user_id=user.id, settings=app_ctx.settings)
+        # Reserve the ledger row BEFORE the provider call and make it
+        # durable in its own transaction -- the budget gate of a concurrent
+        # generation must count this in-flight spend, and a disconnect later
+        # still leaves the partial spend on the books.
+        if tutor is None:  # pragma: no cover - route-level 503 precedes this
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "tutor_unavailable", "message": "Tutor service unavailable"},
+            )
+        pending_usage = reserve_ai_usage(
+            db,
+            user_id=user.id,
+            route="tutor.chat",
+            model=getattr(tutor.provider, "model", None) or tutor.provider.name,
+            prompt_text=payload.message,
         )
-    pending_usage: AiUsage | None = reserve_ai_usage(
-        db,
-        user_id=user.id,
-        route="tutor.chat",
-        model=getattr(tutor.provider, "model", None) or tutor.provider.name,
-        prompt_text=payload.message,
-    )
-    db.commit()
+        db.commit()
     conv = _own_conversation(db, conversation_id, user)
     student = _student_profile(db, user)
     class_level = payload.class_level or student.class_level or 6
@@ -588,8 +611,9 @@ def _persist_chat_reply(
         conv.title = payload.message[:80]
     # AI-002/BE-01: finalize the reserve in place (one row per generation
     # with the answer actually produced). Vision refusals never reach a
-    # provider: their reserve finalizes at zero completion tokens.
-    if not no_vision:
+    # provider: their reserve finalizes at zero completion tokens. The kill
+    # switch (F-031) reserves nothing at all, so there is no row to finalize.
+    if not no_vision and pending_usage is not None:
         finalize_ai_usage(db, pending_usage, model=model, answer_text=result.answer)
     db.commit()
     # one question ≈ one minute of study for the daily counters.
@@ -603,7 +627,7 @@ async def send_chat_message(
 ) -> ChatMessageOut:
     """Non-streaming chat turn: persists both sides and returns the reply."""
     tutor = app_ctx.tutor
-    if tutor is None:
+    if tutor is None and app_ctx.settings.ai_generation_enabled:
         raise HTTPException(
             status_code=503,
             detail={"code": "tutor_unavailable", "message": "Tutor service unavailable"},
@@ -620,7 +644,12 @@ async def send_chat_message(
     prepared = await asyncio.to_thread(
         _prepare_chat_turn, app_ctx, db, user, conversation_id, payload, persist="commit"
     )
-    if prepared.no_vision:
+    if not app_ctx.settings.ai_generation_enabled:
+        # F-031 kill switch: the user turn is already persisted above (with
+        # no ledger reserve); answer with the refusal envelope so the turn
+        # still lands in history and no 5xx surfaces.
+        result = generation_disabled_response()
+    elif prepared.no_vision:
         # Honest refusal: the mock provider cannot see images at all.
         result = AskResponse(
             answer=VISION_UNSUPPORTED_ANSWER,
@@ -629,6 +658,11 @@ async def send_chat_message(
             refused_reason="vision_unsupported",
         )
     else:
+        if tutor is None:  # pragma: no cover - route-level 503 precedes this
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "tutor_unavailable", "message": "Tutor service unavailable"},
+            )
         try:
             result = await tutor.ask(
                 payload.message,
@@ -651,7 +685,7 @@ async def send_chat_message(
                     finalize_ai_usage,
                     db,
                     prepared.pending_usage,
-                    model=getattr(tutor.provider, "model", None) or tutor.provider.name,
+                    model=_effective_model(tutor),
                     answer_text=None,
                 )
                 db.commit()
@@ -675,7 +709,7 @@ async def send_chat_message(
         payload,
         result,
         route="tutor.chat",
-        model=getattr(tutor.provider, "model", None) or tutor.provider.name,
+        model=_effective_model(tutor),
         no_vision=prepared.no_vision,
         pending_usage=prepared.pending_usage,
     )
@@ -717,7 +751,7 @@ async def stream_chat_message(
 ) -> StreamingResponse:
     """SSE streaming chat turn: token events, then one final JSON event."""
     tutor = app_ctx.tutor
-    if tutor is None:
+    if tutor is None and app_ctx.settings.ai_generation_enabled:
         raise HTTPException(
             status_code=503,
             detail={"code": "tutor_unavailable", "message": "Tutor service unavailable"},
@@ -727,11 +761,20 @@ async def stream_chat_message(
     )
     conv = prepared.conv
     user_msg = prepared.user_msg
+    generation_enabled = app_ctx.settings.ai_generation_enabled
 
     async def event_stream() -> AsyncIterator[str]:
         try:
             final_response: AskResponse | None = None
-            if prepared.no_vision:
+            if not generation_enabled:
+                # F-031 kill switch: same refusal envelope as the JSON paths,
+                # emitted through the stream's one-token + done shape. The
+                # user turn was persisted above; the assistant refusal is
+                # persisted below, so history stays coherent.
+                final_response = generation_disabled_response()
+                token_payload = json.dumps({"text": GENERATION_DISABLED_ANSWER}, ensure_ascii=False)
+                yield f"event: token\ndata: {token_payload}\n\n"
+            elif prepared.no_vision:
                 # Honest refusal: the mock provider cannot see images at
                 # all -- emitted as one token + the normal done event.
                 final_response = AskResponse(
@@ -756,6 +799,8 @@ async def stream_chat_message(
 
                 async def _produce() -> None:
                     try:
+                        if tutor is None:  # pragma: no cover - route-level 503 precedes this
+                            raise ProviderError("tutor unavailable")
                         async for event in tutor.ask_stream(
                             payload.message,
                             prepared.class_level,
@@ -808,7 +853,7 @@ async def stream_chat_message(
                             finalize_ai_usage,
                             db,
                             prepared.pending_usage,
-                            model=getattr(tutor.provider, "model", None) or tutor.provider.name,
+                            model=_effective_model(tutor),
                             answer_text=partial or None,
                         )
                         db.commit()
@@ -835,7 +880,7 @@ async def stream_chat_message(
                 payload,
                 final_response,
                 route="tutor.chat.stream",
-                model=getattr(tutor.provider, "model", None) or tutor.provider.name,
+                model=_effective_model(tutor),
                 no_vision=prepared.no_vision,
                 pending_usage=prepared.pending_usage,
             )

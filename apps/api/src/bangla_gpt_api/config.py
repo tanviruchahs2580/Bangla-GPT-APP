@@ -103,6 +103,13 @@ class Settings(BaseSettings):
     # 0 (default) = unlimited. When set, generation entry points refuse with
     # 429 ai_budget_exceeded once the user's current-month ledger hits the cap.
     ai_monthly_budget_usd_per_user: float = 0.0
+    # F-031: operator kill switch for AI generation. false = the tutor/chat
+    # generation surfaces answer with a localized refusal envelope
+    # (refused_reason=ai_generation_disabled) instead of calling a provider;
+    # retrieval, /search, the reader and quizzes keep working, and provider/
+    # index construction is untouched (unlike unsetting LLM_PROVIDER, which
+    # also removes the index). Default true keeps generation on.
+    ai_generation_enabled: bool = True
     # Circuit breaker thresholds
     circuit_breaker_failure_threshold: int = 3  # failures before opening
     circuit_breaker_reset_timeout_seconds: float = 60.0  # seconds before half-open

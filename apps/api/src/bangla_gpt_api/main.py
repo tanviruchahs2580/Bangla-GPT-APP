@@ -574,6 +574,15 @@ def create_app(settings: Settings | None = None) -> object:
     # Phase 2: Production safety gate (fail-fast)
     enforce_production_safety(settings)
 
+    if not settings.ai_generation_enabled:
+        # F-031 kill switch: a deliberate operator state, said once at boot so
+        # the refusal traffic (refused_reason=ai_generation_disabled) is
+        # attributable in the logs; retrieval/search/reader/quizzes stay up.
+        logger.warning(
+            "ai_generation_disabled: tutor/chat generation refuses with "
+            "refused_reason=ai_generation_disabled; retrieval and search stay available"
+        )
+
     # Phase 3: Bare FastAPI app. CORS lives exclusively in
     # initialize.middleware_stack.build_middleware_stack (registered once,
     # together with the rest of the middleware order).

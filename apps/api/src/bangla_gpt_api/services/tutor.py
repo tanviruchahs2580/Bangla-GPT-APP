@@ -92,6 +92,32 @@ VISION_UNSUPPORTED_ANSWER = (
 # not textbook content — the stream path must never mark it grounded.
 _UNAVAILABLE_ANSWER = "দুঃখিত, AI সেবা এই মুহূর্তে ব্যবহার করা যাচ্ছে না। অনুগ্রহ করে পরে আবার চেষ্টা করুন।"
 
+# F-031: the operator kill switch (AI_GENERATION_ENABLED=false) answers every
+# generation surface with this refusal envelope instead of reaching the
+# provider. Retrieval/search/reader/quizzes are untouched, so the copy names
+# what still works and reassures the student that nothing was lost.
+GENERATION_DISABLED_ANSWER = (
+    "এই মুহূর্তে AI উত্তর তৈরি সাময়িকভাবে বন্ধ আছে। "
+    "পাঠ্যবই পড়া, অনুসন্ধান ও কুইজ আগের মতোই ব্যবহার করা যাবে — "
+    "একটু পরে আবার প্রশ্ন করলে আমি উত্তর দেব।"
+)
+
+
+def generation_disabled_response() -> AskResponse:
+    """Refusal envelope for every generation route when the kill switch is
+    off (F-031). grounded/refused_reason/confidence mirror every other
+    refusal, so clients render it through the existing path."""
+    from bangla_gpt_api.services.safety import answer_confidence
+
+    return AskResponse(
+        answer=GENERATION_DISABLED_ANSWER,
+        grounded=False,
+        sources=[],
+        refused_reason="ai_generation_disabled",
+        confidence=answer_confidence(False, "ai_generation_disabled", []),
+    )
+
+
 EVIDENCE_OPEN = "<evidence>"
 EVIDENCE_CLOSE = "</evidence>"
 # Delimiters for the vision turn (F-033/LLM-08): the attached image and any
