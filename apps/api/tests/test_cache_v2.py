@@ -368,11 +368,21 @@ def test_memory_add_if_absent_claims_exactly_once() -> None:
 
 
 def test_memory_add_if_absent_respects_plain_writes_and_expiry() -> None:
+    """A live plain write blocks the claim; an expired one does not.
+
+    The two phases use separate keys with a generous TTL for the blocking phase:
+    with a 0.05 s TTL on one key, a scheduler stall between the write and the
+    claim (a loaded CI runner, or a full local suite under parallel load) could
+    expire the entry first and fail the "live value must block" assertion -
+    observed once in three full-suite runs on 2026-10-29. The expiry phase keeps
+    the short TTL and is unaffected by stalls: any delay only strengthens it.
+    """
     cache = MemoryCache()
-    cache.set_json("k", {"v": 1}, 0.05)
-    assert cache.add_if_absent("k", 1, 60.0) is False, "a live value must block the claim"
+    cache.set_json("live", {"v": 1}, 30.0)
+    assert cache.add_if_absent("live", 1, 60.0) is False, "a live value must block the claim"
+    cache.set_json("expiring", {"v": 1}, 0.05)
     time.sleep(0.06)
-    assert cache.add_if_absent("k", 1, 60.0) is True, "an expired entry must not block"
+    assert cache.add_if_absent("expiring", 1, 60.0) is True, "an expired entry must not block"
 
 
 def test_memory_add_if_absent_is_atomic_under_threads() -> None:
