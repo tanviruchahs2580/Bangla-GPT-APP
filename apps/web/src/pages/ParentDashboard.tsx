@@ -117,7 +117,9 @@ export default function ParentDashboard() {
   }
 
   return (
-    <>
+    /* A11Y-01: the staff layout had no <main> at all, so the route had no
+       landmark and the shell's skip link had nothing to jump to. */
+    <main id="main-content" className="shell-main">
       <h1 className="page-title">{t("parentDashboard")}</h1>
 
       <div className="card">
@@ -397,6 +399,6 @@ export default function ParentDashboard() {
           </p>
         </div>
       )}
-    </>
+    </main>
   );
 }

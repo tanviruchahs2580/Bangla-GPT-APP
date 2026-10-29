@@ -111,33 +111,31 @@ async function tabSweep(page: Page, maxStops = 60): Promise<string[]> {
   throw new Error(`tab sequence did not terminate within ${maxStops} stops: ${stops.join(' > ')}`)
 }
 
-test('the first keyboard stop on a public page is the language switch, with a visible ring', async ({
+test('the first keyboard stop on a public page is the skip link, and it jumps to main', async ({
   page,
 }) => {
-  // a1929ad asserted a skip link here; this branch ships none (the SkipLink
-  // component is absent from src). The keyboard contract that remains is
-  // still asserted in full: a deterministic first stop, a visible focus
-  // indicator on it, and the sweep below proves every later stop paints one
-  // too. First stop = the public language toggle (App.tsx renders it before
-  // the routes for anonymous visitors, I18N-12).
+  // F-003/A11Y-02: the shell ships the skip link again (it was lost with the
+  // SkipLink work) and App.tsx renders it before PublicLanguageToggle, so it is
+  // the deterministic first stop on the public routes too. The focus ring is
+  // asserted in full, and the sweep below proves every later stop paints one.
   await openRoute(page, '/login')
   await page.keyboard.press('Tab')
   const first = await focused(page)
-  // Class-order independent: the toggle renders `icon-btn public-lang-toggle`,
-  // and focused() reports only the FIRST class, so a prefix match broke when
-  // the shared icon-btn class moved ahead of the specific one.
-  const isFirstStopToggle = await page.evaluate(() =>
+  // Class-order independent: focused() reports only the FIRST class.
+  const isFirstStopSkipLink = await page.evaluate(() =>
     Boolean(
       (document.activeElement as HTMLElement | null)?.classList.contains(
-        'public-lang-toggle',
+        'skip-link',
       ),
     ),
   )
-  expect(isFirstStopToggle, `first keyboard stop was ${first}`).toBe(true)
+  expect(isFirstStopSkipLink, `first keyboard stop was ${first}`).toBe(true)
   expect(await focusIsVisible(page)).toBe(true)
-  // The toggle is operable from the keyboard alone: Enter lands the focus
-  // somewhere real (never lost to <body>), and the language actually moves.
+  // Activating it lands the page on the main landmark: the hash moves to the
+  // skip target, and focus is never lost to <body>.
   await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/#main-content$/)
+  expect(await page.locator('main#main-content').count()).toBe(1)
   expect(await focused(page)).not.toBe('body')
 })
 

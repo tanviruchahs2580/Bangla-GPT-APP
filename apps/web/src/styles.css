@@ -383,6 +383,32 @@ p {
   outline: none;
 }
 
+/* F-003 (WCAG 2.4.1/2.4.6): the shell's and the public pages' skip link is the
+   first focusable element on every route. It stays off-screen until focused so
+   it does not alter the visual layout, but it is never display:none -- it must
+   remain in the tab order and the accessible tree. --brand-solid, not --brand:
+   the label is white and the dark theme's accent green is too light for it
+   (same rule as the other white-label fills, F-004). */
+.skip-link {
+  position: fixed;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 1000;
+  transform: translateY(-200%);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  background: var(--brand-solid);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: var(--elev-3);
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
 ::selection {
   background: var(--brand-soft);
   color: var(--brand-ink);

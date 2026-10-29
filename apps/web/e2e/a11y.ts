@@ -75,11 +75,10 @@ export async function signIn(page: Page, email: string): Promise<void> {
  * `networkidle` is best-effort because the tutor page keeps an SSE connection
  * open while an answer streams; it is not used as the sole readiness signal.
  *
- * The readiness landmark is `#root > *`, not `<main>`: this branch's public
- * and staff pages (login, register, parent, admin, status, legal) render
- * their own layouts without a main landmark -- only the student/teacher
- * pages carry `<main className="shell-main">`. Waiting for main would hang
- * the sweep on every public route.
+ * The readiness landmark is `#root > *`: every route renders a
+ * `main#main-content` now (F-003), but the root selector keeps the wait
+ * independent of the page's own markup, so a route added later cannot hang the
+ * sweep by rendering its landmarks late.
  */
 export async function openRoute(page: Page, route: string): Promise<void> {
   await page.goto(route, { waitUntil: 'domcontentloaded' })

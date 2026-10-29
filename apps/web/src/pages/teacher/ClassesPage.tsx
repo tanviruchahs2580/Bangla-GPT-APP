@@ -255,7 +255,7 @@ export default function ClassesPage() {
   }, [wm]);
 
   return (
-    <main className="shell-main">
+    <main id="main-content" className="shell-main">
       <section className="section-head">
         <h1 className="page-title">{t("tNavClasses")}</h1>
         <Button variant="soft" size="sm" onClick={refresh}>

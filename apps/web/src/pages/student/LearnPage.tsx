@@ -115,7 +115,7 @@ export function LearnPage() {
   };
 
   return (
-    <main className="shell-main">
+    <main id="main-content" className="shell-main">
       <section className="section-head">
         <h2>{t("subjects")}</h2>
       </section>
@@ -488,7 +488,7 @@ export function LearnChapterPage() {
   };
 
   return (
-    <main className="shell-main">
+    <main id="main-content" className="shell-main">
       <button
         className="btn btn-ghost btn-sm chips-gap"
         onClick={() => navigate(-1)}

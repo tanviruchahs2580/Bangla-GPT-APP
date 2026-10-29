@@ -99,7 +99,7 @@ export default function TeacherHomePage() {
   }, [wm]);
 
   return (
-    <main className="shell-main">
+    <main id="main-content" className="shell-main">
       {loadError && (
         <div className="muted" role="status">
           {t("thLoadError")}{" "}

@@ -23,6 +23,7 @@ import { AppShell } from "./AppShell";
 import { Skeleton } from "./components/ui";
 import { RouteErrorBoundary } from "./components/AppErrorBoundary";
 import { PublicLanguageToggle } from "./components/PublicLanguageToggle";
+import { SkipLink } from "./components/SkipLink";
 import { onLangChange, t } from "./i18n";
 
 const LoginPage = lazy(() => import("./pages/LoginPage"));
@@ -182,7 +183,10 @@ function RoutesSwitch() {
   return (
     <>
       {/* I18N-12: an anonymous visitor sees these pages without AppShell, so
-          the language switch has to be rendered here or not at all. */}
+          the language switch has to be rendered here or not at all. A11Y-02:
+          the same is true of the skip link, which must be the first focusable
+          element on the public routes too. */}
+      {!me && <SkipLink />}
       {!me && <PublicLanguageToggle />}
       <Routes>
         <Route path="/" element={<Navigate to={home} replace />} />

@@ -374,6 +374,7 @@ const bn = {
   purgeConfirm:
     "এটি মেয়াদোত্তীর্ণ টোকেন, ইনভাইট ও পুরোনো চ্যাট স্থায়ীভাবে মুছে ফেলবে। ফিরিয়ে আনা যাবে না।",
   locPrimaryNav: "প্রধান নেভিগেশন",
+  skipToContent: "মূল কনটেন্টে যান",
   locHighlights: "বিশেষ বৈশিষ্ট্য",
   locFontSize: "লেখার আকার",
   locWorkspace: "কর্মক্ষেত্র",
@@ -1051,6 +1052,7 @@ const en: Dict = {
   purgeConfirm:
     "This permanently deletes expired tokens, invites and old chats. It cannot be undone.",
   locPrimaryNav: "Primary",
+  skipToContent: "Skip to main content",
   locHighlights: "highlights",
   locFontSize: "font size",
   locWorkspace: "workspace",

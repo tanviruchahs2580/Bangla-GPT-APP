@@ -21,7 +21,7 @@ export default function TeacherProfilePage() {
   const [dark, setDark] = useState(currentTheme() === "dark");
 
   return (
-    <main className="shell-main">
+    <main id="main-content" className="shell-main">
       <section className="section-head">
         <h1 className="page-title">{t("tpTitle")}</h1>
       </section>

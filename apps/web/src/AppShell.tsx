@@ -24,6 +24,7 @@ import { exitImpersonation, isImpersonating } from "./api";
 import { NotificationBell } from "./components/NotificationBell";
 import { BrandMark } from "./components/BrandMark";
 import { SearchBox } from "./components/SearchBox";
+import { SkipLink } from "./components/SkipLink";
 import { getLang, onLangChange, setLang, t } from "./i18n";
 import { toggleTheme, currentTheme, onThemeChange } from "./lib/theme";
 import {
@@ -125,6 +126,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             : "shell"
       }
     >
+      <SkipLink />
       <OfflineBanner />
       <ImpersonationBanner />
       <header className="topbar">
