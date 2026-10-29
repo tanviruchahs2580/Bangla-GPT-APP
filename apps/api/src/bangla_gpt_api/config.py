@@ -4,6 +4,7 @@ import logging
 import tomllib
 from functools import lru_cache
 from pathlib import Path
+from typing import cast
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -42,7 +43,7 @@ def _project_version() -> str:
     """
     manifest = Path(__file__).resolve().parents[2] / "pyproject.toml"
     with manifest.open("rb") as fh:
-        return tomllib.load(fh)["project"]["version"]
+        return cast(str, tomllib.load(fh)["project"]["version"])
 
 
 def _get_version() -> str:

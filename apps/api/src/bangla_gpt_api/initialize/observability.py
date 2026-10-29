@@ -4,9 +4,15 @@ Separate from ``create_app`` so both production and test paths can configure
 logging before any dependency is constructed.
 """
 
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING, cast
 
 from bangla_gpt_api.logging_config import redact_value
+
+if TYPE_CHECKING:
+    from sentry_sdk.types import Event, Hint
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +28,7 @@ def configure_observability(log_level: str = "INFO") -> None:
     configure_logging(log_level)
 
 
-def scrub_sentry_event(event: dict, hint: object = None) -> dict:
+def scrub_sentry_event(event: Event, hint: Hint | None = None) -> Event | None:
     """Sentry ``before_send`` hook: run the log redactor over the event (F-043).
 
     Nothing filtered error payloads on the way to a third-party service: an
@@ -32,9 +38,13 @@ def scrub_sentry_event(event: dict, hint: object = None) -> dict:
     so the event goes through the SAME redactor rather than a second, drifting
     copy. Unknown objects are replaced wholesale by the redactor, which also
     keeps the payload JSON-safe for Sentry.
+
+    Typed to sentry_sdk's own public ``Event``/``Hint`` contract so CI's
+    ``mypy src`` accepts the hook; the redactor can still hand back a dict
+    the TypedDict cannot fully describe, hence the cast.
     """
     scrubbed = redact_value(event)
-    return scrubbed if isinstance(scrubbed, dict) else {}
+    return cast("Event", scrubbed) if isinstance(scrubbed, dict) else None
 
 
 def configure_sentry(settings: object) -> None:
