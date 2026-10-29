@@ -4,26 +4,52 @@ Keeps ``original_text`` untouched and produces ``normalized_text`` used
 for indexing/retrieval. Never destroys mathematical/scientific notation:
 normalization is limited to Unicode form, zero-width characters,
 whitespace and optional numeral conversion.
+
+The Unicode form is the shared one from ``retrieval.normalize``: NFKC plus
+zero-width removal, so the ingested text is the same form the query path
+produces (F-133). ``normalize_bangla`` adds the whitespace collapse the
+stored chunk text needs; ``normalize_bangla_with_offsets`` additionally
+returns the map back into the original string.
 """
 
 from __future__ import annotations
 
 import re
-import unicodedata
 
-ZERO_WIDTH_CHARS = {"\u200b", "\u200c", "\u200d", "\ufeff"}
-BENGALI_DIGITS = str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789")
+from bangla_gpt_api.retrieval.normalize import (
+    BENGALI_DIGITS,
+    ZERO_WIDTH_CHARS,
+    NormalizedText,
+    collapse_whitespace,
+    normalize_nfkc,
+    normalize_with_offsets,
+)
+
+__all__ = [
+    "BENGALI_CLASS_WORDS",
+    "BENGALI_DIGITS",
+    "ZERO_WIDTH_CHARS",
+    "NormalizedText",
+    "bangla_char_ratio",
+    "detect_class_level",
+    "detect_class_levels",
+    "looks_like_garbage",
+    "normalize_bangla",
+    "normalize_bangla_with_offsets",
+]
 
 
 def normalize_bangla(text: str, *, ascii_digits: bool = False) -> str:
-    """NFC-normalize, drop zero-width characters and collapse whitespace."""
-    normalized = unicodedata.normalize("NFC", text)
-    for char in ZERO_WIDTH_CHARS:
-        normalized = normalized.replace(char, "")
-    normalized = " ".join(normalized.split())
+    """NFKC-normalize, drop zero-width characters and collapse whitespace."""
+    normalized = collapse_whitespace(normalize_nfkc(text))
     if ascii_digits:
         normalized = normalized.translate(BENGALI_DIGITS)
-    return normalized.strip()
+    return normalized
+
+
+def normalize_bangla_with_offsets(text: str, *, ascii_digits: bool = False) -> NormalizedText:
+    """Like :func:`normalize_bangla`, plus the map back into ``text``."""
+    return normalize_with_offsets(text, ascii_digits=ascii_digits)
 
 
 def bangla_char_ratio(text: str) -> float:

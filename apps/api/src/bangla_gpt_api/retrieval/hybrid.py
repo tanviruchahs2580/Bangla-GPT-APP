@@ -16,7 +16,8 @@ backend can slot in behind the same interface later.
 """
 
 import re
-import unicodedata
+
+from bangla_gpt_api.retrieval.normalize import normalize_nfkc
 
 # The character-class brackets are load-bearing. BAN-001 follow-up, measured
 # 2026-10-17: written unbracketed (`r"\u0980-\u09FF"`), this pattern only
@@ -36,16 +37,14 @@ def tokenize(text: str) -> list[str]:
     explicit range U+0980-U+09FF covers the full Bangla block incl. signs
     and digits.
 
-    NFKC folds compatibility variants (e.g. mobile-keyboard precomposed vs
-    decomposed Bangla) so indexing and querying stay symmetric. Lives
+    The shared normalizer (retrieval/normalize.py) folds compatibility
+    variants (mobile-keyboard precomposed vs decomposed Bangla) and strips
+    zero-width inserts, so indexing and querying stay symmetric. Lives
     beside :func:`light_stem` rather than in :mod:`bm25` because both the
     lexical index and the query-side analysis need it, and the analysis
     layer must not depend on the index.
     """
-    return [
-        match.group(0).lower()
-        for match in _BANGLA_WORD_RE.finditer(unicodedata.normalize("NFKC", text))
-    ]
+    return [match.group(0).lower() for match in _BANGLA_WORD_RE.finditer(normalize_nfkc(text))]
 
 
 # Longest-match-first so 'গুলোকে' wins over 'কে'.
