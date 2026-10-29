@@ -248,6 +248,17 @@ max-complexity = 20
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# A deprecation warning is a dated dependency or a dated call site; the audit
+# found the suite reporting one and shipping it silently (F-159/TEST-01), so
+# the whole suite treats them as failures. The single accepted exception is
+# starlette's httpx shim inside its own TestClient: it is the framework's
+# transition notice, fired from third-party code this repo does not own, and
+# it disappears when starlette ships the shimmed import by default. Removing
+# this ignore is the goal of the next starlette upgrade.
+filterwarnings = [
+    "error::DeprecationWarning",
+    "ignore:Using .httpx. with .starlette.testclient. is deprecated",
+]
 markers = [
     "skipif: conditional skip (pytest.mark.skipif)",
     "integration: slow integration tests requiring external services",
