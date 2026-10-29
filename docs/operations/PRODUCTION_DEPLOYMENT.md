@@ -25,10 +25,12 @@
 # Build Docker image (same as CI). There is no APP_VERSION build-arg: the
 # image is version-independent and the release tag drives the tags and the
 # metadata labels (release.yml). The version number's single source is
-# apps/api/pyproject.toml, so derive it here instead of copying it.
-VERSION="$(python3 -c 'import tomllib;print(tomllib.load(open("apps/api/pyproject.toml","rb"))["project"]["version"])')"
+# apps/api/pyproject.toml, so derive it here instead of copying it. The shell
+# variable is deliberately not named VERSION: Settings reads an environment
+# variable of that name and would silently override the app's own version.
+IMAGE_TAG="v$(python3 -c 'import tomllib;print(tomllib.load(open("apps/api/pyproject.toml","rb"))["project"]["version"])')"
 DOCKER_BUILDKIT=1 docker build \
-  --tag "ghcr.io/tanviruchahs2580/bangla-gpt-app/api:v${VERSION}" \
+  --tag "ghcr.io/tanviruchahs2580/bangla-gpt-app/api:${IMAGE_TAG}" \
   --push .
 ```
 
@@ -91,9 +93,9 @@ ADMIN_PASSWORD=<12+ chars>
 ```bash
 # The released tag carries the version from apps/api/pyproject.toml (0.9.3
 # today). Derive the tag so this page cannot drift from the manifests.
-VERSION="$(python3 -c 'import tomllib;print(tomllib.load(open("apps/api/pyproject.toml","rb"))["project"]["version"])')"
-docker pull "ghcr.io/tanviruchahs2580/bangla-gpt-app/api:v${VERSION}"
-docker pull "ghcr.io/tanviruchahs2580/bangla-gpt-app/web:v${VERSION}"
+IMAGE_TAG="v$(python3 -c 'import tomllib;print(tomllib.load(open("apps/api/pyproject.toml","rb"))["project"]["version"])')"
+docker pull "ghcr.io/tanviruchahs2580/bangla-gpt-app/api:${IMAGE_TAG}"
+docker pull "ghcr.io/tanviruchahs2580/bangla-gpt-app/web:${IMAGE_TAG}"
 ```
 
 ---
