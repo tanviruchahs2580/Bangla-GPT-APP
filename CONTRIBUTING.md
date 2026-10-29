@@ -9,6 +9,22 @@ only the rules that the CI cannot enforce for you.
   agreed before the work is done.
 - `main` is the integration branch. Branch from it, never commit to it
   directly.
+- Participation is covered by [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), which
+  also states the project-specific rule about children's data.
+
+## Setup
+
+1. **API** — the README "Quick start" carries the exact commands for both
+   PowerShell and Linux; CI runs the same two steps (`pip install
+   --require-hashes -r constraints.txt`, then `pip install --no-deps -e
+   ".[dev]"`). Python 3.11+ is required.
+2. **Web** — `npm ci` in `apps/web` (Node 24 / npm 11; `.nvmrc` pins 24).
+3. **Optional but recommended** — `pip install pre-commit && pre-commit
+   install`: the hook set is a subset of CI and catches whitespace, JSON/TOML
+   and private-key problems before the push. `.pre-commit-config.yaml` states
+   what is deliberately left to CI and why.
+4. **Or in one step** — `make setup` runs 1–3 (GNU make + bash; see the
+   Makefile header for the other targets).
 
 ## Branches and commits
 
@@ -139,6 +155,27 @@ that touches authentication, PII handling, migrations, or CI configuration.
 Match the surrounding code. The linters are configured in `apps/api/pyproject.toml`;
 when a suppression is genuinely necessary, put the reason in the comment — an
 unexplained `# noqa` or `# type: ignore` will be asked about in review.
+
+### File names
+
+A `_v2` suffix marks the second generation of a suite or dataset
+(`test_cache_v2.py`, `eval/golden_v2.json`, `eval/redteam_v2.json`,
+`eval/baseline_v2.json` and their siblings). The base name is intentionally
+absent: the first generation was replaced rather than kept side by side, and
+the QA reports and the eval-gate job refer to these names, so rename only with
+every reference updated in the same change.
+
+## Repository size
+
+Sixteen tracked files exceed 500 KB (9.4 MB total): eleven Playwright
+visual-regression baselines under `apps/web/e2e/__screenshots__/visual.spec.ts/`
+and five renovation-evidence screenshots under
+`docs/uiux_renovation_evidence/wave4/after/`. Decision (2026-10-29): keep them
+in git — the baselines make visual regressions reviewable and refreshable, and
+the evidence set is the durable record of that UI pass. The
+`check-added-large-files` pre-commit hook caps **newly added** files at 512 KB
+(it inspects added files per commit), so a new large file needs an explicit
+decision recorded here, not a silent `--no-verify`.
 
 ## Security issues
 
