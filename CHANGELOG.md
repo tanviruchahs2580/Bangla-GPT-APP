@@ -72,6 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: index the new AI, security and language documents
 - docs: index the unlisted living documents and rebaseline the routes
 - docs: never name the derived image tag VERSION
+- docs: regenerate the changelog for the hardening wave
 
 ### Tests
 
@@ -82,6 +83,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - chore(dx): close the cheap pre-commit parity gaps
 - chore: ignore the Android build output at the repo root
+
+### Style
+
+- style(tests,docs): satisfy the end-of-file and line-ending hooks
 
 ### Other
 
