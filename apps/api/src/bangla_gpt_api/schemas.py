@@ -1,7 +1,9 @@
+import re
 from datetime import datetime
-from typing import Any, Literal, cast
+from typing import Annotated, Any, Literal, cast
 
 from pydantic import (
+    AfterValidator,
     BaseModel,
     ConfigDict,
     Field,
@@ -9,6 +11,7 @@ from pydantic import (
     model_serializer,
     model_validator,
 )
+from pydantic_core import PydanticCustomError
 
 # --- explicit explanation strategies -----------------------------------
 
@@ -35,6 +38,34 @@ ExplanationStyle = Literal["simple", "standard", "detailed"]
 # the attempt stayed open forever, and nothing deletes an assignment. Tying
 # both bounds to one name is what stops them drifting apart again.
 MAX_QUIZ_QUESTIONS = 25
+
+
+# --- identity-text hygiene (F-005 / API-04) ------------------------------
+# C0/C1 controls plus the bidi embedding/override/isolate set
+# (U+202A-U+202E, U+2066-U+2069). A NUL is not storable by PostgreSQL at all,
+# so accepting one here is a 500 on the production engine; the bidi controls
+# let a value render as a different string in rosters, reports and generated
+# PDFs. Applied to identity/profile fields (names, emails, phones, invite
+# codes, school names). Free-text bodies -- chat turns, notes, feedback
+# comments -- deliberately keep the whole range: bidirectional text is
+# legitimate inside prose and those surfaces quote content instead of
+# rendering it as an identity. Rejection is a 422 whose error type carries
+# the stable code ``invalid_characters``.
+_FORBIDDEN_IDENTITY_CHARS_RE = re.compile("[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]")
+
+
+def reject_control_characters(value: str) -> str:
+    """Reject control and bidi-formatting characters in an identity field."""
+    if _FORBIDDEN_IDENTITY_CHARS_RE.search(value):
+        raise PydanticCustomError(
+            "invalid_characters",
+            "must not contain control or bidirectional formatting characters",
+        )
+    return value
+
+
+#: A user-identity string: name, email, phone or invite code.
+IdentityText = Annotated[str, AfterValidator(reject_control_characters)]
 
 
 class QuizExplainContext(BaseModel):
@@ -183,9 +214,9 @@ _EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 
 
 class RegisterRequest(BaseModel):
-    email: str = Field(min_length=5, max_length=255, pattern=_EMAIL_PATTERN)
+    email: IdentityText = Field(min_length=5, max_length=255, pattern=_EMAIL_PATTERN)
     password: str = Field(min_length=8, max_length=128)
-    name: str = Field(min_length=2, max_length=120)
+    name: IdentityText = Field(min_length=2, max_length=120)
     role: Literal["student", "teacher", "parent"]
     class_level: int | None = Field(default=None, ge=1, le=12)
     # Parental/guardian consent is mandatory for student accounts (minors).
@@ -196,7 +227,7 @@ class RegisterRequest(BaseModel):
     guardian_consent: bool = False
     # optional guardian phone (parent role); stored encrypted when
     # PII_ENC_KEY is configured.
-    phone: str | None = Field(default=None, max_length=32)
+    phone: IdentityText | None = Field(default=None, max_length=32)
 
 
 class RegisterResponse(BaseModel):
@@ -206,7 +237,7 @@ class RegisterResponse(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email: str = Field(min_length=5, max_length=255)
+    email: IdentityText = Field(min_length=5, max_length=255)
     password: str = Field(min_length=1, max_length=128)
 
 
@@ -217,7 +248,7 @@ class TokenResponse(BaseModel):
 
 
 class ForgotPasswordRequest(BaseModel):
-    email: str = Field(min_length=5, max_length=255)
+    email: IdentityText = Field(min_length=5, max_length=255)
 
 
 class ResetPasswordRequest(BaseModel):
@@ -241,7 +272,7 @@ class ResendVerificationRequest(BaseModel):
     always answers 202 with a generic body to avoid account enumeration.
     """
 
-    email: str | None = Field(default=None, min_length=5, max_length=255)
+    email: IdentityText | None = Field(default=None, min_length=5, max_length=255)
 
 
 # --- pagination contract (M-08) ---------------------------------------------
@@ -998,7 +1029,7 @@ class AssignmentMineOut(BaseModel):
 
 
 class SchoolCreateIn(BaseModel):
-    name: str = Field(min_length=2, max_length=200)
+    name: IdentityText = Field(min_length=2, max_length=200)
 
 
 class SchoolOut(BaseModel):
@@ -1024,10 +1055,10 @@ class SchoolInviteOut(BaseModel):
 class SchoolJoinIn(BaseModel):
     """Redeem a school invite code to create the staff account."""
 
-    invite_code: str = Field(min_length=4, max_length=64)
-    email: str = Field(min_length=5, max_length=255, pattern=_EMAIL_PATTERN)
+    invite_code: IdentityText = Field(min_length=4, max_length=64)
+    email: IdentityText = Field(min_length=5, max_length=255, pattern=_EMAIL_PATTERN)
     password: str = Field(min_length=8, max_length=128)
-    name: str = Field(min_length=2, max_length=120)
+    name: IdentityText = Field(min_length=2, max_length=120)
 
 
 class SchoolStaffOut(BaseModel):
