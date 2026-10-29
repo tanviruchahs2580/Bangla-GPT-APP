@@ -48,3 +48,14 @@ def test_web_package_json_mirrors_the_manifest() -> None:
         (REPO_ROOT / "apps" / "web" / "package.json").read_text(encoding="utf-8")
     )
     assert package_json["version"] == _pyproject_version()
+
+
+def test_web_lockfile_root_mirrors_the_manifest() -> None:
+    """The lockfile carries the same root version in two places (top level
+    and packages[""]); npm regenerates both from package.json, so they are
+    the parity guard's second surface (F-053)."""
+    lock = json.loads(
+        (REPO_ROOT / "apps" / "web" / "package-lock.json").read_text(encoding="utf-8")
+    )
+    assert lock["version"] == _pyproject_version()
+    assert lock["packages"][""]["version"] == _pyproject_version()
