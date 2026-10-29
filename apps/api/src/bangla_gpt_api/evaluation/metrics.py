@@ -224,6 +224,45 @@ async def run_suite(
     )
 
 
+def retrieval_hit_at_k(
+    index: Any,
+    items: list[dict],
+    *,
+    k: int = 3,
+    chapter_key: str = "chapter",
+) -> dict:
+    """Retrieval hit@k against each item's expected chapter (F-050/RAG-23).
+
+    The golden items that expect an answer carry the chapter their evidence
+    lives in; ``hit@k`` asks whether the served index returned a chunk of that
+    chapter inside the top ``k``. Refusal-expectation items are excluded: they
+    have no chapter to hit by construction (their absence is what family C /
+    the red-team set measure). Deterministic and model-free — it measures the
+    retrieval lane CI gates, not generation.
+    """
+    looked_up = [item for item in items if item.get("expect") == "answer" and item.get(chapter_key)]
+    missed: list[dict] = []
+    for item in looked_up:
+        hits = index.search(
+            item["question"],
+            class_level=item["class_level"],
+            subject=item.get("subject") or None,
+            top_k=k,
+        )
+        wanted = str(item[chapter_key]).strip()
+        if not any(str(hit.chunk.meta.chapter).strip() == wanted for hit in hits):
+            missed.append({"question": item["question"], "chapter": wanted})
+    total = len(looked_up)
+    hit = total - len(missed)
+    return {
+        "k": k,
+        "n": total,
+        "hit": hit,
+        "hit_rate": round(hit / total, 4) if total else 0.0,
+        "misses": missed,
+    }
+
+
 def compare_gate(baseline: dict, current: dict) -> tuple[bool, list[str]]:
     """Spec CI gate: FAIL if any metric regressed by more than GATE_PP points.
 
