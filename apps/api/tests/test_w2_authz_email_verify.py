@@ -71,15 +71,20 @@ def _mailpit_probe() -> str | None:
     return None
 
 
-@pytest.fixture(scope="module")
-def mailpit() -> dict:
+@pytest.fixture(scope="module", autouse=True)
+def _require_mailpit() -> None:
+    """Skip the module unless a real SMTP sink answers.
+
+    The verification gate only exists when SMTP delivery is configured, so the
+    whole module is meaningful only against mailpit; autouse gates every test
+    in the file, not just the ones that take ``client``.
+    """
     reason = _mailpit_probe()
     if reason is not None:
         pytest.skip(
             f"mailpit is not reachable on 127.0.0.1:18080 ({reason}); start it with: "
             "docker run -d --name bgpt-w2-mail -p 18025:1025 -p 18080:8025 axllent/mailpit"
         )
-    return {"api": MAILPIT_API}
 
 
 def _message_ids_for(address: str) -> list[str]:
@@ -107,7 +112,7 @@ def _token_from_message(message: dict) -> str:
 
 
 @pytest.fixture
-def client(tmp_path, mailpit) -> TestClient:
+def client(tmp_path) -> TestClient:
     settings = Settings(
         env="test",
         database_url=engine_url(tmp_path, "w2email"),
@@ -116,6 +121,11 @@ def client(tmp_path, mailpit) -> TestClient:
         smtp_host=MAILPIT_SMTP_HOST,
         smtp_port=MAILPIT_SMTP_PORT,
         smtp_from="no-reply@bangla-gpt.test",
+        # The container below speaks plain SMTP (mailpit logs "no
+        # encryption" without a mounted certificate); production keeps the
+        # STARTTLS requirement at its default. The mailer still upgrades
+        # opportunistically when a relay advertises STARTTLS.
+        smtp_require_starttls=False,
     )
     return TestClient(create_app(settings))
 

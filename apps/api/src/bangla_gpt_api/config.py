@@ -258,6 +258,11 @@ class Settings(BaseSettings):
     smtp_user: str | None = None
     smtp_password: str | None = None
     smtp_from: str | None = None
+    # ANON-06: true (default) requires the relay to speak STARTTLS -- reset and
+    # verification codes must not cross the wire in cleartext. False is for a
+    # local sink without TLS (mailpit on 1025, the documented test container):
+    # the mailer then upgrades opportunistically when the relay advertises it.
+    smtp_require_starttls: bool = True
 
     # --- parent weekly digest ---
     # Sunday ~22:00 Dhaka, once per ISO week; summary aggregates only, never
