@@ -19,18 +19,27 @@ curl -fsS "$BASE/health" | grep -q '"status":"ok"' && echo "  health ok"
 echo "== ready"
 curl -fsS "$BASE/ready" | grep -q '"status":"ready"' && echo "  ready ok"
 
+# Responses are written to files and parsed from those files, never piped from
+# curl into the interpreter: OpenSSF Scorecard's download-then-run heuristic
+# (GIT-08/F-186) flags `curl ... | sh/python` as a remote-code pattern, and
+# the file form also keeps curl's own exit status visible to `set -e`.
+TMPD=$(mktemp -d)
+trap 'rm -rf "$TMPD"' EXIT
+json_field() { # json_field <file> <expression over d>
+  "$PYTHON" -c "import json,sys; d=json.load(open(sys.argv[1], encoding='utf-8')); print($2)" "$1"
+}
+
 echo "== register $EMAIL"
 curl -fsS -o /dev/null -X POST "$BASE/auth/register" -H "Content-Type: application/json" -d "{\"email\":\"$EMAIL\",\"password\":\"$PASS\",\"name\":\"$NAME\",\"role\":\"student\",\"class_level\":6,\"guardian_consent\":true}"
 echo "  register ok"
 
 echo "== login"
-TOK=$(curl -fsS -X POST "$BASE/auth/login" -H "Content-Type: application/json" -d "{\"email\":\"$EMAIL\",\"password\":\"$PASS\"}" | "$PYTHON" -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+curl -fsS -o "$TMPD/login.json" -X POST "$BASE/auth/login" -H "Content-Type: application/json" -d "{\"email\":\"$EMAIL\",\"password\":\"$PASS\"}"
+TOK=$(json_field "$TMPD/login.json" "d['access_token']")
 echo "  login ok"
 
 AUTH="Authorization: Bearer $TOK"
 # Windows curl corrupts non-ASCII bytes passed in argv; send JSON bodies from files.
-TMPD=$(mktemp -d)
-trap 'rm -rf "$TMPD"' EXIT
 cat > "$TMPD/ask1.json" <<'BGPT_EOF'
 {"question":"কোষ কী?","class_level":6,"subject":"science"}
 BGPT_EOF
@@ -46,24 +55,27 @@ ASK=$(curl -fsS -X POST "$BASE/tutor/ask" -H "Content-Type: application/json" -H
 echo "$ASK" | grep -q '"grounded":true' && echo "  tutor grounded ok" || (echo "  tutor failed: $ASK"; exit 1)
 
 echo "== quiz start"
-QZ=$(curl -fsS -X POST "$BASE/quizzes" -H "Content-Type: application/json" -H "$AUTH" -d '{"student_id":1,"class_level":6,"subject":"science","num_questions":2}' || true)  # probing call; the correct-SID call below is the gate
+# Probing call: student id 1 is a guess and may not be this account; the
+# correct-SID call below is the gate. The response body is deliberately dropped.
+curl -fsS -o /dev/null -X POST "$BASE/quizzes" -H "Content-Type: application/json" -H "$AUTH" -d '{"student_id":1,"class_level":6,"subject":"science","num_questions":2}' || true
 # Student id 1 may not be correct; fetch me to get profile_id
-ME=$(curl -fsS -H "$AUTH" "$BASE/users/me")
-SID=$(echo "$ME" | "$PYTHON" -c "import sys,json; print(json.load(sys.stdin)['profile_id'])")
-QZ=$(curl -fsS -X POST "$BASE/quizzes" -H "Content-Type: application/json" -H "$AUTH" -d "{\"student_id\":$SID,\"class_level\":6,\"subject\":\"science\",\"num_questions\":2}")
-ATTEMPT=$(echo "$QZ" | "$PYTHON" -c "import sys,json; print(json.load(sys.stdin)['attempt_id'])")
-QCOUNT=$(echo "$QZ" | "$PYTHON" -c "import sys,json; print(len(json.load(sys.stdin)['questions']))")
+curl -fsS -o "$TMPD/me.json" -H "$AUTH" "$BASE/users/me"
+SID=$(json_field "$TMPD/me.json" "d['profile_id']")
+curl -fsS -o "$TMPD/quiz.json" -X POST "$BASE/quizzes" -H "Content-Type: application/json" -H "$AUTH" -d "{\"student_id\":$SID,\"class_level\":6,\"subject\":\"science\",\"num_questions\":2}"
+ATTEMPT=$(json_field "$TMPD/quiz.json" "d['attempt_id']")
+QCOUNT=$(json_field "$TMPD/quiz.json" "len(d['questions'])")
 echo "  quiz start ok attempt $ATTEMPT q $QCOUNT"
 
 echo "== quiz submit"
 ANSWERS=$("$PYTHON" -c "print(','.join(['0']*int('$QCOUNT')))")
-SUBMIT=$(curl -fsS -X POST "$BASE/quizzes/$ATTEMPT/submit" -H "Content-Type: application/json" -H "$AUTH" -d "{\"answers\":[$ANSWERS]}")
-echo "$SUBMIT" | grep -q '"score_pct"' && echo "  submit ok"
+curl -fsS -o "$TMPD/submit.json" -X POST "$BASE/quizzes/$ATTEMPT/submit" -H "Content-Type: application/json" -H "$AUTH" -d "{\"answers\":[$ANSWERS]}"
+grep -q '"score_pct"' "$TMPD/submit.json" && echo "  submit ok"
 
 echo "== quiz explain loop"
-EXPLAIN=$(echo "$SUBMIT" | "$PYTHON" -c "
-import json, sys
-rev = json.load(sys.stdin)['review']
+EXPLAIN=$("$PYTHON" -c "
+import json
+d = json.load(open('$TMPD/submit.json', encoding='utf-8'))
+rev = d['review']
 item = next((x for x in rev if not x['is_correct']), rev[0])
 print(json.dumps({'question': item['question_text'], 'options': item['options'],
                   'correct_index': item['correct_index'], 'user_answer': item['chosen'],
