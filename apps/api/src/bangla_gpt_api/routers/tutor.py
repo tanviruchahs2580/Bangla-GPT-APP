@@ -920,7 +920,18 @@ async def stream_chat_message(
                 + "\n\n"
             )
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    # F-065/API-06: `no-cache` stops a browser or shared cache from holding
+    # the event stream, and `X-Accel-Buffering: no` is the proxy-buffering
+    # signal (nginx and Caddy both forward it; the deployment's Caddyfile
+    # already disables response buffering, and this keeps the contract true
+    # for any other ingress) so an intermediary forwards each frame instead
+    # of pooling bytes until its buffer fills -- which, before the first
+    # token arrives, looks like a hang.
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ------------------------------------------------------------------

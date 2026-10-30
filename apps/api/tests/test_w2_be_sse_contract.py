@@ -136,6 +136,27 @@ def test_producer_that_yields_nothing_answers_the_coded_error(
     assert events[0][1]["code"] == "llm_unavailable"
 
 
+def test_stream_response_carries_the_cache_and_buffering_headers(
+    client: TestClient,
+) -> None:
+    """F-065/API-06: the stream response itself must tell caches and proxies
+    not to hold it. Without ``no-cache`` a shared cache may retain the event
+    stream, and without ``X-Accel-Buffering: no`` a buffering proxy forwards
+    the frames only once its buffer fills -- which before the first token
+    arrives is indistinguishable from a hang."""
+    headers, conv_id = _student(client, "sse-headers@example.com")
+
+    with client.stream(
+        "POST",
+        f"/tutor/conversations/{conv_id}/messages/stream",
+        json={"message": "বল কাকে বলে?"},
+        headers=headers,
+    ) as response:
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "no-cache"
+        assert response.headers["x-accel-buffering"] == "no"
+
+
 def test_client_abort_cancels_the_producer_and_ledgers_the_partial(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

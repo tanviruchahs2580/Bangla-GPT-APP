@@ -102,9 +102,13 @@ Behaviour notes:
 - Rate limits: the request counts against every matching rule — `/tutor`
   (60/min per IP) **and** `/tutor/conversations` (30/min per user by default;
   unauthenticated callers fall back to their IP).
-- Proxies: the bundled nginx serves this path with `proxy_buffering off` and a
-  3600 s read timeout (`apps/web/deploy/nginx.conf`); any proxy you add must do
-  the same or tokens arrive in one blob or the stream is cut mid-answer.
+- Proxies: the response carries `Cache-Control: no-cache` and
+  `X-Accel-Buffering: no`, which nginx honours per response. A proxy that
+  ignores the header still needs buffering disabled for this path: the bundled
+  nginx sets `proxy_buffering off` and a 3600 s read timeout
+  (`apps/web/deploy/nginx.conf`), and the bundled Caddy already disables
+  response buffering. Any proxy you add must do the same, or tokens arrive in
+  one blob or the stream is cut mid-answer.
 
 ## Pagination
 
