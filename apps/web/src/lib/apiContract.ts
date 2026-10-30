@@ -50,7 +50,7 @@ const CALL_RE =
  * query-string shape in `src/api.ts`, so treating the truncated slot as a tail
  * yields the correct route prefix.
  */
-export function normalizePath(raw: string): string | null {
+function normalizePath(raw: string): string | null {
   let out = "";
   for (let i = 0; i < raw.length; i += 1) {
     const ch = raw[i];

@@ -4,7 +4,7 @@ import { VoiceButton } from "../../../components/VoiceButton";
 import { t } from "../../../i18n";
 
 /** explicit teaching strategies accepted by ChatSendRequest.strategy. */
-export const STRATEGIES = [
+const STRATEGIES = [
   "simple",
   "example",
   "book_language",

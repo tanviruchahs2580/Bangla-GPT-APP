@@ -7,9 +7,6 @@ import { clearQuizDraft } from "./lib/quizDraft";
 
 const API_BASE: string = import.meta.env.VITE_API_BASE ?? "/api";
 
-/** Absolute API base for direct navigation links (downloads etc.). */
-export const apiBase = API_BASE;
-
 /**
  * Correlation id (F-121). The API logs one per request, echoes it in
  * `X-Request-ID`, and matches it against the structured log line; without one
