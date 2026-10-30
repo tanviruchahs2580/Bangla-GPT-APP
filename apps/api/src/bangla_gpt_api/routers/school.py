@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -40,6 +40,7 @@ from bangla_gpt_api.db.models import (
 )
 from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded
+from bangla_gpt_api.routers.common import request_language
 from bangla_gpt_api.schemas import (
     ROSTER_PAGE_DEFAULT_LIMIT,
     ROSTER_PAGE_MAX_LIMIT,
@@ -410,7 +411,9 @@ def school_invite_create(
     status_code=201,
     responses=coded(404, 409, 410),
 )
-def auth_join_school(app_ctx: Ctx, payload: SchoolJoinIn, db: DbSession) -> TokenResponse:
+def auth_join_school(
+    app_ctx: Ctx, request: Request, payload: SchoolJoinIn, db: DbSession
+) -> TokenResponse:
     """Redeem a staff invite: create the account in the school and sign in.
 
     Invite codes are single-use and time-limited; only their SHA-256 hash is
@@ -483,7 +486,14 @@ def auth_join_school(app_ctx: Ctx, payload: SchoolJoinIn, db: DbSession) -> Toke
         # account cannot sign in until the mailed code is redeemed, so the
         # code has to be issued here too -- the invited teacher otherwise got
         # a working session and then a permanent 403 on every later sign-in.
-        send_verification_email(db, app_ctx.settings, user)
+        # F-107: the copy follows the Accept-Language of the invited staff
+        # member's client, like every other verification mail.
+        send_verification_email(
+            db,
+            app_ctx.settings,
+            user,
+            lang=request_language(request.headers.get("accept-language")),
+        )
     json_log(
         logger,
         logging.INFO,

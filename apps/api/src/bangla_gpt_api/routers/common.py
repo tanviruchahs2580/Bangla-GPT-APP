@@ -112,6 +112,7 @@ __all__ = [
     "build_personalization_block",
     "canonical_subject",
     "notify_user",
+    "request_language",
     "source_scores",
 ]
 
@@ -124,6 +125,40 @@ def canonical_subject(subject: str | None) -> str | None:
     if subject is None:
         return None
     return _SUBJECT_ALIASES.get(subject.strip().lower(), subject.strip().lower())
+
+
+def request_language(header: str | None) -> str | None:
+    """The caller's language tag from an ``Accept-Language`` header (F-107).
+
+    Returns the base subtag (``bn``/``en``) of the highest-quality supported
+    entry, None when the header is absent or names neither -- None keeps the
+    mailer's shipped bilingual copy, so an unresolved language is never
+    worse than before this existed. A minimal RFC 9110 negotiation: the
+    mail copy ships in exactly the product's two languages, so unsupported
+    tags and the ``*`` wildcard are skipped rather than tracked.
+    """
+    best: tuple[float, str] | None = None
+    for entry in (header or "").split(","):
+        parts = entry.split(";")
+        tag = parts[0].strip().lower()
+        if not tag or tag == "*":
+            continue
+        quality = 1.0
+        for parameter in parts[1:]:
+            key, _, value = parameter.strip().partition("=")
+            if key.strip().lower() == "q":
+                try:
+                    quality = float(value)
+                except ValueError:
+                    quality = 0.0
+        if quality <= 0:
+            continue
+        base = tag.split("-")[0]
+        if base not in ("bn", "en"):
+            continue
+        if best is None or quality > best[0]:
+            best = (quality, base)
+    return best[1] if best is not None else None
 
 
 # Interrogative Bangla words. Used both for question-like queries

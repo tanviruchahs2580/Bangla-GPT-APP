@@ -16,15 +16,21 @@ import email.policy
 from typing import ClassVar
 
 import pytest
+from fastapi.testclient import TestClient
 
 from bangla_gpt_api.config import Settings
+from bangla_gpt_api.main import create_app
+from bangla_gpt_api.routers.common import request_language
 from bangla_gpt_api.services import mailer
 from bangla_gpt_api.services.verification import (
     VERIFICATION_SUBJECT_UNRESOLVED,
     verification_email_copy,
 )
+from conftest import engine_url
 
 TOKEN = "tok_abcdefghijklmnopqrstuvwxyz012345"
+PASSWORD = "supersecret1"
+SECRET = "test-secret-0123456789abcdef0123456789"
 
 
 def _decoded(header: str | None) -> str:
@@ -138,3 +144,116 @@ def test_english_subject_survives_the_wire(
     parsed = email.message_from_bytes(_CapturingSMTP.sent[0])
     assert _decoded(parsed["Subject"]) == "Verify your email"
     assert TOKEN in parsed.get_payload(decode=True).decode("utf-8")
+
+
+# --- the callers resolve the language (F-107 residual) -----------------------
+
+
+def test_request_language_negotiates_the_shipped_languages() -> None:
+    """The header parser the routes use: quality order honoured, q=0 refused,
+    unsupported tags and the wildcard resolve to None (bilingual fallback)."""
+    assert request_language("en-US,en;q=0.9") == "en"
+    assert request_language("bn-BD") == "bn"
+    assert request_language("en;q=0.2,bn;q=0.9") == "bn"
+    assert request_language("bn;q=0") is None
+    assert request_language("fr-FR,de;q=0.8") is None
+    assert request_language("*") is None
+    assert request_language(None) is None
+    assert request_language("") is None
+
+
+@pytest.fixture
+def mail_client(tmp_path, monkeypatch) -> tuple[TestClient, list[dict]]:
+    """SMTP-enabled client whose mailer records what each route sent."""
+    captured: list[dict] = []
+
+    def fake_send_mail(_settings, *, to, subject, body):  # noqa: ANN001
+        captured.append({"to": to, "subject": subject, "body": body})
+        return True
+
+    monkeypatch.setattr("bangla_gpt_api.services.verification.send_mail", fake_send_mail)
+    settings = Settings(
+        env="test",
+        database_url=engine_url(tmp_path, "i18n_mail_lang"),
+        jwt_secret=SECRET,
+        smtp_enabled=True,
+        smtp_host="smtp.example.edu.bd",
+        smtp_from="no-reply@example.edu.bd",
+        admin_email="root@example.com",
+        admin_password=PASSWORD,
+        force_admin_password_change=False,
+    )
+    return TestClient(create_app(settings)), captured
+
+
+def _register(client: TestClient, email: str, *, headers: dict | None = None):
+    return client.post(
+        "/auth/register",
+        json={"email": email, "password": PASSWORD, "name": "যাচাইকারী", "role": "teacher"},
+        headers=headers,
+    )
+
+
+def test_register_mails_in_the_clients_language(
+    mail_client: tuple[TestClient, list[dict]],
+) -> None:
+    client, captured = mail_client
+    res = _register(
+        client, "en-register@example.com", headers={"Accept-Language": "en-US,en;q=0.9"}
+    )
+    assert res.status_code == 201, res.text
+    assert captured[-1]["subject"] == "Verify your email"
+
+
+def test_register_without_a_language_keeps_the_bilingual_mail(
+    mail_client: tuple[TestClient, list[dict]],
+) -> None:
+    client, captured = mail_client
+    res = _register(client, "default-register@example.com")
+    assert res.status_code == 201, res.text
+    assert captured[-1]["subject"] == VERIFICATION_SUBJECT_UNRESOLVED
+
+
+def test_resend_mails_in_the_clients_language(
+    mail_client: tuple[TestClient, list[dict]],
+) -> None:
+    client, captured = mail_client
+    assert _register(client, "bn-resend@example.com").status_code == 201
+    assert captured[-1]["subject"] == VERIFICATION_SUBJECT_UNRESOLVED
+
+    res = client.post(
+        "/auth/resend-verification",
+        json={"email": "bn-resend@example.com"},
+        headers={"Accept-Language": "bn-BD,bn;q=0.9"},
+    )
+    assert res.status_code == 202, res.text
+    assert captured[-1]["subject"] == "ইমেইল যাচাই"
+
+
+def test_join_school_mails_in_the_clients_language(
+    mail_client: tuple[TestClient, list[dict]],
+) -> None:
+    client, captured = mail_client
+    login = client.post("/auth/login", json={"email": "root@example.com", "password": PASSWORD})
+    assert login.status_code == 200, login.text
+    admin = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    school = client.post("/admin/schools", json={"name": "Lang High School"}, headers=admin)
+    assert school.status_code == 201, school.text
+    invite = client.post(
+        f"/schools/{school.json()['id']}/invites", json={"role": "teacher"}, headers=admin
+    )
+    assert invite.status_code == 201, invite.text
+
+    res = client.post(
+        "/auth/join-school",
+        json={
+            "invite_code": invite.json()["code"],
+            "email": "invited-teacher@example.com",
+            "password": PASSWORD,
+            "name": "আমন্ত্রিত শিক্ষক",
+        },
+        headers={"Accept-Language": "en-GB,en;q=0.8"},
+    )
+    assert res.status_code == 201, res.text
+    assert captured[-1]["subject"] == "Verify your email"
+    assert "Welcome to Bangla GPT Tutor!" in captured[-1]["body"]

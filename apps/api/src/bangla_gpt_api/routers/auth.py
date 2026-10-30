@@ -64,6 +64,7 @@ from bangla_gpt_api.security import PiiKeyUnconfigured, encrypt_pii_strict, writ
 from bangla_gpt_api.services.mailer import send_mail, smtp_configured
 from bangla_gpt_api.services.verification import send_verification_email
 
+from .common import request_language
 from .deps import (
     CONSENT_VERSION,
     BearerCredentials,
@@ -227,7 +228,14 @@ def register(
     db.add(profile)
     db.commit()
     if not verified:
-        send_verification_email(db, app_ctx.settings, user)
+        # F-107: the copy follows the language the client asked for; an
+        # absent or unsupported tag keeps the shipped bilingual mail.
+        send_verification_email(
+            db,
+            app_ctx.settings,
+            user,
+            lang=request_language(request.headers.get("accept-language")),
+        )
     return RegisterResponse(user_id=user.id, role=user.role, profile_id=profile.id)
 
 
@@ -276,6 +284,7 @@ def verify_email(app_ctx: Ctx, payload: VerifyEmailRequest, db: DbSession) -> To
 @router.post("/auth/resend-verification", status_code=202)
 def resend_verification(
     app_ctx: Ctx,
+    request: Request,
     db: DbSession,
     credentials: BearerCredentials,
     payload: ResendVerificationRequest | None = None,
@@ -302,7 +311,13 @@ def resend_verification(
         target = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if target is not None and smtp_configured(app_ctx.settings) and not target.email_verified:
         if _address_mail_quota_allows(app_ctx, target.email, "verify"):
-            send_verification_email(db, app_ctx.settings, target)
+            # F-107: same language contract as /auth/register.
+            send_verification_email(
+                db,
+                app_ctx.settings,
+                target,
+                lang=request_language(request.headers.get("accept-language")),
+            )
         else:
             # Quota: the 202 body is identical either way (enumeration-safe);
             # only the SMTP send is withheld. Logged for ops visibility.
