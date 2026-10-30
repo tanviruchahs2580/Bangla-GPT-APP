@@ -8,7 +8,9 @@ import { expect, test, type Page } from "@playwright/test";
  * audit register (`.qa-work/audit/FLOWS/coverage_map.csv`).
  *
  * Harness contract as in w2-flows.spec.ts: the shipped UI against the real
- * API (mock provider, seeded accounts). No HTTP mocking.
+ * API (mock provider, seeded accounts). No HTTP mocking except ANON-04's
+ * induced 429, which replays the limiter's own captured response for the UI
+ * half (named in that test).
  *
  * Deliberate limits, stated where they bite:
  *  * TCH-05 -- JOBS_BACKEND=inline completes a queued job before the first
@@ -279,14 +281,24 @@ test("TCH-01 teacher dashboard numbers equal the API and the workload metric is 
 
   // A real generator run moves the metric by exactly one documented unit.
   await open(page, "/teacher/create?kind=worksheet");
-  await expect(page.getByRole("button", { name: "Generate now" })).toBeVisible({
-    timeout: 30_000,
-  });
+  const generate = page.getByRole("button", { name: "Generate now" });
+  await expect(generate).toBeVisible({ timeout: 30_000 });
+  // Every evidence-backed generator requires a chapter (WorksheetIn.chapter
+  // is min_length=1), so the form gates the button on it instead of letting
+  // an unanswerable request leave the page.
+  await expect(generate).toBeDisabled();
+  await page
+    .getByLabel("Chapter (required)")
+    .fill((await classSixScienceChapters(page))[0]);
+  await expect(generate).toBeEnabled();
   const before = workload.counts.worksheet;
-  await page.getByRole("button", { name: "Generate now" }).click();
-  await expect(page.locator("ol.gen-questions li").first()).toBeVisible({
-    timeout: 60_000,
-  });
+  await generate.click();
+  // A fresh worksheet carries tiers, not a flat `questions` array, so the
+  // payload renders as the JSON view -- same acceptance as TCH-07's stored
+  // document (`.gen-json, ol.gen-questions`); the raw `ol` only exists for
+  // payloads shaped `{questions: [...]}`.
+  const generated = page.locator(".gen-json, ol.gen-questions").first();
+  await expect(generated).toBeVisible({ timeout: 60_000 });
   const after = await apiGet<{
     counts: Record<string, number>;
     total_minutes_saved: number;
@@ -459,7 +471,12 @@ test("TCH-03 assign a take-home quiz; the student sees it with the correct deadl
   await page.locator("#badue").fill(dueLocal);
   const bulkForm = page.locator("form").filter({ has: page.locator("#bachap") });
   await bulkForm.getByRole("button", { name: /Assign/ }).click();
-  await expect(bulkForm.locator("p.muted").first()).toContainText("selected", {
+  // The outcome line lives on the bulk-assign card next to the form, not
+  // inside it; it reports the created attempts as "N selected".
+  const bulkCard = page
+    .locator("section.card")
+    .filter({ has: page.locator("#bachap") });
+  await expect(bulkCard.locator("p.muted").first()).toContainText("selected", {
     timeout: 30_000,
   });
 
@@ -498,10 +515,17 @@ test("TCH-03 assign a take-home quiz; the student sees it with the correct deadl
   await signOut(page);
 
   // The assigned student signs in with the one-time invite code and is forced
-  // to set a personal password (must_change_password), then sees the work.
-  await signIn(page, importedStudent.email, importedStudent.code);
+  // to set a personal password (must_change_password) before the session
+  // lands: the app keeps the /login route and renders the change form in
+  // place (forceChangeTitle), so this sign-in does not leave /login.
+  await open(page, "/login");
+  await page.locator("#email").fill(importedStudent.email);
+  await page.locator("#password").fill(importedStudent.code);
+  await page.locator('form button[type="submit"]').click();
   await expect(
-    page.locator("h2", { hasText: /Set a new password|নতুন পাসওয়ার্ড/ }),
+    page.locator("h2", {
+      hasText: /Change your password|পাসওয়ার্ড পরিবর্তন করুন/,
+    }),
   ).toBeVisible({ timeout: 30_000 });
   await page.locator("#new-password").fill(PASSWORD);
   await page.locator("#confirm-password").fill(PASSWORD);
@@ -511,8 +535,11 @@ test("TCH-03 assign a take-home quiz; the student sees it with the correct deadl
   await expect(page).toHaveURL(/\/student$/, { timeout: 30_000 });
 
   await open(page, "/student/quiz");
-  await page.locator('[role="tab"]', { hasText: /assigned|নির্ধারিত/ }).click();
-  const card = page.locator("div.card").filter({ hasText: chapter }).first();
+  await page.locator('[role="tab"]', { hasText: /assigned/i }).click();
+  const card = page
+    .locator("section.card")
+    .filter({ hasText: chapter })
+    .first();
   await expect(card).toBeVisible({ timeout: 30_000 });
   const dueText = (await card.textContent()) ?? "";
   expect(dueText).toMatch(/Due|শেষ তারিখ/);
@@ -569,9 +596,13 @@ test("TCH-04 question paper: generate, edit, review, finalize and download the P
   const finalize = panel.getByRole("button", { name: "Finalize" });
   await expect(finalize).toBeEnabled({ timeout: 30_000 });
   await finalize.click();
-  await expect(panel.getByText("Finalized").first()).toBeVisible({
+  // The panel's own copy for the final state is the British "Finalised"
+  // (qpFinalized) while the action button above reads "Finalize"; assert the
+  // state change both ways -- the badge appears and the gate controls go.
+  await expect(panel.getByText("Finalised").first()).toBeVisible({
     timeout: 30_000,
   });
+  await expect(panel.getByRole("button", { name: "Finalize" })).toHaveCount(0);
 
   // Both downloads are real PDFs, saved as evidence for the page-render check.
   const evidenceDir = new URL(
@@ -614,9 +645,10 @@ test("TCH-05 create hub: synchronous generation, the queued job outcome, and the
   await open(page, "/teacher/create?kind=homework");
   await page.getByLabel("Chapter (required)").fill(chapter);
   await page.getByRole("button", { name: "Generate now" }).click();
-  await expect(page.locator("ol.gen-questions li").first()).toBeVisible({
-    timeout: 60_000,
-  });
+  // Homework payloads carry `items`, so the result renders as the JSON view
+  // (the stored copy is opened again at the end of this test).
+  const generated = page.locator(".gen-json, ol.gen-questions").first();
+  await expect(generated).toBeVisible({ timeout: 60_000 });
 
   // Queued job: the UI posts it and polls; the row must reach Ready and link
   // the stored document. (JOBS_BACKEND=inline completes the job before the
@@ -720,6 +752,52 @@ test("TCH-06 lesson plans persist and stay editable; short tests and support pla
     .locator("table.data tbody tr", { hasText: "রহিম উদ্দিন" })
     .first();
   await expect(row).toBeVisible({ timeout: 30_000 });
+  // The plan ranks the student's three weakest concepts, so the API refuses
+  // a student with no graded attempt (422 no_graded_data, assessment.py).
+  // Seed one through the student's own quiz hub before opening the plan;
+  // id and email come from the roster rather than TCH-02's module state, so
+  // an earlier failure cannot leave this test reading empty strings.
+  const room = await w2Room(page);
+  const roster = await apiGet<
+    { student_id: number; name: string; email: string | null }[]
+  >(page, `/teacher/classrooms/${room.id}/roster`);
+  const rahim = roster.find((s) => s.name === "রহিম উদ্দিন");
+  expect(rahim, "TCH-02's imported student is missing").toBeTruthy();
+  expect(
+    rahim!.email,
+    "the roster has no email for the imported student",
+  ).toBeTruthy();
+  const rahimLogin = await page.request.post("/api/auth/login", {
+    data: { email: rahim!.email, password: PASSWORD },
+  });
+  expect(rahimLogin.status(), await rahimLogin.text()).toBe(200);
+  const rahimHeaders = {
+    Authorization: `Bearer ${((await rahimLogin.json()) as { access_token: string }).access_token}`,
+    "Content-Type": "application/json",
+  };
+  const rahimQuiz = await page.request.post("/api/quizzes", {
+    headers: rahimHeaders,
+    data: {
+      student_id: rahim!.student_id,
+      class_level: 6,
+      subject: "science",
+      num_questions: 3,
+    },
+  });
+  expect(rahimQuiz.status(), await rahimQuiz.text()).toBe(200);
+  const rahimAttempt = (await rahimQuiz.json()) as {
+    attempt_id: number;
+    questions: unknown[];
+  };
+  const rahimSubmit = await page.request.post(
+    `/api/quizzes/${rahimAttempt.attempt_id}/submit`,
+    {
+      headers: rahimHeaders,
+      data: { answers: rahimAttempt.questions.map(() => 0) },
+    },
+  );
+  expect(rahimSubmit.status(), await rahimSubmit.text()).toBe(200);
+
   await row.getByRole("button", { name: "Open" }).click();
   await expect(page.getByText("Student details")).toBeVisible({ timeout: 30_000 });
   const plansBefore = await apiGet<unknown[]>(page, "/teacher/support-plans");
@@ -808,10 +886,53 @@ test("TCH-08 weak matrix and coverage equal independently queried values", async
 }) => {
   await pin(page, "en");
 
-  // A real graded attempt for student1 so the class-6 matrix has a row.
-  await signIn(page, STUDENT);
-  await gradedQuizAttempt(page);
-  const student1 = await apiGet<{ profile_id: number }>(page, "/users/me");
+  // The matrix is scoped to the teacher's own classrooms, so the row has to
+  // come from a student in one of them: student1 is enrolled in none of
+  // teacher1's rooms (measured: the page rendered its "no graded quizzes"
+  // empty state). রহিম was imported into the W2 room by TCH-02; give him a
+  // graded attempt through his own account, then read everything back as the
+  // teacher. The account comes from the roster, not TCH-02's module state.
+  await signIn(page, TEACHER);
+  const room = await w2Room(page);
+  const roster = await apiGet<
+    { student_id: number; name: string; email: string | null }[]
+  >(page, `/teacher/classrooms/${room.id}/roster`);
+  const target = roster.find((s) => s.name === "রহিম উদ্দিন");
+  expect(target, "TCH-02's imported student is missing").toBeTruthy();
+  expect(
+    target!.email,
+    "the roster has no email for the imported student",
+  ).toBeTruthy();
+  const rahimLogin = await page.request.post("/api/auth/login", {
+    data: { email: target!.email, password: PASSWORD },
+  });
+  expect(rahimLogin.status(), await rahimLogin.text()).toBe(200);
+  const rahimHeaders = {
+    Authorization: `Bearer ${((await rahimLogin.json()) as { access_token: string }).access_token}`,
+    "Content-Type": "application/json",
+  };
+  const rahimQuiz = await page.request.post("/api/quizzes", {
+    headers: rahimHeaders,
+    data: {
+      student_id: target!.student_id,
+      class_level: 6,
+      subject: "science",
+      num_questions: 3,
+    },
+  });
+  expect(rahimQuiz.status(), await rahimQuiz.text()).toBe(200);
+  const rahimAttempt = (await rahimQuiz.json()) as {
+    attempt_id: number;
+    questions: unknown[];
+  };
+  const rahimSubmit = await page.request.post(
+    `/api/quizzes/${rahimAttempt.attempt_id}/submit`,
+    {
+      headers: rahimHeaders,
+      data: { answers: rahimAttempt.questions.map(() => 0) },
+    },
+  );
+  expect(rahimSubmit.status(), await rahimSubmit.text()).toBe(200);
   const progress = await apiGet<{
     by_chapter: {
       chapter: string;
@@ -819,15 +940,13 @@ test("TCH-08 weak matrix and coverage equal independently queried values", async
       correct: number;
       accuracy: number;
     }[];
-  }>(page, `/students/${student1.profile_id}/progress`);
+  }>(page, `/students/${target!.student_id}/progress`);
   expect(progress.by_chapter.length).toBeGreaterThan(0);
-  await signOut(page);
 
-  await signIn(page, TEACHER);
   await open(page, "/teacher/analytics");
   const matrixCard = page
-    .locator("div.card")
-    .filter({ has: page.getByRole("heading", { name: "Weakness map" }) })
+    .locator("section.card")
+    .filter({ hasText: "Weakness map" })
     .first();
   await expect(matrixCard).toBeVisible({ timeout: 30_000 });
   const matrix = await apiGet<{
@@ -841,11 +960,14 @@ test("TCH-08 weak matrix and coverage equal independently queried values", async
     }[];
   }>(page, "/teacher/weak-matrix?class_level=6");
   expect(matrix.students.length).toBeGreaterThan(0);
+  expect(
+    matrix.concepts.length,
+    "the matrix has no concept column to compare",
+  ).toBeGreaterThan(0);
 
   // The rendered grid cell equals the API's accuracy for the same
-  // student/concept pair -- and for student1, the API's numbers equal the
-  // per-chapter accuracy queried independently from the student's own
-  // progress rows.
+  // student/concept pair -- and for রহিম, the API's numbers equal the
+  // per-chapter accuracy queried independently from his own progress rows.
   const table = matrixCard.locator("table.data");
   await expect(table).toBeVisible();
   const bodyRows = await table.locator("tbody tr").all();
@@ -870,7 +992,7 @@ test("TCH-08 weak matrix and coverage equal independently queried values", async
           ? `${Math.round(expected.accuracy)}%`
           : "·",
       );
-      if (student.student_id === student1.profile_id) {
+      if (student.student_id === target!.student_id) {
         const source = progress.by_chapter.find((c) => c.chapter === concept);
         if (source) {
           expect(expected?.asked).toBe(source.asked);
@@ -887,8 +1009,8 @@ test("TCH-08 weak matrix and coverage equal independently queried values", async
   }>(page, "/teacher/curriculum-coverage");
   expect(coverage.cells.length).toBeGreaterThan(0);
   const coverageCard = page
-    .locator("div.card")
-    .filter({ has: page.getByRole("heading", { name: "Curriculum coverage" }) })
+    .locator("section.card")
+    .filter({ hasText: "Curriculum coverage" })
     .first();
   const coverageTable = coverageCard.locator("table.data");
   await expect(coverageTable).toBeVisible({ timeout: 30_000 });
@@ -896,7 +1018,8 @@ test("TCH-08 weak matrix and coverage equal independently queried values", async
     mastered: "Mastered",
     practiced: "Practiced",
     taught: "Taught",
-    uncovered: "Uncovered",
+    // The app's copy for the uncovered status is "Not started" (covUncovered).
+    uncovered: "Not started",
   };
   const statuses = new Set(coverage.cells.map((c) => statusLabel[c.status]));
   const renderedBadges = await coverageTable.locator(".badge").allTextContents();
@@ -936,8 +1059,8 @@ test("TCH-09 student detail matches the source; another school's classroom and a
   expect(Number.isInteger(studentId)).toBe(true);
   await row.getByRole("button", { name: "Open" }).click();
   const detailCard = page
-    .locator("div.card")
-    .filter({ has: page.getByText("Student details") })
+    .locator("section.card")
+    .filter({ hasText: "Student details" })
     .first();
   await expect(detailCard).toBeVisible({ timeout: 30_000 });
   const detail = await apiGet<{ attempts_graded: number }>(
@@ -978,7 +1101,13 @@ test("TCH-09 student detail matches the source; another school's classroom and a
     `/api/teacher/classrooms/${otherRoomId}/roster`,
     { headers: await authHeaders(page) },
   );
-  expect(denied.status(), "another school's classroom was readable").toBe(403);
+  // F-144: a cross-school room answers 404 classroom_not_found, the same
+  // response a room id that was never issued gets -- no existence oracle.
+  // A 200 would be the defect; a 403 would still confirm the room exists.
+  expect(denied.status(), "another school's classroom was readable").toBe(404);
+  expect(
+    ((await denied.json()) as { detail: { code: string } }).detail.code,
+  ).toBe("classroom_not_found");
   const allowed = await page.request.get(
     `/api/teacher/classrooms/${ownRoom.id}/roster`,
     { headers: await authHeaders(page) },
@@ -1055,11 +1184,12 @@ test("PAR-01 a valid invite links a child, the code is single-use, and a wrong c
   );
   expect(children.map((c) => c.name)).toContain("E2E Student");
 
-  // Single use: the same code cannot be redeemed again.
+  // Single use: the same code cannot be redeemed again. The copy names the
+  // invite code specifically ("The invite code is invalid or expired.").
   await page.locator("#icode").fill(code);
   await page.getByRole("button", { name: "Link", exact: true }).click();
   await expect(page.locator('[role="alert"]').first()).toContainText(
-    "The code is invalid or expired",
+    "The invite code is invalid or expired",
     { timeout: 30_000 },
   );
 
@@ -1069,7 +1199,7 @@ test("PAR-01 a valid invite links a child, the code is single-use, and a wrong c
   await page.locator("#icode").fill("BGPT-0000000000000000");
   await page.getByRole("button", { name: "Link", exact: true }).click();
   await expect(page.locator('[role="alert"]').first()).toContainText(
-    "The code is invalid or expired",
+    "The invite code is invalid or expired",
     { timeout: 30_000 },
   );
 });
@@ -1342,13 +1472,19 @@ test("ADM-01 users search, role filter, pagination, a role change with its audit
   await expect(row).toHaveCount(1, { timeout: 30_000 });
   const userId = Number((await row.locator("td").first().textContent())?.trim());
 
-  // Role filter: only teachers are listed.
+  // Role filter: only teachers are listed. Scope the column read to the
+  // users table: /admin renders several tables (schools, invites, triage)
+  // whose third column is not a role, and a page-wide td:nth-child(3) sweep
+  // reads them too.
   await page.locator("#q").fill("");
   await page.locator("#rfilter").selectOption("teacher");
+  const usersCard = page
+    .locator("div.card")
+    .filter({ has: page.locator("#q") });
   await expect
     .poll(
       async () => {
-        const roles = await page
+        const roles = await usersCard
           .locator("table.data tbody tr td:nth-child(3)")
           .allTextContents();
         return roles.length > 0 && roles.every((r) => r.trim() === "Teacher");
@@ -1359,7 +1495,7 @@ test("ADM-01 users search, role filter, pagination, a role change with its audit
   await page.locator("#rfilter").selectOption("");
 
   // Pagination: the range line moves with the page and comes back.
-  const pager = page
+  const pager = usersCard
     .locator("p.muted")
     .filter({ has: page.getByRole("button", { name: "Next page" }) })
     .first();
@@ -1476,11 +1612,19 @@ test("ADM-02 the analytics overview equals the user rows recomputed in the spec"
   expect(overview.teachers).toBe(counts.teacher ?? 0);
   expect(overview.parents).toBe(counts.parent ?? 0);
 
-  // The dashboard renders exactly the API's numbers.
+  // The dashboard renders exactly the API's numbers. The overview stat row
+  // lives in its own card (the "Total" card, the first card with a stat row);
+  // the safety-audit card renders a stat row too, so scope the read and wait
+  // for the values instead of sampling whatever is on screen.
   await open(page, "/admin");
-  const nums = (
-    await page.locator(".stat-row").first().locator(".num").allTextContents()
-  ).map((n) => n.trim());
+  const overviewCard = page
+    .locator("div.card")
+    .filter({ hasText: "Total" })
+    .filter({ has: page.locator(".stat-row") })
+    .first();
+  const numCells = overviewCard.locator(".stat-row").first().locator(".num");
+  await expect(numCells.first()).toBeVisible({ timeout: 30_000 });
+  const nums = (await numCells.allTextContents()).map((n) => n.trim());
   expect(nums[0]).toBe(String(overview.users_total));
   expect(nums[1]).toBe(String(overview.students));
   expect(nums[2]).toBe(String(overview.teachers));
@@ -1506,7 +1650,7 @@ test("ADM-05 impersonation: restrictions, the 15-minute bound, admin revoke, aud
   const row = page.locator("table.data tbody tr", { hasText: target!.email });
   await expect(row).toHaveCount(1, { timeout: 30_000 });
   page.once("dialog", (dialog) => void dialog.accept("w2 support check"));
-  await row.getByRole("button", { name: "Support check" }).click();
+  await row.getByRole("button", { name: "Start support session" }).click();
   await expect(page.locator(".impersonation-banner")).toBeVisible({
     timeout: 30_000,
   });
@@ -1749,10 +1893,14 @@ test("ADM-06 the AI-quality board matches the logs and the feedback triage workf
     .locator("div.card")
     .filter({ has: page.getByRole("heading", { name: "Feedback triage" }) })
     .first();
-  const triageRow = triageCard
-    .locator("table.data tbody tr")
-    .filter({ hasText: `#${rated!.id}` })
-    .first();
+  // The id is a plain cell; the accessible handle that names it is the note
+  // input's label ("Note (admin only) #<id>").
+  const triageRowFor = (id: number) =>
+    triageCard
+      .locator("table.data tbody tr")
+      .filter({ has: page.locator(`input[aria-label$="#${id}"]`) })
+      .first();
+  const triageRow = triageRowFor(rated!.id);
   await expect(triageRow).toBeVisible({ timeout: 30_000 });
   await triageRow
     .locator('input[aria-label^="Note (admin only) #"]')
@@ -1770,10 +1918,10 @@ test("ADM-06 the AI-quality board matches the logs and the feedback triage workf
       { timeout: 30_000 },
     )
     .toBe(true);
-  const reopened = triageCard
-    .locator("table.data tbody tr")
-    .filter({ hasText: `#${rated!.id}` })
-    .first();
+  // The queue's default view is "open"; a triaged row leaves it, so switch
+  // to "all" before reopening the same row.
+  await triageCard.getByRole("button", { name: "All", exact: true }).click();
+  const reopened = triageRowFor(rated!.id);
   await expect(reopened.getByRole("button", { name: "Reopen" })).toBeVisible({
     timeout: 30_000,
   });
@@ -1864,18 +2012,45 @@ test("ANON-04 the per-IP login limiter answers 429 and the app shows the wait co
       data: { email: unknown, password: "DefinitelyWrong!999" },
     });
 
-  // Drive the bound the way an attacker's script would: rapid attempts.
-  let sawLimit = false;
-  for (let batch = 0; batch < 12 && !sawLimit; batch += 1) {
+  // Drive the bound the way an attacker's script would: rapid attempts in
+  // 50-wide waves. The 240/min window is a sliding one, so the flood must
+  // land >240 attempts inside a single minute; 25-wide waves were measured
+  // spreading past the window on a loaded machine and never tripping it.
+  // Eight waves bound the test at 400 attempts.
+  let limited: { body: string; retryAfter: string } | null = null;
+  for (let batch = 0; batch < 8 && limited === null; batch += 1) {
     const responses = await Promise.all(
-      Array.from({ length: 25 }, () => attempt()),
+      Array.from({ length: 50 }, () => attempt()),
     );
-    sawLimit = responses.some((res) => res.status() === 429);
+    const hit = responses.find((res) => res.status() === 429);
+    if (hit) {
+      limited = {
+        body: await hit.text(),
+        retryAfter: hit.headers()["retry-after"] ?? "60",
+      };
+    }
   }
-  expect(sawLimit, "the per-IP login limiter never fired").toBe(true);
+  expect(limited, "the per-IP login limiter never fired").toBeTruthy();
+  expect(JSON.parse(limited!.body).detail.code).toBe("rate_limited");
+  expect(Number(limited!.retryAfter)).toBeGreaterThan(0);
 
-  // The UI now shows the app's rate-limit copy, not a raw error.
+  // The UI now shows the app's rate-limit copy, not a raw error. The window
+  // is a sliding one, so by the time the app's own login lands a slot can
+  // have reopened (measured: the request was allowed and the page showed the
+  // credential error). Replay the limiter's own 429 -- status, Retry-After
+  // and body captured above -- for the UI half; the limiter's real behaviour
+  // is the assertion before this block.
   await open(page, "/login");
+  await page.route("**/auth/login", (route) =>
+    route.fulfill({
+      status: 429,
+      headers: {
+        "content-type": "application/json",
+        "retry-after": limited!.retryAfter,
+      },
+      body: limited!.body,
+    }),
+  );
   await page.locator("#email").fill(unknown);
   await page.locator("#password").fill("DefinitelyWrong!999");
   await page.locator('form button[type="submit"]').click();
@@ -1883,13 +2058,26 @@ test("ANON-04 the per-IP login limiter answers 429 and the app shows the wait co
     "Too many attempts. Please wait a minute.",
     { timeout: 30_000 },
   );
+  await page.unroute("**/auth/login");
 
-  // Clear the footprint: poll until the window reopens (a real signal, not a
-  // fixed sleep) so the rest of a full-suite run is not throttled.
+  // Clear the footprint: a single allowed attempt only proves one slot
+  // opened while the flood's own hits are still inside the 60s window
+  // (measured in a full run: the next spec's signIn then answered 429 and
+  // could not log in). Requiring several consecutive allowed attempts proves
+  // the flood's clump has aged out, so the run that follows starts with
+  // budget to spare -- a real signal, not a fixed sleep.
+  let allowedInARow = 0;
   await expect
-    .poll(async () => (await attempt()).status(), {
-      message: "the login limiter window never reopened",
-      timeout: 120_000,
-    })
-    .toBe(401);
+    .poll(
+      async () => {
+        allowedInARow =
+          (await attempt()).status() === 401 ? allowedInARow + 1 : 0;
+        return allowedInARow;
+      },
+      {
+        message: "the login limiter window never reopened",
+        timeout: 120_000,
+      },
+    )
+    .toBeGreaterThanOrEqual(6);
 });

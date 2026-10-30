@@ -418,7 +418,7 @@ test("ADM-05 impersonation: start, support banner, exit, audit trail", async ({
 
   // The reason prompt is part of the product flow; accept it with a real reason.
   page.once("dialog", (dialog) => void dialog.accept("qa e2e support check"));
-  await row.getByRole("button", { name: "Support check" }).click();
+  await row.getByRole("button", { name: "Start support session" }).click();
 
   // The impersonated session lands on the target's home with the banner naming them.
   await expect(page).toHaveURL(/\/student$/, { timeout: 30_000 });

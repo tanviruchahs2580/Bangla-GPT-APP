@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openRoute, PASSWORD, signIn, useVariant } from "./a11y";
+import { openRoute, signIn, useVariant } from "./a11y";
 
 /**
  * FE-06: the token lifecycle end to end, in a real browser.
@@ -146,12 +146,14 @@ test("logout clears the query cache, user storage and offline copies; the next u
   expect(cookieNames).not.toContain("bgpt_token");
   expect(cookieNames).not.toContain("session");
 
-  // A conversation list in the react-query cache (the long-history seed gives
-  // student1 one, so "empty" for the next user is a real assertion).
+  // A conversation list in the react-query cache. The seed's "E2E long
+  // history" conversation is the oldest once this spec runs and the chip row
+  // shows only the newest eight, so assert the list itself is non-empty --
+  // the leak check below is what carries the assertion.
   await openRoute(page, "/student/tutor");
-  await expect(
-    page.getByRole("button", { name: /E2E long history/ }).first(),
-  ).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".conv-chip").first()).toBeVisible({
+    timeout: 30_000,
+  });
 
   await downloadChapter(page);
   const keysA = await offlineCopyKeys(page);
@@ -188,13 +190,12 @@ test("logout clears the query cache, user storage and offline copies; the next u
   const userB = await userIdOf(page);
   expect(userB).not.toBe(userA);
 
-  // A stale query cache would render student1's conversation chips here —
-  // the `["conversations"]` key carries no user id, which is exactly why
+  // A stale query cache would render student1's conversation chips here --
+  // whatever their titles -- so channel count is the stronger assertion.
+  // The `["conversations"]` key carries no user id, which is exactly why
   // logout must clear the cache rather than rely on the key.
   await openRoute(page, "/student/tutor");
-  await expect(
-    page.getByRole("button", { name: /E2E long history/ }),
-  ).toHaveCount(0);
+  await expect(page.locator(".conv-chip")).toHaveCount(0);
   // And the new chat button proves the page actually rendered its own state.
   await expect(
     page.getByRole("button", { name: /নতুন চ্যাট|New chat/i }).first(),
@@ -239,9 +240,9 @@ test("the service worker caches carry no user data (preview harness only)", asyn
   await useVariant(page, { theme: "light", lang: "bn" });
   await signIn(page, STUDENT_A);
   await openRoute(page, "/student/tutor");
-  await expect(
-    page.getByRole("button", { name: /E2E long history/ }).first(),
-  ).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".conv-chip").first()).toBeVisible({
+    timeout: 30_000,
+  });
 
   const cached = await page.evaluate(async () => {
     await navigator.serviceWorker.ready;

@@ -409,20 +409,26 @@ test("STU-11 reader: chapter opens, bookmark and font scale persist, TTS toggles
   await expect(page.locator('input[type="range"]')).toHaveValue("1.4");
   await expect.poll(articlePx).toBeCloseTo(basePx * 1.4, 0);
 
-  // ── TTS: the control is present (Chromium has speechSynthesis), toggling
-  // it must not throw and must return to the idle state. A device with no
-  // Bangla voice is beyond a headless browser; the fallback branch is
-  // unit-covered (progress.test / workspace.test). ───────────────────────
+  // ── TTS: the control is present (Chromium has speechSynthesis). F-108
+  // disables it with the reason when the device has no Bangla voice, which
+  // is what a headless shell reports: a press is then not a valid action and
+  // the honest assertion is the named reason. Where a Bangla voice exists the
+  // toggle must not throw and must return to the idle state (the fallback
+  // branch is unit-covered: ttsVoice.test). ─────────────────────────────
   const listen = page.getByRole("button", { name: "শুনুন" });
   await expect(listen).toHaveAttribute("aria-pressed", "false");
-  await listen.click();
-  // Chromium without voices still reports speechSynthesis, so the control
-  // may toggle on and immediately fall back to idle; either way the press
-  // must not throw and the idle label must return.
-  if ((await listen.getAttribute("aria-pressed")) === "true") {
+  if (await listen.isDisabled()) {
+    await expect(listen).toHaveAttribute("title", /বাংলা ভয়েস নেই/);
+  } else {
     await listen.click();
+    // Chromium without voices still reports speechSynthesis, so the control
+    // may toggle on and immediately fall back to idle; either way the press
+    // must not throw and the idle label must return.
+    if ((await listen.getAttribute("aria-pressed")) === "true") {
+      await listen.click();
+    }
+    await expect(listen).toHaveAttribute("aria-pressed", "false");
   }
-  await expect(listen).toHaveAttribute("aria-pressed", "false");
 
   expect(errors, `console errors:\n${errors.join("\n")}`).toEqual([]);
 });
@@ -442,11 +448,13 @@ test("STU-11 the offline copy appears in the library and can be deleted", async 
   await expect(download).toHaveAttribute("aria-pressed", "true");
 
   // Manage-downloads: the copy is listed with its size and can be deleted.
+  // The count renders through formatNumber, so under bn it is the Bangla
+  // digit (F-113 numeral policy) -- the copy around it is Bangla.
   await openRoute(page, "/student/learn");
-  const library = page.getByText("অফলাইন কপি · 1");
+  const library = page.getByText(`অফলাইন কপি · ${bn(1)}`);
   await expect(library).toBeVisible({ timeout: 30_000 });
   await page.getByRole("button", { name: `মুছুন: ${CHAPTER}` }).click();
-  await expect(page.getByText("অফলাইন কপি · 1")).toHaveCount(0);
+  await expect(page.getByText(`অফলাইন কপি · ${bn(1)}`)).toHaveCount(0);
 
   // And the reader agrees: the copy is gone, so the control is idle again.
   await openRoute(page, READER_ROUTE);

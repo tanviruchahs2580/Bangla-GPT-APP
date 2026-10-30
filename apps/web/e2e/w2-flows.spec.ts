@@ -852,28 +852,53 @@ test.describe("X-09 dates and numerals", () => {
     await expect(row).toBeVisible({ timeout: 30_000 });
     const rendered = ((await row.locator(".muted").textContent()) ?? "").trim();
 
-    // The API stores naive UTC; the app restores the offset. Under a pinned
-    // Asia/Dhaka browser the string must equal the same instant shown there,
-    // and the engine must really be at +06:00.
+    // The API stores naive UTC; the app restores the offset and renders the
+    // Dhaka instant in the app language with the same Intl shape
+    // lib/datetime.ts uses (F-116). A note timestamp keeps its time of day --
+    // the same formatter renders assignment deadlines, where the hour is
+    // load-bearing.
     const expected = await page.evaluate((iso) => {
       const at = new Date(`${iso.replace(/Z$/, "")}Z`);
-      return { text: at.toLocaleString(), offset: at.getTimezoneOffset() };
+      return {
+        text: new Intl.DateTimeFormat("en", {
+          timeZone: "Asia/Dhaka",
+          year: "numeric",
+          month: "numeric",
+          day: "numeric",
+          hour: "numeric",
+          minute: "numeric",
+          second: "numeric",
+        }).format(at),
+        offset: at.getTimezoneOffset(),
+      };
     }, note.created_at);
     expect(expected.offset).toBe(-360);
     expect(rendered).toBe(expected.text);
 
-    // Numeral policy: counts and dates stay in Latin digits in both UI
-    // languages (the same string, not a re-scripted one), while the copy
-    // around them is Bangla.
+    // The bn half of X-09: the same instant renders the bn-BD locale --
+    // Bangla digits and the locale's own field order. (The earlier assertion
+    // here pinned the en string to both languages; that was the defect
+    // F-W2-FLOW-02 recorded, not the product contract.)
     await page
       .locator("header")
       .getByRole("button", { name: /Language|ভাষা/ })
       .click();
     await expect(page.locator("html")).toHaveAttribute("lang", "bn");
+    const bnExpected = await page.evaluate((iso) => {
+      const at = new Date(`${iso.replace(/Z$/, "")}Z`);
+      return new Intl.DateTimeFormat("bn-BD", {
+        timeZone: "Asia/Dhaka",
+        year: "numeric",
+        month: "numeric",
+        day: "numeric",
+        hour: "numeric",
+        minute: "numeric",
+        second: "numeric",
+      }).format(at);
+    }, note.created_at);
     const bnRendered = ((await row.locator(".muted").textContent()) ?? "").trim();
-    expect(bnRendered).toBe(rendered);
-    expect(bnRendered).toMatch(/[0-9]/);
-    expect(bnRendered).not.toMatch(/[\u09E6-\u09EF]/);
+    expect(bnRendered).toBe(bnExpected);
+    expect(bnRendered).toMatch(/[\u09E6-\u09EF]/);
     await page
       .locator("header")
       .getByRole("button", { name: /Language|ভাষা/ })
