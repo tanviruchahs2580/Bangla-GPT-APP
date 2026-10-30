@@ -9,6 +9,7 @@ import type {
   QPaper,
   RosterEntry,
 } from "../../types";
+import { Check, Pencil } from "lucide-react";
 import { Badge, Button, Card, LoadError, Stat } from "../../components/ui";
 import { QPaperReviewPanel } from "../../components/teacher/QPaperReviewPanel";
 import { friendlyError } from "../../errors";
@@ -265,7 +266,11 @@ export default function AssessmentsPage() {
                   {qps.map((qp) => (
                     <div key={qp.id} className="row qp-review-row">
                       <span className="quick-icon tile-teal" aria-hidden>
-                        {qp.status === "final" ? "✓" : "✎"}
+                        {qp.status === "final" ? (
+                          <Check size={16} />
+                        ) : (
+                          <Pencil size={16} />
+                        )}
                       </span>
                       <div className="row-main">
                         <div className="row-title">

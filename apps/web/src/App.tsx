@@ -65,6 +65,7 @@ const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const SchoolDashboard = lazy(() => import("./pages/SchoolDashboard"));
 const StatusPage = lazy(() => import("./pages/StatusPage"));
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
+const MaintenancePage = lazy(() => import("./pages/MaintenancePage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -268,6 +269,15 @@ function RoutesSwitch() {
             </RouteErrorBoundary>
           }
         />
+        {/* UX-06: the deployment rewrites to this route during a window. */}
+        <Route
+          path="/maintenance"
+          element={
+            <RouteErrorBoundary>
+              <MaintenancePage />
+            </RouteErrorBoundary>
+          }
+        />
 
         <Route
           path="/student"
@@ -456,6 +466,7 @@ const ROUTE_TITLES: Array<[string, Parameters<typeof t>[0]]> = [
   ["/register", "register"],
   ["/forgot", "resetTitle"],
   ["/status", "statusPage"],
+  ["/maintenance", "apiUnreachableTitle"],
   ["/privacy", "privacy"],
   ["/terms", "terms"],
 ];

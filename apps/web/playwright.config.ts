@@ -113,7 +113,21 @@ export default defineConfig({
     // it keeps a stale cache from ever masking a regression.
     serviceWorkers: "block",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  // FE-18: the desktop project never runs the mobile-only spec, and the
+  // mobile profile is one device (Pixel 5, 393x851) so the added CI cost is
+  // that single file rather than a second copy of the whole suite.
+  projects: [
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"] },
+      testIgnore: /mobile\.spec\.ts$/,
+    },
+    {
+      name: "mobile-chromium",
+      use: { ...devices["Pixel 5"] },
+      testMatch: /mobile\.spec\.ts$/,
+    },
+  ],
   webServer: [
     {
       // Seed first (roles cannot be self-registered through the product),

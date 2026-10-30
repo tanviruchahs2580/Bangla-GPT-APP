@@ -466,13 +466,14 @@ export function CreateHub({
             </div>
           ))}
         </div>
-        {openDoc != null && docs.find((d) => d.id === openDoc) && (
-          <div className="card mt-2">
-            <PayloadView
-              payload={docs.find((d) => d.id === openDoc)!.payload}
-            />
-          </div>
-        )}
+        {(() => {
+          const open = docs.find((d) => d.id === openDoc);
+          return open ? (
+            <div className="card mt-2">
+              <PayloadView payload={open.payload} />
+            </div>
+          ) : null;
+        })()}
       </div>
 
       {workload && (

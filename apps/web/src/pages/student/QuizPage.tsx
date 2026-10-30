@@ -167,7 +167,10 @@ export default function QuizPage() {
   const queryClient = useQueryClient();
   const { data: progress } = useQuery({
     queryKey: ["progress", me?.profile_id],
-    queryFn: () => get<StudentProgress>(`/students/${me!.profile_id}/progress`),
+    queryFn: () => {
+      if (!me?.profile_id) throw new Error("student profile is not loaded");
+      return get<StudentProgress>(`/students/${me.profile_id}/progress`);
+    },
     enabled: !!me?.profile_id && me.role === "student",
   });
   const { data: dashboard } = useQuery({
@@ -292,12 +295,16 @@ export default function QuizPage() {
   };
 
   const submit = async () => {
+    // Captured after the guard: TypeScript cannot narrow `started` across the
+    // awaits below, and a non-null assertion would hide a real null.
+    const attempt = started;
+    if (!attempt) return;
     setBusy(true);
     try {
       const res = await post<QuizResult>(
-        `/quizzes/${started!.attempt_id}/submit`,
+        `/quizzes/${attempt.attempt_id}/submit`,
         {
-          answers: started!.questions.map((_, i) => answers[i] ?? -1),
+          answers: attempt.questions.map((_, i) => answers[i] ?? -1),
         },
       );
       setResult(res);
@@ -551,7 +558,7 @@ export default function QuizPage() {
         <h2>{t("practiceTitle")}</h2>
       </section>
 
-      {/* 🎯 আমার দুর্বলতা — the most prominent entry, from the weakness rollup */}
+      {/* আমার দুর্বলতা — the most prominent entry, from the weakness rollup */}
       <Card className="practice-weak-card card-featured">
         <div className="row-flex">
           <span className="quick-icon tile-warn" aria-hidden>

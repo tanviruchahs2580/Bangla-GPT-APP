@@ -4,10 +4,14 @@ import { useNavigate } from "react-router-dom";
 import {
   BookOpen,
   Bookmark,
+  Check,
+  Circle,
   Download,
   FileText,
+  Play,
   Square,
   Volume2,
+  X,
 } from "lucide-react";
 import {
   getChapterContent,
@@ -63,7 +67,10 @@ export function LearnPage() {
   const [activeSubject, setActiveSubject] = useState<string | null>(null);
   const chaptersQuery = useQuery({
     queryKey: ["chapters", activeSubject, selected],
-    queryFn: () => getSubjectChapters(activeSubject!, selected),
+    queryFn: () => {
+      if (!activeSubject) throw new Error("no subject selected");
+      return getSubjectChapters(activeSubject, selected);
+    },
     enabled: !!activeSubject,
   });
   // one progress query for the whole class powers both the subject
@@ -246,11 +253,13 @@ export function LearnPage() {
                 const prog = progressMap.get(ch.chapter);
                 const badgeKind = chapterBadge(prog);
                 const icon =
-                  badgeKind === "done"
-                    ? "✓"
-                    : badgeKind === "reading"
-                      ? "▶"
-                      : "○";
+                  badgeKind === "done" ? (
+                    <Check size={12} />
+                  ) : badgeKind === "reading" ? (
+                    <Play size={12} />
+                  ) : (
+                    <Circle size={12} />
+                  );
                 // The bar reports the progress the reader actually recorded.
                 // It used to read `prog ? 45 : 0`, so every in-progress
                 // chapter claimed the same invented 45%: a chapter read to 20%
@@ -369,7 +378,10 @@ export function LearnChapterPage() {
 
   const progressQuery = useQuery({
     queryKey: ["learnProgressOne", subject, chapter, classLevel],
-    queryFn: () => getLearnProgress(subject!, classLevel),
+    queryFn: () => {
+      if (!subject) throw new Error("reader route is not ready");
+      return getLearnProgress(subject, classLevel);
+    },
     enabled: !!subject && !!chapter,
   });
 
@@ -836,8 +848,15 @@ function ChapterPractice({
         {result.review.map((r, i) => (
           <Card key={i} className="quiz-review-row">
             <div className="row-title">{r.question_text}</div>
-            <div className="row-sub">
-              {r.is_correct ? "✓" : `✗ — ${r.options[r.correct_index] ?? ""}`}
+            <div className="row-sub row-flex">
+              {r.is_correct ? (
+                <Check size={14} aria-hidden />
+              ) : (
+                <>
+                  <X size={14} aria-hidden /> —{" "}
+                  {r.options[r.correct_index] ?? ""}
+                </>
+              )}
             </div>
           </Card>
         ))}

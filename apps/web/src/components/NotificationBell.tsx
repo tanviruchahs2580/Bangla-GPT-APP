@@ -15,7 +15,8 @@ const KIND_ROUTE: Record<string, string> = {
 const UI_PREFIXES = ["/student", "/parent", "/teacher", "/admin", "/school"];
 
 function targetOf(n: NotificationItem): string | null {
-  if (n.link && UI_PREFIXES.some((p) => n.link!.startsWith(p))) return n.link;
+  const link = n.link;
+  if (link && UI_PREFIXES.some((p) => link.startsWith(p))) return link;
   return KIND_ROUTE[n.kind] ?? null;
 }
 
@@ -162,7 +163,13 @@ export function NotificationBell() {
       <button
         ref={triggerRef}
         className="icon-btn"
-        aria-label={t("notifications")}
+        // A11Y-03/F-168: the count lived only in the aria-hidden badge, so a
+        // screen-reader student never learned a quiz had been assigned.
+        aria-label={
+          unread > 0
+            ? `${t("notifications")} (${unread > 9 ? "9+" : unread})`
+            : t("notifications")
+        }
         aria-expanded={open}
         aria-haspopup="menu"
         onClick={() => {

@@ -9,15 +9,7 @@ export function onThemeChange(fn: () => void): () => void {
   return () => themeListeners.delete(fn);
 }
 
-export function initialTheme(): Theme {
-  const saved = localStorage.getItem(THEME_KEY);
-  if (saved === "light" || saved === "dark") return saved;
-  return window.matchMedia?.("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light";
-}
-
-export function applyTheme(theme: Theme): void {
+function applyTheme(theme: Theme): void {
   document.documentElement.setAttribute("data-theme", theme);
   localStorage.setItem(THEME_KEY, theme);
   for (const fn of themeListeners) fn();

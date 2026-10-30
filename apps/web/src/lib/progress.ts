@@ -2,7 +2,7 @@ import type { ChapterProgressOut } from "../types";
 
 export type Badge = "done" | "reading" | null;
 
-// badge logic: completed → ✓, any read progress → ○, none → no badge.
+// badge logic: completed -> "done", any read progress -> "reading", none -> null.
 export function chapterBadge(
   prog: Pick<ChapterProgressOut, "completed" | "read_pct"> | undefined,
 ): Badge {

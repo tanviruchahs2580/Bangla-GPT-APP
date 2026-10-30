@@ -39,6 +39,8 @@ interface Screen {
   name: string
   route: string
   email?: string
+  /** Pins screen state the route's own effects would otherwise leave open. */
+  prepare?: (page: import('@playwright/test').Page) => Promise<void>
 }
 
 const SCREENS: Screen[] = [
@@ -49,6 +51,25 @@ const SCREENS: Screen[] = [
     name: 'student-tutor',
     route: '/student/tutor',
     email: 'student2@e2e.test',
+    // F-204: the tutor thread autoscrolls to its last message on mount and
+    // lays out after the Bangla webfont settles, so a full-suite run measured
+    // a different scroll/layout state than an isolated one (4.2% pixel delta
+    // against the reviewed baselines). Pin the scroll offsets and wait for
+    // fonts and pending frames before the comparator reads the page.
+    prepare: async (page) => {
+      await page.evaluate(() => {
+        const thread = document.querySelector('.chat-viewport')
+        if (thread) thread.scrollTop = 0
+        window.scrollTo(0, 0)
+      })
+      await page.evaluate(() => document.fonts.ready)
+      await page.evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          ),
+      )
+    },
   },
   { name: 'teacher-home', route: '/teacher', email: 'teacher2@e2e.test' },
 ]
@@ -67,6 +88,7 @@ for (const screen of SCREENS) {
         await useVariant(page, variant)
         if (screen.email) await signIn(page, screen.email)
         await openRoute(page, screen.route)
+        await screen.prepare?.(page)
         // PNG: Playwright's toHaveScreenshot does not take a JPEG encoder.
         // The two screens that carry a photo background stay under the
         // repository's 512 KB per-added-file limit because the background

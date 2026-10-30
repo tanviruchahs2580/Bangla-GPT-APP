@@ -61,7 +61,7 @@ const TEACHER_NAV = [
   },
 ] as const;
 
-export function OfflineBanner() {
+function OfflineBanner() {
   const [online, setOnline] = useState(navigator.onLine);
   useEffect(() => {
     const up = () => setOnline(true);
@@ -81,7 +81,7 @@ export function OfflineBanner() {
   );
 }
 
-export function ImpersonationBanner() {
+function ImpersonationBanner() {
   const { me } = useAuth();
   const [ending, setEnding] = useState(false);
   if (!isImpersonating()) return null;
@@ -182,7 +182,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
           <button
             className="icon-btn"
+            // F-168: the name stayed "ডার্ক মোড" in both states, so the state
+            // was invisible; aria-pressed exposes it until a `lightMode` key
+            // lets the name state the target theme (C2 handoff).
             aria-label={t("darkMode")}
+            aria-pressed={dark}
             onClick={() => toggleTheme()}
           >
             {dark ? (

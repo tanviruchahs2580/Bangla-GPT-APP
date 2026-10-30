@@ -13,17 +13,47 @@ export class ApiError extends Error {
   status: number;
   code?: string;
   rawDetail: unknown;
+  /**
+   * Seconds the server asked the client to wait (429 `Retry-After`), when it
+   * sent one. FE-05: the header used to be discarded, so every surface could
+   * only say "try again later" with no relationship to the server's window.
+   */
+  retryAfterSeconds?: number;
   constructor(
     status: number,
     message: string,
     code?: string,
     rawDetail?: unknown,
+    retryAfterSeconds?: number,
   ) {
     super(message);
     this.status = status;
     this.code = code;
     this.rawDetail = rawDetail;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
+}
+
+/**
+ * `Retry-After` is either delta-seconds or an HTTP date (RFC 9110). Anything
+ * unparseable, negative or absurdly large is dropped rather than surfaced.
+ */
+const MAX_RETRY_AFTER_SECONDS = 3600;
+function parseRetryAfter(header: string | null): number | undefined {
+  if (!header) return undefined;
+  const trimmed = header.trim();
+  if (/^\d+$/.test(trimmed)) {
+    const seconds = Number(trimmed);
+    return seconds > 0 && seconds <= MAX_RETRY_AFTER_SECONDS
+      ? seconds
+      : undefined;
+  }
+  const when = Date.parse(trimmed);
+  if (Number.isNaN(when)) return undefined;
+  const seconds = Math.round((when - Date.now()) / 1000);
+  return seconds > 0 && seconds <= MAX_RETRY_AFTER_SECONDS
+    ? seconds
+    : undefined;
 }
 
 export interface MeResponse {
@@ -103,7 +133,7 @@ async function rawRenew(token: string): Promise<boolean> {
 }
 
 /** Renew-once single flight; safe to call on every API call. */
-export function maybeRenewSession(): void {
+function maybeRenewSession(): void {
   const token = getToken();
   if (!token) return;
   const exp = jwtPayload(token)?.["exp"];
@@ -345,7 +375,7 @@ async function parseSse(
   return done;
 }
 
-export async function api<T>(
+async function api<T>(
   path: string,
   options: RequestInit = {},
   opts?: {
@@ -422,7 +452,15 @@ export async function api<T>(
         !AUTH_401_PATHS.some((p) => path.startsWith(p))
       )
         onUnauthorized?.();
-      throw new ApiError(res.status, parsed.message, parsed.code, parsed);
+      throw new ApiError(
+        res.status,
+        parsed.message,
+        parsed.code,
+        parsed,
+        res.status === 429
+          ? parseRetryAfter(res.headers.get("retry-after"))
+          : undefined,
+      );
     }
     try {
       return (await res.json()) as T;

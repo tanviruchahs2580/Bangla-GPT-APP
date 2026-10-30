@@ -87,15 +87,12 @@ export default tseslint.config(
         { checksVoidReturn: { attributes: false } },
       ],
 
-      // Non-null assertions. Left OFF, with the reason recorded rather than
-      // suppressed line by line: all 14 remaining sites are the query
-      // enable-guard idiom -
-      //     useQuery({ queryFn: () => f(active!, id), enabled: !!active })
-      // where TypeScript cannot see that `enabled` gates the call. Rewriting
-      // each one into a redundant `if (!active) return` would add noise
-      // without removing a real possibility of a null crash.
-      // Re-enable this if the codebase stops using react-query guards.
-      '@typescript-eslint/no-non-null-assertion': 'off',
+      // Non-null assertions (`x!`) hide a real null from the type checker.
+      // FE-02: this rule was off with a rationale that the 14 sites were all
+      // react-query enable-guard idioms; every production site is now written
+      // with an explicit guard instead, so the rule is on. (Tests keep their
+      // own override below: asserting a query result is how a test asserts.)
+      '@typescript-eslint/no-non-null-assertion': 'error',
 
       // Fast-refresh granularity only: it complains when a module exports a
       // component alongside a hook or constant, which costs a full reload in
@@ -106,6 +103,13 @@ export default tseslint.config(
       // Console noise in shipped UI code is usually debugging left behind.
       'no-console': ['warn', { allow: ['warn', 'error'] }],
 
+      // FE-03: the >500-line pages are being split (AITutorPage first, its
+      // sections now live under src/pages/student/tutor/). The extracted
+      // modules are capped immediately so the split cannot regress while the
+      // remaining pages land; the rule extends to src/pages as each page is
+      // split, and the register's F-094 tracks the remainder.
+      'max-lines': 'off',
+
       // `role="student"` on <RequireAuth> is a prop of our own component, not
       // a DOM aria role; ignoreNonDOM stops jsx-a11y from reading it as one.
       'jsx-a11y/aria-role': ['error', { ignoreNonDOM: true }],
@@ -113,6 +117,17 @@ export default tseslint.config(
       eqeqeq: ['error', 'smart'],
       'prefer-const': 'error',
       'no-var': 'error',
+    },
+  },
+
+  // ---- extracted page sections: line budget (FE-03) -----------------------
+  {
+    files: ['src/pages/student/tutor/**/*.tsx'],
+    rules: {
+      'max-lines': [
+        'error',
+        { max: 300, skipBlankLines: true, skipComments: true },
+      ],
     },
   },
 

@@ -22,7 +22,10 @@ import { t, tSubject } from "../../i18n";
 function useProgress(me: MeResponse | null) {
   return useQuery({
     queryKey: ["progress", me?.profile_id],
-    queryFn: () => get<StudentProgress>(`/students/${me!.profile_id}/progress`),
+    queryFn: () => {
+      if (!me?.profile_id) throw new Error("student profile is not loaded");
+      return get<StudentProgress>(`/students/${me.profile_id}/progress`);
+    },
     enabled: !!me?.profile_id && me.role === "student",
   });
 }
@@ -38,7 +41,10 @@ function useDashboard(me: MeResponse | null) {
 function useActivity(me: MeResponse | null) {
   return useQuery({
     queryKey: ["activity", me?.profile_id],
-    queryFn: () => get<ActivitySummary>(`/students/${me!.profile_id}/activity`),
+    queryFn: () => {
+      if (!me?.profile_id) throw new Error("student profile is not loaded");
+      return get<ActivitySummary>(`/students/${me.profile_id}/activity`);
+    },
     enabled: !!me?.profile_id && me.role === "student",
   });
 }
