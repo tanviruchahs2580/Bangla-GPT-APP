@@ -125,6 +125,7 @@ def enforce_production_safety(settings: Settings) -> None:
         _validate_corpus,
         _validate_ai_budget,
         _validate_llm_budget,
+        _validate_llm_data_use,
     ):
         try:
             problems.extend(validator(settings))
@@ -424,6 +425,34 @@ def _validate_llm_budget(settings: Settings) -> list[str]:
             "LLM_MAX_RETRIES, or raise --timeout in the container CMD."
         ]
     return []
+
+
+def _validate_llm_data_use(settings: Settings) -> list[str]:
+    """A free-tier provider key must not serve children's content unacknowledged.
+
+    PRIV-06: the vendor's free tier uses submitted content to improve its
+    products (docs/playstore/data-safety.md). Whether the deployed key is
+    free or paid is an owner-side fact the repository cannot observe, so the
+    deployment must state it: with LLM_DATA_USE_TIER=free the boot refuses
+    until the operator has confirmed and recorded the data-use/retention
+    terms (LLM_DATA_USE_ACKNOWLEDGED=true, the acknowledgement data-safety.md
+    open item 1 asks for). "unset" is deliberately not refused here -- that
+    decision, paid tier vs recorded free-tier basis, is the owner's and is
+    tracked as F-042.
+    """
+    if not settings.has_billable_llm_provider:
+        return []
+    if settings.llm_data_use_tier != "free" or settings.llm_data_use_acknowledged:
+        return []
+    return [
+        "LLM_DATA_USE_TIER=free: the provider's free tier uses submitted "
+        "content to improve its products, which must not happen for "
+        "children's questions without a recorded basis. Confirm the vendor's "
+        "data-use/retention terms and record them with a date "
+        "(docs/playstore/data-safety.md, open item 1), then set "
+        "LLM_DATA_USE_ACKNOWLEDGED=true -- or run a paid-tier key with "
+        "LLM_DATA_USE_TIER=paid."
+    ]
 
 
 # ---------------------------------------------------------------------------

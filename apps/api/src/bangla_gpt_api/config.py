@@ -4,7 +4,7 @@ import logging
 import tomllib
 from functools import lru_cache
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -114,6 +114,18 @@ class Settings(BaseSettings):
     # Circuit breaker thresholds
     circuit_breaker_failure_threshold: int = 3  # failures before opening
     circuit_breaker_reset_timeout_seconds: float = 60.0  # seconds before half-open
+    # PRIV-06: which vendor tier key this deployment runs on. The vendor's
+    # free tier uses submitted content to improve its products, which must
+    # not happen silently for children's questions (docs/playstore/
+    # data-safety.md). The Literal makes a typo a loud boot failure instead
+    # of a silently unguarded value.
+    llm_data_use_tier: Literal["unset", "free", "paid"] = "unset"
+    # PRIV-06: set true only after the tier's data-use/retention terms have
+    # been looked up and recorded (with a date) per data-safety.md open item
+    # 1. A production boot with LLM_DATA_USE_TIER=free refuses without it;
+    # "unset" stays a deploy-time decision between this and the owner's
+    # paid-tier confirmation.
+    llm_data_use_acknowledged: bool = False
 
     # --- RAG v2 retrieval ---
     # "hybrid" = lexical BM25 lane + vector lane fused by reciprocal rank
