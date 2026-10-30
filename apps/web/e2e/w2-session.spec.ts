@@ -228,47 +228,54 @@ test("logout clears the query cache, user storage and offline copies; the next u
   expect(errors, `console errors:\n${errors.join("\n")}`).toEqual([]);
 });
 
-test("the service worker caches carry no user data (preview harness only)", async ({
-  page,
-  context,
-}) => {
-  test.skip(
-    process.env.E2E_WEB !== "preview",
-    "needs the production bundle where /sw.js is registered: E2E_WEB=preview npx playwright test w2-session",
-  );
-  const errors = collectConsole(page);
-  await useVariant(page, { theme: "light", lang: "bn" });
-  await signIn(page, STUDENT_A);
-  await openRoute(page, "/student/tutor");
-  await expect(page.locator(".conv-chip").first()).toBeVisible({
-    timeout: 30_000,
-  });
+test.describe(() => {
+  // The suite blocks service workers globally so a stale cache cannot mask a
+  // regression; this one test needs the worker, and it still skips without
+  // the production bundle.
+  test.use({ serviceWorkers: "allow" });
 
-  const cached = await page.evaluate(async () => {
-    await navigator.serviceWorker.ready;
-    const names = await caches.keys();
-    const urls: string[] = [];
-    for (const name of names.filter((n) => n.startsWith("bgpt-"))) {
-      const cache = await caches.open(name);
-      for (const request of await cache.keys()) urls.push(request.url);
-    }
-    return urls;
-  });
-  expect(cached.length, "the shell is cached").toBeGreaterThan(0);
-  expect(
-    cached.filter((u) => new URL(u).pathname.startsWith("/api/")),
-    "API responses are never cached",
-  ).toEqual([]);
-  // Nothing cached is user content: the worker only stores same-origin shell
-  // assets, and the transcript lives in IndexedDB / the query cache instead.
-  expect(cached.some((u) => u.includes("conversation"))).toBe(false);
+  test("the service worker caches carry no user data (preview harness only)", async ({
+    page,
+    context,
+  }) => {
+    test.skip(
+      process.env.E2E_WEB !== "preview",
+      "needs the production bundle where /sw.js is registered: E2E_WEB=preview npx playwright test w2-session",
+    );
+    const errors = collectConsole(page);
+    await useVariant(page, { theme: "light", lang: "bn" });
+    await signIn(page, STUDENT_A);
+    await openRoute(page, "/student/tutor");
+    await expect(page.locator(".conv-chip").first()).toBeVisible({
+      timeout: 30_000,
+    });
 
-  await context.setOffline(true);
-  await page.goto("/student/tutor", { waitUntil: "domcontentloaded" });
-  await expect(page.locator("main, [role='main']")).toHaveCount(1, {
-    timeout: 30_000,
-  });
-  await context.setOffline(false);
+    const cached = await page.evaluate(async () => {
+      await navigator.serviceWorker.ready;
+      const names = await caches.keys();
+      const urls: string[] = [];
+      for (const name of names.filter((n) => n.startsWith("bgpt-"))) {
+        const cache = await caches.open(name);
+        for (const request of await cache.keys()) urls.push(request.url);
+      }
+      return urls;
+    });
+    expect(cached.length, "the shell is cached").toBeGreaterThan(0);
+    expect(
+      cached.filter((u) => new URL(u).pathname.startsWith("/api/")),
+      "API responses are never cached",
+    ).toEqual([]);
+    // Nothing cached is user content: the worker only stores same-origin shell
+    // assets, and the transcript lives in IndexedDB / the query cache instead.
+    expect(cached.some((u) => u.includes("conversation"))).toBe(false);
 
-  expect(errors, `console errors:\n${errors.join("\n")}`).toEqual([]);
+    await context.setOffline(true);
+    await page.goto("/student/tutor", { waitUntil: "domcontentloaded" });
+    await expect(page.locator("main, [role='main']")).toHaveCount(1, {
+      timeout: 30_000,
+    });
+    await context.setOffline(false);
+
+    expect(errors, `console errors:\n${errors.join("\n")}`).toEqual([]);
+  });
 });
