@@ -164,10 +164,14 @@ export function NotificationBell() {
         ref={triggerRef}
         className="icon-btn"
         // A11Y-03/F-168: the count lived only in the aria-hidden badge, so a
-        // screen-reader student never learned a quiz had been assigned.
+        // screen-reader student never learned a quiz had been assigned. The
+        // count sits OUTSIDE parentheses in the name: axe's
+        // label-content-name-mismatch strips parentheticals from both sides
+        // before comparing, so "Notifications (2)" against a visible "2"
+        // badge fails WCAG 2.5.3's label-in-name check.
         aria-label={
           unread > 0
-            ? `${t("notifications")} (${unread > 9 ? "9+" : unread})`
+            ? `${t("notifications")}: ${unread > 9 ? "9+" : unread}`
             : t("notifications")
         }
         aria-expanded={open}
