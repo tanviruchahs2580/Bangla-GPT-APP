@@ -1112,11 +1112,11 @@ class AiJob(Base):
     "the provider is flapping" from "the payload is bad".
 
     What each state covers (F-171): ``queued`` is accepted-not-started,
-    ``generating`` is the provider call, and ``validating`` is the stage
-    between a validated result and its durable row -- the request payload
-    was already validated on entry to ``generating`` and the generator
-    validates its own output before returning, so the V step is
-    "validate-and-persist", not a separate scoring pass.
+    ``generating`` is the moment the runner accepts the job, and
+    ``validating`` opens before the generator call -- the parse/echo/MCQ
+    checks the step names run inside that call, before it returns -- and
+    stays set through the persistence write. The V step is
+    "validate-and-persist", never a separate scoring pass.
     """
 
     __tablename__ = "ai_jobs"

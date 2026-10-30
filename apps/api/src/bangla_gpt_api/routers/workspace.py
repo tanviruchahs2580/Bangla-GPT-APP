@@ -233,6 +233,17 @@ async def _execute_ai_job(app_ctx: Ctx, job_id: str) -> None:
             fresh.attempts = attempt
             db.commit()
 
+    def _mark_validating() -> None:
+        # F-171: the V step opens here, before the generator call, because the
+        # parse/echo/MCQ validation runs inside that call -- the label covers
+        # the work it names instead of only the persistence write. The wire
+        # value stays `validating` (the web client maps it in CreateHub
+        # JOB_LABEL), so no rename reaches the client.
+        fresh = db.get(AiJob, job_id)
+        if fresh is not None:
+            fresh.status = "validating"
+            db.commit()
+
     def _persist_ready(
         job: AiJob,
         actor: User,
@@ -241,13 +252,6 @@ async def _execute_ai_job(app_ctx: Ctx, job_id: str) -> None:
         doc_payload: dict,
         attempts: int,
     ) -> None:
-        # F-171: this status covers the validation-and-persistence window. The
-        # generator validates its own payload (parse/echo/MCQ checks) before it
-        # returns, inside the generating phase, so this write marks the point
-        # where the validated document is stored. The wire value stays
-        # `validating`: the web client maps it (CreateHub JOB_LABEL) and a
-        # rename is a cross-stream change, recorded as a handoff.
-        job.status = "validating"
         job.attempts = attempts
         db.commit()
         doc = _persist_document(
@@ -316,6 +320,7 @@ async def _execute_ai_job(app_ctx: Ctx, job_id: str) -> None:
             attempt += 1
             try:
                 gen_in = _doc_in_for(job.kind, dict(job.payload or {}))
+                await _db_call(_mark_validating)
                 doc_payload, _sources, chapter = await _generate_document(
                     app_ctx, db, actor, job.kind, gen_in
                 )
