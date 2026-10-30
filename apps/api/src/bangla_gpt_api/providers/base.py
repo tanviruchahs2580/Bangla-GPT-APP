@@ -42,11 +42,13 @@ def backoff_total_seconds(max_retries: int) -> float:
     return total
 
 
-#: Jitter source for retry delays. SystemRandom rather than the module-level
+#: Jitter source for retry delays. ``secrets`` rather than the module-level
 #: ``random`` functions: the value only needs to decorrelate workers, but the
 #: project's bandit ruleset (S311) treats the plain generator as a finding in
 #: src, and a suppression would have to be justified for every call site.
-_JITTER = secrets.SystemRandom()
+#: The draw is an integer (``randbelow``), which typeshed gives a real return
+#: type; ``SystemRandom.uniform`` is typed Any and tripped warn_return_any.
+_JITTER_STEPS = 1000
 
 
 def backoff_delay_seconds(attempt: int) -> float:
@@ -58,8 +60,10 @@ def backoff_delay_seconds(attempt: int) -> float:
     delay stays inside the same envelope (never longer than the old schedule,
     at least half of it), so timeout budgets are unaffected.
     """
-    base = min(0.5 * (2**attempt), MAX_BACKOFF_SECONDS)
-    return base * _JITTER.uniform(0.5, 1.0)
+    # ``int ** int`` is typed Any by mypy, hence the explicit annotation.
+    base: float = min(0.5 * (2**attempt), MAX_BACKOFF_SECONDS)
+    spread = secrets.randbelow(_JITTER_STEPS) / (2 * _JITTER_STEPS)
+    return base * (0.5 + spread)
 
 
 def finish_stream(

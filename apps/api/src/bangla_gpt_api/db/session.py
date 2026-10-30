@@ -63,7 +63,7 @@ def _apply_sqlite_pragmas(target: Engine, url: str) -> None:
     def _set_pragmas(dbapi_connection: object, _record: object) -> None:
         # The connect listener receives the DBAPI connection untyped; SQLAlchemy
         # invokes it after the driver's own connect() returned.
-        cursor = dbapi_connection.cursor()  # type: ignore[attr-defined] - DBAPI object arrives untyped
+        cursor = dbapi_connection.cursor()  # type: ignore[attr-defined]  # DBAPI object arrives untyped
         try:
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")

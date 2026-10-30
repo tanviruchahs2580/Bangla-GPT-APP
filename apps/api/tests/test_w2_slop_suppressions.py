@@ -32,7 +32,12 @@ def _has_reason(rest: str) -> bool:
     rest = rest.strip()
     if rest.startswith("- "):
         return len(rest) > 2
-    return rest.startswith("(") and rest.endswith(")") and len(rest) > 2
+    if rest.startswith("(") and rest.endswith(")"):
+        return len(rest) > 2
+    # `# type: ignore[code]  # reason`: mypy rejects a ` - reason` tail after a
+    # bracketed ignore ("Invalid type: ignore comment"), so the reason rides in
+    # a second comment on the same line.
+    return rest.startswith("# ") and len(rest) > 4
 
 
 def test_every_suppression_in_api_source_states_a_reason() -> None:

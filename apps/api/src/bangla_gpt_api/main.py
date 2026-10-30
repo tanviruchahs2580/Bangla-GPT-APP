@@ -553,7 +553,7 @@ def _mark_public_operations(app: object) -> None:
     and the document has no global `security`, so a deliberate decision is
     invisible in the contract.
     """
-    original = app.openapi  # type: ignore[attr-defined] - app is typed object on purpose (see below)
+    original = app.openapi  # type: ignore[attr-defined]  # app is typed object on purpose (see below)
 
     def openapi() -> dict[str, Any]:
         spec: dict[str, Any] = original()
@@ -572,7 +572,7 @@ def _mark_public_operations(app: object) -> None:
 
     # Replacing the attribute on the FastAPI instance is the documented way to
     # customise the schema; mypy types `app` as a bare object here.
-    app.openapi = openapi  # type: ignore[attr-defined] - FastAPI's own extension point
+    app.openapi = openapi  # type: ignore[attr-defined]  # FastAPI's own extension point
 
 
 _HTTP_METHODS = frozenset({"get", "post", "put", "patch", "delete", "head", "options"})

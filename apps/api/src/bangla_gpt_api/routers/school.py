@@ -861,7 +861,7 @@ def _last_active_and_attempts(db: Session, ids: list[int]) -> tuple[dict[int, st
             # Unreachable per the model (created_at is NOT NULL), but legacy
             # SQLite rows may predate that constraint; skipping is the safe
             # response if one appears.
-            continue  # type: ignore[unreachable] - legacy rows, see the comment above
+            continue  # type: ignore[unreachable]  # legacy rows, see the comment above
         iso = str(ts)[:10]
         if sid not in last_day or iso > last_day[sid]:
             last_day[sid] = iso
