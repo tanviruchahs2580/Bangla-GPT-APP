@@ -86,6 +86,22 @@ async function expectAssistantText(page: Page, needle: string) {
   });
 }
 
+/**
+ * The shipped numeral policy (i18n.ts interpolation): a number inside Bangla
+ * copy renders in Bangla digits. The specs that read a rendered figure back
+ * accept both digit sets rather than pinning one -- the policy is a product
+ * decision, and a spec that only parses Latin digits fails on it.
+ */
+const BN_DIGITS = "০১২৩৪৫৬৭৮৯";
+function bn(n: number): string {
+  return String(n).replace(/\d/g, (d) => BN_DIGITS[Number(d)]);
+}
+function parseDigits(text: string): number[] {
+  return [...text.matchAll(/[0-9০-৯]+/g)].map((m) =>
+    Number(m[0].replace(/[০-৯]/g, (d) => String(BN_DIGITS.indexOf(d)))),
+  );
+}
+
 /* ----------------------------------------------------------------- STU-06 */
 
 test("STU-06 an unsafe prompt gets the supportive refusal and nothing harmful is stored", async ({
@@ -107,7 +123,9 @@ test("STU-06 an unsafe prompt gets the supportive refusal and nothing harmful is
   await expect(bubble).toContainText("৯৯৯");
   // The turn is marked unsupported (not a textbook answer).
   await expect(page.locator(".bubble.assistant").last()).toBeVisible();
-  await expect(page.locator(".sources").last()).toContainText("প্রমাণ নেই");
+  await expect(page.locator(".sources").last()).toContainText(
+    "পাঠ্যবই-সমর্থিত নয়",
+  );
 
   // Persistence: the stored assistant turn is the refusal copy itself.
   const convs = await page.request.get("/api/tutor/conversations", {
@@ -276,7 +294,7 @@ test("STU-10 revision mini-quiz drains a due item and the heatmap matches activi
   const item = due.items[0];
 
   await openRoute(page, "/student/quiz");
-  const revisionTab = page.getByRole("tab", { name: /রিভিশন|Revision/ });
+  const revisionTab = page.getByRole("tab", { name: /পুনরালোচনা|Revision/ });
   await revisionTab.click();
   await expect(page.getByText(item.question).first()).toBeVisible({
     timeout: 30_000,
@@ -329,12 +347,12 @@ test("STU-10 revision mini-quiz drains a due item and the heatmap matches activi
   const heatmap = page.getByTestId("activity-heatmap");
   await expect(heatmap).toBeVisible({ timeout: 30_000 });
   const label = (await heatmap.getAttribute("aria-label")) ?? "";
-  const nums = [...label.matchAll(/\d+/g)].map((m) => Number(m[0]));
+  const nums = parseDigits(label);
   expect(nums[0], `heatmap days in "${label}"`).toBe(activity.days.length);
   expect(nums[1], `heatmap questions in "${label}"`).toBe(totals.questions);
   expect(nums[2], `heatmap active days in "${label}"`).toBe(totals.active);
   await expect(
-    page.getByText(`${activity.streak} দিনের ধারাবাহিকতা`),
+    page.getByText(`${bn(activity.streak)} দিনের ধারাবাহিকতা`),
   ).toBeVisible();
 
   expect(errors, `console errors:\n${errors.join("\n")}`).toEqual([]);
@@ -424,7 +442,7 @@ test("STU-11 the offline copy appears in the library and can be deleted", async 
   await openRoute(page, "/student/learn");
   const library = page.getByText("অফলাইন কপি · 1");
   await expect(library).toBeVisible({ timeout: 30_000 });
-  await page.getByRole("button", { name: `মুছে ফেলুন: ${CHAPTER}` }).click();
+  await page.getByRole("button", { name: `মুছুন: ${CHAPTER}` }).click();
   await expect(page.getByText("অফলাইন কপি · 1")).toHaveCount(0);
 
   // And the reader agrees: the copy is gone, so the control is idle again.
