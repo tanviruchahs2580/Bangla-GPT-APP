@@ -40,7 +40,11 @@ import { invalidateStudyCaches } from "../../lib/invalidate";
 import { t, tSubject } from "../../i18n";
 import { friendlyError } from "../../errors";
 import { cn } from "../../lib/cn";
-import { chapterBadge, ttsSupported as ttsAvailable } from "../../lib/progress";
+import {
+  chapterBadge,
+  hasBanglaTtsVoice,
+  ttsSupported as ttsAvailable,
+} from "../../lib/progress";
 import { QuizOptionGroup } from "../../components/QuizOptionGroup";
 import { SafeMarkdownLazy as SafeMarkdown } from "../../lib/safeMarkdownLazy";
 import {
@@ -374,6 +378,7 @@ export function LearnChapterPage() {
     }
   });
   const [speaking, setSpeaking] = useState(false);
+  const [bnVoice, setBnVoice] = useState<boolean | null>(null);
   const [bookmarked, setBookmarked] = useState(false);
   // unified workspace tabs — পড়া | অনুশীলন | জিজ্ঞাসা (no page exit).
   const [tab, setTab] = useState<"read" | "practice" | "ask">("read");
@@ -490,11 +495,30 @@ export function LearnChapterPage() {
     }
   };
 
+  const content = query.data?.content;
+  const offlineCopy = query.data?.offline === true;
+  const ttsSupported = ttsAvailable();
+
+  // F-108: read-aloud needs an installed Bengali voice. Desktop Chrome and
+  // Safari commonly expose speechSynthesis with none, and the button used to
+  // speak Bangla text through an English voice. The list also arrives
+  // asynchronously (Chrome announces `voiceschanged`), so re-read it.
+  useEffect(() => {
+    if (!ttsSupported) return;
+    const synth = window.speechSynthesis;
+    const read = () => setBnVoice(hasBanglaTtsVoice(synth.getVoices()));
+    read();
+    synth.addEventListener("voiceschanged", read);
+    return () => synth.removeEventListener("voiceschanged", read);
+  }, [ttsSupported]);
+
   const speak = () => {
     try {
-      if (!("speechSynthesis" in window) || !content) return;
+      if (!("speechSynthesis" in window) || !content || bnVoice !== true)
+        return;
+      const synth = window.speechSynthesis;
       if (speaking) {
-        window.speechSynthesis.cancel();
+        synth.cancel();
         setSpeaking(false);
         return;
       }
@@ -503,18 +527,18 @@ export function LearnChapterPage() {
         .join(" ");
       const utter = new SpeechSynthesisUtterance(text);
       utter.lang = "bn-BD";
+      const voice = synth
+        .getVoices()
+        .find((v) => v.lang.toLowerCase().startsWith("bn"));
+      if (voice) utter.voice = voice;
       utter.onend = () => setSpeaking(false);
       utter.onerror = () => setSpeaking(false);
       setSpeaking(true);
-      window.speechSynthesis.speak(utter);
+      synth.speak(utter);
     } catch {
       setSpeaking(false);
     }
   };
-
-  const content = query.data?.content;
-  const offlineCopy = query.data?.offline === true;
-  const ttsSupported = ttsAvailable();
 
   const download = async () => {
     if (!content || !subject || !chapter || userId == null) return;
@@ -590,6 +614,8 @@ export function LearnChapterPage() {
                 onClick={speak}
                 aria-label={t("listen")}
                 aria-pressed={speaking}
+                disabled={bnVoice !== true}
+                title={bnVoice === false ? t("ttsUnavailable") : undefined}
               >
                 {speaking ? (
                   <Square size={14} aria-hidden />

@@ -648,6 +648,7 @@ const bn = {
   bookmark: "বুকমার্ক",
   stop: "থামুন",
   listen: "শুনুন",
+  ttsUnavailable: "এই ডিভাইসে বাংলা ভয়েস নেই — লেখা পড়ে শোনানো যাবে না।",
   errBadCredentials: "ইমেইল বা পাসওয়ার্ড সঠিক নয়।",
   errEmailTaken: "এই ইমেইল দিয়ে আগেই অ্যাকাউন্ট খোলা আছে।",
   errEmailUnverified: "আগে ইমেইল যাচাই করুন — কোড পাঠানো হয়েছে।",
@@ -1350,6 +1351,8 @@ const en: Dict = {
   bookmark: "Bookmark",
   stop: "Stop",
   listen: "Listen",
+  ttsUnavailable:
+    "No Bangla voice is installed on this device, so read-aloud is off.",
   errBadCredentials: "Email or password is incorrect.",
   errEmailTaken: "An account with this email already exists.",
   errEmailUnverified: "Verify your email first — a code has been sent.",
