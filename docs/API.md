@@ -29,7 +29,7 @@ Every non-preflight response carries `X-Request-ID` (echoed if supplied, otherwi
 
 | Method | Path | Auth | Body / notes |
 |---|---|---|---|
-| POST | `/auth/register` | - | `{email, password(min 8), name, role: student\|teacher\|parent, class_level?, guardian_consent?}` - `class_level` AND `guardian_consent: true` required for students; admin role cannot be self-registered. Returns 201 `{user_id, role, profile_id}` |
+| POST | `/auth/register` | - | `{email, password(min 8), name, role: student\|teacher\|parent, class_level?, guardian_consent?, phone?}` - `class_level` AND `guardian_consent: true` required for students; admin role cannot be self-registered; `phone` must be a BD mobile and is stored in the canonical `01[3-9]XXXXXXXX` form. Returns 201 `{user_id, role, profile_id}`, or 409 `email_taken` for a registered address (default `REGISTRATION_EMAIL_CONFLICT=disclose`); with `generic` both a new and a taken address answer 202 `{"status":"accepted"}` and the taken one creates nothing (F-143; see `docs/security/threat-model.md`) |
 | POST | `/auth/login` | - | `{email, password}` → `{access_token, must_change_password}` (HS256 JWT: `sub`, `role`, `exp`). MFA-enabled accounts get HTTP 202 + `token_type: "mfa"` step-up token (5 min, rejected by normal routes) — complete with `/auth/mfa/challenge` |
 | POST | `/auth/forgot` | - | `{email}` → always `202 {"status":"accepted"}` (anti-enumeration). Emails a single-use reset token (30 min); token stored only as SHA-256 hash. Dev fallback logs the token to console when SMTP is off and ENV≠production |
 | POST | `/auth/reset` | - | `{token, new_password(min 8)}` → fresh `{access_token}`; single-use + expiry enforced |

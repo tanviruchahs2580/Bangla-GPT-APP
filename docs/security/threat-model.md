@@ -57,15 +57,15 @@ Controls:
 - Login throttling 10/min per IP, MFA challenge 5/min, lockout counters (`config.py:218-219`; `routers/auth.py:336-371`).
 - JWT HS256 pinned, `iss`/`aud` required, unique `jti` on every access token, per-token deny-list and an epoch invalidation stamp (`auth/security.py:218-251,257-266`; `routers/deps.py:187-196`).
 - Single-use, SHA-256-hashed password-reset and verification tokens with expiry and a 30-day grace sweep (audit SEC-03, E-SEC-03-1).
-- Identity fields (name, email, guardian phone, invite code, school name) reject U+0000 and the bidi formatting controls with a stable 422 `invalid_characters`; free-text bodies keep them deliberately (`schemas.py:59-73`, `schemas.py:203-217`; `tests/test_qa_control_chars.py`, FIXED c98dead).
+- Identity fields (name, email, guardian phone, invite code, school name) reject U+0000 and the bidi formatting controls with a stable 422 `invalid_characters`; free-text bodies keep them deliberately (`schemas.py:71-102`, `schemas.py:235`; `tests/test_qa_control_chars.py`, FIXED c98dead).
 - Failed logins, armed lockouts and attempts against a locked account emit WARNING `json_log` lines with ids/counts and a truncated SHA-256 for unknown addresses — never the raw email (`routers/auth.py:336-350,413-470`; `tests/test_qa_auth_logging.py`, FIXED 075cc00). The log line is the only trace: no `audit_log` action exists for auth events by design (row volume under attack).
 - 71 auth tests plus the OpenAPI auth matrix passed (E-SEC-03-1, E-SEC-04-1); `tests/test_jwt_claims.py`, `tests/test_round2_auth_hardening.py`, `tests/test_single_use_tokens.py`.
 - Shared-password test accounts cannot be published to a real database: the e2e seeder refuses unless ENV names a development/CI lane (`apps/web/e2e/seed_e2e_users.py:88-107`; `tests/test_qa_e2e_seeder_guard.py`, FIXED ab84a94).
 
 Partial / open:
 
-- `POST /auth/register` answers 409 `email_taken`, an enumeration oracle the other credential routes do not have (F-SEC-3, owner decision).
-- Password floor is 8 characters with no tracked NIST citation (F-SEC-2, owner decision).
+- `POST /auth/register` answers 409 `email_taken` by default, an enumeration oracle the other credential routes do not have (F-SEC-3). The posture is now a deployment setting: `REGISTRATION_EMAIL_CONFLICT=disclose` (default) keeps the documented 409 for immediate signup feedback, `generic` answers 202 `{"status":"accepted"}` for a new and a taken address alike (the taken one is logged server-side and creates nothing), which closes the oracle at the cost of an honest signup answer and expects an SMTP-backed, API-first client. The owner chooses per deployment (F-143).
+- Password floor (F-SEC-2): the code now cites NIST SP 800-63B-4 s3.1.1.2 with its retrieval date (`auth/security.py:25-45`) and enforces length-only plus the blocklist. The default floor stays 8 — the figure the policy allows where the password is one factor of MFA — while `PASSWORD_MIN_LENGTH=15` is the documented single-factor value for a deployment without mandatory MFA; whether the default should move to 15 is the recorded owner decision (F-142).
 
 ### 4.2 Tutor chat and the LLM path
 

@@ -169,6 +169,18 @@ class Settings(BaseSettings):
     # composition requirements, and passphrases up to PASSWORD_MAX_LENGTH
     # (128) are accepted.
     password_min_length: int = 8
+    # SEC-02/F-143: what POST /auth/register answers for an address that is
+    # already registered. "disclose" (default) keeps the documented 409
+    # email_taken: signup gets an immediate, actionable answer, and a
+    # stranger's retry cannot appear to succeed on an existing account. It
+    # is also an unauthenticated enumeration oracle the sibling credential
+    # routes do not have. "generic" answers 202 {"status": "accepted"} for
+    # both a new and a taken address, closing the oracle at the cost of a
+    # registration that creates nothing and says so only in the log; that
+    # mode expects an SMTP-backed, API-first deployment (the auto-login
+    # 201 body is only produced under "disclose"). Owner decision:
+    # docs/security/threat-model.md records both postures and the trade.
+    registration_email_conflict: Literal["disclose", "generic"] = "disclose"
 
     # --- admin bootstrap / lifecycle ---
     admin_email: str | None = None

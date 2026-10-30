@@ -13,6 +13,7 @@ from typing import Any
 
 import jwt as pyjwt
 from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
@@ -150,11 +151,22 @@ def _encrypt_guardian_phone(app_ctx: Ctx, phone: str | None) -> str | None:
 
 
 @router.post(
-    "/auth/register", response_model=RegisterResponse, status_code=201, responses=coded(409)
+    "/auth/register",
+    response_model=RegisterResponse,
+    status_code=201,
+    responses={
+        **coded(409),
+        202: {
+            "description": (
+                "Generic accepted envelope; returned instead of 201/409 when "
+                "REGISTRATION_EMAIL_CONFLICT=generic (F-143)"
+            )
+        },
+    },
 )
 def register(
     app_ctx: Ctx, request: Request, payload: RegisterRequest, db: DbSession
-) -> RegisterResponse:
+) -> RegisterResponse | Response:
     # Student accounts need a class level and recorded guardian consent. The
     # schema cannot express "required only when role is student", so the rule
     # lives here as a documented 409 (conflict with the account's required
@@ -177,9 +189,16 @@ def register(
                 },
             )
     _enforce_password_policy(app_ctx.settings, payload.password)
+    # F-143: under the generic policy the route never states whether the
+    # address is new -- a taken address is acknowledged with the same 202
+    # envelope the success path returns, and nothing is created or mailed.
+    generic_conflict = app_ctx.settings.registration_email_conflict == "generic"
     email = payload.email.strip().lower()
     existing = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if existing is not None:
+        if generic_conflict:
+            json_log(logger, logging.INFO, "register_email_conflict", policy="generic")
+            return JSONResponse(status_code=202, content={"status": "accepted"})
         raise HTTPException(
             status_code=409,
             detail={"code": "email_taken", "message": "Email already registered"},
@@ -200,6 +219,11 @@ def register(
         db.flush()
     except IntegrityError as exc:
         db.rollback()
+        if generic_conflict:
+            # Concurrent registration won the race against the same address:
+            # under the generic policy that is the same non-answer as above.
+            json_log(logger, logging.INFO, "register_email_conflict", policy="generic")
+            return JSONResponse(status_code=202, content={"status": "accepted"})
         raise HTTPException(
             status_code=409,
             detail={"code": "email_taken", "message": "Email already registered"},
@@ -236,6 +260,11 @@ def register(
             user,
             lang=request_language(request.headers.get("accept-language")),
         )
+    if generic_conflict:
+        # Success answers the same envelope the taken-address branch does;
+        # the 201 RegisterResponse (and its auto-login shape) belongs to the
+        # default policy.
+        return JSONResponse(status_code=202, content={"status": "accepted"})
     return RegisterResponse(user_id=user.id, role=user.role, profile_id=profile.id)
 
 
