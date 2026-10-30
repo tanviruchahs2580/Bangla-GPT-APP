@@ -49,6 +49,7 @@ next is written.
 | Doc | Purpose |
 |---|---|
 | [operations/PRODUCTION_DEPLOYMENT.md](operations/PRODUCTION_DEPLOYMENT.md) | Deployment architecture + procedure |
+| [operations/env-matrix.md](operations/env-matrix.md) | Environment-variable matrix: every switch, default, owner |
 | [backup_dr.md](backup_dr.md) | Backup and disaster recovery |
 | [capacity_plan.md](capacity_plan.md) | Capacity planning |
 | [owasp_checklist.md](owasp_checklist.md) | OWASP review checklist |

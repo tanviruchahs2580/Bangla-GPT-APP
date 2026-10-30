@@ -179,15 +179,17 @@ every reference updated in the same change.
 
 ## Repository size
 
-Sixteen tracked files exceed 500 KB (9.4 MB total): eleven Playwright
-visual-regression baselines under `apps/web/e2e/__screenshots__/visual.spec.ts/`
-and five renovation-evidence screenshots under
-`docs/uiux_renovation_evidence/wave4/after/`. Decision (2026-10-29): keep them
-in git — the baselines make visual regressions reviewable and refreshable, and
-the evidence set is the durable record of that UI pass. The
-`check-added-large-files` pre-commit hook caps **newly added** files at 512 KB
-(it inspects added files per commit), so a new large file needs an explicit
-decision recorded here, not a silent `--no-verify`.
+Fourteen tracked files exceed 500 KB (8.4 MB total, measured 2026-10-30): nine
+Playwright visual-regression baselines under
+`apps/web/e2e/__screenshots__/visual.spec.ts/` and five renovation-evidence
+screenshots under `docs/uiux_renovation_evidence/wave4/after/`. Decision
+(2026-10-29): keep them in git — the baselines make visual regressions
+reviewable and refreshable, and the evidence set is the durable record of that
+UI pass. Re-run the inventory (`git ls-files` + file sizes) when the baselines
+are regenerated; the count moves with them. The `check-added-large-files`
+pre-commit hook caps **newly added** files at 512 KB (it inspects added files
+per commit), so a new large file needs an explicit decision recorded here, not
+a silent `--no-verify`.
 
 ## Security issues
 
