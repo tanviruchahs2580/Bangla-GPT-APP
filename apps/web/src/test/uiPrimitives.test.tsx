@@ -13,6 +13,7 @@ import {
   Spinner,
 } from "../components/ui";
 import { setLang, t } from "../i18n";
+import { BANGLA_NAME_FIXTURES } from "./banglaNames";
 
 function ModalHarness({ onClose }: { onClose?: () => void }) {
   const [open, setOpen] = useState(true);
@@ -168,6 +169,17 @@ describe("ui primitives", () => {
     const av = screen.getByText("ক");
     expect(av.className).toContain("avatar-lg");
     expect(av.className).toContain("avatar-ai");
+  });
+
+  it("renders the first grapheme of every BD-convention fixture name", () => {
+    // F-115: real rosters carry long compound and matra-heavy names; the
+    // initial must be the name's own first character, not a byte or a Latin
+    // fallback.
+    for (const name of BANGLA_NAME_FIXTURES) {
+      const { unmount } = render(<Avatar name={name} />);
+      expect(screen.getByText(name[0])).toBeInTheDocument();
+      unmount();
+    }
   });
 
   it("Spinner announces the localized loading label by default", () => {

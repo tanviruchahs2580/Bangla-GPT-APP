@@ -148,7 +148,18 @@ def seed() -> None:
             db.execute(select(Parent).where(Parent.user_id == parent_user.id)).scalar_one_or_none()
             is None
         ):
-            db.add(Parent(user_id=parent_user.id, name="E2E Parent"))
+            # F-115: a matra-heavy BD-convention name, so the real parent
+            # screens render one. The student/teacher names stay Latin because
+            # committed e2e assertions pin them ("E2E Student" in the smoke,
+            # qa and w2 flow specs) and the visual baselines record them; the
+            # varied name fixture set for unit tests lives in
+            # apps/web/src/test/banglaNames.ts.
+            db.add(
+                Parent(
+                    user_id=parent_user.id,
+                    name="মোছাম্মৎ নূরজাহান বেগম",
+                )
+            )
 
         _upsert_user(db, ACCOUNTS["admin"], "admin")
 
