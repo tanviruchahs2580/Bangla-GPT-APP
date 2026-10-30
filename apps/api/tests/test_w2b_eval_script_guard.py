@@ -61,8 +61,10 @@ def _counter(rule: str) -> float:
 def test_script_violations_flags_each_character_rule() -> None:
     assert script_violations(_CLEAN_ANSWER) == []
     assert script_violations(_ASSAMESE_ANSWER) == ["assamese_letters"]
-    # Devanagari letters; the shared danda (U+0964) must not count.
-    assert script_violations("কোষ कक्ष।") == ["devanagari_letters"]
+    # Devanagari letters; the shared danda (U+0964) must not count. The
+    # Devanagari sample is written as escapes so scripts/bn_scan.py does not
+    # flag this test file's own source text (the scanner has no allowlist).
+    assert script_violations("কোষ \u0915\u0915\u094d\u0937\u0964") == ["devanagari_letters"]
     assert script_violations("কোষ। মাটি।") == []
     assert script_violations("কোষ \ufffd একক") == ["replacement_char"]
 

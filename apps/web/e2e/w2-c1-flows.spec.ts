@@ -530,7 +530,10 @@ test("STU-12 unified search: three Bangla surface forms return the same hits", a
   //  * the decomposed vowel sign (U+09C7 + U+09BE) instead of U+09CB.
   const plain = "কোষ"; // ক ো ষ (U+0995 U+09CB U+09B7)
   const zwnj = "কো‌ষ"; // the plain form with a ZWNJ after the vowel sign
-  const decomposed = "কোষ"; // U+09C7 + U+09BE instead of the U+09CB sign
+  // U+09C7 + U+09BE instead of the U+09CB sign, written as escapes so
+  // scripts/bn_scan.py does not flag this spec's own source text as
+  // non-NFC (the scanner has no allowlist and scans tracked sources).
+  const decomposed = "\u0995\u09c7\u09be\u09b7";
   expect(new Set([plain, zwnj, decomposed]).size).toBe(3);
   // NFKC folds the decomposed vowel sign but keeps a ZWNJ; removing the
   // zero-width character is the shared normalizer's job (retrieval/
