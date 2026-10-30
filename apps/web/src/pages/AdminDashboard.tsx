@@ -1,31 +1,23 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  del,
-  get,
-  getFeedbackQueue,
-  patch,
-  post,
-  startImpersonation,
-  triageFeedback,
-} from "../api";
+import { get, patch, post, startImpersonation } from "../api";
 import { friendlyError } from "../errors";
 import { AiQualityCard } from "../components/admin/AiQualityCard";
-import { LoadError } from "../components/ui";
+import { FeedbackQueueCard } from "../components/admin/FeedbackQueueCard";
+import { RefusalAuditCard } from "../components/admin/RefusalAuditCard";
+import { SchoolsCard } from "../components/admin/SchoolsCard";
+import { VersionsCard } from "../components/admin/VersionsCard";
 import { t } from "../i18n";
 import { roleLabel } from "../lib/roles";
 import { useDebounced } from "../lib/useDebounced";
-import { formatServerDateTime } from "../lib/datetime";
-import type {
-  AdminOverview,
-  AdminSchoolStats,
-  AdminUsersPage,
-  ContentVersionRow,
-  FeedbackQueuePage,
-  RefusalAudit,
-  SchoolInviteAdmin,
-  UserPublic,
-} from "../types";
+import type { AdminOverview, AdminUsersPage, UserPublic } from "../types";
+
+/**
+ * F-094 split: the schools/invites, feedback-triage, refusal-audit and
+ * content-version cards live under components/admin/ now, each owning its
+ * state and fetch. This file keeps the overview, the maintenance action and
+ * the user table (the one card whose query key the page's refresh shares).
+ */
 
 // Every value RoleUpdateRequest accepts. school_admin was missing here, so the
 // table rendered a school_admin row with the first option ("student") selected
@@ -37,7 +29,6 @@ const ROLES = [
   "school_admin",
   "admin",
 ] as const;
-const INVITE_ROLES = ["teacher", "school_admin"] as const;
 
 function errOf(err: unknown): string {
   return (
@@ -56,21 +47,6 @@ export default function AdminDashboard() {
   const [purgeBusy, setPurgeBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const LIMIT = 20;
-
-  // admin center -- schools + stats, invite management, content versions.
-  const [invites, setInvites] = useState<SchoolInviteAdmin[]>([]);
-  const [selSchool, setSelSchool] = useState<number | null>(null);
-  const [schoolName, setSchoolName] = useState("");
-  const [inviteRoles, setInviteRoles] = useState<Record<number, string>>({});
-  const [inviteCode, setInviteCode] = useState<string | null>(null);
-  const [admMsg, setAdmMsg] = useState<string | null>(null);
-
-  // feedback triage queue + audited impersonation launch.
-  const [triageStatus, setTriageStatus] = useState<"open" | "all">("open");
-  const [queue, setQueue] = useState<FeedbackQueuePage | null>(null);
-  const [triageErr, setTriageErr] = useState<string | null>(null);
-  const [notes, setNotes] = useState<Record<number, string>>({});
-  const [triageMsg, setTriageMsg] = useState<string | null>(null);
 
   // F-023: the search box keys a DEBOUNCED query, so a typed burst fires one
   // request instead of five authenticated calls per keystroke (and a
@@ -93,28 +69,9 @@ export default function AdminDashboard() {
     queryKey: ["admin-overview"],
     queryFn: () => get<AdminOverview>("/admin/analytics/overview"),
   });
-  // center cards ride the same refresh; auxiliary on failure.
-  const schoolsQuery = useQuery({
-    queryKey: ["admin-schools"],
-    queryFn: () => get<AdminSchoolStats[]>("/admin/schools/stats"),
-  });
-  const versionsQuery = useQuery({
-    queryKey: ["admin-versions"],
-    queryFn: () => get<ContentVersionRow[]>("/admin/content/versions"),
-  });
-  // The refusal card treats "no data yet" as loading (F-027, out of scope
-  // here): preserve the swallow-to-null so a failure keeps that state.
-  const refusalsQuery = useQuery({
-    queryKey: ["admin-refusals"],
-    queryFn: () =>
-      get<RefusalAudit>("/admin/safety/refusals").catch(() => null),
-  });
 
   const page = usersQuery.data ?? { total: 0, items: [] };
   const overview = overviewQuery.data ?? null;
-  const schools = schoolsQuery.data ?? [];
-  const versions = versionsQuery.data ?? [];
-  const refusals = refusalsQuery.data ?? null;
   // A failed primary fetch must be visible, exactly as the old Promise.all
   // catch showed it.
   const loadError =
@@ -135,35 +92,6 @@ export default function AdminDashboard() {
     }
   }, [queryClient]);
 
-  const loadTriage = useCallback(() => {
-    getFeedbackQueue(triageStatus)
-      .then((page) => {
-        setQueue(page);
-        setTriageErr(null);
-      })
-      .catch((err: unknown) => {
-        // Show the failure: leaving `queue` null renders "loading" forever,
-        // which reads as a slow network and hides a broken triage queue.
-        setQueue(null);
-        setTriageErr(errOf(err));
-      });
-  }, [triageStatus]);
-
-  useEffect(() => {
-    loadTriage();
-  }, [loadTriage]);
-
-  async function doTriage(id: number, triaged: boolean) {
-    setTriageMsg(null);
-    try {
-      const note = (notes[id] ?? "").trim();
-      await triageFeedback(id, note ? { triaged, note } : { triaged });
-      loadTriage();
-    } catch (err) {
-      setTriageMsg(errOf(err));
-    }
-  }
-
   async function doImpersonate(user: UserPublic) {
     const reason = window.prompt(t("impReasonPrompt"));
     if (reason === null || reason.trim().length < 3) return;
@@ -176,20 +104,6 @@ export default function AdminDashboard() {
       setError(errOf(err));
     }
   }
-
-  const loadInvites = useCallback(() => {
-    if (selSchool === null) {
-      setInvites([]);
-      return;
-    }
-    get<SchoolInviteAdmin[]>(`/admin/schools/${selSchool}/invites`)
-      .then((rows) => setInvites(rows))
-      .catch(() => setInvites([]));
-  }, [selSchool]);
-
-  useEffect(() => {
-    loadInvites();
-  }, [loadInvites]);
 
   async function changeRole(user: UserPublic, role: string) {
     if (role === user.role) return;
@@ -218,45 +132,6 @@ export default function AdminDashboard() {
       setPurgeMsg(errOf(err));
     } finally {
       setPurgeBusy(false);
-    }
-  }
-
-  async function addSchool(e: React.FormEvent) {
-    e.preventDefault();
-    if (schoolName.trim().length < 2) return;
-    setError(null);
-    try {
-      await post("/admin/schools", { name: schoolName.trim() });
-      setSchoolName("");
-      refresh();
-    } catch (err) {
-      setError(errOf(err));
-    }
-  }
-
-  async function createInvite(schoolId: number) {
-    setAdmMsg(null);
-    setInviteCode(null);
-    try {
-      const res = await post<{ code: string }>(`/schools/${schoolId}/invites`, {
-        role: inviteRoles[schoolId] ?? "teacher",
-      });
-      setInviteCode(res.code);
-      if (schoolId === selSchool) loadInvites();
-    } catch (err) {
-      setAdmMsg(errOf(err));
-    }
-  }
-
-  async function revokeInvite(inviteId: number) {
-    if (selSchool === null) return;
-    setAdmMsg(null);
-    try {
-      await del(`/admin/schools/${selSchool}/invites/${inviteId}`);
-      setAdmMsg(t("admRevoked"));
-      loadInvites();
-    } catch (err) {
-      setAdmMsg(errOf(err));
     }
   }
 
@@ -341,348 +216,13 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      {/* refusal audit -- why/where safety refusals happened (counts only). */}
-      <div className="card">
-        <h2>{t("admSafety")}</h2>
-        {refusals === null ? (
-          <p className="muted" role="status">
-            {t("loading")}
-          </p>
-        ) : (
-          <>
-            <div className="stat-row">
-              <div className="stat">
-                <div className="num">{refusals.total_refusals}</div>
-                <div className="lbl">{t("admRefusals")}</div>
-              </div>
-            </div>
-            {refusals.total_refusals === 0 ? (
-              <p className="muted">{t("admNoRefusals")}</p>
-            ) : (
-              <>
-                <div className="table-wrap">
-                  <table className="data">
-                    <thead>
-                      <tr>
-                        <th scope="col">{t("admRefusalReason")}</th>
-                        <th scope="col">{t("admRefusals")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Object.entries(refusals.by_reason).map(([reason, n]) => (
-                        <tr key={reason}>
-                          <td>{reason}</td>
-                          <td>{n}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="muted">
-                  {Object.entries(refusals.by_class).map(([cls, n]) => (
-                    <span key={cls} className="mr-2">
-                      {`${t("admRefusalClass")} ${cls}: ${n}`}
-                    </span>
-                  ))}
-                </p>
-                {refusals.last_refusal_at && (
-                  <p className="muted">
-                    {t("admLastRefusal")}:{" "}
-                    {formatServerDateTime(refusals.last_refusal_at)}
-                  </p>
-                )}
-              </>
-            )}
-          </>
-        )}
-      </div>
+      <RefusalAuditCard />
 
-      {/* feedback triage queue (reporter identity withheld, ). */}
-      <div className="card">
-        <h2>{t("admTriage")}</h2>
-        <div className="row-flex gap-2 mb-2">
-          <button
-            className={
-              triageStatus === "open" ? "primary small" : "secondary small"
-            }
-            onClick={() => setTriageStatus("open")}
-          >
-            {t("admTriageOpen")}
-          </button>
-          <button
-            className={
-              triageStatus === "all" ? "primary small" : "secondary small"
-            }
-            onClick={() => setTriageStatus("all")}
-          >
-            {t("admTriageAll")}
-          </button>
-          {queue && (
-            <span className="muted">
-              {t("admOpenCount", { n: queue.open_count, t: queue.total })}
-            </span>
-          )}
-        </div>
-        {triageMsg && (
-          <p className="error" role="alert">
-            {triageMsg}
-          </p>
-        )}
-        {triageErr ? (
-          <p className="error" role="alert">
-            {triageErr}{" "}
-            <button
-              className="btn btn-sm btn-ghost"
-              onClick={loadTriage}
-              aria-label={`${t("admTriage")} — ${t("retry")}`}
-            >
-              {t("retry")}
-            </button>
-          </p>
-        ) : queue === null ? (
-          <p className="muted" role="status">
-            {t("loading")}
-          </p>
-        ) : queue.rows.length === 0 ? (
-          <p className="muted">{t("admNoFeedback")}</p>
-        ) : (
-          <div className="table-wrap">
-            <table className="data">
-              <thead>
-                <tr>
-                  <th scope="col">#</th>
-                  <th scope="col">{t("role")}</th>
-                  <th scope="col">±</th>
-                  <th scope="col">{t("admNoteLabelShort")}</th>
-                  <th scope="col">{t("admStatus")}</th>
-                  <th scope="col"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {queue.rows.map((row) => (
-                  <tr key={row.id}>
-                    <td>{row.id}</td>
-                    <td>{roleLabel(row.role)}</td>
-                    <td>{row.rating > 0 ? "+" : row.rating < 0 ? "−" : "·"}</td>
-                    <td className="cell-wrap">
-                      {row.comment ?? "—"}
-                      {row.note && (
-                        <div className="muted">
-                          {t("admNoteLabel")}: {row.note}
-                        </div>
-                      )}
-                    </td>
-                    <td>
-                      {row.triaged ? t("admTriaged") : t("admTriageOpen")}
-                    </td>
-                    <td>
-                      <input
-                        value={notes[row.id] ?? ""}
-                        maxLength={500}
-                        placeholder={t("admNoteLabel")}
-                        aria-label={`${t("admNoteLabel")} #${row.id}`}
-                        onChange={(e) =>
-                          setNotes({ ...notes, [row.id]: e.target.value })
-                        }
-                      />{" "}
-                      {row.triaged ? (
-                        <button
-                          className="small secondary"
-                          onClick={() => doTriage(row.id, false)}
-                        >
-                          {t("admReopen")}
-                        </button>
-                      ) : (
-                        <button
-                          className="small primary"
-                          onClick={() => doTriage(row.id, true)}
-                        >
-                          {t("admMarkTriage")}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <FeedbackQueueCard />
 
-      <div className="card">
-        <h2>{t("admSchools")}</h2>
-        <form onSubmit={addSchool}>
-          <label htmlFor="nschool">{t("admNewSchool")}</label>
-          <input
-            id="nschool"
-            value={schoolName}
-            onChange={(e) => setSchoolName(e.target.value)}
-            minLength={2}
-            maxLength={200}
-            required
-          />
-          <button className="primary small" type="submit">
-            {t("admCreateSchool")}
-          </button>
-        </form>
-        {inviteCode && (
-          <p role="status">
-            {t("admInviteOnce")} <code>{inviteCode}</code>
-          </p>
-        )}
-        {admMsg && (
-          <p className="muted" role="status">
-            {admMsg}
-          </p>
-        )}
-        {schoolsQuery.isError ? (
-          <LoadError
-            message={errOf(schoolsQuery.error)}
-            onRetry={() => void schoolsQuery.refetch()}
-          />
-        ) : schools.length === 0 ? (
-          <p className="muted">{t("admNoSchools")}</p>
-        ) : (
-          <div className="table-wrap">
-            <table className="data">
-              <thead>
-                <tr>
-                  <th scope="col">{t("admNewSchool")}</th>
-                  <th scope="col">{t("admCode")}</th>
-                  <th scope="col">{t("sdTeachers")}</th>
-                  <th scope="col">{t("admClassrooms")}</th>
-                  <th scope="col">{t("students")}</th>
-                  <th scope="col">{t("admSessions7d")}</th>
-                  <th scope="col">{t("admInvite")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {schools.map((s) => (
-                  <tr key={s.id}>
-                    <td className="cell-wrap-sm">
-                      <button
-                        className="small secondary"
-                        onClick={() =>
-                          setSelSchool(s.id === selSchool ? null : s.id)
-                        }
-                        aria-label={`${s.name} ${t("admInvites")}`}
-                      >
-                        {s.name}
-                      </button>
-                    </td>
-                    <td>{s.code}</td>
-                    <td>{s.teachers}</td>
-                    <td>{s.classrooms}</td>
-                    <td>{s.students}</td>
-                    <td>{s.sessions_7d}</td>
-                    <td>
-                      <select
-                        value={inviteRoles[s.id] ?? "teacher"}
-                        onChange={(e) =>
-                          setInviteRoles({
-                            ...inviteRoles,
-                            [s.id]: e.target.value,
-                          })
-                        }
-                        aria-label={`${s.name} ${t("role")}`}
-                      >
-                        {INVITE_ROLES.map((r) => (
-                          <option key={r} value={r}>
-                            {roleLabel(r)}
-                          </option>
-                        ))}
-                      </select>{" "}
-                      <button
-                        className="small primary"
-                        onClick={() => createInvite(s.id)}
-                      >
-                        {t("admInvite")}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {selSchool !== null && (
-          <div className="table-wrap">
-            <table className="data">
-              <caption>{t("admInvites")}</caption>
-              <thead>
-                <tr>
-                  <th scope="col">{t("role")}</th>
-                  <th scope="col">{t("admStatus")}</th>
-                  <th scope="col">{t("admCreated")}</th>
-                  <th scope="col"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {invites.map((i) => (
-                  <tr key={i.id}>
-                    <td>{roleLabel(i.role)}</td>
-                    <td>{i.used ? t("admUsed") : t("admActive")}</td>
-                    <td>{i.created_at.slice(0, 10)}</td>
-                    <td>
-                      {!i.used && (
-                        <button
-                          className="small secondary"
-                          onClick={() => revokeInvite(i.id)}
-                        >
-                          {t("admRevoke")}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <SchoolsCard onChanged={refresh} onError={setError} />
 
-      <div className="card">
-        <h2>{t("admVersions")}</h2>
-        {versionsQuery.isError ? (
-          <LoadError
-            message={errOf(versionsQuery.error)}
-            onRetry={() => void versionsQuery.refetch()}
-          />
-        ) : versions.length === 0 ? (
-          <p className="muted">{t("admNoVersions")}</p>
-        ) : (
-          <div className="table-wrap">
-            <table className="data">
-              <thead>
-                <tr>
-                  <th scope="col">{t("admSubject")}</th>
-                  <th scope="col">{t("admChapter")}</th>
-                  <th scope="col">{t("admVersion")}</th>
-                  <th scope="col">{t("admSource")}</th>
-                  <th scope="col">{t("email")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {versions.map((v) => (
-                  <tr key={`${v.subject}-${v.class_level}-${v.chapter}`}>
-                    <td>
-                      {v.subject} · {v.class_level}
-                    </td>
-                    <td className="cell-wrap-sm">{v.chapter}</td>
-                    <td>
-                      v{v.current_version} ({v.versions_total})
-                    </td>
-                    <td>{v.source}</td>
-                    <td className="cell-wrap-sm">
-                      {v.updated_by_email ?? "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <VersionsCard />
 
       <div className="card">
         <h2>{t("searchEmail")}</h2>

@@ -1,12 +1,16 @@
 /**
- * F-094 (FE-03): eight page components exceed the 500-line review budget the
+ * F-094 (FE-03): eight page components exceeded the 500-line review budget the
  * audit set (AITutorPage was the first one split; its sections live under
  * pages/student/tutor/ now, LearnPage's reader and workspace tabs under
- * pages/student/learn/). The remaining six are each a body of work that
- * belongs in its own reviewed change, so this is the ratchet that keeps the
- * queue from growing while they land: every page is capped at the size it has
- * today, a file that is split MUST lower its ceiling in the same change, and a
- * page added from now on must fit the 500-line budget outright.
+ * pages/student/learn/). QuizPage (832 -> 488) and AdminDashboard (797 -> 337)
+ * were split in the wave-2 close-out: QuizPage's screens and panels live under
+ * pages/student/quiz/, AdminDashboard's cards under components/admin/. The
+ * remaining four over the budget (MePage 793, CreatePage 704, ClassesPage 685,
+ * AssessmentsPage 623) are each a body of work that belongs in its own
+ * reviewed change, so this is the ratchet that keeps the queue from growing
+ * while they land: every page is capped at the size it has today, a file that
+ * is split MUST lower its ceiling in the same change, and a page added from
+ * now on must fit the 500-line budget outright.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -17,7 +21,7 @@ const BUDGET = 500;
 
 /** Recorded ceilings: lower on split, never raise. */
 const CEILING: Record<string, number> = {
-  "AdminDashboard.tsx": 797,
+  "AdminDashboard.tsx": 337,
   "ForgotResetPage.tsx": 185,
   "LegalPage.tsx": 127,
   "LoginPage.tsx": 353,
@@ -32,10 +36,16 @@ const CEILING: Record<string, number> = {
   "student/HomePage.tsx": 319,
   "student/LearnPage.tsx": 306,
   "student/MePage.tsx": 793,
-  "student/QuizPage.tsx": 832,
+  "student/QuizPage.tsx": 488,
   "student/learn/ChapterAsk.tsx": 90,
   "student/learn/ChapterPractice.tsx": 174,
   "student/learn/LearnChapterPage.tsx": 481,
+  "student/quiz/AssignedPanel.tsx": 119,
+  "student/quiz/QuizResultScreen.tsx": 105,
+  "student/quiz/QuizRunner.tsx": 132,
+  "student/quiz/ReteachCards.tsx": 28,
+  "student/quiz/RevisionPanel.tsx": 50,
+  "student/quiz/StartQuizCard.tsx": 89,
   "student/tutor/AssistantContent.tsx": 40,
   "student/tutor/EvidenceModal.tsx": 33,
   "student/tutor/TutorComposer.tsx": 179,
