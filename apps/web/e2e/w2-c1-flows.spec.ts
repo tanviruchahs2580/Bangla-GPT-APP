@@ -1,4 +1,11 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
+import {
+  extractClientCalls,
+  missingFromSchema,
+  type OpenApiSchema,
+} from "../src/lib/apiContract";
 import {
   COMPOSER_LABEL,
   openRoute,
@@ -195,7 +202,7 @@ test("STU-07 image question: valid, wrong-type, oversized and corrupted attachme
     buffer: Buffer.from(PNG_1PX, "base64"),
   });
   await expect(page.locator(".attach-preview")).toBeVisible();
-  await page.getByRole("button", { name: "সমাধান করো" }).click();
+  await page.getByRole("button", { name: "সমাধান করো", exact: true }).click();
   // The mock provider cannot see images; the honest refusal is the answer.
   await expectAssistantText(page, "ছবি থেকে উত্তর দেওয়া এখনো সম্ভব হয়নি");
   expect(streamRequests).toBeGreaterThan(0);
@@ -208,7 +215,7 @@ test("STU-07 image question: valid, wrong-type, oversized and corrupted attachme
     buffer: Buffer.from("this is not a png at all"),
   });
   await expect(page.locator(".attach-preview")).toBeVisible();
-  await page.getByRole("button", { name: "সমাধান করো" }).click();
+  await page.getByRole("button", { name: "সমাধান করো", exact: true }).click();
   await expect(errorLine).toContainText("পড়া যায়নি", { timeout: 60_000 });
   expect(streamRequests).toBeGreaterThan(before);
 
