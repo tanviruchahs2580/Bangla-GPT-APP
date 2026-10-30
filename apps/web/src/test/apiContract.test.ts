@@ -6,12 +6,30 @@
  * stops matching cannot make the live check vacuous. The fixture strings
  * mirror the shapes that actually occur in `src/api.ts` and the pages.
  */
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   extractClientCalls,
   missingFromSchema,
   openApiOperations,
 } from "../lib/apiContract";
+
+function clientSourceText(): string {
+  const files: string[] = [];
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (!["node_modules", "test"].includes(entry.name)) walk(path);
+      } else if (/\.(ts|tsx)$/.test(entry.name)) {
+        files.push(path);
+      }
+    }
+  };
+  walk(join(process.cwd(), "src"));
+  return files.map((file) => readFileSync(file, "utf8")).join("\n");
+}
 
 describe("normalizePath", () => {
   it("turns path parameters into {param} and drops query strings", () => {
@@ -87,5 +105,32 @@ describe("missingFromSchema", () => {
     const operations = openApiOperations(schema);
     expect(operations.has("get /learn/subjects/{param}/chapters")).toBe(true);
     expect(operations.has("get /learn/topics/{param}/chapters")).toBe(false);
+  });
+});
+
+/**
+ * F-157 residual: the extractor's own cases above run on fixtures, and the
+ * live schema comparison needs servers (e2e). These cases run the extractor
+ * over the shipped client sources, so regex rot or a client call that stops
+ * being a plain literal fails here too -- next to the code that parses it.
+ */
+describe("the extractor against the shipped client", () => {
+  const calls = extractClientCalls(clientSourceText());
+  const keys = new Set(calls.map((c) => `${c.method} ${c.path}`));
+
+  it("still finds the >60 calls the e2e floor claims", () => {
+    expect(calls.length).toBeGreaterThan(60);
+  });
+
+  it("finds the release-critical calls", () => {
+    for (const expected of [
+      "post /auth/register",
+      "post /auth/login",
+      "get /users/me",
+      "post /tutor/conversations/{param}/messages/stream",
+      "post /quizzes/{param}/submit",
+    ]) {
+      expect(keys.has(expected), `missing ${expected}`).toBe(true);
+    }
   });
 });
