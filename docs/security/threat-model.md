@@ -52,6 +52,7 @@ Threats: credential stuffing and brute force; token forgery or replay; session
 theft persistence; account enumeration through error differences.
 
 Controls:
+
 - Argon2id at the OWASP parameters (`auth/security.py:9-22,159-165`).
 - Login throttling 10/min per IP, MFA challenge 5/min, lockout counters (`config.py:218-219`; `routers/auth.py:336-371`).
 - JWT HS256 pinned, `iss`/`aud` required, unique `jti` on every access token, per-token deny-list and an epoch invalidation stamp (`auth/security.py:218-251,257-266`; `routers/deps.py:187-196`).
@@ -62,6 +63,7 @@ Controls:
 - Shared-password test accounts cannot be published to a real database: the e2e seeder refuses unless ENV names a development/CI lane (`apps/web/e2e/seed_e2e_users.py:88-107`; `tests/test_qa_e2e_seeder_guard.py`, FIXED ab84a94).
 
 Partial / open:
+
 - `POST /auth/register` answers 409 `email_taken`, an enumeration oracle the other credential routes do not have (F-SEC-3, owner decision).
 - Password floor is 8 characters with no tracked NIST citation (F-SEC-2, owner decision).
 
@@ -72,6 +74,7 @@ age-inappropriate output; PII reaching the provider; provider outage; cost
 abuse.
 
 Controls:
+
 - Query screen with six refusal categories plus an academic-context exception (`services/safety.py:25-106`); injection patterns refuse before retrieval.
 - Corpus-side: instruction-override sentences removed at ingest; `<evidence>` and `<user_question>` delimiters sanitized; the system prompt declares both as quoted data and forbids disclosing its own instructions (`services/safety.py:139-207`; `services/tutor.py:104-122,132-141`).
 - Pasted phone/email/NID redacted before the provider call (`services/pii.py:29`; `services/tutor.py:160-198`).
@@ -82,6 +85,7 @@ Controls:
 - Red-team gate: 23/23 probes refused with no leak markers (SEC-20, E-SEC-20-1); `tests/test_injection_screen.py`, `tests/test_injection_guard.py`, `tests/test_chat_route_safety.py`, `tests/test_safety_v2.py`.
 
 Partial / open:
+
 - Tutor answers are not output-screened, only teacher-path outputs are (F-LLM-2); no hate or bullying category (F-LLM-1); text inside an image is not declared untrusted data (F-LLM-3).
 - Live-model behaviour is UNVERIFIED-LIVE; all injection evidence is hermetic.
 
@@ -91,6 +95,7 @@ Threats: malicious file upload; metadata (GPS, device) leakage; an image
 carrying smuggled instructions into the model.
 
 Controls:
+
 - The only upload path is an inline image on a chat turn; there is no multipart upload endpoint (SEC-12, E-SEC-12-1).
 - Mime allow-list (png/jpeg/webp), strict base64 decode, 1.5 MB cap, and magic-byte sniffing that rejects a declared/actual mismatch (`routers/common.py:218-221,242-300`).
 - Server-side Pillow re-encode strips EXIF/GPS and bounds pixel count before forwarding (`providers/image_safety.py:47,98-152`).
@@ -98,6 +103,7 @@ Controls:
 - `tests/test_chat_image_validation.py` and `tests/test_image_metadata_stripping.py` passed (25 assertions, E-LLM-12).
 
 Partial / open:
+
 - The attached image is not named in the prompt's data-only rules (F-LLM-3).
 - Real-image vision behaviour is UNVERIFIED-LIVE and the quality gate lives on a separate branch (`providers/image_safety.py:25-30`).
 
@@ -107,10 +113,12 @@ Threats: invite-code guessing; a leaked code staying redeemable; a guardian
 attaching to the wrong child; unattributed linking during incident review.
 
 Controls:
+
 - The code is 64-bit, stored hashed, single-use, atomic under redeem, TTL bounded, and the redeem endpoint is limited to 10/min per IP (`routers/parent.py:156,330`; `config.py:253`; SEC-06, E-SEC-06-1).
 - Linked guardians see progress only, never chat transcripts (audit PRIV inventory: parent access is "report only").
 
 Partial / open:
+
 - Create and redeem are not written to the audit trail, and a code cannot be revoked before its TTL (F-SEC-5).
 
 ### 4.5 Impersonation (support sessions)
@@ -119,10 +127,12 @@ Threats: abuse of a support session; confusion between an impersonated and a
 real session; persistence after sign-out.
 
 Controls:
+
 - Impersonation tokens are 15-minute, `jti`-bound, audited, and the UI shows an impersonation banner; sensitive routes refuse impersonated tokens via `forbid_impersonation` (`routers/auth.py:510-511,781-819`; `routers/deps.py:117-140`).
 - Renewal refuses impersonated tokens (`routers/auth.py:510-511`).
 
 Partial / open:
+
 - `POST /auth/logout` answers 204 for an impersonation token without revoking it — proven by probe (token still valid afterwards); the exit endpoint does revoke (F-SEC-6, E-SEC-07-1).
 
 ### 4.6 Tenancy and authorization
@@ -131,11 +141,13 @@ Threats: horizontal access across schools; role escalation; sequential-id
 enumeration.
 
 Controls:
+
 - Role guards with school scoping (`routers/deps.py:243,354-376,379-396`), a last-admin guard (`routers/admin.py:113`), and no self-escalation path (SEC-04, E-SEC-04-1).
 - 87 authorization/tenancy tests plus the OpenAPI auth matrix passed (E-SEC-04-1); `tests/test_school_tenancy_isolation.py`, `tests/test_openapi_auth_matrix.py`, `tests/test_school_admin_edges.py`.
 - Privileged actions are audited append-only with redacted detail (SEC-15, E-SEC-15-1).
 
 Partial / open:
+
 - Cross-tenant requests answer 403 `other_school` for existing objects but 404 for absent ones, an existence oracle across tenants (F-SEC-4).
 - `/auth/join-school` — unauthenticated and creating staff accounts — is not rate-limited (F-SEC-7).
 
@@ -145,6 +157,7 @@ Threats: data exfiltration through export; one account exhausting resources;
 destructive maintenance misuse; incomplete erasure.
 
 Controls:
+
 - Self-service export and erasure with password re-authentication (`routers/users.py:82-151,152-157`); erasure cascade verified by 44 targeted tests (PRIV-03, E-PRIV-3).
 - The export now carries the graded-answer record, the AI-memory preferences and each attempt's `quiz_json` (`services/gdpr.py:97,140,174,490-552`; `tests/test_qa_export.py`, FIXED 62fa487).
 - Purge windows documented and enforced (180/180/730/365 days) with dry-run and admin gate (PRIV-04, E-PRIV-3).
@@ -153,6 +166,7 @@ Controls:
 - Sentry events pass through the same redactor every log line uses before leaving the process (`initialize/observability.py:25-47`; `tests/test_qa_sentry_scrub.py`, FIXED fcb7e13).
 
 Partial / open:
+
 - `/users/me/export` and `/admin/reports/aggregate` are unrated (F-SEC-8).
 - The retention purge is neither confirmation-gated nor rate-limited (F-SEC-10).
 - Sentry has no user-facing consent gate; the web client still initialises without a scrubber (F-PRIV-7, web part open; the API `before_send` hook above is the API half).

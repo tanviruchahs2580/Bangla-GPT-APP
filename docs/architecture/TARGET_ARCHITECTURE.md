@@ -29,7 +29,7 @@
 
 ## 2. Layer Architecture
 
-```
+```text
 ┌──────────────────────────────────────────────────┐
 │  Web / PWA (React + Vite + Vercel)               │
 │  pages/ components/ lib/ hooks (inline)          │
@@ -79,7 +79,7 @@
 
 ## 3. AI/RAG Pipeline Boundary
 
-```
+```text
 User Query (bn/en)
     ↓
 normalize_query()        ← NFKC normalization (Unicode variant folding)
@@ -103,7 +103,7 @@ Response (with provenance)
 
 ## 4. Dependency Direction (enforced)
 
-```
+```text
 routers/  →  services/  →  providers/ / retrieval/ / db/
 services/ →  providers/ / retrieval/ / db/
 providers/ ← (leaf, no inbound from routers or services)
@@ -167,7 +167,7 @@ disagree.
 
 ## 8. Async Job Boundary
 
-```
+```text
 HTTP POST → return job_id (202)
     ↓
 ARQ queue (Redis-backed)
@@ -196,7 +196,7 @@ Cron jobs: `run_weekly_digest()`, `run_nightly_rollup()`, `run_retention_sweep()
 
 ## 10. Deployment Topology
 
-```
+```text
                     ┌─────────────┐
                     │   Vercel    │
                     │  (SPA +     │

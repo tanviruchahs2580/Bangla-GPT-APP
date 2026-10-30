@@ -13,7 +13,7 @@ and bn/en i18n with dark mode.
 `apps/web/package.json`; release tags, the GHCR image tags and this line follow
 it. Nothing else may carry a version number.
 
-- **Live web app:** https://bangla-gpt-app.vercel.app
+- **Live web app:** <https://bangla-gpt-app.vercel.app>
 - **Production API origin (FE-01):** the Vercel frontend forwards `/api/*`
   through an edge proxy (`apps/web/api/[[...path]].ts`) to the origin set in
   the `API_ORIGIN` project environment variable — no tunnel URL is baked into

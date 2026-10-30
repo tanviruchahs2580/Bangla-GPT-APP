@@ -31,7 +31,7 @@ curl http://127.0.0.1:8000/ready
 > `JWT_SECRET`; the pytest suite already uses 39-char test secrets, so its
 > warnings come only from the shortest-lived dev-default cases.
 
-Web dashboard (dev): `cd apps/web && npm ci && npm run dev` → http://localhost:5173
+Web dashboard (dev): `cd apps/web && npm ci && npm run dev` → <http://localhost:5173>
 (dev server proxies `/api/*` to `http://127.0.0.1:8000`). Production build: `npm run build`.
 
 ## 2. Staging / production deployment (docker compose)
@@ -152,7 +152,6 @@ mix of inline workers plus an ARQ cron still sends each weekly digest (and
 runs each nightly rollup) **at most once**; losers skip with `already_ran`.
 The digest needs working SMTP (`SMTP_ENABLED` + relay, §2 production list);
 without SMTP it logs `skipped=smtp_not_configured` instead of failing.
-
 
 ## 3. Database migrations
 
@@ -386,6 +385,7 @@ Quarterly rotation procedure:
 ## 10. v0.3 additions (chat, invites, retention)
 
 ### Secrets rotation (expanded)
+
 - `JWT_SECRET`: rotate via `python -c "import secrets;print(secrets.token_urlsafe(48))"`.
   Rotation invalidates all sessions (users simply log in again); do it in a
   maintenance window. Update the compose `.env` and restart `api`.
@@ -512,6 +512,7 @@ stable and removes this whole failure class; it needs the budget and residency s
 recorded in `docs/hosting_decision.md`.
 
 ### Capacity plan & load testing
+
 - Baseline: 2 uvicorn workers handle ~120 concurrent quiz journeys at
   p95<300 ms (DB-bound). The LLM path is upstream-bound: budget ~2-8 s p95
   per ask at free-tier quota; scale by upgrading tier / adding keys, not
@@ -520,17 +521,20 @@ recorded in `docs/hosting_decision.md`.
   before each release; thresholds inside fail on SLO breach.
 
 ### Data retention (D20)
+
 - Conversations older than `CHAT_RETENTION_DAYS` (default 180) are purged by
   `POST /admin/maintenance/purge` (admin-only). Schedule it daily:
   `0 3 * * * curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" http://api:8000/admin/maintenance/purge`
   or trigger from the admin dashboard button weekly until automated.
 
 ### Email verification
+
 - With `SMTP_ENABLED=true`, registration requires email verification before
   first login (`email_unverified` code drives UI copy + resend link).
 - Without SMTP, accounts auto-verify (dev/small deployments only).
 
 ### Support ops & SLA
+
 - Public status page: the web app serves `/status` from `GET /status`
   (presence/booleans only -- safe to link publicly; never exposes counts).
   Check the API directly with `curl http://api:8000/status`; a `degraded`

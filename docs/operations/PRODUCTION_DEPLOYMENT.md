@@ -64,7 +64,8 @@ docker compose --profile core up -d
 ```
 
 **Required environment variables** (`.env.production.example`):
-```
+
+```bash
 ENV=production
 LLM_PROVIDER=gemini
 GEMINI_API_KEY=<key>
@@ -135,7 +136,8 @@ All of these must pass for a successful deployment:
 ## 6. Reverse Proxy Configuration
 
 **Caddyfile** (`deploy/caddy/Caddyfile`):
-```
+
+```text
 domain {
     encode zstd gzip
     # Security headers (HSTS, X-Content-Type-Options, X-Frame-Options DENY)
@@ -219,6 +221,7 @@ bash scripts/smoke.sh
 ```
 
 Validates:
+
 1. `/health` → 200
 2. `/ready` → 200 (if provider configured)
 3. User registration (write path)

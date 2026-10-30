@@ -36,7 +36,7 @@ two install steps; CI runs the same commands in the `quickstart-windows` job.
 
 ## Branches and commits
 
-```
+```bash
 git switch main && git pull
 git switch -c fix/short-description
 ```
@@ -89,7 +89,7 @@ builds the same dependency set.
 
 When you change `pyproject.toml`, regenerate the lock in the same pull request:
 
-```
+```bash
 pip install pip-tools
 cd apps/api
 pip-compile --generate-hashes --allow-unsafe --extra dev --strip-extras
@@ -120,7 +120,7 @@ The `Dockerfile` pins `python:3.12-slim` to a digest, and the two explicitly
 installed Debian packages to the versions that digest resolves to. To move the
 base, re-resolve both and change them together:
 
-```
+```bash
 docker run --rm --entrypoint sh python:3.12-slim@sha256:<digest> \
   -c "apt-get update -qq && apt-cache policy openssl libssl3t64"
 ```

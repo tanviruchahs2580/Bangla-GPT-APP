@@ -62,7 +62,7 @@ hand edit that changes the items without the counts fails the gate.
 
 The split is a property of the item, not of a run:
 
-```
+```text
 dev  when sha256("20261029|question|class_level|subject") mod 3 == 0, else test
 ```
 
@@ -185,7 +185,7 @@ claim of this document.
 
 ## 8. Commands
 
-```
+```bash
 cd apps/api
 python -m bangla_gpt_api.evaluation.cli --check-golden      # integrity gate
 python -m bangla_gpt_api.evaluation.cli --build-golden-v3   # regenerate (reviewed act)

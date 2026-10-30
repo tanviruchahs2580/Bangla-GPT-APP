@@ -68,6 +68,7 @@ cd apps/api && alembic heads        # prints "<revision> (head)"
 (append-only — no downgrade-safe deletions).
 
 **Rules:**
+
 - Never delete or modify existing migration files
 - Always run `alembic upgrade head` in CI before tests
 - Use `--autogenerate` only for simple schema changes (verify diff carefully)
@@ -139,6 +140,7 @@ AI jobs/usage, …).
 **pgBackRest config:** `deploy/postgres/pgbackrest.conf`
 
 **Recovery scripts:**
+
 - `scripts/pg_backup.sh` — manual backup trigger
 - `scripts/pgbackrest_drill.sh` — DR drill
 - `scripts/restore_test.py` — verify restore integrity

@@ -5,11 +5,16 @@
   // follow anywhere: MD013 (80-column lines, while README tables and the
   // runbook carry long unbroken table rows and URLs) and MD060 (table pipe
   // spacing style, purely cosmetic). Both are disabled with this reason.
-  // Everything else is on: heading structure, list indentation, fence
-  // languages, bare URLs, broken in-document anchors and duplicate headings
-  // are the classes that actually mislead a reader.
+  // MD024 keeps duplicate headings in scope but only among siblings: the ADR
+  // log repeats the same section names (Context, Decision, ...) under each
+  // ADR's own H1, which is the point of the template, while a repeated
+  // heading under one parent still fails. Everything else is on: heading
+  // structure, list indentation, fence languages, bare URLs, broken
+  // in-document anchors and duplicate headings are the classes that actually
+  // mislead a reader.
   "config": {
     "MD013": false,
+    "MD024": { "siblings_only": true },
     "MD060": false
   },
   "globs": ["docs/**/*.md", "README.md", "CONTRIBUTING.md", "SECURITY.md"],

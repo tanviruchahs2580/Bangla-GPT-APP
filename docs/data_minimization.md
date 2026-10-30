@@ -7,6 +7,7 @@ engineering (self-review), 2026-10-29. **Bangladesh legal review is a human
 step and is NOT done here — see [`archive/PROGRESS.md`](archive/PROGRESS.md).**
 
 Legend:
+
 - **Retention**: `sweep=<n>d` = deleted by the retention job after `n` days
   (`services/retention.py`, nightly arq job + `POST /admin/maintenance/purge`);
   `token` = swept `expires_at + 30 days` (`TOKEN_GRACE_DAYS`); `erasure` =

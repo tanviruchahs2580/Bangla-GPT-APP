@@ -2,6 +2,7 @@
 
 **Target (master prompt):** pagination/N+1 audit; k6: 500 RPS read, 50 RPS
 write, p95 < 400 ms on **non-AI** endpoints. PASS = targets met **on staging**
+
 + this report saved. k6 is not installed on this machine, so the k6 script is
 a deliverable and the local numbers below come from an equivalent Python
 harness (a scratch load script, not committed to the tree — see
@@ -27,19 +28,19 @@ old code returned; caps only bind at the documented limit) so no client breaks.
 
 ### Documented, not changed (each with rationale)
 
-- `GET /admin/content/versions` (A8): admin-only, low QPS; full payload pull is
++ `GET /admin/content/versions` (A8): admin-only, low QPS; full payload pull is
   acceptable at current corpus size. Cap when content service grows.
-- Admin school-stats overview (B5): N+1 across schools, but school count is
++ Admin school-stats overview (B5): N+1 across schools, but school count is
   dozens at most; SQL `COUNT` rewrite when it grows.
-- `POST /admin/classrooms/import` (B6): one existence `SELECT` per CSV row —
++ `POST /admin/classrooms/import` (B6): one existence `SELECT` per CSV row —
   admin batch path, bounded by file upload size limit.
-- Quiz submit hot path (B7/B8): a few primary-key `db.get` lookups per submit;
++ Quiz submit hot path (B7/B8): a few primary-key `db.get` lookups per submit;
   PK hits, cheap.
-- Admin analytics / school overview aggregate views load rows then aggregate
++ Admin analytics / school overview aggregate views load rows then aggregate
   in Python; correct for now, `SQL COUNT`-native versions are the upgrade path.
-- Dashboard `/progress` scans `AnswerLog` via ORM rows (cached 60 s, S5.3) —
++ Dashboard `/progress` scans `AnswerLog` via ORM rows (cached 60 s, S5.3) —
   move to SQL aggregate + Redis when row counts climb.
-- `Assignment.attempts` JSON membership forces a scan; a link table
++ `Assignment.attempts` JSON membership forces a scan; a link table
   (`assignment_students`) is the proper fix, deliberately deferred (schema +
   migration + backfill for one admin-scale query).
 
@@ -47,15 +48,15 @@ old code returned; caps only bind at the documented limit) so no client breaks.
 
 ### Deliverable: `scripts/load/k6_scale.js`
 
-- Reads: constant-arrival 500 req/s over `/dashboard/summary` (40 %), `/search`
++ Reads: constant-arrival 500 req/s over `/dashboard/summary` (40 %), `/search`
   (25 %), `/revision/due` (20 %), `/health` (15 %) — all non-AI.
-- Writes: constant-arrival 50 req/s of `POST /learn/progress` (DB upsert).
++ Writes: constant-arrival 50 req/s of `POST /learn/progress` (DB upsert).
   `POST /events` is **excluded**: its by-design 60/min/IP limiter was observed
   answering 429 from a single generator IP, so including it would measure the
   limiter, not the API.
-- Thresholds (PASS-WHEN): `http_req_duration{mix:read} p(95)<400`,
++ Thresholds (PASS-WHEN): `http_req_duration{mix:read} p(95)<400`,
   same for `{mix:write}`, `http_req_failed rate<0.01`.
-- `setup()` logs in **once** (login is limited to 10/min by design) and reuses
++ `setup()` logs in **once** (login is limited to 10/min by design) and reuses
   the JWT; run against staging with pre-provisioned throwaway student creds:
   `k6 run -e BASE_URL=https://STAGING -e LOAD_EMAIL=... -e LOAD_PASSWORD=... scripts/load/k6_scale.js`
 
@@ -92,9 +93,9 @@ staging (Postgres + N API replicas + Caddy + Redis caches).
 
 ### Verdict
 
-- **Local: PASS for the audit half** (unbounded reads capped, N+1s batched,
++ **Local: PASS for the audit half** (unbounded reads capped, N+1s batched,
   pinned by tests; 4-worker box holds p95 < 400 ms up to ~75 RPS on this mix).
-- **500/50 RPS @ p95<400 ms: NOT met locally and not claimable locally** —
++ **500/50 RPS @ p95<400 ms: NOT met locally and not claimable locally** —
   measurement environment is one laptop + SQLite. The k6 script + staging
   instructions above are the ready-made gate; run when staging credentials exist.
 

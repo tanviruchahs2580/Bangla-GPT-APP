@@ -13,7 +13,7 @@ Regenerate the tables with `.qa-work/evidence/E-W2-BE-env/gen_env_matrix.py`
 
 | Variable | Purpose / production guidance | Default | Required | .env.example | .env.production.example | compose | Code |
 |---|---|---|---|---|---|---|---|
-| ADMIN_EMAIL | Bootstrap admin created at startup ONLY if both are set and no admin exists. In production both are REQUIRED and ADMIN_PASSWORD must be >=12 chars. | None | - | admin@example.com | admin@example.com | yes | config.py:145 |
+| ADMIN_EMAIL | Bootstrap admin created at startup ONLY if both are set and no admin exists. In production both are REQUIRED and ADMIN_PASSWORD must be >=12 chars. | None | - | <admin@example.com> | <admin@example.com> | yes | config.py:145 |
 | ADMIN_PASSWORD | At least 12 characters; forced rotation on first login is enabled by default. | None | - | - | - | yes | config.py:146 |
 | AI_GENERATION_ENABLED | F-031 AI kill switch: false stops tutor/chat generation (answers a localized refusal, refused_reason=ai_generation_disabled) while retrieval, /search, the reader and quizzes keep working; set back to true to resume generation. | True | - | true | true | yes | config.py:113 |
 | AI_JOBS_RETENTION_DAYS | F-007: finished AI jobs (ready\|failed) age out; in-flight rows never do. | 30 | - | 30 | - | - | config.py:209 |
@@ -22,7 +22,7 @@ Regenerate the tables with `.qa-work/evidence/E-W2-BE-env/gen_env_matrix.py`
 | AI_JOB_RETRY_BACKOFF_SECONDS | First backoff delay in seconds; doubles per attempt, capped at 4s. | 0.5 | - | 0.5 | - | - | config.py:220 |
 | AI_MONTHLY_BUDGET_USD_PER_USER | looping or abusive account would be bounded only by 30 requests/minute. 5 is a conservative starting point for a student account; measure real usage in /admin/ai/quality and raise deliberately. Generation stops with a coded 429 ai_budget_exceeded when the month's ledger reaches the cap. | 0.0 | - | (commented) 0 | 5 | yes | config.py:106 |
 | AI_USAGE_RETENTION_DAYS | The AI spend ledger. The budget math only reads the current month, so a year of history is generous for dashboards and audits while keeping the table bounded for accounts that live for years. | 365 | - | 365 | - | - | config.py:204 |
-| ALLOWED_ORIGINS | talks to this API directly (docs/mobile_release.md): without them the WebView's CORS preflight is answered 400 and login fails inside the app while the same account works in a desktop browser (measured live, 2026-10-25). Drop the last two if you ship web-only. | '' | - | http://localhost:5173 | https://tutor.example.edu.bd,capacitor://localhost,https://localhost | yes | config.py:150 |
+| ALLOWED_ORIGINS | talks to this API directly (docs/mobile_release.md): without them the WebView's CORS preflight is answered 400 and login fails inside the app while the same account works in a desktop browser (measured live, 2026-10-25). Drop the last two if you ship web-only. | '' | - | <http://localhost:5173> | `https://tutor.example.edu.bd,capacitor://localhost,https://localhost` | yes | config.py:150 |
 | ALLOW_BUNDLED_SAMPLE_CORPUS_IN_PRODUCTION | boot that way when a billable provider (gemini/openai) is configured, so point NCTB_CORPUS_DIR at the built corpus. Offline demos that deliberately serve the sample (together with LLM_PROVIDER=mock and ALLOW_MOCK_LLM_IN_PRODUCTION=true) set this instead: | False | - | (commented) false | (commented) true | - | config.py:263 |
 | ALLOW_DIRECT_PARENT_LINK | Legacy bare-ID parent linking (insecure; invite-code flow is the default) | False | - | false | false | yes | config.py:231 |
 | ANALYTICS_RETENTION_DAYS | Product analytics trail (analytics_events). The table is swept on the same schedule; the account-erasure path also drops the user_id attribution. | 180 | - | 180 | 180 | yes | config.py:196 |
@@ -72,10 +72,10 @@ Regenerate the tables with `.qa-work/evidence/E-W2-BE-env/gen_env_matrix.py`
 | RATE_LIMIT_TUTOR_PER_MINUTE | Per-user budget for the /tutor/* chat routes; an IP scope would let one school NAT lock out a classroom. | 30 | - | 30 | 30 | yes | config.py:158 |
 | REDIS_URL | Shared cache, limiter and token-revocation store; required when RATE_LIMIT_BACKEND=redis or JOBS_BACKEND=arq. | None | - | - | redis://redis:6379/0 | yes | config.py:163 |
 | RETRIEVAL_MODE | GEMINI_FAST_MODEL= # S4.2 router: model for SIMPLE routes (empty = main model serves all) | 'hybrid' | - | hybrid | hybrid # S4.3: hybrid = BM25+vector RRF+rerank; bm25 = v1 baseline | yes | config.py:122 |
-| SENTRY_DSN | Error tracking (optional; both apps init Sentry when set). Sentinels are stripped from logs either way. | None | - | # https://xxx@xxx.ingest.sentry.io/xxx | - | yes | config.py:347 |
+| SENTRY_DSN | Error tracking (optional; both apps init Sentry when set). Sentinels are stripped from logs either way. | None | - | # <https://xxx@xxx.ingest.sentry.io/xxx> | - | yes | config.py:347 |
 | SENTRY_ENV | Sentry environment tag; set it to production explicitly or events are tagged environment=development (F-OBS-3). | 'development' | - | production | - | yes | config.py:348 |
 | SMTP_ENABLED | Turn password-reset e-mail on; when false the reset token is only printed outside production. | False | - | false | true | yes | config.py:234 |
-| SMTP_FROM | From: address on password-reset e-mail. | None | - | - | no-reply@example.edu.bd | yes | config.py:239 |
+| SMTP_FROM | From: address on password-reset e-mail. | None | - | - | <no-reply@example.edu.bd> | yes | config.py:239 |
 | SMTP_HOST | SMTP server for password-reset e-mail; used when SMTP_ENABLED=true. | None | - | - | smtp.example.edu.bd | yes | config.py:235 |
 | SMTP_PASSWORD | SMTP password; never commit a real value. | None | - | - | - | yes | config.py:238 |
 | SMTP_PORT | SMTP port (587 = submission with STARTTLS). | 587 | - | 587 | 587 | yes | config.py:236 |
