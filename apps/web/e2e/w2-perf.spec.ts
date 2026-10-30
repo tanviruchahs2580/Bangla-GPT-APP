@@ -203,11 +203,12 @@ test('JS heap after a long conversation does not grow without bound', async ({ p
   // newer one, so the seeded conversation -- created at harness boot and
   // therefore the oldest -- falls off the row in a full run. Open it through
   // the app's own history search, which spans every conversation of the
-  // student; "(120)" is the last seeded user turn, so exactly one hit.
+  // student; the seed numbers its 120 messages as 60 user/assistant pairs,
+  // so "(60)" is the last seeded user turn and exactly one hit.
   const historySearch = page.getByRole('textbox', {
     name: /ইতিহাস খুঁজুন|Search history/,
   })
-  await historySearch.fill('ব্যাখ্যা করো? (120)')
+  await historySearch.fill('ব্যাখ্যা করো? (60)')
   await historySearch.press('Enter')
   await page
     .getByRole('button', { name: new RegExp(LONG_HISTORY_TITLE) })
