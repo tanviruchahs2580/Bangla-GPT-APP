@@ -32,7 +32,11 @@ from typing import Any
 _BANGLA_DIGITS = str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789")
 #: Multiplication/division symbols models emit, normalised to ASCII operators.
 _OPERATOR_ALIASES = {"×": "*", "x": "*", "X": "*", "÷": "/", "−": "-", "–": "-"}
-_OPERATOR_RE = re.compile(r"[0-9+\-*/(). ]+")
+#: An operator-bearing numeric run. The lookarounds keep the run *standalone*:
+#: without them the digits inside an identifier ("variant1-0", "COVID-19")
+#: parse as arithmetic and derive an answer key that no option can match -- a
+#: false violation, which the module docstring rates worse than a missed one.
+_OPERATOR_RE = re.compile(r"(?<!\w)[0-9+\-*/(). ]+(?!\w)")
 _NUMBER_RE = re.compile(r"\d+(?:\.\d+)?")
 
 

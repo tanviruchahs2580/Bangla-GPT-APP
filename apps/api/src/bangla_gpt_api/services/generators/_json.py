@@ -1,6 +1,7 @@
 """shared JSON-object extraction for the generic generator contracts."""
 
 import json
+from typing import Any
 
 from bangla_gpt_api.providers.base import ProviderError
 
@@ -57,3 +58,21 @@ def require_echo(data: dict, *, class_level: int, subject: str, label: str) -> N
         raise ProviderError(f"{label} payload must echo subject {subject!r}")
     if data.get("class_level") != class_level:
         raise ProviderError(f"{label} payload must echo class_level {class_level}")
+
+
+def require_semantic_validation(kind: str, payload: Any, **expectations: Any) -> None:
+    """Fail closed on the semantic violations the shape parsers cannot see.
+
+    F-118: the parsers checked field presence, option count and index range,
+    never whether the four options were *distinct* or whether the payload
+    delivered the requested count -- a worksheet with two identical choices
+    parsed clean. Every generator that produces a validated payload calls
+    this after its parse step, so the semantic layer cannot be bypassed by a
+    new call site; the validator returns all violations at once and the whole
+    set is named in the refusal so a bad provider payload is diagnosable.
+    """
+    from bangla_gpt_api.evaluation.output_validation import validate_structured_output
+
+    violations = validate_structured_output(kind, payload, **expectations)
+    if violations:
+        raise ProviderError(f"{kind} payload failed semantic validation: " + "; ".join(violations))

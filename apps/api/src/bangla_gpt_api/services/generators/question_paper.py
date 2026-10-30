@@ -14,6 +14,7 @@ from bangla_gpt_api.retrieval.bm25 import tokenize
 from bangla_gpt_api.retrieval.hybrid import light_stem
 from bangla_gpt_api.services.context import RequestContext, set_current_context
 from bangla_gpt_api.services.generators._evidence import evidence_block
+from bangla_gpt_api.services.generators._json import require_semantic_validation
 from bangla_gpt_api.services.router import Route, set_current_route
 from bangla_gpt_api.services.safety import AGE_RULE_SENTENCE
 
@@ -300,5 +301,16 @@ async def generate_question_paper(
     set_current_route(Route.TOOL)
     raw = await provider.generate(prompt, system=QP_SYSTEM_PROMPT)
     questions = parse_qp_payload(raw, chapters, total_marks=marks)
+    # F-118: the shape parser accepts four non-empty options; the SPEC line
+    # asked for exact per-difficulty counts and distinct choices, so a payload
+    # with duplicate options or the wrong count must fail closed before the
+    # alignment/dedupe gate -- those gates judge content, not the key.
+    require_semantic_validation(
+        "question_paper",
+        questions,
+        expected_count=sum(counts.values()),
+        total_marks=marks,
+        counts=counts,
+    )
     meta = validate_paper(questions, counts, evidence, total_marks=marks)
     return questions, meta

@@ -11,7 +11,11 @@ from bangla_gpt_api.retrieval.base import RankingIndex
 from bangla_gpt_api.schemas import SourceRef
 from bangla_gpt_api.services.context import RequestContext, set_current_context
 from bangla_gpt_api.services.generators._evidence import evidence_blocks
-from bangla_gpt_api.services.generators._json import extract_json_object, require_echo
+from bangla_gpt_api.services.generators._json import (
+    extract_json_object,
+    require_echo,
+    require_semantic_validation,
+)
 from bangla_gpt_api.services.router import Route, set_current_route
 from bangla_gpt_api.services.safety import AGE_RULE_SENTENCE
 from bangla_gpt_api.services.tutor import sanitize_evidence
@@ -145,6 +149,9 @@ async def generate_worksheet(
     set_current_route(Route.TOOL)
     raw = await provider.generate(prompt, system=WORKSHEET_SYSTEM_PROMPT)
     payload = parse_worksheet_payload(raw, class_level=class_level, subject=subject)
+    # F-118: the shape parser accepts four non-empty options but not two
+    # identical ones, and the request carries no per-tier count to check.
+    require_semantic_validation("worksheet", payload)
     sources = [
         SourceRef(
             book=hit.chunk.meta.book,
