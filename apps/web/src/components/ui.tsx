@@ -1,8 +1,11 @@
 import {
+  cloneElement,
+  isValidElement,
   useEffect,
   useId,
   useRef,
   type ButtonHTMLAttributes,
+  type ReactElement,
   type ReactNode,
 } from "react";
 import { TrendingDown, TrendingUp, X } from "lucide-react";
@@ -264,7 +267,7 @@ export function Modal({
     // inside a role=button. Keyboard dismissal is Escape, handled by the
     // document listener above (and the dialog's own close button), which is
     // where a keyboard user reaches it.
-    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- the backdrop is a mouse dismissal surface, not a control; the keyboard dismissal is Escape (reason above)
     <div
       className="modal-backdrop"
       onClick={(e) => {
@@ -329,7 +332,16 @@ export function Skeleton({
   );
 }
 
-/** Label + control + error text, matching the .field contract. */
+/** Label + control + error text, matching the .field contract.
+ *
+ * F-060/A11Y-08: the hint and the error were visible text only — a screen
+ * reader heard the role=alert error but could not navigate back to the field
+ * it belonged to, and the hint was never announced with the control. The
+ * ids are generated here and handed to the wrapped control, so every form
+ * built on Field gets the association without each call site repeating it.
+ * A non-element child (or several) cannot receive props; those call sites
+ * keep their own ids.
+ */
 export function Field({
   label,
   htmlFor,
@@ -345,13 +357,39 @@ export function Field({
   children: ReactNode;
   className?: string;
 }) {
+  const id = useId();
+  const hintId = `${id}-hint`;
+  const errorId = `${id}-error`;
+  const describedBy =
+    [hint && !error ? hintId : null, error ? errorId : null]
+      .filter(Boolean)
+      .join(" ") || undefined;
+  const control = isValidElement(children)
+    ? cloneElement(children as ReactElement<Record<string, unknown>>, {
+        "aria-describedby":
+          describedBy ??
+          (children.props as { "aria-describedby"?: string })[
+            "aria-describedby"
+          ],
+        "aria-invalid":
+          error || (children.props as { "aria-invalid"?: boolean })[
+            "aria-invalid"
+          ]
+            ? true
+            : undefined,
+      })
+    : children;
   return (
     <div className={cn("field", !!error && "field-error", className)}>
       <label htmlFor={htmlFor}>{label}</label>
-      {children}
-      {hint && !error && <span className="field-hint">{hint}</span>}
+      {control}
+      {hint && !error && (
+        <span className="field-hint" id={hintId}>
+          {hint}
+        </span>
+      )}
       {error && (
-        <span className="field-error-text" role="alert">
+        <span className="field-error-text" role="alert" id={errorId}>
           {error}
         </span>
       )}

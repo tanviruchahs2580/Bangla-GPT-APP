@@ -107,6 +107,32 @@ describe("ui primitives", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("required");
   });
 
+  it("Field ties the error and the hint to the control it wraps", () => {
+    // F-060/A11Y-08: the announced error must also be reachable FROM the
+    // field, and the hint announced WITH it -- otherwise a screen reader
+    // hears a failure it cannot navigate back to.
+    const { rerender } = render(
+      <Field label={t("classLevel")} htmlFor="cls" hint="1-6">
+        <input id="cls" />
+      </Field>,
+    );
+    const input = screen.getByRole("textbox");
+    const hint = screen.getByText("1-6");
+    expect(input).toHaveAttribute("aria-describedby", hint.id);
+    expect(input).not.toHaveAttribute("aria-invalid");
+
+    rerender(
+      <Field label={t("classLevel")} htmlFor="cls" hint="1-6" error="required">
+        <input id="cls" />
+      </Field>,
+    );
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    // The error replaces the hint, and the description points at the alert.
+    const alert = screen.getByRole("alert");
+    expect(input).toHaveAttribute("aria-describedby", alert.id);
+    expect(screen.queryByText("1-6")).not.toBeInTheDocument();
+  });
+
   it("Segmented is a labelled toggle group: aria-pressed state + onChange", async () => {
     // role=group + aria-pressed, not tablist/tab: these pick a filter and have
     // no tabpanels, so a tablist role promised an arrow-key contract the
