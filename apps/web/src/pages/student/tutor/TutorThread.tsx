@@ -99,7 +99,12 @@ export function TutorThread({
         const showDay = day && day !== prevDay;
         return (
           <div
-            key={m.id || i}
+            // The in-flight placeholder bubbles carry id 0, so a bare
+            // `m.id || i` keys them by index — which collides with the real
+            // message whose id equals that index (every streamed turn warned
+            // "two children with the same key" once a thread had enough
+            // messages). The two namespaces below never intersect.
+            key={m.id ? `m-${m.id}` : `draft-${i}`}
             className={tight ? "chat-group-tight" : undefined}
           >
             {showDay && (
