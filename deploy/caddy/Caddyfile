@@ -23,6 +23,10 @@
 		X-Content-Type-Options nosniff
 		X-Frame-Options DENY
 		Referrer-Policy strict-origin-when-cross-origin
+		# SEC-10/F-193: the same restriction apps/web/vercel.json ships, so
+		# the self-hosted path does not leave camera/microphone/geolocation
+		# reachable by an injected script while Vercel blocks them.
+		Permissions-Policy "camera=(self), microphone=(self), geolocation=()"
 		-Server
 	}
 
