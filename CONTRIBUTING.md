@@ -26,6 +26,14 @@ only the rules that the CI cannot enforce for you.
 4. **Or in one step** — `make setup` runs 1–3 (GNU make + bash; see the
    Makefile header for the other targets).
 
+A fresh-clone bootstrap was measured end-to-end on 2026-10-30 (Windows 11,
+Git Bash, warm pip cache, ≈10.8 GiB free): clone 5 s → `python -m venv .venv`
+40 s → hash-locked install 263 s → editable install 24 s → `npm ci` 226 s →
+`npm run build` 65 s, ≈21 minutes in total, and the dev server answered
+`/health` and `/ready` 200 at the end. Disk after the installs: venv 258 MB,
+`apps/web/node_modules` 348 MB, `dist/` 4 MB. A cold pip/npm cache adds to the
+two install steps; CI runs the same commands in the `quickstart-windows` job.
+
 ## Branches and commits
 
 ```
@@ -39,6 +47,10 @@ git switch -c fix/short-description
   ("Add retry to the ingestion worker"), then a blank line, then the body.
   Explain *why* — the diff already says *what*. Reference the issue or the
   finding id when one exists (`Refs: #123`).
+- Commit with a GitHub noreply address (`<id>+<user>@users.noreply.github.com`),
+  not a personal one. A personal address in the author field is permanent in
+  published history (GIT-09/F-103); `.mailmap` maps the historic address for
+  display only, it does not rewrite the commits.
 - Do not commit secrets, `.env` files, real student data, or generated
   artefacts. `.env.example` is the template; copy it to `.env` locally.
 
