@@ -1064,6 +1064,22 @@ jobs:
           curl -fsS http://127.0.0.1:8080/live | grep -q '"status":"alive"'
           curl -fsS http://127.0.0.1:8080/ready | grep -q '"provider":"mock"'
 
+      - name: Insecure production boot is refused (typo'd ENV)
+        # The parked deploy contract (apps/api/eval/parked_specs/
+        # test_deploy_contracts.py) pins that CI executes the image's most
+        # valuable property: ENV=prodction is an unrecognized name, so the
+        # boot guard must treat it as production and refuse to start with
+        # the default secrets -- a typo'd ENV once booted production
+        # unguarded (test_env_gate.py pins the code side). Measured against
+        # the wave-2 image: exit 3, "Refusing to start" in the worker log.
+        run: |
+          set -e
+          if docker run --rm -e ENV=prodction bangla-gpt-api:ci > /tmp/refusal.log 2>&1; then
+            echo "::error title=Insecure boot accepted::ENV=prodction started the image"
+            exit 1
+          fi
+          grep -q "Refusing to start" /tmp/refusal.log
+
       - name: Generate image SBOM (per-PR inventory of what shipped)
         # F-078: release.yml owns the attested image SBOMs; this one makes the
         # cheap per-PR job prove the image contents can be inventoried at all
