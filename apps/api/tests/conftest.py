@@ -112,6 +112,31 @@ def _no_dotenv(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(field.upper(), raising=False)
 
 
+#: Varied Bangladeshi names (F-115): the audit found every fixture written in
+#: English, so no test exercised wide, matra-heavy names through the paths
+#: that render them -- mail headers (RFC 2047 wrapping), PDF text shaping and
+#: CSV/report cells. They carry the shapes that break naive width handling:
+#: মোছাম্মৎ (repeated shadda), জয়ন্তী (য় conjunct), সাইয়্যেদা (long with
+#: repeated ya), ইবনাত (nasal vowel signs). Kept in one place so a new
+#: export path can reuse the same adversarial set.
+BANGLA_NAMES = (
+    "মোছাম্মৎ নূরজাহান বেগম",
+    "আব্দুল্লাহ আল মামুন",
+    "জয়ন্তী রানী দাশ",
+    "মুহম্মদ ইউনুস",
+    "সাইয়্যেদা রুবাইয়া ইবনাত",
+    "নুসরাত জাহান তিশা",
+    "শাহরিয়ার কবির আহমেদ",
+    "তাহমিনা আক্তার",
+)
+
+
+@pytest.fixture
+def bangla_names() -> list[str]:
+    """The shared Bangladeshi fixture names, per test (never shared state)."""
+    return list(BANGLA_NAMES)
+
+
 @pytest.fixture(autouse=True)
 def _pg_test_isolation():
     """Truncate every table after each test when running on PostgreSQL.

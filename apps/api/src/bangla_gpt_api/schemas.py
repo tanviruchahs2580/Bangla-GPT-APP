@@ -10,6 +10,7 @@ from pydantic import (
     PlainSerializer,
     StrictBool,
     WithJsonSchema,
+    field_validator,
     model_serializer,
     model_validator,
 )
@@ -99,6 +100,33 @@ def reject_control_characters(value: str) -> str:
 
 #: A user-identity string: name, email, phone or invite code.
 IdentityText = Annotated[str, AfterValidator(reject_control_characters)]
+
+#: Bangladesh mobile in local or E.164 form, with the separators a person
+#: actually types on a phone keypad (spaces, dashes, parentheses). Mirrors the
+#: recogniser in services/pii._MOBILE_RE: one shape for the guardian-contact
+#: channel and the PII redactor.
+_BD_MOBILE_RE = re.compile(r"(?:\+?880|0)(1[3-9]\d{8})")
+
+
+def canonical_guardian_phone(value: str) -> str:
+    """Canonicalise a hand-typed Bangladeshi mobile number (F-115).
+
+    Accepts ``01[3-9]XXXXXXXX`` and its ``+880``/``880`` E.164 spellings and
+    returns the local form, so storage, the mailer and the PII redactor all
+    see the same string. Anything else -- a landline, a foreign number, a
+    stray digit string -- is refused with the stable ``invalid_phone`` error
+    type; before this the field accepted any 32-character string, and the
+    number a guardian typed was never checked against the format the rest of
+    the pipeline recognises.
+    """
+    compact = re.sub(r"[\s\-()]+", "", value or "")
+    match = _BD_MOBILE_RE.fullmatch(compact)
+    if match is None:
+        raise PydanticCustomError(
+            "invalid_phone",
+            "must be a Bangladesh mobile number (01[3-9]XXXXXXXX or +8801[3-9]XXXXXXXX)",
+        )
+    return f"0{match.group(1)}"
 
 
 class QuizExplainContext(BaseModel):
@@ -281,8 +309,17 @@ class RegisterRequest(BaseModel):
     # ValueError, which surfaced as an undocumented 422.
     guardian_consent: bool = False
     # optional guardian phone (parent role); stored encrypted when
-    # PII_ENC_KEY is configured.
+    # PII_ENC_KEY is configured. Validated and canonicalised to the local
+    # 01[3-9]XXXXXXXX form (F-115); a blank string stays None.
     phone: IdentityText | None = Field(default=None, max_length=32)
+
+    @field_validator("phone")
+    @classmethod
+    def _canonical_phone(cls, value: str | None) -> str | None:
+        stripped = (value or "").strip()
+        if not stripped:
+            return None
+        return canonical_guardian_phone(stripped)
 
 
 class RegisterResponse(BaseModel):
