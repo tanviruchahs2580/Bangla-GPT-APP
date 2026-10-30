@@ -87,6 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): ship only government-documented helplines in the self-harm refusal
 - fix(api): single-source the version fallback from pyproject
 - fix(api): stop the phone rule from masking request ids in logs
+- fix(api): stop the second redaction pass from destroying structured log lines
 - fix(api): validate and canonicalise the guardian phone, share Bangla name fixtures
 - fix(ci): stop splicing contexts into the deploy script and land the SEC-18 triage
 - fix(compose): forward the production boot-guard keys from .env
@@ -99,6 +100,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(pwa): the offline-shell spec discovers the cache by prefix; changelog regen
 - fix(scripts): make the smoke, backup and rolling-deploy scripts honest
 - fix(scripts): stop piping curl output into the interpreter
+- fix(web): delete the account with one navigation
 - fix(web): format and sort with the app language, not the device
 - fix(web): gate read-aloud on an installed Bengali voice
 - fix(web): give every route one outline and one page heading
@@ -119,9 +121,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): regenerate the lockfile root version to 0.9.3
 - fix(web): render teacher and offline counts through the numeral policy
 - fix(web): replace the last text-glyph icons with lucide marks
+- fix(web): require a chapter for evidence-backed generators
 - fix(web): restore the skip link and a main landmark on every route
+- fix(web): restore the time of day in the server formatter
 - fix(web): say a query failed instead of rendering it as empty
 - fix(web): scope offline copies to their user and bound the storage budget
+- fix(web): send the purge confirmation the API requires
 - fix(web): serve the offline retry script under the shipped CSP
 - fix(web): show localized copy when a chapter quiz fails to start
 - fix(web): state Argon2id and the real data flows in the privacy page
@@ -221,6 +226,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Tests
 
 - test(api),docs(qa): make the event-props guard engine-agnostic and correct the report's counts
+- test(api),docs: cover the auth race/degraded paths and regenerate the changelog
 - test(api): assert a refused admission leaves the generation lane usable
 - test(api): assert the messages route's real 200 instead of accepting either code
 - test(api): enforce per-module coverage floors on the critical paths
@@ -234,6 +240,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - test(api): remove the TTL-boundary race from the claim test
 - test(api): wave-2 suites for authz, mail verification, corpus identity and coverage
 - test(e2e): cover the audit flow matrix gaps
+- test(e2e): let the preview service-worker test register its worker
+- test(e2e): reconcile the wave-2 specs with the shipped app
 - test(scripts): catch an error-table key that left the dictionary
 - test(web): assert the ZWNJ form against the fold the app performs
 - test(web): carry BD-convention names through fixtures and the parent seed
@@ -272,6 +280,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Style
 
+- style(api): format the auth race-path tests
 - style(scripts): restore the blank line after the bn_scan docstring
 - style(scripts): state why the boto3 import carries a type ignore
 - style(tests,docs): satisfy the end-of-file and line-ending hooks

@@ -26,7 +26,8 @@ Current sources of truth live one level up (living docs):
   (the generated `../route_baseline.md` and the live `/openapi.json` are the
   full route list)
 - `../runbook.md` — operations runbook
-- `../qa/QA_REPORT_2026-10-29.md` — the single current QA record
+- `../qa/QA_REPORT_2026-10-30.md` — the single current QA record
+- `QA_REPORT_2026-10-29.md` — superseded 2026-10-30 by the record above
 - `QA_REPORT_2026-10-27.md` — superseded 2026-10-29 by the record above
   (this pointer is updated when a record is rotated into the archive; if the
   path does not resolve, read `../qa/` directly rather than trusting a name
