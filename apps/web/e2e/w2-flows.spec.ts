@@ -1086,12 +1086,12 @@ test("STU-15 invite code: regenerate yields a new code, redemption is single-use
   const second = (await page.locator(".invite-code").textContent())?.trim() ?? "";
   expect(second).toMatch(/^BGPT-[A-F0-9]{16}$/);
   expect(second).not.toBe(first);
-  const expires = await page
-    .locator(".card", { hasText: "Link a parent" })
-    .locator(".muted")
-    .last()
-    .textContent();
-  expect(expires ?? "").toMatch(/minute/i);
+  // F-IV2-3 added the live-code list to the same card, so the expiry line is
+  // no longer the last `.muted` element ("Active codes" is); assert the copy
+  // itself instead of a positional locator.
+  await expect(
+    page.locator(".card", { hasText: "Link a parent" }),
+  ).toContainText(/valid for [\d,]+ minutes/);
   await signOut(page);
 
   // Redeem the second code through the parent UI...
