@@ -29,25 +29,37 @@ async function focused(page: Page): Promise<string> {
   })
 }
 
+/**
+ * The ring predicate, evaluated in the page. Module scope so waitForFunction
+ * can serialise it (an inline closure capturing `page` cannot be).
+ */
+function ringVisible(): boolean {
+  const el = document.activeElement as HTMLElement | null
+  if (!el) return false
+  const style = getComputedStyle(el)
+  const outline =
+    style.outlineStyle !== 'none' && Number.parseFloat(style.outlineWidth || '0') > 0
+  return outline || style.boxShadow !== 'none'
+}
+
+/** Wait (bounded) for the frame that paints the ring; false when it never does. */
+async function ringAppears(page: Page, timeout = 250): Promise<boolean> {
+  try {
+    await page.waitForFunction(ringVisible, undefined, { timeout, polling: 25 })
+    return true
+  } catch {
+    return false
+  }
+}
+
 /** True when the focused element paints a focus indicator. */
 async function focusIsVisible(page: Page): Promise<boolean> {
-  const hasRing = () =>
-    page.evaluate(() => {
-      const el = document.activeElement as HTMLElement | null
-      if (!el) return false
-      const style = getComputedStyle(el)
-      const outline =
-        style.outlineStyle !== 'none' && Number.parseFloat(style.outlineWidth || '0') > 0
-      return outline || style.boxShadow !== 'none'
-    })
-  // Polls instead of sampling once: the `:focus-visible` ring is applied in the
-  // frame after the Tab, and on a loaded CI runner a single sample landed before
-  // it often enough to flake this suite (measured 2026-10-21 on two different
-  // stops). The assertion is unchanged -- a stop with no ring still fails.
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    if (await hasRing()) return true
-    await page.waitForTimeout(50)
-  }
+  // Waits on the ring's own signal instead of sampling plus a fixed sleep: the
+  // `:focus-visible` ring is applied in the frame after the Tab, and a single
+  // early sample flaked this suite on a loaded runner (measured 2026-10-21 on
+  // two different stops; F-160 converted the polling sleeps to this wait).
+  // The assertion is unchanged -- a stop with no ring still fails.
+  if (await ringAppears(page)) return true
   if (await isFocusVisible(page)) return false // the ring is genuinely absent
   // The stop holds focus without the browser's `:focus-visible` flag, which
   // means the focus was re-established programmatically (a re-render) rather
@@ -58,11 +70,7 @@ async function focusIsVisible(page: Page): Promise<boolean> {
   // nothing, the assertion fails as before.
   await page.keyboard.press('Shift+Tab')
   await page.keyboard.press('Tab')
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    if (await hasRing()) return true
-    await page.waitForTimeout(50)
-  }
-  return false
+  return ringAppears(page)
 }
 
 /** Whether the focused element carries the browser's keyboard-focus flag. */

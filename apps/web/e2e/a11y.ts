@@ -92,6 +92,22 @@ export async function openRoute(page: Page, route: string): Promise<void> {
   await page.evaluate(() => document.fonts.ready).catch(() => undefined);
 }
 
+/**
+ * Wait two animation frames after a style or DOM change.
+ *
+ * The layout has provably been applied once the next frame has rendered; this
+ * is the signal a screenshot or a geometry assertion needs, and it replaces
+ * the fixed sleeps those call sites used to carry (F-160).
+ */
+export async function settleLayout(page: Page): Promise<void> {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+}
+
 export interface AxeFinding {
   route: string;
   variant: string;

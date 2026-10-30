@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
-import { COMPOSER_LABEL, openRoute, signIn, useVariant } from './a11y'
+import { COMPOSER_LABEL, openRoute, settleLayout, signIn, useVariant } from './a11y'
 
 /**
  * Wave-2 performance execution (PERF-04 scripted INP, PERF-05 frontend heap,
@@ -203,9 +203,14 @@ test('JS heap after a long conversation does not grow without bound', async ({ p
     await expect
       .poll(() => page.locator('.bubble.assistant').count(), { timeout: 60_000 })
       .toBeGreaterThan(answersBefore)
-    // Let the stream settle and the state updates flush before sampling, so
-    // the sample reflects retained data, not an in-flight render.
-    await page.waitForTimeout(1500)
+    // The bubble appears on the first token; sample only after the stream
+    // finished (the cursor span disappears with the terminal frame) and the
+    // commit painted, so the heap reflects retained data, not an in-flight
+    // render. A 1500 ms sleep was the fixed-time form of this wait (F-160).
+    await expect(page.locator('.stream-cursor')).toHaveCount(0, {
+      timeout: 60_000,
+    })
+    await settleLayout(page)
     series.push(await heap())
   }
 
