@@ -189,6 +189,11 @@ services:
     restart: unless-stopped
     working_dir: /app/apps/api
     command: ["arq", "worker.WorkerSettings"]
+    # The api image's HEALTHCHECK probes HTTP /ready; the ARQ worker serves no
+    # HTTP, so inheriting it kept this container permanently unhealthy (the
+    # api service defines its own equivalent probe above).
+    healthcheck:
+      disable: true
     environment:
       ENV: ${ENV:-production}
       DATABASE_URL: ${DATABASE_URL:-sqlite:////data/app.db}
@@ -363,6 +368,10 @@ services:
     profiles: [backup]
     restart: unless-stopped
     entrypoint: ["python", "/srv/scripts/backup_loop.py"]
+    # Same inheritance as the worker: the image probes HTTP /ready, this loop
+    # serves no HTTP, so the inherited probe only ever reported unhealthy.
+    healthcheck:
+      disable: true
     environment:
       DATABASE_URL: ${DATABASE_URL:-sqlite:////data/app.db}
       BACKUP_DIR: /backups
