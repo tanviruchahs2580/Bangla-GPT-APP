@@ -7,7 +7,6 @@ import {
   Download,
   FileText,
   Flame,
-  KeyRound,
   LogOut,
   Moon,
   ShieldCheck,
@@ -17,7 +16,6 @@ import {
 import {
   clearMyMemory,
   del,
-  generateInviteCode,
   get,
   getMyMemory,
   getMyPrefs,
@@ -27,6 +25,7 @@ import {
   deleteNote,
   getNotes,
 } from "../../api";
+import ParentInviteCard from "../../components/ParentInviteCard";
 import { track } from "../../lib/analytics";
 import { formatServerDateTime } from "../../lib/datetime";
 import type { ActivitySummary } from "../../types";
@@ -81,14 +80,8 @@ export default function MePage() {
   // password and DELETE /users/me carries it in the body.
   const [delPassword, setDelPassword] = useState("");
   const [revokeBusy, setRevokeBusy] = useState(false);
-  const [invite, setInvite] = useState<{
-    code: string;
-    expires_in_minutes: number;
-  } | null>(null);
-  const [inviteBusy, setInviteBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
-  const [inviteError, setInviteError] = useState<string | null>(null);
   const [dark, setDark] = useState(currentTheme() === "dark");
   // low-data mode (skip images + short tutor answers)
   const [lowData, setLowDataState] = useState(getLowData());
@@ -218,23 +211,6 @@ export default function MePage() {
     queryFn: () => get<ActivitySummary>(`/students/${me?.profile_id}/activity`),
     enabled: me?.role === "student" && me?.profile_id != null,
   });
-
-  const createInvite = async () => {
-    setInviteBusy(true);
-    setInviteError(null);
-    try {
-      const inv = await generateInviteCode();
-      setInvite(inv);
-      track("parent_invite_generated");
-    } catch (e) {
-      setInviteError(
-        friendlyError((e as { rawDetail?: unknown }).rawDetail)?.text ??
-          t("errorGeneric"),
-      );
-    } finally {
-      setInviteBusy(false);
-    }
-  };
 
   // Auth is header-based, so a plain <a href> download would 401; fetch the
   // JSON with the session token and hand the browser a blob URL instead.
@@ -435,35 +411,7 @@ export default function MePage() {
         </Card>
       )}
 
-      {me?.role === "student" && (
-        <Card>
-          <div className="card-title">{t("parentInviteTitle")}</div>
-          <p className="muted text-sm m-0">{t("parentInviteHint")}</p>
-          {invite ? (
-            <div className="stack">
-              <div className="row-flex gap-2">
-                <KeyRound size={18} aria-hidden />
-                <strong className="invite-code">{invite.code}</strong>
-              </div>
-              <p className="muted text-sm m-0">
-                {t("parentInviteExpires", {
-                  minutes: invite.expires_in_minutes,
-                })}
-              </p>
-            </div>
-          ) : (
-            <Button variant="teal" onClick={createInvite} disabled={inviteBusy}>
-              {inviteBusy ? (
-                <span className="spinner" aria-hidden />
-              ) : (
-                <KeyRound size={16} aria-hidden />
-              )}
-              {t("parentInviteGenerate")}
-            </Button>
-          )}
-          {inviteError && <p className="error m-0">{inviteError}</p>}
-        </Card>
-      )}
+      {me?.role === "student" && <ParentInviteCard />}
 
       {me?.role === "student" && (
         <Card>

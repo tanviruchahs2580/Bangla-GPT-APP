@@ -257,6 +257,10 @@ const bn = {
     "কোড তৈরি করে অভিভাবককে দিন — তিনি নিজের অ্যাকাউন্ট থেকে কোডটি দিয়ে আপনার অগ্রগতি দেখতে পারবেন।",
   parentInviteGenerate: "কোড তৈরি করুন",
   parentInviteExpires: "এই কোডটি {minutes} মিনিটের জন্য বৈধ।",
+  parentInviteActive: "সক্রিয় কোডসমূহ",
+  parentInviteExpiresAt: "মেয়াদ শেষ: {time}",
+  parentInviteRevoke: "কোড বাতিল করুন",
+  parentInviteRevoked: "কোডটি বাতিল করা হয়েছে।",
   partialQuizNote:
     "এই শ্রেণি/বিষয়ে এখনো সব প্রশ্ন তৈরি হয়নি — {got}/{want}টি দেওয়া হলো।",
   rateUp: "সহায়ক ছিল",
@@ -973,6 +977,10 @@ const en: Dict = {
     "Generate a code and share it with your parent — they can enter it from their account to follow your progress.",
   parentInviteGenerate: "Generate code",
   parentInviteExpires: "This code is valid for {minutes} minutes.",
+  parentInviteActive: "Active codes",
+  parentInviteExpiresAt: "Expires: {time}",
+  parentInviteRevoke: "Revoke code",
+  parentInviteRevoked: "The code has been revoked.",
   partialQuizNote:
     "Not all questions are available for this class/subject yet — showing {got}/{want}.",
   rateUp: "Helpful",

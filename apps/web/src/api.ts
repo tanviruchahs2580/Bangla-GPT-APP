@@ -819,10 +819,28 @@ export async function changePassword(
 
 /** Student generates a single-use code (BGPT-XXXXXXXXXXXXXXXX) a parent can redeem to link. */
 export async function generateInviteCode(): Promise<{
+  id: number;
   code: string;
   expires_in_minutes: number;
 }> {
   return post("/students/me/invite-code");
+}
+
+/**
+ * Live guardian invites of the signed-in student (F-IV2-3).
+ *
+ * The id in each row is what `revokeInviteCode` needs; the code itself is
+ * returned only by the create response, so a listing cannot leak one.
+ */
+export async function getLiveInviteCodes(): Promise<
+  { id: number; created_at: string; expires_at: string }[]
+> {
+  return get("/students/me/invite-code");
+}
+
+/** Revoke a live guardian invite so its code can no longer link a parent. */
+export async function revokeInviteCode(id: number): Promise<void> {
+  await del(`/students/me/invite-code/${id}`);
 }
 
 /**
