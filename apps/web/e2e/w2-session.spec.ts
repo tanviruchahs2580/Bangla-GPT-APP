@@ -190,12 +190,26 @@ test("logout clears the query cache, user storage and offline copies; the next u
   const userB = await userIdOf(page);
   expect(userB).not.toBe(userA);
 
-  // A stale query cache would render student1's conversation chips here --
-  // whatever their titles -- so channel count is the stronger assertion.
-  // The `["conversations"]` key carries no user id, which is exactly why
-  // logout must clear the cache rather than rely on the key.
+  // A stale query cache would render student1's conversation chips here.
+  // The chip row renders the newest eight (TutorHistory) and B legitimately
+  // owns conversations created by earlier specs (resilience's slow-3G ask,
+  // among others), so "zero" only holds on a virgin account. The contract is
+  // equality with B's own server-side list: the `["conversations"]` key
+  // carries no user id, which is exactly why logout must clear the cache
+  // rather than rely on the key -- any leaked row makes the rendered set
+  // differ from it.
   await openRoute(page, "/student/tutor");
-  await expect(page.locator(".conv-chip")).toHaveCount(0);
+  const ownRes = await page.request.get("/api/tutor/conversations", {
+    headers: { Authorization: `Bearer ${await tokenFor(page)}` },
+  });
+  expect(ownRes.status(), await ownRes.text()).toBe(200);
+  const own = (await ownRes.json()) as { id: number; title: string | null }[];
+  await expect
+    .poll(
+      async () => await page.locator(".conv-chip .conv-open").allTextContents(),
+      { timeout: 20_000 },
+    )
+    .toEqual(own.slice(0, 8).map((c) => c.title ?? `#${c.id}`));
   // And the new chat button proves the page actually rendered its own state.
   await expect(
     page.getByRole("button", { name: /নতুন চ্যাট|New chat/i }).first(),
