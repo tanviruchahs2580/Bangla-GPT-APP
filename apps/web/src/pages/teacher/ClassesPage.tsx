@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bot } from "lucide-react";
+import { Bot, ChevronLeft } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { get, post } from "../../api";
 import type {
@@ -206,7 +206,7 @@ export default function ClassesPage() {
     // The roster is derived state, recomputed whenever its inputs change.
     // detailId is deliberately absent: including it would rebuild the
     // map on every detail open/close, and the map is only read from.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- detailId is read-only for this derived map; including it would rebuild the roster on every open/close
   }, [roster, search, filter, wm]);
 
   const detail =
@@ -392,7 +392,7 @@ export default function ClassesPage() {
             onClick={() => setDetailId(null)}
             aria-label={t("clsBackToList")}
           >
-            ← {t("clsBackToList")}
+            <ChevronLeft size={16} aria-hidden /> {t("clsBackToList")}
           </Button>
           <div className="row-flex section-gap-top gap-4">
             <ProgressRing

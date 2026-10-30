@@ -9,7 +9,7 @@ import type {
   QPaper,
   RosterEntry,
 } from "../../types";
-import { Check, Pencil } from "lucide-react";
+import { Check, ChevronLeft, Pencil } from "lucide-react";
 import { Badge, Button, Card, LoadError, Stat } from "../../components/ui";
 import { QPaperReviewPanel } from "../../components/teacher/QPaperReviewPanel";
 import { friendlyError } from "../../errors";
@@ -238,7 +238,7 @@ export default function AssessmentsPage() {
                 onClick={() => setOpenQp(null)}
                 aria-label={t("back")}
               >
-                ← {t("back")}
+                <ChevronLeft size={16} aria-hidden /> {t("back")}
               </Button>
               <QPaperReviewPanel
                 qp={openQp}
