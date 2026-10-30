@@ -94,7 +94,9 @@ const bn = {
   removeImage: "ছবি সরান",
   imageTooLarge: "ছবিটি অনেক বড় (১.৫ MB-এর কম রাখুন)",
   imageTypeUnsupported: "শুধু PNG, JPEG বা WebP ছবি সংযুক্ত করা যায়।",
-  confidenceBadge: "{pct}% নিশ্চিত",
+  // F-119: the number is a heuristic blend (docs/rag/architecture.md 6.7);
+  // the copy names it as one instead of reading like a probability.
+  confidenceBadge: "{pct}% সোর্স-নিশ্চয়তা (আনুমানিক)",
   learningStyleTitle: "শেখার ধরন ও মনে রাখা তথ্য",
   explanationStyle: "ব্যাখ্যার ধরন",
   styleSimple: "সহজ",
@@ -811,7 +813,8 @@ const en: Dict = {
   removeImage: "Remove image",
   imageTooLarge: "Image too large (keep it under 1.5 MB)",
   imageTypeUnsupported: "Only PNG, JPEG or WebP images can be attached.",
-  confidenceBadge: "{pct}% confident",
+  // F-119: see the Bangla entry -- the heuristic qualifier is required copy.
+  confidenceBadge: "{pct}% retrieval confidence (heuristic)",
   learningStyleTitle: "Learning style & memory",
   explanationStyle: "Explanation style",
   styleSimple: "Simple",

@@ -362,10 +362,12 @@ score into a 0-1 value; it is a **heuristic signal, not a calibrated
 probability**, and no calibration against answer correctness exists. The label
 required in the UI copy (both languages) and in the API documentation is
 "retrieval confidence (heuristic)" / "সোর্স-নিশ্চয়তা (আনুমানিক)", with the
-percentage rendered against that label, never as a bare "x% confident". The UI
-strings live in `apps/web/src` (i18n) and the response-field description in
-`apps/api/src/bangla_gpt_api/schemas*.py`; neither file belongs to this stream,
-so both edits are handoffs recorded in the stream report with the exact strings.
+percentage rendered against that label, never as a bare "x% confident". Both
+edits landed in the wave-2 close-out: `apps/web/src/i18n.ts` carries the
+qualifier in the `confidenceBadge` copy (pinned by
+`src/test/w2_final_confidence_label.test.ts` and the numeral-policy test) and
+`apps/api/src/bangla_gpt_api/schemas.py` carries it in
+`CONFIDENCE_FIELD_DESCRIPTION`, which every confidence field serves.
 
 ### 6.8 Evaluation set
 

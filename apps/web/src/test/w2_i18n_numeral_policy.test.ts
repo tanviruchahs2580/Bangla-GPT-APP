@@ -14,7 +14,9 @@ describe("numeral policy at the interpolation boundary", () => {
   it("renders numeric quantities in Bangla digits under bn", () => {
     expect(t("activityQuestions", { n: 5 })).toBe("৫টি প্রশ্ন");
     expect(t("correctOutOf", { correct: 8, total: 10 })).toBe("৮/১০ সঠিক");
-    expect(t("confidenceBadge", { pct: 87 })).toBe("৮৭% নিশ্চিত");
+    expect(t("confidenceBadge", { pct: 87 })).toBe(
+      "৮৭% সোর্স-নিশ্চয়তা (আনুমানিক)",
+    );
     expect(t("streakLabel", { days: 3 })).toBe("৩ দিনের ধারাবাহিকতা");
     expect(t("spWeek", { n: 2 })).toBe("সপ্তাহ ২");
   });
