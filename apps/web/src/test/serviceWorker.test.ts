@@ -53,7 +53,7 @@ function loadSw(
   };
   // The globals are parameters here: the Function constructor is the only way
   // to run a worker script in-process with them injected.
-  // eslint-disable-next-line @typescript-eslint/no-implied-eval
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval -- the Function constructor is the only way to run the worker script in-process with the worker globals injected
   const runSw = new Function(
     "self",
     "caches",
