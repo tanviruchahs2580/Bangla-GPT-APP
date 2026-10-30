@@ -439,6 +439,13 @@ jobs:
       - name: Format check (prettier)
         run: npm run format:check
 
+      # F-096/FE-13: knip sat in devDependencies while nothing ran it, so
+      # unused files, exports, types and unlisted dependencies could
+      # accumulate with no gate. The step fails on any finding; knip.json
+      # names the test/e2e/api entry points so test-only imports stay alive.
+      - name: Dead code and unused exports (knip)
+        run: npm run deadcode
+
       - name: Build (tsc + vite)
         run: npm run build
 

@@ -73,6 +73,9 @@ lint:
 	cd apps/api && "$(PY)" -m ruff check .
 	cd apps/web && npm run lint
 
+deadcode:
+	cd apps/web && npm run deadcode
+
 format:
 	cd apps/api && "$(PY)" -m ruff format .
 	cd apps/web && npm run format
@@ -136,6 +139,7 @@ ci: format-check
 	cd apps/api && "$(PY)" -m mypy src
 	cd apps/api && "$(PY)" -m pytest -q
 	cd apps/web && npm run lint
+	cd apps/web && npm run deadcode
 	cd apps/web && npm test
 	cd apps/web && npm run build
 	$(MAKE) docs-check
