@@ -25,20 +25,53 @@ def font_available() -> bool:
     return _FONT.is_file()
 
 
+class _PaperPDF(FPDF):
+    """Question-paper PDF with the collation furniture F-166 asked for.
+
+    A printed stack is collated by its running header and page numbers, and
+    the renderers emitted neither. ``header()`` repeats the paper title from
+    page 2 on (page 1 already carries it as the title block); ``footer()``
+    prints ``পৃষ্ঠা <page>/<total>`` on every page, where ``{nb}`` is fpdf2's
+    total-page alias resolved when the document is written. Both callbacks
+    draw with the bundled Bengali font, so the renderers register the font,
+    enable shaping and call ``alias_nb_pages`` before the first ``add_page``.
+    """
+
+    header_text: str = ""
+
+    def header(self) -> None:
+        if self.page_no() <= 1 or not self.header_text:
+            return
+        self.set_font("nbg", size=9)
+        self.set_text_color(120, 120, 120)
+        self.cell(w=0, h=6, text=self.header_text, new_x="LMARGIN", new_y="NEXT")
+        self.set_text_color(0, 0, 0)
+
+    def footer(self) -> None:
+        self.set_y(-15)
+        self.set_font("nbg", size=9)
+        self.set_text_color(120, 120, 120)
+        self.cell(w=0, h=6, text=f"পৃষ্ঠা {self.page_no()}/{{nb}}", align="C")
+
+
 def render_qp_pdf(paper: dict, kind: str = "paper") -> bytes:
     """Render one question paper. ``kind``: 'paper' (no answers) or 'answer'."""
     if not font_available():
         raise RuntimeError("bundled Bengali font missing")
-    pdf = FPDF(format="A4")
+    pdf = _PaperPDF(format="A4")
+    pdf.alias_nb_pages()
     pdf.set_margins(15, 15, 15)
-    pdf.add_page()
+    # Font before the first page: the header/footer callbacks above run
+    # during add_page and draw with "nbg".
     pdf.add_font("nbg", style="", fname=str(_FONT))
     # Complex-script shaping is opt-in in fpdf2. Leaving it off emits the raw
     # code points, so Bengali conjuncts render decomposed with floating vowel
     # signs even though the extracted text still looks correct. AUD-0045.
     pdf.set_text_shaping(True)
+    pdf.add_page()
     pdf.set_font("nbg", size=15)
     title = f"{paper['exam_type']} ({paper['class_level']}) - {paper['subject']}"
+    pdf.header_text = title
     pdf.cell(w=0, h=9, text=title, new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("nbg", size=10)
     pdf.set_text_color(90, 90, 90)
@@ -122,16 +155,20 @@ def render_document_pdf(doc: dict) -> bytes:
     if kind not in ("worksheet", "answer_key", "lesson_plan"):
         raise ValueError(f"no PDF renderer for kind {kind!r}")
     payload = dict(doc.get("payload") or {})
-    pdf = FPDF(format="A4")
+    pdf = _PaperPDF(format="A4")
+    pdf.alias_nb_pages()
     pdf.set_margins(15, 15, 15)
-    pdf.add_page()
+    # Same ordering contract as render_qp_pdf: the footer draws with "nbg".
     pdf.add_font("nbg", style="", fname=str(_FONT))
     pdf.set_text_shaping(True)  # AUD-0045 - see module docstring
+    pdf.add_page()
     pdf.set_font("nbg", size=15)
+    title = f"{doc.get('title') or kind} ({doc.get('class_level')}) - {doc.get('subject')}"
+    pdf.header_text = title
     pdf.cell(
         w=0,
         h=9,
-        text=f"{doc.get('title') or kind} ({doc.get('class_level')}) - {doc.get('subject')}",
+        text=title,
         new_x="LMARGIN",
         new_y="NEXT",
     )
