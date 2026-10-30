@@ -350,6 +350,7 @@ def build_dependencies(
         tutor=tutor,
         session_factory=session_factory,
         ai_job_tasks=set(),
+        circuit_breaker=circuit_breaker,
     )
 
     return ctx, provider, fast_provider, engine, session_factory

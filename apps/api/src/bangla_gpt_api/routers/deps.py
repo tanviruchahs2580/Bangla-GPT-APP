@@ -33,6 +33,7 @@ from bangla_gpt_api.providers.base import LLMProvider
 from bangla_gpt_api.retrieval.base import RankingIndex
 from bangla_gpt_api.schemas import MeResponse
 from bangla_gpt_api.security import decrypt_pii, write_audit
+from bangla_gpt_api.services.circuit_breaker import CircuitBreaker
 from bangla_gpt_api.services.tutor import TutorService
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,7 @@ class AppContext:
         tutor: TutorService | None,
         session_factory: Callable[[], Session],
         ai_job_tasks: set,
+        circuit_breaker: CircuitBreaker | None = None,
     ) -> None:
         self.settings = settings
         self.cache = cache
@@ -65,6 +67,10 @@ class AppContext:
         # Strong references to fire-and-forget AiJob tasks (asyncio may
         # garbage-collect bare create_task handles).
         self.ai_job_tasks = ai_job_tasks
+        # F-123: the public /status page reports the assistant as healthy only
+        # when the provider is configured AND its circuit is not open, so a
+        # total provider outage cannot read as "all ok".
+        self.circuit_breaker = circuit_breaker
 
 
 def get_ctx(request: Request) -> AppContext:

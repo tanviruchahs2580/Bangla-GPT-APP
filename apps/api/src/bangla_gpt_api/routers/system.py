@@ -15,11 +15,13 @@ from sqlalchemy import select
 from bangla_gpt_api.metrics import (
     REGISTRY,
 )
+from bangla_gpt_api.providers.base import provider_health
 from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES
 from bangla_gpt_api.schemas import (
     StatusComponent,
     StatusOut,
 )
+from bangla_gpt_api.services.circuit_breaker import CircuitState
 
 from .deps import (
     AdminUser,
@@ -88,21 +90,32 @@ def status(app_ctx: Ctx, db: DbSession) -> StatusOut:
         cache_ok = app_ctx.cache.ping()
     except Exception:
         cache_ok = False
-    components.append(
-        StatusComponent(
-            name="cache",
-            ok=cache_ok,
-            detail="shared cache reachable" if cache_ok else "cache unreachable",
-        )
-    )
-    assistant_ok = app_ctx.provider is not None
-    components.append(
-        StatusComponent(
-            name="assistant",
-            ok=assistant_ok,
-            detail="provider configured" if assistant_ok else "no LLM provider configured",
-        )
-    )
+    # The in-process cache has no "unreachable" state (ping is unconditionally
+    # true), so claiming "shared cache reachable" for it would describe a
+    # dependency that does not exist. Name the backend that is actually
+    # answering (F-123).
+    cache_shared = type(app_ctx.cache).__name__ != "MemoryCache"
+    if cache_ok:
+        cache_detail = "shared cache reachable" if cache_shared else "in-process cache active"
+    else:
+        cache_detail = "cache unreachable"
+    components.append(StatusComponent(name="cache", ok=cache_ok, detail=cache_detail))
+    # F-123: "a provider object exists" is not health. Two cheap real signals
+    # decide it: the call-outcome tracker (always present -- the live posture
+    # sets no fallback provider, so no breaker is built) and the circuit
+    # breaker when a fallback chain is configured.
+    breaker = app_ctx.circuit_breaker
+    breaker_open = breaker is not None and breaker.state is CircuitState.OPEN
+    calls_ok, calls_detail = provider_health()
+    if app_ctx.provider is None:
+        assistant_ok, assistant_detail = False, "no LLM provider configured"
+    elif breaker_open:
+        assistant_ok, assistant_detail = False, "provider circuit open after repeated failures"
+    elif not calls_ok:
+        assistant_ok, assistant_detail = False, calls_detail
+    else:
+        assistant_ok, assistant_detail = True, calls_detail
+    components.append(StatusComponent(name="assistant", ok=assistant_ok, detail=assistant_detail))
     # Presence-only, same disclosure rule as the rest of this payload: the
     # status page should show a failed index build (the tutor answers nothing
     # without it) without exposing corpus identity or size.
