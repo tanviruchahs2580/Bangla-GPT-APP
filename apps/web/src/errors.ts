@@ -64,8 +64,14 @@ const KEY: Record<string, Parameters<typeof t>[0]> = {
   // A photo the server could not decode or re-encode. Distinct from the
   // client-side size/type checks (which answer before the upload): this
   // one means the file itself was unusable, so the advice is a different
-  // photo, not a smaller one.
+  // photo, not a smaller one. image_type_mismatch is the same verdict from
+  // the magic-byte sniff (S-011), and it reached the UI as the generic copy
+  // because only image_invalid was listed.
   image_invalid: "errImageInvalid",
+  image_type_mismatch: "errImageInvalid",
+  // 503: the sanitizer's Pillow is missing -- a deployment fault, not the
+  // student's photo, so it gets the retryable service copy.
+  image_support_unavailable: "errServiceUnavailable",
   // Codes the API-wide envelope pass introduced for flows the UI already
   // distinguishes (previously bare strings that fell through to the generic
   // copy): change-password, MFA settings, parent linking, last-admin guard.
@@ -94,6 +100,7 @@ const ACTION: Record<string, ErrorCopy["action"]> = {
   api_origin_unreachable: "retry",
   api_origin_timeout: "retry",
   image_invalid: "retry",
+  image_type_mismatch: "retry",
   revocation_unavailable: "retry",
   verify_failed: "retry",
 };

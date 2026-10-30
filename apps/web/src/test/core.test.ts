@@ -31,6 +31,21 @@ describe("friendlyError", () => {
     expect(friendlyError({ detail: { message: "?" } }).action).toBe("retry");
   });
 
+  it("maps every image-attachment code the tutor route can answer", () => {
+    // The route answers three codes for an attached photo; only the first was
+    // mapped, so the two newer ones showed "something went wrong" for a file
+    // verdict and a deployment fault respectively.
+    expect(friendlyError({ detail: { code: "image_invalid" } }).text).toBe(
+      t("errImageInvalid"),
+    );
+    expect(
+      friendlyError({ detail: { code: "image_type_mismatch" } }).text,
+    ).toBe(t("errImageInvalid"));
+    expect(
+      friendlyError({ detail: { code: "image_support_unavailable" } }).text,
+    ).toBe(t("errServiceUnavailable"));
+  });
+
   it("maps login-infrastructure codes to retry/mfa copy (no generic dead-end)", () => {
     expect(friendlyError({ code: "mfa_required" }).action).toBe("mfa");
     expect(friendlyError({ code: "bad_mfa_code" }).action).toBe("mfa");
