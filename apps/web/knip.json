@@ -1,9 +1,10 @@
 {
-  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": [
     "src/test/**/*.{test,spec}.{ts,tsx}",
     "e2e/**/*.spec.ts",
     "api/**/*.ts"
   ],
-  "project": ["src/**/*.{ts,tsx}", "e2e/**/*.ts", "api/**/*.ts"]
+  "project": ["src/**/*.{ts,tsx}", "e2e/**/*.ts", "api/**/*.ts"],
+  "ignoreExportsUsedInFile": true
 }

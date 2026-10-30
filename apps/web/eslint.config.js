@@ -16,6 +16,7 @@
 
 import js from '@eslint/js';
 import globals from 'globals';
+import importX from 'eslint-plugin-import-x';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
@@ -47,9 +48,24 @@ export default tseslint.config(
       // Its rules are spread in `rules` below.
       'react-hooks': reactHooks,
       'jsx-a11y': jsxA11y,
+      // F-184: the check names an import plugin. Cycles between modules only
+      // surface at bundle time (or as an undefined binding at runtime); this
+      // is the plugin's cycle rule, not its whole recommended set, because
+      // most of that set overlaps type-aware checks already on.
+      'import-x': importX,
     },
     settings: {
       react: { version: 'detect' },
+      // F-184: the built-in node resolver only resolves .js/.json by default,
+      // so extensionless TS imports (the house style) would resolve to
+      // nothing and no-cycle would silently never fire. Both the extension
+      // list and the resolver options are required: import-x's ExportMap uses
+      // `import-x/extensions`, the rule's resolver uses the node options. No
+      // tsconfig path aliases exist, so this is the whole configuration.
+      'import-x/extensions': ['.ts', '.tsx', '.js', '.jsx'],
+      'import-x/resolver': {
+        node: { extensions: ['.ts', '.tsx', '.js', '.jsx'] },
+      },
     },
     rules: {
       // `recommended` carries rules-of-hooks and exhaustive-deps;
@@ -118,6 +134,10 @@ export default tseslint.config(
       eqeqeq: ['error', 'smart'],
       'prefer-const': 'error',
       'no-var': 'error',
+
+      // F-184: a cycle between modules has no type error and no test failure
+      // until something imports the stale half; fail it at lint time.
+      'import-x/no-cycle': 'error',
     },
   },
 
