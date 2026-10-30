@@ -66,6 +66,7 @@ from bangla_gpt_api.services.router import (
 from bangla_gpt_api.services.safety import (
     AGE_RULE_SENTENCE,
     UNSAFE_ANSWER_REFUSAL,
+    citation_check,
     refusal_for,
     screen_question,
 )
@@ -1257,6 +1258,50 @@ class TutorService:
             rewrite_terms=rewrite_terms,
         )
 
+    def _classify_streamed_answer(
+        self,
+        answer: str,
+        *,
+        hits: list,
+        grounded: bool,
+        outage: bool,
+    ) -> tuple[bool, bool, str | None, str]:
+        """Verify, downgrade and name a streamed answer's outcome.
+
+        The citation check speaks to a grounded answer only: an outage notice
+        (or an empty stream) is a service-level message, not evidence-based
+        text, so verifying - let alone metering - it against the evidence would
+        record a check that answers nothing. A "not in the textbook" reply is a
+        refusal, not a grounded answer (same honesty downgrade as the
+        non-stream path). Extracted from ``ask_stream`` so the streaming
+        function keeps one branch per decision instead of nine.
+        """
+        verdict_text: str | None = None
+        citation_ok = False
+        if grounded:
+            verdict = citation_check(answer, " ".join(h.chunk.text for h in hits), sources=hits)
+            citation_ok = verdict.verified
+            verdict_text = "verified" if citation_ok else f"unverified:{verdict.reason}"
+            RAG_CITATION_CHECKS_TOTAL.labels(result="pass" if citation_ok else "fail").inc()
+            if not citation_ok:
+                logger.warning(
+                    "citation_check_failed reason=%s detail=%s",
+                    verdict.reason,
+                    list(verdict.detail[:3]),
+                )
+        model_refused = _model_refused(answer)
+        if grounded and model_refused:
+            grounded = False
+        if model_refused:
+            RAG_GATE_REFUSALS_TOTAL.labels(reason="model_refused").inc()
+        if outage:
+            outcome = "outage"
+        elif model_refused:
+            outcome = "model_refused"
+        else:
+            outcome = "answered"
+        return grounded, citation_ok, verdict_text, outcome
+
     async def ask_stream(
         self,
         question: str,
@@ -1483,38 +1528,18 @@ class TutorService:
             prompt_version=PROMPT_VERSION,
             prompt_sha256=PROMPT_SHA256,
         )
-        from bangla_gpt_api.services.safety import citation_check
-
         # The citation check speaks to a grounded answer only: an outage notice
         # (or an empty stream) is a service-level message, not evidence-based
         # text, so verifying — let alone metering — it against the evidence
         # would record a check that answers nothing.
-        if answer_is_grounded:
-            verdict = citation_check(answer, " ".join(h.chunk.text for h in hits), sources=hits)
-            citation_ok = verdict.verified
-            # Same metering contract as _assemble (non-stream path).
-            RAG_CITATION_CHECKS_TOTAL.labels(result="pass" if citation_ok else "fail").inc()
-            if not citation_ok:
-                logger.warning(
-                    "citation_check_failed reason=%s detail=%s",
-                    verdict.reason,
-                    list(verdict.detail[:3]),
-                )
-        else:
-            citation_ok = False
-        # Same honesty downgrade as the non-stream path: a "not in the
-        # textbook" reply is a refusal, not a grounded answer.
-        model_refused = _model_refused(answer)
-        if answer_is_grounded and model_refused:
-            answer_is_grounded = False
-        if model_refused:
-            RAG_GATE_REFUSALS_TOTAL.labels(reason="model_refused").inc()
-        if outage_sentinel:
-            outcome = "outage"
-        elif model_refused:
-            outcome = "model_refused"
-        else:
-            outcome = "answered"
+        (
+            answer_is_grounded,
+            citation_ok,
+            citation_verdict_text,
+            outcome,
+        ) = self._classify_streamed_answer(
+            answer, hits=hits, grounded=answer_is_grounded, outage=outage_sentinel
+        )
         stream_parameters: dict = {"route": route.value, "top_k": self.top_k, "stream": True}
         script_violations_found = self._flag_answer_script(answer)
         if script_violations_found:
@@ -1523,16 +1548,12 @@ class TutorService:
             question=question,
             outcome=outcome,
             grounded=answer_is_grounded,
-            refused_reason="model_refused" if model_refused else None,
+            refused_reason="model_refused" if outcome == "model_refused" else None,
             hits=hits if answer_is_grounded else [],
             model=getattr(provider_for_stream, "name", "unknown"),
             parameters=stream_parameters,
             latency_ms=trace_stages,
-            citation_verdict=(
-                None
-                if not answer_is_grounded
-                else ("verified" if citation_ok else f"unverified:{verdict.reason}")
-            ),
+            citation_verdict=citation_verdict_text,
             composed_prompt=context_blocks,
             rewrite_applied=rewrite_applied,
             rewrite_terms=rewrite_terms,
@@ -1547,7 +1568,7 @@ class TutorService:
                 # tests): a refusal carries no citation verdict, not a False
                 # one -- None is the schema's documented "not applicable".
                 citation_verified=citation_ok if answer_is_grounded else None,
-                refused_reason="model_refused" if model_refused else None,
+                refused_reason="model_refused" if outcome == "model_refused" else None,
             ),
         )
 

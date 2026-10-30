@@ -125,6 +125,164 @@ def _iso(value: datetime | None) -> str | None:
     return value.isoformat() if value else None
 
 
+def _student_learning_sections(
+    db: Session, student: Student | None, attempt_rows: list[QuizAttempt]
+) -> dict[str, list[dict]]:
+    """Every student-scoped learning table the export must carry (F-063/F-040).
+
+    Returns the seven section lists keyed by the response field name; an unset
+    student yields empty lists. Extracted from ``build_data_export`` so the
+    builder reads one section per concept instead of forty branches, and so the
+    completeness of this section can be reviewed and tested on its own.
+    """
+    sections: dict[str, list[dict]] = {
+        "chapter_progress": [],
+        "answer_log": [],
+        "assignment_memberships": [],
+        "revision_items": [],
+        "concept_mastery": [],
+        "student_abilities": [],
+        "classrooms": [],
+    }
+    if student is None:
+        return sections
+    sections["chapter_progress"] = [
+        {
+            "subject": row.subject,
+            "chapter": row.chapter,
+            "class_level": row.class_level,
+            "read_pct": row.read_pct,
+            "completed": row.completed,
+            "bookmarked": row.bookmarked,
+            "updated_at": _iso(row.updated_at),
+        }
+        for row in db.execute(
+            select(ChapterProgress)
+            .where(ChapterProgress.student_id == student.id)
+            .order_by(ChapterProgress.id)
+        ).scalars()
+    ]
+    sections["revision_items"] = [
+        {
+            "id": row.id,
+            "question": row.question,
+            "options": row.options_json,
+            "correct_index": row.correct_index,
+            "chapter": row.chapter,
+            "subject": row.subject,
+            "class_level": row.class_level,
+            "reps": row.reps,
+            "interval_days": row.interval_days,
+            "ease_factor": row.ease_factor,
+            "due_date": row.due_date,
+            "updated_at": _iso(row.updated_at),
+        }
+        for row in db.execute(
+            select(RevisionItem)
+            .where(RevisionItem.student_id == student.id)
+            .order_by(RevisionItem.id)
+        ).scalars()
+    ]
+    attempt_ids = [a.id for a in attempt_rows]
+    sections["assignment_memberships"] = [
+        {
+            "assignment_id": row.assignment_id,
+            "attempt_id": row.attempt_id,
+            "created_at": _iso(row.created_at),
+        }
+        for row in db.execute(
+            select(AssignmentRecipient)
+            .where(AssignmentRecipient.student_id == student.id)
+            .order_by(AssignmentRecipient.id)
+        ).scalars()
+    ]
+    if attempt_ids:
+        sections["answer_log"] = [
+            {
+                "id": row.id,
+                "attempt_id": row.attempt_id,
+                "seq": row.seq,
+                "question_text": row.question_text,
+                "chosen": row.chosen,
+                "correct_index": row.correct_index,
+                "is_correct": row.is_correct,
+                "chapter": row.chapter,
+                "book": row.book,
+                "created_at": _iso(row.created_at),
+            }
+            for row in db.execute(
+                select(AnswerLog)
+                .where(AnswerLog.attempt_id.in_(attempt_ids))
+                .order_by(AnswerLog.id)
+            ).scalars()
+        ]
+    sections["concept_mastery"] = [
+        {
+            "concept_id": row.concept_id,
+            "correct": row.correct,
+            "total": row.total,
+            "updated_at": _iso(row.updated_at),
+        }
+        for row in db.execute(
+            select(ConceptMastery)
+            .where(ConceptMastery.student_id == student.id)
+            .order_by(ConceptMastery.concept_id)
+        ).scalars()
+    ]
+    sections["student_abilities"] = [
+        {
+            "concept": row.concept,
+            "class_level": row.class_level,
+            "ability": row.ability,
+            "attempts": row.attempts,
+            "updated_at": _iso(row.updated_at),
+        }
+        for row in db.execute(
+            select(StudentAbility)
+            .where(StudentAbility.student_id == student.id)
+            .order_by(StudentAbility.concept)
+        ).scalars()
+    ]
+    sections["classrooms"] = [
+        {
+            "classroom_id": room.id,
+            "school_id": room.school_id,
+            "class_level": room.class_level,
+            "section": room.section,
+            "as": "student",
+        }
+        for room in db.execute(
+            select(ClassRoom)
+            .join(ClassStudent, ClassStudent.classroom_id == ClassRoom.id)
+            .where(ClassStudent.student_id == student.id)
+            .order_by(ClassRoom.id)
+        ).scalars()
+    ]
+    return sections
+
+
+def _teacher_classroom_rows(db: Session, teacher: Teacher | None) -> list[dict]:
+    """A teacher's classroom assignments (class_teachers), the staff mirror."""
+    if teacher is None:
+        return []
+    return [
+        {
+            "classroom_id": room.id,
+            "school_id": room.school_id,
+            "class_level": room.class_level,
+            "section": room.section,
+            "subject": assignment.subject,
+            "as": "teacher",
+        }
+        for room, assignment in db.execute(
+            select(ClassRoom, ClassTeacher)
+            .join(ClassTeacher, ClassTeacher.classroom_id == ClassRoom.id)
+            .where(ClassTeacher.teacher_id == teacher.id)
+            .order_by(ClassRoom.id)
+        ).all()
+    ]
+
+
 def build_data_export(db: Session, user: User) -> _DataExportV2:
     """Everything stored about this account (self-service portability)."""
     student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one_or_none()
@@ -497,148 +655,15 @@ def build_data_export(db: Session, user: User) -> _DataExportV2:
         ).scalars()
     ]
 
-    # Student-scoped learning tables not covered by the v1 sections.
-    chapter_progress: list[dict] = []
-    answer_log: list[dict] = []
-    assignment_memberships: list[dict] = []
-    revision_items: list[dict] = []
-    concept_mastery: list[dict] = []
-    student_abilities: list[dict] = []
-    classrooms: list[dict] = []
-    if student is not None:
-        chapter_progress = [
-            {
-                "subject": row.subject,
-                "chapter": row.chapter,
-                "class_level": row.class_level,
-                "read_pct": row.read_pct,
-                "completed": row.completed,
-                "bookmarked": row.bookmarked,
-                "updated_at": _iso(row.updated_at),
-            }
-            for row in db.execute(
-                select(ChapterProgress)
-                .where(ChapterProgress.student_id == student.id)
-                .order_by(ChapterProgress.id)
-            ).scalars()
-        ]
-        revision_items = [
-            {
-                "id": row.id,
-                "question": row.question,
-                "options": row.options_json,
-                "correct_index": row.correct_index,
-                "chapter": row.chapter,
-                "subject": row.subject,
-                "class_level": row.class_level,
-                "reps": row.reps,
-                "interval_days": row.interval_days,
-                "ease_factor": row.ease_factor,
-                "due_date": row.due_date,
-                "updated_at": _iso(row.updated_at),
-            }
-            for row in db.execute(
-                select(RevisionItem)
-                .where(RevisionItem.student_id == student.id)
-                .order_by(RevisionItem.id)
-            ).scalars()
-        ]
-        attempt_ids = [a.id for a in attempt_rows]
-        assignment_memberships = [
-            {
-                "assignment_id": row.assignment_id,
-                "attempt_id": row.attempt_id,
-                "created_at": _iso(row.created_at),
-            }
-            for row in db.execute(
-                select(AssignmentRecipient)
-                .where(AssignmentRecipient.student_id == student.id)
-                .order_by(AssignmentRecipient.id)
-            ).scalars()
-        ]
-        if attempt_ids:
-            answer_log = [
-                {
-                    "id": row.id,
-                    "attempt_id": row.attempt_id,
-                    "seq": row.seq,
-                    "question_text": row.question_text,
-                    "chosen": row.chosen,
-                    "correct_index": row.correct_index,
-                    "is_correct": row.is_correct,
-                    "chapter": row.chapter,
-                    "book": row.book,
-                    "created_at": _iso(row.created_at),
-                }
-                for row in db.execute(
-                    select(AnswerLog)
-                    .where(AnswerLog.attempt_id.in_(attempt_ids))
-                    .order_by(AnswerLog.id)
-                ).scalars()
-            ]
-        concept_mastery = [
-            {
-                "concept_id": row.concept_id,
-                "correct": row.correct,
-                "total": row.total,
-                "updated_at": _iso(row.updated_at),
-            }
-            for row in db.execute(
-                select(ConceptMastery)
-                .where(ConceptMastery.student_id == student.id)
-                .order_by(ConceptMastery.concept_id)
-            ).scalars()
-        ]
-        student_abilities = [
-            {
-                "concept": row.concept,
-                "class_level": row.class_level,
-                "ability": row.ability,
-                "attempts": row.attempts,
-                "updated_at": _iso(row.updated_at),
-            }
-            for row in db.execute(
-                select(StudentAbility)
-                .where(StudentAbility.student_id == student.id)
-                .order_by(StudentAbility.concept)
-            ).scalars()
-        ]
-        classrooms = [
-            {
-                "classroom_id": room.id,
-                "school_id": room.school_id,
-                "class_level": room.class_level,
-                "section": room.section,
-                "as": "student",
-            }
-            for room in db.execute(
-                select(ClassRoom)
-                .join(ClassStudent, ClassStudent.classroom_id == ClassRoom.id)
-                .where(ClassStudent.student_id == student.id)
-                .order_by(ClassRoom.id)
-            ).scalars()
-        ]
+    learning = _student_learning_sections(db, student, attempt_rows)
+    chapter_progress = learning["chapter_progress"]
+    answer_log = learning["answer_log"]
+    assignment_memberships = learning["assignment_memberships"]
+    revision_items = learning["revision_items"]
+    concept_mastery = learning["concept_mastery"]
+    student_abilities = learning["student_abilities"]
 
-    if teacher is not None:
-        # F-040 follow-up: a teacher's classroom assignments (class_teachers)
-        # are the staff-side mirror of the student membership rows above and
-        # were exported by nothing.
-        classrooms = [
-            {
-                "classroom_id": room.id,
-                "school_id": room.school_id,
-                "class_level": room.class_level,
-                "section": room.section,
-                "subject": assignment.subject,
-                "as": "teacher",
-            }
-            for room, assignment in db.execute(
-                select(ClassRoom, ClassTeacher)
-                .join(ClassTeacher, ClassTeacher.classroom_id == ClassRoom.id)
-                .where(ClassTeacher.teacher_id == teacher.id)
-                .order_by(ClassRoom.id)
-            ).all()
-        ]
+    classrooms = _teacher_classroom_rows(db, teacher)
 
     return _DataExportV2(
         schema_version=EXPORT_SCHEMA_VERSION,

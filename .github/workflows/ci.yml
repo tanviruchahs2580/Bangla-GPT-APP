@@ -747,13 +747,14 @@ jobs:
           # path::function (Class.method for methods) -> measured radon score.
           # Owned by other wave-2 workstreams; the splits are handed to them.
           BUDGET = {
+              # Wave-2 split the three entries this dict used to carry
+              # (verify_corpus_manifest, build_data_export, ask_stream): the
+              # sections moved into named helpers and each function now sits
+              # below 38, so the entries are gone rather than raised.
               "src/bangla_gpt_api/data/nctb_loader.py::load_nctb_corpus": 33,  # corpus build
               "src/bangla_gpt_api/evaluation/fairness_probes.py::validate_fixture": 32,  # eval tooling
               "src/bangla_gpt_api/evaluation/golden_v3.py::check_golden": 24,  # eval tooling
               "src/bangla_gpt_api/evaluation/metrics.py::run_suite": 36,  # eval tooling
-              "src/bangla_gpt_api/nctb/manifest.py::verify_corpus_manifest": 21,  # corpus build
-              "src/bangla_gpt_api/services/gdpr.py::build_data_export": 46,  # privacy stream
-              "src/bangla_gpt_api/services/tutor.py::TutorService.ask_stream": 36,  # tutor stream
               "src/bangla_gpt_api/services/tutor.py::TutorService._coverage_details": 34,  # tutor stream
           }
           raw = subprocess.run(

@@ -192,6 +192,76 @@ def corpus_manifest_path(corpus_root: Path) -> Path:
     return corpus_root / "manifests" / CORPUS_MANIFEST_NAME
 
 
+def _manifest_shape_problems(manifest: dict, *, check_code_fingerprint: bool) -> list[str]:
+    """Manifest-level checks that need no corpus files: version, sources, fingerprint."""
+    problems: list[str] = []
+    if manifest.get("manifest_version") != CORPUS_MANIFEST_VERSION:
+        problems.append(
+            f"manifest_version {manifest.get('manifest_version')!r} != {CORPUS_MANIFEST_VERSION}"
+        )
+    if not manifest.get("sources"):
+        problems.append("manifest lists no sources")
+    pipeline = manifest.get("pipeline") or {}
+    fingerprint = pipeline.get("code_fingerprint")
+    if not fingerprint:
+        problems.append("manifest records no pipeline code fingerprint")
+    elif check_code_fingerprint:
+        current = pipeline_code_fingerprint()
+        if fingerprint != current:
+            problems.append(
+                f"pipeline code fingerprint {fingerprint} != current {current}; "
+                "the corpus was not built by the code in this tree"
+            )
+    return problems
+
+
+def _source_file_problems(
+    corpus_root: Path, manifest: dict, *, check_files: bool
+) -> tuple[int, list[str]]:
+    """Per-source chunk-file checks; also returns the declared chunk total."""
+    total_chunks = 0
+    problems: list[str] = []
+    for source in manifest.get("sources", []):
+        source_id = source.get("source_id", "<unnamed>")
+        declared_chunks = source.get("chunks")
+        if isinstance(declared_chunks, int):
+            total_chunks += declared_chunks
+        declared_digest = source.get("normalized_sha256")
+        if not check_files:
+            continue
+        normalized = corpus_root / "normalized" / f"{source_id}.chunks.jsonl"
+        if normalized.exists():
+            if declared_digest and sha256_file(normalized) != declared_digest:
+                problems.append(f"{source_id}: chunk file digest differs from the manifest")
+        elif declared_chunks:
+            problems.append(
+                f"{source_id}: manifest declares {declared_chunks} chunks, file missing"
+            )
+    return total_chunks, problems
+
+
+def _totals_and_index_problems(
+    manifest: dict, total_chunks: int, index_chunks: int | None
+) -> list[str]:
+    """Cross-checks between the per-source sum, the totals row and the built index."""
+    problems: list[str] = []
+    totals = manifest.get("totals") or {}
+    if totals.get("chunks") is not None and int(totals["chunks"]) != total_chunks:
+        problems.append(
+            f"totals.chunks {totals.get('chunks')} != sum of per-source chunks {total_chunks}"
+        )
+    derived = manifest.get("derived") or {}
+    if (
+        index_chunks is not None
+        and derived.get("index_chunks") is not None
+        and int(derived["index_chunks"]) != int(index_chunks)
+    ):
+        problems.append(
+            f"served index has {index_chunks} chunks, manifest records {derived['index_chunks']}"
+        )
+    return problems
+
+
 def verify_corpus_manifest(
     corpus_root: Path,
     *,
@@ -214,53 +284,12 @@ def verify_corpus_manifest(
     if not path.exists():
         return None, [f"no corpus manifest at {path}"]
     manifest = read_json(path)
-    problems: list[str] = []
-    if manifest.get("manifest_version") != CORPUS_MANIFEST_VERSION:
-        problems.append(
-            f"manifest_version {manifest.get('manifest_version')!r} != {CORPUS_MANIFEST_VERSION}"
-        )
-    if not manifest.get("sources"):
-        problems.append("manifest lists no sources")
-    pipeline = manifest.get("pipeline") or {}
-    fingerprint = pipeline.get("code_fingerprint")
-    if not fingerprint:
-        problems.append("manifest records no pipeline code fingerprint")
-    elif check_code_fingerprint:
-        current = pipeline_code_fingerprint()
-        if fingerprint != current:
-            problems.append(
-                f"pipeline code fingerprint {fingerprint} != current {current}; "
-                "the corpus was not built by the code in this tree"
-            )
-    total_chunks = 0
-    for source in manifest.get("sources", []):
-        source_id = source.get("source_id", "<unnamed>")
-        declared_chunks = source.get("chunks")
-        if isinstance(declared_chunks, int):
-            total_chunks += declared_chunks
-        declared_digest = source.get("normalized_sha256")
-        if not check_files:
-            continue
-        normalized = corpus_root / "normalized" / f"{source_id}.chunks.jsonl"
-        if normalized.exists():
-            if declared_digest and sha256_file(normalized) != declared_digest:
-                problems.append(f"{source_id}: chunk file digest differs from the manifest")
-        elif declared_chunks:
-            problems.append(
-                f"{source_id}: manifest declares {declared_chunks} chunks, file missing"
-            )
-    totals = manifest.get("totals") or {}
-    if totals.get("chunks") is not None and int(totals["chunks"]) != total_chunks:
-        problems.append(
-            f"totals.chunks {totals.get('chunks')} != sum of per-source chunks {total_chunks}"
-        )
-    derived = manifest.get("derived") or {}
-    if (
-        index_chunks is not None
-        and derived.get("index_chunks") is not None
-        and int(derived["index_chunks"]) != int(index_chunks)
-    ):
-        problems.append(
-            f"served index has {index_chunks} chunks, manifest records {derived['index_chunks']}"
-        )
+    total_chunks, file_problems = _source_file_problems(
+        corpus_root, manifest, check_files=check_files
+    )
+    problems = [
+        *_manifest_shape_problems(manifest, check_code_fingerprint=check_code_fingerprint),
+        *file_problems,
+        *_totals_and_index_problems(manifest, total_chunks, index_chunks),
+    ]
     return manifest, problems
