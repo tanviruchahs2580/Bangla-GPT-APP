@@ -1,7 +1,8 @@
 /**
  * F-094 (FE-03): eight page components exceed the 500-line review budget the
  * audit set (AITutorPage was the first one split; its sections live under
- * pages/student/tutor/ now). The remaining seven are each a body of work that
+ * pages/student/tutor/ now, LearnPage's reader and workspace tabs under
+ * pages/student/learn/). The remaining six are each a body of work that
  * belongs in its own reviewed change, so this is the ratchet that keeps the
  * queue from growing while they land: every page is capped at the size it has
  * today, a file that is split MUST lower its ceiling in the same change, and a
@@ -29,9 +30,12 @@ const CEILING: Record<string, number> = {
   "WelcomePage.tsx": 128,
   "student/AITutorPage.tsx": 625,
   "student/HomePage.tsx": 319,
-  "student/LearnPage.tsx": 1023,
+  "student/LearnPage.tsx": 306,
   "student/MePage.tsx": 793,
   "student/QuizPage.tsx": 832,
+  "student/learn/ChapterAsk.tsx": 90,
+  "student/learn/ChapterPractice.tsx": 174,
+  "student/learn/LearnChapterPage.tsx": 481,
   "student/tutor/AssistantContent.tsx": 40,
   "student/tutor/EvidenceModal.tsx": 33,
   "student/tutor/TutorComposer.tsx": 179,

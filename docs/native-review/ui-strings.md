@@ -861,9 +861,9 @@ translation that changes the meaning of the English original.
 | 837 | apps/api/src/bangla_gpt_api/services/parent_digest.py:56 | (literal) | এই সারসংক্ষেপে শুধু পরিসংখ্যান আছে। আপনার সন্তানের ব্যক্তিগত টিউটর আলাপ | |
 | 838 | apps/api/src/bangla_gpt_api/services/parent_digest.py:57 | (literal) | কখনোই এতে যোগ করা হয় না বা শেয়ার করা হয় না। | |
 | 839 | apps/api/src/bangla_gpt_api/services/parent_digest.py:103 | (literal) | আপনার সন্তানের এ সপ্তাহের সারসংক্ষেপ নিচে দেওয়া হলো। | |
-| 840 | apps/api/src/bangla_gpt_api/services/qp_pdf.py:88 | (literal) | / উত্তরমালা | |
-| 841 | apps/api/src/bangla_gpt_api/services/qp_pdf.py:97 | (literal) | / উত্তরমালা | |
-| 842 | apps/api/src/bangla_gpt_api/services/qp_pdf.py:217 | (literal) | মূল্যায়ন নির্দেশিকা — মোট {guide.get( | |
+| 840 | apps/api/src/bangla_gpt_api/services/qp_pdf.py:89 | (literal) | / উত্তরমালা | |
+| 841 | apps/api/src/bangla_gpt_api/services/qp_pdf.py:98 | (literal) | / উত্তরমালা | |
+| 842 | apps/api/src/bangla_gpt_api/services/qp_pdf.py:218 | (literal) | মূল্যায়ন নির্দেশিকা — মোট {guide.get( | |
 | 843 | apps/api/src/bangla_gpt_api/services/quiz.py:155 | (literal) | শূন্যস্থানে সঠিক শব্দটি বসান: {sentence.replace(term, | |
 | 844 | apps/api/src/bangla_gpt_api/services/quiz_explain.py:19 | (literal) | শিক্ষার্থী একটি কুইজে এই প্রশ্নে ভুল করেছে। ব্যাখ্যা করে বোঝাও: | |
 | 845 | apps/api/src/bangla_gpt_api/services/quiz_explain.py:20 | (literal) | প্রশ্ন: {ctx.question} | |
