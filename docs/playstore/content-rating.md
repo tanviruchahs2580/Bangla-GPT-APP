@@ -17,7 +17,7 @@ adds content questions that do not apply.
 | Does the app contain violence? | No | Curriculum content only; the tutor's safety layer refuses violent requests (`services/safety.py`). |
 | Sexual content or nudity? | No | Same refusal layer; the safety layer carries a Bangla sexual-content refusal category (`services/safety.py`) while the committed red-team set (`apps/api/eval/redteam_v2.json`) covers override/leak prompts in Bangla and English plus drug, weapon and self-harm prompts. |
 | Profanity or crude humour? | No | No user-visible copy uses it. The safety layer has no profanity category (`services/safety.py` refuses self-harm, weapon/drug synthesis, sexual content, violence and personal-data requests); the answer rests on the copy and the school context, not on a filter. |
-| References to drugs, alcohol or tobacco? | No | Textbook science may *mention* substances in a biology context; that is not promotion and IARC's question is about glamorisation/promotion. Answer No; if the console offers a free-text note, say the app is a textbook tutor. |
+| References to drugs, alcohol or tobacco? | No | Curriculum science may *mention* substances in a biology context; that is not promotion and IARC's question is about glamourisation/promotion. Answer No; if the console offers a free-text note, say the app is an NCTB curriculum tutor (F-126: the corpus is curriculum documents, not student textbooks). |
 | Gambling, simulated gambling, or real-money purchases? | No | No payment path exists in the app at all. |
 | Horror, fear or threatening content? | No | |
 | **Does the app allow users to interact or exchange content?** | **Yes** | Classes, teacher-authored content and the tutor chat all carry user-generated text. |
