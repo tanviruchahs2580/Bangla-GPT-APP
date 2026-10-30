@@ -11,7 +11,8 @@ This script is the runtime backstop and adds what TypeScript cannot:
 
 * placeholder parity, and Bangla values that contain no Bengali at all;
 * the glossary's banned variants and register policy (`docs/glossary-bn.md`);
-* counted English nouns without a singular form in `EN_SINGULAR`.
+* counted English nouns without a singular form in `EN_SINGULAR`;
+* dictionary keys nothing renders (dead copy a reviewer still has to read).
 
 The dictionary is parsed as key/value pairs, including values the formatter
 wrapped over several lines: the first version of this parser matched one line
@@ -26,7 +27,9 @@ import re
 import sys
 from pathlib import Path
 
-I18N = Path(__file__).resolve().parents[1] / "apps" / "web" / "src" / "i18n.ts"
+REPO = Path(__file__).resolve().parents[1]
+I18N = REPO / "apps" / "web" / "src" / "i18n.ts"
+WEB_SRC = REPO / "apps" / "web" / "src"
 
 KEY = re.compile(
     r'^\s{2}([A-Za-z_][A-Za-z0-9_]*):\s*("(?:[^"\\]|\\.)*")\s*,?\s*$',
@@ -90,6 +93,14 @@ INFORMAL_VOICE_KEYS = {
     "saCheck",
 }
 INFORMAL_MARKER = re.compile("তুমি|তোমার|তোমাকে|তোমরা")
+
+#: Key prefixes the client resolves at runtime from a server value, so the
+#: name never appears as a literal: notif_* wire codes become camelCase keys
+#: in NotificationBell, and sugg_* report codes arrive verbatim from the API.
+DYNAMIC_KEY_PREFIXES = ("notif", "sugg_")
+
+#: Keys a server-supplied code selects verbatim (StudentMemoryOut).
+DYNAMIC_KEYS = {"memory_on_disable_note"}
 
 #: A counted English noun: a numeric placeholder, up to two modifier words,
 #: then a plural noun. `heatmapSummary` is deliberately count-agnostic
@@ -180,6 +191,33 @@ def check_english_plurals(en: dict[str, str], singular: dict[str, str]) -> list[
     return failures
 
 
+def check_unused_keys(bn: dict[str, str]) -> list[str]:
+    """Dictionary keys no source file can render.
+
+    A key is live when its name appears as a string literal anywhere under
+    apps/web/src (a `t("key")` call, or a map/lookup holding the name), or
+    when it is named below as a key the client resolves from a server value.
+    Tests count as references: a key a test drives through the component is
+    wired, and the point of the check is dead copy, not unused test fixtures.
+    """
+    blob = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in WEB_SRC.rglob("*")
+        if path.suffix in {".ts", ".tsx"} and path != I18N
+    )
+    failures: list[str] = []
+    for key in sorted(bn):
+        if key.startswith(DYNAMIC_KEY_PREFIXES) or key in DYNAMIC_KEYS:
+            continue
+        if f'"{key}"' in blob or f"'{key}'" in blob:
+            continue
+        failures.append(
+            f"unused key: {key!r} is in the dictionary but no source file "
+            "renders it -- delete it, wire it, or name it in DYNAMIC_KEYS"
+        )
+    return failures
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument(
@@ -231,16 +269,19 @@ def main() -> int:
 
     glossary = check_glossary(bn)
     plural = check_english_plurals(en, singular)
+    unused = check_unused_keys(bn)
     failures.extend(glossary)
     failures.extend(plural)
+    failures.extend(unused)
 
     print(f"i18n: {len(bn)} bn keys, {len(en)} en keys")
     print(f"  english-in-bn      : {len(leaks)}")
     print(
-        f"  parity/placeholder : {len(failures) - len(leaks) - len(glossary) - len(plural)}"
+        f"  parity/placeholder : {len(failures) - len(leaks) - len(glossary) - len(plural) - len(unused)}"
     )
     print(f"  glossary/register  : {len(glossary)}")
     print(f"  plural             : {len(plural)}")
+    print(f"  unused keys        : {len(unused)}")
 
     if failures:
         print("\nFAILURES:")
