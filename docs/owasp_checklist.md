@@ -59,7 +59,7 @@ Legend: [DONE] implemented + tested | [PARTIAL] implemented, limitation noted
 
 ## A04 -- Insecure Design
 - [DONE] Fail-closed production boot: `enforce_production_safety()`
-  (`apps/api/src/bangla_gpt_api/config.py`) refuses mock provider, wildcard
+  (`apps/api/src/bangla_gpt_api/main.py`) refuses mock provider, wildcard
   CORS, default admin password, missing `PII_ENC_KEY`, bad
   `RATE_LIMIT_BACKEND` in prod. Tests: `test_admin_hardening.py`,
   `test_security_v2.py::test_production_boot_requires_pii_enc_key` (with a
@@ -72,7 +72,7 @@ Legend: [DONE] implemented + tested | [PARTIAL] implemented, limitation noted
   (`SecurityHeadersMiddleware`; `test_security_headers.py`): nosniff,
   frame-ancestors/DENY, referrer-policy, CSP; on the SPA via Caddy
   (`deploy/caddy/Caddyfile`): same set + HSTS includeSubDomains.
-- [DONE] CORS: explicit allowlist from `CORS_ORIGINS`; no wildcard in prod
+- [DONE] CORS: explicit allowlist from `ALLOWED_ORIGINS`; no wildcard in prod
   (enforced at boot). Tests: `test_cors.py`.
 - [DONE] `Server` header stripped at the edge (`-Server` in Caddyfile).
 - [DONE] `/docs`, `/redoc`, `/openapi.json` are development-only surfaces:
