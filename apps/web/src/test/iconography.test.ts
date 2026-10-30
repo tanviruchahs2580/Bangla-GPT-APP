@@ -17,9 +17,19 @@ import { describe, expect, it } from "vitest";
 
 const ROOTS = ["src/pages", "src/components"];
 
-/** Emoji, dingbats and the arrow blocks that read as iconography in the UI. */
-const GLYPH =
-  /[\u2190-\u21FF\u2300-\u23FF\u2460-\u24FF\u25A0-\u27BF\u2B00-\u2BFF\uFE0F\u{1F000}-\u{1FAFF}]/u;
+/**
+ * Emoji, dingbats and the arrow blocks that read as iconography in the UI.
+ * Built from a string so the astral emoji range is one explicit code-point
+ * range rather than a literal the linter reads as a combined character. The
+ * variation selector U+FE0F is deliberately absent: on its own it renders
+ * nothing, and the emoji it modifies is already in range (this matches the
+ * repo-wide slop scan's B4 character set).
+ */
+const GLYPH = new RegExp(
+  "[\\u2190-\\u21FF\\u2300-\\u23FF\\u2460-\\u24FF\\u25A0-\\u27BF" +
+    "\\u2B00-\\u2BFF\\u{1F000}-\\u{1FAFF}]",
+  "u",
+);
 
 /** Comment shapes that legitimately contain an arrow or a tick. */
 const COMMENT_LINE = /^\s*(\/\/|\/\*|\*|\{\/\*|<!--)/;
@@ -46,7 +56,9 @@ describe("UI iconography (F-149/F-200)", () => {
             if (COMMENT_LINE.test(line)) return;
             const code = line.replace(INLINE_JSX_COMMENT, "");
             if (GLYPH.test(code)) {
-              hits.push(`${relative(process.cwd(), file)}:${index + 1}: ${line.trim()}`);
+              hits.push(
+                `${relative(process.cwd(), file)}:${index + 1}: ${line.trim()}`,
+              );
             }
           });
       }

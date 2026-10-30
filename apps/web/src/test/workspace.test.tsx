@@ -189,9 +189,7 @@ describe("unified workspace tabs", () => {
     expect(button).toHaveAttribute("aria-pressed", "false");
 
     await userEvent.click(button);
-    await waitFor(() =>
-      expect(button).toHaveAttribute("aria-pressed", "true"),
-    );
+    await waitFor(() => expect(button).toHaveAttribute("aria-pressed", "true"));
     // The visible label switches to "Saved" as well; both channels agree.
     expect(button).toHaveTextContent(t("downloaded"));
     await clearOfflineChapters();

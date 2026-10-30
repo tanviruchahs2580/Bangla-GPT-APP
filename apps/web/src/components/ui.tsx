@@ -372,9 +372,8 @@ export function Field({
             "aria-describedby"
           ],
         "aria-invalid":
-          error || (children.props as { "aria-invalid"?: boolean })[
-            "aria-invalid"
-          ]
+          error ||
+          (children.props as { "aria-invalid"?: boolean })["aria-invalid"]
             ? true
             : undefined,
       })

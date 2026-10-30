@@ -60,8 +60,6 @@ describe("offline fallback page carries both languages (F-165)", () => {
 
   it("uses an SVG signal glyph, not an emoji", () => {
     expect(html).toMatch(/<svg[\s\S]*?<\/svg>/);
-    expect(html).not.toMatch(
-      /[\u{1F000}-\u{1FAFF}\u2600-\u27BF]/u,
-    );
+    expect(html).not.toMatch(/[\u{1F000}-\u{1FAFF}\u2600-\u27BF]/u);
   });
 });

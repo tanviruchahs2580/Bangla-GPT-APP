@@ -79,7 +79,9 @@ describe("page size budget (F-094)", () => {
     const unrecorded = files
       .map((file) => relative(PAGES, file).replace(/\\/g, "/"))
       .filter((key) => CEILING[key] === undefined)
-      .filter((key) => countLines(readFileSync(join(PAGES, key), "utf8")) > BUDGET);
+      .filter(
+        (key) => countLines(readFileSync(join(PAGES, key), "utf8")) > BUDGET,
+      );
     expect(
       unrecorded,
       `new pages over ${BUDGET} lines (split before adding a ceiling):\n${unrecorded.join("\n")}`,

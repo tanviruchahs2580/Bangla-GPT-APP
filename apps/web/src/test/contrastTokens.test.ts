@@ -159,9 +159,10 @@ describe("no loose colour literals (F-199)", () => {
       if (/^\s*--[a-z0-9-]+\s*:/.test(line)) return;
       loose.push(`styles.css:${index + 1}: ${line.trim()}`);
     });
-    expect(loose, `colour literals outside the token blocks:\n${loose.join("\n")}`).toEqual(
-      [],
-    );
+    expect(
+      loose,
+      `colour literals outside the token blocks:\n${loose.join("\n")}`,
+    ).toEqual([]);
   });
 
   it("defines the ink, print and highlight tokens the rules now use", () => {

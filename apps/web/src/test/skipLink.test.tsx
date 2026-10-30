@@ -183,9 +183,7 @@ describe("heading order (F-168)", () => {
       { timeout: 8000 },
     );
 
-    const headings = [
-      ...container.querySelectorAll("h1, h2, h3, h4, h5, h6"),
-    ];
+    const headings = [...container.querySelectorAll("h1, h2, h3, h4, h5, h6")];
     const levels = headings.map((h) => Number(h.tagName.slice(1)));
     expect(
       container.querySelectorAll("h1"),
