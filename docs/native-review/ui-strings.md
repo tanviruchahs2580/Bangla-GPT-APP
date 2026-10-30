@@ -28,7 +28,7 @@ translation that changes the meaning of the English original.
 | 4 | apps/web/src/i18n.ts:19 | welcomeLogin | আমার অ্যাকাউন্ট আছে | |
 | 5 | apps/web/src/i18n.ts:20 | landingKicker | বাংলাদেশের শিক্ষার্থীদের জন্য নির্মিত | |
 | 6 | apps/web/src/i18n.ts:21 | landingHeroTitle | পাঠ্যবই-ভিত্তিক বাংলা AI টিউটর — এখন প্রতিটি শিক্ষার্থীর জন্য | |
-| 7 | apps/web/src/i18n.ts:23 | landingHeroSub | প্রশ্ন করো, কুইজ দাও, অগ্রগতি দেখো — সবই তোমার নিজের ভাষায়, পাঠ্যবইয়ের প্রমাণসহ। শিক্ষক ও অভিভাবকদের জন্যও আছে AI সহকারী। | |
+| 7 | apps/web/src/i18n.ts:23 | landingHeroSub | প্রশ্ন করুন, কুইজ দিন, অগ্রগতি দেখুন — সবই আপনার নিজের ভাষায়, পাঠ্যবইয়ের প্রমাণসহ। শিক্ষক ও অভিভাবকদের জন্যও আছে AI সহকারী। | |
 | 8 | apps/web/src/i18n.ts:25 | featTutorTitle | AI টিউটর | |
 | 9 | apps/web/src/i18n.ts:26 | featTutorSub | পাঠ্যবই-ভিত্তিক উত্তর, ধাপে ধাপে ব্যাখ্যাসহ | |
 | 10 | apps/web/src/i18n.ts:27 | featPracticeTitle | অনুশীলন ও কুইজ | |
@@ -36,7 +36,7 @@ translation that changes the meaning of the English original.
 | 12 | apps/web/src/i18n.ts:29 | featLearnTitle | শেখার লাইব্রেরি | |
 | 13 | apps/web/src/i18n.ts:30 | featLearnSub | অফলাইনেও পড়া যায় | |
 | 14 | apps/web/src/i18n.ts:31 | featTeacherTitle | শিক্ষকের AI সহকারী | |
-| 15 | apps/web/src/i18n.ts:32 | featTeacherSub | ওয়ার্কশীট, প্রশ্নপত্র ও লেসন প্ল্যান মিনিটেই | |
+| 15 | apps/web/src/i18n.ts:32 | featTeacherSub | ওয়ার্কশীট, প্রশ্নপত্র ও পাঠ পরিকল্পনা মিনিটেই | |
 | 16 | apps/web/src/i18n.ts:33 | landingFeaturesLabel | মূল ফিচার | |
 | 17 | apps/web/src/i18n.ts:34 | landingStatsLabel | এক নজরে | |
 | 18 | apps/web/src/i18n.ts:35 | statClassesValue | ৬–১০ | |
@@ -50,12 +50,12 @@ translation that changes the meaning of the English original.
 | 26 | apps/web/src/i18n.ts:44 | notifEmpty | এখন কোনো নোটিফিকেশন নেই | |
 | 27 | apps/web/src/i18n.ts:45 | notifQuizAssigned | {subject} · {chapter}: {count}টি প্রশ্নের কুইজ যোগ হয়েছে | |
 | 28 | apps/web/src/i18n.ts:47 | notifShorttestAssigned | {subject} · {chapter}: নতুন ছোট পরীক্ষা যোগ হয়েছে | |
-| 29 | apps/web/src/i18n.ts:48 | notifSupportPlan | তোমার জন্য নতুন সহায়তা প্ল্যান তৈরি হয়েছে ({focus}টি ফোকাস পয়েন্ট) | |
+| 29 | apps/web/src/i18n.ts:48 | notifSupportPlan | আপনার জন্য নতুন সহায়তা পরিকল্পনা তৈরি হয়েছে ({focus}টি ফোকাস পয়েন্ট) | |
 | 30 | apps/web/src/i18n.ts:50 | notifParentLinked | অভিভাবকের সংযোগ সফল হয়েছে | |
 | 31 | apps/web/src/i18n.ts:51 | stopGenerating | থামান | |
 | 32 | apps/web/src/i18n.ts:52 | regenerate | আবার তৈরি করুন | |
 | 33 | apps/web/src/i18n.ts:53 | saveAsNote | নোট হিসেবে সেভ করুন | |
-| 34 | apps/web/src/i18n.ts:54 | noteSaved | সেভ হয়েছে | |
+| 34 | apps/web/src/i18n.ts:54 | noteSaved | সংরক্ষিত হয়েছে | |
 | 35 | apps/web/src/i18n.ts:55 | savedNotesTitle | সংরক্ষিত নোট | |
 | 36 | apps/web/src/i18n.ts:56 | savedNotesEmpty | এখনো কোনো নোট সংরক্ষণ করা হয়নি — টিউটরের উত্তরের পাশে বুকমার্ক আইকনে চাপ দিলে এখানে জমা হবে। | |
 | 37 | apps/web/src/i18n.ts:58 | noteDelete | নোট মুছুন | |
@@ -63,9 +63,9 @@ translation that changes the meaning of the English original.
 | 39 | apps/web/src/i18n.ts:60 | genKind | ধরন | |
 | 40 | apps/web/src/i18n.ts:61 | genWorksheet | ওয়ার্কশীট | |
 | 41 | apps/web/src/i18n.ts:62 | genAnswerKey | উত্তরমালা | |
-| 42 | apps/web/src/i18n.ts:63 | genHomework | হোমওয়ার্ক | |
+| 42 | apps/web/src/i18n.ts:63 | genHomework | বাড়ির কাজ | |
 | 43 | apps/web/src/i18n.ts:64 | genRubric | রুব্রিক | |
-| 44 | apps/web/src/i18n.ts:65 | genLessonPlan | লেসন প্ল্যান | |
+| 44 | apps/web/src/i18n.ts:65 | genLessonPlan | পাঠ পরিকল্পনা | |
 | 45 | apps/web/src/i18n.ts:66 | genNow | এখনই তৈরি করুন | |
 | 46 | apps/web/src/i18n.ts:67 | genLater | ব্যাকগ্রাউন্ডে চালান | |
 | 47 | apps/web/src/i18n.ts:68 | genQuestionsHint | প্রতি সারিতে একটি করে প্রশ্ন (উত্তরমালার জন্য) | |
@@ -76,12 +76,12 @@ translation that changes the meaning of the English original.
 | 52 | apps/web/src/i18n.ts:74 | jobValidating | যাচাই হচ্ছে | |
 | 53 | apps/web/src/i18n.ts:75 | jobReady | প্রস্তুত | |
 | 54 | apps/web/src/i18n.ts:76 | jobFailed | ব্যর্থ | |
-| 55 | apps/web/src/i18n.ts:77 | genLibrary | সেভ করা ডকুমেন্ট | |
+| 55 | apps/web/src/i18n.ts:77 | genLibrary | সংরক্ষিত ডকুমেন্ট | |
 | 56 | apps/web/src/i18n.ts:78 | genAll | সকল | |
 | 57 | apps/web/src/i18n.ts:79 | noDocumentsYet | এখন পর্যন্ত কোনো ডকুমেন্ট নেই | |
 | 58 | apps/web/src/i18n.ts:80 | genDownloadPdf | PDF | |
-| 59 | apps/web/src/i18n.ts:81 | genSourcesCount | {n}টি উৎস থেকে | |
-| 60 | apps/web/src/i18n.ts:82 | deleteGeneric | মুছে ফেলুন | |
+| 59 | apps/web/src/i18n.ts:81 | genSourcesCount | {n}টি সূত্র থেকে | |
+| 60 | apps/web/src/i18n.ts:82 | deleteGeneric | মুছুন | |
 | 61 | apps/web/src/i18n.ts:83 | classLevel | শ্রেণি | |
 | 62 | apps/web/src/i18n.ts:84 | chapterOptional | অধ্যায় (ঐচ্ছিক) | |
 | 63 | apps/web/src/i18n.ts:85 | chapterRequired | অধ্যায় (আবশ্যিক) | |
@@ -118,7 +118,7 @@ translation that changes the meaning of the English original.
 | 94 | apps/web/src/i18n.ts:120 | periodWeekly | সাপ্তাহিক | |
 | 95 | apps/web/src/i18n.ts:121 | periodMonthly | মাসিক | |
 | 96 | apps/web/src/i18n.ts:122 | reportQuizzesGraded | জমা দেওয়া পরীক্ষা | |
-| 97 | apps/web/src/i18n.ts:123 | reportAvg | গড় নম্বর | |
+| 97 | apps/web/src/i18n.ts:123 | reportAvg | গড় স্কোর | |
 | 98 | apps/web/src/i18n.ts:124 | reportChaptersRead | পড়া অধ্যায় | |
 | 99 | apps/web/src/i18n.ts:125 | reportQuestions | জিজ্ঞাসা করা প্রশ্ন | |
 | 100 | apps/web/src/i18n.ts:126 | reportWeak | দুর্বল অধ্যায় | |
@@ -145,7 +145,7 @@ translation that changes the meaning of the English original.
 | 121 | apps/web/src/i18n.ts:150 | secQuizzes | কুইজ প্রচেষ্টা | |
 | 122 | apps/web/src/i18n.ts:151 | covContent | কনটেন্ট আছে এমন বিষয় | |
 | 123 | apps/web/src/i18n.ts:152 | covCompleted | সম্পূর্ণ | |
-| 124 | apps/web/src/i18n.ts:153 | anaTitle | ব্যবহারের পরিসংখ্যা | |
+| 124 | apps/web/src/i18n.ts:153 | anaTitle | ব্যবহারের পরিসংখ্যান | |
 | 125 | apps/web/src/i18n.ts:154 | anaDaily | দৈনিক সক্রিয় শিক্ষার্থী | |
 | 126 | apps/web/src/i18n.ts:155 | login | লগইন | |
 | 127 | apps/web/src/i18n.ts:156 | logout | লগআউট | |
@@ -177,13 +177,13 @@ translation that changes the meaning of the English original.
 | 153 | apps/web/src/i18n.ts:184 | noResults | কিছু পাওয়া যায়নি | |
 | 154 | apps/web/src/i18n.ts:185 | activityTitle | প্রতিদিনের অনুশীলন | |
 | 155 | apps/web/src/i18n.ts:186 | streakLabel | {days} দিনের ধারাবাহিকতা | |
-| 156 | apps/web/src/i18n.ts:187 | activityHint | প্রতিদিন অন্তত একটি প্রশ্ন বা কুইজ স্ট্রিক ধরে রাখে | |
+| 156 | apps/web/src/i18n.ts:187 | activityHint | প্রতিদিন অন্তত একটি প্রশ্ন বা কুইজ করলে ধারাবাহিকতা থাকে | |
 | 157 | apps/web/src/i18n.ts:188 | activityQuestion | {n}টি প্রশ্ন | |
 | 158 | apps/web/src/i18n.ts:189 | activityQuestions | {n}টি প্রশ্ন | |
 | 159 | apps/web/src/i18n.ts:190 | activityQuizzes | {n}টি কুইজ | |
 | 160 | apps/web/src/i18n.ts:191 | activityMinutes | {n} মিনিট | |
-| 161 | apps/web/src/i18n.ts:192 | revisionTab | রিভিশন | |
-| 162 | apps/web/src/i18n.ts:193 | revisionEmpty | আজ কোনো রিভিশন নেই। কুইজ খেলে নতুন প্রশ্ন যোগ করুন। | |
+| 161 | apps/web/src/i18n.ts:192 | revisionTab | পুনরালোচনা | |
+| 162 | apps/web/src/i18n.ts:193 | revisionEmpty | আজ পুনরালোচনার কিছু নেই — কুইজ খেললে নতুন প্রশ্ন যোগ হবে। | |
 | 163 | apps/web/src/i18n.ts:194 | reteachTitle | আগে এগুলো পড়ে নিন | |
 | 164 | apps/web/src/i18n.ts:195 | reteachHint | ভুল করা প্রশ্নগুলোর পেছনের ধাপ — পাঠ্যবই থেকে | |
 | 165 | apps/web/src/i18n.ts:196 | reteachChain | {concept} — আগে শক্ত করুন: {prereq} | |
@@ -217,7 +217,7 @@ translation that changes the meaning of the English original.
 | 193 | apps/web/src/i18n.ts:224 | askPlaceholder | পাঠ্যবই থেকে যেকোনো প্রশ্ন লিখুন… | |
 | 194 | apps/web/src/i18n.ts:225 | thinking | ভাবছি… | |
 | 195 | apps/web/src/i18n.ts:226 | supportedBadge | পাঠ্যবই-সমর্থিত | |
-| 196 | apps/web/src/i18n.ts:227 | unsupportedBadge | প্রমাণ নেই | |
+| 196 | apps/web/src/i18n.ts:227 | unsupportedBadge | পাঠ্যবই-সমর্থিত নয় | |
 | 197 | apps/web/src/i18n.ts:228 | quizTitle | কুইজ | |
 | 198 | apps/web/src/i18n.ts:229 | startQuiz | কুইজ শুরু করুন | |
 | 199 | apps/web/src/i18n.ts:230 | questionCount | প্রশ্ন সংখ্যা | |
@@ -443,12 +443,12 @@ translation that changes the meaning of the English original.
 | 419 | apps/web/src/i18n.ts:458 | nextQuestion | পরের প্রশ্ন | |
 | 420 | apps/web/src/i18n.ts:459 | previousQuestion | আগের প্রশ্ন | |
 | 421 | apps/web/src/i18n.ts:460 | finishQuiz | শেষ করুন | |
-| 422 | apps/web/src/i18n.ts:463 | quizUnansweredConfirm | {n} টি প্রশ্নের উত্তর দেওয়া হয়নি। যা আছে তা দিয়েই জমা দেবেন? | |
+| 422 | apps/web/src/i18n.ts:463 | quizUnansweredConfirm | {n}টি প্রশ্নের উত্তর দেওয়া হয়নি। যা আছে তা দিয়েই জমা দেবেন? | |
 | 423 | apps/web/src/i18n.ts:465 | quizSubmitAnyway | যা আছে তা-ই জমা দিন | |
 | 424 | apps/web/src/i18n.ts:466 | quizKeepAnswering | উত্তর দিতে থাকুন | |
 | 425 | apps/web/src/i18n.ts:467 | prevPage | আগের পৃষ্ঠা | |
 | 426 | apps/web/src/i18n.ts:468 | nextPage | পরের পৃষ্ঠা | |
-| 427 | apps/web/src/i18n.ts:470 | heatmapSummary | গত {days} দিনে {questions} টি প্রশ্ন ও কুইজ অনুশীলন, {active} টি সক্রিয় দিন | |
+| 427 | apps/web/src/i18n.ts:470 | heatmapSummary | গত {days} দিনে {questions}টি প্রশ্ন ও কুইজ অনুশীলন, {active}টি সক্রিয় দিন | |
 | 428 | apps/web/src/i18n.ts:472 | notStarted | এখনো কোনো কুইজ দেওয়া হয়নি। | |
 | 429 | apps/web/src/i18n.ts:473 | continueTutor | চ্যাট চালিয়ে যান | |
 | 430 | apps/web/src/i18n.ts:479 | admSafety | নিরাপত্তা পরীক্ষা | |
@@ -463,7 +463,7 @@ translation that changes the meaning of the English original.
 | 439 | apps/web/src/i18n.ts:492 | statusChecked | সর্বশেষ যাচাই: {when} | |
 | 440 | apps/web/src/i18n.ts:493 | actingAs | আপনি একটি সহায়তা সেশনে {name} হিসেবে কাজ করছেন | |
 | 441 | apps/web/src/i18n.ts:494 | exitImpersonation | সহায়তা সেশন শেষ করুন | |
-| 442 | apps/web/src/i18n.ts:495 | impersonate | সহায়তা যাচাই | |
+| 442 | apps/web/src/i18n.ts:495 | impersonate | সহায়তা সেশনে প্রবেশ করুন | |
 | 443 | apps/web/src/i18n.ts:496 | impReasonPrompt | এই সহায়তা সেশনের কারণ (কমপক্ষে ৩ অক্ষর) | |
 | 444 | apps/web/src/i18n.ts:497 | admTriage | ফিডব্যাক পর্যালোচনা | |
 | 445 | apps/web/src/i18n.ts:498 | admTriageOpen | খোলা | |
@@ -485,7 +485,7 @@ translation that changes the meaning of the English original.
 | 461 | apps/web/src/i18n.ts:516 | practice | অনুশীলন | |
 | 462 | apps/web/src/i18n.ts:517 | practiceTitle | অনুশীলন | |
 | 463 | apps/web/src/i18n.ts:518 | weakPracticeTitle | আমার দুর্বলতা | |
-| 464 | apps/web/src/i18n.ts:519 | weakPracticeHint | এই অধ্যায়গুলোতে একটু বেশি মনোযোগ দাও | |
+| 464 | apps/web/src/i18n.ts:519 | weakPracticeHint | এই অধ্যায়গুলোতে একটু বেশি মনোযোগ দিন | |
 | 465 | apps/web/src/i18n.ts:520 | weakPracticeStart | দুর্বলতা অনুশীলন করুন | |
 | 466 | apps/web/src/i18n.ts:521 | noWeakChapters | এখনো কোনো দুর্বল অধ্যায় নেই — দারুণ! | |
 | 467 | apps/web/src/i18n.ts:522 | chapterPracticeTab | অধ্যায় অনুশীলন | |
@@ -512,8 +512,8 @@ translation that changes the meaning of the English original.
 | 488 | apps/web/src/i18n.ts:545 | imgExplain | বুঝিয়ে দাও | |
 | 489 | apps/web/src/i18n.ts:546 | imgCheck | আমার উত্তর যাচাই করো | |
 | 490 | apps/web/src/i18n.ts:547 | imgSteps | ধাপে ধাপে দেখাও | |
-| 491 | apps/web/src/i18n.ts:548 | lowConfidenceHint | AI এই উত্তরে পুরোপুরি নিশ্চিত নয় — পাঠ্যবইয়ের উৎসটিও দেখে নিন। | |
-| 492 | apps/web/src/i18n.ts:550 | actionPractice | অনুশীলন করো | |
+| 491 | apps/web/src/i18n.ts:548 | lowConfidenceHint | AI এই উত্তরে পুরোপুরি নিশ্চিত নয় — পাঠ্যবইয়ের সূত্রটিও দেখে নিন। | |
+| 492 | apps/web/src/i18n.ts:550 | actionPractice | অনুশীলন করুন | |
 | 493 | apps/web/src/i18n.ts:552 | chaptersDone | {done}/{total} সম্পন্ন | |
 | 494 | apps/web/src/i18n.ts:553 | aiSuggestion | AI পরামর্শ | |
 | 495 | apps/web/src/i18n.ts:554 | nextSuggestionPractice | এই অধ্যায়টি অনুশীলন করে শক্ত করুন | |
@@ -535,115 +535,115 @@ translation that changes the meaning of the English original.
 | 511 | apps/web/src/i18n.ts:573 | thAiInsight | AI অন্তর্দৃষ্টি | |
 | 512 | apps/web/src/i18n.ts:574 | thInsightRisk | {n} জন শিক্ষার্থী ঝুঁকিতে আছে — সহায়তা পরিকল্পনা তৈরি করুন। | |
 | 513 | apps/web/src/i18n.ts:575 | thInsightWeak | সবচেয়ে দুর্বল ধারণা: {concept} ({pct}% নির্ভুলতা)। | |
-| 514 | apps/web/src/i18n.ts:576 | thInsightOk | এই মুহূর্তে কোনো উদ্বেগজনক প্যাটার্ন নেই। | |
-| 515 | apps/web/src/i18n.ts:577 | thInsightNoData | অন্তর্দৃষ্টি পেতে শ্রেণি তৈরি করুন ও শিক্ষার্থী যোগ করুন। | |
-| 516 | apps/web/src/i18n.ts:578 | thWorkloadTitle | সাশ্রয়ী সময় (আনুমানিক) | |
-| 517 | apps/web/src/i18n.ts:580 | cGridTitle | কী তৈরি করতে চান? | |
-| 518 | apps/web/src/i18n.ts:581 | cQuickMode | কুইক মোড | |
-| 519 | apps/web/src/i18n.ts:582 | cAdvancedMode | অ্যাডভান্সড মোড | |
-| 520 | apps/web/src/i18n.ts:583 | cQuizEntry | কুইজ (বাল্ক অ্যাসাইনমেন্ট) | |
-| 521 | apps/web/src/i18n.ts:584 | cQuizEntryHint | শিক্ষার্থীদের জন্য কুইজ অ্যাসাইন করুন | |
-| 522 | apps/web/src/i18n.ts:585 | cOpen | খুলুন | |
-| 523 | apps/web/src/i18n.ts:586 | cWorksheetSub | স্টাডি মেটেরিয়াল | |
-| 524 | apps/web/src/i18n.ts:587 | valTitle | AI যাচাই চেকলিস্ট | |
-| 525 | apps/web/src/i18n.ts:588 | valNctb | NCTB সামঞ্জস্য | |
-| 526 | apps/web/src/i18n.ts:589 | valDup | ডুপ্লিকেট প্রশ্ন নেই | |
-| 527 | apps/web/src/i18n.ts:590 | valDifficulty | অসুবিধার বণ্টন মিলেছে | |
-| 528 | apps/web/src/i18n.ts:591 | valPass | পাস | |
-| 529 | apps/web/src/i18n.ts:592 | valGenerationGate | নির্মাণের সময় সার্ভারে যাচাই হয় | |
-| 530 | apps/web/src/i18n.ts:593 | valMin | সর্বনিম্ন সামঞ্জস্য | |
-| 531 | apps/web/src/i18n.ts:594 | valPending | তৈরি হলে দেখা যাবে | |
-| 532 | apps/web/src/i18n.ts:595 | stepDraft | খসড়া | |
-| 533 | apps/web/src/i18n.ts:596 | stepReview | পর্যালোচনা | |
-| 534 | apps/web/src/i18n.ts:597 | stepEdit | সম্পাদনা | |
-| 535 | apps/web/src/i18n.ts:598 | stepApprove | অনুমোদন | |
-| 536 | apps/web/src/i18n.ts:599 | stepPublish | প্রকাশ | |
-| 537 | apps/web/src/i18n.ts:600 | qpReviewProgress | {done}/{total}টি প্রশ্ন অনুমোদিত | |
-| 538 | apps/web/src/i18n.ts:601 | qpGateHint | সব প্রশ্ন অনুমোদন না করা পর্যন্ত চূড়ান্ত করা যাবে না। | |
-| 539 | apps/web/src/i18n.ts:602 | qpChaptersLabel | অধ্যায় (কমা দিয়ে) | |
-| 540 | apps/web/src/i18n.ts:604 | clsOverview | শ্রেণি ওভারভিউ | |
-| 541 | apps/web/src/i18n.ts:605 | clsRisk | ঝুঁকিতে | |
-| 542 | apps/web/src/i18n.ts:606 | clsSearchStudent | শিক্ষার্থী খুঁজুন… | |
-| 543 | apps/web/src/i18n.ts:607 | clsStudentTitle | শিক্ষার্থীর বিবরণ | |
-| 544 | apps/web/src/i18n.ts:608 | clsMastery | সামগ্রিক দক্ষতা | |
-| 545 | apps/web/src/i18n.ts:609 | clsWeakConcepts | দুর্বল ধারণা | |
-| 546 | apps/web/src/i18n.ts:610 | clsRecommend | AI সুপারিশ | |
-| 547 | apps/web/src/i18n.ts:611 | clsBackToList | তালিকায় ফিরুন | |
-| 548 | apps/web/src/i18n.ts:612 | clsNoWeakConcepts | এই শিক্ষার্থীর দুর্বল ধারণা নেই। | |
-| 549 | apps/web/src/i18n.ts:614 | asmTitle | মূল্যায়ন | |
-| 550 | apps/web/src/i18n.ts:615 | asmTabPapers | প্রশ্নপত্র | |
-| 551 | apps/web/src/i18n.ts:616 | asmTabShortTests | সংক্ষিপ্ত পরীক্ষা | |
-| 552 | apps/web/src/i18n.ts:617 | asmTabAssignments | বাল্ক অ্যাসাইনমেন্ট | |
-| 553 | apps/web/src/i18n.ts:618 | asmResults | ফলাফল | |
-| 554 | apps/web/src/i18n.ts:619 | resAvg | গড় | |
-| 555 | apps/web/src/i18n.ts:620 | resHigh | সর্বোচ্চ | |
-| 556 | apps/web/src/i18n.ts:621 | resLow | সর্বনিম্ন | |
-| 557 | apps/web/src/i18n.ts:622 | resCount | জমা দিয়েছে {n} জন | |
-| 558 | apps/web/src/i18n.ts:623 | asmCreateInCreate | নতুন কিছু তৈরি করতে ‘তৈরি করুন’ ট্যাবে যান | |
-| 559 | apps/web/src/i18n.ts:625 | anaCiTitle | AI ক্লাসরুম ইন্টেলিজেন্স | |
-| 560 | apps/web/src/i18n.ts:626 | anaCiTop | আজকের প্রধান পরামর্শ | |
-| 561 | apps/web/src/i18n.ts:627 | anaCiRisk | {n} জন ঝুঁকিতে — সহায়তা পরিকল্পনা তৈরি করুন। | |
-| 562 | apps/web/src/i18n.ts:628 | anaCiWeak | {concept} ধারণাটি সবচেয়ে দুর্বল ({pct}% নির্ভুলতা) — পুনরালোচনা করুন। | |
-| 563 | apps/web/src/i18n.ts:630 | anaCiCoverage | {subject} বিষয়ে পাঠদান এখনো শুরু হয়নি। | |
-| 564 | apps/web/src/i18n.ts:631 | anaCiOk | শ্রেণির অবস্থা ভালো — নিয়মিত অনুশীলন চালিয়ে যান। | |
-| 565 | apps/web/src/i18n.ts:632 | anaCapacity | শিক্ষক সামর্থ্য | |
-| 566 | apps/web/src/i18n.ts:633 | anaCapacityHint | AI সহকারী হিসেবে আপনার সামর্থ্য বাড়ায় — কখনো শিক্ষকের বিকল্প নয়। | |
-| 567 | apps/web/src/i18n.ts:636 | tpTitle | শিক্ষক প্রোফাইল | |
-| 568 | apps/web/src/i18n.ts:637 | tpDefaultClass | ডিফল্ট শ্রেণি | |
-| 569 | apps/web/src/i18n.ts:638 | tpPrefsHint | এই সেটিংস জেনারেটরে আগে থেকে বসে যাবে। | |
-| 570 | apps/web/src/i18n.ts:640 | retry | আবার চেষ্টা করুন | |
-| 571 | apps/web/src/i18n.ts:641 | roleStudent | শিক্ষার্থী | |
-| 572 | apps/web/src/i18n.ts:642 | roleTeacher | শিক্ষক | |
-| 573 | apps/web/src/i18n.ts:643 | roleParent | অভিভাবক | |
-| 574 | apps/web/src/i18n.ts:644 | roleAdmin | অ্যাডমিন | |
-| 575 | apps/web/src/i18n.ts:645 | roleSchoolAdmin | স্কুল অ্যাডমিন | |
-| 576 | apps/web/src/i18n.ts:646 | studentFallback | শিক্ষার্থী | |
-| 577 | apps/web/src/i18n.ts:647 | loadFailed | লোড করা যায়নি | |
-| 578 | apps/web/src/i18n.ts:648 | newChatFailed | নতুন চ্যাট শুরু করা যায়নি | |
-| 579 | apps/web/src/i18n.ts:649 | bookmark | বুকমার্ক | |
-| 580 | apps/web/src/i18n.ts:650 | stop | থামুন | |
-| 581 | apps/web/src/i18n.ts:651 | listen | শুনুন | |
-| 582 | apps/web/src/i18n.ts:652 | errBadCredentials | ইমেইল বা পাসওয়ার্ড সঠিক নয়। | |
-| 583 | apps/web/src/i18n.ts:653 | errEmailTaken | এই ইমেইল দিয়ে আগেই অ্যাকাউন্ট খোলা আছে। | |
-| 584 | apps/web/src/i18n.ts:654 | errEmailUnverified | আগে ইমেইল যাচাই করুন — কোড পাঠানো হয়েছে। | |
-| 585 | apps/web/src/i18n.ts:655 | errRateLimited | অনেকবার চেষ্টা হয়েছে। এক মিনিট অপেক্ষা করুন। | |
-| 586 | apps/web/src/i18n.ts:656 | errNoQuiz | এই শ্রেণি/বিষয়ে এখনো কুইজ তৈরি হয়নি। | |
-| 587 | apps/web/src/i18n.ts:657 | errAnswerCount | উত্তরের সংখ্যা মিলছে না। আবার জমা দিন। | |
-| 588 | apps/web/src/i18n.ts:658 | errAlreadyGraded | এই কুইজ আগেই জমা হয়ে গেছে। | |
-| 589 | apps/web/src/i18n.ts:659 | errInvalidInvite | ইনভাইট কোডটি ভুল বা মেয়াদ শেষ। | |
-| 590 | apps/web/src/i18n.ts:660 | errInvalidToken | কোডটি ভুল বা মেয়াদ শেষ। | |
-| 591 | apps/web/src/i18n.ts:661 | errLlmUnavailable | এখন উত্তর তৈরি হচ্ছে না — একটু পরে আবার চেষ্টা করুন। | |
-| 592 | apps/web/src/i18n.ts:662 | errTutorUnavailable | টিউটর সেবা এখন বন্ধ — একটু পরে চেষ্টা করুন। | |
-| 593 | apps/web/src/i18n.ts:663 | errNotAllowed | এটি করার অনুমতি নেই। | |
-| 594 | apps/web/src/i18n.ts:664 | errNetwork | ইন্টারনেট সংযোগ পরীক্ষা করুন। | |
-| 595 | apps/web/src/i18n.ts:665 | errTimeout | সার্ভার সাড়া দিচ্ছে না — একটু পরে আবার চেষ্টা করুন। | |
-| 596 | apps/web/src/i18n.ts:666 | errGeneric | কিছু একটা সমস্যা হয়েছে। একটু পরে আবার চেষ্টা করুন। | |
-| 597 | apps/web/src/i18n.ts:667 | errMfaRequired | দুই ধাপের যাচাই প্রয়োজন — অথেনটিকেটর কোড দিন। | |
-| 598 | apps/web/src/i18n.ts:668 | errBadMfaCode | কোডটি ভুল — আবার দেখে দিন। | |
-| 599 | apps/web/src/i18n.ts:669 | errBadMfaToken | যাচাইয়ের সময় শেষ — আবার লগইন করুন। | |
-| 600 | apps/web/src/i18n.ts:670 | errServiceUnavailable | সার্ভার এখন ব্যস্ত — একটু পরে আবার চেষ্টা করুন। | |
-| 601 | apps/web/src/i18n.ts:671 | errApiOriginDown | সার্ভারে সংযোগ করা যাচ্ছে না — অ্যাপটি এখনো কোনো ব্যাকএন্ড সার্ভারের সঙ্গে যুক্ত হয়নি। | |
-| 602 | apps/web/src/i18n.ts:673 | errImageInvalid | ছবিটি পড়া যায়নি — অন্য একটি ছবি দিয়ে আবার চেষ্টা করুন। | |
-| 603 | apps/web/src/i18n.ts:674 | errApiOriginUnreachable | সার্ভারটি এই মুহূর্তে সাড়া দিচ্ছে না — আপনার ইন্টারনেট বা ফোনে সমস্যা নেই। কিছুক্ষণ পরে আবার চেষ্টা করুন। | |
-| 604 | apps/web/src/i18n.ts:676 | errApiUnconfigured | অ্যাপের সার্ভার ঠিকানা বসানো হয়নি — সঠিক ঠিকানা দিয়ে APK আবার বানাতে হবে। | |
-| 605 | apps/web/src/i18n.ts:678 | errVerifyFailed | লগইন হলেও সেশন যাচাই হয়নি — আবার চেষ্টা করুন। | |
-| 606 | apps/web/src/i18n.ts:679 | errorBoundaryBody | পাতাটি লোড করতে সমস্যা হয়েছে। আবার চেষ্টা করুন — সমস্যা থাকলে অ্যাপটি রিলোড করুন। | |
-| 607 | apps/web/src/i18n.ts:681 | errBadCurrentPassword | বর্তমান পাসওয়ার্ড সঠিক নয়। | |
-| 608 | apps/web/src/i18n.ts:682 | errMfaAlreadyEnabled | দুই ধাপের যাচাই আগেই চালু আছে। | |
-| 609 | apps/web/src/i18n.ts:683 | errMfaNotEnabled | দুই ধাপের যাচাই চালু নেই। | |
-| 610 | apps/web/src/i18n.ts:684 | errAlreadyLinked | এই অ্যাকাউন্ট আগেই যুক্ত করা হয়েছে। | |
-| 611 | apps/web/src/i18n.ts:685 | errLastAdmin | শেষ অ্যাডমিন অ্যাকাউন্ট মোছা বা নামানো যাবে না। | |
-| 612 | apps/web/src/i18n.ts:686 | errPasswordChangeRequired | আগে পাসওয়ার্ড বদলাতে হবে — পাসওয়ার্ড পরিবর্তনের পাতায় যান। | |
-| 613 | apps/web/src/i18n.ts:688 | mfaTitle | দুই ধাপের যাচাই | |
-| 614 | apps/web/src/i18n.ts:689 | mfaHint | অথেনটিকেটর অ্যাপের ৬ সংখ্যার কোডটি দিন। | |
-| 615 | apps/web/src/i18n.ts:690 | mfaCode | ৬ সংখ্যার কোড | |
-| 616 | apps/web/src/i18n.ts:691 | mfaSubmit | যাচাই করে ঢুকুন | |
-| 617 | apps/web/src/i18n.ts:692 | saSimple | সহজ ব্যাখ্যা | |
-| 618 | apps/web/src/i18n.ts:693 | saExample | উদাহরণ | |
-| 619 | apps/web/src/i18n.ts:694 | saPoints | মূল বিষয় | |
-| 620 | apps/web/src/i18n.ts:695 | saCheck | তুমি বুঝেছ? | |
-| 621 | apps/web/src/i18n.ts:696 | statTotal | মোট | |
-| 622 | apps/web/src/i18n.ts:697 | statQuizzes | কুইজ | |
+| 514 | apps/web/src/i18n.ts:576 | thInsightOk | শিক্ষার্থীদের মধ্যে এই মুহূর্তে দুশ্চিন্তার কিছু চোখে পড়ছে না। | |
+| 515 | apps/web/src/i18n.ts:578 | thInsightNoData | অন্তর্দৃষ্টি পেতে শ্রেণি তৈরি করুন ও শিক্ষার্থী যোগ করুন। | |
+| 516 | apps/web/src/i18n.ts:579 | thWorkloadTitle | সাশ্রয় হওয়া সময় (আনুমানিক) | |
+| 517 | apps/web/src/i18n.ts:581 | cGridTitle | কী তৈরি করতে চান? | |
+| 518 | apps/web/src/i18n.ts:582 | cQuickMode | কুইক মোড | |
+| 519 | apps/web/src/i18n.ts:583 | cAdvancedMode | অ্যাডভান্সড মোড | |
+| 520 | apps/web/src/i18n.ts:584 | cQuizEntry | কুইজ (বাল্ক অ্যাসাইনমেন্ট) | |
+| 521 | apps/web/src/i18n.ts:585 | cQuizEntryHint | শিক্ষার্থীদের জন্য কুইজ অ্যাসাইন করুন | |
+| 522 | apps/web/src/i18n.ts:586 | cOpen | খুলুন | |
+| 523 | apps/web/src/i18n.ts:587 | cWorksheetSub | পাঠসহায়ক উপকরণ | |
+| 524 | apps/web/src/i18n.ts:588 | valTitle | AI যাচাই চেকলিস্ট | |
+| 525 | apps/web/src/i18n.ts:589 | valNctb | NCTB সামঞ্জস্য | |
+| 526 | apps/web/src/i18n.ts:590 | valDup | ডুপ্লিকেট প্রশ্ন নেই | |
+| 527 | apps/web/src/i18n.ts:591 | valDifficulty | অসুবিধার বণ্টন মিলেছে | |
+| 528 | apps/web/src/i18n.ts:592 | valPass | পাস | |
+| 529 | apps/web/src/i18n.ts:593 | valGenerationGate | নির্মাণের সময় সার্ভারে যাচাই হয় | |
+| 530 | apps/web/src/i18n.ts:594 | valMin | সর্বনিম্ন সামঞ্জস্য | |
+| 531 | apps/web/src/i18n.ts:595 | valPending | তৈরি হলে দেখা যাবে | |
+| 532 | apps/web/src/i18n.ts:596 | stepDraft | খসড়া | |
+| 533 | apps/web/src/i18n.ts:597 | stepReview | পর্যালোচনা | |
+| 534 | apps/web/src/i18n.ts:598 | stepEdit | সম্পাদনা | |
+| 535 | apps/web/src/i18n.ts:599 | stepApprove | অনুমোদন | |
+| 536 | apps/web/src/i18n.ts:600 | stepPublish | প্রকাশ | |
+| 537 | apps/web/src/i18n.ts:601 | qpReviewProgress | {done}/{total}টি প্রশ্ন অনুমোদিত | |
+| 538 | apps/web/src/i18n.ts:602 | qpGateHint | সব প্রশ্ন অনুমোদন না করা পর্যন্ত চূড়ান্ত করা যাবে না। | |
+| 539 | apps/web/src/i18n.ts:603 | qpChaptersLabel | অধ্যায় (কমা দিয়ে) | |
+| 540 | apps/web/src/i18n.ts:605 | clsOverview | শ্রেণি ওভারভিউ | |
+| 541 | apps/web/src/i18n.ts:606 | clsRisk | ঝুঁকিতে | |
+| 542 | apps/web/src/i18n.ts:607 | clsSearchStudent | শিক্ষার্থী খুঁজুন… | |
+| 543 | apps/web/src/i18n.ts:608 | clsStudentTitle | শিক্ষার্থীর বিবরণ | |
+| 544 | apps/web/src/i18n.ts:609 | clsMastery | সামগ্রিক দক্ষতা | |
+| 545 | apps/web/src/i18n.ts:610 | clsWeakConcepts | দুর্বল ধারণা | |
+| 546 | apps/web/src/i18n.ts:611 | clsRecommend | AI সুপারিশ | |
+| 547 | apps/web/src/i18n.ts:612 | clsBackToList | তালিকায় ফিরুন | |
+| 548 | apps/web/src/i18n.ts:613 | clsNoWeakConcepts | এই শিক্ষার্থীর দুর্বল ধারণা নেই। | |
+| 549 | apps/web/src/i18n.ts:615 | asmTitle | মূল্যায়ন | |
+| 550 | apps/web/src/i18n.ts:616 | asmTabPapers | প্রশ্নপত্র | |
+| 551 | apps/web/src/i18n.ts:617 | asmTabShortTests | সংক্ষিপ্ত পরীক্ষা | |
+| 552 | apps/web/src/i18n.ts:618 | asmTabAssignments | বাল্ক অ্যাসাইনমেন্ট | |
+| 553 | apps/web/src/i18n.ts:619 | asmResults | ফলাফল | |
+| 554 | apps/web/src/i18n.ts:620 | resAvg | গড় | |
+| 555 | apps/web/src/i18n.ts:621 | resHigh | সর্বোচ্চ | |
+| 556 | apps/web/src/i18n.ts:622 | resLow | সর্বনিম্ন | |
+| 557 | apps/web/src/i18n.ts:623 | resCount | জমা দিয়েছে {n} জন | |
+| 558 | apps/web/src/i18n.ts:624 | asmCreateInCreate | নতুন কিছু তৈরি করতে ‘তৈরি করুন’ ট্যাবে যান | |
+| 559 | apps/web/src/i18n.ts:626 | anaCiTitle | AI ক্লাসরুম ইন্টেলিজেন্স | |
+| 560 | apps/web/src/i18n.ts:627 | anaCiTop | আজকের প্রধান পরামর্শ | |
+| 561 | apps/web/src/i18n.ts:628 | anaCiRisk | {n} জন ঝুঁকিতে — সহায়তা পরিকল্পনা তৈরি করুন। | |
+| 562 | apps/web/src/i18n.ts:629 | anaCiWeak | {concept} ধারণাটি সবচেয়ে দুর্বল ({pct}% নির্ভুলতা) — পুনরালোচনা করুন। | |
+| 563 | apps/web/src/i18n.ts:631 | anaCiCoverage | {subject} বিষয়ে পাঠদান এখনো শুরু হয়নি। | |
+| 564 | apps/web/src/i18n.ts:632 | anaCiOk | শ্রেণির অবস্থা ভালো — নিয়মিত অনুশীলন চালিয়ে যান। | |
+| 565 | apps/web/src/i18n.ts:633 | anaCapacity | শিক্ষক সামর্থ্য | |
+| 566 | apps/web/src/i18n.ts:634 | anaCapacityHint | AI সহকারী আপনার সামর্থ্য বাড়ায় — শিক্ষকের বিকল্প কখনো নয়। | |
+| 567 | apps/web/src/i18n.ts:637 | tpTitle | শিক্ষক প্রোফাইল | |
+| 568 | apps/web/src/i18n.ts:638 | tpDefaultClass | ডিফল্ট শ্রেণি | |
+| 569 | apps/web/src/i18n.ts:639 | tpPrefsHint | এই সেটিংস জেনারেটরে আগে থেকে বসে যাবে। | |
+| 570 | apps/web/src/i18n.ts:641 | retry | আবার চেষ্টা করুন | |
+| 571 | apps/web/src/i18n.ts:642 | roleStudent | শিক্ষার্থী | |
+| 572 | apps/web/src/i18n.ts:643 | roleTeacher | শিক্ষক | |
+| 573 | apps/web/src/i18n.ts:644 | roleParent | অভিভাবক | |
+| 574 | apps/web/src/i18n.ts:645 | roleAdmin | অ্যাডমিন | |
+| 575 | apps/web/src/i18n.ts:646 | roleSchoolAdmin | স্কুল অ্যাডমিন | |
+| 576 | apps/web/src/i18n.ts:647 | studentFallback | শিক্ষার্থী | |
+| 577 | apps/web/src/i18n.ts:648 | loadFailed | লোড করা যায়নি | |
+| 578 | apps/web/src/i18n.ts:649 | newChatFailed | নতুন চ্যাট শুরু করা যায়নি | |
+| 579 | apps/web/src/i18n.ts:650 | bookmark | বুকমার্ক | |
+| 580 | apps/web/src/i18n.ts:651 | stop | থামুন | |
+| 581 | apps/web/src/i18n.ts:652 | listen | শুনুন | |
+| 582 | apps/web/src/i18n.ts:653 | errBadCredentials | ইমেইল বা পাসওয়ার্ড সঠিক নয়। | |
+| 583 | apps/web/src/i18n.ts:654 | errEmailTaken | এই ইমেইল দিয়ে আগেই অ্যাকাউন্ট খোলা আছে। | |
+| 584 | apps/web/src/i18n.ts:655 | errEmailUnverified | আগে ইমেইল যাচাই করুন — কোড পাঠানো হয়েছে। | |
+| 585 | apps/web/src/i18n.ts:656 | errRateLimited | অনেকবার চেষ্টা হয়েছে। এক মিনিট অপেক্ষা করুন। | |
+| 586 | apps/web/src/i18n.ts:657 | errNoQuiz | এই শ্রেণি/বিষয়ে এখনো কুইজ তৈরি হয়নি। | |
+| 587 | apps/web/src/i18n.ts:658 | errAnswerCount | উত্তরের সংখ্যা মিলছে না। আবার জমা দিন। | |
+| 588 | apps/web/src/i18n.ts:659 | errAlreadyGraded | এই কুইজ আগেই জমা হয়ে গেছে। | |
+| 589 | apps/web/src/i18n.ts:660 | errInvalidInvite | ইনভাইট কোডটি ভুল বা মেয়াদ শেষ। | |
+| 590 | apps/web/src/i18n.ts:661 | errInvalidToken | কোডটি ভুল বা মেয়াদ শেষ। | |
+| 591 | apps/web/src/i18n.ts:662 | errLlmUnavailable | এখন উত্তর তৈরি হচ্ছে না — একটু পরে আবার চেষ্টা করুন। | |
+| 592 | apps/web/src/i18n.ts:663 | errTutorUnavailable | টিউটর সেবা এখন বন্ধ — একটু পরে চেষ্টা করুন। | |
+| 593 | apps/web/src/i18n.ts:664 | errNotAllowed | এটি করার অনুমতি নেই। | |
+| 594 | apps/web/src/i18n.ts:665 | errNetwork | ইন্টারনেট সংযোগ পরীক্ষা করুন। | |
+| 595 | apps/web/src/i18n.ts:666 | errTimeout | সার্ভার সাড়া দিচ্ছে না — একটু পরে আবার চেষ্টা করুন। | |
+| 596 | apps/web/src/i18n.ts:667 | errGeneric | কিছু একটা সমস্যা হয়েছে। একটু পরে আবার চেষ্টা করুন। | |
+| 597 | apps/web/src/i18n.ts:668 | errMfaRequired | দুই ধাপের যাচাই প্রয়োজন — অথেনটিকেটর কোড দিন। | |
+| 598 | apps/web/src/i18n.ts:669 | errBadMfaCode | কোডটি ভুল — আবার দেখে দিন। | |
+| 599 | apps/web/src/i18n.ts:670 | errBadMfaToken | যাচাইয়ের সময় শেষ — আবার লগইন করুন। | |
+| 600 | apps/web/src/i18n.ts:671 | errServiceUnavailable | সার্ভার এখন ব্যস্ত — একটু পরে আবার চেষ্টা করুন। | |
+| 601 | apps/web/src/i18n.ts:672 | errApiOriginDown | সার্ভারে সংযোগ করা যাচ্ছে না — অ্যাপটি এখনো কোনো ব্যাকএন্ড সার্ভারের সঙ্গে যুক্ত হয়নি। | |
+| 602 | apps/web/src/i18n.ts:674 | errImageInvalid | ছবিটি পড়া যায়নি — অন্য একটি ছবি দিয়ে আবার চেষ্টা করুন। | |
+| 603 | apps/web/src/i18n.ts:675 | errApiOriginUnreachable | সার্ভারটি এই মুহূর্তে সাড়া দিচ্ছে না — আপনার ইন্টারনেট বা ফোনে সমস্যা নেই। কিছুক্ষণ পরে আবার চেষ্টা করুন। | |
+| 604 | apps/web/src/i18n.ts:677 | errApiUnconfigured | অ্যাপের সার্ভার ঠিকানা বসানো হয়নি — সঠিক ঠিকানা দিয়ে APK আবার বানাতে হবে। | |
+| 605 | apps/web/src/i18n.ts:679 | errVerifyFailed | লগইন হলেও সেশন যাচাই হয়নি — আবার চেষ্টা করুন। | |
+| 606 | apps/web/src/i18n.ts:680 | errorBoundaryBody | পাতাটি লোড করতে সমস্যা হয়েছে। আবার চেষ্টা করুন — সমস্যা থাকলে অ্যাপটি রিলোড করুন। | |
+| 607 | apps/web/src/i18n.ts:682 | errBadCurrentPassword | বর্তমান পাসওয়ার্ড সঠিক নয়। | |
+| 608 | apps/web/src/i18n.ts:683 | errMfaAlreadyEnabled | দুই ধাপের যাচাই আগেই চালু আছে। | |
+| 609 | apps/web/src/i18n.ts:684 | errMfaNotEnabled | দুই ধাপের যাচাই চালু নেই। | |
+| 610 | apps/web/src/i18n.ts:685 | errAlreadyLinked | এই অ্যাকাউন্ট আগেই যুক্ত করা হয়েছে। | |
+| 611 | apps/web/src/i18n.ts:686 | errLastAdmin | শেষ অ্যাডমিন অ্যাকাউন্ট মোছা বা নামানো যাবে না। | |
+| 612 | apps/web/src/i18n.ts:687 | errPasswordChangeRequired | আগে পাসওয়ার্ড বদলাতে হবে — পাসওয়ার্ড পরিবর্তনের পাতায় যান। | |
+| 613 | apps/web/src/i18n.ts:689 | mfaTitle | দুই ধাপের যাচাই | |
+| 614 | apps/web/src/i18n.ts:690 | mfaHint | অথেনটিকেটর অ্যাপের ৬ সংখ্যার কোডটি দিন। | |
+| 615 | apps/web/src/i18n.ts:691 | mfaCode | ৬ সংখ্যার কোড | |
+| 616 | apps/web/src/i18n.ts:692 | mfaSubmit | যাচাই করে ঢুকুন | |
+| 617 | apps/web/src/i18n.ts:693 | saSimple | সহজ ব্যাখ্যা | |
+| 618 | apps/web/src/i18n.ts:694 | saExample | উদাহরণ | |
+| 619 | apps/web/src/i18n.ts:695 | saPoints | মূল বিষয় | |
+| 620 | apps/web/src/i18n.ts:696 | saCheck | তুমি বুঝেছ? | |
+| 621 | apps/web/src/i18n.ts:697 | statTotal | মোট | |
+| 622 | apps/web/src/i18n.ts:698 | statQuizzes | কুইজ | |
 | 623 | apps/web/src/AppShell.tsx:185 | (literal) | ডার্ক মোড | |
 | 624 | apps/web/src/components/UpdateBanner.tsx:13 | (literal) | নতুন সংস্করণ প্রস্তুত — আপডেট করলে সর্বশেষ সংস্করণ পাবেন। | |
 | 625 | apps/web/src/components/UpdateBanner.tsx:14 | (literal) | এখনই আপডেট করুন | |
