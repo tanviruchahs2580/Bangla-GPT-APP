@@ -133,7 +133,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <button
           className="brand brand-reset"
           onClick={() => navigate(me ? `/` : "/login")}
-          aria-label={t("brandHome")}
+          // WCAG 2.5.3 (label in name): the accessible name must contain the
+          // visible label, and the visible label here is the app name. Naming
+          // it only "go home" -- the pre-fix state -- made axe fail every
+          // authed route with label-content-name-mismatch (serious), so the
+          // hint now rides along with the name instead of replacing it.
+          aria-label={`${t("appName")} — ${t("brandHome")}`}
         >
           <span className="brand-mark" aria-hidden>
             <BrandMark size={30} />
