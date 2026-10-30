@@ -115,11 +115,28 @@ const LEGACY_BN: Record<string, string> = {
   "ইন্টারনেট সংযোগ পরীক্ষা করুন।": "network",
 };
 
-export function friendlyError(detail: unknown): ErrorCopy {
-  let code: string | undefined;
-  if (detail && typeof detail === "object") {
-    code = (detail as { code?: string }).code;
-  } else if (typeof detail === "string") {
+/**
+ * The machine code inside whatever shape the API sent.
+ *
+ * FastAPI wraps errors as `{detail: {code, message}}`, the Vercel edge proxy
+ * answers flat `{code, message}`, and old endpoints sent a bare Bengali
+ * string. Every page-level catcher passes the raw body here, so without
+ * unwrapping `detail` a coded FastAPI error (image_invalid, rate_limited,
+ * llm_unavailable, …) matched nothing and every surface showed the generic
+ * "something went wrong" — found by driving the tutor's corrupted-image case,
+ * which the API answers with 422 image_invalid and the UI answered generically.
+ * Unwrapping in this one place reaches the legacy string map too, which had
+ * the same problem for the same reason.
+ */
+function codeOf(detail: unknown): string | undefined {
+  const body =
+    detail && typeof detail === "object" && "detail" in detail
+      ? (detail as { detail?: unknown }).detail
+      : detail;
+  if (body && typeof body === "object") {
+    return (body as { code?: string }).code;
+  }
+  if (typeof body === "string") {
     // A bare machine code, which is what the register / verify / reset paths
     // hold: they read `err.code` and pass the string on. The string branch used
     // to consult LEGACY_BN only, so `friendlyError("rate_limited")` and
@@ -128,8 +145,13 @@ export function friendlyError(detail: unknown): ErrorCopy {
     // registering was told "something went wrong" instead of "too many
     // attempts, wait a minute". Accepting either shape here fixes every caller
     // at once rather than one screen at a time.
-    code = KEY[detail] ? detail : LEGACY_BN[detail];
+    return KEY[body] ? body : LEGACY_BN[body];
   }
+  return undefined;
+}
+
+export function friendlyError(detail: unknown): ErrorCopy {
+  const code = codeOf(detail);
   if (code && KEY[code]) {
     return { text: t(KEY[code]), action: ACTION[code] };
   }

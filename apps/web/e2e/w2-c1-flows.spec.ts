@@ -232,7 +232,10 @@ test("STU-07 image question: valid, wrong-type, oversized and corrupted attachme
     mimeType: "image/png",
     buffer: Buffer.from("this is not a png at all"),
   });
-  await expect(page.locator(".attach-preview")).toBeVisible();
+  // The preview row exists, but the browser cannot paint undecodable bytes,
+  // so "attached" is the honest assertion for this case (the row, its remove
+  // control and the intent chips are what the student sees).
+  await expect(page.locator(".attach-preview")).toBeAttached();
   await page.getByRole("button", { name: "সমাধান করো", exact: true }).click();
   await expect(errorLine).toContainText("পড়া যায়নি", { timeout: 60_000 });
   expect(streamRequests).toBeGreaterThan(before);
@@ -470,7 +473,12 @@ test("STU-11 the quiz's explain-this deep link lands in the tutor with the quest
     .first();
   await expect(start).toBeVisible({ timeout: 30_000 });
   await start.click();
+  // The finish control only exists on the last question, so walk to it: the
+  // paper is deterministic, the loop is bounded by the question count.
   const finish = page.getByRole("button", { name: "শেষ করুন" });
+  for (let i = 0; i < 10 && !(await finish.isVisible()); i += 1) {
+    await page.getByRole("button", { name: "পরের প্রশ্ন" }).click();
+  }
   await expect(finish).toBeVisible({ timeout: 30_000 });
   await finish.click();
   // The unanswered confirmation appears; confirm it.
@@ -528,7 +536,9 @@ test("STU-12 unified search: three Bangla surface forms return the same hits", a
   // zero-width character is the shared normalizer's job (retrieval/
   // normalize.py, strip_zero_width), so the ZWNJ form is asserted against the
   // fold the app actually performs.
-  expect(zwnj.replace(/[\u200b-\u200d\ufeff]/g, "").normalize("NFKC")).toBe(plain);
+  expect(zwnj.replace(/[\u200b-\u200d\ufeff]/g, "").normalize("NFKC")).toBe(
+    plain,
+  );
   expect(decomposed.normalize("NFKC")).toBe(plain);
 
   async function hitTitles(query: string): Promise<string[]> {

@@ -12,6 +12,25 @@ describe("friendlyError", () => {
     ).toContain("মিনিট");
   });
 
+  it("unwraps the FastAPI detail envelope every page passes in", () => {
+    // The catchers hand friendlyError the raw body, which for FastAPI is
+    // {detail: {code, message}}: reading only the top level missed every
+    // coded error and the surface fell back to the generic copy (the tutor's
+    // corrupted-image 422 image_invalid was the measured case).
+    expect(
+      friendlyError({ detail: { code: "image_invalid", message: "bad" } }).text,
+    ).toBe(t("errImageInvalid"));
+    expect(friendlyError({ detail: { code: "llm_unavailable" } }).action).toBe(
+      "retry",
+    );
+    // The legacy Bengali string detail reaches the same map once unwrapped.
+    expect(
+      friendlyError({ detail: "ইমেইল বা পাসওয়ার্ড সঠিক নয়।" }).text,
+    ).toBe(t("errBadCredentials"));
+    // An unknown body still gets the generic copy and a retry.
+    expect(friendlyError({ detail: { message: "?" } }).action).toBe("retry");
+  });
+
   it("maps login-infrastructure codes to retry/mfa copy (no generic dead-end)", () => {
     expect(friendlyError({ code: "mfa_required" }).action).toBe("mfa");
     expect(friendlyError({ code: "bad_mfa_code" }).action).toBe("mfa");
