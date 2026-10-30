@@ -157,6 +157,19 @@ export default defineConfig({
         // harness override (middleware_stack._PER_FIELD_ROUTES); the
         // limiter's own tests pin the production value.
         RATE_LIMIT_LOGIN_PER_MINUTE: "240",
+        // The suite's own navigation rate must not be an input to the flows.
+        // GET /users/me is bounded at 10/min per user in production (F-127,
+        // the cheap half of that rule's destructive siblings); every spec
+        // entry signs in and every page load probes the session, and the dev
+        // harness mounts each component twice (StrictMode), so the flows
+        // below legitimately exceed the bound and then every later request
+        // answers 429. The production bound stays production's: the API's
+        // own tests pin the rule (tests/test_rate_limit_coverage.py) and no
+        // e2e spec asserts a 429 on the config-driven routes. What this
+        // override does replace is the config-driven rule map for this
+        // test-only process; the per-field knobs (login, tutor) are applied
+        // by the API independently and stay in force.
+        RATE_LIMIT_RULES: JSON.stringify({ "/users/me": [240, "user"] }),
       },
     },
     {
