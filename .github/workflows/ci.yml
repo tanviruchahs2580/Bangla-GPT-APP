@@ -206,6 +206,18 @@ jobs:
           cache: pip
           cache-dependency-path: apps/api/constraints.txt
 
+      # The README's web quick start runs under Node 24/npm 11 (engines in
+      # apps/web/package.json). The windows runner image ships Node 22 and its
+      # npm 10 refuses the npm-11 lockfile ("Missing: esbuild@0.28.2 from lock
+      # file"), so this job sets the documented toolchain up itself, the same
+      # way the web and e2e jobs do.
+      - name: Set up Node 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
       - name: API quick start (README, PowerShell)
         # The README's exact commands. --require-hashes makes a broken pin
         # fail here exactly as it would on a contributor's machine.
