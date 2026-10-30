@@ -79,6 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): require a per-user AI budget in production
 - fix(api): resolve roman and glossary terms as alternative surfaces
 - fix(api): resolve the mail language at every verification-mail caller
+- fix(api): return the guardian invite id and list live invites
 - fix(api): sanitize analytics event prop values, not just key names
 - fix(api): scrub PII from Sentry events before they are sent
 - fix(api): send Retry-After on the limiter's 429
@@ -108,6 +109,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): keep the session when the server throttles the probe
 - fix(web): keep white label text above AA on every accent fill
 - fix(web): label the confidence badge a heuristic in both languages
+- fix(web): make guardian invite codes revocable from the Me page
 - fix(web): make the Bangla typography rules honest to the loaded faces
 - fix(web): make the skip-link target focusable and stabilise the e2e sweeps
 - fix(web): make the tutor handoffs survive a remount
@@ -194,6 +196,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(playstore): ground the store copy in the curriculum corpus
 - docs(privacy): rebuild the data-minimization doc from the real schema
 - docs(qa): publish the 2026-10-29 QA report and archive the predecessor
+- docs(qa): publish the 2026-10-30 report and close the wave-2 register
 - docs(qa): refresh the native-review sheet and check in the docs lint config
 - docs(qa): tag the F-203 flow evidence in the register copy of the report
 - docs(rag): correct the script-share definition and record the latency spread
@@ -239,6 +242,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - test(api): make deprecation warnings fatal and add property tests
 - test(api): remove the TTL-boundary race from the claim test
 - test(api): wave-2 suites for authz, mail verification, corpus identity and coverage
+- test(e2e): assert the invite expiry copy, not the last muted element
 - test(e2e): cover the audit flow matrix gaps
 - test(e2e): let the preview service-worker test register its worker
 - test(e2e): reconcile the wave-2 specs with the shipped app
