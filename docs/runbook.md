@@ -575,3 +575,24 @@ probe. Treat the probe as a backstop, not a pager.
 After any incident, record what happened, the impact and the follow-up action
 in the current QA record or a follow-up issue; do not edit an archived report
 to match the new facts.
+
+### Planned maintenance window
+
+The web app ships a maintenance screen at the `/maintenance` route
+(`apps/web/src/pages/MaintenancePage.tsx`; the same honest copy the API-outage
+state uses — the account is fine, nothing was lost), and the offline shell
+(`apps/web/public/offline.html`) is bilingual and cached by the service worker,
+so an already-open tab stays usable while the API is down. Opening a window is
+a one-line change in the web tier's rewrite plus a redeploy:
+
+- compose/nginx: in `apps/web/deploy/nginx.conf`, add an exact-match
+  `location = /maintenance` before `location /`, then make `location /` return
+  a 302 to `/maintenance`. Keep the `/assets/`, `/sw.js` and `/index.html`
+  blocks as they are — hashed assets must keep loading for the screen to
+  render. Rebuild the web image and `docker compose --profile web up -d web`.
+- Vercel: point the catch-all rewrite in `apps/web/vercel.json` at
+  `/maintenance` (add `maintenance` to the exception group) and redeploy.
+
+The API stays up through the window so `/health` and `/ready` keep answering
+for the uptime probe. After the window, revert the rewrite and redeploy — do
+not leave the app pinned to the maintenance copy.
