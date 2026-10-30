@@ -13,7 +13,6 @@ a rename without this file changing is the defect this test exists to catch.
 
 import asyncio
 import json
-import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -116,7 +115,10 @@ def test_producer_that_yields_nothing_answers_the_coded_error(
     must produce the coded error, never a naked 500 or an empty stream."""
 
     async def empty_stream(self, *args, **kwargs):  # type: ignore[no-untyped-def]
-        if False:  # pragma: no cover - marks this an async generator
+        # The empty loop is what makes this an async generator (a bare return
+        # would make it a coroutine, which ``async for`` cannot consume), and
+        # it yields nothing - exactly the provider shape under test.
+        for _ in ():  # pragma: no cover
             yield StreamEvent(type="token", text="")
 
     headers, conv_id = _student(client, "sse-empty@example.com")
@@ -142,6 +144,15 @@ def test_client_abort_cancels_the_producer_and_ledgers_the_partial(
     An abandoned stream that keeps generating burns provider budget with
     nobody reading it; the route's ``finally`` cancels the producer task and
     finalizes the ledger with whatever text was delivered.
+
+    Driven at the ASGI level on purpose: ``TestClient.stream`` buffers the
+    whole response before it returns (its transport calls
+    ``portal.call(self.app, ...)`` and only then hands back a BytesIO body), so
+    through it a client can never walk away mid-stream - the abort this test is
+    about is unreachable and an endless provider hangs the suite. An
+    ``http.disconnect`` message on the receive channel is the same signal a
+    closed socket produces, and it arrives here only after the first token
+    frame was sent.
     """
     observed: dict[str, bool] = {"started": False, "cancelled": False}
 
@@ -153,31 +164,57 @@ def test_client_abort_cancels_the_producer_and_ledgers_the_partial(
             # abort. An Event never set is the idiomatic wait (ruff ASYNC110):
             # a busy `while True: sleep` also holds the loop awake under load.
             await asyncio.Event().wait()
-        finally:
+        except asyncio.CancelledError:
             observed["cancelled"] = True
+            raise
 
     headers, conv_id = _student(client, "sse-abort@example.com")
     monkeypatch.setattr(tutor_service.TutorService, "ask_stream", endless_stream)
 
-    with client.stream(
-        "POST",
-        f"/tutor/conversations/{conv_id}/messages/stream",
-        json={"message": "বল কাকে বলে?"},
-        headers=headers,
-    ) as response:
-        saw_token = False
-        for line in response.iter_lines():
-            if line.startswith("event: token"):
-                saw_token = True
-                break  # walk away mid-stream
-        assert saw_token
+    body = json.dumps({"message": "বল কাকে বলে?"}).encode()
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.3"},
+        "http_version": "1.1",
+        "method": "POST",
+        "path": f"/tutor/conversations/{conv_id}/messages/stream",
+        "query_string": b"",
+        "root_path": "",
+        "scheme": "http",
+        "headers": [
+            (b"authorization", headers["Authorization"].encode()),
+            (b"content-type", b"application/json"),
+        ],
+        "client": ("testclient", 50000),
+        "server": ("testserver", 80),
+    }
 
-    # Deterministic wait: poll for the cancellation instead of sleeping a
-    # fixed amount; the margin only bounds a failure, it is not a delay.
-    deadline = time.monotonic() + 10.0
-    while not observed["cancelled"] and time.monotonic() < deadline:
-        time.sleep(0.02)
+    request_delivered = False
+    token_frame_sent = asyncio.Event()
+    sent: list[dict] = []
+
+    async def receive() -> dict:
+        nonlocal request_delivered
+        if not request_delivered:
+            request_delivered = True
+            return {"type": "http.request", "body": body, "more_body": False}
+        # The socket is gone; the response side must notice and clean up.
+        await token_frame_sent.wait()
+        return {"type": "http.disconnect"}
+
+    async def send(message: dict) -> None:
+        sent.append(message)
+        if message["type"] == "http.response.body" and b"event: token" in (
+            message.get("body") or b""
+        ):
+            token_frame_sent.set()
+
+    import anyio
+
+    anyio.run(client.app, scope, receive, send)
+
     assert observed["started"], "the producer never ran"
+    assert token_frame_sent.is_set(), "no token frame reached the client"
     assert observed["cancelled"], "the producer task was not cancelled on abort"
 
 
