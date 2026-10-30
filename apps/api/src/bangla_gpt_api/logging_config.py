@@ -151,10 +151,15 @@ class RedactionFilter(logging.Filter):
             # Set only by json_log_secret, which refuses outright in
             # production. Everything else is redacted.
             return True
-        try:
-            record.msg = redact_value(record.msg)
-        except Exception:  # never let redaction break logging
-            record.msg = REDACTED
+        if not getattr(record, "fields_redacted", False):
+            # json_log redacted each field before serialising, which is the
+            # only pass that can see the field names; re-scanning the JSON
+            # string can only guess from value shapes and would destroy lines
+            # whose ids merely resemble a phone number.
+            try:
+                record.msg = redact_value(record.msg)
+            except Exception:  # never let redaction break logging
+                record.msg = REDACTED
         # ``exc_info`` renders a traceback that may embed a repr() of the
         # offending object. The message is already redacted above; the
         # formatted exception text is scrubbed by RedactingFormatter, which
@@ -267,7 +272,18 @@ def json_log(logger: logging.Logger, level: int, event: str, **fields) -> None:
     if rid:
         fields.setdefault("request_id", rid)
     safe = {"event": event, **redact_value(fields)}
-    logger.log(level, json.dumps(safe, ensure_ascii=False, default=str))
+    # The mapping above is authoritative and already redacted; the record is
+    # marked so ``RedactionFilter`` does not run a second, shape-guessing pass
+    # over the serialised JSON. That second pass used to replace a whole line
+    # with "[redacted]" whenever a value merely *looked* sensitive - a hex
+    # request_id containing an 11-digit run matches the phone pattern, so the
+    # event name was lost in the sink operators use to correlate a report with
+    # the server's trace (F-188's root cause, measured 2026-10-30).
+    logger.log(
+        level,
+        json.dumps(safe, ensure_ascii=False, default=str),
+        extra={"fields_redacted": True},
+    )
 
 
 # --------------------------------------------------------------------------
