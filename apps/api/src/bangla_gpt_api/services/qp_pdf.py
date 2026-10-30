@@ -1,9 +1,10 @@
 """PDF export for question papers (paper + answer key).
 
-Primary engine is WeasyPrint when the platform's Pango/GTK libraries are
-loadable (Linux containers). On hosts without them (e.g. Windows dev) this
-falls back to fpdf2 with the bundled Noto Sans Bengali TTF. If neither engine
-is usable the API returns the HTML print view instead (documented fallback).
+The one PDF engine is fpdf2 with the bundled Noto Sans Bengali TTF; the
+``render_*_pdf`` functions below and their ``render_*_html`` print-view
+fallbacks are the complete set of renderers. (An earlier revision of this
+docstring claimed a WeasyPrint primary engine with an fpdf2 fallback; no
+WeasyPrint code ever existed in this module.)
 
 fpdf2 does NOT shape complex scripts unless told to: text shaping is opt-in,
 so every fpdf2 document MUST call ``set_text_shaping(True)`` after
