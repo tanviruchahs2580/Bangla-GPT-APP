@@ -102,6 +102,11 @@ LOGIN_LOCKED_CODE = "account_locked"
 # cool-down would break it. 5/hour absorbs every legitimate flow (a lost
 # first mail, a typo fix, one retry) while capping the bomb.
 _MAIL_QUOTA_PER_ADDRESS_PER_HOUR = 5
+#: The rolling window that quota is counted over. Named (F-195): the TTL and
+#: the count in ``_MAIL_QUOTA_PER_ADDRESS_PER_HOUR`` are one rule, and a
+#: future tuning change must move both or the bound silently means
+#: something else.
+_MAIL_QUOTA_WINDOW_SECONDS = 3600.0
 
 
 def _address_mail_quota_allows(app_ctx: Ctx, email: str, kind: str) -> bool:
@@ -114,7 +119,7 @@ def _address_mail_quota_allows(app_ctx: Ctx, email: str, kind: str) -> bool:
     """
     key = f"mailq:{kind}:{email.strip().lower()}"
     try:
-        count = int(app_ctx.cache.incr(key, ttl=3600.0))
+        count = int(app_ctx.cache.incr(key, ttl=_MAIL_QUOTA_WINDOW_SECONDS))
     except CacheUnavailable:
         return True
     except Exception:  # pragma: no cover - defensive, same posture as above
