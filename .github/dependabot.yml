@@ -11,22 +11,23 @@
 # version comment together.
 #
 # LABELS (F-GIT-7 / F-102): `dependencies`, `python`, `web`, `docker` and `ci`
-# are requested below. None of them existed in the repository's label set when
-# this was checked on 2026-10-29, and Dependabot silently drops labels that do
-# not exist -- so until an owner creates them the PRs arrive unlabelled and
-# cannot be filtered. Create them once (repository admin scope required):
+# are requested below. None of them existed in the repository's label set on
+# 2026-10-29, and Dependabot silently drops labels that do not exist -- PRs
+# arrived unlabelled and could not be filtered. The five labels were created on
+# 2026-10-30 (verified with `gh api repos/tanviruchahs2580/Bangla-GPT-APP/labels`),
+# so the configuration below now resolves:
 #
-#   gh label create dependencies --color 1D76DB --description "..."
-#   gh label create python        --color 1D76DB --description "..."
-#   gh label create web           --color 5319E7 --description "..."
-#   gh label create docker        --color 2496ED --description "..."
-#   gh label create ci            --color BFDADC --description "..."
+#   gh label create dependencies --color 1D76DB
+#   gh label create python       --color 1D76DB
+#   gh label create web          --color 5319E7
+#   gh label create docker       --color 2496ED
+#   gh label create ci           --color BFDADC
 #
-# The alternative -- shipping labels the repository does not have and hoping
-# they appear -- is what left the queue unfiltered while the changelog gate
-# blocked seven of eight CI runs (F-027). A severity taxonomy (security /
-# patch / minor / major) remains the more valuable follow-up: without one, a
-# critical CVE and a typo fix arrive with the same urgency.
+# Keep the label list here and the repository's label set in step: a label
+# removed from the repository is silently dropped again, not an error. A
+# severity taxonomy (security / patch / minor / major) remains the more
+# valuable follow-up: without one, a critical CVE and a typo fix arrive with
+# the same urgency.
 #
 # Group review (2026-10-29): every group now carries `update-types: [minor,
 # patch]`, so a routine bump still arrives as one reviewable PR while a major
