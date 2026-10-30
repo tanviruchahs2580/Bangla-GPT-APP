@@ -231,7 +231,7 @@ def test_export_includes_conversations_and_messages(tmp_path) -> None:
         json={"message": "২+২ কত?"},
         headers=headers,
     )
-    assert msg.status_code == 201, msg.text
+    assert msg.status_code == 200, msg.text  # the JSON messages route's default
 
     export = client.get("/users/me/export", headers=headers)
     assert export.status_code == 200, export.text
