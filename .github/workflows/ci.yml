@@ -956,16 +956,22 @@ jobs:
           CI: "true"
         run: npm run test:e2e
 
-      - name: Offline shell (PWA) against the production bundle
+      - name: Production bundle: offline shell and throttled perf
         # B-06: the offline fallback is a marquee feature for rural 2G
         # students and its spec only registers the service worker on the
         # preview harness. A second playwright pass builds once and serves
         # `vite preview`; only the offline-shell spec is selected.
+        #
+        # w2-perf's Slow-3G interactivity budgets belong to the same pass:
+        # they are claims about the shipped bundle, and the dev harness's
+        # unbundled module graph cannot fit them under throttle regardless of
+        # the product (the spec skips that test off the preview harness for
+        # exactly that reason).
         env:
           E2E_PYTHON: python
           E2E_WEB: preview
           CI: "true"
-        run: npx playwright test offline-shell
+        run: npx playwright test offline-shell w2-perf
 
       - name: Upload report on failure
         if: failure()
