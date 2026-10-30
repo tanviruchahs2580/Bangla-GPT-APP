@@ -139,13 +139,14 @@ jobs:
         # runtime dependency, but pip-audit scans the whole environment and so
         # picks up whatever setuptools the runner image happens to ship. The
         # Python 3.11 image carried 79.0.1, which PYSEC-2026-3447 flags
-        # (fixed in 83.0.0), failing a leg over tooling we do not ship. Upgrade
-        # to exactly the fixed release before auditing so the gate reports
+        # (fixed in 83.0.0); 83.0.0 is itself now flagged by GHSA-xmj3-9gf7-h52w
+        # (fixed in 84.1.0), so the pin moves with the advisory. Upgrade to
+        # exactly the fixed release before auditing so the gate reports
         # real, application-relevant vulnerabilities instead of runner drift
         # (GIT-08/F-186: an exact pin, so a future setuptools release cannot
         # change what this step audits).
         run: |
-          python -m pip install --quiet --upgrade "setuptools==83.0.0"
+          python -m pip install --quiet --upgrade "setuptools==84.1.0"
           python -m pip_audit
 
       - name: Import-linter contracts (API layering)
