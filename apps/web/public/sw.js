@@ -4,7 +4,10 @@
  *  - Navigations: network-first, offline fallback page.
  *  - API calls: never cached.
  */
-const CACHE = "bgpt-v3";
+// Bumped whenever a shell file's content changes: clients holding the old
+// cache keep the old offline.html/offline-retry.js until a fresh cache exists
+// (v4: bilingual offline page, external retry handler, update message).
+const CACHE = "bgpt-v4";
 const MAX_RUNTIME_ENTRIES = 50; // hashed build assets rotate; cap the cache
 // Offline navigation fallback. Chrome's installability check requires the
 // service worker to answer an OFFLINE navigation with HTTP 200 — the old

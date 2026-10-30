@@ -14,20 +14,20 @@
 
   function attempt() {
     retryBtn.disabled = true
-    statusEl.textContent = 'সংযোগ পরীক্ষা করা হচ্ছে…'
+    statusEl.textContent = 'সংযোগ পরীক্ষা করা হচ্ছে… / Checking the connection…'
     fetch('/', { method: 'HEAD', cache: 'no-store' })
       .then(function () {
         window.location.reload()
       })
       .catch(function () {
-        statusEl.textContent = 'এখনো অফলাইন — সংযোগের অপেক্ষায়…'
+        statusEl.textContent = 'এখনো অফলাইন — সংযোগের অপেক্ষায়… / Still offline — waiting for a connection…'
         retryBtn.disabled = false
       })
   }
 
   retryBtn.addEventListener('click', attempt)
   window.addEventListener('online', function () {
-    statusEl.textContent = 'সংযোগ ফিরেছে — লোড হচ্ছে…'
+    statusEl.textContent = 'সংযোগ ফিরেছে — লোড হচ্ছে… / Back online — loading…'
     setTimeout(function () {
       window.location.reload()
     }, 400)

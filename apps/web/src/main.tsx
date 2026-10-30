@@ -25,7 +25,9 @@ import { registerServiceWorker } from "./lib/serviceWorkerUpdate";
 // apply the persisted low-data mode before first paint.
 initLowData();
 initInstallPrompt();
-ReactDOM.createRoot(document.getElementById("root")!).render(
+const rootElement = document.getElementById("root");
+if (!rootElement) throw new Error("index.html is missing #root");
+ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
     {/* Last-resort boundary for errors above the routes (providers, shell);
         per-route recovery lives in RouteErrorBoundary (F-001). */}

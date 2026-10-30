@@ -52,13 +52,13 @@ const STORE = "chapters";
  * enough that the copies cannot crowd out the rest of the origin's storage.
  */
 export const MAX_OFFLINE_CHAPTERS = 20;
-export const MAX_OFFLINE_BYTES = 4_000_000;
+const MAX_OFFLINE_BYTES = 4_000_000;
 
 /** Device marker: which user's copies the IndexedDB currently holds. */
 export const OFFLINE_OWNER_KEY = "bgpt_offline_owner";
 
 /** The copy cannot be stored: the chapter alone exceeds the budget. */
-export class OfflineStorageFullError extends Error {
+class OfflineStorageFullError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "OfflineStorageFullError";
