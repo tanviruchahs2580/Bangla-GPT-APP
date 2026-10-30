@@ -1,10 +1,35 @@
+# Build-context exclusions for the API image (root context, Dockerfile).
+#
+# The API Dockerfile copies only apps/api/**; excluding the rest keeps the
+# daemon upload small and keeps local secret material out of the context. The
+# parked deploy contract (apps/api/eval/parked_specs/test_deploy_contracts.py)
+# pins the secret patterns; F-089 pins the web tree and node_modules.
 .git
 .github
 **/__pycache__
 **/*.py[cod]
-apps/api/.venv
-apps/api/tests
 *.egg-info
-.env
+
+# Secret material that exists on developer and CI disks.
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+.mailpit
+.vercel
+
+# The templates ARE the repository's documented configuration and must stay
+# in the context (a blanket .env* rule would drop them; the parked contract
+# asserts these two negations).
+!**/.env.example
+!**/.env.production.example
+
+# Not needed by the API image: the web tree ships its own image and context,
+# and a stray apps/web/.env.local must never be uploaded with the API build.
+apps/web
+**/node_modules
+apps/api/.venv
+.venv
+apps/api/tests
 *.db
 docs
