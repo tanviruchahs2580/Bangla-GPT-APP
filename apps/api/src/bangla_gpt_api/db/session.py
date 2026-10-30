@@ -45,6 +45,10 @@ SQLITE_BUSY_TIMEOUT_MS = 15000
 #: TCP connect budget for PostgreSQL — a hung host fails the connection
 #: attempt instead of blocking the (boot-time or request) caller indefinitely.
 POSTGRES_CONNECT_TIMEOUT_SECONDS = 10
+#: Pooled connections are recycled after an hour: long enough that a worker
+#: reuses warm connections, short enough that a connection to a restarted or
+#: failed-over primary is replaced without waiting for an error.
+POSTGRES_POOL_RECYCLE_SECONDS = 3600
 
 
 def _is_memory_sqlite(url: str) -> bool:
@@ -57,7 +61,9 @@ def _apply_sqlite_pragmas(target: Engine, url: str) -> None:
 
     @event.listens_for(target, "connect")
     def _set_pragmas(dbapi_connection: object, _record: object) -> None:
-        cursor = dbapi_connection.cursor()  # type: ignore[attr-defined]
+        # The connect listener receives the DBAPI connection untyped; SQLAlchemy
+        # invokes it after the driver's own connect() returned.
+        cursor = dbapi_connection.cursor()  # type: ignore[attr-defined] - DBAPI object arrives untyped
         try:
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
@@ -99,7 +105,7 @@ def make_engine(settings: Settings) -> Engine:
         kwargs["pool_pre_ping"] = True
         kwargs["pool_size"] = 10
         kwargs["max_overflow"] = 20
-        kwargs["pool_recycle"] = 3600
+        kwargs["pool_recycle"] = POSTGRES_POOL_RECYCLE_SECONDS
         kwargs["connect_args"] = {"connect_timeout": POSTGRES_CONNECT_TIMEOUT_SECONDS}
     return create_engine(url, **kwargs)
 

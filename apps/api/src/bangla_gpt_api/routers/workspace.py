@@ -53,6 +53,12 @@ from .deps import (
 
 router = APIRouter(responses=AUTH_GUARD_RESPONSES)
 
+#: How long a cancelled job runner waits for an in-flight DB hop before
+#: closing its session anyway. The hop is a synchronous SQLAlchemy call in a
+#: worker thread; 30 s covers a slow write without letting a wedged thread
+#: hold shutdown open (the lifespan drain has its own 20 s bound).
+JOB_CANCEL_DB_WAIT_SECONDS = 30.0
+
 
 # --- teacher workload metric ------------------------------------------
 # PLANNING ESTIMATES -- minutes a teacher typically spends producing each
@@ -235,6 +241,12 @@ async def _execute_ai_job(app_ctx: Ctx, job_id: str) -> None:
         doc_payload: dict,
         attempts: int,
     ) -> None:
+        # F-171: this status covers the validation-and-persistence window. The
+        # generator validates its own payload (parse/echo/MCQ checks) before it
+        # returns, inside the generating phase, so this write marks the point
+        # where the validated document is stored. The wire value stays
+        # `validating`: the web client maps it (CreateHub JOB_LABEL) and a
+        # rename is a cross-stream change, recorded as a handoff.
         job.status = "validating"
         job.attempts = attempts
         db.commit()
@@ -348,7 +360,9 @@ async def _execute_ai_job(app_ctx: Ctx, job_id: str) -> None:
         # the next await, so wait it out (bounded) before touching the session.
         if in_flight is not None and not in_flight.done():
             with contextlib.suppress(BaseException):
-                await asyncio.wait_for(asyncio.shield(in_flight), timeout=30.0)
+                await asyncio.wait_for(
+                    asyncio.shield(in_flight), timeout=JOB_CANCEL_DB_WAIT_SECONDS
+                )
         # Still-cancelled at close: the close runs in its worker thread
         # regardless; nothing else touches this session afterwards.
         with contextlib.suppress(BaseException):

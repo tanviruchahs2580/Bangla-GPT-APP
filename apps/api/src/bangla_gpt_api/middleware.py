@@ -260,6 +260,11 @@ class BodySizeLimitMiddleware:
             await self._response(400, "Unable to read request body")(scope, receive, send)
 
 
+#: HSTS lifetime. Must match the edge's value (deploy/caddy/Caddyfile) so a
+#: response that reaches a browser through either hop pins the same policy.
+HSTS_MAX_AGE_SECONDS = 31_536_000
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Baseline hardening headers on every API response."""
 
@@ -322,7 +327,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         settings = getattr(request.app.state, "settings", None)
         if settings is not None and settings.is_production:
             response.headers.setdefault(
-                "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+                "Strict-Transport-Security",
+                f"max-age={HSTS_MAX_AGE_SECONDS}; includeSubDomains",
             )
         return response
 

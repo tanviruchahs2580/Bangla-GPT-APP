@@ -18,6 +18,11 @@ logger = logging.getLogger(__name__)
 #: Both backends count in one-minute windows.
 WINDOW_SECONDS = 60.0
 
+#: Per-socket Redis deadlines. A limiter backend that answers slowly must
+#: not hold the request open: the fallback posture (fail-open/closed) is
+#: decided the moment the backend misses this bound.
+REDIS_SOCKET_TIMEOUT_SECONDS = 1.0
+
 
 class RateLimitBackendError(RuntimeError):
     """Raised when the configured backend cannot be reached (fail-closed)."""
@@ -97,7 +102,10 @@ class RedisRateLimiter:
 
         self._fail_open = fail_open
         self._redis: redis.Redis = redis.Redis.from_url(
-            url, socket_connect_timeout=1.0, socket_timeout=1.0, decode_responses=True
+            url,
+            socket_connect_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
+            socket_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
+            decode_responses=True,
         )
 
     def check(self, key: str, limit: int) -> bool:

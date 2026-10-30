@@ -63,7 +63,7 @@ from bangla_gpt_api.retrieval.hybrid_index import HybridIndex  # noqa: F401 (re-
 from bangla_gpt_api.routers import register_routers
 from bangla_gpt_api.routers._error_contract import CodedDetail, MessageDetail
 from bangla_gpt_api.routers.deps import CONSENT_VERSION
-from bangla_gpt_api.services.circuit_breaker import CircuitBreaker  # noqa: F401
+from bangla_gpt_api.services.circuit_breaker import CircuitBreaker  # noqa: F401 - re-exported for tests
 from bangla_gpt_api.services.tutor import TutorService  # noqa: F401 (re-exported for tests)
 
 __all__ = ["CONSENT_VERSION", "app", "create_app", "enforce_production_safety"]
@@ -553,7 +553,7 @@ def _mark_public_operations(app: object) -> None:
     and the document has no global `security`, so a deliberate decision is
     invisible in the contract.
     """
-    original = app.openapi  # type: ignore[attr-defined]
+    original = app.openapi  # type: ignore[attr-defined] - app is typed object on purpose (see below)
 
     def openapi() -> dict[str, Any]:
         spec: dict[str, Any] = original()
@@ -572,7 +572,7 @@ def _mark_public_operations(app: object) -> None:
 
     # Replacing the attribute on the FastAPI instance is the documented way to
     # customise the schema; mypy types `app` as a bare object here.
-    app.openapi = openapi  # type: ignore[attr-defined]
+    app.openapi = openapi  # type: ignore[attr-defined] - FastAPI's own extension point
 
 
 _HTTP_METHODS = frozenset({"get", "post", "put", "patch", "delete", "head", "options"})

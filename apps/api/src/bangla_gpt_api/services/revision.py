@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from bangla_gpt_api.services.activity import dhaka_date
 
-if TYPE_CHECKING:  # pragma: no cover
+if TYPE_CHECKING:
     from bangla_gpt_api.schemas import ReviewItem
 
 MIN_EASE = 1.3
