@@ -16,6 +16,7 @@ import type { LessonPlan, QPaper, ShortTest } from "../../types";
 import { Button, Card, Field, LoadError } from "../../components/ui";
 import { CreateHub } from "../../components/teacher/CreateHub";
 import { QPaperReviewPanel } from "../../components/teacher/QPaperReviewPanel";
+import { ShortTestRow } from "../../components/teacher/ShortTestRow";
 import { friendlyError } from "../../errors";
 import { t } from "../../i18n";
 
@@ -456,10 +457,7 @@ export function ShortTestFlow() {
         ) : (
           <ul>
             {tests.slice(0, 5).map((st) => (
-              <li key={st.id}>
-                {st.chapter} · {st.subject} · {st.questions.length}Q ·{" "}
-                {t("stAssigned", { n: st.attempts.length })}
-              </li>
+              <ShortTestRow key={st.id} test={st} />
             ))}
           </ul>
         )}

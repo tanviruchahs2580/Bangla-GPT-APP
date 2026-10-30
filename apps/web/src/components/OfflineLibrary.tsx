@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { Card } from "./ui";
-import { t } from "../i18n";
+import { formatNumber, t } from "../i18n";
 import {
   deleteChapter,
   downloadedChapters,
@@ -59,7 +59,7 @@ export function OfflineLibrary({
   return (
     <Card>
       <div className="card-title">
-        {t("offlineBadge")} · {records.length}
+        {t("offlineBadge")} · {formatNumber(records.length)}
         {usage ? ` · ${formatBytes(usage.bytes)}` : ""}
       </div>
       <div className="stack">
@@ -68,8 +68,8 @@ export function OfflineLibrary({
             <div className="row-main">
               <div className="row-title">{rec.chapter}</div>
               <div className="row-sub">
-                {rec.subject} · {t("classLabel")} {rec.classLevel} ·{" "}
-                {formatBytes(rec.bytes)}
+                {rec.subject} · {t("classLabel")} {formatNumber(rec.classLevel)}{" "}
+                · {formatBytes(rec.bytes)}
               </div>
             </div>
             <button

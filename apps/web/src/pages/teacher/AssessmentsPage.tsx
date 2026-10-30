@@ -12,8 +12,9 @@ import type {
 import { Check, ChevronLeft, Pencil } from "lucide-react";
 import { Badge, Button, Card, LoadError, Stat } from "../../components/ui";
 import { QPaperReviewPanel } from "../../components/teacher/QPaperReviewPanel";
+import { ShortTestRow } from "../../components/teacher/ShortTestRow";
 import { friendlyError } from "../../errors";
-import { t } from "../../i18n";
+import { formatNumber, t } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { formatServerDateTime } from "../../lib/datetime";
 import { byClassLevelThenSection } from "../../lib/localeSort";
@@ -275,9 +276,13 @@ export default function AssessmentsPage() {
                           {t("classLabel")} {qp.class_level}
                         </div>
                         <div className="row-sub">
-                          {qp.questions.length}Q · {qp.marks} {t("qpMarks")} ·{" "}
-                          {qp.questions.filter((q) => q.reviewed).length}/
-                          {qp.questions.length} {t("stepApprove")}
+                          {formatNumber(qp.questions.length)}Q ·{" "}
+                          {formatNumber(qp.marks)} {t("qpMarks")} ·{" "}
+                          {formatNumber(
+                            qp.questions.filter((q) => q.reviewed).length,
+                          )}
+                          /{formatNumber(qp.questions.length)}{" "}
+                          {t("stepApprove")}
                         </div>
                       </div>
                       <Badge tone={qp.status === "final" ? "ok" : "teal"}>
@@ -611,10 +616,7 @@ function ShortTestList() {
   return (
     <ul>
       {rows.slice(0, 8).map((st) => (
-        <li key={st.id}>
-          {st.chapter} · {st.subject} · {st.questions.length}Q ·{" "}
-          {t("stAssigned", { n: st.attempts.length })}
-        </li>
+        <ShortTestRow key={st.id} test={st} />
       ))}
     </ul>
   );
