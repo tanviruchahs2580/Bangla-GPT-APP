@@ -113,9 +113,11 @@ export default defineConfig({
     // it keeps a stale cache from ever masking a regression.
     serviceWorkers: "block",
   },
-  // FE-18: the desktop project never runs the mobile-only spec, and the
-  // mobile profile is one device (Pixel 5, 393x851) so the added CI cost is
-  // that single file rather than a second copy of the whole suite.
+  // FE-18 / F-158: the desktop project never runs the mobile-only spec, and
+  // the mobile profile (one device: Pixel 5, 393x851) runs the mobile-only
+  // spec plus the critical journey file at that viewport, so a route, auth
+  // or layout break on a phone fails CI instead of shipping -- the budget
+  // stays two files, not a second copy of the whole suite.
   projects: [
     {
       name: "chromium",
@@ -125,7 +127,7 @@ export default defineConfig({
     {
       name: "mobile-chromium",
       use: { ...devices["Pixel 5"] },
-      testMatch: /mobile\.spec\.ts$/,
+      testMatch: /(mobile|smoke)\.spec\.ts$/,
     },
   ],
   webServer: [
