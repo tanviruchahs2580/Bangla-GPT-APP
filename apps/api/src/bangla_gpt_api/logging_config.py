@@ -47,13 +47,21 @@ _IDENTIFIER_KEY_RE = re.compile(
 )
 
 # Values that are unmistakably credentials regardless of the key they sit under.
-_SENSITIVE_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = (
+_CREDENTIAL_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\$argon2[id]?\$"),  # argon2 PHC string
     re.compile(r"\bpbkdf2_sha256\$"),  # legacy PHC string
     re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\."),  # JWT
     re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}"),  # GitHub token
     re.compile(r"\b(?:sk|ghp|glpat|xox[abps])-[A-Za-z0-9_-]{16,}"),  # vendor tokens
     re.compile(r"\bBearer\s+[A-Za-z0-9._~+/-]{12,}=*"),  # Authorization header
+)
+
+# Values that are PII but not credentials. These are checked for every field
+# EXCEPT one whose key says "opaque identifier" (F-188): a hex id such as
+# `9c12968924894e25` contains an 11-digit run that the phone pattern matched,
+# so 3 of 273 logged request_ids arrived as "[redacted]" - the id was lost in
+# the very sink used to correlate the client's report with the server's trace.
+_PII_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\+?[0-9]{10,15}"),  # phone numbers (guardian PII)
 )
 
@@ -73,14 +81,21 @@ def is_sensitive_key(key: str) -> bool:
     return bool(_SENSITIVE_KEY_RE.search(key) or _OPAQUE_KEY_RE.search(key))
 
 
-def _value_looks_secret(value: str) -> bool:
+def _value_looks_secret(value: str, *, identifier: bool = False) -> bool:
     """True when a string value matches a credential/PII shape.
+
+    The credential patterns run always - a token under a field named
+    ``request_id`` is still a token. The phone pattern is skipped when the key
+    declared an opaque identifier, because an id is not a phone number and the
+    digit-run match turned out to be a false positive (F-188).
 
     The email check runs only when the value contains an '@', so the common
     log field (an id, a name, an event) pays one subclass check per pattern
     instead of a quadratic scan (F-076).
     """
-    if any(pattern.search(value) for pattern in _SENSITIVE_VALUE_PATTERNS):
+    if any(pattern.search(value) for pattern in _CREDENTIAL_VALUE_PATTERNS):
+        return True
+    if not identifier and any(pattern.search(value) for pattern in _PII_VALUE_PATTERNS):
         return True
     return "@" in value and _EMAIL_VALUE_PATTERN.search(value) is not None
 
@@ -112,12 +127,10 @@ def redact_value(value: Any, *, _depth: int = 0, _is_identifier: bool = False) -
     if value is None or isinstance(value, bool):
         return value
     if isinstance(value, str):
-        # An identifier field is exempt from the value-shape rules, but never
-        # from a rule that says "this is definitely a credential".
-        secret_shape = _value_looks_secret(value)
-        if _is_identifier and not secret_shape:
-            return value
-        return REDACTED if secret_shape else value
+        # An identifier field skips the PII patterns, never the credential
+        # ones: an id is not a phone number, but a token logged under an
+        # id-shaped key is still a token (F-188).
+        return REDACTED if _value_looks_secret(value, identifier=_is_identifier) else value
     if isinstance(value, (int, float)):
         return value
     # Any other object could carry a __repr__ that exposes internals, and a
