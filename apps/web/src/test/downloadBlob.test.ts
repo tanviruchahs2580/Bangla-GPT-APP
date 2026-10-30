@@ -7,6 +7,17 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { downloadBlob } from "../lib/download";
 
+/** jsdom's `URL.createObjectURL` reads jsdom's own Blob internals, which the
+ * Node global Blob does not have (measured: "Cannot read properties of
+ * undefined (reading '_buffer')" on Node 24). The platform call is not the
+ * subject here - the anchor mechanics and the revoke timing are - so it is
+ * stubbed the same way dataExport.test.tsx stubs it. */
+function stubObjectUrl() {
+  const create = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:stub");
+  const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+  return { create, revoke };
+}
+
 function spyOnAnchor() {
   const clicks: HTMLAnchorElement[] = [];
   const realClick = HTMLAnchorElement.prototype.click;
@@ -28,10 +39,13 @@ afterEach(() => {
 
 describe("downloadBlob", () => {
   it("clicks an anchor that is attached to the document", () => {
+    const urls = stubObjectUrl();
     const spy = spyOnAnchor();
     const blob = new Blob(["x"], { type: "application/pdf" });
 
     downloadBlob(blob, "doc.pdf");
+
+    expect(urls.create).toHaveBeenCalledWith(blob);
 
     expect(spy.clicks).toHaveLength(1);
     const a = spy.clicks[0];
@@ -39,17 +53,14 @@ describe("downloadBlob", () => {
     // the element to be in the tree
     expect(document.contains(a)).toBe(false);
     expect(a.download).toBe("doc.pdf");
-    expect(a.href.startsWith("blob:")).toBe(true);
+    expect(a.href).toBe("blob:stub");
     spy.restore();
   });
 
   it("does not revoke the object URL synchronously, and does revoke it later", () => {
     vi.useFakeTimers();
     const spy = spyOnAnchor();
-    const revoke = vi.spyOn(URL, "revokeObjectURL");
-    const create = vi
-      .spyOn(URL, "createObjectURL")
-      .mockReturnValue("blob:test");
+    const { create, revoke } = stubObjectUrl();
 
     downloadBlob(new Blob(["x"]), "doc.pdf");
 
@@ -58,11 +69,12 @@ describe("downloadBlob", () => {
     expect(revoke).not.toHaveBeenCalled();
 
     vi.advanceTimersByTime(30_000);
-    expect(revoke).toHaveBeenCalledWith("blob:test");
+    expect(revoke).toHaveBeenCalledWith("blob:stub");
     spy.restore();
   });
 
   it("opens in a tab without a download name when asked", () => {
+    stubObjectUrl();
     const spy = spyOnAnchor();
     const win = vi.spyOn(window, "open").mockImplementation(() => null);
 

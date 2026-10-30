@@ -5,10 +5,10 @@ import {
   type ButtonHTMLAttributes,
   type ReactNode,
 } from "react";
+import { TrendingDown, TrendingUp, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { cn } from "../lib/cn";
 import { t } from "../i18n";
-import { BrandMark } from "./BrandMark";
 
 type Variant = "primary" | "teal" | "ghost" | "soft" | "danger" | "default";
 type Size = "sm" | "md" | "lg";
@@ -151,57 +151,6 @@ export function Stat({ value, label }: { value: ReactNode; label: ReactNode }) {
   );
 }
 
-export function Row({
-  title,
-  sub,
-  trailing,
-  onClick,
-}: {
-  title: ReactNode;
-  sub?: ReactNode;
-  trailing?: ReactNode;
-  onClick?: () => void;
-}) {
-  const content = (
-    <>
-      <div className="row-main">
-        <div className="row-title">{title}</div>
-        {sub && <div className="row-sub">{sub}</div>}
-      </div>
-      {trailing}
-    </>
-  );
-  if (onClick) {
-    return (
-      <button className="row row-action" onClick={onClick}>
-        {content}
-      </button>
-    );
-  }
-  return <div className="row">{content}</div>;
-}
-
-export function EmptyState({
-  title,
-  sub,
-  action,
-}: {
-  title: ReactNode;
-  sub?: ReactNode;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="center empty-state empty-pad">
-      <div className="empty-mark" aria-hidden>
-        <BrandMark size={56} />
-      </div>
-      <div className="empty-title">{title}</div>
-      {sub && <div className="muted empty-sub">{sub}</div>}
-      {action && <div className="empty-action">{action}</div>}
-    </div>
-  );
-}
-
 /* Shared primitives: one focus-trapped modal, one skeleton
    vocabulary, one form field / segmented / avatar pattern for
    every page. */
@@ -340,7 +289,7 @@ export function Modal({
             aria-label={t("close")}
             onClick={onClose}
           >
-            ✕
+            <X size={18} aria-hidden />
           </button>
         </div>
         {children}
@@ -470,6 +419,46 @@ export function Avatar({
       )}
     >
       {initial}
+    </span>
+  );
+}
+
+/** Direction of a per-student score trend, as one accessible mark.
+ *
+ * The trend used to be a bare ▼/▲/– text glyph: it read as iconography, and
+ * when it became an icon it lost its meaning to assistive tech. One component
+ * now owns the mapping (label in both languages, colour never the only
+ * channel) so the two teacher screens cannot drift apart. */
+export function TrendMark({ trend }: { trend: "up" | "down" | "flat" }) {
+  if (trend === "down") {
+    return (
+      <span
+        className="trend-mark trend-down"
+        role="img"
+        aria-label={t("trendFalling")}
+      >
+        <TrendingDown size={14} aria-hidden />
+      </span>
+    );
+  }
+  if (trend === "up") {
+    return (
+      <span
+        className="trend-mark trend-up"
+        role="img"
+        aria-label={t("trendRising")}
+      >
+        <TrendingUp size={14} aria-hidden />
+      </span>
+    );
+  }
+  return (
+    <span
+      className="trend-mark trend-flat"
+      role="img"
+      aria-label={t("trendSteady")}
+    >
+      {"–"}
     </span>
   );
 }

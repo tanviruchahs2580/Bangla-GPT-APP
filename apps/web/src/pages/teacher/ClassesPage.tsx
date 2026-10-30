@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Bot } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { get, post } from "../../api";
 import type {
@@ -9,7 +10,14 @@ import type {
   SupportPlanRow,
   WeakMatrix,
 } from "../../types";
-import { Badge, Button, Card, ProgressRing, Stat } from "../../components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  ProgressRing,
+  Stat,
+  TrendMark,
+} from "../../components/ui";
 import { friendlyError } from "../../errors";
 import { t } from "../../i18n";
 
@@ -369,7 +377,7 @@ export default function ClassesPage() {
           </div>
           {insight && (
             <p className="ai-insight-line section-gap-top" role="status">
-              <span aria-hidden>🤖</span>{" "}
+              <Bot size={16} aria-hidden />{" "}
               {t(insight.key, insight.vars as Record<string, string | number>)}
             </p>
           )}
@@ -412,12 +420,7 @@ export default function ClassesPage() {
                 {detailWm && (
                   <>
                     {" "}
-                    · {t("wmTrend")}:{" "}
-                    {detailWm.trend === "down"
-                      ? "▼"
-                      : detailWm.trend === "up"
-                        ? "▲"
-                        : "–"}
+                    · {t("wmTrend")}: <TrendMark trend={detailWm.trend} />
                     {detailWm.at_risk && (
                       <Badge tone="warn"> {t("spRisk")}</Badge>
                     )}

@@ -164,18 +164,18 @@ describe("weakness heatmap card", () => {
     expect(screen.getAllByTitle(t("wmRead")).length).toBe(2);
 
     // avg/trend footer row: downward trend flags Karim, Rahim stays flat.
-    // The arrow is its own text node, so match on the cell's combined text.
-    const trendCells = (mark: string) =>
-      screen
-        .queryAllByText((_, el) =>
-          Boolean(
-            el?.tagName === "TD" && (el.textContent ?? "").includes(mark),
-          ),
-        )
-        .filter((el) => el.className.includes("wm-cell"));
-    expect(trendCells("▼").length).toBe(1);
-    expect(trendCells("▲").length).toBe(0);
-    expect(trendCells("–").length).toBe(1);
+    // Since the SLOP-C3 pass the trend is an icon with an accessible name, not
+    // a text glyph: assert the label a screen reader gets, which is also what
+    // keeps the meaning from being colour-only.
+    expect(screen.getAllByRole("img", { name: t("trendFalling") }).length).toBe(
+      1,
+    );
+    expect(
+      screen.queryAllByRole("img", { name: t("trendRising") }),
+    ).toHaveLength(0);
+    expect(screen.getAllByRole("img", { name: t("trendSteady") }).length).toBe(
+      1,
+    );
   });
 
   it("flags at-risk students and creates a 3-week support plan", async () => {
