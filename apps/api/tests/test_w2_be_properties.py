@@ -96,13 +96,17 @@ def test_k_anonymity_floor_cannot_be_argued_below_the_minimum(requested: int | N
             assert effective == requested
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def prepared(tmp_path_factory) -> dict:
-    """One app, one teacher and one pupil, registered once.
+    """One app, one teacher and one pupil per test.
 
-    The property examples below drive the import and the quiz, so the setup
-    must not re-register per example: the register rate limit (10/min) turns
-    additional examples into 429s, which would test the limiter instead.
+    Function-scoped, not module-scoped: the Postgres parity job truncates
+    every table after each test (conftest `_pg_test_isolation`), so a
+    module-scoped app would keep issuing JWTs for users that no longer exist
+    -- the second test in this module answered 401 on every /quizzes POST.
+    Function scope is not per-example: pytest sets the fixture up once per
+    test call (hypothesis re-runs only the body), so the 10/min register
+    bound is never approached.
     """
     settings = Settings(
         env="test",
