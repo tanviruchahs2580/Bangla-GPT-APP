@@ -684,6 +684,39 @@ const bn = {
   errLastAdmin: "শেষ অ্যাডমিন অ্যাকাউন্ট মোছা বা নামানো যাবে না।",
   errPasswordChangeRequired:
     "আগে পাসওয়ার্ড বদলাতে হবে — পাসওয়ার্ড পরিবর্তনের পাতায় যান।",
+  errChapterNotFound:
+    "অধ্যায়টি খুঁজে পাওয়া যায়নি — তালিকা থেকে আবার বেছে নিন।",
+  errSubjectNotFound:
+    "বিষয়টি খুঁজে পাওয়া যায়নি — তালিকা থেকে আবার বেছে নিন।",
+  errAttemptNotFound: "কুইজটি খুঁজে পাওয়া যায়নি — তালিকা থেকে আবার বেছে নিন।",
+  errAssignmentNotFound:
+    "অ্যাসাইনমেন্টটি খুঁজে পাওয়া যায়নি — তালিকা থেকে আবার বেছে নিন।",
+  errStudentNotFound:
+    "শিক্ষার্থীকে খুঁজে পাওয়া যায়নি — তালিকা থেকে আবার বেছে নিন।",
+  errEmptyRoster: "এই শ্রেণিতে এখনো কোনো শিক্ষার্থী যুক্ত হয়নি।",
+  errStudentsOnly: "এটি শুধু শিক্ষার্থীদের জন্য।",
+  errUnsafeContent:
+    "নিরাপত্তার কারণে এই প্রশ্নের উত্তর দেওয়া যাচ্ছে না — অন্য প্রশ্ন করে দেখুন।",
+  errConsentRequired: "চালিয়ে যেতে নীতিমালায় সম্মতি দিন।",
+  errGuardianConsentRequired:
+    "শিক্ষার্থী হিসেবে নথিভুক্ত হতে অভিভাবকের সম্মতি প্রয়োজন।",
+  errClassLevelRequired: "আগে শ্রেণি বেছে নিন।",
+  errPasswordTooCommon: "এই পাসওয়ার্ডটি অনেক সহজ — অন্য একটি বেছে নিন।",
+  errPasswordTooShort: "পাসওয়ার্ডটি কমপক্ষে ৮ অক্ষরের দিন।",
+  errPasswordUnchanged: "নতুন পাসওয়ার্ড আগেরটির মতোই — ভিন্ন একটি বেছে নিন।",
+  errMfaLocked:
+    "অনেকবার ভুল কোড দেওয়া হয়েছে — কিছুক্ষণ পরে আবার চেষ্টা করুন।",
+  errNoGradedData: "এখনো কোনো মূল্যায়িত ফলাফল নেই — আগে কুইজ জমা দিন।",
+  errMixedClassLevels:
+    "একই কুইজে ভিন্ন শ্রেণির শিক্ষার্থী রাখা যায় না — এক শ্রেণির শিক্ষার্থী বেছে নিন।",
+  errEmptyQuery: "আগে প্রশ্নটি লিখুন।",
+  errImportEmpty: "ফাইলটিতে কোনো ডেটা সারি নেই।",
+  errImportTooLarge: "ফাইলটি অনেক বড় — ছোট ব্যাচে ভাগ করে আবার চেষ্টা করুন।",
+  errNotLinked:
+    "এই শিক্ষার্থীর সঙ্গে আপনার অ্যাকাউন্ট যুক্ত নয় — আগে লিংক করুন।",
+  errDirectLinkDisabled:
+    "সরাসরি লিংক বন্ধ আছে — শিক্ষার্থীর ইনভাইট কোড ব্যবহার করুন।",
+  errSessionExpired: "সেশনের সময় শেষ — আবার লগইন করুন।",
   mfaTitle: "দুই ধাপের যাচাই",
   mfaHint: "অথেনটিকেটর অ্যাপের ৬ সংখ্যার কোডটি দিন।",
   mfaCode: "৬ সংখ্যার কোড",
@@ -1355,6 +1388,39 @@ const en: Dict = {
   errLastAdmin: "The last admin account cannot be removed or demoted.",
   errPasswordChangeRequired:
     "Change your password first — open the password screen.",
+  errChapterNotFound:
+    "That chapter was not found — pick it again from the list.",
+  errSubjectNotFound:
+    "That subject was not found — pick it again from the list.",
+  errAttemptNotFound: "That quiz was not found — pick it again from the list.",
+  errAssignmentNotFound:
+    "That assignment was not found — pick it again from the list.",
+  errStudentNotFound:
+    "That student was not found — pick them again from the list.",
+  errEmptyRoster: "No students have joined this class yet.",
+  errStudentsOnly: "This is only for students.",
+  errUnsafeContent:
+    "This question cannot be answered for safety reasons — try asking something else.",
+  errConsentRequired: "Accept the policy to continue.",
+  errGuardianConsentRequired:
+    "Guardian consent is required to register as a student.",
+  errClassLevelRequired: "Choose a class level first.",
+  errPasswordTooCommon: "That password is too common — choose a different one.",
+  errPasswordTooShort: "Use a password of at least 8 characters.",
+  errPasswordUnchanged:
+    "The new password is the same as the current one — choose a different one.",
+  errMfaLocked: "Too many wrong codes — try again in a little while.",
+  errNoGradedData: "No graded results yet — submit a quiz first.",
+  errMixedClassLevels:
+    "A quiz cannot mix class levels — select students from one class.",
+  errEmptyQuery: "Type a question first.",
+  errImportEmpty: "The file has no data rows.",
+  errImportTooLarge:
+    "The file is too large — split it into smaller batches and try again.",
+  errNotLinked: "Your account is not linked to this student — link it first.",
+  errDirectLinkDisabled:
+    "Direct linking is off — use the student's invite code.",
+  errSessionExpired: "Your session has ended — please log in again.",
   mfaTitle: "Two-step verification",
   mfaHint: "Enter the 6-digit code from your authenticator app.",
   mfaCode: "6-digit code",

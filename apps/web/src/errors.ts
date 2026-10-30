@@ -84,6 +84,100 @@ const KEY: Record<string, Parameters<typeof t>[0]> = {
   // other route will answer; the app routes this to the change screen, this
   // copy covers any surface that shows it inline.
   password_change_required: "errPasswordChangeRequired",
+  // F-111: the remaining codes the API can emit. The parity guard
+  // (src/test/errorCodeParity.test.ts) reads every `code` literal under
+  // apps/api/src/bangla_gpt_api and fails when one is missing here, so a new
+  // endpoint cannot fall through to the generic sentence unnamed.
+  //
+  // Codes a student or teacher can act on get their own sentence:
+  chapter_not_found: "errChapterNotFound",
+  subject_not_found: "errSubjectNotFound",
+  attempt_not_found: "errAttemptNotFound",
+  assignment_not_found: "errAssignmentNotFound",
+  student_not_found: "errStudentNotFound",
+  empty_roster: "errEmptyRoster",
+  students_only: "errStudentsOnly",
+  unsafe_content: "errUnsafeContent",
+  consent_not_accepted: "errConsentRequired",
+  guardian_consent_required: "errGuardianConsentRequired",
+  class_level_required: "errClassLevelRequired",
+  password_too_common: "errPasswordTooCommon",
+  password_too_short: "errPasswordTooShort",
+  password_unchanged: "errPasswordUnchanged",
+  mfa_locked: "errMfaLocked",
+  no_graded_data: "errNoGradedData",
+  mixed_class_levels: "errMixedClassLevels",
+  empty_query: "errEmptyQuery",
+  import_empty: "errImportEmpty",
+  import_too_large: "errImportTooLarge",
+  not_linked: "errNotLinked",
+  direct_link_disabled: "errDirectLinkDisabled",
+  session_ended: "errSessionExpired",
+  session_expired: "errSessionExpired",
+  // Generation is off until the index, the budget or the provider recovers;
+  // the retryable "answers are not being generated" copy is the honest one.
+  index_unavailable: "errLlmUnavailable",
+  ai_budget_exceeded: "errLlmUnavailable",
+  provider_unavailable: "errLlmUnavailable",
+  // Deployment faults behind a service that is expected back.
+  database_unavailable: "errServiceUnavailable",
+  provider_misconfigured: "errServiceUnavailable",
+  provider_unconfigured: "errServiceUnavailable",
+  renew_unavailable: "errServiceUnavailable",
+  pii_key_unconfigured: "errServiceUnavailable",
+  // Permission and ownership refusals with no more specific surface copy.
+  other_school: "errNotAllowed",
+  content_read_only: "errNotAllowed",
+  impersonation_forbidden: "errNotAllowed",
+  not_impersonation: "errNotAllowed",
+  session_not_bindable: "errNotAllowed",
+  metrics_denied: "errNotAllowed",
+  no_student_profile: "errNotAllowed",
+  staff_cannot_submit_student_quiz: "errNotAllowed",
+  // An expired or wrong invite code is exactly the invite sentence.
+  invite_expired: "errInvalidInvite",
+  invalid_code: "errInvalidInvite",
+  // Plumbing and validation codes that surface only under their owning
+  // screen's own handling; the generic retry sentence is deliberate. Checked
+  // so a rename upstream fails the parity guard instead of silently
+  // re-falling through.
+  already_used: "errGeneric",
+  classroom_exists: "errGeneric",
+  classroom_not_found: "errGeneric",
+  code_used: "errGeneric",
+  content_not_found: "errGeneric",
+  conversation_not_found: "errGeneric",
+  document_not_found: "errGeneric",
+  feedback_not_found: "errGeneric",
+  internal_error: "errGeneric",
+  invalid_explanation_style: "errGeneric",
+  invalid_idempotency_key: "errGeneric",
+  invalid_kind: "errGeneric",
+  invalid_payload: "errGeneric",
+  invalid_subject_focus: "errGeneric",
+  invite_not_found: "errGeneric",
+  job_not_found: "errGeneric",
+  missing_target: "errGeneric",
+  no_replacement: "errGeneric",
+  no_school: "errGeneric",
+  not_found: "errGeneric",
+  not_owner: "errGeneric",
+  not_revocable: "errGeneric",
+  note_not_found: "errGeneric",
+  notification_not_found: "errGeneric",
+  paper_finalised: "errGeneric",
+  pdf_unsupported: "errGeneric",
+  pii_review_failed: "errGeneric",
+  purge_confirmation_required: "errGeneric",
+  qpaper_not_found: "errGeneric",
+  review_required: "errGeneric",
+  school_not_found: "errGeneric",
+  target_not_found: "errGeneric",
+  unknown_kind: "errGeneric",
+  unknown_learning_pref: "errGeneric",
+  unknown_question_ref: "errGeneric",
+  unknown_student: "errGeneric",
+  user_not_found: "errGeneric",
 };
 
 const ACTION: Record<string, ErrorCopy["action"]> = {
