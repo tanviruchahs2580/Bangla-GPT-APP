@@ -197,7 +197,7 @@ test("STU-07 image question: valid, wrong-type, oversized and corrupted attachme
     mimeType: "text/plain",
     buffer: Buffer.from("not an image"),
   });
-  await expect(errorLine).toContainText("পড়া যায়নি");
+  await expect(errorLine).toContainText("সংযুক্ত করা যায়");
   await expect(errorLine).not.toContainText("বড়");
   expect(streamRequests).toBe(0);
 

@@ -39,12 +39,12 @@ repos:
       - id: end-of-file-fixer
       - id: mixed-line-ending
         args: [--fix=lf]
-        # .gitattributes pins *.ps1 to CRLF (`*.ps1 text eol=crlf`, for the
-        # Windows PowerShell helpers under apps/web) and .editorconfig agrees
-        # ([*.{bat,ps1}] end_of_line = crlf), so --fix=lf was rewriting
-        # apps/web/run_web_tests.ps1 to LF on every run and contradicting a
-        # checked-in attribute. The attribute file wins; this hook keeps
-        # normalising every other text file to LF. (T-040b)
+        # .gitattributes pins *.ps1 to CRLF (`*.ps1 text eol=crlf`) and
+        # .editorconfig agrees ([*.{bat,ps1}] end_of_line = crlf), so --fix=lf
+        # rewrote a checked-in PowerShell helper to LF on every run and
+        # contradicted the attribute. The attribute file wins; this hook keeps
+        # normalising every other text file to LF. The exclusion stays for the
+        # next .ps1 that lands (none is tracked today). (T-040b)
         exclude: \.ps1$
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
