@@ -809,7 +809,11 @@ def get_learn_progress(
         q = q.where(ChapterProgress.subject == subject)
     if class_level:
         q = q.where(ChapterProgress.class_level == class_level)
-    rows = db.execute(q.order_by(ChapterProgress.updated_at.desc())).scalars().all()
+    rows = (
+        db.execute(q.order_by(ChapterProgress.updated_at.desc(), ChapterProgress.id.desc()))
+        .scalars()
+        .all()
+    )
     return [
         ChapterProgressOut(
             subject=r.subject,

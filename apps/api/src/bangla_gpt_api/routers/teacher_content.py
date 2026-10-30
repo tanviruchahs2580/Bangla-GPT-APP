@@ -114,7 +114,7 @@ def _content_current(
             ChapterContent.class_level == class_level,
             ChapterContent.chapter == chapter,
         )
-        .order_by(ChapterContent.version.desc())
+        .order_by(ChapterContent.version.desc(), ChapterContent.id.desc())
         .limit(1)
     ).scalar_one_or_none()
 
@@ -264,7 +264,7 @@ def teacher_content_history(
                 ChapterContent.class_level == class_level,
                 ChapterContent.chapter == chapter,
             )
-            .order_by(ChapterContent.version.desc())
+            .order_by(ChapterContent.version.desc(), ChapterContent.id.desc())
         )
         .scalars()
         .all()
