@@ -95,6 +95,11 @@ class _DataExportV2(DataExportResponse):
     # erasure cascade deletes; the export skipped it, so a subject access
     # request answered without the question text and chosen answers.
     answer_log: list[dict] = Field(default_factory=list)
+    # DB-01/F-040 follow-up: the relational bulk-assignment membership rows
+    # (assignment_recipients) are as much the student's record as the JSON
+    # list the export already carries, and they are what the erasure path
+    # deletes row by row.
+    assignment_memberships: list[dict] = Field(default_factory=list)
     revision_items: list[dict] = Field(default_factory=list)
     concept_mastery: list[dict] = Field(default_factory=list)
     student_abilities: list[dict] = Field(default_factory=list)
@@ -150,7 +155,14 @@ def build_data_export(db: Session, user: User) -> _DataExportV2:
         ).scalars():
             links.append({"direction": "linked_by", "parent_id": link.parent_id})
     elif teacher is not None:
-        profile = {"type": "teacher", "id": teacher.id, "name": teacher.name}
+        profile = {
+            "type": "teacher",
+            "id": teacher.id,
+            "name": teacher.name,
+            # F-040 follow-up: the teacher's own workflow preferences are
+            # stored about them and were the one profile field omitted.
+            "prefs": teacher.prefs,
+        }
     elif parent is not None:
         profile = {"type": "parent", "id": parent.id, "name": parent.name}
         for link in db.execute(
@@ -488,6 +500,7 @@ def build_data_export(db: Session, user: User) -> _DataExportV2:
     # Student-scoped learning tables not covered by the v1 sections.
     chapter_progress: list[dict] = []
     answer_log: list[dict] = []
+    assignment_memberships: list[dict] = []
     revision_items: list[dict] = []
     concept_mastery: list[dict] = []
     student_abilities: list[dict] = []
@@ -531,6 +544,18 @@ def build_data_export(db: Session, user: User) -> _DataExportV2:
             ).scalars()
         ]
         attempt_ids = [a.id for a in attempt_rows]
+        assignment_memberships = [
+            {
+                "assignment_id": row.assignment_id,
+                "attempt_id": row.attempt_id,
+                "created_at": _iso(row.created_at),
+            }
+            for row in db.execute(
+                select(AssignmentRecipient)
+                .where(AssignmentRecipient.student_id == student.id)
+                .order_by(AssignmentRecipient.id)
+            ).scalars()
+        ]
         if attempt_ids:
             answer_log = [
                 {
@@ -584,6 +609,7 @@ def build_data_export(db: Session, user: User) -> _DataExportV2:
                 "school_id": room.school_id,
                 "class_level": room.class_level,
                 "section": room.section,
+                "as": "student",
             }
             for room in db.execute(
                 select(ClassRoom)
@@ -591,6 +617,27 @@ def build_data_export(db: Session, user: User) -> _DataExportV2:
                 .where(ClassStudent.student_id == student.id)
                 .order_by(ClassRoom.id)
             ).scalars()
+        ]
+
+    if teacher is not None:
+        # F-040 follow-up: a teacher's classroom assignments (class_teachers)
+        # are the staff-side mirror of the student membership rows above and
+        # were exported by nothing.
+        classrooms = [
+            {
+                "classroom_id": room.id,
+                "school_id": room.school_id,
+                "class_level": room.class_level,
+                "section": room.section,
+                "subject": assignment.subject,
+                "as": "teacher",
+            }
+            for room, assignment in db.execute(
+                select(ClassRoom, ClassTeacher)
+                .join(ClassTeacher, ClassTeacher.classroom_id == ClassRoom.id)
+                .where(ClassTeacher.teacher_id == teacher.id)
+                .order_by(ClassRoom.id)
+            ).all()
         ]
 
     return _DataExportV2(
@@ -610,6 +657,7 @@ def build_data_export(db: Session, user: User) -> _DataExportV2:
         notes=notes,
         notifications=notifications,
         chapter_progress=chapter_progress,
+        assignment_memberships=assignment_memberships,
         answer_log=answer_log,
         revision_items=revision_items,
         concept_mastery=concept_mastery,
