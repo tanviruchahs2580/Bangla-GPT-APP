@@ -40,8 +40,20 @@ export function formatServerDateTime(
 ): string {
   const date = parseServerDate(value);
   if (!date) return "";
+  // Numeric components are explicit: with only `timeZone` set the formatter
+  // defaults to date-only, which silently dropped the time of day from every
+  // deadline, note and audit row (the F-116 Intl rewrite), and a
+  // dateStyle/timeStyle pair changed the year width from the previous
+  // toLocaleString output. These options reproduce that shape in the app
+  // language and the product zone.
   return new Intl.DateTimeFormat(localeTag(lang), {
     timeZone: TIME_ZONE,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
   }).format(date);
 }
 

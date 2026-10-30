@@ -50,16 +50,31 @@ describe("parseServerDate", () => {
     // defect (F-116): a bn-UI user on an en-US device read US-formatted Latin
     // dates in the middle of Bangla screens. The product formats Dhaka
     // instants for Bangladeshi classrooms, and the language toggle decides
-    // the digits and field order.
+    // the digits and field order. The numeric components stay explicit: the
+    // earlier mirror assertion omitted them, so it blessed a formatter that
+    // had silently dropped the time of day from every deadline.
     const instant = new Date("2026-10-20T04:30:00Z");
     const dhaka = { timeZone: "Asia/Dhaka" };
-    const bn = new Intl.DateTimeFormat("bn-BD", dhaka).format(instant);
-    const en = new Intl.DateTimeFormat("en", dhaka).format(instant);
+    const dateTime: Intl.DateTimeFormatOptions = {
+      ...dhaka,
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "numeric",
+      second: "numeric",
+    };
+    const bn = new Intl.DateTimeFormat("bn-BD", dateTime).format(instant);
+    const en = new Intl.DateTimeFormat("en", dateTime).format(instant);
 
     setLang("bn");
     expect(formatServerDateTime("2026-10-20T04:30:00")).toBe(bn);
     expect(formatServerDateTime("2026-10-20T04:30:00")).toMatch(
       /[\u09E6-\u09EF]/,
+    );
+    // The time of day is back: 04:30Z is 10:30 in Dhaka.
+    expect(formatServerDateTime("2026-10-20T04:30:00")).not.toBe(
+      new Intl.DateTimeFormat("bn-BD", dhaka).format(instant),
     );
     expect(
       formatServerDate(
@@ -80,5 +95,7 @@ describe("parseServerDate", () => {
     expect(formatServerDateTime("2026-10-20T04:30:00")).not.toMatch(
       /[\u09E6-\u09EF]/,
     );
+    // Pinned to the Dhaka wall clock, not just "has a colon".
+    expect(formatServerDateTime("2026-10-20T04:30:00")).toContain("10:30:00");
   });
 });
