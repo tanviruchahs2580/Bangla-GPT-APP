@@ -27,25 +27,36 @@ the index.
 These are npm dependencies, not committed files; the licence text is installed
 with each package at `node_modules/<package>/LICENSE`.
 
-## Bundled images (licence record owed)
+## Bundled images (provenance pending, owner action)
 
-The web app ships seven UI background images and two PWA icons. Their
-provenance was not recorded when they were added, and no source, author or
-licence is stated anywhere in the tree:
+The web app ships seven UI background images and three PWA icons. One row per
+shipped file: the provenance check (F-137) opened each file, and none carries
+EXIF or any other source metadata (Pillow reads only JFIF/loop records), so no
+author, source or licence is recoverable from the artefacts and none was
+recorded in the commits that added them. **Every row is pending an owner
+record:** the provenance is unknown, and no licence is assumed here — do not
+cite this table as a licence grant.
 
-| File | What it is |
-| --- | --- |
-| `apps/web/src/assets/login-bg-desktop.jpg`, `apps/web/src/assets/login-bg-desktop.webp` | login/landing background, desktop |
-| `apps/web/src/assets/login-bg-mobile.jpg`, `apps/web/src/assets/login-bg-mobile.webp` | login/landing background, mobile |
-| `apps/web/src/assets/login-bg-blur.jpg` | blurred background layer |
-| `apps/web/src/assets/student-bg.jpg`, `apps/web/src/assets/student-bg.webp` | student dashboard background |
-| `apps/web/public/icon-192.png`, `apps/web/public/icon-512.png`, `apps/web/public/icon-maskable.svg` | PWA / Android launcher icons (project artwork) |
+| File | What it is | Author / source / licence | Status |
+| --- | --- | --- | --- |
+| `apps/web/src/assets/login-bg-desktop.jpg` | login/landing background, desktop | unknown — no metadata in the file, nothing recorded in the adding commit (f63d715) | PENDING owner record or replacement |
+| `apps/web/src/assets/login-bg-desktop.webp` | WebP twin of the above | unknown — derived from the JPEG above at build time (same commit) | PENDING owner record or replacement |
+| `apps/web/src/assets/login-bg-mobile.jpg` | login/landing background, mobile | unknown — no metadata in the file (f63d715) | PENDING owner record or replacement |
+| `apps/web/src/assets/login-bg-mobile.webp` | WebP twin of the above | unknown — derived from the JPEG above (f63d715) | PENDING owner record or replacement |
+| `apps/web/src/assets/login-bg-blur.jpg` | blurred background layer | unknown — no metadata in the file (f63d715) | PENDING owner record or replacement |
+| `apps/web/src/assets/student-bg.jpg` | student dashboard background | unknown — no metadata in the file (eb2c506) | PENDING owner record or replacement |
+| `apps/web/src/assets/student-bg.webp` | WebP twin of the above | unknown — derived from the JPEG above (eb2c506) | PENDING owner record or replacement |
+| `apps/web/public/icon-192.png` | PWA / Android launcher icon | unknown — project artwork by assertion only, no author recorded (4c60566) | PENDING owner record or replacement |
+| `apps/web/public/icon-512.png` | PWA / Android launcher icon | unknown — as above (4c60566) | PENDING owner record or replacement |
+| `apps/web/public/icon-maskable.svg` | PWA maskable icon | unknown — as above; SVG source, no embedded metadata | PENDING owner record or replacement |
 
-**Owner action (F-137):** record each image's source and licence here, or
-replace it with generated artwork under a stated licence, before a public
-release. `scripts/check_asset_notices.py` fails when an image under
-`apps/web/src/assets/` or a `apps/web/public/icon-*.png` is not named in this
-file, so a new unrecorded asset cannot slip in behind this list.
+**Owner action (F-137):** state each image's author/source/licence in its row
+above, or replace it with generated artwork under a stated licence, before a
+public release; until then every row stays PENDING and the set must not be
+redistributed outside this repository's MIT terms. `scripts/check_asset_notices.py`
+fails when an image under `apps/web/src/assets/` or a `apps/web/public/icon-*.png`
+is not named in this file, so a new unrecorded asset cannot slip in behind
+this list.
 
 ## Runtime dependencies
 

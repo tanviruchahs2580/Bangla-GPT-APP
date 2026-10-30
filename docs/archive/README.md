@@ -14,7 +14,10 @@ that property on every run, so a file cannot lose its banner silently.
 **Ratings and gate claims are self-assessed.** The "x/10" tables and
 "CI green" lines in some reports were written by the session that produced
 them, not by `score.py` against the findings register; where a claim carries
-no evidence id, treat it as an assertion, not a measurement.
+no evidence id, treat it as an assertion, not a measurement. Fifteen reports
+carry a numeric score or grade table; each of them now states that disclaimer
+in the file itself, directly under the banner (F-150). The remaining reports
+carry the banner but no score.
 
 Current sources of truth live one level up (living docs):
 

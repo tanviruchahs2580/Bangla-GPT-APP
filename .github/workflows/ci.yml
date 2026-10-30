@@ -563,6 +563,14 @@ jobs:
         # deleted.
         run: python3 apps/api/scripts/check_doc_paths.py
 
+      - name: Every bundled image is named in THIRD_PARTY_NOTICES.md
+        # REPO-07/F-137: the checker existed but ran only in `make docs-check`,
+        # so a new asset could land with no notices row. It fails when an image
+        # under apps/web/src/assets/ or an apps/web/public/icon-* is not named
+        # in the notices file (the provenance rows themselves stay an owner
+        # action recorded there).
+        run: python3 scripts/check_asset_notices.py
+
       - name: README and docs/ci.md agree with the workflows
         # F-008: the README's CI table invented a `golden-eval` job inside
         # ci.yml, omitted the sbom/guardrails jobs and never listed four of the

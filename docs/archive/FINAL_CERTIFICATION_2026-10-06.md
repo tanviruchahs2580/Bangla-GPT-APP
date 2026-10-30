@@ -1,8 +1,13 @@
 > **Archived - superseded.** This document is kept for history only and is
 > not a statement of current state. The current QA record is
 > [`docs/archive/qa-audit-2026-10-06.md`](qa-audit-2026-10-06.md)
-> (itself superseded by `docs/qa/QA_REPORT_2026-10-16.md`).
+> (itself superseded by `docs/qa/QA_REPORT_2026-10-29.md`).
 >
+
+> **Ratings/grades in this file were self-assessed by the session that wrote it,
+> not produced by `score.py` from the findings register; treat them as assertions
+> and do not cite them (F-150; see [README.md](README.md)).**
+
 # Bangla GPT — Final Engineering, QA, Security, UX & Repository Certification Report
 
 > **Date:** 2026-10-06 · **Head at certification:** `ecca3ef` · **Certification state: B — READY WITH KNOWN RISKS**

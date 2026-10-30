@@ -2,6 +2,10 @@
 > not describe the current tree and must not be quoted as current status.
 > Current sources of truth: [README.md](README.md).
 
+> **Ratings/grades in this file were self-assessed by the session that wrote it,
+> not produced by `score.py` from the findings register; treat them as assertions
+> and do not cite them (F-150; see [README.md](README.md)).**
+
 # FINAL EXECUTION REPORT — v0.3.0 "Product-Complete MVP"
 
 > Companion to the earlier `FINAL_ENTERPRISE_VALIDATION_REPORT.md` (v0.2.1,
