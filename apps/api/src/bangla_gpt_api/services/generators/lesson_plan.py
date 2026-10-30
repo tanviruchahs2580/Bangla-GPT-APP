@@ -13,10 +13,11 @@ from bangla_gpt_api.providers.base import LLMProvider, ProviderError
 from bangla_gpt_api.retrieval.base import RankingIndex
 from bangla_gpt_api.schemas import SourceRef
 from bangla_gpt_api.services.context import RequestContext, set_current_context
+from bangla_gpt_api.services.generators._evidence import evidence_blocks
 from bangla_gpt_api.services.generators._json import require_echo, strip_code_fences
 from bangla_gpt_api.services.router import Route, set_current_route
 from bangla_gpt_api.services.safety import AGE_RULE_SENTENCE
-from bangla_gpt_api.services.tutor import EVIDENCE_CLOSE, EVIDENCE_OPEN, sanitize_evidence
+from bangla_gpt_api.services.tutor import sanitize_evidence
 
 # Prompt marker so deterministic/mock providers recognize the lesson contract.
 LESSON_JSON_MARKER = "LESSON_JSON_V1"
@@ -60,9 +61,7 @@ def build_lesson_prompt(
     hits: list,
 ) -> str:
     """Single RAG context shared by all eight lesson sections."""
-    blocks = "\n".join(
-        f"{EVIDENCE_OPEN}\n{sanitize_evidence(hit.chunk.text)}\n{EVIDENCE_CLOSE}" for hit in hits
-    )
+    blocks = evidence_blocks(hits)
     return (
         f"{LESSON_JSON_MARKER}\n"
         f"Target: class_level={class_level}, subject={subject}, chapter={chapter}, "

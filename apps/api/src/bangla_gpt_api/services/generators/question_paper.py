@@ -13,9 +13,9 @@ from bangla_gpt_api.retrieval.base import RankingIndex
 from bangla_gpt_api.retrieval.bm25 import tokenize
 from bangla_gpt_api.retrieval.hybrid import light_stem
 from bangla_gpt_api.services.context import RequestContext, set_current_context
+from bangla_gpt_api.services.generators._evidence import evidence_block
 from bangla_gpt_api.services.router import Route, set_current_route
 from bangla_gpt_api.services.safety import AGE_RULE_SENTENCE
-from bangla_gpt_api.services.tutor import EVIDENCE_CLOSE, EVIDENCE_OPEN, sanitize_evidence
 
 QP_JSON_MARKER = "QP_JSON_V1"
 
@@ -97,9 +97,7 @@ def build_qp_prompt(
     counts: dict[str, int],
     evidence: list[str],
 ) -> str:
-    blocks = "\n".join(
-        f"{EVIDENCE_OPEN}\n{sanitize_evidence(text)}\n{EVIDENCE_CLOSE}" for text in evidence
-    )
+    blocks = "\n".join(evidence_block(text) for text in evidence)
     spec = f"SPEC: easy={counts['easy']} medium={counts['medium']} hard={counts['hard']} "
     spec += "chapters=" + "|".join(chapters)
     return (

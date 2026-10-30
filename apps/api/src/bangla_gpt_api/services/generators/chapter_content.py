@@ -6,9 +6,10 @@ from bangla_gpt_api.providers.base import LLMProvider, ProviderError
 from bangla_gpt_api.retrieval.base import RankingIndex
 from bangla_gpt_api.schemas import SourceRef
 from bangla_gpt_api.services.context import RequestContext, set_current_context
+from bangla_gpt_api.services.generators._evidence import evidence_blocks
 from bangla_gpt_api.services.router import Route, set_current_route
 from bangla_gpt_api.services.safety import AGE_RULE_SENTENCE
-from bangla_gpt_api.services.tutor import EVIDENCE_CLOSE, EVIDENCE_OPEN, sanitize_evidence
+from bangla_gpt_api.services.tutor import sanitize_evidence
 
 # Marker embedded in the prompt so deterministic/mock providers can recognize
 # the content-generation contract and reply with the JSON payload.
@@ -42,9 +43,7 @@ CONTENT_SYSTEM_PROMPT = (
 
 def build_content_prompt(class_level: int, subject: str, chapter: str, hits: list) -> str:
     """Single RAG context shared by every output section (spec 2.3)."""
-    blocks = "\n".join(
-        f"{EVIDENCE_OPEN}\n{sanitize_evidence(hit.chunk.text)}\n{EVIDENCE_CLOSE}" for hit in hits
-    )
+    blocks = evidence_blocks(hits)
     return (
         f"{CONTENT_JSON_MARKER}\n"
         f"Target: class_level={class_level}, subject={subject}, chapter={chapter}.\n"
