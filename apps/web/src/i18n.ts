@@ -2,6 +2,16 @@
 // English ships as a secondary so non-Bangla stakeholders can navigate.
 export type Lang = "bn" | "en";
 
+// Numeral + plural policy lives at this one boundary (docs/glossary-bn.md,
+// "Numeral and plural policy"): a value that is entirely a number is a
+// quantity and renders in the current language's digits; anything else a
+// caller interpolates (names, codes, pre-formatted dates) is opaque text and
+// is never rewritten. Values named in MACHINE_VALUE_VARS stay Latin under
+// both languages even when numeric, because they are identifiers.
+const BN_DIGITS = "০১২৩৪৫৬৭৮৯";
+const PURE_NUMBER = /^\d+(?:\.\d+)?$/;
+const MACHINE_VALUE_VARS: ReadonlySet<string> = new Set(["id"]);
+
 const bn = {
   appName: "বাংলা GPT টিউটর",
   welcomeTagline: "আপনার শেখার নতুন সঙ্গী",
@@ -1130,14 +1140,14 @@ const en: Dict = {
   finishQuiz: "Finish quiz",
   // B-03: unanswered-submit confirmation (mirrors the bn block).
   quizUnansweredConfirm:
-    "{n} question(s) have no answer yet. Submit with what you have?",
+    "{n} questions have no answer yet. Submit with what you have?",
   quizSubmitAnyway: "Submit anyway",
   quizKeepAnswering: "Keep answering",
   prevPage: "Previous page",
   nextPage: "Next page",
   // FE-11: the activity heatmap's screen-reader summary (role="img" name).
   heatmapSummary:
-    "Last {days} days: {questions} questions and quizzes practiced across {active} active days",
+    "Practice summary — questions and quizzes: {questions}; active days: {active} of {days}",
   notStarted: "No quiz taken yet.",
   continueTutor: "Continue chat",
   admSafety: "Safety audit",
@@ -1361,6 +1371,30 @@ const en: Dict = {
 
 const DICTS: Record<Lang, Dict> = { bn, en };
 
+/**
+ * Singular sentences for English counted nouns.
+ *
+ * English needs a different sentence at 1 ("Assigned to 1 student"), Bangla
+ * does not inflect for number at all, so the twins live here instead of in
+ * the dictionaries: a `bn` duplicate would exist only to satisfy key parity.
+ * `t()` picks the form through `Intl.PluralRules` when exactly one numeric
+ * placeholder is present, so the category comes from CLDR rather than a
+ * hand-rolled `n === 1`. `scripts/check_i18n.py` fails when a key that needs
+ * a singular form is missing from this table.
+ */
+const EN_SINGULAR: Partial<Record<keyof Dict, string>> = {
+  notifQuizAssigned: "Quiz assigned: {count} question · {subject} · {chapter}",
+  notifSupportPlan: "A new support plan is ready ({focus} focus point)",
+  stAssigned: "Assigned to {n} student",
+  activityQuizzes: "{n} quiz",
+  activityMinutes: "{n} minute",
+  thInsightRisk: "{n} student is at risk — consider creating support plans.",
+  anaCiRisk: "{n} student at risk — create support plans.",
+  genSourcesCount: "Grounded in {n} textbook source",
+  quizUnansweredConfirm:
+    "{n} question has no answer yet. Submit with what you have?",
+};
+
 let current: Lang = (localStorage.getItem("bgpt_lang") as Lang) || "bn";
 const listeners = new Set<() => void>();
 
@@ -1388,6 +1422,56 @@ export function tSubject(value: string | null | undefined): string {
   return v;
 }
 
+/** BCP 47 tag for the active (or given) language. */
+export function localeTag(lang: Lang = current): string {
+  return lang === "bn" ? "bn-BD" : "en";
+}
+
+/** Bangla digits (০-৯) for a quantity inside Bangla copy. */
+export function toBanglaDigits(text: string): string {
+  return text.replace(/\d/g, (digit) => BN_DIGITS[Number(digit)]);
+}
+
+/** A user-facing quantity in the given language: bn-BD digits or en digits,
+ *  with the language's own grouping. */
+export function formatNumber(value: number, lang: Lang = current): string {
+  return new Intl.NumberFormat(localeTag(lang)).format(value);
+}
+
+function interpolation(
+  name: string,
+  value: string | number,
+  lang: Lang,
+): string {
+  if (MACHINE_VALUE_VARS.has(name)) return String(value);
+  if (typeof value === "number") return formatNumber(value, lang);
+  // A string that is nothing but digits is a quantity a caller assembled;
+  // mixed strings (ids, codes, dates) stay as they are.
+  return lang === "bn" && PURE_NUMBER.test(value)
+    ? toBanglaDigits(value)
+    : value;
+}
+
+function singularForm(
+  key: keyof Dict,
+  vars: Record<string, string | number>,
+  lang: Lang,
+): string | undefined {
+  if (lang !== "en") return undefined;
+  const form = EN_SINGULAR[key];
+  if (!form) return undefined;
+  const counts = Object.entries(vars).filter(
+    ([, value]) => typeof value === "number",
+  );
+  // Two counts in one sentence have no single form to pick; those sentences
+  // stay count-agnostic (see heatmapSummary). A digit string is not a count
+  // here on purpose: callers send numbers for counts and strings for things
+  // like a chapter number or an id.
+  if (counts.length !== 1) return undefined;
+  const rule = new Intl.PluralRules("en").select(Number(counts[0][1]));
+  return rule === "one" ? form : undefined;
+}
+
 /** Translate a key; `{var}` placeholders are replaced positionally by named props. */
 export function t(
   key: keyof Dict,
@@ -1398,8 +1482,9 @@ export function t(
   // open to server-supplied codes); echoing the key keeps `t(...) || fallback` usable.
   if (typeof out !== "string") return String(key);
   if (vars) {
+    out = singularForm(key, vars, current) ?? out;
     for (const [k, v] of Object.entries(vars)) {
-      out = out.replaceAll(`{${k}}`, String(v));
+      out = out.replaceAll(`{${k}}`, interpolation(k, v, current));
     }
   }
   return out;

@@ -103,7 +103,9 @@ describe("friendlyError", () => {
 describe("i18n", () => {
   it("defaults to Bengali with interpolation support", () => {
     const out = t("partialQuizNote", { got: 4, want: 5 });
-    expect(out).toContain("4");
-    expect(out).toContain("5");
+    // Numbers are quantities and take Bangla digits under bn (F-113 numeral
+    // policy); the old assertion expected Latin digits at the boundary.
+    expect(out).toContain("৪");
+    expect(out).toContain("৫");
   });
 });
