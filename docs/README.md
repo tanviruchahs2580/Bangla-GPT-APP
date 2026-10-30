@@ -17,7 +17,7 @@ next is written.
 | [adr/ADRs.md](adr/ADRs.md) | Architecture decision records |
 | [runbook.md](runbook.md) | Operations runbook |
 | [ci.md](ci.md) | What every workflow runs, what blocks a merge, and how to reproduce it locally |
-| [route_baseline.md](route_baseline.md) | Route inventory regenerated 2026-10-29 from the app's own schema (142 method+path routes); regenerate the same way when routes change |
+| [route_baseline.md](route_baseline.md) | Route inventory regenerated 2026-10-30 from the app's own schema (143 method+path routes); regenerate the same way when routes change |
 | [qa/QA_REPORT_2026-10-29.md](qa/QA_REPORT_2026-10-29.md) | Current QA record |
 
 ## AI / data
