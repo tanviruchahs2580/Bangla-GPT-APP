@@ -127,6 +127,22 @@ The measured baseline on this tree (mock provider, bundled sample corpus,
 0.9969, language_consistency 1.0000, zero Assamese-letter violations. Per-form
 rates in the same run: bn 209/238, mixed 68/74, banglish 53/74, bn_typo 6/37.
 
+The language legs are gated, not just printed (RAG-21/F-132):
+`language_consistency` carries an absolute floor of 0.99 beside the 2pp
+regression rule, and `assamese_letter_violations` must stay 0. Both appear as
+lines under `GATE` and fail the command's exit code. Every report run also
+prints `ANSWER QUALITY (RAG-D1/SLOP-D1): UNVERIFIED-LIVE`: faithfulness in
+`local_overlap` mode, reference correctness and register are not decided by a
+hermetic run, and the 10% human re-label (section 7) is still an open owner
+action.
+
+The CI gate is the workflow's first step, `python -m
+bangla_gpt_api.evaluation.cli` (`.github/workflows/eval-gate.yml`), with this
+file and `baseline_v3.json` as its defaults, so the paired bootstrap against
+the committed baseline runs on every pull request without a workflow edit.
+`apps/api/scripts/evaluate_golden.py` remains the separate 24-question
+retrieval/hit floor step of the same workflow.
+
 ## 7. Labelling guideline (how a human label is assigned)
 
 The generator labels items programmatically; this section is the rule a human

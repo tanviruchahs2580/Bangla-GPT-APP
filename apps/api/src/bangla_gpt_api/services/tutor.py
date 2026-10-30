@@ -9,7 +9,9 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
+from bangla_gpt_api.evaluation.metrics import script_violations
 from bangla_gpt_api.evaluation.observability import (
+    RAG_ANSWER_SCRIPT_VIOLATIONS_TOTAL,
     RAG_GENERATION_OVERLOAD_TOTAL,
     RAG_RETRIEVAL_DEGRADED_TOTAL,
     TRACE_STORE,
@@ -30,6 +32,7 @@ from bangla_gpt_api.metrics import (
 from bangla_gpt_api.providers.base import LLMProvider, ProviderError
 from bangla_gpt_api.retrieval.base import RankingIndex
 from bangla_gpt_api.retrieval.bm25 import indexable_text, tokenize
+from bangla_gpt_api.retrieval.context import assemble_evidence
 from bangla_gpt_api.retrieval.hybrid import light_stem, trigram_similarity
 from bangla_gpt_api.retrieval.query_analysis import (
     content_terms,
@@ -279,6 +282,12 @@ def build_evidence_prompt(
     *,
     has_image: bool = False,
 ) -> str:
+    # F-129/RAG-10: the evidence set is budgeted in production tokens and
+    # deduplicated before it is rendered. The tutor already passes a selected
+    # list (prompt, citations and trace must describe the same evidence), so
+    # this second application is a no-op there; it exists so a direct caller
+    # cannot hand the generator an unbounded evidence set.
+    hits = assemble_evidence(hits)
     # strip pasted PII (phones, emails, NID runs) at the egress
     # boundary — retrieval/gating above run on the raw question (no ranking
     # drift); only the text sent upstream is sanitized, and every removal is
@@ -822,6 +831,24 @@ class TutorService:
             return None
         return verdict.reason or "unsafe_content"
 
+    @staticmethod
+    def _flag_answer_script(answer: str) -> list[str]:
+        """Record answer-side script-integrity failures (F-120/LLM-14).
+
+        The repository's unicode gate only ever saw tracked text, and the live
+        model is the one writer no gate has sampled. The answer is flagged,
+        not refused: one stray glyph should not cost a student the whole
+        answer, but the failure has to be visible (metric, warning log and
+        trace parameter) instead of silent. Register and naturalness are not
+        judged here -- those stay a human or live-model call.
+        """
+        violations = script_violations(answer)
+        for rule in violations:
+            RAG_ANSWER_SCRIPT_VIOLATIONS_TOTAL.labels(rule=rule).inc()
+        if violations:
+            logger.warning("answer_script_violation rules=%s", violations)
+        return violations
+
     @asynccontextmanager
     async def _generation_slot(self) -> AsyncIterator[None]:
         """Bounded admission around a provider call (F-117/LLM-11).
@@ -1000,6 +1027,9 @@ class TutorService:
             "prompt_chars": len(context_blocks),
             "prompt_version": PROMPT_VERSION,
         }
+        script_violations_found = self._flag_answer_script(answer)
+        if script_violations_found:
+            parameters["script_violations"] = script_violations_found
         json_log(
             logger,
             logging.INFO,
@@ -1188,6 +1218,11 @@ class TutorService:
                 rewrite_terms=rewrite_terms,
             )
             return self._refusal(INSUFFICIENT_EVIDENCE_ANSWER, "insufficient_evidence")
+        # F-129: prompt, citations and trace must describe one evidence set, so
+        # the budget is applied here once, after the gate has judged the full
+        # hit list, and the selected list is what the model, the citations and
+        # the trace all see.
+        hits = assemble_evidence(hits)
         context_blocks = self._prompt_blocks(
             hits,
             question,
@@ -1321,6 +1356,10 @@ class TutorService:
             )
             return
 
+        # F-129: same single evidence set as the non-stream path -- the budget
+        # is applied after the gate judged the full hit list, and the selected
+        # hits are what the model, the citations and the trace all see.
+        hits = assemble_evidence(hits)
         context_blocks = self._prompt_blocks(
             hits,
             question,
@@ -1476,6 +1515,10 @@ class TutorService:
             outcome = "model_refused"
         else:
             outcome = "answered"
+        stream_parameters: dict = {"route": route.value, "top_k": self.top_k, "stream": True}
+        script_violations_found = self._flag_answer_script(answer)
+        if script_violations_found:
+            stream_parameters["script_violations"] = script_violations_found
         self._record_trace(
             question=question,
             outcome=outcome,
@@ -1483,7 +1526,7 @@ class TutorService:
             refused_reason="model_refused" if model_refused else None,
             hits=hits if answer_is_grounded else [],
             model=getattr(provider_for_stream, "name", "unknown"),
-            parameters={"route": route.value, "top_k": self.top_k, "stream": True},
+            parameters=stream_parameters,
             latency_ms=trace_stages,
             citation_verdict=(
                 None

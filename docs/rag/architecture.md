@@ -101,9 +101,9 @@ the raw hash of every source it was built from.
 
 * The vector lane is a deterministic hashing embedder, not a semantic model.
 * Context assembly is bounded by `top_k=3` and by
-  `retrieval/context.EVIDENCE_TOKEN_BUDGET` (768 tokens, §6); the tutor's call
-  site into `assemble_evidence` is still pending (handoff), so the bound is
-  currently enforced by the callers that opt in.
+  `retrieval/context.EVIDENCE_TOKEN_BUDGET` (768 tokens, §6); the tutor applies
+  the selection on both answer paths (§6.5), so the bound holds for every
+  served turn, not only for callers that opt in.
 * Every chunk carries a span map back to the extracted page text
   (`source_spans`, §6); nothing in the API or the UI consumes it yet, so a
   highlight still cannot be rendered end to end.
@@ -114,8 +114,9 @@ the raw hash of every source it was built from.
   loader logs the sources it attributes by declared level range.
 * The citation verdict is surfaced and metered but does not yet discard or
   regenerate an unsupported answer.
-* Retrieval has no timeout/retry/fallback isolation, and `/tutor/ask`
-  degrades to 503 (not retrieval-only) when the provider is unavailable.
+* Retrieval has no timeout or retry; a failing fused pipeline degrades to the
+  lexical lane instead of a 500 (§6.6). `/tutor/ask` degrades to 503 (not
+  retrieval-only excerpts) when the provider is unavailable.
 
 ## 6. Corpus and index operations (wave-2 additions)
 
@@ -208,9 +209,13 @@ were anchored on.
 `retrieval/context.assemble_evidence` (768 evidence tokens, derived in the
 module docstring from the capacity model's 1.2 k input budget minus the
 measured system prompt) keeps the rank order, always keeps the best-ranked
-hit, and collapses duplicate texts before the budget is applied. It is opt-in
-today: the tutor's call site is owned by the generation stream (handoff in
-`.qa-work/audit/A1/fixes_done.csv`).
+hit, and collapses duplicate texts before the budget is applied. The tutor call
+site is wired (wave 2b): `services/tutor.py` selects once, after the grounding
+gate has judged the full hit list, and the prompt, the citations and the
+per-answer trace all describe that one evidence set; `build_evidence_prompt`
+re-applies the selection so a direct caller cannot bypass it. On the committed
+golden set the selection drops nothing (maximum 84 evidence tokens per question
+against the 768 budget), so no committed-set metric moved.
 
 ## 7. Generation and validation (wave-2 additions)
 
@@ -369,3 +374,30 @@ rules are documented in `docs/rag/golden-set-v3.md`; the runnable integrity
 gate is `python -m bangla_gpt_api.evaluation.cli --check-golden` (part of
 `--gate`).
 
+### 6.9 Answer-side script guard and enforced language floors (F-120, F-132)
+
+The repository's unicode gate (`scripts/bn_scan.py`) only ever saw tracked
+text, so an Assamese letter or a mangled glyph in a live model's answer to a
+child would have failed nothing. Wave 2b closes both halves:
+
+* **Runtime guard.** `evaluation/metrics.script_violations()` applies the
+  answer-appropriate character rules to every composed answer on both paths:
+  `assamese_letters` (U+09F0/U+09F1), `devanagari_letters` (the shared dandas
+  U+0964/U+0965 excluded), `replacement_char` (U+FFFD) and an NFC check.
+  Mixed-script tokens and ZWJ/ZWNJ are deliberately not rules -- Bangla prose
+  carries Latin loanwords and the joiner is orthographically required, so
+  those would be false alarms on an answer. A violation is **flagged, not
+  refused**: the answer still reaches the student, but the rule fires
+  `bgpt_rag_answer_script_violations_total{rule}`, a warning log, and
+  `script_violations` on the per-answer trace. Register and naturalness remain
+  a human judgement, and real-model output remains UNVERIFIED-LIVE.
+* **Enforced floors.** The two master floors are now gate legs, not printed
+  numbers: `language_consistency >= 0.99` (absolute floor beside the 2pp
+  regression rule against the committed baseline) and
+  `assamese_letter_violations == 0`. Both print under `GATE` and fail the
+  run's exit code; `tests/test_w2b_eval_language_gate.py` pins them.
+* **The answer-quality label.** Every report run prints
+  `ANSWER QUALITY (RAG-D1/SLOP-D1): UNVERIFIED-LIVE`, because faithfulness,
+  reference correctness and register cannot be decided by a hermetic mock run
+  -- a mock pass must never read as a quality measurement. The model-judged
+  faithfulness leg and the 10% human re-label (RAG-24/F-045) remain open.

@@ -18,17 +18,28 @@ input once a provider is configured -- see:func:`faithfulness`):
   against the recorded baseline FAILS, with per-metric detail.
 *:func:`run_suite` -- executes the golden set through a TutorService and
   aggregates all four metrics plus refusal precision/recall.
+*:func:`language_verdict` / :func:`script_violations` -- the deterministic
+  language-integrity legs (RAG-21/F-120): Assamese letters, Devanagari,
+  replacement characters, NFC, and whether a Bangla question got a Bangla
+  answer. The register/fluency legs stay a human or live-model judgement and
+  the CLI labels them UNVERIFIED-LIVE.
 """
 
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 
 from bangla_gpt_api.evaluation.stats import interval_report, paired_bootstrap
 
 GATE_PP = 2.0  # percentage points; spec: fail the build on >2% regression
+
+#: Absolute floor for the language-consistency leg (RAG-21/F-132). The spec's
+#: floor is 99%: a Bangla question answered overwhelmingly in another script is
+#: a failure regardless of what the baseline recorded.
+LANGUAGE_CONSISTENCY_FLOOR = 0.99
 
 #: Bootstrap seed for the paired comparison against the committed baseline.
 #: Fixed, not random: a gate that reports different numbers on identical input
@@ -41,6 +52,22 @@ _LATIN_RE = re.compile(r"[A-Za-z]")
 #: answer to a Bangla-medium student (RAG-21; the repo's bn_scan gate uses the
 #: same two codepoints for tracked text).
 _ASSAMESE_RE = re.compile(r"[\u09f0\u09f1]")
+#: Devanagari letters and signs. The dandas (U+0964/U+0965) are excluded --
+#: Bengali uses the same two codepoints for its full stop, so a danda is not
+#: evidence of Devanagari text. Same class as scripts/bn_scan.py.
+_DEVANAGARI_RE = re.compile(r"[\u0900-\u0963\u0966-\u097f]")
+#: U+FFFD: a decoding failure that survives into an answer renders as a box.
+_REPLACEMENT_RE = re.compile("\ufffd")
+#: Character-level rules applied to a generated answer (F-120/LLM-14).
+#: Deliberately a subset of scripts/bn_scan.py's repo-text checks: mixed-script
+#: tokens and ZWJ/ZWNJ are review candidates in source text, but Bangla prose
+#: legitimately carries Latin loanwords and the joiner is orthographically
+#: required (র্যাপিড), so those would be false alarms on an answer.
+_SCRIPT_RULES: dict[str, re.Pattern[str]] = {
+    "assamese_letters": _ASSAMESE_RE,
+    "devanagari_letters": _DEVANAGARI_RE,
+    "replacement_char": _REPLACEMENT_RE,
+}
 _DANDA = "।"  # danda -- the Bengali full stop
 _SENTENCE_SPLIT = re.compile(r"[।\n]+")
 # Mock/answer-structure scaffolding (providers/mock.py layout): the "[mock]"
@@ -142,6 +169,22 @@ def language_verdict(question: str, answer: str, *, min_share: float = 0.5) -> d
         "consistent": (not bengali_question) or answer_share >= min_share,
         "assamese": assamese_letters(answer),
     }
+
+
+def script_violations(answer: str) -> list[str]:
+    """Deterministic answer-side script-integrity failures (F-120/LLM-14).
+
+    The repo's unicode gate (scripts/bn_scan.py) only ever saw tracked text, so
+    a real model could ship Assamese letters or mangled glyphs into a
+    child-facing answer and nothing would fail. This is the same character
+    check applied to generated text: the rule names are a bounded set, and an
+    empty list means the answer is clean. Register and naturalness are not
+    checked here -- those stay a human or live-model judgement.
+    """
+    violations = [name for name, pattern in _SCRIPT_RULES.items() if pattern.search(answer)]
+    if unicodedata.normalize("NFC", answer) != answer:
+        violations.append("not_nfc")
+    return violations
 
 
 def _overlap_fraction(answer: str, evidence: list[str]) -> float:
@@ -432,6 +475,48 @@ def compare_gate(baseline: dict, current: dict) -> tuple[bool, list[str]]:
     return passed, lines
 
 
+def _language_gate(baseline: dict, current: SuiteMetrics) -> tuple[bool, list[str]]:
+    """Language-integrity legs of the gate (RAG-21/F-132).
+
+    Two rules the ``>2pp`` comparison cannot express, because they are not
+    rate drops: an Assamese letter in a child-facing answer is a failure at any
+    count, and language consistency has an absolute 99% floor beside the
+    regression rule. The floors are as binding as the six compared metrics --
+    a report that printed them without gating them would be an unenforced
+    claim.
+    """
+    passed = True
+    lines: list[str] = []
+    baseline_consistency = baseline.get("language_consistency")
+    consistency = current.language_consistency
+    floor_ok = consistency >= LANGUAGE_CONSISTENCY_FLOOR
+    if baseline_consistency is None:
+        lines.append(
+            f"language_consistency: current={consistency:.4f} "
+            f"floor={LANGUAGE_CONSISTENCY_FLOOR:.2f} (no baseline value) "
+            + ("PASS" if floor_ok else "FAIL")
+        )
+        passed = passed and floor_ok
+    else:
+        base = float(baseline_consistency)
+        drop_pp = round((base - consistency) * 100.0, 4)
+        drop_ok = drop_pp <= GATE_PP + 1e-9
+        ok = floor_ok and drop_ok
+        lines.append(
+            f"language_consistency: baseline={base:.4f} current={consistency:.4f} "
+            f"drop={drop_pp:+.2f}pp floor={LANGUAGE_CONSISTENCY_FLOOR:.2f} "
+            + ("PASS" if ok else f"FAIL(>{GATE_PP:.0f}pp or < floor)")
+        )
+        passed = passed and ok
+    assamese = current.assamese_letter_violations
+    lines.append(
+        f"assamese_letter_violations: current={assamese} floor=0 "
+        + ("PASS" if assamese == 0 else "FAIL")
+    )
+    passed = passed and assamese == 0
+    return passed, lines
+
+
 def compare_gate_with_intervals(
     baseline: dict,
     current: SuiteMetrics,
@@ -439,12 +524,14 @@ def compare_gate_with_intervals(
     baseline_scores: list[int] | None = None,
     seed: int = COMPARISON_SEED,
 ) -> tuple[bool, list[str]]:
-    """``compare_gate`` plus Wilson intervals and a paired bootstrap.
+    """``compare_gate`` plus Wilson intervals, a paired bootstrap and the
+    language-integrity floors.
 
-    The pass/fail rule is unchanged (the spec's fixed 2pp threshold); what is
-    added is the evidence needed to read the numbers: n, a Wilson 95% interval
-    per proportion, and -- when the baseline carries per-item scores -- a
-    paired bootstrap of the difference. A delta whose interval covers zero
+    The pass/fail rule for the six rates is unchanged (the spec's fixed 2pp
+    threshold); what is added is the evidence needed to read the numbers -- n,
+    a Wilson 95% interval per proportion, and, when the baseline carries
+    per-item scores, a paired bootstrap of the difference -- plus the two
+    language legs of :func:`_language_gate`. A delta whose interval covers zero
     prints as "no measurable difference" so a claim of improvement cannot be
     read into noise.
     """
@@ -455,6 +542,9 @@ def compare_gate_with_intervals(
             f"{key}: n={interval['n']} rate={interval['rate']:.4f} "
             f"wilson95=[{interval['ci95_low']:.4f}, {interval['ci95_high']:.4f}]"
         )
+    language_passed, language_lines = _language_gate(baseline, current)
+    lines.extend(language_lines)
+    passed = passed and language_passed
     if baseline_scores is not None and len(baseline_scores) == len(current.item_scores):
         bootstrap = paired_bootstrap(baseline_scores, current.item_scores, seed=seed)
         if bootstrap["significant"]:

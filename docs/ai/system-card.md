@@ -96,3 +96,19 @@ RAG-20, LLM-03, evidence E-RAG-20; sample corpus, mock provider):
 - Re-run the eval gate and the red-team suite when the system prompt, provider, model id or corpus changes (`.venv/Scripts/python.exe -m bangla_gpt_api.evaluation.cli`, from `apps/api`); update this card in the same change when any number or scope statement moves.
 - Review this card together with `docs/ai/risk-register.md` and `docs/ai/incident-response.md`; the register tracks each limitation's mitigation status.
 - Owner of this document: engineering lead. Findings referenced here are tracked in `.qa-work/findings.csv` until the QA run closes.
+
+## 10. Wave-2b update (2026-10-30)
+
+The statements above are pinned to BASE_SHA `7e8525e2`; these move since:
+the golden set is now v3 (`docs/rag/golden-set-v3.md`: 427 construct items,
+grounded_rate 0.7963 with Wilson intervals and a paired bootstrap against the
+committed baseline), tutor answers are output-screened, prompts are versioned
+and per-answer traced, a kill switch exists, and a bounded generation cap is
+in place -- all recorded with commands in `docs/rag/architecture.md` section 6.
+Section 7's line "no answer-side Bangla-script guard" is superseded: the
+character rules from `scripts/bn_scan.py` now run on generated answers and flag
+through `bgpt_rag_answer_script_violations_total`, and the eval gate enforces
+language consistency >= 0.99 and zero Assamese letters. Section 8 stands: live
+model behaviour of every kind remains UNVERIFIED-LIVE, and every report run
+prints `ANSWER QUALITY (RAG-D1/SLOP-D1): UNVERIFIED-LIVE` so a mock pass is
+never read as a quality measurement.

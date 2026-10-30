@@ -78,6 +78,18 @@ RAG_GENERATION_OVERLOAD_TOTAL = Counter(
     registry=REGISTRY,
 )
 
+#: Answer-side script integrity (F-120/LLM-14): a generated answer carried a
+#: character the repository's own unicode gate (scripts/bn_scan.py) forbids in
+#: shipped Bangla -- an Assamese letter, a Devanagari run, a replacement
+#: character or non-NFC text. The label set is the bounded rule-name set in
+#: :mod:`bangla_gpt_api.evaluation.metrics`; no answer text is ever a label.
+RAG_ANSWER_SCRIPT_VIOLATIONS_TOTAL = Counter(
+    "bgpt_rag_answer_script_violations_total",
+    "Generated answers that failed the deterministic script-integrity rules.",
+    labelnames=["rule"],
+    registry=REGISTRY,
+)
+
 
 def observe_stage(stage: str, seconds: float) -> None:
     """Record one stage observation (unknown stages are ignored, not invented)."""

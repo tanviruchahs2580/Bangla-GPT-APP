@@ -70,3 +70,23 @@ inventory of what the answer path already uses, for the record:
 
 No new model download, dataset or package entered the tree from this stream's
 work, so no new licence obligation was created.
+
+## Wave-2b update (2026-10-30): script guard and enforced floors
+
+Row 12 moves from "printed" to "enforced", and one more flag layer exists, so
+its residual status reads:
+
+- the answer-side script rules now run at answer time on both paths
+  (`evaluation/metrics.script_violations`), flagging `assamese_letters`,
+  `devanagari_letters`, `replacement_char` and non-NFC text through
+  `bgpt_rag_answer_script_violations_total{rule}`, a warning log and the
+  `script_violations` trace parameter; a violation does not refuse the answer,
+  it makes the failure visible. Real-model output is still UNVERIFIED-LIVE.
+- the eval gate now enforces `language_consistency >= 0.99` and zero Assamese
+  letters as gate legs (not just report lines), and every report run prints the
+  `ANSWER QUALITY (RAG-D1/SLOP-D1): UNVERIFIED-LIVE` label;
+- the evidence-token budget now has its tutor call site wired (F-129), so the
+  prompt, the citations and the trace describe one evidence set;
+- still open on row 12: the semantic output validator is not yet called by
+  `services/generators/**` (handoff, F-118), and reference-correctness and
+  register legs remain human review.

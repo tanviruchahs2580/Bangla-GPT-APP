@@ -17,7 +17,13 @@ the per-item difference against the committed baseline, and the per-stratum
 breakdown of the golden set. A delta whose bootstrap interval covers zero
 prints as "no measurable difference". Judge-based legs are labelled
 UNVERIFIED-LIVE whenever no provider is configured and the deterministic
-overlap mode runs instead.
+overlap mode runs instead, and the report always prints the
+RAG-D1/SLOP-D1 generated-answer-quality label: that class needs a real model
+and human review, never a mock pass.
+
+The language-integrity legs are gated, not just printed (RAG-21/F-132):
+language consistency has an absolute floor (99%) beside the 2pp regression
+rule, and any Assamese letter in an answer fails the gate.
 
 ``--gate`` (F-050/F-059) runs the blocking checks in one process and exits
 non-zero if ANY fails:
@@ -210,6 +216,15 @@ def _report(metrics: SuiteMetrics, baseline: dict | None) -> bool:
         else " (live judge; reference-correctness and register legs remain human review)"
     )
     print(f"JUDGE: mode={metrics.faithfulness_mode}{judge_note}")
+    # RAG-D1/SLOP-D1: generated-answer quality (faithfulness, reference
+    # correctness, register/naturalness) is never decided by this hermetic
+    # run. The label is unconditional so a mock pass can never be read as a
+    # quality measurement.
+    print(
+        "ANSWER QUALITY (RAG-D1/SLOP-D1): UNVERIFIED-LIVE "
+        f"(faithfulness mode={metrics.faithfulness_mode}; a real model and human review"
+        " are required for this class)"
+    )
     for field_name, buckets in sorted(metrics.strata.items()):
         if field_name == "class_subject":
             continue
