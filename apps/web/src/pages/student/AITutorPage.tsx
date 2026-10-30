@@ -1,7 +1,7 @@
 import { asText } from "../../lib/text";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { ArrowLeft, MessageSquarePlus } from "lucide-react";
 import { createNote, del, get, patch, post, postStream } from "../../api";
 import type {
@@ -18,8 +18,8 @@ import { t } from "../../i18n";
 import { getLowData } from "../../lib/lowData";
 import { toast } from "../../lib/toast";
 import { track } from "../../lib/analytics";
-import { explainMessage, type QuizExplainPayload } from "../../lib/quizExplain";
 import { EvidenceModal } from "./tutor/EvidenceModal";
+import { useTutorHandoff } from "./tutor/useTutorHandoff";
 import { TutorComposer } from "./tutor/TutorComposer";
 import { TutorHistory } from "./tutor/TutorHistory";
 import { TutorThread } from "./tutor/TutorThread";
@@ -39,7 +39,6 @@ const MAX_IMAGE_BYTES = 1_500_000;
 export default function AITutorPage() {
   const { me } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [subject, setSubject] = useState("science");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -368,32 +367,13 @@ export default function AITutorPage() {
     if (next) track("tutor_strategy_chosen", { strategy: next });
   };
 
-  // a wrong quiz item can arrive here as `location.state.explain` —
-  // ask once, then drop the explain payload so a refresh does not re-ask.
-  const quizContextRef = useRef(false);
+  // a wrong quiz item and the search box's question both arrive as
+  // location.state; one hook owns asking each exactly once.
   const [backToResult, setBackToResult] = useState(false);
-  useEffect(() => {
-    const st = location.state as {
-      explain?: QuizExplainPayload;
-      backToResult?: boolean;
-    } | null;
-    if (!st?.explain || quizContextRef.current) return;
-    quizContextRef.current = true;
-    if (st.backToResult) setBackToResult(true);
-    void send(explainMessage(st.explain));
-    void navigate(location.pathname, { replace: true, state: null });
-  }, [location, navigate, send]);
-
-  // the search box's "ask in Tutor" action hands the question over via
-  // location.state.ask — ask it once, then clear the payload (like explain).
-  const askSentRef = useRef(false);
-  useEffect(() => {
-    const st = location.state as { ask?: string } | null;
-    if (!st?.ask || askSentRef.current) return;
-    askSentRef.current = true;
-    void send(st.ask);
-    void navigate(location.pathname, { replace: true, state: null });
-  }, [location, navigate, send]);
+  useTutorHandoff(
+    (text) => void send(text),
+    () => setBackToResult(true),
+  );
 
   const rate = async (messageId: number, rating: 1 | -1) => {
     try {
