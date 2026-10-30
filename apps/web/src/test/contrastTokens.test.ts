@@ -135,3 +135,39 @@ describe("white-label fills (F-004)", () => {
     }
   });
 });
+
+/**
+ * F-199 (UX-01): twenty loose hex values sat outside the token blocks, so a
+ * theme or brand change had to chase them — the 2026-10-27 dark `.primary`
+ * bug was one of them. The loose values are named tokens now, and this guard
+ * fails on any hex that is not a `--token: …` declaration or a comment, so
+ * the next one cannot land quietly.
+ */
+describe("no loose colour literals (F-199)", () => {
+  const HEX =
+    /#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})\b/;
+
+  it("every hex value in styles.css is a token declaration or a comment", () => {
+    // Blank the comments while keeping every newline, so reported line
+    // numbers still point at the real file.
+    const masked = CSS.replace(/\/\*[\s\S]*?\*\//g, (block) =>
+      block.replace(/[^\n]/g, " "),
+    );
+    const loose: string[] = [];
+    masked.split("\n").forEach((line, index) => {
+      if (!HEX.test(line)) return;
+      if (/^\s*--[a-z0-9-]+\s*:/.test(line)) return;
+      loose.push(`styles.css:${index + 1}: ${line.trim()}`);
+    });
+    expect(loose, `colour literals outside the token blocks:\n${loose.join("\n")}`).toEqual(
+      [],
+    );
+  });
+
+  it("defines the ink, print and highlight tokens the rules now use", () => {
+    expect(LIGHT["on-brand"]).toBe("var(--white)");
+    expect(LIGHT["white"]).toBe("#ffffff");
+    expect(LIGHT["print-ink"]).toBe("#000000");
+    expect(DARK["on-brand"]).toBeDefined();
+  });
+});
