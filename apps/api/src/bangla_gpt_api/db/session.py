@@ -12,8 +12,9 @@ SQLite engine the same contract the app assumes on Postgres:
 * ``foreign_keys=ON`` — declarative FK constraints are enforced, so a delete
   path that misses a child row fails loudly instead of leaving orphans
   (tests run this posture too, by construction).
-* ``busy_timeout=5000`` — a contended write waits up to 5s for the lock
-  instead of raising ``database is locked`` on the first collision.
+* ``busy_timeout=SQLITE_BUSY_TIMEOUT_MS`` (15 s, see the constant below) — a
+  contended write waits for the lock instead of raising ``database is
+  locked`` on the first collision.
 * ``journal_mode=WAL`` + ``synchronous=NORMAL`` (file databases only) —
   readers never block the single writer, and WAL + NORMAL is the documented
   safe pairing (a power loss can lose the last transactions, never corrupt
