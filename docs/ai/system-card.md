@@ -87,7 +87,7 @@ RAG-20, LLM-03, evidence E-RAG-20; sample corpus, mock provider):
 ## 8. Not verified
 
 - Live-model behaviour of any kind: answer quality, prompt-injection resistance, image/vision behaviour, structured-output reliability, latency. The audit ran `LLM_PROVIDER=mock` only; the real-model eval leg is deliberately non-blocking (`.github/workflows/eval-gate.yml:65-71`). Treat as UNVERIFIED-LIVE.
-- The accuracy of the helpline number shown in self-harm refusals (`services/safety.py:17`): OWNER-ACTION, still unchecked on the launch checklist (`docs/LAUNCH_READINESS_CHECKLIST.md:29-30`; F-LLM-11). The number shipped in `services/safety.py` is pending owner verification.
+- The helpline numbers shown in self-harm refusals are no longer an open risk: the copy carries only services the Directorate General of Health Services publishes itself (16263 health call centre, 999 emergency; source URLs and retrieval date in the `SAFE_HELPLINES` comment of `services/safety.py`, retrieved 2026-10-29). `apps/api/tests/test_qa_helpline_policy.py` fails any edit that adds an unlisted number. An owner who obtains a verified mental-health-specific line extends `SAFE_HELPLINES` with its source first (F-001, closed by substitution).
 - NCTB usage rights (F-LEGAL-1, owner decision; legal review required).
 - Whether the deployed environment sets a spend budget (F-LLM-4) or Sentry scrubbing (F-PRIV-7); deployment configuration is not in the repository.
 
