@@ -1,7 +1,6 @@
 import { asText, suggestionSentence } from "../../lib/text";
 import { downloadBlob } from "../../lib/download";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   Brain,
@@ -75,7 +74,6 @@ function memoryFactRows(
 
 export default function MePage() {
   const { me, signOut } = useAuth();
-  const navigate = useNavigate();
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -264,8 +262,10 @@ export default function MePage() {
     setError(null);
     try {
       await del("/users/me", { password: delPassword });
+      // signOut() wipes storage/offline copies and only then redirects
+      // (AuthContext, F-036); navigating here too raced that redirect with a
+      // second, hard navigation and could cut the wipe short.
       signOut();
-      void navigate("/login");
     } catch (e) {
       setError(
         friendlyError((e as { rawDetail?: unknown }).rawDetail)?.text ??
