@@ -38,6 +38,7 @@ import { Card, LoadError } from "../../components/ui";
 import { OfflineLibrary } from "../../components/OfflineLibrary";
 import { invalidateStudyCaches } from "../../lib/invalidate";
 import { t, tSubject } from "../../i18n";
+import { friendlyError } from "../../errors";
 import { cn } from "../../lib/cn";
 import { chapterBadge, ttsSupported as ttsAvailable } from "../../lib/progress";
 import { QuizOptionGroup } from "../../components/QuizOptionGroup";
@@ -807,12 +808,11 @@ function ChapterPractice({
       setCurrent(0);
       setResult(null);
     } catch (e) {
-      const detail = (e as { rawDetail?: { message?: string } }).rawDetail;
-      setError(
-        typeof detail === "object" && detail?.message
-          ? detail.message
-          : t("errorGeneric"),
-      );
+      // F-110: the branch used to print the API's raw English detail.message
+      // ("Curriculum index unavailable") into this Bangla screen. Every other
+      // surface maps the machine code through friendlyError; do the same here
+      // (index_unavailable has retryable copy).
+      setError(friendlyError((e as { rawDetail?: unknown }).rawDetail).text);
     } finally {
       setBusy(false);
     }
