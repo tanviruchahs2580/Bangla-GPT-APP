@@ -140,6 +140,18 @@ class SourceRef(BaseModel):
     excerpt: str | None = None
 
 
+#: Served description of every confidence value. F-119/LLM-10: the number is
+#: a retrieval heuristic, not a calibration result, and the OpenAPI contract
+#: must say so -- the web badge draws its label from this field, and a schema
+#: without the qualifier invites reading it as a probability.
+CONFIDENCE_FIELD_DESCRIPTION = (
+    "Retrieval-confidence heuristic (not a calibrated probability): a blend of "
+    "evidence breadth and source score computed at answer time. A high value "
+    "means the retrieved textbook evidence is strong, not that the answer is "
+    "measured correct."
+)
+
+
 class AskResponse(BaseModel):
     answer: str
     grounded: bool
@@ -148,8 +160,8 @@ class AskResponse(BaseModel):
     refused_reason: str | None = None
     # Soft post-generation signal that the answer leans on the cited evidence.
     citation_verified: bool | None = None
-    # honest numeric confidence (formula in services/safety).
-    confidence: float | None = None
+    # F-119: heuristic retrieval signal (formula in services/safety).
+    confidence: float | None = Field(default=None, description=CONFIDENCE_FIELD_DESCRIPTION)
 
 
 class ConversationCreate(BaseModel):
@@ -211,10 +223,9 @@ class ChatMessageOut(BaseModel):
     sources: list[SourceRef] = []
     rating: int | None = None
     created_at: UtcDateTime
-    # honest numeric confidence (formula documented in
-    # main._answer_confidence). None for user turns / pre-wave answers read
-    # before this field existed is impossible -- it is always computed.
-    confidence: float | None = None
+    # F-119: heuristic retrieval signal (formula in services/safety), never a
+    # calibrated probability. None for user turns.
+    confidence: float | None = Field(default=None, description=CONFIDENCE_FIELD_DESCRIPTION)
 
 
 class FeedbackRequest(BaseModel):
@@ -1528,8 +1539,14 @@ class AdminAiQualityOut(BaseModel):
     refusals_by_reason: dict[str, int] = {}
     thumbs_up: int = 0
     thumbs_down: int = 0
-    # confidence < 0.5 under the documented formula (see main._answer_confidence)
-    low_confidence_count: int = 0
+    # confidence < 0.5 under the heuristic formula (services/safety.answer_confidence)
+    low_confidence_count: int = Field(
+        default=0,
+        description=(
+            "Answers whose heuristic retrieval-confidence fell below 0.5. "
+            "A triage counter, not a calibrated error rate."
+        ),
+    )
     # ChatMessage carries no model column -> always empty today (audit finding).
     by_model: dict[str, int] = {}
     # AI-002: estimated LLM spend (USD) over the same window, from ai_usage.

@@ -628,6 +628,15 @@ def create_app(settings: Settings | None = None) -> object:
     app = FastAPI(
         title=settings.app_name,
         version=settings.version,
+        # F-119/LLM-10: every tutoring answer carries a `confidence` value. It
+        # is a heuristic retrieval signal, never a calibrated probability; the
+        # OpenAPI summary repeats the qualifier so a client reading only /docs
+        # cannot mistake it for one.
+        description=(
+            "Tutoring answers carry a `confidence` value. It is a heuristic "
+            "retrieval signal (evidence breadth and source score), never a "
+            "calibrated probability of a correct answer."
+        ),
         docs_url="/docs" if serve_docs else None,
         redoc_url="/redoc" if serve_docs else None,
         openapi_url="/openapi.json" if serve_docs else None,
