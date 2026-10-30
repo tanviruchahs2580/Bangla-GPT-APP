@@ -106,7 +106,9 @@ describe("tutor chrome", () => {
     // what the branch below exists for.
     fireEvent.change(input, {
       target: {
-        files: [new File(["not an image"], "homework.txt", { type: "text/plain" })],
+        files: [
+          new File(["not an image"], "homework.txt", { type: "text/plain" }),
+        ],
       },
     });
     expect(
