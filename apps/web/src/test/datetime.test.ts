@@ -1,9 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   formatServerDate,
   formatServerDateTime,
   parseServerDate,
 } from "../lib/datetime";
+import { setLang } from "../i18n";
+
+afterEach(() => setLang("bn"));
 
 describe("parseServerDate", () => {
   it("reads an offset-less API timestamp as UTC, not as local time", () => {
@@ -42,20 +45,40 @@ describe("parseServerDate", () => {
     expect(formatServerDate(null)).toBe("");
   });
 
-  it("formats in the viewer's locale zone", () => {
-    // Whatever the machine's zone, the instant must survive the round trip:
-    // the formatted output has to equal the same instant formatted directly.
+  it("formats in the app language and the product timezone, not the device's", () => {
+    // The old assertion pinned the *viewer's* locale zone, which was the
+    // defect (F-116): a bn-UI user on an en-US device read US-formatted Latin
+    // dates in the middle of Bangla screens. The product formats Dhaka
+    // instants for Bangladeshi classrooms, and the language toggle decides
+    // the digits and field order.
     const instant = new Date("2026-10-20T04:30:00Z");
-    expect(formatServerDateTime("2026-10-20T04:30:00")).toBe(
-      instant.toLocaleString(),
+    const dhaka = { timeZone: "Asia/Dhaka" };
+    const bn = new Intl.DateTimeFormat("bn-BD", dhaka).format(instant);
+    const en = new Intl.DateTimeFormat("en", dhaka).format(instant);
+
+    setLang("bn");
+    expect(formatServerDateTime("2026-10-20T04:30:00")).toBe(bn);
+    expect(formatServerDateTime("2026-10-20T04:30:00")).toMatch(
+      /[\u09E6-\u09EF]/,
     );
     expect(
-      formatServerDate("2026-10-20T04:30:00", {
+      formatServerDate(
+        "2026-10-20T04:30:00",
+        { day: "numeric", month: "short" },
+        "bn",
+      ),
+    ).toBe(
+      new Intl.DateTimeFormat("bn-BD", {
+        ...dhaka,
         day: "numeric",
         month: "short",
-      }),
-    ).toBe(
-      instant.toLocaleDateString(undefined, { day: "numeric", month: "short" }),
+      }).format(instant),
+    );
+
+    setLang("en");
+    expect(formatServerDateTime("2026-10-20T04:30:00")).toBe(en);
+    expect(formatServerDateTime("2026-10-20T04:30:00")).not.toMatch(
+      /[\u09E6-\u09EF]/,
     );
   });
 });

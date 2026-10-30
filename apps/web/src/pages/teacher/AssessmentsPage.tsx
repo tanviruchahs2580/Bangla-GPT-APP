@@ -16,6 +16,7 @@ import { friendlyError } from "../../errors";
 import { t } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { formatServerDateTime } from "../../lib/datetime";
+import { localizedCollator } from "../../lib/localeSort";
 
 const errText = (err: unknown): string =>
   friendlyError((err as { rawDetail?: unknown }).rawDetail)?.text ??
@@ -38,11 +39,14 @@ export default function AssessmentsPage() {
   const roomsQuery = useQuery({
     queryKey: ["teacher", "classrooms"],
     queryFn: () => get<ClassRoom[]>("/teacher/classrooms"),
-    select: (rs) =>
-      [...rs].sort(
+    select: (rs) => {
+      const collator = localizedCollator();
+      return [...rs].sort(
         (a, b) =>
-          a.class_level - b.class_level || a.section.localeCompare(b.section),
-      ),
+          a.class_level - b.class_level ||
+          collator.compare(a.section, b.section),
+      );
+    },
   });
   const rooms = useMemo(() => roomsQuery.data ?? [], [roomsQuery.data]);
   const rosterQuery = useQuery({
