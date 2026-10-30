@@ -20,7 +20,7 @@ import {
 } from "../../components/ui";
 import { friendlyError } from "../../errors";
 import { t } from "../../i18n";
-import { localizedCollator } from "../../lib/localeSort";
+import { byClassLevelThenSection } from "../../lib/localeSort";
 
 const errText = (err: unknown): string =>
   friendlyError((err as { rawDetail?: unknown }).rawDetail)?.text ??
@@ -72,14 +72,7 @@ export default function ClassesPage() {
   const roomsQuery = useQuery({
     queryKey: ["teacher", "classrooms"],
     queryFn: () => get<ClassRoom[]>("/teacher/classrooms"),
-    select: (rs) => {
-      const collator = localizedCollator();
-      return [...rs].sort(
-        (a, b) =>
-          a.class_level - b.class_level ||
-          collator.compare(a.section, b.section),
-      );
-    },
+    select: byClassLevelThenSection,
   });
   // stable identity while loading: the auto-select effect and the
   // students memo key on this array
