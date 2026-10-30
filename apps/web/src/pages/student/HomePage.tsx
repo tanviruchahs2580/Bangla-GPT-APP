@@ -127,10 +127,10 @@ export default function HomePage() {
     <main id="main-content" tabIndex={-1} className="shell-main">
       {/* 1 — greeting + "আজ কী শিখতে চাও?" prompt bar into the AI tutor */}
       <section className="hero">
-        <h2>
+        <h1>
           {t("welcome")}, {me?.name?.split(/\s+/)[0] ?? t("studentFallback")}!{" "}
           <Sparkles size={20} className="hero-sparkle" aria-hidden />
-        </h2>
+        </h1>
         <p>{t("whatToDo")}</p>
         <div className="home-prompt row-flex">
           <input

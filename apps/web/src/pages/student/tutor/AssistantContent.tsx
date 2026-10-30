@@ -10,19 +10,19 @@ export function AssistantContent({ content }: { content: string }) {
     <div className="structured-answer">
       {parsed.simple && (
         <section>
-          <h4 className="section-label">{t("saSimple")}</h4>
+          <h3 className="section-label">{t("saSimple")}</h3>
           <SafeMarkdown content={parsed.simple} />
         </section>
       )}
       {parsed.example && (
         <section>
-          <h4 className="section-label">{t("saExample")}</h4>
+          <h3 className="section-label">{t("saExample")}</h3>
           <SafeMarkdown content={parsed.example} />
         </section>
       )}
       {parsed.points.length > 0 && (
         <section>
-          <h4 className="section-label">{t("saPoints")}</h4>
+          <h3 className="section-label">{t("saPoints")}</h3>
           <ul>
             {parsed.points.map((p, i) => (
               <li key={i}>{p}</li>

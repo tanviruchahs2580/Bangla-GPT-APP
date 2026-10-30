@@ -340,7 +340,7 @@ export default function QuizPage() {
     return (
       <main id="main-content" tabIndex={-1} className="shell-main">
         <section className="section-head">
-          <h2>{t("yourQuizResult")}</h2>
+          <h1>{t("yourQuizResult")}</h1>
         </section>
         <QuizCelebration score={result.score_pct} />
         <Card className="card-featured">
@@ -433,7 +433,7 @@ export default function QuizPage() {
     return (
       <main id="main-content" tabIndex={-1} className="shell-main">
         <section className="section-head">
-          <h2>{t("practiceTitle")}</h2>
+          <h1>{t("practiceTitle")}</h1>
           <Badge>
             {current + 1}/{started.questions.length}
           </Badge>
@@ -555,7 +555,7 @@ export default function QuizPage() {
   return (
     <main id="main-content" tabIndex={-1} className="shell-main">
       <section className="section-head">
-        <h2>{t("practiceTitle")}</h2>
+        <h1>{t("practiceTitle")}</h1>
       </section>
 
       {/* আমার দুর্বলতা — the most prominent entry, from the weakness rollup */}

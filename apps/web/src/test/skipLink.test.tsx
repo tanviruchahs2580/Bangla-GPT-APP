@@ -150,3 +150,55 @@ describe("skip link and main landmark (F-003)", () => {
     expect(css).toMatch(/\.skip-link:focus[^{]*\{[^}]*translateY\(0\)/);
   });
 });
+
+/**
+ * F-168: the student surface had no h1 at all (the page title was an h2)
+ * while the staff pages used h1.page-title, so the document outline depended
+ * on the role; structured answers then jumped h2 -> h4. This walks the same
+ * routing table and holds every route to one outline: exactly one h1, and no
+ * level skipped on the way down.
+ */
+describe("heading order (F-168)", () => {
+  beforeEach(() => {
+    setLang("bn");
+    authState.me = null;
+  });
+
+  afterEach(() => {
+    cleanup();
+    queryClient.clear();
+    authState.me = null;
+  });
+
+  it.each(ROUTES)("%s", async (path, role) => {
+    authState.me = role ? WHO(role) : null;
+    const { container } = renderAt(path);
+    await waitFor(
+      () => {
+        expect(
+          container.querySelector("h1, h2, h3, h4, h5, h6"),
+          `no heading rendered on ${path}`,
+        ).toBeTruthy();
+      },
+      { timeout: 8000 },
+    );
+
+    const headings = [
+      ...container.querySelectorAll("h1, h2, h3, h4, h5, h6"),
+    ];
+    const levels = headings.map((h) => Number(h.tagName.slice(1)));
+    expect(
+      container.querySelectorAll("h1"),
+      `expected exactly one h1 on ${path}`,
+    ).toHaveLength(1);
+    // The page title comes first: a section heading above it would make the
+    // outline start in the middle.
+    expect(levels[0], `first heading is not the h1 on ${path}`).toBe(1);
+    for (let i = 1; i < levels.length; i += 1) {
+      expect(
+        levels[i] - levels[i - 1],
+        `heading level jumps from h${levels[i - 1]} to h${levels[i]} on ${path}: "${headings[i].textContent?.trim()}"`,
+      ).toBeLessThanOrEqual(1);
+    }
+  });
+});

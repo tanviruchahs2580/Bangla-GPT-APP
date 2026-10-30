@@ -60,18 +60,18 @@ export default function LegalPage({ kind }: { kind: "privacy" | "terms" }) {
   const isPrivacy = kind === "privacy";
   return (
     <main id="main-content" tabIndex={-1} className="card card-legal">
-      <h2>
+      <h1>
         {isPrivacy
           ? "গোপনীয়তা নীতি / Privacy Policy"
           : "ব্যবহারের শর্তাবলি / Terms of Service"}
-      </h2>
+      </h1>
       {isPrivacy ? (
         <>
           {SECTIONS.map((section) => (
             <section key={section.titleEn}>
-              <h3>
+              <h2>
                 {section.titleBn} · {section.titleEn}
-              </h3>
+              </h2>
               <p>{section.bodyBn}</p>
               <p className="muted">{section.bodyEn}</p>
             </section>
@@ -81,7 +81,7 @@ export default function LegalPage({ kind }: { kind: "privacy" | "terms" }) {
       ) : (
         <>
           <section>
-            <h3>১. সেবার ধরন</h3>
+            <h2>১. সেবার ধরন</h2>
             <p>
               এটি একটি NCTB পাঠ্যবই-ভিত্তিক শিক্ষা সহায়ক। উত্তরগুলো সরবরাহকৃত
               পাঠ্যবইয়ের অংশ থেকে দেওয়া হয়; পরীক্ষার একমাত্র উৎস হিসেবে এটিকে
@@ -94,7 +94,7 @@ export default function LegalPage({ kind }: { kind: "privacy" | "terms" }) {
             </p>
           </section>
           <section>
-            <h3>২. অ্যাকাউন্ট দায়িত্ব</h3>
+            <h2>২. অ্যাকাউন্ট দায়িত্ব</h2>
             <p>
               পাসওয়ার্ড গোপন রাখা ব্যবহারকারীর দায়িত্ব। অন্যের অ্যাকাউন্টে
               অনুপ্রবেশ বা সেবার অপব্যবহার নিষিদ্ধ।
@@ -105,7 +105,7 @@ export default function LegalPage({ kind }: { kind: "privacy" | "terms" }) {
             </p>
           </section>
           <section>
-            <h3>৩. বৌদ্ধিক সম্পত্তি</h3>
+            <h2>৩. বৌদ্ধিক সম্পত্তি</h2>
             <p>
               পাঠ্যবইয়ের বিষয়বস্তুর স্বত্ব NCTB/সংশ্লিষ্ট মালিকদের; শেখার
               উদ্দেশ্যেই ব্যবহৃত হয়।

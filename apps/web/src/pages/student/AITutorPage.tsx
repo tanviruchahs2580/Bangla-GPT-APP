@@ -508,7 +508,7 @@ export default function AITutorPage() {
   return (
     <main id="main-content" tabIndex={-1} className="shell-main">
       <section className="section-head">
-        <h2>{t("aiTutor")}</h2>
+        <h1>{t("aiTutor")}</h1>
         <Button variant="soft" size="sm" onClick={newChat}>
           <MessageSquarePlus size={16} aria-hidden /> {t("newChat")}
         </Button>

@@ -109,7 +109,7 @@ export default function TeacherHomePage() {
         </div>
       )}
       <section className="hero teacher-hero">
-        <h2>{t("thGreeting", { name: me?.name ?? "" })}</h2>
+        <h1>{t("thGreeting", { name: me?.name ?? "" })}</h1>
         <p>{t("teacherDashboard")}</p>
       </section>
 

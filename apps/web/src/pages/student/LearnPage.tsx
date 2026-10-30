@@ -2,13 +2,17 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
+  ArrowLeft,
+  ArrowRight,
   BookOpen,
   Bookmark,
   Check,
+  ChevronLeft,
   Circle,
   Download,
   FileText,
   Play,
+  RotateCw,
   Square,
   Volume2,
   X,
@@ -126,7 +130,7 @@ export function LearnPage() {
   return (
     <main id="main-content" tabIndex={-1} className="shell-main">
       <section className="section-head">
-        <h2>{t("subjects")}</h2>
+        <h1>{t("subjects")}</h1>
       </section>
 
       <div
@@ -534,7 +538,7 @@ export function LearnChapterPage() {
         className="btn btn-ghost btn-sm chips-gap"
         onClick={() => navigate(-1)}
       >
-        ← {t("back")}
+        <ChevronLeft size={16} aria-hidden /> {t("back")}
       </button>
       {query.isLoading ? (
         <Card>
@@ -693,7 +697,7 @@ export function LearnChapterPage() {
                 >
                   {content.sections.map((s, i) => (
                     <div key={i}>
-                      {s.section && <h3>{s.section}</h3>}
+                      {s.section && <h2>{s.section}</h2>}
                       <SafeMarkdown content={s.text} />
                     </div>
                   ))}
@@ -861,7 +865,7 @@ function ChapterPractice({
           </Card>
         ))}
         <button className="btn btn-soft" onClick={start} disabled={busy}>
-          {t("startQuiz")} ↻
+          {t("startQuiz")} <RotateCw size={15} aria-hidden />
         </button>
       </div>
     );
@@ -894,14 +898,14 @@ function ChapterPractice({
             disabled={current === 0}
             onClick={() => setCurrent((c) => c - 1)}
           >
-            ← {t("previousQuestion")}
+            <ArrowLeft size={15} aria-hidden /> {t("previousQuestion")}
           </button>
           {current < started.questions.length - 1 ? (
             <button
               className="btn btn-primary btn-sm"
               onClick={() => setCurrent((c) => c + 1)}
             >
-              {t("nextQuestion")} →
+              {t("nextQuestion")} <ArrowRight size={15} aria-hidden />
             </button>
           ) : (
             <button

@@ -278,7 +278,7 @@ export default function MePage() {
   return (
     <main id="main-content" tabIndex={-1} className="shell-main">
       <section className="section-head">
-        <h2>{t("me")}</h2>
+        <h1>{t("me")}</h1>
       </section>
 
       <Card>

@@ -41,7 +41,7 @@ export default function StatusPage() {
 
   return (
     <main id="main-content" tabIndex={-1} className="card card-narrow">
-      <h2>{t("statusPage")}</h2>
+      <h1>{t("statusPage")}</h1>
       {error && (
         <p className="error" role="alert">
           {error}
