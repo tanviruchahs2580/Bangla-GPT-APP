@@ -20,6 +20,7 @@ from bangla_gpt_api.retrieval.bm25 import BM25Index
 from bangla_gpt_api.retrieval.embedding import HashingEmbedder
 from bangla_gpt_api.retrieval.hybrid import trigram_ngrams
 from bangla_gpt_api.retrieval.hybrid_index import HybridIndex
+from bangla_gpt_api.routers.learn import _subject_hits
 
 ZWNJ = "\u200c"
 ZWJ = "\u200d"
@@ -102,3 +103,41 @@ def test_hybrid_search_same_hits_for_zero_width_variants() -> None:
 
     assert _hits(index, KOSH[:2] + ZWNJ + KOSH[2:]) == baseline
     assert _hits(index, KOSH[:2] + ZWJ + KOSH[2:]) == baseline
+
+
+def test_subject_lane_folds_the_same_query_variants() -> None:
+    """F-104 residual: ``/search``'s subject lane matched its slug or book
+    title against the RAW query, so a ZWNJ typed between two letters (or a
+    decomposed য়) missed only the subject lane while the retrieval lanes
+    found the same words. The lane now folds through the shared normalizer
+    like the other lanes do."""
+    chunks = _corpus()
+    plain = _subject_hits(chunks, "বিজ্ঞান")
+    assert [hit.kind for hit in plain] == ["subject"], plain
+
+    assert _subject_hits(chunks, "বিজ্ঞান"[:2] + ZWNJ + "বিজ্ঞান"[2:]) == plain
+    assert _subject_hits(chunks, "বিজ্ঞান"[:2] + ZWJ + "বিজ্ঞান"[2:]) == plain
+
+
+def test_subject_lane_folds_decomposed_yya_in_a_book_title() -> None:
+    """The precomposed/decomposed pair (য় = য + nukta) must name the same
+    subject: an old keyboard map emits the decomposed form, and the book
+    title is the field a student types against."""
+    chunk = Chunk(
+        id="c9",
+        text=f"{PRAYOG} ব্যাখ্যা।",
+        meta=CurriculumMeta(
+            curriculum_year=2012,
+            class_level=6,
+            subject="physics",
+            book=PRAYOG,
+            source="sample",
+            chapter="গতি",
+            section="ভূমিকা",
+        ),
+    )
+    composed = _subject_hits([chunk], PRAYOG)
+    assert [hit.kind for hit in composed] == ["subject"], composed
+
+    assert _subject_hits([chunk], PRAYOG_DECOMPOSED) == composed
+    assert _subject_hits([chunk], PRAYOG[:1] + ZWNJ + PRAYOG[1:]) == composed

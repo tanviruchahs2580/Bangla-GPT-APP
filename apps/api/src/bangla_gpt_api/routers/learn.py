@@ -27,6 +27,7 @@ from bangla_gpt_api.db.models import (
     Teacher,
     User,
 )
+from bangla_gpt_api.retrieval.normalize import normalize_nfkc
 from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded, message
 from bangla_gpt_api.schemas import (
     SMALL_PAGE_DEFAULT_LIMIT,
@@ -574,8 +575,14 @@ def _subject_hits(chunks: list, query: str, limit: int = 3) -> list[SearchHit]:
     Subject names are matched directly (not by relevance score), so they lead
     the result list and are capped: a query that matches every subject is
     served by the chapter/question hits below it.
+
+    The query folds through the shared normalizer (F-104, residual): the
+    retrieval lanes already fold ZWNJ/ZWJ and decomposed yya spellings, so a
+    subject query typed the same way as the other lanes must not be the one
+    lane that misses. The book title is folded on both sides for the same
+    reason -- it is Bangla text a student can type with either encoding.
     """
-    norm = query.casefold()
+    norm = normalize_nfkc(query).casefold()
     out: list[SearchHit] = []
     seen: set[str] = set()
     for chunk in chunks:
@@ -583,7 +590,7 @@ def _subject_hits(chunks: list, query: str, limit: int = 3) -> list[SearchHit]:
         if slug in seen:
             continue
         book = chunk.meta.book or slug
-        if norm == slug.casefold() or norm in slug or norm in book.casefold():
+        if norm == slug.casefold() or norm in slug or norm in normalize_nfkc(book).casefold():
             seen.add(slug)
             out.append(
                 SearchHit(
