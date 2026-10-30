@@ -342,6 +342,15 @@ test("TCH-02 classroom create, roster, and the CSV import matrix", async ({
 
   // Valid file with Bangla names: UI import, per-row invite codes.
   await open(page, "/teacher/classes");
+  // The import card posts to the SELECTED classroom, and the page
+  // auto-selects the first room in the list: with another room already
+  // present (perf.spec's 6/P4 import), that is not this room, and the
+  // import would land in someone else's roster. Select 6/W2 the way a
+  // teacher does, then import.
+  await page
+    .getByRole("group", { name: "Classes" })
+    .getByRole("button", { name: /6 · W2/ })
+    .click();
   await page
     .locator("textarea.mono-block")
     .fill(
@@ -432,6 +441,12 @@ test("TCH-02 classroom create, roster, and the CSV import matrix", async ({
 
   // The UI shows the imported Bangla student and the formula name as text.
   await open(page, "/teacher/classes");
+  // Same selection contract as the import above: the roster table renders
+  // the SELECTED room, and the auto-select is the first room in the list.
+  await page
+    .getByRole("group", { name: "Classes" })
+    .getByRole("button", { name: /6 · W2/ })
+    .click();
   await expect(
     page.locator("table.data tbody tr", { hasText: "রহিম উদ্দিন" }),
   ).toHaveCount(1, { timeout: 30_000 });
@@ -460,6 +475,9 @@ test("TCH-03 assign a take-home quiz; the student sees it with the correct deadl
   ).padStart(2, "0")}T10:30`;
 
   await open(page, "/teacher/assessments?tab=assignments");
+  // The roster table renders the SELECTED room and the auto-select is the
+  // first room in the list; রহিম lives in 6/W2 (see TCH-02).
+  await page.getByRole("button", { name: /6 · W2/ }).click();
   const rosterRow = page
     .locator("table.data tbody tr", { hasText: "রহিম উদ্দিন" })
     .first();
@@ -748,6 +766,12 @@ test("TCH-06 lesson plans persist and stay editable; short tests and support pla
 
   // Support plan for a roster student, created from the student detail card.
   await open(page, "/teacher/classes");
+  // The roster table renders the SELECTED room and the auto-select is the
+  // first room in the list; রহিম lives in 6/W2 (see TCH-02).
+  await page
+    .getByRole("group", { name: "Classes" })
+    .getByRole("button", { name: /6 · W2/ })
+    .click();
   const row = page
     .locator("table.data tbody tr", { hasText: "রহিম উদ্দিন" })
     .first();
@@ -1029,7 +1053,9 @@ test("TCH-08 weak matrix and coverage equal independently queried values", async
   }
 
   // Class analytics (the Chapters stat on /teacher/classes) equals the
-  // analytics endpoint for the same grade.
+  // analytics endpoint for the same grade. The stat renders 0 while its
+  // query loads, and a grade with a 200-student room (perf.spec's import)
+  // delays that response past a single read, so poll for the settled value.
   const analytics = await apiGet<{ chapters: unknown[] }>(
     page,
     "/teacher/classes/6/analytics",
@@ -1037,8 +1063,13 @@ test("TCH-08 weak matrix and coverage equal independently queried values", async
   await open(page, "/teacher/classes");
   const statCells = page.locator(".stat-row").first().locator(".stat-value");
   await expect(statCells.first()).toBeVisible({ timeout: 30_000 });
-  const nums = (await statCells.allTextContents()).map((n) => n.trim());
-  expect(nums[1]).toBe(String(analytics.chapters.length));
+  await expect
+    .poll(
+      async () =>
+        (await statCells.allTextContents()).map((n) => n.trim())[1],
+      { timeout: 30_000 },
+    )
+    .toBe(String(analytics.chapters.length));
 });
 
 test("TCH-09 student detail matches the source; another school's classroom and another teacher's paper are denied", async ({
@@ -1049,6 +1080,12 @@ test("TCH-09 student detail matches the source; another school's classroom and a
 
   // Student detail view: the roster row opens the student's real numbers.
   await open(page, "/teacher/classes");
+  // The roster table renders the SELECTED room and the auto-select is the
+  // first room in the list; রহিম lives in 6/W2 (see TCH-02).
+  await page
+    .getByRole("group", { name: "Classes" })
+    .getByRole("button", { name: /6 · W2/ })
+    .click();
   const row = page
     .locator("table.data tbody tr", { hasText: "রহিম উদ্দিন" })
     .first();
