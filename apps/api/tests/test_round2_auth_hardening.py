@@ -94,7 +94,7 @@ def test_login_does_not_reveal_that_an_address_is_registered(tmp_path) -> None:
             )
         )
     )
-    assert _register(client, "real@example.test").status_code in (200, 201)
+    assert _register(client, "real@example.test").status_code == 201
 
     res = _login(client, "real@example.test", "definitely-not-the-password")
     missing = _login(client, "nobody-at-all@example.test", "definitely-not-the-password")
@@ -154,7 +154,7 @@ def test_unverified_hint_is_only_given_when_the_password_is_right(tmp_path) -> N
             )
         )
     )
-    assert _register(client, "unverified@example.test").status_code in (200, 201)
+    assert _register(client, "unverified@example.test").status_code == 201
     # Wrong password on an unverified account: must NOT get the hint.
     wrong = _login(client, "unverified@example.test", "wrong-password-entirely")
     assert wrong.status_code == 401

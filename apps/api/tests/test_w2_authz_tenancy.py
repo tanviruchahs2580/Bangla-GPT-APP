@@ -87,14 +87,14 @@ def _two_schools(client: TestClient, factory) -> tuple[dict, dict]:
     schools = {}
     for label in ("A", "B"):
         created = client.post("/admin/schools", json={"name": f"School {label}"}, headers=admin)
-        assert created.status_code in (200, 201), created.text
+        assert created.status_code == 201, created.text
         schools[label] = created.json()
     teacher_headers = {}
     for label in ("A", "B"):
         invite = client.post(
             f"/schools/{schools[label]['id']}/invites", json={"role": "teacher"}, headers=admin
         )
-        assert invite.status_code in (200, 201), invite.text
+        assert invite.status_code == 201, invite.text
         join = client.post(
             "/auth/join-school",
             json={

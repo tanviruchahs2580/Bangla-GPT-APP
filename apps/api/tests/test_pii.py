@@ -62,3 +62,53 @@ def test_evidence_prompt_without_pii_is_unchanged() -> None:
     prompt = build_evidence_prompt([], "ভগ্নাংশ কী?", history=None)
     assert "ভগ্নাংশ কী?" in prompt
     assert "redacted" not in prompt
+
+
+# ---------------------------------------------------------------------------
+# F-162: the mutation survivors were all boundary conditions of these three
+# patterns. Each case below fails if its boundary moves.
+# ---------------------------------------------------------------------------
+
+
+def test_phone_needs_non_digit_boundaries_but_the_nid_rule_still_catches() -> None:
+    """A digit on either side makes it a longer run, not a mobile number.
+
+    Without the lookarounds the phone pattern would fire inside a 12-digit
+    run and count a second redaction (and the remaining digits would be
+    mangled differently).
+    """
+    trailing, count_trailing = redact_pii("ref 017123456789 end")
+    assert count_trailing == {"phone": 0, "email": 0, "nid": 1}, trailing
+    leading, count_leading = redact_pii("ref 1017123456789 end")
+    assert count_leading == {"phone": 0, "email": 0, "nid": 1}, leading
+
+
+def test_email_requires_a_two_character_tld() -> None:
+    assert redact_pii("mail a@b.cö here")[1]["email"] == 0
+    assert redact_pii("mail a@b.co here")[1]["email"] == 1
+    long_tld = "".join(["user@example.", "c" * 63])
+    assert redact_pii(long_tld)[1]["email"] == 1
+
+
+def test_nid_run_length_bounds_are_exact() -> None:
+    nine, nine_counts = redact_pii("id 123456789 ok")
+    assert nine_counts["nid"] == 0, nine
+    ten, ten_counts = redact_pii("id 1234567890 ok")
+    assert ten_counts["nid"] == 1, ten
+    seventeen, seventeen_counts = redact_pii("id " + "1" * 17 + " ok")
+    assert seventeen_counts["nid"] == 1, seventeen
+    eighteen, eighteen_counts = redact_pii("id " + "1" * 18 + " ok")
+    assert eighteen_counts["nid"] == 0, eighteen
+
+
+def test_pattern_order_keeps_an_adjacent_address_intact() -> None:
+    """The phone pass runs before the email pass by design.
+
+    A pasted "number@domain" is a phone glued to a domain, not an address:
+    redacting the phone first leaves "[phone redacted]@example.com", which the
+    email pattern cannot match. Swapping the order would label the pair an
+    email and leave the phone digits in the text.
+    """
+    text, counts = redact_pii("যোগাযোগ 01712345678@example.com")
+    assert counts == {"phone": 1, "email": 0, "nid": 0}, text
+    assert "01712345678" not in text

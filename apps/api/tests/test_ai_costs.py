@@ -9,6 +9,7 @@
 """
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
@@ -94,8 +95,10 @@ def test_budget_blocks_when_exhausted(tmp_path) -> None:
         )
         db.commit()
         assert month_cost_usd(db, user_id) > 0.000001
-        with pytest.raises(Exception, match="ai_budget_exceeded"):
+        with pytest.raises(HTTPException) as refused:
             check_ai_budget(db, user_id=user_id, settings=budgeted)
+        assert refused.value.status_code == 429
+        assert refused.value.detail["code"] == "ai_budget_exceeded"
 
 
 def test_budget_zero_means_unlimited(tmp_path) -> None:
