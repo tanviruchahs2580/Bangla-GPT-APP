@@ -73,7 +73,7 @@ Regenerate the tables with `.qa-work/evidence/E-W2-BE-env/gen_env_matrix.py`
 | REDIS_URL | Shared cache, limiter and token-revocation store; required when RATE_LIMIT_BACKEND=redis or JOBS_BACKEND=arq. | None | - | - | redis://redis:6379/0 | yes | config.py:163 |
 | RETRIEVAL_MODE | GEMINI_FAST_MODEL= # S4.2 router: model for SIMPLE routes (empty = main model serves all) | 'hybrid' | - | hybrid | hybrid # S4.3: hybrid = BM25+vector RRF+rerank; bm25 = v1 baseline | yes | config.py:122 |
 | SENTRY_DSN | Error tracking (optional; both apps init Sentry when set). Sentinels are stripped from logs either way. | None | - | # https://xxx@xxx.ingest.sentry.io/xxx | - | yes | config.py:347 |
-| SENTRY_ENV | Sentry environment tag; set it to production explicitly or events are tagged environment=development (F-OBS-3). | 'development' | - | development | - | yes | config.py:348 |
+| SENTRY_ENV | Sentry environment tag; set it to production explicitly or events are tagged environment=development (F-OBS-3). | 'development' | - | production | - | yes | config.py:348 |
 | SMTP_ENABLED | Turn password-reset e-mail on; when false the reset token is only printed outside production. | False | - | false | true | yes | config.py:234 |
 | SMTP_FROM | From: address on password-reset e-mail. | None | - | - | no-reply@example.edu.bd | yes | config.py:239 |
 | SMTP_HOST | SMTP server for password-reset e-mail; used when SMTP_ENABLED=true. | None | - | - | smtp.example.edu.bd | yes | config.py:235 |
@@ -101,7 +101,7 @@ Regenerate the tables with `.qa-work/evidence/E-W2-BE-env/gen_env_matrix.py`
 | GF_SECURITY_ADMIN_PASSWORD | docker-compose.yml:346 - compose service env | Grafana service env key, set from GRAFANA_ADMIN_PASSWORD; not set directly in .env. |
 | GF_SECURITY_ADMIN_USER | docker-compose.yml:345 - compose service env | Grafana service env key, set from GRAFANA_ADMIN_USER; not set directly in .env. |
 | GRAFANA_ADMIN_PASSWORD | docker-compose.yml:346 - compose interpolation; .env.production.example; docs/deploy | Grafana admin password; interpolated into the compose grafana service (GF_SECURITY_ADMIN_PASSWORD). Required whenever the monitoring profile is up. |
-| GRAFANA_ADMIN_USER | docker-compose.yml:345 - compose interpolation; docs/deploy | Grafana admin login; interpolated into the compose grafana service (GF_SECURITY_ADMIN_USER). |
+| GRAFANA_ADMIN_USER | docker-compose.yml:345 - compose interpolation; .env.production.example; docs/deploy | Grafana admin login; interpolated into the compose grafana service (GF_SECURITY_ADMIN_USER). |
 | OFFSITE_SYNC_CMD | docker-compose.yml:371 - compose interpolation; compose service env; .env.production.example; docs/deploy | Optional offsite sync command executed after each backup, e.g. rclone: |
 | PGBR_STANZA | docker-compose.yml:397 - compose interpolation; compose service env; .env.production.example; docs/deploy | Optional offsite sync command executed after each backup, e.g. rclone: OFFSITE_SYNC_CMD=rclone copy /backups remote:bgpt-backups |
 | POSTGRES_DB | docker-compose.yml:265 - compose interpolation; compose service env; .env.production.example; docs/deploy | Database name created by the postgres service; DATABASE_URL must point at it. |
@@ -115,21 +115,18 @@ Regenerate the tables with `.qa-work/evidence/E-W2-BE-env/gen_env_matrix.py`
 
 - Settings fields: 71
 - App settings documented in `.env.example`: 71
-- App settings documented in `.env.production.example`: 50
+- App settings documented in `.env.production.example`: 51
 - Compose/infra names with no Settings field: 21
-- Present in `.env.example` but not in the production template (21): APP_NAME, VERSION, OPENAI_API_KEY, OPENAI_MODEL, OPENAI_BASE_URL, LLM_FALLBACK_PROVIDER, CIRCUIT_BREAKER_FAILURE_THRESHOLD, CIRCUIT_BREAKER_RESET_TIMEOUT_SECONDS, FORCE_ADMIN_PASSWORD_CHANGE, ANSWER_LOG_RETENTION_DAYS, AI_USAGE_RETENTION_DAYS, AI_JOBS_RETENTION_DAYS, AI_JOB_MAX_ATTEMPTS, AI_JOB_RETRY_BACKOFF_SECONDS, AI_JOB_IDEMPOTENCY_WINDOW_MINUTES, PARENT_DIGEST_ENABLED, PARENT_DIGEST_CHECK_MINUTES, WEAKNESS_REFRESH_ENABLED, WEAKNESS_REFRESH_CHECK_MINUTES, RATE_LIMIT_RULES, SENTRY_ENV
+- Present in `.env.example` but not in the production template (20): APP_NAME, VERSION, OPENAI_API_KEY, OPENAI_MODEL, OPENAI_BASE_URL, LLM_FALLBACK_PROVIDER, CIRCUIT_BREAKER_FAILURE_THRESHOLD, CIRCUIT_BREAKER_RESET_TIMEOUT_SECONDS, FORCE_ADMIN_PASSWORD_CHANGE, ANSWER_LOG_RETENTION_DAYS, AI_USAGE_RETENTION_DAYS, AI_JOBS_RETENTION_DAYS, AI_JOB_MAX_ATTEMPTS, AI_JOB_RETRY_BACKOFF_SECONDS, AI_JOB_IDEMPOTENCY_WINDOW_MINUTES, PARENT_DIGEST_ENABLED, PARENT_DIGEST_CHECK_MINUTES, WEAKNESS_REFRESH_ENABLED, WEAKNESS_REFRESH_CHECK_MINUTES, RATE_LIMIT_RULES
 - Present only in the production template (0): none
 
 ## Known gaps and their disposition
 
-- `SENTRY_ENV` has a working default (`development`) and is documented in
-  `.env.example`, but it is absent from `.env.production.example`, so a
-  production deployment that follows the template tags every Sentry event
-  `environment=development` (F-OBS-3). Handoff: add the line to the
-  production template; the row above carries the guidance meanwhile.
-- `GRAFANA_ADMIN_USER` is interpolated in `docker-compose.yml` but appears
-  in neither template (F-OBS-3). Handoff: add it beside
-  `GRAFANA_ADMIN_PASSWORD` in `.env.production.example`.
+- `SENTRY_ENV=production` and `GRAFANA_ADMIN_USER=admin` are now in
+  `.env.production.example` (F-122): a production deployment that follows the
+  template tags its Sentry events with the real environment, and the Grafana
+  login user is documented beside the password. Both are pinned by
+  `tests/test_env_parity.py`.
 - `ALLOW_MOCK_LLM_IN_PRODUCTION` is deliberately absent from both templates:
   it is an offline-demo escape hatch the production boot gate accepts only
   together with `LLM_PROVIDER=mock` (see the note in .env.production.example).
