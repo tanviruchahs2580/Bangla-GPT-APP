@@ -524,7 +524,11 @@ test("STU-12 unified search: three Bangla surface forms return the same hits", a
   const zwnj = "কো‌ষ"; // the plain form with a ZWNJ after the vowel sign
   const decomposed = "কোষ"; // U+09C7 + U+09BE instead of the U+09CB sign
   expect(new Set([plain, zwnj, decomposed]).size).toBe(3);
-  expect(zwnj.normalize("NFKC")).toBe(plain);
+  // NFKC folds the decomposed vowel sign but keeps a ZWNJ; removing the
+  // zero-width character is the shared normalizer's job (retrieval/
+  // normalize.py, strip_zero_width), so the ZWNJ form is asserted against the
+  // fold the app actually performs.
+  expect(zwnj.replace(/[\u200b-\u200d\ufeff]/g, "").normalize("NFKC")).toBe(plain);
   expect(decomposed.normalize("NFKC")).toBe(plain);
 
   async function hitTitles(query: string): Promise<string[]> {
