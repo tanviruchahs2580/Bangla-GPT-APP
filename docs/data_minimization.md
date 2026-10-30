@@ -135,3 +135,62 @@ design. `PII_ENC_KEY` is deliberately NOT in backups (docs/backup_dr.md).
   AI jobs) have no cadence beyond erasure. Owner decision needed on windows.
 - Teacher/parent names have no retention sweep (needed while accounts are
   active; dormancy gap above).
+
+## 8. Browser storage inventory (PRIV-09)
+
+Added by the wave-2 fixer stream (PRIV-09); the keys and the wipe behaviour
+below were read from the web client sources named in the `Where` column.
+
+| Storage | Key | Purpose | Lifetime / scope | Wiped on sign-out |
+| --- | --- | --- | --- | --- |
+| localStorage | `bgpt_token` | Session JWT for the API | until logout or expiry | yes (`api.ts` `USER_STORAGE_KEYS`) |
+| localStorage | `lastChapter` | Resume position on Home | device | yes |
+| localStorage | `bgpt_teacher_default_class` | Teacher's default class picker | device | yes |
+| localStorage | `bgpt-lowdata` | Low-data mode preference | device | kept by design (device pref, F-036) |
+| localStorage | `fontScale` | Text-size accessibility preference (`LearnPage.tsx`) | device | kept by design (a low-vision user must not lose it on sign-out) |
+| localStorage | `bgpt_lang`, `bgpt_theme` | Language and theme | device | kept by design |
+| localStorage | `bgpt_offline_owner` | Which account owns the downloaded chapters (`offlineStore.ts`) | device | cleared with the IndexedDB store below |
+| sessionStorage | `bgpt_admin_token_backup` | Parked platform-admin credential during impersonation | per tab (`api.ts`) | yes, both storages |
+| sessionStorage | `bgpt_impersonating` | Impersonated user id (banner state) | per tab | yes, both storages |
+| sessionStorage | `bangla-gpt:last-quiz-result` | Last graded result for the explain back-link (`quizExplain.ts`) | per tab | yes |
+| sessionStorage | `bgpt_quiz_draft` | In-flight quiz draft (`quizDraft.ts`) | per tab | yes |
+| IndexedDB | `bgpt-offline` / `chapters` (schema v2) | Downloaded chapter content for offline reading | device, owner-scoped | yes (`clearOfflineChapters`; in-memory fallback when IndexedDB is unavailable) |
+
+Cookies: **none**. `grep -rn "document.cookie" apps/web/src` returns no hit
+and the API never sets one (auth is the bearer header only, there is no
+`Set-Cookie` in `apps/api/src`), so there is no cookie banner to gate and no
+cookie-based CSRF surface to pair (SEC-09). The only optional third-party
+code is the Sentry bundle, loaded only when the build sets `VITE_SENTRY_DSN`
+(section 6).
+
+Flag for legal review (not answered here): whether the first-party
+`analytics_events` rows (section 5) or any of the device preferences above
+need a consent surface in the launch jurisdictions.
+
+## 9. Applicable-law flags (PRIV-10)
+
+The frameworks below are the ones named in tracked documents; this section
+records what the repository says, not a compliance conclusion.
+
+| Framework | Where stated | What it means for this product |
+| --- | --- | --- |
+| Bangladesh Digital Security Act / Cyber Security Act 2023; no comprehensive GDPR-equivalent statute yet | `docs/dpa_template.md:8-10` | Contract terms (the DPA template) carry more weight than a statutory regime; a Bangladeshi lawyer must review the template before any school signs. |
+| Children Act 2013 and BTRC/ICT guidance | `docs/LAUNCH_READINESS_CHECKLIST.md:18-20` | The registration consent checkbox, `/privacy` and `/terms` copy need a lawyer's review; the checklist item is open. |
+| GDPR-style principles applied voluntarily | `README.md:35`, `docs/API.md:44-45` | Self-service export and erasure exist; the wording claims the feature, not GDPR compliance. |
+| Google Play Families policy | `docs/playstore/content-rating.md:34-35` | The repo states the app is not built to the policy's content and ads requirements; declaring it would be a false claim. |
+
+Technical controls observed, mapped to the principle they serve (each has a
+test or a boot guard named elsewhere in this document):
+
+| Control | Where | Principle |
+| --- | --- | --- |
+| Self-service export and erasure (`GET /users/me/export`, `DELETE /users/me`) | `services/gdpr.py`, `routers/users.py` | access, rectification, portability |
+| Retention sweep with a dry-run report and a confirmation-gated purge | `services/retention.py`, `routers/admin.py` | storage limitation |
+| k-anonymity floor on the aggregate authority report | `services/govt_report.py` | purpose limitation |
+| Pre-provider PII redaction and metadata-stripped images | `services/tutor.py`, `services/pii.py` | data minimisation |
+| Fernet-encrypted guardian phone, Argon2id password hashes | `security.py`, `auth/security.py` | integrity and confidentiality |
+| Consent version/at/ip evidence at registration | `routers/auth.py`, `routers/deps.py` | accountability |
+| Provider data-use tier declaration with a production boot refusal on an unacknowledged free tier | `config.py`, `main.py::_validate_llm_data_use` | lawfulness of the transfer basis (PRIV-06) |
+
+**Legal review required.** None of the above is asserted as compliance, and
+the reviewer and date have not been recorded in-repo.
