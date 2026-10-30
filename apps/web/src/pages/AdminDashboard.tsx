@@ -121,7 +121,7 @@ export default function AdminDashboard() {
     setPurgeBusy(true);
     try {
       const res = await post<Record<string, number>>(
-        "/admin/maintenance/purge",
+        "/admin/maintenance/purge?confirm=true",
       );
       const parts = Object.entries(res)
         .map(([key, n]) => `${key}: ${n}`)
