@@ -415,9 +415,7 @@ export default function AITutorPage() {
     // (a PDF, a text snapshot) used to be reported as "too large", so the
     // student retried with a smaller file of the same unusable kind.
     if (!IMAGE_TYPES.includes(f.type)) {
-      // C2 handoff: replace with a type-naming key ("only PNG/JPEG/WebP")
-      // once i18n.ts has one; errImageInvalid is the closest shipped copy.
-      setError(t("errImageInvalid"));
+      setError(t("imageTypeUnsupported"));
       return;
     }
     if (f.size > MAX_IMAGE_BYTES) {

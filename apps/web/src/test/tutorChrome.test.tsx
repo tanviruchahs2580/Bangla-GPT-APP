@@ -1,7 +1,7 @@
 /** tutor chrome — image intent menu, entry suggestions and the
  *  low-confidence hint. Streaming logic itself is untouched. */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -90,6 +90,39 @@ describe("tutor chrome", () => {
         expect.anything(),
       ),
     );
+  });
+
+  it("names the accepted types for a wrong-type file and the size bound for an oversized image", async () => {
+    // F-202: the two client-side refusals must not share a sentence -- a
+    // text/plain snapshot used to be reported as "too large", so the student
+    // retried with a smaller file of the same unusable kind.
+    renderPage();
+    await screen.findByText(t("suggestTeach"));
+
+    const input = document.querySelector('input[type="file"]')!;
+    // fireEvent.change, not user.upload: the picker's `accept` attribute
+    // filters the real dialog, but drag-and-drop, an OS "All files" picker and
+    // a renamed snapshot all deliver a wrong type to this handler, which is
+    // what the branch below exists for.
+    fireEvent.change(input, {
+      target: {
+        files: [new File(["not an image"], "homework.txt", { type: "text/plain" })],
+      },
+    });
+    expect(
+      await screen.findByText(t("imageTypeUnsupported")),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(t("imageTooLarge"))).not.toBeInTheDocument();
+
+    const oversized = new File([new Uint8Array(1_600_000)], "huge.png", {
+      type: "image/png",
+    });
+    fireEvent.change(input, { target: { files: [oversized] } });
+    expect(await screen.findByText(t("imageTooLarge"))).toBeInTheDocument();
+    expect(
+      screen.queryByText(t("imageTypeUnsupported")),
+    ).not.toBeInTheDocument();
+    expect(apiMock.postStream).not.toHaveBeenCalled();
   });
 
   it("follow-up chips re-ask the previous question with an explicit strategy", async () => {
