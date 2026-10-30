@@ -37,8 +37,10 @@ regexes = [
   '''(SECRET|KEY|TOKEN|PASSWORD)\s*[:=]\s*["'](test|unit|dummy|fake)''',
   # jwt_secret fixtures, in both Python-kwarg and JSON spellings. `test-`
   # covers the older fixtures, `other-` the negative-test decoy, `bench-` the
-  # bench script's throwaway.
+  # bench script's throwaway, `w2-obs-` the wave-2 observability suite's
+  # named constant (used as a jwt_secret in test_w2_obs_request_id.py).
   '''jwt_secret["']?\s*[:=]\s*["'](test|other|bench)-''',
+  '''SECRET\s*=\s*["']w2-obs-secret-''',
   # The CI DAST job's placeholder JWT secret (commit removed since).
   '''JWT_SECRET=(ci-dast|bench)-secret-''',
   # The shared 57-character high-entropy constant the boot-guard suites need:
