@@ -111,6 +111,14 @@ class Settings(BaseSettings):
     # index construction is untouched (unlike unsetting LLM_PROVIDER, which
     # also removes the index). Default true keeps generation on.
     ai_generation_enabled: bool = True
+    # RAG-27: retrieval-only degraded mode. When the provider cannot serve a
+    # turn (ProviderError after its retries and circuit breaker) and this is
+    # true, the tutoring surfaces answer with the retrieved textbook excerpts
+    # and their citations -- an explicitly ungrounded response
+    # (refused_reason=provider_unavailable) -- instead of the 502
+    # llm_unavailable envelope. Default false keeps the pinned 502 contract;
+    # enable it where an excerpt is more useful to a student than an error.
+    retrieval_only_fallback_enabled: bool = False
     # Circuit breaker thresholds
     circuit_breaker_failure_threshold: int = 3  # failures before opening
     circuit_breaker_reset_timeout_seconds: float = 60.0  # seconds before half-open

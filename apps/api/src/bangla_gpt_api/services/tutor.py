@@ -107,6 +107,16 @@ VISION_UNSUPPORTED_ANSWER = (
 # not textbook content — the stream path must never mark it grounded.
 _UNAVAILABLE_ANSWER = "দুঃখিত, AI সেবা এই মুহূর্তে ব্যবহার করা যাচ্ছে না। অনুগ্রহ করে পরে আবার চেষ্টা করুন।"
 
+# RAG-27: retrieval-only degraded mode (RETRIEVAL_ONLY_FALLBACK_ENABLED). The
+# turn already retrieved and gate-passed textbook evidence when the provider
+# failed, so instead of a 502 the student gets the evidence itself, labelled
+# as excerpts and marked ungrounded -- never model text, never an uncited
+# answer presented as grounded.
+RETRIEVAL_ONLY_ANSWER = (
+    "এই মুহূর্তে AI উত্তর তৈরি করতে পারছে না। তোমার প্রশ্নের সঙ্গে মেলে এমন পাঠ্যবইয়ের অংশগুলো নিচে দেওয়া হলো:"
+)
+RETRIEVAL_ONLY_REFUSED_REASON = "provider_unavailable"
+
 # F-031: the operator kill switch (AI_GENERATION_ENABLED=false) answers every
 # generation surface with this refusal envelope instead of reaching the
 # provider. Retrieval/search/reader/quizzes are untouched, so the copy names
@@ -360,8 +370,13 @@ class TutorService:
         trace_store: AnswerTraceStore | None = None,
         max_concurrent_generations: int = MAX_CONCURRENT_GENERATIONS,
         generation_queue_timeout: float = GENERATION_QUEUE_TIMEOUT_SECONDS,
+        retrieval_only_fallback: bool = False,
     ) -> None:
         self.index = index
+        # RAG-27: when true, a provider failure answers with the retrieved
+        # excerpts (ungrounded, cited) instead of raising ProviderError up to
+        # the 502 handler. Off by default: the 502 contract is pinned.
+        self.retrieval_only_fallback = bool(retrieval_only_fallback)
         # Corpus term statistics (document frequencies) that let the
         # grounding gate weight rare curriculum terms above scaffolding.
         # Optional: without them the gate falls back to uniform weights
@@ -898,6 +913,53 @@ class TutorService:
             confidence=answer_confidence(False, reason, []),
         )
 
+    def _retrieval_only_response(
+        self,
+        hits: list,
+        *,
+        question: str,
+        route: str,
+        stage_ms: dict[str, int] | None = None,
+    ) -> AskResponse:
+        """Provider unavailable, evidence retrieved (RAG-27): excerpts, not 502.
+
+        The answer text is the citation list itself -- batch heading plus one
+        excerpt per source -- so the response cannot present model text, and
+        ``grounded`` stays false because no model grounded it. ``confidence``
+        is None: there is no generated answer to score, and inventing one from
+        retrieval alone would read as if the question had been answered.
+        """
+        sources = self._sources(hits)
+        lines = [RETRIEVAL_ONLY_ANSWER]
+        for index, ref in enumerate(sources, start=1):
+            location = " - ".join(part for part in (ref.book, ref.chapter, ref.section) if part)
+            if ref.page is not None:
+                location = f"{location} ({ref.page})" if location else str(ref.page)
+            lines.append(f"{index}. {ref.excerpt} [{location}]")
+        answer = "\n".join(lines)
+        logger.warning(
+            "tutor_provider_unavailable_retrieval_only question_chars=%d evidence_chunks=%d",
+            len(question),
+            len(hits),
+        )
+        self._record_trace(
+            question=question,
+            outcome="retrieval_only",
+            grounded=False,
+            refused_reason=RETRIEVAL_ONLY_REFUSED_REASON,
+            hits=hits,
+            model=getattr(self.provider, "name", "unknown"),
+            parameters={"route": route, "top_k": self.top_k, "evidence_chunks": len(hits)},
+            latency_ms={**(stage_ms or {}), "total": sum((stage_ms or {}).values())},
+        )
+        return AskResponse(
+            answer=answer,
+            grounded=False,
+            sources=sources,
+            refused_reason=RETRIEVAL_ONLY_REFUSED_REASON,
+            confidence=None,
+        )
+
     async def _generate(
         self,
         context_blocks: str,
@@ -1245,6 +1307,12 @@ class TutorService:
             answer = await self._generate(context_blocks, image=image, provider=provider_for_call)
         except GenerationBusyError:
             return self._refusal(GENERATION_BUSY_ANSWER, "ai_busy")
+        except ProviderError:
+            if not self.retrieval_only_fallback:
+                raise
+            return self._retrieval_only_response(
+                hits, question=question, route=route.value, stage_ms=stage_ms
+            )
         return self._assemble(
             answer,
             hits,

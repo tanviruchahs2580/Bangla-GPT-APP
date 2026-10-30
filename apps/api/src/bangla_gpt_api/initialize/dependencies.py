@@ -159,12 +159,17 @@ def _build_tutor(
     circuit_breaker: CircuitBreaker | None,
     fallback_provider: LLMProvider | None,
     term_stats: TermStats | None = None,
+    *,
+    retrieval_only_fallback: bool = False,
 ) -> TutorService:
     """Construct the TutorService with optional circuit breaker + fallback.
 
     ``term_stats`` carries corpus document frequencies to the grounding gate
     (weighted content-term coverage). Optional: absence degrades the gate to
     uniform weights over content terms, never to a lie.
+
+    ``retrieval_only_fallback`` (RAG-27) is the operator's degraded-mode flag:
+    a provider outage answers with cited excerpts instead of the 502.
     """
     return TutorService(
         index=index,
@@ -173,6 +178,7 @@ def _build_tutor(
         circuit_breaker=circuit_breaker,
         fallback_provider=fallback_provider,
         term_stats=term_stats,
+        retrieval_only_fallback=retrieval_only_fallback,
     )
 
 
@@ -325,6 +331,7 @@ def build_dependencies(
             circuit_breaker,
             fallback_provider,
             term_stats=term_stats,
+            retrieval_only_fallback=settings.retrieval_only_fallback_enabled,
         )
     else:
         tutor = None
