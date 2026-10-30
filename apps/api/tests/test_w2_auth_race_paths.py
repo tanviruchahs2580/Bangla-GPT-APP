@@ -8,7 +8,6 @@ exactly the paths that must not be assumed. These tests execute them.
 
 from datetime import UTC, datetime, timedelta
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import IntegrityError
 
@@ -77,9 +76,7 @@ def test_forgot_returns_accepted_when_the_mail_quota_is_exhausted(tmp_path, monk
 
     from bangla_gpt_api.routers import auth as auth_router
 
-    monkeypatch.setattr(
-        auth_router, "_address_mail_quota_allows", lambda *a, **k: False
-    )
+    monkeypatch.setattr(auth_router, "_address_mail_quota_allows", lambda *a, **k: False)
     res = client.post("/auth/forgot", json={"email": "quota@example.test"})
     # The documented generic answer for /auth/forgot is 202 {"status": "accepted"}.
     assert res.status_code == 202, res.text
