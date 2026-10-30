@@ -91,6 +91,14 @@ dev = [
   # in the guardrails job on every PR. It only arrived transitively before,
   # so a lock refresh could have turned a green gate into an ImportError.
   "packaging>=24",
+  # F-155: the property tests (tests/test_w2_be_properties.py) need hypothesis;
+  # CI installs the dev extra from the hash-verified lock, so the package must
+  # be in the lock or the property tests skip silently on every runner.
+  "hypothesis>=6",
+  # F-163: the CI pytest legs run with `-p randomly`; without the plugin in
+  # the lock that leg would fail on the runner even though it is installed on
+  # developer machines.
+  "pytest-randomly>=3",
 ]
 
 [build-system]
