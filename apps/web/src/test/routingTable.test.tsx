@@ -128,4 +128,26 @@ describe("routing table", () => {
     const home = screen.getByRole("link", { name: t("brandHome") });
     expect(home.getAttribute("href")).toBe("/student");
   });
+
+  it("serves a maintenance screen at /maintenance (F-165)", async () => {
+    // Before this a maintenance window could only surface as per-request error
+    // copy on whatever page the user happened to be on. The deployment serves
+    // the SPA for this path (vercel.json rewrites everything to index.html;
+    // nginx falls back the same way), so the route is the whole product half.
+    authState.me = null;
+    renderAt("/maintenance");
+    expect(
+      await screen.findByText(t("apiUnreachableTitle"), {}, { timeout: 5000 }),
+    ).toBeTruthy();
+    expect(screen.getByText(t("apiUnreachableBody"))).toBeTruthy();
+    // Retry acts on the page, and the status page is reachable from it (the
+    // public footer carries the same link, so this is a set membership).
+    expect(screen.getByRole("button", { name: t("retry") })).toBeTruthy();
+    const statusLinks = screen.getAllByRole("link", {
+      name: t("statusPage"),
+    });
+    expect(
+      statusLinks.some((link) => link.getAttribute("href") === "/status"),
+    ).toBe(true);
+  });
 });

@@ -57,7 +57,6 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       ...reactHooks.configs['recommended-latest'].rules,
       ...jsxA11y.flatConfigs.recommended.rules,
-      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
 
       // Unused arguments prefixed with `_` are deliberate (callbacks,
       // interface conformance); anything else unused is a mistake.
@@ -97,7 +96,9 @@ export default tseslint.config(
       // Fast-refresh granularity only: it complains when a module exports a
       // component alongside a hook or constant, which costs a full reload in
       // dev but is not a defect in the shipped code. Colocating a page with
-      // its helpers is the more common, more readable layout.
+      // its helpers is the more common, more readable layout, and FE-02's
+      // review accepted this one global disable with that reason written
+      // down (the plugin still runs for the export-shape rules it shares).
       'react-refresh/only-export-components': 'off',
 
       // Console noise in shipped UI code is usually debugging left behind.

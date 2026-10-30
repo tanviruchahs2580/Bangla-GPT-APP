@@ -43,3 +43,25 @@ describe("offline fallback page under script-src 'self' (F-022)", () => {
     expect(sw).toMatch(/"\/offline-retry\.js"/);
   });
 });
+
+/**
+ * F-165 (UX-06): the fallback page shipped in Bangla only, so an
+ * English-preferring teacher who lost connectivity read a page in a language
+ * they do not use. Both languages are on the page now, and the graphic is an
+ * inline SVG rather than an emoji (UX-12: emoji render differently per
+ * Android vendor, and the fallback page exists precisely for those handsets).
+ */
+describe("offline fallback page carries both languages (F-165)", () => {
+  it("has the Bangla copy first and an English section beside it", () => {
+    expect(html).toMatch(/<html lang="bn"/);
+    expect(html).toMatch(/<h1>[^<]*অফলাইনে/);
+    expect(html).toMatch(/<section lang="en">[\s\S]*You are offline/);
+  });
+
+  it("uses an SVG signal glyph, not an emoji", () => {
+    expect(html).toMatch(/<svg[\s\S]*?<\/svg>/);
+    expect(html).not.toMatch(
+      /[\u{1F000}-\u{1FAFF}\u2600-\u27BF]/u,
+    );
+  });
+});
