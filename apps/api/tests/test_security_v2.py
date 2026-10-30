@@ -134,7 +134,9 @@ def test_all_five_event_types_write_audit_rows(client: TestClient) -> None:
     # 3. purge (retention sweep)
     # F-140: a real sweep needs an explicit confirmation
     assert (
-        client.post("/admin/maintenance/purge", params={"confirm": "true"}, headers=admin).status_code
+        client.post(
+            "/admin/maintenance/purge", params={"confirm": "true"}, headers=admin
+        ).status_code
         == 200
     )
 
@@ -206,7 +208,9 @@ def test_audit_view_filters_and_pages(client: TestClient) -> None:
     # one more event of a different type so filtering is proven, not assumed
     # F-140: a real sweep needs an explicit confirmation
     assert (
-        client.post("/admin/maintenance/purge", params={"confirm": "true"}, headers=admin).status_code
+        client.post(
+            "/admin/maintenance/purge", params={"confirm": "true"}, headers=admin
+        ).status_code
         == 200
     )
 
@@ -428,7 +432,9 @@ def test_purge_audit_detail_is_counts_only(client: TestClient) -> None:
     admin = _admin(client)
     # F-140: a real sweep needs an explicit confirmation
     assert (
-        client.post("/admin/maintenance/purge", params={"confirm": "true"}, headers=admin).status_code
+        client.post(
+            "/admin/maintenance/purge", params={"confirm": "true"}, headers=admin
+        ).status_code
         == 200
     )
     row = _audit_actions(client, action="purge")[0]

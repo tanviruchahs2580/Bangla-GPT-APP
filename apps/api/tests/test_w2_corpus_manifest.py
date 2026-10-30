@@ -75,7 +75,9 @@ def _write_corpus(root: Path) -> dict:
             "usable_pages": 1,
         }
     }
-    (root / "quality_report.json").write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
+    (root / "quality_report.json").write_text(
+        json.dumps(report, ensure_ascii=False), encoding="utf-8"
+    )
 
     manifests = root / "manifests"
     manifests.mkdir(exist_ok=True)
@@ -103,8 +105,11 @@ def _write_corpus(root: Path) -> dict:
 
 
 def _build_manifest(root: Path) -> dict:
-    from bangla_gpt_api.nctb.corpus import build_corpus_manifest, load_manifest
-    from bangla_gpt_api.nctb.corpus import record_cross_source_report
+    from bangla_gpt_api.nctb.corpus import (
+        build_corpus_manifest,
+        load_manifest,
+        record_cross_source_report,
+    )
 
     record_cross_source_report(root / "quality_report.json", root / "normalized")
     records = load_manifest(root / "manifests" / "acquisition_manifest.jsonl")

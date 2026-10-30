@@ -334,10 +334,11 @@ warn_unreachable = true         # dead code after a terminating branch
 no_implicit_reexport = true     # `import x` must say `from x import y as y`
 strict_bytes = true
 
-# Still off, deliberately, with the measured cost on 2026-10-10:
+# Still off, deliberately, with the measured cost (re-measured 2026-10-30):
 #   disallow_any_generics    161 - bare `dict`/`list` annotations that need a
 #                                   per-site decision about key/value types
-#   disallow_untyped_defs     24 - untyped public functions
+#   disallow_untyped_defs      28 - untyped public functions in 14 of 127
+#                                   source files (`mypy src --disallow-untyped-defs`)
 #   disallow_untyped_decorators, disallow_any_decorated, no_partialtypes,
 #   disallow_subclassing_any, extra_checks - no measurable benefit today
 # Removing any of the above from this list is a deliberate act: see the plan.

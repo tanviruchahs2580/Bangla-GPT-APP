@@ -30,7 +30,9 @@ def _hit(chunk_id: str, text: str, score: float) -> Hit:
     chunk = Chunk(
         id=chunk_id,
         text=text,
-        meta=CurriculumMeta(curriculum_year=2012, class_level=6, subject="science", book="বিজ্ঞান", source="s"),
+        meta=CurriculumMeta(
+            curriculum_year=2012, class_level=6, subject="science", book="বিজ্ঞান", source="s"
+        ),
     )
     return Hit(chunk=chunk, score=score)
 

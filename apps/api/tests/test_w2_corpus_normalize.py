@@ -18,7 +18,7 @@ import pytest
 
 from bangla_gpt_api.nctb.chunking import RawChunk, chunk_pages, highlight_spans
 from bangla_gpt_api.nctb.extract import PageText
-from bangla_gpt_api.nctb.normalize import normalize_bangla, normalize_bangla_with_offsets
+from bangla_gpt_api.nctb.normalize import normalize_bangla
 from bangla_gpt_api.retrieval.hybrid import tokenize
 from bangla_gpt_api.retrieval.normalize import (
     collapse_whitespace,
@@ -110,7 +110,9 @@ class TestChunkSourceSpans:
         for chunk in chunks:
             cursor = 0
             for span in chunk.source_spans:
-                assert span.text_start == cursor or chunk.text[cursor : span.text_start].strip() == ""
+                assert (
+                    span.text_start == cursor or chunk.text[cursor : span.text_start].strip() == ""
+                )
                 cursor = span.text_end
                 assert span.page == 7
                 source = normalize_bangla(page.text[span.page_start : span.page_end])

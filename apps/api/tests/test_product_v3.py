@@ -502,9 +502,7 @@ def test_admin_maintenance_purge(admin_client: TestClient) -> None:
         "/auth/login", json={"email": "root@example.com", "password": PASSWORD}
     ).json()
     headers = {"Authorization": f"Bearer {admin['access_token']}"}
-    res = admin_client.post(
-        "/admin/maintenance/purge", params={"confirm": "true"}, headers=headers
-    )
+    res = admin_client.post("/admin/maintenance/purge", params={"confirm": "true"}, headers=headers)
     assert res.status_code == 200
     body = res.json()
     assert set(body) >= {

@@ -78,9 +78,7 @@ def _admin(client: TestClient) -> dict:
 
 def _audit_rows(factory, action: str) -> list[AuditLog]:
     with factory() as session:
-        return list(
-            session.execute(select(AuditLog).where(AuditLog.action == action)).scalars()
-        )
+        return list(session.execute(select(AuditLog).where(AuditLog.action == action)).scalars())
 
 
 def _two_schools(client: TestClient, factory) -> tuple[dict, dict]:
@@ -203,7 +201,9 @@ def test_invite_code_is_64_bit_and_audited_and_revocable(pair) -> None:
     assert all(c in "0123456789ABCDEF" for c in body)
 
     # the CREATE is audited (hash only, never the code)
-    rows = [r for r in _audit_rows(factory, "parent_link") if r.detail.get("phase") == "invite_created"]
+    rows = [
+        r for r in _audit_rows(factory, "parent_link") if r.detail.get("phase") == "invite_created"
+    ]
     assert len(rows) == 1
     assert rows[0].target == f"student:{student['profile_id']}"
     assert code not in str(rows[0].detail), "an audit row must never carry the code"
@@ -215,14 +215,18 @@ def test_invite_code_is_64_bit_and_audited_and_revocable(pair) -> None:
     refused = client.post("/parents/link/invite", json={"code": code}, headers=parent_headers)
     assert refused.status_code == 400, refused.text
     assert refused.json()["detail"]["code"] == "invalid_invite"
-    assert [r for r in _audit_rows(factory, "parent_link") if r.detail.get("phase") == "invite_revoked"]
+    assert [
+        r for r in _audit_rows(factory, "parent_link") if r.detail.get("phase") == "invite_revoked"
+    ]
 
     # and a successful redemption is audited as `linked` (create + redeem
     # both reconstructable in an incident review)
     second = client.post("/students/me/invite-code", headers=kid).json()["code"]
     linked = client.post("/parents/link/invite", json={"code": second}, headers=parent_headers)
     assert linked.status_code == 201, linked.text
-    linked_rows = [r for r in _audit_rows(factory, "parent_link") if r.detail.get("phase") == "linked"]
+    linked_rows = [
+        r for r in _audit_rows(factory, "parent_link") if r.detail.get("phase") == "linked"
+    ]
     assert len(linked_rows) == 1
     assert linked_rows[0].actor_user_id == parent["user_id"]
 
@@ -251,9 +255,7 @@ def _invite_id(factory, student_id: int) -> int:
 
     with factory() as session:
         return int(
-            session.execute(
-                select(ParentInvite.id).where(ParentInvite.student_id == student_id)
-            )
+            session.execute(select(ParentInvite.id).where(ParentInvite.student_id == student_id))
             .scalars()
             .first()
         )
@@ -297,16 +299,16 @@ def test_impersonation_dies_with_the_admin_session(pair) -> None:
 
     # the admin signs out (their own session ends)
     assert (
-        client.post(
-            "/auth/logout", headers={"Authorization": f"Bearer {admin_token}"}
-        ).status_code
+        client.post("/auth/logout", headers={"Authorization": f"Bearer {admin_token}"}).status_code
         == 204
     )
     assert client.get("/users/me", headers=imp_headers).status_code == 401, (
         "an impersonation token must not outlive the admin session that minted it"
     )
     # the implicit end is audited with the count of ended windows
-    ends = [r for r in _audit_rows(factory, "impersonation") if r.detail.get("phase") == "session_end"]
+    ends = [
+        r for r in _audit_rows(factory, "impersonation") if r.detail.get("phase") == "session_end"
+    ]
     assert ends and ends[0].detail["revoked_sessions"] == 1
 
 
