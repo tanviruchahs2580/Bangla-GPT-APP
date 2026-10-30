@@ -235,7 +235,7 @@ committed build (852 chunks across 9 sources, 169 with a chapter,
 
 | Field | Meaning |
 |---|---|
-| `pipeline.code_fingerprint` | sha256 over the artifact-shaping modules (`nctb/{bijoy,chunking,corpus,extract,normalize}.py`, `data/nctb_loader.py`) |
+| `pipeline.code_fingerprint` | sha256 over the artifact-shaping modules — `bijoy`, `chunking`, `corpus`, `extract` and `normalize` under `apps/api/src/bangla_gpt_api/nctb/`, plus `apps/api/src/bangla_gpt_api/data/nctb_loader.py` (`_FINGERPRINTED_MODULES` in `manifest.py`) |
 | `pipeline.extractor`, `pipeline.python`, `pipeline.chunker` | pypdf version, interpreter, and the token budgets/normalizer the build used |
 | `edition.*` | the edition/year policy of §1 (including the HSC UNKNOWN) |
 | `acquisition_manifest.sha256` | digest of the provenance ledger the build read |
