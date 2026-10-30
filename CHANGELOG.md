@@ -16,87 +16,268 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - feat(api): add a paired-prompt fairness probe harness
+- feat(api): add a token-budgeted, duplicate-free evidence assembler
 - feat(api): add an AI generation kill switch with a refusal envelope
+- feat(api): add page numbers and a running header to PDF exports
+- feat(api): answer with cited excerpts when the provider is unavailable
+- feat(api): carry the assignment memberships and teacher prefs in the export
+- feat(api): enforce answer language integrity and bound the evidence set
+- feat(api): expose and stamp the served corpus identity
 - feat(api): gate the golden set, retrieval hit@k floor and red team in one command
+- feat(api): make the NCTB corpus artifacts reproducible and self-verifying
+- feat(api): make the registration email-conflict posture configurable
+- feat(api): refuse a free-tier provider boot without a data-use record
+- feat(api): refuse to serve a corpus under a different embedder
+- feat(api): select the verification mail language instead of one constant
+- feat(api): stamp the shared sources on chunk rows and record ablation samples
+- feat(api): tag every operation and give core request models examples
+- feat(api): trace answers, version prompts, degrade and bound generation
+- feat(dx): add the Makefile task runner and the contributor setup path
+- feat(eval): add the semantic validation layer for structured outputs
+- feat(eval): generate the golden set from curriculum constructs, with intervals
+- feat(web): apply the numeral and plural policy at the i18n boundary
+- feat(web): bound, scope and version the offline layer
+- feat(web): pin the PWA identity, prompt for updates, and show a real 404
+- feat(web): wave-2 frontend quality pass
+- feat(web,docs): apply the Bangla glossary and register policy
 
 ### Fixed
 
+- fix(api): bound the quadratic email scans and fence strips
+- fix(api): break timestamp ties in the newest-first lists
 - fix(api): carry the answer log, AI prefs and quiz_json in the export
+- fix(api): cite and name the password policy, keep it length-only
+- fix(api): deduplicate cross-source chunks at index build
+- fix(api): delete the dead password rule and the caller-less OCR entry point
+- fix(api): drop the single-column indexes the composites already serve
 - fix(api): extend the moderation screen and citation verdicts
 - fix(api): feed ranks to the family-B MRR helper and assert fractions
+- fix(api): fingerprint pipeline modules by content, not by line endings
+- fix(api): fold the search subject lane through the shared normalizer
 - fix(api): forward the AI kill switch through the compose env map
+- fix(api): gate generator payloads on the semantic validator
+- fix(api): give every foreign key an explicit ON DELETE policy
 - fix(api): ground on evidence mass, screen answers and declare image text as data
+- fix(api): jitter provider retries, share the stream tail, report real provider health
+- fix(api): label the served confidence figure as a retrieval heuristic
+- fix(api): let the mailer reach a local sink that speaks plain SMTP
 - fix(api): log failed logins and armed account lockouts
+- fix(api): make AI jobs idempotent, retried and bounded
+- fix(api): make tenancy, invite, impersonation and purge answers honest
+- fix(api): make the parked deploy contract runnable and green
 - fix(api): make the pyproject version reader and Sentry hook type-check
+- fix(api): make the suppression reasons valid mypy comments and type the jitter
+- fix(api): mark the SSE stream no-cache and unbuffered
+- fix(api): name the production Sentry environment and the Grafana login user
 - fix(api): narrow the identity block list to NUL and bidi controls
+- fix(api): normalise the search query in every retrieval lane
+- fix(api): open the validating job status before the generator call
+- fix(api): put every error path in the coded envelope
 - fix(api): read the NCTB class signal from the cover, never invent one
 - fix(api): refuse production boot on the bundled sample corpus
 - fix(api): reject NUL and bidi controls in identity fields
 - fix(api): require a per-user AI budget in production
+- fix(api): resolve roman and glossary terms as alternative surfaces
+- fix(api): resolve the mail language at every verification-mail caller
 - fix(api): sanitize analytics event prop values, not just key names
 - fix(api): scrub PII from Sentry events before they are sent
+- fix(api): send Retry-After on the limiter's 429
+- fix(api): serialise every response timestamp as ISO-8601 UTC Z
+- fix(api): share one Bangla normalizer and size chunks in real tokens
+- fix(api): ship only government-documented helplines in the self-harm refusal
 - fix(api): single-source the version fallback from pyproject
+- fix(api): stop the phone rule from masking request ids in logs
+- fix(api): validate and canonicalise the guardian phone, share Bangla name fixtures
+- fix(ci): stop splicing contexts into the deploy script and land the SEC-18 triage
 - fix(compose): forward the production boot-guard keys from .env
+- fix(deploy): align the web build context and worker healthchecks
+- fix(deploy): mirror the Permissions-Policy into the self-hosted hosts
 - fix(docs,test): point every QA-record link at the new report and make the inline-script guard case-insensitive
 - fix(e2e): refuse to seed the shared e2e accounts outside test lanes
+- fix(eval,api): satisfy the full-tree type check on the new modules
 - fix(pwa): offline navigations answer 200 — restore the install prompt
 - fix(pwa): the offline-shell spec discovers the cache by prefix; changelog regen
+- fix(scripts): make the smoke, backup and rolling-deploy scripts honest
+- fix(scripts): stop piping curl output into the interpreter
+- fix(web): format and sort with the app language, not the device
+- fix(web): gate read-aloud on an installed Bengali voice
+- fix(web): give every route one outline and one page heading
+- fix(web): give the trend its meaning back to assistive tech
+- fix(web): keep the session when the server throttles the probe
 - fix(web): keep white label text above AA on every accent fill
+- fix(web): label the confidence badge a heuristic in both languages
+- fix(web): make the Bangla typography rules honest to the loaded faces
 - fix(web): make the skip-link target focusable and stabilise the e2e sweeps
+- fix(web): make the tutor handoffs survive a remount
+- fix(web): map the two newer photo-refusal codes to their copy
+- fix(web): name an unsupported attachment type instead of claiming it is too large
+- fix(web): name every API detail code in the error table
+- fix(web): name the accepted image types in the tutor attachment refusal
+- fix(web): put the visible label back into the brand's accessible name
+- fix(web): read the machine code out of the FastAPI detail envelope
 - fix(web): refresh the dependency register and clear the undici alert
 - fix(web): regenerate the lockfile root version to 0.9.3
+- fix(web): render teacher and offline counts through the numeral policy
+- fix(web): replace the last text-glyph icons with lucide marks
 - fix(web): restore the skip link and a main landmark on every route
 - fix(web): say a query failed instead of rendering it as empty
+- fix(web): scope offline copies to their user and bound the storage budget
 - fix(web): serve the offline retry script under the shipped CSP
+- fix(web): show localized copy when a chapter quiz fails to start
 - fix(web): state Argon2id and the real data flows in the privacy page
+- fix(web): state the reason on every suppression and pin the saved state
 - fix(web): stream SSE unbuffered from nginx and honour the deploy contract
+- fix(web): tie a field's error and hint to the control it wraps
+
+### Performance
+
+- perf(web): cache immutable assets and revalidate the SPA shell on Vercel
+
+### Changed
+
+- refactor(api): drop the caller-less iter_corpus_search helper
+- refactor(api): name the mail-quota window constant
+- refactor(api): share one activity summary and one chapter-accuracy rollup
+- refactor(api): share one evidence-block helper across every generator
+- refactor(api): split routers/common.py by concern
+- refactor(api): split the grade-D functions and enforce a complexity budget
+- refactor(api): split the three functions over the complexity budget
+- refactor(web): drop the exports knip proves unreferenced
+- refactor(web): name the last loose colours as design tokens
+- refactor(web): share the classroom sort helper across the teacher pages
+- refactor(web): split QuizPage and AdminDashboard under the line budget
+- refactor(web): split the chapter reader out of LearnPage
+
+### Build and dependencies
+
+- build(deps): declare the direct imports, review the update groups, label the image
+- build(deps): record the created Dependabot labels
+- build(docker): shrink the API build context and probe readiness
+- build(web): refresh the lock to the newest in-range dependency versions
 
 ### CI/CD
 
+- ci(docs): run the PowerShell quick start on windows-latest and tighten the docker job
 - ci(e2e): install all three browsers before the engines pass
 - ci(eval): run the golden hit@3 and red-team gates on every PR
+- ci(guardrails): gate semgrep, hadolint and the shipped npm tree
 - ci(release): refuse tag/version drift and tag images by commit sha
+- ci(security): scope the gitleaks allowlist to values, not test paths
+- ci: gate per-module coverage floors and Lighthouse budgets
+- ci: run the suites shuffled and pin the workflow tool installs
 - ci: run the three-engine Bangla pass and guard the workflow tables
 
 ### Documentation
 
+- docs(ai),test(api): close the helpline row in the system card and land the SSE contract test
 - docs(ai): add AI risk register
 - docs(ai): add incident response procedure
 - docs(ai): add system card for the tutor
 - docs(api): document the SSE contract and the pagination shape
+- docs(api): name fpdf2 as the only PDF engine in qp_pdf
+- docs(api): re-measure the two mypy gap counts in pyproject
+- docs(api): regenerate the route baseline from the served schema
+- docs(archive): give every archived report its own historical banner
+- docs(archive): state that the archived ratings are self-assessed
+- docs(contributing): record the measured bootstrap and the identity policy
+- docs(corpus): name the fingerprinted modules by their real paths
 - docs(env): drop the stale VERSION value from the dev template
 - docs(i18n): add Bangla terminology glossary proposal
+- docs(markdownlint): clear the mechanical backlog and scope MD024 to siblings
+- docs(ops): publish the environment-variable matrix
+- docs(ops): write down the API versioning policy and the test budgets
+- docs(playstore): ground the store copy in the curriculum corpus
 - docs(privacy): rebuild the data-minimization doc from the real schema
 - docs(qa): publish the 2026-10-29 QA report and archive the predecessor
+- docs(qa): refresh the native-review sheet and check in the docs lint config
+- docs(qa): tag the F-203 flow evidence in the register copy of the report
+- docs(rag): correct the script-share definition and record the latency spread
 - docs(rag): map the as-built pipeline and correct the overstated claims
 - docs(rag): record the latency range of both verification runs
+- docs(rag,ai): document the generation, validation and escalation reality
+- docs(repo): add the code of conduct, issue forms and a real security channel
+- docs(runbook): document the planned-maintenance window
+- docs(runbook): verify the procedures, complete the alert list, add incident basics
 - docs(security): add threat model
+- docs(security): merge the two scan registers into one
 - docs(security): refresh the threat model with the shipped controls
+- docs: add the C4 views, truth-fix the checklist and pipeline, complete the index
 - docs: derive the version from pyproject and drop the phantom build-arg
+- docs: drop the emoji markers from living documents
+- docs: index the environment matrix and refresh the size inventory
 - docs: index the new AI, security and language documents
 - docs: index the unlisted living documents and rebaseline the routes
+- docs: mark the historical scores as self-assessed and record asset provenance
+- docs: name the real CORS setting and boot-guard file in the checklist
+- docs: name the real paths in the glossary and the RAG architecture notes
 - docs: never name the derived image tag VERSION
+- docs: record the browser storage inventory and the applicable-law flags
 - docs: refresh the native-review sheet and changelog for the hardening wave
 - docs: regenerate the changelog for the hardening wave
+- docs: regenerate the native-review sheet after the badge copy change
+- docs: state the CI coverage of both quick-start paths precisely
+- docs: state the live SQLite busy_timeout in the backup runbook
 
 ### Tests
 
 - test(api),docs(qa): make the event-props guard engine-agnostic and correct the report's counts
+- test(api): assert a refused admission leaves the generation lane usable
+- test(api): assert the messages route's real 200 instead of accepting either code
+- test(api): enforce per-module coverage floors on the critical paths
+- test(api): execute SEC-08/SEC-09 injection and client-boundary probes
+- test(api): give the seam factory the new corpus_digest attribute
+- test(api): guard the contract artefacts and tighten the weak assertions
+- test(api): guard the qp_pdf docstring engine claim
+- test(api): inject the token clock and budget the suite's long sleeps
+- test(api): keep the vulture gate green and make the SSE abort test terminate
+- test(api): make deprecation warnings fatal and add property tests
 - test(api): remove the TTL-boundary race from the claim test
+- test(api): wave-2 suites for authz, mail verification, corpus identity and coverage
 - test(e2e): cover the audit flow matrix gaps
+- test(scripts): catch an error-table key that left the dictionary
+- test(web): assert the ZWNJ form against the fold the app performs
+- test(web): carry BD-convention names through fixtures and the parent seed
+- test(web): commit the Lighthouse budget config for the CI gate
+- test(web): execute the wave-2 perf, a11y and console probes
+- test(web): follow the retitled copy and the Bangla digit policy in the e2e flows
 - test(web): give asynchronous assertions a fair runner budget
 - test(web): give the activity heatmap suite a local wait budget
 - test(web): isolate module state so shuffled runs are deterministic
 - test(web): lock the offline page to what script-src 'self' allows
+- test(web): make the no-synthetic-bold engine assertion able to fail
+- test(web): pin the INP CI budget to 1000 ms with the CWV line recorded
+- test(web): pin the maintenance route, the bilingual fallback and page size
+- test(web): pin the tutor capture and regenerate the reviewed baselines
+- test(web): read the teacher greeting from the h1 the page now has
+- test(web): repair the wave-2 C1 flow spec before running it
+- test(web): replace the remaining e2e fixed sleeps with signal waits
+- test(web): run the contract extractor over the shipped client
+- test(web): run the critical journeys at the mobile viewport
+- test: write the non-conforming script fixtures as escapes
 
 ### Maintenance
 
+- chore(api): add hypothesis and pytest-randomly to the dev extra and lock
+- chore(api): regenerate the hash-locked constraints against the current index
+- chore(api): remove the dead arguments and gate the tree with vulture
+- chore(api): state a reason on every suppression and name the repeated limits
+- chore(corpus): regenerate the tracked artifacts from one build
 - chore(dx): close the cheap pre-commit parity gaps
+- chore(git): map the historic personal address in a mailmap
+- chore(web): add the dead-code and import-cycle gates to the dev toolchain
+- chore(web): gate knip in CI and wire it into make
+- chore(web,scripts): drop the three unrendered locale keys and gate new ones
+- chore: add the pre-push and commit-msg hooks the note listed
 - chore: ignore the Android build output at the repo root
 
 ### Style
 
+- style(scripts): restore the blank line after the bn_scan docstring
+- style(scripts): state why the boto3 import carries a type ignore
 - style(tests,docs): satisfy the end-of-file and line-ending hooks
+- style(web): format the wave-2 files and use a string-built glyph regex
+- style(web): wrap the attachment test's file list at the formatter's width
+- style: land the hook normalisations from the wave-2 close-out
 
 ### Other
 
