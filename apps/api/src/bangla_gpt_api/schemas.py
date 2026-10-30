@@ -745,6 +745,31 @@ class ParentInviteLinkRequest(BaseModel):
     code: str = Field(min_length=8, max_length=128)
 
 
+class ParentInviteOut(BaseModel):
+    """A freshly issued guardian invite.
+
+    The plaintext code is returned exactly once; the id is the handle
+    ``DELETE /students/me/invite-code/{invite_id}`` revokes it by. Without
+    the id in the response revocation was unreachable (F-IV2-3).
+    """
+
+    id: int
+    code: str
+    expires_in_minutes: int
+
+
+class ParentInviteStatusOut(BaseModel):
+    """One live guardian invite as listed back to its student.
+
+    Codes and hashes are never returned here: the create response is the only
+    place the plaintext appears, so a list read cannot surface a stale secret.
+    """
+
+    id: int
+    created_at: UtcDateTime
+    expires_at: UtcDateTime
+
+
 class AdminUsersPage(BaseModel):
     total: int
     items: list[UserPublic]

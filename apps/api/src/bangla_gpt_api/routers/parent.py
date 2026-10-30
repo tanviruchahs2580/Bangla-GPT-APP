@@ -34,6 +34,8 @@ from bangla_gpt_api.schemas import (
     ActivitySummary,
     MemoryFactsOut,
     ParentInviteLinkRequest,
+    ParentInviteOut,
+    ParentInviteStatusOut,
     ParentLinkRequest,
     ParentReportOut,
     StudentBrief,
@@ -149,8 +151,8 @@ def parent_link(
 # ------------------------------------------------------------------
 
 
-@router.post("/students/me/invite-code", status_code=201)
-def create_parent_invite(app_ctx: Ctx, db: DbSession, user: CurrentUser) -> dict:
+@router.post("/students/me/invite-code", status_code=201, response_model=ParentInviteOut)
+def create_parent_invite(app_ctx: Ctx, db: DbSession, user: CurrentUser) -> ParentInviteOut:
     if user.role != "student":
         raise HTTPException(
             status_code=403, detail={"code": "students_only", "message": "Students only"}
@@ -175,13 +177,16 @@ def create_parent_invite(app_ctx: Ctx, db: DbSession, user: CurrentUser) -> dict
     # inside its TTL. Redemption looks codes up by hash, so codes issued in the
     # old 4-byte format stay redeemable.
     code = "BGPT-" + secrets.token_hex(8).upper()
-    db.add(
-        ParentInvite(
-            code_hash=_hash_invite(code),
-            student_id=student.id,
-            expires_at=now + timedelta(minutes=app_ctx.settings.invite_ttl_minutes),
-        )
+    invite = ParentInvite(
+        code_hash=_hash_invite(code),
+        student_id=student.id,
+        expires_at=now + timedelta(minutes=app_ctx.settings.invite_ttl_minutes),
     )
+    db.add(invite)
+    # The id is what DELETE /students/me/invite-code/{invite_id} revokes by,
+    # so it must be assigned before the response is built (F-IV2-3).
+    db.flush()
+    invite_id = invite.id
     # F-145: issuing a guardian link code is the act that can attach an adult
     # to a child's record, so the trail must show who issued one and when.
     # The code itself is never written anywhere (only its hash is stored).
@@ -194,7 +199,46 @@ def create_parent_invite(app_ctx: Ctx, db: DbSession, user: CurrentUser) -> dict
         detail={"phase": "invite_created", "ttl_minutes": app_ctx.settings.invite_ttl_minutes},
     )
     db.commit()
-    return {"code": code, "expires_in_minutes": app_ctx.settings.invite_ttl_minutes}
+    return ParentInviteOut(
+        id=invite_id,
+        code=code,
+        expires_in_minutes=app_ctx.settings.invite_ttl_minutes,
+    )
+
+
+@router.get("/students/me/invite-code", response_model=list[ParentInviteStatusOut])
+def list_parent_invites(db: DbSession, user: CurrentUser) -> list[ParentInviteStatusOut]:
+    """Live guardian invites of the signed-in student (F-IV2-3).
+
+    Revocation is only reachable if the student can recover the id of a code
+    issued earlier or in another tab; the create response names only the code
+    and the id never reached the client otherwise. Only unused, unexpired
+    codes are listed -- the codes themselves are not, so a list read cannot
+    surface a secret that the create response did not already return once.
+    """
+    if user.role != "student":
+        raise HTTPException(
+            status_code=403, detail={"code": "students_only", "message": "Students only"}
+        )
+    student = _student_profile(db, user)
+    now = datetime.now(UTC).replace(tzinfo=None)
+    invites = (
+        db.execute(
+            select(ParentInvite)
+            .where(
+                ParentInvite.student_id == student.id,
+                ParentInvite.used_at.is_(None),
+                ParentInvite.expires_at > now,
+            )
+            .order_by(ParentInvite.id.desc())
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        ParentInviteStatusOut(id=i.id, created_at=i.created_at, expires_at=i.expires_at)
+        for i in invites
+    ]
 
 
 @router.delete("/students/me/invite-code/{invite_id}", status_code=204)
