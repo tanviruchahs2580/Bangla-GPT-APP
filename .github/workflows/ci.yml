@@ -812,10 +812,12 @@ jobs:
           PY
 
       # F-073/BE-07: dead code used to be found by hand. vulture at 100 %
-      # confidence is precise enough to gate on: the two entries below are the
-      # only survivors, each with its reason, and a new finding fails. Stale
-      # entries warn instead of failing, so a cross-stream cleanup cannot red
-      # another stream's change -- but the entry must then be deleted here.
+      # confidence is precise enough to gate on: the one entry below is the
+      # only survivor, with its reason, and a new finding fails. Stale entries
+      # warn instead of failing, so a cross-stream cleanup cannot red another
+      # stream's change -- but the entry must then be deleted here. The
+      # manifest.py 'check_files' entry was exactly that: the wave-2 close-out
+      # deleted it once vulture stopped reporting the symbol.
       - name: Dead code (vulture, 100% confidence, allowlisted)
         working-directory: apps/api
         run: |
@@ -825,10 +827,6 @@ jobs:
           import sys
 
           ALLOWED = {
-              # Accepted parameter, not yet wired in the manifest verifier
-              # (owned by the corpus pipeline stream): it must be implemented
-              # or dropped, then this entry goes.
-              "src/bangla_gpt_api/nctb/manifest.py:190: unused variable 'check_files' (100% confidence)",
               # The unreachable yield is what makes the stub an async
               # generator, which is the interface the tutor calls.
               "tests/test_scale_hardening.py:144: unreachable code after 'raise' (100% confidence)",

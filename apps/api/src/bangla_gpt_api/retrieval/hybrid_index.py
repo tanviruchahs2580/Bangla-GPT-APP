@@ -12,7 +12,7 @@ documents the feature set and why each weight is what it is); a model-based
 reranker replaces exactly one stage of this pipeline when one is benchmarked.
 """
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 
 from bangla_gpt_api.curriculum.models import Chunk
 from bangla_gpt_api.retrieval.bm25 import BM25Index, Hit, indexable_text, tokenize
@@ -279,12 +279,3 @@ class HybridIndex:
         ]
         ranked.sort(key=lambda hit: (-hit.score, hit.chunk.id))
         return ranked[:top_k]
-
-
-def iter_corpus_search(
-    index: BM25Index | HybridIndex,
-    queries: Iterable[str],
-    **filters: object,
-) -> list[list[Hit]]:
-    """Batch helper for the hit@k evaluation harness (keeps top_k explicit)."""
-    return [index.search(q, **filters) for q in queries]  # type: ignore[arg-type]
