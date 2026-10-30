@@ -162,4 +162,3 @@ refusal timestamps, feedback ratings and per-answer traces (system-side only).
 A responder cannot see the child's question, the conversation or the child's
 identity from the AI-quality surfaces; reaching the child is a school-side,
 consent-bound process, never an API call.
-

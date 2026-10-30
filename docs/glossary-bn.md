@@ -119,7 +119,7 @@ the dictionary and is listed in the handoff.
 - **"recommendation".** `clsRecommend` says সুপারিশ while `aiSuggestion` and
   `anaCiTop` say পরামর্শ. The audit's terminology table did not cover this
   concept; the reviewer kept both rather than guess which word the owner wants.
-- **Corpus numeral mix.** `data/sample_nctb/class10_math.md` writes
+- **Corpus numeral mix.** `apps/api/src/bangla_gpt_api/data/sample_nctb/class10_math.md` writes
   "b² − ৪ac" (Latin base, Bangla index) — a curriculum reviewer should say
   whether the sample corpus follows Bangla-medium digit convention.
 - **Currency and prices.** `docs/capacity_plan.md` is a business document; it

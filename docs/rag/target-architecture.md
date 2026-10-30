@@ -81,7 +81,7 @@ the owning evidence:
 | Versioned golden set, intervals, paired bootstrap, strata | Done: `eval/golden_v3.json` + `baseline_v3.json`, `evaluation/stats.py`, `docs/rag/golden-set-v3.md`; the gate also enforces the language floors |
 | Versioned prompts, prompt hash, per-answer trace | Done: `PROMPT_VERSION`/`PROMPT_SHA256`, `evaluation/observability.py`, `tests/test_w2_eval_trace.py` |
 | Kill switch and retrieval fallback isolation | Done: `AI_GENERATION_ENABLED`, lexical-lane fallback in `_retrieve_guarded`; the provider-outage path still returns 503 rather than retrieval-only excerpts (open, F-131) |
-| Index manifest verified at boot, embedder identity | Done: `nctb_corpus_identity` boot log, `scripts/check_corpus_manifest.py`, `build_embedder` identity gate; the per-answer/health exposure is still open (F-082 handoff) |
+| Index manifest verified at boot, embedder identity | Done: `nctb_corpus_identity` boot log, `apps/api/scripts/check_corpus_manifest.py`, `build_embedder` identity gate; the per-answer/health exposure is still open (F-082 handoff) |
 | Token-budgeted context assembly | Done and wired at the tutor call site (F-129); measured selection drops nothing on the committed set |
 | Numeric recomputation and language-integrity checks | Done deterministically (`evaluation/output_validation.py`, `evaluation/metrics.py`); the semantic validator still lacks parser call sites (F-118 handoff) |
 | Cross-encoder, MMR, pgvector, human evaluation loop | Still open (P2/P3 items above, unchanged) |

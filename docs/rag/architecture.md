@@ -93,7 +93,7 @@ parallel QA jobs: p50 2267 ms / p95 22756 ms over 180 queries and a 55 s index
 build for the 1605-chunk corpus, against 261-293 ms p50 measured earlier on an
 idle machine for a 2599-chunk index. Treat the committed latency as an upper
 bound of that contended run, not as the deployed p50. The committed reports
-are reproducible: `scripts/check_corpus_manifest.py --rebuild-dir <fresh build>`
+are reproducible: `apps/api/scripts/check_corpus_manifest.py --rebuild-dir <fresh build>`
 compares them with a rebuild field by field (see §6.1), and the corpus keeps
 the raw hash of every source it was built from.
 
@@ -139,7 +139,7 @@ produced them (`docs/NCTB_DATA_PIPELINE.md` §7):
 * artifact writes pin LF newlines and the code fingerprint reads modules with
   universal newlines, so a Windows build and a Linux build agree byte for
   byte;
-* `scripts/check_corpus_manifest.py` verifies the tracked reports against the
+* `apps/api/scripts/check_corpus_manifest.py` verifies the tracked reports against the
   manifest and, with `--rebuild-dir`/`--corpus-dir`, a fresh build or a served
   corpus against it. Exit code 1 on any drift; CI can run it with no PDFs
   present (tracked-artifact legs only).
