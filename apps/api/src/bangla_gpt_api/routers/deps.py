@@ -57,6 +57,7 @@ class AppContext:
         session_factory: Callable[[], Session],
         ai_job_tasks: set,
         circuit_breaker: CircuitBreaker | None = None,
+        corpus_identity: dict | None = None,
     ) -> None:
         self.settings = settings
         self.cache = cache
@@ -71,6 +72,10 @@ class AppContext:
         # when the provider is configured AND its circuit is not open, so a
         # total provider outage cannot read as "all ok".
         self.circuit_breaker = circuit_breaker
+        # F-082: kind, chunk count, artifact digest and manifest hash of the
+        # corpus the index was built from. None when no provider/index was
+        # built (nothing is served, so there is no identity to name).
+        self.corpus_identity = corpus_identity
 
 
 def get_ctx(request: Request) -> AppContext:

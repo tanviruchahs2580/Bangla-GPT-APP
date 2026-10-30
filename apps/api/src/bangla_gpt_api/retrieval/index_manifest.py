@@ -46,6 +46,23 @@ def corpus_digest(paths: Iterable[Path]) -> str:
     return digest.hexdigest()
 
 
+def served_chunks_digest(chunks: Iterable[object]) -> str:
+    """Digest of the served chunk payloads: id + text, in serving order.
+
+    The fallback identity for corpora with no chunk artifacts on disk (the
+    bundled sample): it covers exactly what the index will answer from, so the
+    digest an answer is stamped with changes when the served corpus changes.
+    """
+    digest = hashlib.sha256()
+    digest.update(f"served-v{CORPUS_DIGEST_VERSION}\n".encode("ascii"))
+    for chunk in chunks:
+        digest.update(str(getattr(chunk, "id", "")).encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(str(getattr(chunk, "text", "")).encode("utf-8"))
+        digest.update(b"\n")
+    return digest.hexdigest()
+
+
 def index_identity(
     *,
     corpus_digest: str,

@@ -163,9 +163,14 @@ async def metrics(app_ctx: Ctx, request: Request) -> Response:
 # authenticated internal endpoint with version/env detail (health is now minimal)
 @router.get("/admin/system/info", responses=AUTH_GUARD_RESPONSES, response_model=dict)
 def system_info(app_ctx: Ctx, admin: AdminUser) -> dict:
+    # F-082: the admin surface carries the corpus identity (kind, chunk count,
+    # artifact digest, manifest hash) so an answer's stamped digest can be
+    # traced to the build that produced it. The public /ready and /status
+    # payloads deliberately stay presence-only.
     return {
         "status": "ok",
         "app": app_ctx.settings.app_name,
         "version": app_ctx.settings.version,
         "env": app_ctx.settings.env,
+        "corpus": app_ctx.corpus_identity,
     }

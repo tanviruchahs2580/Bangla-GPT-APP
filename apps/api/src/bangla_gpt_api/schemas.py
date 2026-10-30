@@ -138,6 +138,15 @@ class SourceRef(BaseModel):
     score: float
     # sanitized evidence excerpt shown in the source → evidence modal.
     excerpt: str | None = None
+    # F-082: digest of the corpus build this citation was retrieved from, so
+    # an answer can be traced to the corpus revision that produced it.
+    corpus_version: str | None = Field(
+        default=None,
+        description=(
+            "Corpus build digest the citation was retrieved from; the same "
+            "digest /admin/system/info reports for the served corpus."
+        ),
+    )
 
 
 #: Served description of every confidence value. F-119/LLM-10: the number is

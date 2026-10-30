@@ -371,12 +371,17 @@ class TutorService:
         max_concurrent_generations: int = MAX_CONCURRENT_GENERATIONS,
         generation_queue_timeout: float = GENERATION_QUEUE_TIMEOUT_SECONDS,
         retrieval_only_fallback: bool = False,
+        corpus_digest: str | None = None,
     ) -> None:
         self.index = index
         # RAG-27: when true, a provider failure answers with the retrieved
         # excerpts (ungrounded, cited) instead of raising ProviderError up to
         # the 502 handler. Off by default: the 502 contract is pinned.
         self.retrieval_only_fallback = bool(retrieval_only_fallback)
+        # F-082: identity of the corpus this service answers from, stamped on
+        # every trace and citation. None when the caller (a test, the eval CLI)
+        # built the service without a corpus identity to name.
+        self.corpus_digest = corpus_digest
         # Corpus term statistics (document frequencies) that let the
         # grounding gate weight rare curriculum terms above scaffolding.
         # Optional: without them the gate falls back to uniform weights
@@ -710,8 +715,7 @@ class TutorService:
             return question
         return question + " " + " ".join(context_terms[: self._FOLLOWUP_CONTEXT_TERMS])
 
-    @staticmethod
-    def _sources(hits: list) -> list[SourceRef]:
+    def _sources(self, hits: list) -> list[SourceRef]:
         return [
             SourceRef(
                 book=hit.chunk.meta.book,
@@ -721,6 +725,8 @@ class TutorService:
                 score=hit.score,
                 # full (delimiter-sanitized) evidence for the modal.
                 excerpt=sanitize_evidence(hit.chunk.text),
+                # F-082: every citation names the corpus build it came from.
+                corpus_version=self.corpus_digest,
             )
             for hit in hits
         ]
@@ -1028,6 +1034,10 @@ class TutorService:
         failure must not fail an answer, so the writer is guarded -- the
         diagnostic is worth strictly less than the response.
         """
+        # F-082: every trace names the corpus build the answer came from, so a
+        # complaint can be tied to a corpus revision without a boot-log dig.
+        if self.corpus_digest is not None:
+            parameters = {**parameters, "corpus_digest": self.corpus_digest}
         try:
             record_trace(
                 store=self.trace_store,
@@ -1104,6 +1114,8 @@ class TutorService:
             answer_chars=len(answer),
             prompt_version=PROMPT_VERSION,
             prompt_sha256=PROMPT_SHA256,
+            # F-082: the answer-log line names the corpus build it answered from.
+            corpus_digest=self.corpus_digest,
         )
 
         def trace(
@@ -1595,6 +1607,8 @@ class TutorService:
             answer_chars=len(answer),
             prompt_version=PROMPT_VERSION,
             prompt_sha256=PROMPT_SHA256,
+            # F-082: the streamed answer-log line names the corpus build too.
+            corpus_digest=self.corpus_digest,
         )
         # The citation check speaks to a grounded answer only: an outage notice
         # (or an empty stream) is a service-level message, not evidence-based
