@@ -91,7 +91,15 @@ export function TutorComposer({
         <div className="attach-row attach-flow">
           <div className="row-flex">
             <img
-              src={`data:${image.mime_type};base64,${image.data_base64}`}
+              // CodeQL js/xss-through-dom: the mime comes from an API payload,
+              // so the data URL is built only over the allowlist the upload
+              // contract enforces server-side (png/jpeg/webp) - anything else
+              // renders the generic placeholder instead of an attacker URL.
+              src={
+                ["image/png", "image/jpeg", "image/webp"].includes(image.mime_type)
+                  ? `data:${image.mime_type};base64,${image.data_base64}`
+                  : ""
+              }
               alt=""
               className="attach-preview"
             />

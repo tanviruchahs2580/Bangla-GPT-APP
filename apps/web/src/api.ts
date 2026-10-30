@@ -13,7 +13,9 @@ const API_BASE: string = import.meta.env.VITE_API_BASE ?? "/api";
  * a student reporting a failure cannot give support an id that resolves to
  * the server trace. The server accepts `[A-Za-z0-9._-]{1,64}` and generates
  * its own when the header is absent, so a client-generated value is always a
- * valid inbound id.
+ * valid inbound id. The fallback path uses the Web Crypto generator, not
+ * Math.random(): the id joins auth-flow error reports to server traces, and a
+ * predictable id there is CodeQL-flagged insecure randomness (js/insecure-randomness).
  */
 const REQUEST_ID_HEADER = "X-Request-ID";
 
@@ -21,7 +23,9 @@ function newRequestId(): string {
   const uuid =
     typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
       ? crypto.randomUUID()
-      : `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
+      : Array.from(crypto.getRandomValues(new Uint8Array(16)))
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("");
   return uuid.replace(/-/g, "").slice(0, 32);
 }
 
