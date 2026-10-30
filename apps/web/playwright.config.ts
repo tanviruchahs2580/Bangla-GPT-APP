@@ -172,6 +172,18 @@ export default defineConfig({
         // test-only process; the per-field knobs (login, tutor) are applied
         // by the API independently and stay in force.
         RATE_LIMIT_RULES: JSON.stringify({ "/users/me": [240, "user"] }),
+        // The tutor conversation routes are one per-user bucket
+        // (/tutor/conversations matches the listing, the create and every
+        // /{id}/messages[/stream] call), and the streaming specs fire many of
+        // them in one minute: STU-04's abort/recover matrix, STU-17's five
+        // settled variants and STU-18's three turns put ~15 requests into a
+        // sliding window that the production 30/min bound then refuses -- the
+        // captured 429 in the STU-18 trace answers the "New chat" POST. Same
+        // sanctioned per-field mechanism as the login knob above; the
+        // production values stay pinned by the limiter's own tests, and no
+        // spec asserts a real tutor 429.
+        RATE_LIMIT_TUTOR_PER_MINUTE: "240",
+        RATE_LIMIT_TUTOR_IP_PER_MINUTE: "240",
       },
     },
     {
