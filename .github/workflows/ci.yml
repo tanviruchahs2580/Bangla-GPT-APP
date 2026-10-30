@@ -95,12 +95,24 @@ jobs:
       - name: Coverage gate (branch coverage, fail_under from pyproject)
         # Coverage used to be measured by nobody: fail_under was 0, no job
         # passed --cov, and pytest-cov was not a declared dev dependency.
+        # The JSON report feeds the per-module floors step below; the XML
+        # report stays the uploaded artifact.
         run: >-
           pytest -q
           --cov=bangla_gpt_api
           --cov-branch
           --cov-report=term-missing
           --cov-report=xml
+          --cov-report=json
+        working-directory: apps/api
+
+      - name: Per-module coverage floors (critical paths)
+        # F-058/TEST-02: the global fail_under says nothing about *where* the
+        # coverage sits -- a well-covered schema module can hide a thin
+        # authorization or privacy path. The floor table was measured on the
+        # full suite (2026-10-30) and lives in the script; a module dropping
+        # below its floor fails here, and the floors may only rise.
+        run: python scripts/check_coverage_floors.py coverage.json
         working-directory: apps/api
 
       - name: Upload coverage report
@@ -406,10 +418,10 @@ jobs:
       - name: Dependency audit (npm audit, prod deps)
         run: npm audit --audit-level=high --omit=dev
 
-      # H-03: thresholds are enforced in vite.config.ts (lines/functions/
-      # statements 55, branches 75) — a run that drops below them exits 1,
-      # so frontend coverage can no longer regress silently while the
-      # backend enforces fail_under=80.
+      # H-03: thresholds are enforced in vite.config.ts (lines 68,
+      # functions 60, branches 60, statements 70) — a run that drops below
+      # them exits 1, so frontend coverage can no longer regress silently
+      # while the backend enforces fail_under=80.
       - name: Unit tests with coverage gate (vitest)
         run: npm run test:coverage -- --no-file-parallelism
 
@@ -428,6 +440,13 @@ jobs:
 
       - name: Build (tsc + vite)
         run: npm run build
+
+      # F-125/PERF-04: the budgets in lighthouserc.json are the desktop
+      # baseline measured in wave 2 (LCP 4 s, CLS 0.1, TBT 3 s, score 0.5,
+      # gzip budgets per resource type); before this step nothing gated the
+      # built bundle on them. ubuntu-latest ships Chrome, which lhci drives.
+      - name: Lighthouse budgets (desktop preset)
+        run: npx --yes @lhci/cli@0.15.1 autorun --config=lighthouserc.json
 
   guardrails:
     name: Repository guardrails
