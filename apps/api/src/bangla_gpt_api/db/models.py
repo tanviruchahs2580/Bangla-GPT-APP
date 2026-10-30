@@ -1142,7 +1142,9 @@ class AiJob(Base):
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    # F-175: no single-column index -- uq_ai_jobs_idempotency above has
+    # user_id leading, so a user_id lookup never needs a second b-tree.
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     kind: Mapped[str] = mapped_column(String(40))
     status: Mapped[str] = mapped_column(String(16), default="queued")
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -1188,7 +1190,9 @@ class AiUsage(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    # F-175: no single-column index -- ix_ai_usage_user_created above is the
+    # composite the budget gate reads and already serves every user_id lookup.
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     route: Mapped[str] = mapped_column(String(40), default="tutor.ask")
     model: Mapped[str] = mapped_column(String(80), default="mock")
     prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)
