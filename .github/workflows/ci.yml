@@ -814,12 +814,17 @@ jobs:
           import sys
 
           # path::function (Class.method for methods) -> measured radon score.
-          # Owned by other wave-2 workstreams; the splits are handed to them.
           BUDGET = {
-              # Wave-2 split the three entries this dict used to carry
-              # (verify_corpus_manifest, build_data_export, ask_stream): the
-              # sections moved into named helpers and each function now sits
-              # below 38, so the entries are gone rather than raised.
+              # Wave-2 split verify_corpus_manifest, build_data_export and
+              # ask_stream: the first sections moved into named helpers
+              # (nctb/manifest.py, gdpr.py _conversation_sections and
+              # tutor.py _classify_streamed_answer), and the CI-repair pass
+              # finished the job for the other two -- build_data_export ->
+              # _user_activity_tables/_profile_content_tables (37 -> 10) and
+              # ask_stream -> _retrieve_and_gate/_stream_events (26 -> 18) --
+              # so all three now sit at grade C or better and their entries
+              # are gone rather than raised. The blocks below stay recorded
+              # at their measured scores until their own streams split them.
               "src/bangla_gpt_api/data/nctb_loader.py::load_nctb_corpus": 33,  # corpus build
               "src/bangla_gpt_api/evaluation/fairness_probes.py::validate_fixture": 32,  # eval tooling
               "src/bangla_gpt_api/evaluation/golden_v3.py::check_golden": 24,  # eval tooling

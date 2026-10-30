@@ -354,6 +354,31 @@ def _screen_safety(question: str) -> tuple[str, str] | None:
     return None
 
 
+@dataclass
+class _RetrievalOutcome:
+    """What the rewrite → retrieve → gate phase produced for one turn."""
+
+    query: str
+    hits: list
+    coverage: float
+    gate_pass: bool
+    stage_ms: dict[str, int]
+    rewrite_applied: bool
+    rewrite_terms: int
+
+
+@dataclass
+class _StreamRun:
+    """Mutable state of one streaming generation, shared with ``_stream_events``."""
+
+    started: float
+    chunks: list[str] = field(default_factory=list)
+    first_token_ms: int | None = None
+    outage: bool = False
+    output_blocked: bool = False
+    busy: bool = False
+
+
 class TutorService:
     def __init__(
         self,
@@ -1241,42 +1266,20 @@ class TutorService:
             )
             return self._refusal(refusal_copy, reason)
 
-        # search_query is a deliberate override (quiz-explain): never rewritten.
-        rewrite_started = time.perf_counter()
-        retrieval_query = search_query or self._conversation_retrieval_query(question, history)
-        rewrite_ms = int((time.perf_counter() - rewrite_started) * 1000)
-        rewrite_applied = retrieval_query != question
-        rewrite_terms = len(retrieval_query.split()) - len(question.split())
-        # Retrieval is synchronous CPU work (BM25 scan + rerank over the whole
-        # corpus); offloaded off the event loop so a 120-250 ms p95 search no
-        # longer freezes concurrent SSE streams on the same worker.
-        retrieval_started = time.perf_counter()
-        hits = await asyncio.to_thread(
-            self._retrieve_guarded, retrieval_query, class_level, subject, chapter
+        retrieval = await self._retrieve_and_gate(
+            question,
+            class_level=class_level,
+            subject=subject,
+            chapter=chapter,
+            history=history,
+            search_query=search_query,
+            stream=False,
         )
-        retrieval_ms = int((time.perf_counter() - retrieval_started) * 1000)
-        RAG_RETRIEVAL_LATENCY_SECONDS.observe(retrieval_ms / 1000.0)
-        gate_started = time.perf_counter()
-        coverage_value, gate_pass = self._coverage_details(retrieval_query, hits)
-        gate_ms = int((time.perf_counter() - gate_started) * 1000)
-        RAG_GATE_OUTCOMES_TOTAL.labels(gate="pass" if gate_pass else "refuse").inc()
-        stage_ms = {"rewrite": rewrite_ms, "retrieval": retrieval_ms, "gate": gate_ms}
-        for stage, value in stage_ms.items():
-            observe_stage(stage, value / 1000.0)
-        # Retrieval telemetry. Logged without the question text: the privacy
-        # posture of this service is that student wording is PII-adjacent and
-        # is never written to logs (ask() redacts it before it leaves here).
-        json_log(
-            logger,
-            logging.INFO,
-            "tutor_retrieval",
-            retrieval_ms=retrieval_ms,
-            evidence_chunks=len(hits),
-            top_score=(round(hits[0].score, 4) if hits else None),
-            coverage=coverage_value,
-            gate="pass" if gate_pass else "refuse",
-        )
-        if not gate_pass:
+        hits = retrieval.hits
+        stage_ms = retrieval.stage_ms
+        rewrite_applied = retrieval.rewrite_applied
+        rewrite_terms = retrieval.rewrite_terms
+        if not retrieval.gate_pass:
             self._record_trace(
                 question=question,
                 outcome="insufficient_evidence",
@@ -1284,7 +1287,7 @@ class TutorService:
                 refused_reason="insufficient_evidence",
                 hits=hits,
                 model=getattr(self.provider, "name", "unknown"),
-                parameters={"coverage": coverage_value, "top_k": self.top_k},
+                parameters={"coverage": retrieval.coverage, "top_k": self.top_k},
                 latency_ms={
                     **stage_ms,
                     "total": sum(stage_ms.values()),
@@ -1337,6 +1340,120 @@ class TutorService:
             rewrite_applied=rewrite_applied,
             rewrite_terms=rewrite_terms,
         )
+
+    async def _retrieve_and_gate(
+        self,
+        question: str,
+        *,
+        class_level: int,
+        subject: str | None,
+        chapter: str | None,
+        history: list[dict[str, str]] | None,
+        search_query: str | None,
+        stream: bool,
+    ) -> _RetrievalOutcome:
+        """Rewrite, retrieve, gate and record stage telemetry (both ask paths).
+
+        ``search_query`` is a deliberate override (quiz-explain): never
+        rewritten. ``stream`` selects the one telemetry field that differs
+        between the streaming and non-streaming paths.
+        """
+        rewrite_started = time.perf_counter()
+        retrieval_query = search_query or self._conversation_retrieval_query(question, history)
+        rewrite_ms = int((time.perf_counter() - rewrite_started) * 1000)
+        rewrite_applied = retrieval_query != question
+        rewrite_terms = len(retrieval_query.split()) - len(question.split())
+        # Retrieval is synchronous CPU work (BM25 scan + rerank over the whole
+        # corpus); offloaded off the event loop so a 120-250 ms p95 search no
+        # longer freezes concurrent SSE streams on the same worker.
+        retrieval_started = time.perf_counter()
+        hits = await asyncio.to_thread(
+            self._retrieve_guarded, retrieval_query, class_level, subject, chapter
+        )
+        retrieval_ms = int((time.perf_counter() - retrieval_started) * 1000)
+        RAG_RETRIEVAL_LATENCY_SECONDS.observe(retrieval_ms / 1000.0)
+        gate_started = time.perf_counter()
+        coverage_value, gate_pass = self._coverage_details(retrieval_query, hits)
+        gate_ms = int((time.perf_counter() - gate_started) * 1000)
+        RAG_GATE_OUTCOMES_TOTAL.labels(gate="pass" if gate_pass else "refuse").inc()
+        stage_ms = {"rewrite": rewrite_ms, "retrieval": retrieval_ms, "gate": gate_ms}
+        for stage, value in stage_ms.items():
+            observe_stage(stage, value / 1000.0)
+        # Retrieval telemetry. Logged without the question text: the privacy
+        # posture of this service is that student wording is PII-adjacent and
+        # is never written to logs (ask() redacts it before it leaves here).
+        telemetry = {"stream": True} if stream else {"retrieval_ms": retrieval_ms}
+        json_log(
+            logger,
+            logging.INFO,
+            "tutor_retrieval",
+            evidence_chunks=len(hits),
+            top_score=(round(hits[0].score, 4) if hits else None),
+            coverage=coverage_value,
+            gate="pass" if gate_pass else "refuse",
+            **telemetry,
+        )
+        return _RetrievalOutcome(
+            query=retrieval_query,
+            hits=hits,
+            coverage=coverage_value,
+            gate_pass=gate_pass,
+            stage_ms=stage_ms,
+            rewrite_applied=rewrite_applied,
+            rewrite_terms=rewrite_terms,
+        )
+
+    async def _stream_events(
+        self,
+        context_blocks: str,
+        *,
+        provider: Any,
+        image: dict | None,
+        fallback: Any,
+        run: _StreamRun,
+    ) -> AsyncIterator["StreamEvent"]:
+        """Run the generation stream, yielding token events.
+
+        ``run`` carries the pieces the caller needs afterwards: the collected
+        ``chunks``, ``first_token_ms`` and the terminal flags. A busy slot is
+        answered in-stream (busy copy + final) and ``run.busy`` tells the
+        caller to stop.
+        """
+        try:
+            # The slot is held for the whole stream: N concurrent streams are
+            # what the worker and the provider quota actually have to carry.
+            async with self._generation_slot():
+                async for delta in self._stream_with_fallback(
+                    context_blocks,
+                    provider=provider,
+                    image=image,
+                    fallback=fallback,
+                ):
+                    if delta is _OUTAGE:
+                        # No fallback could serve the stream; the caller emits
+                        # the outage notice exactly once.
+                        run.outage = True
+                        break
+                    if run.first_token_ms is None:
+                        run.first_token_ms = int((time.perf_counter() - run.started) * 1000)
+                        observe_stage("ttft", run.first_token_ms / 1000.0)
+                    run.chunks.append(delta)
+                    # F-032 on the streaming path: the accumulated answer is
+                    # screened before each delta leaves, so the student
+                    # receives at most the longest screen-clean prefix of a bad
+                    # completion. The scan repeats over the buffer
+                    # (O(answer^2) characters, bounded by the answer size and
+                    # the simple alternations in the screen) because a pattern
+                    # can span two deltas.
+                    if self._answer_trips_screen("".join(run.chunks)) is not None:
+                        run.output_blocked = True
+                        break
+                    yield StreamEvent(type="token", text=delta)
+        except GenerationBusyError:
+            run.busy = True
+            RAG_GATE_REFUSALS_TOTAL.labels(reason="ai_busy").inc()
+            yield StreamEvent(type="token", text=GENERATION_BUSY_ANSWER)
+            yield StreamEvent(type="final", response=generation_busy_response())
 
     def _classify_streamed_answer(
         self,
@@ -1426,37 +1543,22 @@ class TutorService:
             )
             return
 
-        rewrite_started = time.perf_counter()
-        retrieval_query = search_query or self._conversation_retrieval_query(question, history)
-        rewrite_ms = int((time.perf_counter() - rewrite_started) * 1000)
-        rewrite_applied = retrieval_query != question
-        rewrite_terms = len(retrieval_query.split()) - len(question.split())
         # Same event-loop offload as the non-stream path: an SSE turn must not
         # stall other in-flight streams while it searches the corpus.
-        retrieval_started = time.perf_counter()
-        hits = await asyncio.to_thread(
-            self._retrieve_guarded, retrieval_query, class_level, subject, chapter
-        )
-        retrieval_ms = int((time.perf_counter() - retrieval_started) * 1000)
-        RAG_RETRIEVAL_LATENCY_SECONDS.observe(retrieval_ms / 1000.0)
-        gate_started = time.perf_counter()
-        coverage_value, gate_pass = self._coverage_details(retrieval_query, hits)
-        gate_ms = int((time.perf_counter() - gate_started) * 1000)
-        RAG_GATE_OUTCOMES_TOTAL.labels(gate="pass" if gate_pass else "refuse").inc()
-        stage_ms = {"rewrite": rewrite_ms, "retrieval": retrieval_ms, "gate": gate_ms}
-        for stage, value in stage_ms.items():
-            observe_stage(stage, value / 1000.0)
-        json_log(
-            logger,
-            logging.INFO,
-            "tutor_retrieval",
+        retrieval = await self._retrieve_and_gate(
+            question,
+            class_level=class_level,
+            subject=subject,
+            chapter=chapter,
+            history=history,
+            search_query=search_query,
             stream=True,
-            evidence_chunks=len(hits),
-            top_score=(round(hits[0].score, 4) if hits else None),
-            coverage=coverage_value,
-            gate="pass" if gate_pass else "refuse",
         )
-        if not gate_pass:
+        hits = retrieval.hits
+        stage_ms = retrieval.stage_ms
+        rewrite_applied = retrieval.rewrite_applied
+        rewrite_terms = retrieval.rewrite_terms
+        if not retrieval.gate_pass:
             yield StreamEvent(type="token", text=INSUFFICIENT_EVIDENCE_ANSWER)
             RAG_GATE_REFUSALS_TOTAL.labels(reason="insufficient_evidence").inc()
             self._record_trace(
@@ -1466,7 +1568,7 @@ class TutorService:
                 refused_reason="insufficient_evidence",
                 hits=hits,
                 model=getattr(self.provider, "name", "unknown"),
-                parameters={"coverage": coverage_value, "top_k": self.top_k, "stream": True},
+                parameters={"coverage": retrieval.coverage, "top_k": self.top_k, "stream": True},
                 latency_ms={**stage_ms, "total": sum(stage_ms.values())},
                 rewrite_applied=rewrite_applied,
                 rewrite_terms=rewrite_terms,
@@ -1502,52 +1604,22 @@ class TutorService:
         _, provider_for_stream = await self._select_provider(
             context_blocks, image=image, route=route
         )
-        chunks: list[str] = []
         answer_is_grounded = True
         outage_sentinel = False
-        started = time.perf_counter()
-        first_token_ms: int | None = None
-        fallback_stream = self._fallback
+        run = _StreamRun(started=time.perf_counter())
 
-        outage = False
-        output_blocked = False
-        try:
-            # The slot is held for the whole stream: N concurrent streams are
-            # what the worker and the provider quota actually have to carry.
-            async with self._generation_slot():
-                async for delta in self._stream_with_fallback(
-                    context_blocks,
-                    provider=provider_for_stream,
-                    image=image,
-                    fallback=fallback_stream,
-                ):
-                    if delta is _OUTAGE:
-                        # No fallback could serve the stream; the caller emits
-                        # the outage notice exactly once.
-                        outage = True
-                        break
-                    if first_token_ms is None:
-                        first_token_ms = int((time.perf_counter() - started) * 1000)
-                        observe_stage("ttft", first_token_ms / 1000.0)
-                    chunks.append(delta)
-                    # F-032 on the streaming path: the accumulated answer is
-                    # screened before each delta leaves, so the student
-                    # receives at most the longest screen-clean prefix of a bad
-                    # completion. The scan repeats over the buffer
-                    # (O(answer^2) characters, bounded by the answer size and
-                    # the simple alternations in the screen) because a pattern
-                    # can span two deltas.
-                    if self._answer_trips_screen("".join(chunks)) is not None:
-                        output_blocked = True
-                        break
-                    yield StreamEvent(type="token", text=delta)
-        except GenerationBusyError:
-            RAG_GATE_REFUSALS_TOTAL.labels(reason="ai_busy").inc()
-            yield StreamEvent(type="token", text=GENERATION_BUSY_ANSWER)
-            yield StreamEvent(type="final", response=generation_busy_response())
+        async for event in self._stream_events(
+            context_blocks,
+            provider=provider_for_stream,
+            image=image,
+            fallback=self._fallback,
+            run=run,
+        ):
+            yield event
+        if run.busy:
             return
 
-        if output_blocked:
+        if run.output_blocked:
             logger.warning("output_screen_blocked_answer reason=stream_buffer")
             self._record_trace(
                 question=question,
@@ -1559,7 +1631,7 @@ class TutorService:
                 parameters={"stage": "output_screen", "stream": True},
                 latency_ms={
                     **stage_ms,
-                    "generate": int((time.perf_counter() - started) * 1000),
+                    "generate": int((time.perf_counter() - run.started) * 1000),
                 },
                 rewrite_applied=rewrite_applied,
                 rewrite_terms=rewrite_terms,
@@ -1570,31 +1642,31 @@ class TutorService:
             )
             return
 
-        if outage:
+        if run.outage:
             answer_is_grounded = False
             outage_sentinel = True
-            chunks = [_UNAVAILABLE_ANSWER]
+            run.chunks = [_UNAVAILABLE_ANSWER]
             yield StreamEvent(type="token", text=_UNAVAILABLE_ANSWER)
 
-        if not chunks:
+        if not run.chunks:
             # No chunks were yielded at all — provide a fallback response
             yield StreamEvent(type="token", text=_UNAVAILABLE_ANSWER)
-            chunks = [_UNAVAILABLE_ANSWER]
+            run.chunks = [_UNAVAILABLE_ANSWER]
             answer_is_grounded = False
             outage_sentinel = True
 
-        answer = "".join(chunks).strip()
+        answer = "".join(run.chunks).strip()
         # Record result for circuit breaker
         if self._router is not None:
             self._router.record_result(True)
-        stream_ms = int((time.perf_counter() - started) * 1000)
+        stream_ms = int((time.perf_counter() - run.started) * 1000)
         trace_stages = {
             **stage_ms,
             "generate": stream_ms,
             "total": sum(stage_ms.values()) + stream_ms,
         }
-        if first_token_ms is not None:
-            trace_stages["ttft"] = first_token_ms
+        if run.first_token_ms is not None:
+            trace_stages["ttft"] = run.first_token_ms
         json_log(
             logger,
             logging.INFO,
@@ -1602,7 +1674,7 @@ class TutorService:
             route=route.value,
             model=getattr(provider_for_stream, "name", "unknown"),
             latency_ms=stream_ms,
-            ttft_ms=first_token_ms,
+            ttft_ms=run.first_token_ms,
             prompt_chars=len(context_blocks),
             answer_chars=len(answer),
             prompt_version=PROMPT_VERSION,
