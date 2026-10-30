@@ -55,7 +55,7 @@ next is written.
 | [owasp_checklist.md](owasp_checklist.md) | OWASP review checklist |
 | [security/threat-model.md](security/threat-model.md) | Threat model: assets, actors, trust boundaries, mitigations by surface |
 | [security/codeql-triage-2026-10-27.md](security/codeql-triage-2026-10-27.md) | CodeQL/Scorecard alert triage record |
-| [security_scans.md](security_scans.md) | Security scan records |
+| [security/security_scans.md](security/security_scans.md) | Security scan register: scanners, CI gates, triage decisions and dependency waivers |
 | [dependency_waivers.md](dependency_waivers.md) | Dependency risk waiver register |
 | [type-checking-plan.md](type-checking-plan.md) | mypy strictness plan |
 | [scale_report.md](scale_report.md) | Scale audit + local load-test numbers |
