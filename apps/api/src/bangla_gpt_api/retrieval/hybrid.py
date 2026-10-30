@@ -129,14 +129,22 @@ def expand_query(terms: list[str], extra: list[str] | None = None) -> list[str]:
     return out
 
 
-def _char_ngrams(text: str, n: int = 3) -> set[str]:
-    compact = re.sub(r"\s+", "", text.lower())
-    return {compact[i : i + n] for i in range(max(len(compact) - n + 1, 0))}
+def _normalized_for_ngrams(text: str) -> str:
+    """The shared normalization, applied before whitespace folding.
+
+    The trigram lane used to gram the raw string while the corpus side was
+    ingested normalized: ``য়`` typed precomposed or decomposed, or a word
+    carrying a ZWNJ/ZWJ from an IME or a PDF copy-paste, produced different
+    trigram sets for the same word and therefore different hits and ranking
+    at ``/search`` (F-104). Normalizing here is idempotent for text that is
+    already normalized, which is what the index stores.
+    """
+    return re.sub(r"\s+", "", normalize_nfkc(text).lower())
 
 
 def trigram_ngrams(text: str) -> frozenset[str]:
     """Character-trigram set of a text, for precomputing at index build."""
-    compact = re.sub(r"\s+", "", text.lower())
+    compact = _normalized_for_ngrams(text)
     return frozenset(compact[i : i + 3] for i in range(max(len(compact) - 2, 0)))
 
 
