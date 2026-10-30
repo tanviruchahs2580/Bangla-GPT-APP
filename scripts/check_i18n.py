@@ -218,6 +218,30 @@ def check_unused_keys(bn: dict[str, str]) -> list[str]:
     return failures
 
 
+def check_error_keys(bn: dict[str, str]) -> list[str]:
+    """Every copy key the error table names must exist in the dictionary.
+
+    `apps/web/src/errors.ts` maps API detail codes to dictionary keys; a key
+    renamed in the dictionary without the table following (or a typo in the
+    table) silently degrades that code to the reasonless generic message
+    (F-111). The reverse direction -- every API code having copy -- needs the
+    table's own change set; this half is enforceable today.
+    """
+    path = WEB_SRC / "errors.ts"
+    if not path.exists():  # pragma: no cover - structural change in the app
+        return []
+    source = path.read_text(encoding="utf-8")
+    failures: list[str] = []
+    for match in re.finditer(r':\s*"(err[A-Za-z0-9_]*)"', source):
+        key = match.group(1)
+        if key not in bn:
+            failures.append(
+                f"error table: errors.ts maps a code to {key!r}, which is not "
+                "in the dictionary -- the code falls back to the generic message"
+            )
+    return failures
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument(
@@ -270,18 +294,21 @@ def main() -> int:
     glossary = check_glossary(bn)
     plural = check_english_plurals(en, singular)
     unused = check_unused_keys(bn)
+    error_keys = check_error_keys(bn)
     failures.extend(glossary)
     failures.extend(plural)
     failures.extend(unused)
+    failures.extend(error_keys)
 
     print(f"i18n: {len(bn)} bn keys, {len(en)} en keys")
     print(f"  english-in-bn      : {len(leaks)}")
     print(
-        f"  parity/placeholder : {len(failures) - len(leaks) - len(glossary) - len(plural) - len(unused)}"
+        f"  parity/placeholder : {len(failures) - len(leaks) - len(glossary) - len(plural) - len(unused) - len(error_keys)}"
     )
     print(f"  glossary/register  : {len(glossary)}")
     print(f"  plural             : {len(plural)}")
     print(f"  unused keys        : {len(unused)}")
+    print(f"  error-table keys   : {len(error_keys)}")
 
     if failures:
         print("\nFAILURES:")
