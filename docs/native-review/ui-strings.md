@@ -802,8 +802,8 @@ translation that changes the meaning of the English original.
 | 778 | apps/api/src/bangla_gpt_api/providers/mock.py:290 | (literal) | {name}: পূর্ণ ধারণা ও নিজের ভাষায় ব্যাখ্যা ({m}) | |
 | 779 | apps/api/src/bangla_gpt_api/providers/mock.py:291 | (literal) | {name}: আংশিক ধারণা, ছোট ভুল {s[i % len(s)]} | |
 | 780 | apps/api/src/bangla_gpt_api/providers/mock.py:292 | (literal) | {name}: ধারণা স্পষ্ট নয়, আবার পড়তে হবে | |
-| 781 | apps/api/src/bangla_gpt_api/retrieval/bm25.py:37 | (literal) | সূচক কী | |
-| 782 | apps/api/src/bangla_gpt_api/retrieval/bm25.py:37 | (literal) | সূচকের নিয়ম | |
+| 781 | apps/api/src/bangla_gpt_api/retrieval/bm25.py:38 | (literal) | সূচক কী | |
+| 782 | apps/api/src/bangla_gpt_api/retrieval/bm25.py:38 | (literal) | সূচকের নিয়ম | |
 | 783 | apps/api/src/bangla_gpt_api/retrieval/query_analysis.py:5 | (literal) | সালোকসংশ্লেষণ কী এবং কোথায় ঘটে? | |
 | 784 | apps/api/src/bangla_gpt_api/retrieval/query_analysis.py:326 | (literal) | ব্যাখ্যা করো | |
 | 785 | apps/api/src/bangla_gpt_api/retrieval/query_analysis.py:327 | (literal) | ৬ষ্ঠ শ্রেণির | |
@@ -914,9 +914,10 @@ translation that changes the meaning of the English original.
 | 890 | apps/api/src/bangla_gpt_api/services/tutor.py:438 | (literal) | সালোকসংশ্লেষণ কী এবং কোথায় ঘটে? | |
 | 891 | apps/api/src/bangla_gpt_api/services/tutor.py:453 | (literal) | ৬ষ্ঠ শ্রেণির | |
 | 892 | apps/api/src/bangla_gpt_api/services/tutor.py:674 | (literal) | আরেকটু সহজ করে বোঝাও | |
-| 893 | apps/api/src/bangla_gpt_api/services/verification.py:23 | (literal) | ইমেইল যাচাই / Verify your email | |
-| 894 | apps/api/src/bangla_gpt_api/services/verification.py:69 | (literal) | Bangla GPT Tutor-এ স্বাগতম! | |
-| 895 | apps/api/src/bangla_gpt_api/services/verification.py:70 | (literal) | ইমেইল যাচাই করতে নিচের কোডটি | |
-| 896 | apps/api/src/bangla_gpt_api/services/verification.py:71 | (literal) | অ্যাপের ঘরে দিন ({VERIFICATION_TTL_HOURS} ঘণ্টা বৈধ):\n\n | |
+| 893 | apps/api/src/bangla_gpt_api/services/verification.py:31 | (literal) | ইমেইল যাচাই / Verify your email | |
+| 894 | apps/api/src/bangla_gpt_api/services/verification.py:45 | (literal) | Bangla GPT Tutor-এ স্বাগতম! | |
+| 895 | apps/api/src/bangla_gpt_api/services/verification.py:46 | (literal) | ইমেইল যাচাই করতে নিচের কোডটি | |
+| 896 | apps/api/src/bangla_gpt_api/services/verification.py:47 | (literal) | অ্যাপের ঘরে দিন ({VERIFICATION_TTL_HOURS} ঘণ্টা বৈধ):\n\n | |
+| 897 | apps/api/src/bangla_gpt_api/services/verification.py:59 | (literal) | ইমেইল যাচাই | |
 
-Total rows: 896 (622 dictionary, 274 literals).
+Total rows: 897 (622 dictionary, 275 literals).
