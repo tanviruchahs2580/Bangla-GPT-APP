@@ -645,7 +645,19 @@ test("X-02 session clock: near-expiry token renews, an expired one forces re-log
 
   // The sliding contract, exercised through the app's own session: a token
   // inside the renewal window is exchanged for a fresh one by POST /auth/renew.
-  const nearExpiry = forgeToken(me.user_id, me.role, { expInSeconds: 60 });
+  //
+  // RENEW_MINT_SECONDS (240) is derived from the client's renewal window
+  // (api.ts RENEW_AHEAD_MS = 5 min): any token with less than that left
+  // renews on the first api() call after boot, so the mint sits just under
+  // the window and the branch cannot depend on runner speed. The old 60 s
+  // mint raced a loaded CI runner: the boot's renewal POST landed after the
+  // token had already died, the fail-secure probe bounced to /login and
+  // cleared the token, and the later assertions read that wreckage instead
+  // of the sliding contract (CI run stuck at /login, 36 s).
+  const RENEW_MINT_SECONDS = 240;
+  const nearExpiry = forgeToken(me.user_id, me.role, {
+    expInSeconds: RENEW_MINT_SECONDS,
+  });
   const renewed = await page.request.post("/api/auth/renew", {
     headers: { Authorization: `Bearer ${nearExpiry}` },
   });
@@ -686,19 +698,43 @@ test("X-02 session clock: near-expiry token renews, an expired one forces re-log
       },
     )
     .toBeGreaterThan(before + 10 * 60);
+  // The renewal kept the user IN the app (a failed one would have bounced
+  // to /login and cleared the token) and the stored token is a genuinely
+  // fresh full-window grant, not the minted one reserialized.
+  await expect(page).toHaveURL(/\/student\/me$/);
+  const stored = await page.evaluate(() =>
+    window.localStorage.getItem("bgpt_token"),
+  );
+  expect(stored).not.toBeNull();
+  expect(stored).not.toBe(nearExpiry);
+  const storedClaims = tokenPayload(stored as string);
+  expect(
+    (storedClaims.exp as number) - (storedClaims.iat as number),
+    "the stored token is not a full-window grant",
+  ).toBe(60 * 60);
 
   // An expired token is dead: the app clears it and bounces to /login with
   // the deep link preserved in ?next=. The app's own retry control re-issues
   // the probe if a request is parked, so this waits on the product's
   // recoverable path rather than on one socket.
+  //
+  // The expired token is installed at document start of the fresh boot
+  // instead of on the live page: a setItem on the running app races its next
+  // api call, which reads the expired token, 401s and clears storage
+  // mid-goto -- the boot then finds no token at all and takes RequireAuth's
+  // bare redirect (no ?next), which is exactly the CI failure this half
+  // used to be. With the init script the boot itself walks the fail-secure
+  // path at any runner speed; the pathname guard keeps the re-login at the
+  // end (a client-side navigation, never a new document) out of its scope.
   const expired = forgeToken(me.user_id, me.role, {
     iat: Math.floor(Math.floor(Date.now() / 1000) - 7200),
     expInSeconds: 3600,
   });
-  await page.evaluate(
-    (token) => window.localStorage.setItem("bgpt_token", token),
-    expired,
-  );
+  await page.addInitScript((token) => {
+    if (window.location.pathname === "/student/quiz") {
+      window.localStorage.setItem("bgpt_token", token);
+    }
+  }, expired);
   await open(page, "/student/quiz");
   await expect
     .poll(
