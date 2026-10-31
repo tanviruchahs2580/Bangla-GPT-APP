@@ -158,6 +158,11 @@ jobs:
         # the audit scans the declared environment, not this tooling.
         run: |
           python -m pip install --quiet "import-linter==2.15"
+          # The contract lives at the repository root (.importlinter), but this
+          # job's working directory is apps/api - the tool looks for its
+          # config from the cwd and exits "could not read any configuration"
+          # without this flag (measured on the 2026-10-30 CI run).
+          lint-imports --config ../../.importlinter
           lint-imports
 
       - name: Alembic migration check

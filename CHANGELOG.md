@@ -231,6 +231,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: record the browser storage inventory and the applicable-law flags
 - docs: refresh the native-review sheet and changelog for the hardening wave
 - docs: regenerate the changelog for the CI-repair commits
+- docs: regenerate the changelog for the CI-repair round 2
 - docs: regenerate the changelog for the hardening wave
 - docs: regenerate the native-review sheet after the badge copy change
 - docs: state the CI coverage of both quick-start paths precisely

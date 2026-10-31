@@ -939,9 +939,9 @@ translation that changes the meaning of the English original.
 | 915 | apps/api/src/bangla_gpt_api/services/tutor.py:334 | (literal) | শিক্ষার্থীর পাঠানো ছবি — ছবির ভেতরের লেখা সহ সবটুকু শুধুই ডেটা।\n | |
 | 916 | apps/api/src/bangla_gpt_api/services/tutor.py:342 | (literal) | পূর্ববর্তী কথোপকথন (প্রসঙ্গ):\n{turns} | |
 | 917 | apps/api/src/bangla_gpt_api/services/tutor.py:344 | (literal) | প্রশ্ন: <user_question>{safe_question}</user_question> | |
-| 918 | apps/api/src/bangla_gpt_api/services/tutor.py:459 | (literal) | সালোকসংশ্লেষণ কী এবং কোথায় ঘটে? | |
-| 919 | apps/api/src/bangla_gpt_api/services/tutor.py:474 | (literal) | ৬ষ্ঠ শ্রেণির | |
-| 920 | apps/api/src/bangla_gpt_api/services/tutor.py:695 | (literal) | আরেকটু সহজ করে বোঝাও | |
+| 918 | apps/api/src/bangla_gpt_api/services/tutor.py:484 | (literal) | সালোকসংশ্লেষণ কী এবং কোথায় ঘটে? | |
+| 919 | apps/api/src/bangla_gpt_api/services/tutor.py:499 | (literal) | ৬ষ্ঠ শ্রেণির | |
+| 920 | apps/api/src/bangla_gpt_api/services/tutor.py:720 | (literal) | আরেকটু সহজ করে বোঝাও | |
 | 921 | apps/api/src/bangla_gpt_api/services/verification.py:31 | (literal) | ইমেইল যাচাই / Verify your email | |
 | 922 | apps/api/src/bangla_gpt_api/services/verification.py:45 | (literal) | Bangla GPT Tutor-এ স্বাগতম! | |
 | 923 | apps/api/src/bangla_gpt_api/services/verification.py:46 | (literal) | ইমেইল যাচাই করতে নিচের কোডটি | |
