@@ -567,11 +567,25 @@ test("TCH-03 assign a take-home quiz; the student sees it with the correct deadl
   );
   const mineRow = mine.find((a) => a.chapter === chapter);
   expect(mineRow, "the student's own assignment feed is empty").toBeTruthy();
-  // The student reads the same instant, rendered in their own zone.
-  const expected = await page.evaluate(
-    (iso) => new Date(`${iso.replace(/Z$/, "")}Z`).toLocaleString(),
-    mineRow!.due_at,
-  );
+  // The student reads the same instant, rendered by the app's own contract:
+  // AssignedPanel -> formatServerDateTime pins the PRODUCT zone (Asia/Dhaka,
+  // lib/datetime.ts, F-116) and localeTag("en") -- a bare toLocaleString()
+  // follows the device zone instead, which is why this assertion passed on a
+  // +06:00 laptop and failed on a UTC runner. Computing the expectation here
+  // with the documented shape keeps it independent of the runner's zone and
+  // still fails if the card ever renders the wrong zone or shape.
+  const expected = await page.evaluate((iso) => {
+    const date = new Date(`${iso.replace(/Z$/, "")}Z`);
+    return new Intl.DateTimeFormat("en", {
+      timeZone: "Asia/Dhaka",
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+      hour: "numeric",
+      minute: "numeric",
+      second: "numeric",
+    }).format(date);
+  }, mineRow!.due_at);
   expect(dueText).toContain(expected);
 
   // "Students see them" also means the work opens: the questions load.
