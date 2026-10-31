@@ -956,7 +956,7 @@ jobs:
           CI: "true"
         run: npm run test:e2e
 
-      - name: Production bundle: offline shell and throttled perf
+      - name: "Production bundle: offline shell and throttled perf"
         # B-06: the offline fallback is a marquee feature for rural 2G
         # students and its spec only registers the service worker on the
         # preview harness. A second playwright pass builds once and serves
