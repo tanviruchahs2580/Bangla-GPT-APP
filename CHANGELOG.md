@@ -101,11 +101,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(pwa): the offline-shell spec discovers the cache by prefix; changelog regen
 - fix(scripts): make the smoke, backup and rolling-deploy scripts honest
 - fix(scripts): stop piping curl output into the interpreter
+- fix(web): close the two CodeQL alerts on the wave-2 code
 - fix(web): delete the account with one navigation
 - fix(web): format and sort with the app language, not the device
 - fix(web): gate read-aloud on an installed Bengali voice
 - fix(web): give every route one outline and one page heading
 - fix(web): give the trend its meaning back to assistive tech
+- fix(web): keep the bell count outside parentheses in its name
 - fix(web): keep the session when the server throttles the probe
 - fix(web): keep white label text above AA on every accent fill
 - fix(web): label the confidence badge a heuristic in both languages
@@ -133,6 +135,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): show localized copy when a chapter quiz fails to start
 - fix(web): state Argon2id and the real data flows in the privacy page
 - fix(web): state the reason on every suppression and pin the saved state
+- fix(web): stop the streaming placeholders from colliding on React keys
 - fix(web): stream SSE unbuffered from nginx and honour the deploy contract
 - fix(web): tie a field's error and hint to the control it wraps
 
@@ -146,6 +149,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - refactor(api): name the mail-quota window constant
 - refactor(api): share one activity summary and one chapter-accuracy rollup
 - refactor(api): share one evidence-block helper across every generator
+- refactor(api): split build_data_export and ask_stream below the ratchet
 - refactor(api): split routers/common.py by concern
 - refactor(api): split the grade-D functions and enforce a complexity budget
 - refactor(api): split the three functions over the complexity budget
@@ -171,6 +175,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - ci(release): refuse tag/version drift and tag images by commit sha
 - ci(security): scope the gitleaks allowlist to values, not test paths
 - ci: gate per-module coverage floors and Lighthouse budgets
+- ci: give the Windows quick-start job the documented Node 24
+- ci: pin setuptools to the release fix for GHSA-xmj3-9gf7-h52w
+- ci: quote a step name that broke the workflow parse
 - ci: run the suites shuffled and pin the workflow tool installs
 - ci: run the three-engine Bangla pass and guard the workflow tables
 
@@ -197,6 +204,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(privacy): rebuild the data-minimization doc from the real schema
 - docs(qa): publish the 2026-10-29 QA report and archive the predecessor
 - docs(qa): publish the 2026-10-30 report and close the wave-2 register
+- docs(qa): reconcile the wave-2 report with the register and verification
 - docs(qa): refresh the native-review sheet and check in the docs lint config
 - docs(qa): tag the F-203 flow evidence in the register copy of the report
 - docs(rag): correct the script-share definition and record the latency spread
@@ -241,11 +249,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - test(api): keep the vulture gate green and make the SSE abort test terminate
 - test(api): make deprecation warnings fatal and add property tests
 - test(api): remove the TTL-boundary race from the claim test
+- test(api): scope the property-test fixture per test, not per module
 - test(api): wave-2 suites for authz, mail verification, corpus identity and coverage
 - test(e2e): assert the invite expiry copy, not the last muted element
 - test(e2e): cover the audit flow matrix gaps
 - test(e2e): let the preview service-worker test register its worker
+- test(e2e): lift the harness tutor limiter to the sanctioned 240
+- test(e2e): pin the next-user chip check to the server-side list
+- test(e2e): reach the seeded history via search and budget 3G on the bundle
 - test(e2e): reconcile the wave-2 specs with the shipped app
+- test(e2e): search for the seed's last turn, not a doubled index
+- test(e2e): select the 6/W2 room wherever the teacher UI renders a roster
 - test(scripts): catch an error-table key that left the dictionary
 - test(web): assert the ZWNJ form against the fold the app performs
 - test(web): carry BD-convention names through fixtures and the parent seed
