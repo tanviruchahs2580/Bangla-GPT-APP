@@ -314,6 +314,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Other
 
 - Merge pull request #93 from tanviruchahs2580/fix/pwa-install-offline-200
+- ci,style: point lint-imports at the root contract; format the composer; refresh the review sheet
 
 ## v0.9.3 - 2026-10-27
 

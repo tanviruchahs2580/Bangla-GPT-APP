@@ -53,8 +53,10 @@ const CEILING: Record<string, number> = {
   "student/quiz/StartQuizCard.tsx": 89,
   "student/tutor/AssistantContent.tsx": 40,
   "student/tutor/EvidenceModal.tsx": 33,
-  // 187: 8f80e93 added the CodeQL mime allowlist to the preview data URL.
-  "student/tutor/TutorComposer.tsx": 187,
+  // 189: 8f80e93 added the CodeQL mime allowlist to the preview data URL
+  // (5 lines), e7e5268 formatted the file (2 lines) - the security fix and its
+  // formatting are the recorded raise.
+  "student/tutor/TutorComposer.tsx": 189,
   "student/tutor/TutorHistory.tsx": 126,
   // 269: eec2f6a namespaced the streaming-placeholder React keys with the
   // why-comment the fix requires.
