@@ -72,6 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): narrow the identity block list to NUL and bidi controls
 - fix(api): normalise the search query in every retrieval lane
 - fix(api): open the validating job status before the generator call
+- fix(api): pin pypdf to the CVE bundle fix 6.21.4
 - fix(api): put every error path in the coded envelope
 - fix(api): read the NCTB class signal from the cover, never invent one
 - fix(api): refuse production boot on the bundled sample corpus
@@ -229,6 +230,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: never name the derived image tag VERSION
 - docs: record the browser storage inventory and the applicable-law flags
 - docs: refresh the native-review sheet and changelog for the hardening wave
+- docs: regenerate the changelog for the CI-repair commits
 - docs: regenerate the changelog for the hardening wave
 - docs: regenerate the native-review sheet after the badge copy change
 - docs: state the CI coverage of both quick-start paths precisely
@@ -253,6 +255,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - test(api): wave-2 suites for authz, mail verification, corpus identity and coverage
 - test(e2e): assert the invite expiry copy, not the last muted element
 - test(e2e): cover the audit flow matrix gaps
+- test(e2e): expect the assignment deadline in the product zone
 - test(e2e): let the preview service-worker test register its worker
 - test(e2e): lift the harness tutor limiter to the sanctioned 240
 - test(e2e): pin the next-user chip check to the server-side list
@@ -275,6 +278,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - test(web): pin the maintenance route, the bilingual fallback and page size
 - test(web): pin the tutor capture and regenerate the reviewed baselines
 - test(web): read the teacher greeting from the h1 the page now has
+- test(web): record the justified page-size raises in the ratchet
 - test(web): repair the wave-2 C1 flow spec before running it
 - test(web): replace the remaining e2e fixed sleeps with signal waits
 - test(web): run the contract extractor over the shipped client
