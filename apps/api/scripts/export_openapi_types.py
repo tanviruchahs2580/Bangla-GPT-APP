@@ -43,9 +43,13 @@ def main() -> int:
     output = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_OUTPUT
     doc = create_app(Settings(**_TEST_SETTINGS)).openapi()
     output.parent.mkdir(parents=True, exist_ok=True)
+    # newline="\n" keeps the bytes identical on every platform: the CI
+    # staleness diff compares this file's exact bytes, and text-mode default
+    # translation would turn the whole file into a diff on Windows.
     output.write_text(
         json.dumps(doc, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
         encoding="utf-8",
+        newline="\n",
     )
     operations = sum(
         1
