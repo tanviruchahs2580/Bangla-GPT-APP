@@ -8,16 +8,13 @@ state-machine's V step cosmetic.
 
 from __future__ import annotations
 
-import time
-
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.models import AiJob
 from bangla_gpt_api.main import create_app
-from conftest import engine_url
+from conftest import engine_url, poll_until
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -39,16 +36,20 @@ def _headers(client: TestClient) -> dict[str, str]:
 
 
 def _wait(client: TestClient, headers: dict, job_id: str, timeout: float = 20.0) -> dict:
-    deadline = time.monotonic() + timeout
-    body: dict = {}
-    while time.monotonic() < deadline:
+    last: dict = {}
+
+    def settled() -> dict | None:
         res = client.get(f"/teacher/jobs/{job_id}", headers=headers)
         assert res.status_code == 200
         body = res.json()
-        if body["status"] in ("ready", "failed"):
-            return body
-        time.sleep(0.05)
-    pytest.fail(f"job never settled: last={body}")
+        last.update(body)
+        return body if body["status"] in ("ready", "failed") else None
+
+    return poll_until(
+        settled,
+        timeout=timeout,
+        describe=lambda: f"job never settled: last={last}",
+    )
 
 
 def test_job_reads_validating_while_the_generator_runs(tmp_path, monkeypatch) -> None:

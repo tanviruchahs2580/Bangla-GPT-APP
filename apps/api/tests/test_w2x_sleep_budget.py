@@ -3,8 +3,10 @@
 Every literal sleep >= 1s is listed with the reason it cannot be removed. A
 new long sleep, or a longer one where a shorter one existed, fails here so the
 cost is an explicit decision instead of an accident. The injected-clock
-rewrites of the F-05 epoch tests removed the three 1.1s TTL sleeps; polling
-loops and concurrency windows stay short by construction.
+rewrites of the F-05 epoch tests removed the three 1.1s TTL sleeps, the
+cache-TTL tests run on an injected monotonic clock, and every deadline-bounded
+poll (job runner, mailpit delivery, Redis server TTL) goes through
+conftest.poll_until, which owns the suite's one short poll-interval sleep.
 """
 
 from __future__ import annotations
@@ -17,9 +19,6 @@ _SLEEP_RE = re.compile(r"\b(?:_time|time|asyncio)\.sleep\(([0-9.]+)\)")
 
 #: (file, seconds) -> why the wall-clock wait is the test's subject, not slack.
 ALLOWED_LONG_SLEEPS: dict[tuple[str, float], str] = {
-    ("test_cache_v2.py", 1.4): (
-        "real Redis TTL expiry: only the server's own clock can prove the key ages out"
-    ),
     ("test_w2_sec_client.py", 1.0): (
         "negative SSRF assertion: the wait is what gives a forbidden fetch time to happen"
     ),

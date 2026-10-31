@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import json
 import re
-import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -38,7 +37,7 @@ from fastapi.testclient import TestClient
 
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
-from conftest import engine_url
+from conftest import engine_url, poll_until
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -95,13 +94,16 @@ def _message_ids_for(address: str) -> list[str]:
 
 def _wait_for_new_message(address: str, seen: set[str], *, timeout: float = 15.0) -> dict:
     """Wait for a delivery to ``address`` that is not in ``seen``."""
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
+
+    def fresh_message() -> dict | None:
         fresh = [mid for mid in _message_ids_for(address) if mid not in seen]
-        if fresh:
-            return _mailpit_get(f"/api/v1/message/{fresh[-1]}")
-        time.sleep(0.2)
-    pytest.fail(f"no new mail was delivered to {address} within {timeout}s")
+        return _mailpit_get(f"/api/v1/message/{fresh[-1]}") if fresh else None
+
+    return poll_until(
+        fresh_message,
+        timeout=timeout,
+        describe=lambda: f"no new mail was delivered to {address}",
+    )
 
 
 def _token_from_message(message: dict) -> str:

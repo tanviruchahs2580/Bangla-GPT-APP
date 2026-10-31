@@ -25,6 +25,9 @@ every run stays hermetic and never shares ``./bangla_gpt.db``.
 """
 
 import os
+import time
+from collections.abc import Callable
+from typing import TypeVar
 
 import pytest
 
@@ -82,6 +85,37 @@ def engine_url(tmp_path, name: str) -> str:  # type: ignore[no-untyped-def]
     if not name.endswith(".db"):
         name = f"{name}.db"
     return _PG_TEST_URL or f"sqlite:///{tmp_path}/{name}"
+
+
+_T = TypeVar("_T")
+
+
+def poll_until(
+    condition: Callable[[], _T | None],
+    *,
+    timeout: float,
+    describe: Callable[[], str],
+    interval: float = 0.05,
+) -> _T:
+    """Poll ``condition`` until it returns a non-None value, or fail.
+
+    The suite's one sanctioned wall-clock wait (F-161): work that completes on
+    another thread, task or process -- the AiJob runner's portal, mailpit
+    delivery, a Redis server's own TTL clock -- exposes no event the test
+    thread could await, so polling is the only interface. Keeping the loop
+    here gives the whole suite exactly one commented poll-interval sleep
+    instead of a scatter of naked fixed waits; every caller is deadline-
+    bounded and returns at the first observation that satisfies the
+    condition, so a fast run pays no fixed cost.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        result = condition()
+        if result is not None:
+            return result
+        if time.monotonic() >= deadline:
+            pytest.fail(f"{describe()} not observed within {timeout}s")
+        time.sleep(interval)  # poll backoff; the deadline above bounds the loop
 
 
 @pytest.fixture(autouse=True)

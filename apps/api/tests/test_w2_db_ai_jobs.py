@@ -37,7 +37,7 @@ from bangla_gpt_api.main import create_app
 from bangla_gpt_api.providers.base import ProviderError
 from bangla_gpt_api.providers.mock import MockLLMProvider
 from bangla_gpt_api.services.retention import run_retention_sweep
-from conftest import engine_url
+from conftest import engine_url, poll_until
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -109,20 +109,22 @@ def _headers(client: TestClient, email: str) -> dict:
 
 def _wait_settled(factory, job_id: str, timeout: float = 30.0) -> str:
     """Wait for the detached runner to stop writing (see module docstring)."""
-    deadline = datetime.now(UTC).timestamp() + timeout
-    status = "queued"
-    while datetime.now(UTC).timestamp() < deadline:
+    last = {"status": "queued"}
+
+    def settled() -> str | None:
         with factory() as session:
             status = (
                 session.execute(select(AiJob.status).where(AiJob.id == job_id)).scalar_one_or_none()
                 or "missing"
             )
-        if status in job_policy.TERMINAL_STATUSES:
-            return status
-        import time as _time
+        last["status"] = status
+        return status if status in job_policy.TERMINAL_STATUSES else None
 
-        _time.sleep(0.05)
-    pytest.fail(f"job {job_id} never settled (last status {status})")
+    return poll_until(
+        settled,
+        timeout=timeout,
+        describe=lambda: f"job {job_id} never settled (last status {last['status']})",
+    )
 
 
 # --- idempotency ------------------------------------------------------------

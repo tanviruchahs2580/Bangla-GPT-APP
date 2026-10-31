@@ -174,6 +174,12 @@ def test_user_text_is_never_fetched_server_side(tmp_path, ssrf_target: str) -> N
     )
     assert imported.status_code == 200, imported.text
 
+    # The sleep IS the subject: it is the window in which a forbidden
+    # server-side fetch would have to reach the probe listener. Every
+    # triggering request above is a synchronous TestClient round-trip, so any
+    # fetch has already completed before this line; 1.0 s is margin for the
+    # probe thread's scheduling only -- three orders of magnitude above the
+    # handler's own single-digit-millisecond response time.
     time.sleep(1.0)
     assert _ProbeHandler.hits == [], f"server fetched user-controlled URL(s): {_ProbeHandler.hits}"
 
