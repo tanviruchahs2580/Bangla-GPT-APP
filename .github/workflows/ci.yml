@@ -278,6 +278,39 @@ jobs:
           npm ci
           npm run build
 
+      - name: Visual regression matrix (F-156 / TEST-11)
+        # The 60 committed baselines are Windows-rasterised by design
+        # (e2e/visual.spec.ts: cross-OS text rasterisation measured at 3-5%+,
+        # far past the 5% comparator is impossible to budget honestly), so
+        # the matrix can only be compared on a Windows runner. This is the
+        # pipeline's one windows-latest job and the workflow-table guard
+        # freezes the job set, so the step lives here, after the npm ci
+        # above, mirroring the e2e job's tooling (playwright browser install,
+        # report upload). E2E_PYTHON points the harness's seed + uvicorn at
+        # the venv the API quick start created.
+        #
+        # If the runner's font stack ever drifts past the 5% comparator, the
+        # failure artifact shows the exact screens; regenerating from the
+        # runner (`npx playwright test visual --update-snapshots`) and
+        # re-reviewing the baselines is the documented follow-up, not a
+        # tolerance bump.
+        working-directory: apps/web
+        env:
+          E2E_PYTHON: ${{ github.workspace }}/apps/api/.venv/Scripts/python.exe
+          CI: "true"
+        run: |
+          npx --no-install playwright install chromium
+          npx --no-install playwright test visual
+
+      - name: Upload visual report on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-visual-report
+          path: apps/web/.playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
   postgres:
     name: Postgres engine check (alembic + API flows)
     runs-on: ubuntu-latest
