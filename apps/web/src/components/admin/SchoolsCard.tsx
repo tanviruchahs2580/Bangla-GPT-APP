@@ -4,7 +4,11 @@ import { del, get, post } from "../../api";
 import { friendlyError } from "../../errors";
 import { t } from "../../i18n";
 import { roleLabel } from "../../lib/roles";
-import type { AdminSchoolStats, SchoolInviteAdmin } from "../../types";
+import type {
+  AdminSchoolStats,
+  SchoolInviteAdmin,
+  SchoolInviteOut,
+} from "../../types";
 import { LoadError } from "../ui";
 
 /**
@@ -75,7 +79,7 @@ export function SchoolsCard({
     setAdmMsg(null);
     setInviteCode(null);
     try {
-      const res = await post<{ code: string }>(`/schools/${schoolId}/invites`, {
+      const res = await post<SchoolInviteOut>(`/schools/${schoolId}/invites`, {
         role: inviteRoles[schoolId] ?? "teacher",
       });
       setInviteCode(res.code);

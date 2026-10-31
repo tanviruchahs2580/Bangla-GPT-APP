@@ -101,6 +101,8 @@ export interface MeResponse {
   profile_id: number | null;
   name: string | null;
   class_level: number | null;
+  /** guardian phone at rest (S5.6): delivered in cleartext to the owner only. */
+  phone: string | null;
 }
 
 const TOKEN_KEY = "bgpt_token";
@@ -827,7 +829,7 @@ export async function generateInviteCode(): Promise<{
   code: string;
   expires_in_minutes: number;
 }> {
-  return post("/students/me/invite-code");
+  return post<import("./types").ParentInviteOut>("/students/me/invite-code");
 }
 
 /**
@@ -839,7 +841,9 @@ export async function generateInviteCode(): Promise<{
 export async function getLiveInviteCodes(): Promise<
   { id: number; created_at: string; expires_at: string }[]
 > {
-  return get("/students/me/invite-code");
+  return get<import("./types").ParentInviteStatusOut[]>(
+    "/students/me/invite-code",
+  );
 }
 
 /** Revoke a live guardian invite so its code can no longer link a parent. */
@@ -1357,6 +1361,8 @@ export interface AdminAiQuality {
   thumbs_down: number;
   low_confidence_count: number;
   by_model: Record<string, number>;
+  cost_usd_by_model: Record<string, number>;
+  cost_usd_total: number;
 }
 
 export const getAdminAiQuality = (days = 30) =>

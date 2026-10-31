@@ -1,0 +1,4 @@
+# Generated files: the OpenAPI fixture is written by
+# apps/api/scripts/export_openapi_types.py (the CI staleness guard diffs the
+# exporter's exact bytes), so prettier must not reformat it.
+src/test/fixtures/

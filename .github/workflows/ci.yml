@@ -196,6 +196,15 @@ jobs:
           DATABASE_URL: sqlite:////tmp/ci_smoke.db
         run: python -c "from bangla_gpt_api.main import create_app; app = create_app(); print(len(app.openapi()['paths']), 'openapi paths ok')"
 
+      - name: OpenAPI fixture matches the served schema (F-157)
+        # apps/web/src/test/fixtures/openapi.json is the committed snapshot
+        # the web contract test reads (vitest has no server). Regenerating it
+        # here and diffing means a schema change that ships without the
+        # fixture following fails this job instead of drifting silently.
+        run: |
+          python scripts/export_openapi_types.py
+          git diff --exit-code -- ../web/src/test/fixtures/openapi.json
+
   quickstart-windows:
     name: Quick start (Windows PowerShell)
     # DOC-01: the README quick start is written for Windows PowerShell

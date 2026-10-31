@@ -381,6 +381,8 @@ export interface LessonPlan {
   chapter: string;
   minutes: number;
   level: string;
+  /** set once the approved plan is persisted as a teacher document. */
+  document_id: string | null;
 }
 
 // weakness heatmap + rule-based at-risk flags + 3-week support plans.
@@ -486,6 +488,8 @@ export interface SchoolHealth {
   strong_pct: number;
   support_pct: number;
   risk_pct: number;
+  /** seat capacity from the school record (null when unset). */
+  capacity: number | null;
   at_risk: SchoolAtRiskRow[];
 }
 
@@ -536,6 +540,7 @@ export interface SchoolInviteAdmin {
   role: string;
   used: boolean;
   created_at: string;
+  expires_at: string | null;
   used_at: string | null;
 }
 
@@ -573,4 +578,27 @@ export interface StatusOut {
   status: string;
   components: StatusComponent[];
   checked_at: string;
+}
+
+// guardian linking: the code a student mints and a parent redeems.
+export interface ParentInviteOut {
+  id: number;
+  code: string;
+  expires_in_minutes: number;
+}
+
+export interface ParentInviteStatusOut {
+  id: number;
+  created_at: string;
+  expires_at: string;
+}
+
+// school-scoped admin invite (admin center v1.5).
+export interface SchoolInviteOut {
+  id: number;
+  school_id: number;
+  role: string;
+  code: string;
+  created_at: string;
+  expires_at: string;
 }

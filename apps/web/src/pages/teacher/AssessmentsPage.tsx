@@ -7,7 +7,9 @@ import type {
   AssignmentRow,
   ClassRoom,
   QPaper,
+  QuizStarted,
   RosterEntry,
+  ShortTest,
 } from "../../types";
 import { Check, ChevronLeft, Pencil } from "lucide-react";
 import { Badge, Button, Card, LoadError, Stat } from "../../components/ui";
@@ -109,7 +111,7 @@ export default function AssessmentsPage() {
     setAssignBusy(true);
     setAssignMsg(null);
     try {
-      const started = await post<{ attempt_id: number }>("/quizzes", {
+      const started = await post<QuizStarted>("/quizzes", {
         student_id: assignTo,
         class_level: selected.class_level,
         subject: assignSubject,
@@ -597,16 +599,7 @@ function AssignmentResult({ rows }: { rows: AssignmentProgressRow[] }) {
 function ShortTestList() {
   const { data, isError, refetch } = useQuery({
     queryKey: ["teacher", "shorttests"],
-    queryFn: () =>
-      get<
-        Array<{
-          id: number;
-          chapter: string;
-          subject: string;
-          questions: unknown[];
-          attempts: unknown[];
-        }>
-      >("/teacher/shorttests"),
+    queryFn: () => get<ShortTest[]>("/teacher/shorttests"),
   });
   const rows = data ?? [];
   // F-021: the same empty-vs-failed confusion as the paper and assignment

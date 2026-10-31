@@ -12,7 +12,7 @@ import {
   Timer,
 } from "lucide-react";
 import { get, post } from "../../api";
-import type { LessonPlan, QPaper, ShortTest } from "../../types";
+import type { ClassRoom, LessonPlan, QPaper, ShortTest } from "../../types";
 import { Button, Card, Field, LoadError } from "../../components/ui";
 import { CreateHub } from "../../components/teacher/CreateHub";
 import { QPaperReviewPanel } from "../../components/teacher/QPaperReviewPanel";
@@ -23,9 +23,6 @@ import { t } from "../../i18n";
 const errText = (err: unknown): string =>
   friendlyError((err as { rawDetail?: unknown }).rawDetail)?.text ??
   t("errorGeneric");
-
-/** Minimal shape of GET /teacher/classrooms used by the short-test form. */
-type Room = { id: number; class_level: number; section?: string | null };
 
 // Grid entry -> deep-link token (shared with TeacherHome quick-create).
 export type CreateEntry =
@@ -300,7 +297,7 @@ export function ShortTestFlow() {
   // Shared cache (audit H-04): same keys as Classes/Assessments/Home.
   const roomsQuery = useQuery({
     queryKey: ["teacher", "classrooms"],
-    queryFn: () => get<Room[]>("/teacher/classrooms"),
+    queryFn: () => get<ClassRoom[]>("/teacher/classrooms"),
   });
   const rooms = useMemo(() => roomsQuery.data ?? [], [roomsQuery.data]);
   const testsQuery = useQuery({
@@ -478,8 +475,7 @@ export function LessonPlanFlow() {
   const [edits, setEdits] = useState<Record<string, string>>({});
   const roomsQuery = useQuery({
     queryKey: ["teacher", "classrooms"],
-    queryFn: () =>
-      get<{ id: number; class_level: number }[]>("/teacher/classrooms"),
+    queryFn: () => get<ClassRoom[]>("/teacher/classrooms"),
   });
   const rooms = useMemo(() => roomsQuery.data ?? [], [roomsQuery.data]);
 

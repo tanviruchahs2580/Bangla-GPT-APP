@@ -76,6 +76,7 @@ const INVITES: SchoolInviteAdmin[] = [
     role: "teacher",
     used: false,
     created_at: "2026-09-01T10:00:00",
+    expires_at: "2026-09-08T10:00:00",
     used_at: null,
   },
   {
@@ -84,6 +85,7 @@ const INVITES: SchoolInviteAdmin[] = [
     role: "school_admin",
     used: true,
     created_at: "2026-08-30T10:00:00",
+    expires_at: null,
     used_at: "2026-08-31T10:00:00",
   },
 ];
