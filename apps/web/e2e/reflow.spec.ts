@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { openRoute, signIn, useVariant } from "./a11y";
+import { openRoute, settleLayout, signIn, useVariant } from "./a11y";
 
 /**
  * AUD-G-07 / G-13 (visual polish, reflow), AUD-G-09 (motion).
@@ -159,7 +159,8 @@ test("reflow: 200% text resize keeps the layout inside the viewport", async ({
     await page.setViewportSize({ width: 1280, height: 800 });
     await openRoute(page, screen.route);
     await page.addStyleTag({ content: "html { font-size: 200% !important; }" });
-    await page.waitForTimeout(300);
+    // The zoom is applied once the next frame has laid it out (F-160).
+    await settleLayout(page);
     await assertNoHorizontalScroll(page, `${screen.name}@200% text`);
     await page.screenshot({
       path: `coverage/reflow/${screen.name}--zoom200.png`,
@@ -172,7 +173,7 @@ test("text at 200% is not clipped by its own box", async ({ page }) => {
   await useVariant(page, { theme: "light", lang: "bn" });
   await openRoute(page, "/welcome");
   await page.addStyleTag({ content: "html { font-size: 200% !important; }" });
-  await page.waitForTimeout(300);
+  await settleLayout(page);
   const clipped = await page.evaluate(() => {
     const bad: string[] = [];
     for (const element of Array.from(

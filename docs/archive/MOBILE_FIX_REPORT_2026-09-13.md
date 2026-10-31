@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [README.md](README.md).
+
 # WAVE-5 — Mobile Responsive Repair — Final Report (v0.9.1)
 
 **Date:** 2026-09-13 · **Scope:** `apps/web` CSS only · **Trigger:** user-reported broken layout on Android Chrome after login (screenshot, ~360px viewport)

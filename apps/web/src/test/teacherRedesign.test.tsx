@@ -1,7 +1,7 @@
 /** teacher shell split — Home, Classes student detail, Assessments
  *  papers library and Analytics classroom intelligence coverage. */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -273,6 +273,55 @@ describe("assessments papers tab", () => {
       screen.getByText(t("qpReviewProgress", { done: 1, total: 1 })),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: t("qpFinalize") })).toBeEnabled();
+  });
+
+  // F-021: "no documents yet" and "nothing assigned" were also the message
+  // after a failed fetch, so an outage read as an empty library.
+  it("surfaces a failed paper library instead of 'no documents yet'", async () => {
+    const original = apiMock.get.getMockImplementation() as (
+      path: string,
+    ) => Promise<unknown>;
+    apiMock.get.mockImplementation((path: string) =>
+      path === "/teacher/qpapers"
+        ? Promise.reject(new Error("boom"))
+        : original(path),
+    );
+    renderAt(
+      <AssessmentsPage />,
+      "/teacher/assessments",
+      "/teacher/assessments?tab=papers",
+    );
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(t("errorGeneric"));
+    expect(
+      screen.getByRole("button", { name: t("retry") }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(t("noDocumentsYet"))).toBeNull();
+  });
+
+  it("surfaces a failed assignment list instead of 'nothing assigned'", async () => {
+    const original = apiMock.get.getMockImplementation() as (
+      path: string,
+    ) => Promise<unknown>;
+    apiMock.get.mockImplementation((path: string) =>
+      path === "/teacher/assignments"
+        ? Promise.reject(new Error("boom"))
+        : original(path),
+    );
+    renderAt(
+      <AssessmentsPage />,
+      "/teacher/assessments",
+      "/teacher/assessments?tab=assignments",
+    );
+
+    const results = (await screen.findByText(t("asmResults"))).closest(
+      ".card",
+    ) as HTMLElement;
+    expect(await within(results).findByRole("alert")).toHaveTextContent(
+      t("errorGeneric"),
+    );
+    expect(within(results).queryByText(t("baNone"))).toBeNull();
   });
 });
 

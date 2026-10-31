@@ -114,9 +114,40 @@ describe("routing table", () => {
     expect(realAuth.ROLE_HOME.student).toBe("/student");
   });
 
-  it("resolves an unknown path through the catch-all to the role home", async () => {
+  it("renders the 404 page for an unknown path instead of silently redirecting", async () => {
+    // F-182: the catch-all used to Navigate to "/", so a mistyped deep link
+    // looked like the app ignoring the URL and support had nothing to see.
     authState.me = STUDENT;
     renderAt("/definitely-not-a-route");
-    await waitFor(() => expect(window.location.pathname).toBe("/student"));
+    expect(
+      await screen.findByText(t("noResults"), {}, { timeout: 5000 }),
+    ).toBeTruthy();
+    // The address that was not found is on the page, and the way home works.
+    expect(screen.getByText("/definitely-not-a-route")).toBeTruthy();
+    expect(window.location.pathname).toBe("/definitely-not-a-route");
+    const home = screen.getByRole("link", { name: t("brandHome") });
+    expect(home.getAttribute("href")).toBe("/student");
+  });
+
+  it("serves a maintenance screen at /maintenance (F-165)", async () => {
+    // Before this a maintenance window could only surface as per-request error
+    // copy on whatever page the user happened to be on. The deployment serves
+    // the SPA for this path (vercel.json rewrites everything to index.html;
+    // nginx falls back the same way), so the route is the whole product half.
+    authState.me = null;
+    renderAt("/maintenance");
+    expect(
+      await screen.findByText(t("apiUnreachableTitle"), {}, { timeout: 5000 }),
+    ).toBeTruthy();
+    expect(screen.getByText(t("apiUnreachableBody"))).toBeTruthy();
+    // Retry acts on the page, and the status page is reachable from it (the
+    // public footer carries the same link, so this is a set membership).
+    expect(screen.getByRole("button", { name: t("retry") })).toBeTruthy();
+    const statusLinks = screen.getAllByRole("link", {
+      name: t("statusPage"),
+    });
+    expect(
+      statusLinks.some((link) => link.getAttribute("href") === "/status"),
+    ).toBe(true);
   });
 });

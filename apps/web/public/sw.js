@@ -4,7 +4,10 @@
  *  - Navigations: network-first, offline fallback page.
  *  - API calls: never cached.
  */
-const CACHE = "bgpt-v3";
+// Bumped whenever a shell file's content changes: clients holding the old
+// cache keep the old offline.html/offline-retry.js until a fresh cache exists
+// (v4: bilingual offline page, external retry handler, update message).
+const CACHE = "bgpt-v4";
 const MAX_RUNTIME_ENTRIES = 50; // hashed build assets rotate; cap the cache
 // Offline navigation fallback. Chrome's installability check requires the
 // service worker to answer an OFFLINE navigation with HTTP 200 — the old
@@ -15,6 +18,10 @@ const SHELL = [
   "/",
   "/index.html",
   "/offline.html",
+  // The fallback page's retry/auto-reload handler is an external script (the
+  // CSP forbids inline ones), so it must be in the cache too — otherwise the
+  // button is dead precisely when offline.html is served from it.
+  "/offline-retry.js",
   "/icon.svg",
   "/icon-192.png",
   "/icon-512.png",
@@ -84,6 +91,16 @@ async function trimRuntimeCache() {
   );
   await Promise.all(excess.map((req) => cache.delete(req)));
 }
+
+// PWA-02: an update over a live session waits (see the install handler) until
+// the page asks for it. The update banner postMessages SKIP_WAITING once the
+// student accepts, and the page reloads on controllerchange — so the new shell
+// and its hashed chunks arrive together instead of mid-session.
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING" && self.skipWaiting) {
+    self.skipWaiting();
+  }
+});
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);

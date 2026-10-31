@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [README.md](README.md).
+
 # Bangla GPT APP — Full Audit Report (Live Tested)
 
 **Date:** 2026-08-30 · **Branch:** `feature/ui-ux-blueprint-upgrade-20260830` · **HEAD:** `1e3c949`

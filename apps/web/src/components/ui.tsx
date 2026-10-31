@@ -1,14 +1,17 @@
 import {
+  cloneElement,
+  isValidElement,
   useEffect,
   useId,
   useRef,
   type ButtonHTMLAttributes,
+  type ReactElement,
   type ReactNode,
 } from "react";
+import { TrendingDown, TrendingUp, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { cn } from "../lib/cn";
 import { t } from "../i18n";
-import { BrandMark } from "./BrandMark";
 
 type Variant = "primary" | "teal" | "ghost" | "soft" | "danger" | "default";
 type Size = "sm" | "md" | "lg";
@@ -151,57 +154,6 @@ export function Stat({ value, label }: { value: ReactNode; label: ReactNode }) {
   );
 }
 
-export function Row({
-  title,
-  sub,
-  trailing,
-  onClick,
-}: {
-  title: ReactNode;
-  sub?: ReactNode;
-  trailing?: ReactNode;
-  onClick?: () => void;
-}) {
-  const content = (
-    <>
-      <div className="row-main">
-        <div className="row-title">{title}</div>
-        {sub && <div className="row-sub">{sub}</div>}
-      </div>
-      {trailing}
-    </>
-  );
-  if (onClick) {
-    return (
-      <button className="row row-action" onClick={onClick}>
-        {content}
-      </button>
-    );
-  }
-  return <div className="row">{content}</div>;
-}
-
-export function EmptyState({
-  title,
-  sub,
-  action,
-}: {
-  title: ReactNode;
-  sub?: ReactNode;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="center empty-state empty-pad">
-      <div className="empty-mark" aria-hidden>
-        <BrandMark size={56} />
-      </div>
-      <div className="empty-title">{title}</div>
-      {sub && <div className="muted empty-sub">{sub}</div>}
-      {action && <div className="empty-action">{action}</div>}
-    </div>
-  );
-}
-
 /* Shared primitives: one focus-trapped modal, one skeleton
    vocabulary, one form field / segmented / avatar pattern for
    every page. */
@@ -315,7 +267,7 @@ export function Modal({
     // inside a role=button. Keyboard dismissal is Escape, handled by the
     // document listener above (and the dialog's own close button), which is
     // where a keyboard user reaches it.
-    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- the backdrop is a mouse dismissal surface, not a control; the keyboard dismissal is Escape (reason above)
     <div
       className="modal-backdrop"
       onClick={(e) => {
@@ -340,7 +292,7 @@ export function Modal({
             aria-label={t("close")}
             onClick={onClose}
           >
-            ✕
+            <X size={18} aria-hidden />
           </button>
         </div>
         {children}
@@ -380,7 +332,16 @@ export function Skeleton({
   );
 }
 
-/** Label + control + error text, matching the .field contract. */
+/** Label + control + error text, matching the .field contract.
+ *
+ * F-060/A11Y-08: the hint and the error were visible text only — a screen
+ * reader heard the role=alert error but could not navigate back to the field
+ * it belonged to, and the hint was never announced with the control. The
+ * ids are generated here and handed to the wrapped control, so every form
+ * built on Field gets the association without each call site repeating it.
+ * A non-element child (or several) cannot receive props; those call sites
+ * keep their own ids.
+ */
 export function Field({
   label,
   htmlFor,
@@ -396,13 +357,38 @@ export function Field({
   children: ReactNode;
   className?: string;
 }) {
+  const id = useId();
+  const hintId = `${id}-hint`;
+  const errorId = `${id}-error`;
+  const describedBy =
+    [hint && !error ? hintId : null, error ? errorId : null]
+      .filter(Boolean)
+      .join(" ") || undefined;
+  const control = isValidElement(children)
+    ? cloneElement(children as ReactElement<Record<string, unknown>>, {
+        "aria-describedby":
+          describedBy ??
+          (children.props as { "aria-describedby"?: string })[
+            "aria-describedby"
+          ],
+        "aria-invalid":
+          error ||
+          (children.props as { "aria-invalid"?: boolean })["aria-invalid"]
+            ? true
+            : undefined,
+      })
+    : children;
   return (
     <div className={cn("field", !!error && "field-error", className)}>
       <label htmlFor={htmlFor}>{label}</label>
-      {children}
-      {hint && !error && <span className="field-hint">{hint}</span>}
+      {control}
+      {hint && !error && (
+        <span className="field-hint" id={hintId}>
+          {hint}
+        </span>
+      )}
       {error && (
-        <span className="field-error-text" role="alert">
+        <span className="field-error-text" role="alert" id={errorId}>
           {error}
         </span>
       )}
@@ -470,6 +456,46 @@ export function Avatar({
       )}
     >
       {initial}
+    </span>
+  );
+}
+
+/** Direction of a per-student score trend, as one accessible mark.
+ *
+ * The trend used to be a bare ▼/▲/– text glyph: it read as iconography, and
+ * when it became an icon it lost its meaning to assistive tech. One component
+ * now owns the mapping (label in both languages, colour never the only
+ * channel) so the two teacher screens cannot drift apart. */
+export function TrendMark({ trend }: { trend: "up" | "down" | "flat" }) {
+  if (trend === "down") {
+    return (
+      <span
+        className="trend-mark trend-down"
+        role="img"
+        aria-label={t("trendFalling")}
+      >
+        <TrendingDown size={14} aria-hidden />
+      </span>
+    );
+  }
+  if (trend === "up") {
+    return (
+      <span
+        className="trend-mark trend-up"
+        role="img"
+        aria-label={t("trendRising")}
+      >
+        <TrendingUp size={14} aria-hidden />
+      </span>
+    );
+  }
+  return (
+    <span
+      className="trend-mark trend-flat"
+      role="img"
+      aria-label={t("trendSteady")}
+    >
+      {"–"}
     </span>
   );
 }

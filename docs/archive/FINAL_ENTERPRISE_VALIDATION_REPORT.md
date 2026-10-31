@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [README.md](README.md).
+
 # Final Enterprise Validation Report — Bangla GPT APP
 
 **Project:** Bangla GPT APP — NCTB-grounded Bangla-first AI Personal Tutor

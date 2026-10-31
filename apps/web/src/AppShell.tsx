@@ -24,6 +24,7 @@ import { exitImpersonation, isImpersonating } from "./api";
 import { NotificationBell } from "./components/NotificationBell";
 import { BrandMark } from "./components/BrandMark";
 import { SearchBox } from "./components/SearchBox";
+import { SkipLink } from "./components/SkipLink";
 import { getLang, onLangChange, setLang, t } from "./i18n";
 import { toggleTheme, currentTheme, onThemeChange } from "./lib/theme";
 import {
@@ -60,7 +61,7 @@ const TEACHER_NAV = [
   },
 ] as const;
 
-export function OfflineBanner() {
+function OfflineBanner() {
   const [online, setOnline] = useState(navigator.onLine);
   useEffect(() => {
     const up = () => setOnline(true);
@@ -80,7 +81,7 @@ export function OfflineBanner() {
   );
 }
 
-export function ImpersonationBanner() {
+function ImpersonationBanner() {
   const { me } = useAuth();
   const [ending, setEnding] = useState(false);
   if (!isImpersonating()) return null;
@@ -125,13 +126,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             : "shell"
       }
     >
+      <SkipLink />
       <OfflineBanner />
       <ImpersonationBanner />
       <header className="topbar">
         <button
           className="brand brand-reset"
           onClick={() => navigate(me ? `/` : "/login")}
-          aria-label={t("brandHome")}
+          // WCAG 2.5.3 (label in name): the accessible name must contain the
+          // visible label, and the visible label here is the app name. Naming
+          // it only "go home" -- the pre-fix state -- made axe fail every
+          // authed route with label-content-name-mismatch (serious), so the
+          // hint now rides along with the name instead of replacing it.
+          aria-label={`${t("appName")} — ${t("brandHome")}`}
         >
           <span className="brand-mark" aria-hidden>
             <BrandMark size={30} />
@@ -180,7 +187,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
           <button
             className="icon-btn"
+            // F-168: the name stayed "ডার্ক মোড" in both states, so the state
+            // was invisible; aria-pressed exposes it until a `lightMode` key
+            // lets the name state the target theme (C2 handoff).
             aria-label={t("darkMode")}
+            aria-pressed={dark}
             onClick={() => toggleTheme()}
           >
             {dark ? (

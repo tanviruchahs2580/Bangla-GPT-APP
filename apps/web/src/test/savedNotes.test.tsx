@@ -6,7 +6,7 @@
  * same way.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -128,5 +128,25 @@ describe("saved notes", () => {
         timeout: 8000,
       }),
     ).toBeInTheDocument();
+  });
+
+  // F-021: a failed notes fetch rendered the same "no saved notes yet" copy as
+  // an empty list, telling the student their bookmarks were gone.
+  it("surfaces a failed notes fetch instead of the empty state", async () => {
+    apiMock.getNotes.mockRejectedValue(new Error("boom"));
+    renderPage();
+
+    const card = await screen.findByText(t("savedNotesTitle"), undefined, {
+      timeout: 8000,
+    });
+    const section = card.closest(".card") as HTMLElement;
+    const alert = await within(section).findByRole("alert", undefined, {
+      timeout: 8000,
+    });
+    expect(alert).toHaveTextContent(t("errorGeneric"));
+    expect(
+      within(section).getByRole("button", { name: t("retry") }),
+    ).toBeInTheDocument();
+    expect(within(section).queryByText(t("savedNotesEmpty"))).toBeNull();
   });
 });

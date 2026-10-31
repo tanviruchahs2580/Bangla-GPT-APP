@@ -10,12 +10,14 @@ report accordingly and do not paste real student data into an issue.
 **Do not open a public issue.** Public issues are visible to everyone,
 including people who would use the knowledge.
 
-Email the maintainer, or use GitHub's private reporting:
+Use GitHub's private reporting — it is the monitored channel:
 
 - Repository → **Security** → **Advisories** → **Report a vulnerability**
-  (preferred: it gives you a private thread and a tracking id)
-- Email: the address in `pyproject.toml` `[project.urls]` / the repository
-  owner profile
+  (it gives you a private thread and a tracking id)
+
+There is no separate security mailbox. If GitHub is itself unavailable, open
+a minimal public issue asking for a private channel and disclose nothing in
+it.
 
 Please include:
 

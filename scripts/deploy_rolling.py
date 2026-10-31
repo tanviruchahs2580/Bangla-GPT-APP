@@ -97,33 +97,47 @@ class Proxy:
     def __init__(self) -> None:
         self.upstream = ""
         self.server: asyncio.Server | None = None
+        # Requests currently routed to an upstream. The demo waits for this to
+        # reach zero before stopping the old instance; without that wait the
+        # terminate() lands mid-request (on Windows terminate() is immediate,
+        # not a graceful SIGTERM) and the client sees a 502.
+        self.inflight = 0
+        # One pooled client shared by every forwarded request: constructing an
+        # AsyncClient per request was measured (2026-10-29) to cost hundreds of
+        # ms on Windows, which queued requests past the load generator's 5 s
+        # timeout and made the proxy -- not the upstream switch -- the source
+        # of "failed" requests in the demo.
+        self.client = httpx.AsyncClient(timeout=5.0)
 
     async def handle(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
-        status, body = 502, b""
+        self.inflight += 1
         try:
-            request = await reader.readuntil(b"\r\n\r\n")
-            head = request.split(b"\r\n")[0].decode()
-            path = head.split(" ")[1] if len(head.split(" ")) > 1 else "/"
-            async with httpx.AsyncClient() as client:
-                r = await client.get(f"{self.upstream}{path}", timeout=10.0)
-            status, body = r.status_code, r.content
-        except (
-            httpx.HTTPError,
-            asyncio.IncompleteReadError,
-            UnicodeDecodeError,
-            OSError,
-        ):
             status, body = 502, b""
-        with contextlib.suppress(OSError):
-            writer.write(
-                b"HTTP/1.1 %d OK\r\nContent-Length: %d\r\nConnection: close\r\n\r\n"
-                % (status, len(body))
-            )
-            writer.write(body)
-            await writer.drain()
-            writer.close()
+            try:
+                request = await reader.readuntil(b"\r\n\r\n")
+                head = request.split(b"\r\n")[0].decode()
+                path = head.split(" ")[1] if len(head.split(" ")) > 1 else "/"
+                r = await self.client.get(f"{self.upstream}{path}")
+                status, body = r.status_code, r.content
+            except (
+                httpx.HTTPError,
+                asyncio.IncompleteReadError,
+                UnicodeDecodeError,
+                OSError,
+            ):
+                status, body = 502, b""
+            with contextlib.suppress(OSError):
+                writer.write(
+                    b"HTTP/1.1 %d OK\r\nContent-Length: %d\r\nConnection: close\r\n\r\n"
+                    % (status, len(body))
+                )
+                writer.write(body)
+                await writer.drain()
+                writer.close()
+        finally:
+            self.inflight -= 1
 
     async def start(self, port: int) -> None:
         self.server = await asyncio.start_server(self.handle, "127.0.0.1", port)
@@ -224,10 +238,13 @@ def demo(args: argparse.Namespace) -> int:
                 )
                 return 1
             # Gate green -> flip upstream atomically -> drain old. On real hosts
-            # this is `caddy reload` + graceful stop; here it is one assignment.
+            # this is `caddy reload` + graceful stop; here it is one assignment
+            # plus a wait for the requests already routed to the old release.
             proxy.upstream = f"http://127.0.0.1:{new_port}"
             print("gate green: upstream flipped to new release", flush=True)
-            await asyncio.sleep(0.3)  # let in-flight old-upstream requests finish
+            drain_deadline = time.monotonic() + 5.0
+            while proxy.inflight and time.monotonic() < drain_deadline:
+                await asyncio.sleep(0.02)
             old_proc.terminate()
             await asyncio.to_thread(old_proc.wait)
             switching.set()
@@ -256,13 +273,20 @@ def demo(args: argparse.Namespace) -> int:
                     p.terminate()
             if proxy.server is not None:
                 proxy.server.close()
+            await proxy.client.aclose()
             await client.aclose()
 
     try:
         return asyncio.run(_run())
     finally:
         time.sleep(1.5)  # let uvicorn children release the sqlite file
-        for name in ("_deploy_demo.db", "_deploy_demo.db-wal", "_deploy_demo.db-shm"):
+        for name in (
+            "_deploy_demo.db",
+            "_deploy_demo.db-wal",
+            "_deploy_demo.db-shm",
+            "_deploy_demo_old.log",
+            "_deploy_demo_new.log",
+        ):
             with contextlib.suppress(OSError):
                 (API_DIR / name).unlink(missing_ok=True)
 

@@ -47,16 +47,30 @@ _IDENTIFIER_KEY_RE = re.compile(
 )
 
 # Values that are unmistakably credentials regardless of the key they sit under.
-_SENSITIVE_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = (
+_CREDENTIAL_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\$argon2[id]?\$"),  # argon2 PHC string
     re.compile(r"\bpbkdf2_sha256\$"),  # legacy PHC string
     re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\."),  # JWT
     re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}"),  # GitHub token
     re.compile(r"\b(?:sk|ghp|glpat|xox[abps])-[A-Za-z0-9_-]{16,}"),  # vendor tokens
     re.compile(r"\bBearer\s+[A-Za-z0-9._~+/-]{12,}=*"),  # Authorization header
-    re.compile(r"\+?[0-9]{10,15}"),  # phone numbers (guardian PII)
-    re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.]{2,}\b"),  # email addresses
 )
+
+# Values that are PII but not credentials. These are checked for every field
+# EXCEPT one whose key says "opaque identifier" (F-188): a hex id such as
+# `9c12968924894e25` contains an 11-digit run that the phone pattern matched,
+# so 3 of 273 logged request_ids arrived as "[redacted]" - the id was lost in
+# the very sink used to correlate the client's report with the server's trace.
+_PII_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\+?[0-9]{10,15}"),  # phone numbers (guardian PII)
+)
+
+# Email addresses (guardian PII). Kept out of the tuple above because it is
+# the only pattern that needs a precondition and a bounded shape: the previous
+# unbounded ``\b[\w.+-]+@[\w-]+\.[\w.]{2,}\b`` re-scanned a long word run from
+# every boundary and took 10 s on a 20 000-char adversarial log field (F-076).
+# Every quantifier is bounded at the RFC 5321 limits, so the scan is linear.
+_EMAIL_VALUE_PATTERN = re.compile(r"\b[\w.+-]{1,64}@[\w-]{1,255}(?:\.[\w-]{1,255}){1,8}\b")
 
 #: Keys whose values are long opaque blobs (tokens) regardless of the word match.
 _OPAQUE_KEY_RE = re.compile(r"(?i)(?:^|_)(?:bearer|auth_header|raw|raw_detail)(?:$|_)")
@@ -65,6 +79,25 @@ _OPAQUE_KEY_RE = re.compile(r"(?i)(?:^|_)(?:bearer|auth_header|raw|raw_detail)(?
 def is_sensitive_key(key: str) -> bool:
     """True when a structured-log field name denotes a secret."""
     return bool(_SENSITIVE_KEY_RE.search(key) or _OPAQUE_KEY_RE.search(key))
+
+
+def _value_looks_secret(value: str, *, identifier: bool = False) -> bool:
+    """True when a string value matches a credential/PII shape.
+
+    The credential patterns run always - a token under a field named
+    ``request_id`` is still a token. The phone pattern is skipped when the key
+    declared an opaque identifier, because an id is not a phone number and the
+    digit-run match turned out to be a false positive (F-188).
+
+    The email check runs only when the value contains an '@', so the common
+    log field (an id, a name, an event) pays one subclass check per pattern
+    instead of a quadratic scan (F-076).
+    """
+    if any(pattern.search(value) for pattern in _CREDENTIAL_VALUE_PATTERNS):
+        return True
+    if not identifier and any(pattern.search(value) for pattern in _PII_VALUE_PATTERNS):
+        return True
+    return "@" in value and _EMAIL_VALUE_PATTERN.search(value) is not None
 
 
 def redact_value(value: Any, *, _depth: int = 0, _is_identifier: bool = False) -> Any:
@@ -94,14 +127,10 @@ def redact_value(value: Any, *, _depth: int = 0, _is_identifier: bool = False) -
     if value is None or isinstance(value, bool):
         return value
     if isinstance(value, str):
-        # An identifier field is exempt from the value-shape rules, but never
-        # from a rule that says "this is definitely a credential".
-        if _is_identifier and not any(p.search(value) for p in _SENSITIVE_VALUE_PATTERNS):
-            return value
-        for pattern in _SENSITIVE_VALUE_PATTERNS:
-            if pattern.search(value):
-                return REDACTED
-        return value
+        # An identifier field skips the PII patterns, never the credential
+        # ones: an id is not a phone number, but a token logged under an
+        # id-shaped key is still a token (F-188).
+        return REDACTED if _value_looks_secret(value, identifier=_is_identifier) else value
     if isinstance(value, (int, float)):
         return value
     # Any other object could carry a __repr__ that exposes internals, and a
@@ -122,10 +151,15 @@ class RedactionFilter(logging.Filter):
             # Set only by json_log_secret, which refuses outright in
             # production. Everything else is redacted.
             return True
-        try:
-            record.msg = redact_value(record.msg)
-        except Exception:  # never let redaction break logging
-            record.msg = REDACTED
+        if not getattr(record, "fields_redacted", False):
+            # json_log redacted each field before serialising, which is the
+            # only pass that can see the field names; re-scanning the JSON
+            # string can only guess from value shapes and would destroy lines
+            # whose ids merely resemble a phone number.
+            try:
+                record.msg = redact_value(record.msg)
+            except Exception:  # never let redaction break logging
+                record.msg = REDACTED
         # ``exc_info`` renders a traceback that may embed a repr() of the
         # offending object. The message is already redacted above; the
         # formatted exception text is scrubbed by RedactingFormatter, which
@@ -238,7 +272,18 @@ def json_log(logger: logging.Logger, level: int, event: str, **fields) -> None:
     if rid:
         fields.setdefault("request_id", rid)
     safe = {"event": event, **redact_value(fields)}
-    logger.log(level, json.dumps(safe, ensure_ascii=False, default=str))
+    # The mapping above is authoritative and already redacted; the record is
+    # marked so ``RedactionFilter`` does not run a second, shape-guessing pass
+    # over the serialised JSON. That second pass used to replace a whole line
+    # with "[redacted]" whenever a value merely *looked* sensitive - a hex
+    # request_id containing an 11-digit run matches the phone pattern, so the
+    # event name was lost in the sink operators use to correlate a report with
+    # the server's trace (F-188's root cause, measured 2026-10-30).
+    logger.log(
+        level,
+        json.dumps(safe, ensure_ascii=False, default=str),
+        extra={"fields_redacted": True},
+    )
 
 
 # --------------------------------------------------------------------------

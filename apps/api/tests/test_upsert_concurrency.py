@@ -82,7 +82,7 @@ def test_get_or_create_recovers_from_the_insert_race(engine) -> None:
     with Session(engine) as db:
         fired = threading.Event()
 
-        def rival_commits(session, flush_context, instances):
+        def rival_commits(session, _flush_context, _instances):
             if fired.is_set():
                 return
             fired.set()

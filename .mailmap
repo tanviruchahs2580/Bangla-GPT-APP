@@ -1,0 +1,12 @@
+# Git identity map (F-103 / GIT-09).
+#
+# 73 commits between 2026-10-11 and 2026-10-28 carry a personal Gmail address
+# in the author field because the local user.email was not the GitHub noreply
+# address during that window. The address cannot be removed from published
+# history without a force-push (the owner's decision, register F-103), but
+# `git shortlog -sne`, `git log --format=%aE` displays and blame output all
+# honour this file, so tooling and reports show the canonical identity.
+#
+# Canonical identity <canonical@address> <historic@address>
+tanviruchahs2580 <287437042+tanviruchahs2580@users.noreply.github.com> <tanvir.uchahs2580@gmail.com>
+tanviruchahs2580 <287437042+tanviruchahs2580@users.noreply.github.com> <tanvir.uchahs2580@users.noreply.github.com>

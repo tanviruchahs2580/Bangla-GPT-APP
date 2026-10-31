@@ -164,7 +164,7 @@ def test_students_list_is_scoped_to_the_calling_schools_tenant(env):
             json={"csv_text": f"name,email\nPupil {tag},pupil.{tag}@ten.test"},
             headers=who["teacher"],
         )
-        assert res.status_code in (200, 201), res.text
+        assert res.status_code == 200, res.text  # the import endpoint answers 200
         created.append(tag)
 
     body_a = client.get("/school/students", headers=a["principal"])

@@ -1,7 +1,7 @@
 /** student home is capped at five primary blocks and the prompt
  *  bar hands the question straight to the AI tutor. */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -137,6 +137,55 @@ describe("student home", () => {
     expect(tutorLocation?.pathname).toBe("/student/tutor");
     expect((tutorLocation?.state as { ask?: string })?.ask).toBe(
       "ভগ্নাংশ বুঝাও",
+    );
+  });
+
+  // F-021: an outage used to drop the recommendation card silently and print a
+  // 0-day streak — two confident, wrong statements about the student's work.
+  it("says so when the summary query fails instead of dropping the card", async () => {
+    apiMock.get.mockImplementation((path: string) => {
+      if (path.endsWith("/progress"))
+        return Promise.resolve(structuredClone(PROGRESS));
+      if (path.endsWith("/activity"))
+        return Promise.resolve(structuredClone(ACTIVITY));
+      if (path === "/dashboard/summary")
+        return Promise.reject(new Error("boom"));
+      return Promise.resolve(null);
+    });
+    renderHome();
+
+    const title = await screen.findByText(t("todayRecommendation"));
+    const section = title.closest(".card") as HTMLElement;
+    expect(await within(section).findByRole("alert")).toHaveTextContent(
+      t("errorGeneric"),
+    );
+    expect(
+      within(section).getByRole("button", { name: t("retry") }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not claim a zero streak when the activity query fails", async () => {
+    apiMock.get.mockImplementation((path: string) => {
+      if (path.endsWith("/progress"))
+        return Promise.resolve(structuredClone(PROGRESS));
+      if (path.endsWith("/activity")) return Promise.reject(new Error("boom"));
+      if (path === "/dashboard/summary")
+        return Promise.resolve(structuredClone(DASHBOARD));
+      return Promise.resolve(null);
+    });
+    renderHome();
+
+    const snapshot = (await screen.findByText(t("progressSnapshot"))).closest(
+      ".card",
+    ) as HTMLElement;
+    expect(
+      within(snapshot).queryByText(t("streakLabel", { days: 0 })),
+    ).toBeNull();
+    expect(
+      within(snapshot).queryByText(t("streakLabel", { days: 3 })),
+    ).toBeNull();
+    expect(await within(snapshot).findByRole("alert")).toHaveTextContent(
+      t("errorGeneric"),
     );
   });
 });

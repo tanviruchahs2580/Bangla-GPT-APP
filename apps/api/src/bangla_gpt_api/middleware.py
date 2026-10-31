@@ -153,9 +153,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             except RateLimitBackendError:
                 return JSONResponse({"detail": "Rate limiter unavailable"}, status_code=503)
             if not allowed:
+                # Retry-After so a throttled client waits instead of guessing
+                # (the auth lockout path already sends it; API-05).
+                wait_seconds = self.limiter.retry_after(f"{path_prefix}|{key_source}")
                 return JSONResponse(
                     {"detail": {"code": "rate_limited", "message": "Rate limit exceeded"}},
                     status_code=429,
+                    headers={"Retry-After": str(wait_seconds)},
                 )
         return await call_next(request)
 
@@ -256,6 +260,11 @@ class BodySizeLimitMiddleware:
             await self._response(400, "Unable to read request body")(scope, receive, send)
 
 
+#: HSTS lifetime. Must match the edge's value (deploy/caddy/Caddyfile) so a
+#: response that reaches a browser through either hop pins the same policy.
+HSTS_MAX_AGE_SECONDS = 31_536_000
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Baseline hardening headers on every API response."""
 
@@ -318,7 +327,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         settings = getattr(request.app.state, "settings", None)
         if settings is not None and settings.is_production:
             response.headers.setdefault(
-                "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+                "Strict-Transport-Security",
+                f"max-age={HSTS_MAX_AGE_SECONDS}; includeSubDomains",
             )
         return response
 

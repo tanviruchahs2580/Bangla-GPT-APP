@@ -42,12 +42,26 @@ class _Stub(LLMProvider):
 
 
 def _service(provider, *, fallback=None, breaker=None, router=None):
+    # ``__new__`` skips the constructor, so every attribute the seams read has
+    # to be set here; the defaults mirror TutorService.__init__. A new
+    # constructor attribute that a seam reads shows up as an AttributeError
+    # here, which is the signal to add it below (and to the real defaults).
     service = TutorService.__new__(TutorService)
     service.provider = provider
     service.fast_provider = None
     service._fallback = fallback
     service._breaker = breaker
     service._router = router
+    service.index = None
+    service.term_stats = None
+    service.min_score = 0.0
+    service.min_coverage = 0.5
+    service.top_k = 3
+    # F-082: the answer trace stamps the served corpus identity on every row.
+    service.corpus_digest = None
+    service.max_concurrent_generations = 0
+    service.generation_queue_timeout = 0.0
+    service._generation_slots = None
     return service
 
 

@@ -20,11 +20,14 @@ import { AuthProvider } from "./AuthContext";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { initInstallPrompt } from "./lib/installPrompt";
 import { initLowData } from "./lib/lowData";
+import { registerServiceWorker } from "./lib/serviceWorkerUpdate";
 
 // apply the persisted low-data mode before first paint.
 initLowData();
 initInstallPrompt();
-ReactDOM.createRoot(document.getElementById("root")!).render(
+const rootElement = document.getElementById("root");
+if (!rootElement) throw new Error("index.html is missing #root");
+ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
     {/* Last-resort boundary for errors above the routes (providers, shell);
         per-route recovery lives in RouteErrorBoundary (F-001). */}
@@ -39,10 +42,12 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
 );
 
 // PWA: register the service worker in production builds only — in dev the
-// cache-first strategy would serve stale Vite modules and break HMR.
+// cache-first strategy would serve stale Vite modules and break HMR. The
+// registration also drives the "new version is ready" banner; registerServiceWorker
+// never rejects the app (offline support is best-effort).
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => {
+    registerServiceWorker().catch(() => {
       /* offline support is best-effort; never block the app on SW errors */
     });
   });

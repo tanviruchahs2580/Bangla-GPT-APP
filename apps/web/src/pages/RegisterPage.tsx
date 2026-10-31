@@ -95,7 +95,11 @@ export default function RegisterPage() {
     // Shares login's photo backdrop (.splash-login): the desktop artwork, the
     // portrait mobile artwork with its ambient fill, the dark-mode veil and
     // the low-data kill-switch all live in that one class.
-    <div className="splash splash-login auth-shell">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="splash splash-login auth-shell"
+    >
       <section className="auth-brand">
         <div className="auth-brand-head">
           <span className="auth-brand-logo" aria-hidden>
@@ -279,6 +283,6 @@ export default function RegisterPage() {
           </>
         )}
       </Card>
-    </div>
+    </main>
   );
 }

@@ -11,6 +11,7 @@ import {
   setUnauthorizedHandler,
   type MeResponse,
 } from "./api";
+import { syncOfflineOwner } from "./lib/offlineStore";
 
 interface AuthState {
   me: MeResponse | null;
@@ -43,6 +44,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (result.status === "ok") {
           setMe(result.me);
           setApiUnreachable(false);
+          if (result.me.role === "student") {
+            // PWA-03: a crash or an undetected logout can leave offline
+            // chapter copies owned by a different user on a shared device;
+            // the owner marker catches that before the reader opens.
+            void syncOfflineOwner(result.me.user_id);
+          }
         } else if (result.status === "unreachable") {
           // Keep whatever profile we already have and keep the token: the
           // outage is not the user's fault and must not end their session.
@@ -84,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = () => {
     // F-036: logout() is awaitable precisely so sign-out cannot navigate away
     // before the storage wipe finishes; the query cache is cleared by the
-    // cleanup registered in main.tsx.
+    // cleanup registered in App.tsx (`setLogoutCleanup`).
     void logout().finally(() => {
       setMe(null);
       setApiUnreachable(false);

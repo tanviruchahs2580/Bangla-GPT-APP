@@ -1,15 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Check,
-  ClipboardCheck,
-  RefreshCcw,
-  Repeat2,
-  Target,
-} from "lucide-react";
+import { ClipboardCheck, Repeat2, Target } from "lucide-react";
 import { get, post } from "../../api";
 import { track } from "../../lib/analytics";
 import type {
@@ -17,7 +9,6 @@ import type {
   DashboardSummary,
   QuizResult,
   QuizStarted,
-  ReteachCard,
   RevisionDue,
   RevisionItemOut,
   ShortTestMine,
@@ -26,61 +17,26 @@ import type {
 import { invalidateStudyCaches } from "../../lib/invalidate";
 import { buildExplainPayload, LAST_RESULT_KEY } from "../../lib/quizExplain";
 import { useAuth } from "../../AuthContext";
-import {
-  Badge,
-  Button,
-  Card,
-  LoadError,
-  ProgressRing,
-  Stat,
-} from "../../components/ui";
-import { QuizOptionGroup } from "../../components/QuizOptionGroup";
+import { Badge, Button, Card } from "../../components/ui";
 import { friendlyError } from "../../errors";
-import { t, tSubject } from "../../i18n";
+import { t } from "../../i18n";
 import { cn } from "../../lib/cn";
-import { formatServerDateTime } from "../../lib/datetime";
-import { celebrate } from "../../lib/confetti";
 import {
   clearQuizDraft,
   readQuizDraft,
   QUIZ_DRAFT_KEY,
 } from "../../lib/quizDraft";
+import { AssignedPanel, type AssignedEntry } from "./quiz/AssignedPanel";
+import { QuizResultScreen } from "./quiz/QuizResultScreen";
+import { QuizRunner } from "./quiz/QuizRunner";
+import { RevisionPanel } from "./quiz/RevisionPanel";
+import { StartQuizCard, subjectOptions } from "./quiz/StartQuizCard";
 
-// labels from i18n, evaluated per render (lang switch remounts).
-const subjectOptions = () => [
-  { value: "science", label: t("subjectScience") },
-  { value: "mathematics", label: t("subjectMath") },
-  { value: "bangla", label: t("subjectBangla") },
-];
-
-// KG gap -> grounded re-teach card (textbook excerpt, never AI text).
-function QuizCelebration({ score }: { score: number }) {
-  useEffect(() => {
-    celebrate(score);
-  }, [score]);
-  return null;
-}
-
-function ReteachCards({ cards }: { cards: ReteachCard[] }) {
-  if (cards.length === 0) return null;
-  return (
-    <Card className="reteach-card card-ai">
-      <div className="card-title">{t("reteachTitle")}</div>
-      <p className="muted muted-sm reteach-hint">{t("reteachHint")}</p>
-      <div className="stack">
-        {cards.map((c, i) => (
-          <div key={i} className="reteach-item">
-            <div className="row-title">
-              {t("reteachChain", { concept: c.concept, prereq: c.prereq })}
-            </div>
-            <p className="reteach-excerpt">{c.excerpt}</p>
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
-
+/**
+ * F-094 split: the screens and tab panels live under ./quiz/ now. This file
+ * keeps the state that spans them (the draft, the answer map, the submit
+ * guard, the hub tabs, the queries) and the wiring between them.
+ */
 export default function QuizPage() {
   const { me } = useAuth();
   const isStudent = me?.role === "student";
@@ -145,6 +101,28 @@ export default function QuizPage() {
     void submit();
   };
 
+  const queryClient = useQueryClient();
+  const { data: progress } = useQuery({
+    queryKey: ["progress", me?.profile_id],
+    queryFn: () => {
+      if (!me?.profile_id) throw new Error("student profile is not loaded");
+      return get<StudentProgress>(`/students/${me.profile_id}/progress`);
+    },
+    enabled: !!me?.profile_id && me.role === "student",
+  });
+  const { data: dashboard } = useQuery({
+    queryKey: ["dashboard"],
+    queryFn: () => get<DashboardSummary>("/dashboard/summary"),
+    enabled: me?.role === "student",
+  });
+
+  // spaced-revision tab (SM-2-lite queue) with due badge.
+  const [tab, setTab] = useState<"quiz" | "revision" | "assigned">("quiz");
+  const { data: due, refetch: refetchDue } = useQuery({
+    queryKey: ["revision-due"],
+    queryFn: () => get<RevisionDue>("/revision/due"),
+    enabled: me?.role === "student",
+  });
   // FE-06: the visual tabs promise tab semantics, so the keyboard gets
   // them too — roving focus with arrow keys, exactly the contract
   // LearnPage implements for the same controls.
@@ -164,25 +142,6 @@ export default function QuizPage() {
     tabRefs.current[tabOrder.indexOf(next)]?.focus();
   };
 
-  const queryClient = useQueryClient();
-  const { data: progress } = useQuery({
-    queryKey: ["progress", me?.profile_id],
-    queryFn: () => get<StudentProgress>(`/students/${me!.profile_id}/progress`),
-    enabled: !!me?.profile_id && me.role === "student",
-  });
-  const { data: dashboard } = useQuery({
-    queryKey: ["dashboard"],
-    queryFn: () => get<DashboardSummary>("/dashboard/summary"),
-    enabled: me?.role === "student",
-  });
-
-  // spaced-revision tab (SM-2-lite queue) with due badge.
-  const [tab, setTab] = useState<"quiz" | "revision" | "assigned">("quiz");
-  const { data: due, refetch: refetchDue } = useQuery({
-    queryKey: ["revision-due"],
-    queryFn: () => get<RevisionDue>("/revision/due"),
-    enabled: me?.role === "student",
-  });
   // + merged "assigned by teacher" list (short tests + bulk).
   const {
     data: stMine,
@@ -292,12 +251,16 @@ export default function QuizPage() {
   };
 
   const submit = async () => {
+    // Captured after the guard: TypeScript cannot narrow `started` across the
+    // awaits below, and a non-null assertion would hide a real null.
+    const attempt = started;
+    if (!attempt) return;
     setBusy(true);
     try {
       const res = await post<QuizResult>(
-        `/quizzes/${started!.attempt_id}/submit`,
+        `/quizzes/${attempt.attempt_id}/submit`,
         {
-          answers: started!.questions.map((_, i) => answers[i] ?? -1),
+          answers: attempt.questions.map((_, i) => answers[i] ?? -1),
         },
       );
       setResult(res);
@@ -331,204 +294,49 @@ export default function QuizPage() {
   // ----- result screen -----
   if (result) {
     return (
-      <main className="shell-main">
-        <section className="section-head">
-          <h2>{t("yourQuizResult")}</h2>
-        </section>
-        <QuizCelebration score={result.score_pct} />
-        <Card className="card-featured">
-          <div className="row-flex quiz-result-hero">
-            <ProgressRing
-              value={result.score_pct}
-              size={120}
-              label={<strong>{Math.round(result.score_pct)}%</strong>}
-            />
-            <div className="stat-value quiz-result-score">
-              {t("correctOutOf", {
-                correct: result.correct,
-                total: result.total,
-              })}
-            </div>
-          </div>
-          <div className="stack section-gap-top">
-            {result.review.map((r, i) => (
-              <Card key={i} className="row quiz-review-row">
-                <span
-                  className={cn(
-                    "quick-icon",
-                    r.is_correct ? "tile-ok" : "tile-danger",
-                  )}
-                >
-                  {r.is_correct ? (
-                    <Check size={18} aria-hidden />
-                  ) : (
-                    <ClipboardCheck size={18} aria-hidden />
-                  )}
-                </span>
-                <div className="row-main">
-                  <div className="row-title">{r.question_text}</div>
-                  <div className="row-sub">
-                    {t("chapter")}: {r.chapter} —{" "}
-                    {r.options[r.correct_index] ?? ""}
-                  </div>
-                  {!r.is_correct && (
-                    // wrong item → explain loop with full quiz context.
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="section-gap-top"
-                      onClick={() =>
-                        navigate("/student/tutor", {
-                          state: {
-                            explain: buildExplainPayload(r),
-                            backToResult: true,
-                          },
-                        })
-                      }
-                    >
-                      {t("explainThis")}
-                    </Button>
-                  )}
-                </div>
-              </Card>
-            ))}
-          </div>
-        </Card>
-        {result.reteach && result.reteach.length > 0 && (
-          <div className="section-gap-top">
-            <ReteachCards cards={result.reteach} />
-          </div>
-        )}
-        {/* one clear next step; everything else is secondary */}
-        <div className="section-gap-top">
-          <Button
-            variant="primary"
-            block
-            onClick={() => {
-              setResult(null);
-              void start();
-            }}
-          >
-            <RefreshCcw size={18} aria-hidden /> {t("startQuiz")}
-          </Button>
-        </div>
-      </main>
+      <QuizResultScreen
+        result={result}
+        onExplain={(row) =>
+          navigate("/student/tutor", {
+            state: { explain: buildExplainPayload(row), backToResult: true },
+          })
+        }
+        onRestart={() => {
+          setResult(null);
+          void start();
+        }}
+      />
     );
   }
 
   // ----- in-progress quiz -----
   if (started) {
-    const q = started.questions[current];
-    // undefined before any option is picked; normalised here so the roving
-    // tab stop and the arrow handler agree on "no choice yet".
-    const chosen = answers[current] ?? null;
-    const answeredCount = Object.keys(answers).length;
     return (
-      <main className="shell-main">
-        <section className="section-head">
-          <h2>{t("practiceTitle")}</h2>
-          <Badge>
-            {current + 1}/{started.questions.length}
-          </Badge>
-        </section>
-        {started.reteach && started.reteach.length > 0 && current === 0 && (
-          <div className="stack chips-gap">
-            <ReteachCards cards={started.reteach} />
-          </div>
-        )}
-        <Card key={current} className="quiz-q">
-          <div className="row-flex chips-gap">
-            <ProgressRing
-              value={(answeredCount / started.questions.length) * 100}
-              size={64}
-              label={
-                <strong>
-                  {answeredCount}/{started.questions.length}
-                </strong>
-              }
-            />
-            <div className="row-main">
-              <div className="row-title quiz-q-title">{q.question_text}</div>
-              <div className="muted muted-sm">{t("chooseAnswers")}</div>
-            </div>
-          </div>
-          <QuizOptionGroup
-            options={q.options}
-            chosen={chosen}
-            label={q.question_text}
-            onChoose={(oi) => setAnswers((a) => ({ ...a, [current]: oi }))}
-          />
-          <div className="row-flex quiz-pager">
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={current === 0}
-              onClick={() => setCurrent((c) => c - 1)}
-            >
-              <ArrowLeft size={16} aria-hidden /> {t("previousQuestion")}
-            </Button>
-            {current < started.questions.length - 1 ? (
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => setCurrent((c) => c + 1)}
-              >
-                {t("nextQuestion")} <ArrowRight size={16} aria-hidden />
-              </Button>
-            ) : (
-              <Button
-                variant="teal"
-                size="sm"
-                onClick={requestSubmit}
-                disabled={busy}
-              >
-                {t("finishQuiz")}
-              </Button>
-            )}
-          </div>
-          {error && (
-            <p className="error section-gap-top" role="alert">
-              {error}
-            </p>
-          )}
-          {confirmSubmit && unanswered > 0 && (
-            <div className="warn-strip section-gap-top" role="alert">
-              <p>{t("quizUnansweredConfirm", { n: unanswered })}</p>
-              <div className="row-flex">
-                <Button
-                  variant="teal"
-                  size="sm"
-                  loading={busy}
-                  onClick={() => {
-                    setConfirmSubmit(false);
-                    void submit();
-                  }}
-                >
-                  {t("quizSubmitAnyway")}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setConfirmSubmit(false)}
-                >
-                  {t("quizKeepAnswering")}
-                </Button>
-              </div>
-            </div>
-          )}
-        </Card>
-      </main>
+      <QuizRunner
+        started={started}
+        current={current}
+        answers={answers}
+        busy={busy}
+        error={error}
+        confirmSubmit={confirmSubmit}
+        unanswered={unanswered}
+        onChoose={(oi) => setAnswers((a) => ({ ...a, [current]: oi }))}
+        onPrevious={() => setCurrent((c) => c - 1)}
+        onNext={() => setCurrent((c) => c + 1)}
+        onRequestSubmit={requestSubmit}
+        onSubmitAnyway={() => {
+          setConfirmSubmit(false);
+          void submit();
+        }}
+        onKeepAnswering={() => setConfirmSubmit(false)}
+      />
     );
   }
 
   // ----- practice hub start screen -----
-  const avg = progress?.avg_score_pct;
   const weakChapters = progress?.weak_chapters ?? [];
   const rec = dashboard?.recommendation;
-  const assigned: Array<
-    | { kind: "shorttest"; item: ShortTestMine }
-    | { kind: "bulk"; item: AssignmentMine }
-  > = [
+  const assigned: AssignedEntry[] = [
     ...(Array.isArray(stMine) ? stMine : []).map((item) => ({
       kind: "shorttest" as const,
       item,
@@ -546,12 +354,12 @@ export default function QuizPage() {
   });
 
   return (
-    <main className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       <section className="section-head">
-        <h2>{t("practiceTitle")}</h2>
+        <h1>{t("practiceTitle")}</h1>
       </section>
 
-      {/* 🎯 আমার দুর্বলতা — the most prominent entry, from the weakness rollup */}
+      {/* আমার দুর্বলতা — the most prominent entry, from the weakness rollup */}
       <Card className="practice-weak-card card-featured">
         <div className="row-flex">
           <span className="quick-icon tile-warn" aria-hidden>
@@ -641,184 +449,39 @@ export default function QuizPage() {
       </div>
 
       {tab === "revision" ? (
-        <div className="stack">
-          {due && due.items.length === 0 && (
-            <Card>
-              <p className="muted flush">{t("revisionEmpty")}</p>
-            </Card>
-          )}
-          {due?.items.map((item) => (
-            <Card key={item.id} className="row quiz-review-row">
-              <div className="row-main">
-                <div className="row-title">{item.question}</div>
-                <div className="row-sub">
-                  {t("chapter")}: {item.chapter}
-                </div>
-                <div className="stack section-gap-top">
-                  {item.options.map((opt, oi) => (
-                    <button
-                      key={oi}
-                      className="quiz-option"
-                      disabled={revisionBusy}
-                      onClick={() => answerRevision(item, oi)}
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                  <p className="muted muted-sm flush">{t("revisionChoose")}</p>
-                </div>
-              </div>
-            </Card>
-          ))}
-          {error && <p className="error">{error}</p>}
-        </div>
+        <RevisionPanel
+          due={due}
+          busy={revisionBusy}
+          error={error}
+          onAnswer={(item, oi) => void answerRevision(item, oi)}
+        />
       ) : tab === "assigned" ? (
-        <div className="stack">
-          {/* A failed fetch used to render "no work assigned yet", which reads
-              as a fact about the student's homework rather than a failed
-              request -- so they would skip work that actually exists. */}
-          {stMineFailed || asMineFailed ? (
-            <Card>
-              <LoadError
-                onRetry={() => {
-                  if (stMineFailed) void refetchStMine();
-                  if (asMineFailed) void refetchAsMine();
-                }}
-              />
-            </Card>
-          ) : isStudent &&
-            (stMinePending || asMinePending) &&
-            assigned.length === 0 ? (
-            // isStudent guards this: react-query reports isPending while a query
-            // is disabled too, so without it a teacher opening this tab would
-            // wait on a "loading" that never resolves.
-            <Card>
-              <p className="muted flush" role="status">
-                {t("loading")}
-              </p>
-            </Card>
-          ) : (
-            assigned.length === 0 && (
-              <Card>
-                <p className="muted flush">{t("assignedEmpty")}</p>
-              </Card>
-            )
-          )}
-          {assigned.map(({ kind, item }) => {
-            if (kind === "shorttest") {
-              const st = item;
-              return (
-                <Card key={`st-${st.id}`} className="row quiz-review-row">
-                  <div className="row-main">
-                    <div className="row-title">
-                      <Badge tone="teal">{t("assignedShortTest")}</Badge>{" "}
-                      {st.chapter}
-                    </div>
-                    <div className="row-sub">
-                      {tSubject(st.subject)} ·{" "}
-                      {t("stMinutes", { n: st.duration_min })}
-                      {st.expired && (
-                        <Badge tone="warn"> {t("stExpired")}</Badge>
-                      )}
-                    </div>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      className="section-gap-top"
-                      disabled={st.attempt_id === null || st.expired}
-                      onClick={() => openShortTest(st)}
-                    >
-                      {t("startQuiz")}
-                    </Button>
-                  </div>
-                </Card>
-              );
-            }
-            const a = item;
-            return (
-              <Card key={`ba-${a.id}`} className="row quiz-review-row">
-                <div className="row-main">
-                  <div className="row-title">
-                    <Badge>{t("assignedBulk")}</Badge> {a.chapter}
-                  </div>
-                  <div className="row-sub">
-                    {tSubject(a.subject)} · {t("baDue")}:{" "}
-                    {formatServerDateTime(a.due_at)}
-                    {a.done ? (
-                      <Badge tone="ok"> {t("baDone")}</Badge>
-                    ) : a.overdue ? (
-                      <Badge tone="warn"> {t("baOverdue")}</Badge>
-                    ) : null}
-                  </div>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    className="section-gap-top"
-                    disabled={a.done}
-                    onClick={() => openAssigned(a)}
-                  >
-                    {t("startQuiz")}
-                  </Button>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
+        <AssignedPanel
+          assigned={assigned}
+          isStudent={isStudent}
+          shortTestPending={stMinePending}
+          assignmentsPending={asMinePending}
+          shortTestFailed={stMineFailed}
+          assignmentsFailed={asMineFailed}
+          onRetry={() => {
+            if (stMineFailed) void refetchStMine();
+            if (asMineFailed) void refetchAsMine();
+          }}
+          onOpenShortTest={openShortTest}
+          onOpenAssigned={openAssigned}
+        />
       ) : (
-        <Card>
-          <div className="card-title">{t("startQuiz")}</div>
-          <div className="field">
-            <label htmlFor="qcount">{t("questionCount")}</label>
-            <select
-              id="qcount"
-              className="select"
-              value={number}
-              onChange={(e) => setNumber(e.target.value)}
-            >
-              {[3, 5, 10, 15].map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="quiz-subject">{t("subject")}</label>
-            <select
-              id="quiz-subject"
-              className="select"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-            >
-              {subjectOptions().map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          {progress && progress.attempts_graded > 0 && (
-            <div className="stat-grid section-gap-top">
-              <Stat value={Math.round(avg ?? 0) + "%"} label={t("avgScore")} />
-              <Stat
-                value={progress.attempts_graded}
-                label={t("gradedQuizzes")}
-              />
-            </div>
-          )}
-          {error && <p className="error">{error}</p>}
-          <Button
-            variant="primary"
-            block
-            onClick={() => void start()}
-            disabled={busy || !me?.profile_id}
-          >
-            {t("startQuiz")}
-          </Button>
-          {!me?.profile_id && (
-            <p className="muted muted-sm section-gap-top">{t("notStarted")}</p>
-          )}
-        </Card>
+        <StartQuizCard
+          number={number}
+          subject={subject}
+          onNumberChange={setNumber}
+          onSubjectChange={setSubject}
+          progress={progress}
+          error={error}
+          busy={busy}
+          canStart={!!me?.profile_id}
+          onStart={() => void start()}
+        />
       )}
     </main>
   );

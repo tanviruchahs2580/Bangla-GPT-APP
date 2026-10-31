@@ -110,4 +110,25 @@ describe("history UI", () => {
     await waitFor(() => expect(screen.queryByText("My-Old-Title")).toBeNull());
     expect(window.confirm).toHaveBeenCalled();
   });
+
+  // F-021: the history chips were hidden on failure exactly like an empty
+  // history, so old chats read as deleted. The error is now said out loud.
+  it("surfaces a failed history fetch instead of hiding the chips", async () => {
+    apiMock.get.mockReset();
+    apiMock.get.mockImplementation((path: string) => {
+      if (path.startsWith("/tutor/conversations"))
+        return Promise.reject(new Error("boom"));
+      return Promise.resolve(null);
+    });
+    renderPage();
+
+    const alert = await screen.findByRole("alert", undefined, {
+      timeout: 8000,
+    });
+    expect(alert).toHaveTextContent(t("errorGeneric"));
+    expect(
+      screen.getByRole("button", { name: t("retry") }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("My-Old-Title")).toBeNull();
+  });
 });

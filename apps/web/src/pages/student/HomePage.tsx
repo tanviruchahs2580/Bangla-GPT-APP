@@ -22,7 +22,10 @@ import { t, tSubject } from "../../i18n";
 function useProgress(me: MeResponse | null) {
   return useQuery({
     queryKey: ["progress", me?.profile_id],
-    queryFn: () => get<StudentProgress>(`/students/${me!.profile_id}/progress`),
+    queryFn: () => {
+      if (!me?.profile_id) throw new Error("student profile is not loaded");
+      return get<StudentProgress>(`/students/${me.profile_id}/progress`);
+    },
     enabled: !!me?.profile_id && me.role === "student",
   });
 }
@@ -38,7 +41,10 @@ function useDashboard(me: MeResponse | null) {
 function useActivity(me: MeResponse | null) {
   return useQuery({
     queryKey: ["activity", me?.profile_id],
-    queryFn: () => get<ActivitySummary>(`/students/${me!.profile_id}/activity`),
+    queryFn: () => {
+      if (!me?.profile_id) throw new Error("student profile is not loaded");
+      return get<ActivitySummary>(`/students/${me.profile_id}/activity`);
+    },
     enabled: !!me?.profile_id && me.role === "student",
   });
 }
@@ -53,8 +59,19 @@ export default function HomePage() {
   // yet" — a child's streak vanishing because the network hiccupped is
   // the most demotivating false message the home screen could show.
   const { data: progress, isLoading, isError, refetch } = useProgress(me);
-  const { data: dashboard } = useDashboard(me);
-  const { data: activity } = useActivity(me);
+  // F-021: the summary and activity queries were destructured without
+  // `isError`, so an outage silently dropped the recommendation card and
+  // printed a 0-day streak where the real number was simply unknown.
+  const {
+    data: dashboard,
+    isError: dashboardError,
+    refetch: refetchDashboard,
+  } = useDashboard(me);
+  const {
+    data: activity,
+    isError: activityError,
+    refetch: refetchActivity,
+  } = useActivity(me);
 
   const avg = progress?.avg_score_pct ?? 0;
   const weak = progress?.weak_chapters ?? [];
@@ -107,13 +124,13 @@ export default function HomePage() {
   const rec = dashboard?.recommendation;
 
   return (
-    <main className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       {/* 1 — greeting + "আজ কী শিখতে চাও?" prompt bar into the AI tutor */}
       <section className="hero">
-        <h2>
+        <h1>
           {t("welcome")}, {me?.name?.split(/\s+/)[0] ?? t("studentFallback")}!{" "}
           <Sparkles size={20} className="hero-sparkle" aria-hidden />
-        </h2>
+        </h1>
         <p>{t("whatToDo")}</p>
         <div className="home-prompt row-flex">
           <input
@@ -206,6 +223,12 @@ export default function HomePage() {
       </div>
 
       {/* 4 — today's recommendation (weak-chapter rollup) */}
+      {dashboardError && !dashboard && (
+        <Card className="next-step-card">
+          <div className="card-title">{t("todayRecommendation")}</div>
+          <LoadError onRetry={() => void refetchDashboard()} />
+        </Card>
+      )}
       {rec && rec.chapter && (
         <Card className="next-step-card">
           <div className="card-title">
@@ -248,11 +271,19 @@ export default function HomePage() {
             <div className="row-main">
               <div className="stat-grid">
                 <Stat value={Math.round(avg) + "%"} label={t("avgScore")} />
-                <Stat
-                  value={activity?.streak ?? 0}
-                  label={t("streakLabel", { days: activity?.streak ?? 0 })}
-                />
+                {/* The streak is only claimed when the activity query
+                    answered: `activity?.streak ?? 0` told every student with
+                    a failed request that their streak was gone. */}
+                {activity && (
+                  <Stat
+                    value={activity.streak}
+                    label={t("streakLabel", { days: activity.streak })}
+                  />
+                )}
               </div>
+              {activityError && !activity && (
+                <LoadError onRetry={() => void refetchActivity()} />
+              )}
               {weak.length > 0 && (
                 <div className="weak-chip-row">
                   {weak.slice(0, 3).map((w) => (

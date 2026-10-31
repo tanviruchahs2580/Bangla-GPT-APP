@@ -2,6 +2,16 @@
 // English ships as a secondary so non-Bangla stakeholders can navigate.
 export type Lang = "bn" | "en";
 
+// Numeral + plural policy lives at this one boundary (docs/glossary-bn.md,
+// "Numeral and plural policy"): a value that is entirely a number is a
+// quantity and renders in the current language's digits; anything else a
+// caller interpolates (names, codes, pre-formatted dates) is opaque text and
+// is never rewritten. Values named in MACHINE_VALUE_VARS stay Latin under
+// both languages even when numeric, because they are identifiers.
+const BN_DIGITS = "০১২৩৪৫৬৭৮৯";
+const PURE_NUMBER = /^\d+(?:\.\d+)?$/;
+const MACHINE_VALUE_VARS: ReadonlySet<string> = new Set(["id"]);
+
 const bn = {
   appName: "বাংলা GPT টিউটর",
   welcomeTagline: "আপনার শেখার নতুন সঙ্গী",
@@ -11,7 +21,7 @@ const bn = {
   landingHeroTitle:
     "পাঠ্যবই-ভিত্তিক বাংলা AI টিউটর — এখন প্রতিটি শিক্ষার্থীর জন্য",
   landingHeroSub:
-    "প্রশ্ন করো, কুইজ দাও, অগ্রগতি দেখো — সবই তোমার নিজের ভাষায়, পাঠ্যবইয়ের প্রমাণসহ। শিক্ষক ও অভিভাবকদের জন্যও আছে AI সহকারী।",
+    "প্রশ্ন করুন, কুইজ দিন, অগ্রগতি দেখুন — সবই আপনার নিজের ভাষায়, পাঠ্যবইয়ের প্রমাণসহ। শিক্ষক ও অভিভাবকদের জন্যও আছে AI সহকারী।",
   featTutorTitle: "AI টিউটর",
   featTutorSub: "পাঠ্যবই-ভিত্তিক উত্তর, ধাপে ধাপে ব্যাখ্যাসহ",
   featPracticeTitle: "অনুশীলন ও কুইজ",
@@ -19,7 +29,7 @@ const bn = {
   featLearnTitle: "শেখার লাইব্রেরি",
   featLearnSub: "অফলাইনেও পড়া যায়",
   featTeacherTitle: "শিক্ষকের AI সহকারী",
-  featTeacherSub: "ওয়ার্কশীট, প্রশ্নপত্র ও লেসন প্ল্যান মিনিটেই",
+  featTeacherSub: "ওয়ার্কশীট, প্রশ্নপত্র ও পাঠ পরিকল্পনা মিনিটেই",
   landingFeaturesLabel: "মূল ফিচার",
   landingStatsLabel: "এক নজরে",
   statClassesValue: "৬–১০",
@@ -36,12 +46,12 @@ const bn = {
     "{subject} · {chapter}: {count}টি প্রশ্নের কুইজ যোগ হয়েছে",
   notifShorttestAssigned: "{subject} · {chapter}: নতুন ছোট পরীক্ষা যোগ হয়েছে",
   notifSupportPlan:
-    "তোমার জন্য নতুন সহায়তা প্ল্যান তৈরি হয়েছে ({focus}টি ফোকাস পয়েন্ট)",
+    "আপনার জন্য নতুন সহায়তা পরিকল্পনা তৈরি হয়েছে ({focus}টি ফোকাস পয়েন্ট)",
   notifParentLinked: "অভিভাবকের সংযোগ সফল হয়েছে",
   stopGenerating: "থামান",
   regenerate: "আবার তৈরি করুন",
   saveAsNote: "নোট হিসেবে সেভ করুন",
-  noteSaved: "সেভ হয়েছে",
+  noteSaved: "সংরক্ষিত হয়েছে",
   savedNotesTitle: "সংরক্ষিত নোট",
   savedNotesEmpty:
     "এখনো কোনো নোট সংরক্ষণ করা হয়নি — টিউটরের উত্তরের পাশে বুকমার্ক আইকনে চাপ দিলে এখানে জমা হবে।",
@@ -50,9 +60,9 @@ const bn = {
   genKind: "ধরন",
   genWorksheet: "ওয়ার্কশীট",
   genAnswerKey: "উত্তরমালা",
-  genHomework: "হোমওয়ার্ক",
+  genHomework: "বাড়ির কাজ",
   genRubric: "রুব্রিক",
-  genLessonPlan: "লেসন প্ল্যান",
+  genLessonPlan: "পাঠ পরিকল্পনা",
   genNow: "এখনই তৈরি করুন",
   genLater: "ব্যাকগ্রাউন্ডে চালান",
   genQuestionsHint: "প্রতি সারিতে একটি করে প্রশ্ন (উত্তরমালার জন্য)",
@@ -64,12 +74,12 @@ const bn = {
   jobValidating: "যাচাই হচ্ছে",
   jobReady: "প্রস্তুত",
   jobFailed: "ব্যর্থ",
-  genLibrary: "সেভ করা ডকুমেন্ট",
+  genLibrary: "সংরক্ষিত ডকুমেন্ট",
   genAll: "সকল",
   noDocumentsYet: "এখন পর্যন্ত কোনো ডকুমেন্ট নেই",
   genDownloadPdf: "PDF",
-  genSourcesCount: "{n}টি উৎস থেকে",
-  deleteGeneric: "মুছে ফেলুন",
+  genSourcesCount: "{n}টি সূত্র থেকে",
+  deleteGeneric: "মুছুন",
   classLevel: "শ্রেণি",
   chapterOptional: "অধ্যায় (ঐচ্ছিক)",
   chapterRequired: "অধ্যায় (আবশ্যিক)",
@@ -83,7 +93,10 @@ const bn = {
   attachImage: "ছবি সংযুক্ত করুন",
   removeImage: "ছবি সরান",
   imageTooLarge: "ছবিটি অনেক বড় (১.৫ MB-এর কম রাখুন)",
-  confidenceBadge: "{pct}% নিশ্চিত",
+  imageTypeUnsupported: "শুধু PNG, JPEG বা WebP ছবি সংযুক্ত করা যায়।",
+  // F-119: the number is a heuristic blend (docs/rag/architecture.md 6.7);
+  // the copy names it as one instead of reading like a probability.
+  confidenceBadge: "{pct}% সোর্স-নিশ্চয়তা (আনুমানিক)",
   learningStyleTitle: "শেখার ধরন ও মনে রাখা তথ্য",
   explanationStyle: "ব্যাখ্যার ধরন",
   styleSimple: "সহজ",
@@ -110,7 +123,7 @@ const bn = {
   periodWeekly: "সাপ্তাহিক",
   periodMonthly: "মাসিক",
   reportQuizzesGraded: "জমা দেওয়া পরীক্ষা",
-  reportAvg: "গড় নম্বর",
+  reportAvg: "গড় স্কোর",
   reportChaptersRead: "পড়া অধ্যায়",
   reportQuestions: "জিজ্ঞাসা করা প্রশ্ন",
   reportWeak: "দুর্বল অধ্যায়",
@@ -140,7 +153,7 @@ const bn = {
   secQuizzes: "কুইজ প্রচেষ্টা",
   covContent: "কনটেন্ট আছে এমন বিষয়",
   covCompleted: "সম্পূর্ণ",
-  anaTitle: "ব্যবহারের পরিসংখ্যা",
+  anaTitle: "ব্যবহারের পরিসংখ্যান",
   anaDaily: "দৈনিক সক্রিয় শিক্ষার্থী",
   login: "লগইন",
   logout: "লগআউট",
@@ -174,13 +187,13 @@ const bn = {
   noResults: "কিছু পাওয়া যায়নি",
   activityTitle: "প্রতিদিনের অনুশীলন",
   streakLabel: "{days} দিনের ধারাবাহিকতা",
-  activityHint: "প্রতিদিন অন্তত একটি প্রশ্ন বা কুইজ স্ট্রিক ধরে রাখে",
+  activityHint: "প্রতিদিন অন্তত একটি প্রশ্ন বা কুইজ করলে ধারাবাহিকতা থাকে",
   activityQuestion: "{n}টি প্রশ্ন",
   activityQuestions: "{n}টি প্রশ্ন",
   activityQuizzes: "{n}টি কুইজ",
   activityMinutes: "{n} মিনিট",
-  revisionTab: "রিভিশন",
-  revisionEmpty: "আজ কোনো রিভিশন নেই। কুইজ খেলে নতুন প্রশ্ন যোগ করুন।",
+  revisionTab: "পুনরালোচনা",
+  revisionEmpty: "আজ পুনরালোচনার কিছু নেই — কুইজ খেললে নতুন প্রশ্ন যোগ হবে।",
   reteachTitle: "আগে এগুলো পড়ে নিন",
   reteachHint: "ভুল করা প্রশ্নগুলোর পেছনের ধাপ — পাঠ্যবই থেকে",
   reteachChain: "{concept} — আগে শক্ত করুন: {prereq}",
@@ -214,7 +227,7 @@ const bn = {
   askPlaceholder: "পাঠ্যবই থেকে যেকোনো প্রশ্ন লিখুন…",
   thinking: "ভাবছি…",
   supportedBadge: "পাঠ্যবই-সমর্থিত",
-  unsupportedBadge: "প্রমাণ নেই",
+  unsupportedBadge: "পাঠ্যবই-সমর্থিত নয়",
   quizTitle: "কুইজ",
   startQuiz: "কুইজ শুরু করুন",
   questionCount: "প্রশ্ন সংখ্যা",
@@ -244,6 +257,10 @@ const bn = {
     "কোড তৈরি করে অভিভাবককে দিন — তিনি নিজের অ্যাকাউন্ট থেকে কোডটি দিয়ে আপনার অগ্রগতি দেখতে পারবেন।",
   parentInviteGenerate: "কোড তৈরি করুন",
   parentInviteExpires: "এই কোডটি {minutes} মিনিটের জন্য বৈধ।",
+  parentInviteActive: "সক্রিয় কোডসমূহ",
+  parentInviteExpiresAt: "মেয়াদ শেষ: {time}",
+  parentInviteRevoke: "কোড বাতিল করুন",
+  parentInviteRevoked: "কোডটি বাতিল করা হয়েছে।",
   partialQuizNote:
     "এই শ্রেণি/বিষয়ে এখনো সব প্রশ্ন তৈরি হয়নি — {got}/{want}টি দেওয়া হলো।",
   rateUp: "সহায়ক ছিল",
@@ -300,6 +317,9 @@ const bn = {
   wmConcept: "অধ্যায়",
   wmAvg: "গড়",
   wmTrend: "প্রবণতা",
+  trendFalling: "কমছে",
+  trendRising: "বাড়ছে",
+  trendSteady: "অপরিবর্তিত",
   wmRead: "পড়া হয়েছে",
   wmEmpty: "এই শ্রেণিতে এখনো কোনো গ্রেড করা কুইজ নেই।",
   spTitle: "সহায়তা পরিকল্পনা",
@@ -374,10 +394,10 @@ const bn = {
   purgeConfirm:
     "এটি মেয়াদোত্তীর্ণ টোকেন, ইনভাইট ও পুরোনো চ্যাট স্থায়ীভাবে মুছে ফেলবে। ফিরিয়ে আনা যাবে না।",
   locPrimaryNav: "প্রধান নেভিগেশন",
+  skipToContent: "মূল কনটেন্টে যান",
   locHighlights: "বিশেষ বৈশিষ্ট্য",
   locFontSize: "লেখার আকার",
   locWorkspace: "কর্মক্ষেত্র",
-  locCloseDialog: "ডায়ালগ বন্ধ করুন",
   locLinkRemoved: "সহায়ক এই লিংকটি সরিয়ে দিয়েছে।",
   locExternalLink: " (বাইরের লিংক)",
   locResetCode: "রিসেট কোড",
@@ -438,7 +458,6 @@ const bn = {
   appearance: "চেহারা",
   darkMode: "ডার্ক মোড",
   yourQuizResult: "আপনার কুইজ ফলাফল",
-  score: "স্কোর",
   correctOutOf: "{correct}/{total} সঠিক",
   chooseAnswers: "প্রতিটি প্রশ্নের সঠিক উত্তর বেছে নিন।",
   nextQuestion: "পরের প্রশ্ন",
@@ -447,14 +466,14 @@ const bn = {
   // B-03: unanswered-submit confirmation — a Finish press used to score
   // every unanswered question as wrong with no warning.
   quizUnansweredConfirm:
-    "{n} টি প্রশ্নের উত্তর দেওয়া হয়নি। যা আছে তা দিয়েই জমা দেবেন?",
+    "{n}টি প্রশ্নের উত্তর দেওয়া হয়নি। যা আছে তা দিয়েই জমা দেবেন?",
   quizSubmitAnyway: "যা আছে তা-ই জমা দিন",
   quizKeepAnswering: "উত্তর দিতে থাকুন",
   prevPage: "আগের পৃষ্ঠা",
   nextPage: "পরের পৃষ্ঠা",
   // FE-11: the activity heatmap's screen-reader summary (role="img" name).
   heatmapSummary:
-    "গত {days} দিনে {questions} টি প্রশ্ন ও কুইজ অনুশীলন, {active} টি সক্রিয় দিন",
+    "গত {days} দিনে {questions}টি প্রশ্ন ও কুইজ অনুশীলন, {active}টি সক্রিয় দিন",
   notStarted: "এখনো কোনো কুইজ দেওয়া হয়নি।",
   continueTutor: "চ্যাট চালিয়ে যান",
   // refusal audit (admin safety view). These are literal Bengali
@@ -478,7 +497,7 @@ const bn = {
   statusChecked: "সর্বশেষ যাচাই: {when}",
   actingAs: "আপনি একটি সহায়তা সেশনে {name} হিসেবে কাজ করছেন",
   exitImpersonation: "সহায়তা সেশন শেষ করুন",
-  impersonate: "সহায়তা যাচাই",
+  impersonate: "সহায়তা সেশনে প্রবেশ করুন",
   impReasonPrompt: "এই সহায়তা সেশনের কারণ (কমপক্ষে ৩ অক্ষর)",
   admTriage: "ফিডব্যাক পর্যালোচনা",
   admTriageOpen: "খোলা",
@@ -502,7 +521,7 @@ const bn = {
   practice: "অনুশীলন",
   practiceTitle: "অনুশীলন",
   weakPracticeTitle: "আমার দুর্বলতা",
-  weakPracticeHint: "এই অধ্যায়গুলোতে একটু বেশি মনোযোগ দাও",
+  weakPracticeHint: "এই অধ্যায়গুলোতে একটু বেশি মনোযোগ দিন",
   weakPracticeStart: "দুর্বলতা অনুশীলন করুন",
   noWeakChapters: "এখনো কোনো দুর্বল অধ্যায় নেই — দারুণ!",
   chapterPracticeTab: "অধ্যায় অনুশীলন",
@@ -532,8 +551,8 @@ const bn = {
   imgCheck: "আমার উত্তর যাচাই করো",
   imgSteps: "ধাপে ধাপে দেখাও",
   lowConfidenceHint:
-    "AI এই উত্তরে পুরোপুরি নিশ্চিত নয় — পাঠ্যবইয়ের উৎসটিও দেখে নিন।",
-  actionPractice: "অনুশীলন করো",
+    "AI এই উত্তরে পুরোপুরি নিশ্চিত নয় — পাঠ্যবইয়ের সূত্রটিও দেখে নিন।",
+  actionPractice: "অনুশীলন করুন",
   // ── learn ──
   chaptersDone: "{done}/{total} সম্পন্ন",
   aiSuggestion: "AI পরামর্শ",
@@ -559,9 +578,10 @@ const bn = {
   thAiInsight: "AI অন্তর্দৃষ্টি",
   thInsightRisk: "{n} জন শিক্ষার্থী ঝুঁকিতে আছে — সহায়তা পরিকল্পনা তৈরি করুন।",
   thInsightWeak: "সবচেয়ে দুর্বল ধারণা: {concept} ({pct}% নির্ভুলতা)।",
-  thInsightOk: "এই মুহূর্তে কোনো উদ্বেগজনক প্যাটার্ন নেই।",
+  thInsightOk:
+    "শিক্ষার্থীদের মধ্যে এই মুহূর্তে দুশ্চিন্তার কিছু চোখে পড়ছে না।",
   thInsightNoData: "অন্তর্দৃষ্টি পেতে শ্রেণি তৈরি করুন ও শিক্ষার্থী যোগ করুন।",
-  thWorkloadTitle: "সাশ্রয়ী সময় (আনুমানিক)",
+  thWorkloadTitle: "সাশ্রয় হওয়া সময় (আনুমানিক)",
   // ── create ──
   cGridTitle: "কী তৈরি করতে চান?",
   cQuickMode: "কুইক মোড",
@@ -569,12 +589,11 @@ const bn = {
   cQuizEntry: "কুইজ (বাল্ক অ্যাসাইনমেন্ট)",
   cQuizEntryHint: "শিক্ষার্থীদের জন্য কুইজ অ্যাসাইন করুন",
   cOpen: "খুলুন",
-  cWorksheetSub: "স্টাডি মেটেরিয়াল",
+  cWorksheetSub: "পাঠসহায়ক উপকরণ",
   valTitle: "AI যাচাই চেকলিস্ট",
   valNctb: "NCTB সামঞ্জস্য",
   valDup: "ডুপ্লিকেট প্রশ্ন নেই",
   valDifficulty: "অসুবিধার বণ্টন মিলেছে",
-  valPass: "পাস",
   valGenerationGate: "নির্মাণের সময় সার্ভারে যাচাই হয়",
   valMin: "সর্বনিম্ন সামঞ্জস্য",
   valPending: "তৈরি হলে দেখা যাবে",
@@ -617,7 +636,7 @@ const bn = {
   anaCiOk: "শ্রেণির অবস্থা ভালো — নিয়মিত অনুশীলন চালিয়ে যান।",
   anaCapacity: "শিক্ষক সামর্থ্য",
   anaCapacityHint:
-    "AI সহকারী হিসেবে আপনার সামর্থ্য বাড়ায় — কখনো শিক্ষকের বিকল্প নয়।",
+    "AI সহকারী আপনার সামর্থ্য বাড়ায় — শিক্ষকের বিকল্প কখনো নয়।",
   // ── teacher profile ──
   tpTitle: "শিক্ষক প্রোফাইল",
   tpDefaultClass: "ডিফল্ট শ্রেণি",
@@ -635,6 +654,7 @@ const bn = {
   bookmark: "বুকমার্ক",
   stop: "থামুন",
   listen: "শুনুন",
+  ttsUnavailable: "এই ডিভাইসে বাংলা ভয়েস নেই — লেখা পড়ে শোনানো যাবে না।",
   errBadCredentials: "ইমেইল বা পাসওয়ার্ড সঠিক নয়।",
   errEmailTaken: "এই ইমেইল দিয়ে আগেই অ্যাকাউন্ট খোলা আছে।",
   errEmailUnverified: "আগে ইমেইল যাচাই করুন — কোড পাঠানো হয়েছে।",
@@ -671,6 +691,39 @@ const bn = {
   errLastAdmin: "শেষ অ্যাডমিন অ্যাকাউন্ট মোছা বা নামানো যাবে না।",
   errPasswordChangeRequired:
     "আগে পাসওয়ার্ড বদলাতে হবে — পাসওয়ার্ড পরিবর্তনের পাতায় যান।",
+  errChapterNotFound:
+    "অধ্যায়টি খুঁজে পাওয়া যায়নি — তালিকা থেকে আবার বেছে নিন।",
+  errSubjectNotFound:
+    "বিষয়টি খুঁজে পাওয়া যায়নি — তালিকা থেকে আবার বেছে নিন।",
+  errAttemptNotFound: "কুইজটি খুঁজে পাওয়া যায়নি — তালিকা থেকে আবার বেছে নিন।",
+  errAssignmentNotFound:
+    "অ্যাসাইনমেন্টটি খুঁজে পাওয়া যায়নি — তালিকা থেকে আবার বেছে নিন।",
+  errStudentNotFound:
+    "শিক্ষার্থীকে খুঁজে পাওয়া যায়নি — তালিকা থেকে আবার বেছে নিন।",
+  errEmptyRoster: "এই শ্রেণিতে এখনো কোনো শিক্ষার্থী যুক্ত হয়নি।",
+  errStudentsOnly: "এটি শুধু শিক্ষার্থীদের জন্য।",
+  errUnsafeContent:
+    "নিরাপত্তার কারণে এই প্রশ্নের উত্তর দেওয়া যাচ্ছে না — অন্য প্রশ্ন করে দেখুন।",
+  errConsentRequired: "চালিয়ে যেতে নীতিমালায় সম্মতি দিন।",
+  errGuardianConsentRequired:
+    "শিক্ষার্থী হিসেবে নথিভুক্ত হতে অভিভাবকের সম্মতি প্রয়োজন।",
+  errClassLevelRequired: "আগে শ্রেণি বেছে নিন।",
+  errPasswordTooCommon: "এই পাসওয়ার্ডটি অনেক সহজ — অন্য একটি বেছে নিন।",
+  errPasswordTooShort: "পাসওয়ার্ডটি কমপক্ষে ৮ অক্ষরের দিন।",
+  errPasswordUnchanged: "নতুন পাসওয়ার্ড আগেরটির মতোই — ভিন্ন একটি বেছে নিন।",
+  errMfaLocked:
+    "অনেকবার ভুল কোড দেওয়া হয়েছে — কিছুক্ষণ পরে আবার চেষ্টা করুন।",
+  errNoGradedData: "এখনো কোনো মূল্যায়িত ফলাফল নেই — আগে কুইজ জমা দিন।",
+  errMixedClassLevels:
+    "একই কুইজে ভিন্ন শ্রেণির শিক্ষার্থী রাখা যায় না — এক শ্রেণির শিক্ষার্থী বেছে নিন।",
+  errEmptyQuery: "আগে প্রশ্নটি লিখুন।",
+  errImportEmpty: "ফাইলটিতে কোনো ডেটা সারি নেই।",
+  errImportTooLarge: "ফাইলটি অনেক বড় — ছোট ব্যাচে ভাগ করে আবার চেষ্টা করুন।",
+  errNotLinked:
+    "এই শিক্ষার্থীর সঙ্গে আপনার অ্যাকাউন্ট যুক্ত নয় — আগে লিংক করুন।",
+  errDirectLinkDisabled:
+    "সরাসরি লিংক বন্ধ আছে — শিক্ষার্থীর ইনভাইট কোড ব্যবহার করুন।",
+  errSessionExpired: "সেশনের সময় শেষ — আবার লগইন করুন।",
   mfaTitle: "দুই ধাপের যাচাই",
   mfaHint: "অথেনটিকেটর অ্যাপের ৬ সংখ্যার কোডটি দিন।",
   mfaCode: "৬ সংখ্যার কোড",
@@ -748,7 +801,7 @@ const en: Dict = {
   genAll: "All",
   noDocumentsYet: "No documents yet",
   genDownloadPdf: "PDF",
-  genSourcesCount: "Grounded in {n} textbook source(s)",
+  genSourcesCount: "Grounded in {n} textbook sources",
   deleteGeneric: "Delete",
   classLevel: "Class",
   chapterOptional: "Chapter (optional)",
@@ -763,7 +816,9 @@ const en: Dict = {
   attachImage: "Attach image",
   removeImage: "Remove image",
   imageTooLarge: "Image too large (keep it under 1.5 MB)",
-  confidenceBadge: "{pct}% confident",
+  imageTypeUnsupported: "Only PNG, JPEG or WebP images can be attached.",
+  // F-119: see the Bangla entry -- the heuristic qualifier is required copy.
+  confidenceBadge: "{pct}% retrieval confidence (heuristic)",
   learningStyleTitle: "Learning style & memory",
   explanationStyle: "Explanation style",
   styleSimple: "Simple",
@@ -856,7 +911,8 @@ const en: Dict = {
   activityQuizzes: "{n} quizzes",
   activityMinutes: "{n} minutes",
   revisionTab: "Revision",
-  revisionEmpty: "Nothing due today - take a quiz and new questions land here",
+  revisionEmpty:
+    "Nothing to revise today — take a quiz and new questions land here",
   reteachTitle: "Re-learn these first",
   reteachHint:
     "The basics behind your wrong answers, straight from the textbook",
@@ -891,7 +947,7 @@ const en: Dict = {
   askPlaceholder: "Ask anything from your textbook…",
   thinking: "Thinking…",
   supportedBadge: "Textbook-backed",
-  unsupportedBadge: "No evidence",
+  unsupportedBadge: "Not textbook-backed",
   quizTitle: "Quiz",
   startQuiz: "Start quiz",
   questionCount: "Number of questions",
@@ -921,6 +977,10 @@ const en: Dict = {
     "Generate a code and share it with your parent — they can enter it from their account to follow your progress.",
   parentInviteGenerate: "Generate code",
   parentInviteExpires: "This code is valid for {minutes} minutes.",
+  parentInviteActive: "Active codes",
+  parentInviteExpiresAt: "Expires: {time}",
+  parentInviteRevoke: "Revoke code",
+  parentInviteRevoked: "The code has been revoked.",
   partialQuizNote:
     "Not all questions are available for this class/subject yet — showing {got}/{want}.",
   rateUp: "Helpful",
@@ -977,6 +1037,9 @@ const en: Dict = {
   wmConcept: "Concept",
   wmAvg: "Avg",
   wmTrend: "Trend",
+  trendFalling: "Falling",
+  trendRising: "Rising",
+  trendSteady: "Steady",
   wmRead: "Read",
   wmEmpty: "No graded quizzes for this class yet.",
   spTitle: "Support plan",
@@ -1051,10 +1114,10 @@ const en: Dict = {
   purgeConfirm:
     "This permanently deletes expired tokens, invites and old chats. It cannot be undone.",
   locPrimaryNav: "Primary",
+  skipToContent: "Skip to main content",
   locHighlights: "highlights",
   locFontSize: "font size",
   locWorkspace: "workspace",
-  locCloseDialog: "Close dialog",
   locLinkRemoved: "This link was removed by the assistant.",
   locExternalLink: " (external link)",
   locResetCode: "Reset code",
@@ -1114,7 +1177,6 @@ const en: Dict = {
   appearance: "Appearance",
   darkMode: "Dark mode",
   yourQuizResult: "Your quiz result",
-  score: "Score",
   correctOutOf: "{correct}/{total} correct",
   chooseAnswers: "Choose the best answer for each question.",
   nextQuestion: "Next question",
@@ -1122,14 +1184,14 @@ const en: Dict = {
   finishQuiz: "Finish quiz",
   // B-03: unanswered-submit confirmation (mirrors the bn block).
   quizUnansweredConfirm:
-    "{n} question(s) have no answer yet. Submit with what you have?",
+    "{n} questions have no answer yet. Submit with what you have?",
   quizSubmitAnyway: "Submit anyway",
   quizKeepAnswering: "Keep answering",
   prevPage: "Previous page",
   nextPage: "Next page",
   // FE-11: the activity heatmap's screen-reader summary (role="img" name).
   heatmapSummary:
-    "Last {days} days: {questions} questions and quizzes practiced across {active} active days",
+    "Practice summary — questions and quizzes: {questions}; active days: {active} of {days}",
   notStarted: "No quiz taken yet.",
   continueTutor: "Continue chat",
   admSafety: "Safety audit",
@@ -1146,7 +1208,7 @@ const en: Dict = {
   statusChecked: "Last checked: {when}",
   actingAs: "You are acting as {name} in a support session",
   exitImpersonation: "End support session",
-  impersonate: "Support check",
+  impersonate: "Start support session",
   impReasonPrompt: "Reason for this support session (min 3 chars)",
   admTriage: "Feedback triage",
   admTriageOpen: "Open",
@@ -1226,7 +1288,7 @@ const en: Dict = {
   thAiInsight: "AI insight",
   thInsightRisk: "{n} students are at risk — consider creating support plans.",
   thInsightWeak: "Weakest concept: {concept} ({pct}% accuracy).",
-  thInsightOk: "No concerning patterns right now.",
+  thInsightOk: "Nothing concerning is showing among the students right now.",
   thInsightNoData: "Create a class and add students to see insights.",
   thWorkloadTitle: "Time saved (estimate)",
   // ── create ──
@@ -1241,7 +1303,6 @@ const en: Dict = {
   valNctb: "NCTB alignment",
   valDup: "No duplicate questions",
   valDifficulty: "Difficulty distribution matches",
-  valPass: "Pass",
   valGenerationGate: "checked server-side at generation",
   valMin: "Minimum alignment",
   valPending: "Visible after generation",
@@ -1250,7 +1311,7 @@ const en: Dict = {
   stepEdit: "Edit",
   stepApprove: "Approve",
   stepPublish: "Publish",
-  qpReviewProgress: "{done}/{total} questions approved",
+  qpReviewProgress: "{done}/{total} approved",
   qpGateHint: "Finalize unlocks only after every question is approved.",
   qpChaptersLabel: "Chapters (comma separated)",
   // ── classes ──
@@ -1283,7 +1344,7 @@ const en: Dict = {
   anaCiOk: "The class is doing well — keep the regular practice going.",
   anaCapacity: "Teacher capacity",
   anaCapacityHint:
-    "AI augments your capacity as an assistant — it never replaces the teacher.",
+    "The AI assistant adds capacity — it never replaces the teacher.",
   // ── teacher profile ──
   tpTitle: "Teacher profile",
   tpDefaultClass: "Default class",
@@ -1301,6 +1362,8 @@ const en: Dict = {
   bookmark: "Bookmark",
   stop: "Stop",
   listen: "Listen",
+  ttsUnavailable:
+    "No Bangla voice is installed on this device, so read-aloud is off.",
   errBadCredentials: "Email or password is incorrect.",
   errEmailTaken: "An account with this email already exists.",
   errEmailUnverified: "Verify your email first — a code has been sent.",
@@ -1339,6 +1402,39 @@ const en: Dict = {
   errLastAdmin: "The last admin account cannot be removed or demoted.",
   errPasswordChangeRequired:
     "Change your password first — open the password screen.",
+  errChapterNotFound:
+    "That chapter was not found — pick it again from the list.",
+  errSubjectNotFound:
+    "That subject was not found — pick it again from the list.",
+  errAttemptNotFound: "That quiz was not found — pick it again from the list.",
+  errAssignmentNotFound:
+    "That assignment was not found — pick it again from the list.",
+  errStudentNotFound:
+    "That student was not found — pick them again from the list.",
+  errEmptyRoster: "No students have joined this class yet.",
+  errStudentsOnly: "This is only for students.",
+  errUnsafeContent:
+    "This question cannot be answered for safety reasons — try asking something else.",
+  errConsentRequired: "Accept the policy to continue.",
+  errGuardianConsentRequired:
+    "Guardian consent is required to register as a student.",
+  errClassLevelRequired: "Choose a class level first.",
+  errPasswordTooCommon: "That password is too common — choose a different one.",
+  errPasswordTooShort: "Use a password of at least 8 characters.",
+  errPasswordUnchanged:
+    "The new password is the same as the current one — choose a different one.",
+  errMfaLocked: "Too many wrong codes — try again in a little while.",
+  errNoGradedData: "No graded results yet — submit a quiz first.",
+  errMixedClassLevels:
+    "A quiz cannot mix class levels — select students from one class.",
+  errEmptyQuery: "Type a question first.",
+  errImportEmpty: "The file has no data rows.",
+  errImportTooLarge:
+    "The file is too large — split it into smaller batches and try again.",
+  errNotLinked: "Your account is not linked to this student — link it first.",
+  errDirectLinkDisabled:
+    "Direct linking is off — use the student's invite code.",
+  errSessionExpired: "Your session has ended — please log in again.",
   mfaTitle: "Two-step verification",
   mfaHint: "Enter the 6-digit code from your authenticator app.",
   mfaCode: "6-digit code",
@@ -1352,6 +1448,31 @@ const en: Dict = {
 };
 
 const DICTS: Record<Lang, Dict> = { bn, en };
+
+/**
+ * Singular sentences for English counted nouns.
+ *
+ * English needs a different sentence at 1 ("Assigned to 1 student"), Bangla
+ * does not inflect for number at all, so the twins live here instead of in
+ * the dictionaries: a `bn` duplicate would exist only to satisfy key parity.
+ * `t()` picks the form through `Intl.PluralRules` when exactly one numeric
+ * placeholder is present, so the category comes from CLDR rather than a
+ * hand-rolled `n === 1`. `scripts/check_i18n.py` fails when a key that needs
+ * a singular form is missing from this table.
+ */
+const EN_SINGULAR: Partial<Record<keyof Dict, string>> = {
+  notifQuizAssigned: "Quiz assigned: {count} question · {subject} · {chapter}",
+  notifSupportPlan: "A new support plan is ready ({focus} focus point)",
+  stAssigned: "Assigned to {n} student",
+  activityQuizzes: "{n} quiz",
+  activityMinutes: "{n} minute",
+  workloadMinutes: "≈ {n} minute saved (estimate)",
+  thInsightRisk: "{n} student is at risk — consider creating support plans.",
+  anaCiRisk: "{n} student at risk — create support plans.",
+  genSourcesCount: "Grounded in {n} textbook source",
+  quizUnansweredConfirm:
+    "{n} question has no answer yet. Submit with what you have?",
+};
 
 let current: Lang = (localStorage.getItem("bgpt_lang") as Lang) || "bn";
 const listeners = new Set<() => void>();
@@ -1380,6 +1501,56 @@ export function tSubject(value: string | null | undefined): string {
   return v;
 }
 
+/** BCP 47 tag for the active (or given) language. */
+export function localeTag(lang: Lang = current): string {
+  return lang === "bn" ? "bn-BD" : "en";
+}
+
+/** Bangla digits (০-৯) for a quantity inside Bangla copy. */
+export function toBanglaDigits(text: string): string {
+  return text.replace(/\d/g, (digit) => BN_DIGITS[Number(digit)]);
+}
+
+/** A user-facing quantity in the given language: bn-BD digits or en digits,
+ *  with the language's own grouping. */
+export function formatNumber(value: number, lang: Lang = current): string {
+  return new Intl.NumberFormat(localeTag(lang)).format(value);
+}
+
+function interpolation(
+  name: string,
+  value: string | number,
+  lang: Lang,
+): string {
+  if (MACHINE_VALUE_VARS.has(name)) return String(value);
+  if (typeof value === "number") return formatNumber(value, lang);
+  // A string that is nothing but digits is a quantity a caller assembled;
+  // mixed strings (ids, codes, dates) stay as they are.
+  return lang === "bn" && PURE_NUMBER.test(value)
+    ? toBanglaDigits(value)
+    : value;
+}
+
+function singularForm(
+  key: keyof Dict,
+  vars: Record<string, string | number>,
+  lang: Lang,
+): string | undefined {
+  if (lang !== "en") return undefined;
+  const form = EN_SINGULAR[key];
+  if (!form) return undefined;
+  const counts = Object.entries(vars).filter(
+    ([, value]) => typeof value === "number",
+  );
+  // Two counts in one sentence have no single form to pick; those sentences
+  // stay count-agnostic (see heatmapSummary). A digit string is not a count
+  // here on purpose: callers send numbers for counts and strings for things
+  // like a chapter number or an id.
+  if (counts.length !== 1) return undefined;
+  const rule = new Intl.PluralRules("en").select(Number(counts[0][1]));
+  return rule === "one" ? form : undefined;
+}
+
 /** Translate a key; `{var}` placeholders are replaced positionally by named props. */
 export function t(
   key: keyof Dict,
@@ -1390,8 +1561,9 @@ export function t(
   // open to server-supplied codes); echoing the key keeps `t(...) || fallback` usable.
   if (typeof out !== "string") return String(key);
   if (vars) {
+    out = singularForm(key, vars, current) ?? out;
     for (const [k, v] of Object.entries(vars)) {
-      out = out.replaceAll(`{${k}}`, String(v));
+      out = out.replaceAll(`{${k}}`, interpolation(k, v, current));
     }
   }
   return out;

@@ -6,6 +6,7 @@ the domain routers; nothing in this package may import ``main`` or any router
 """
 
 import calendar
+import logging
 from collections.abc import Callable, Generator
 from typing import Annotated, Any
 
@@ -27,11 +28,15 @@ from bangla_gpt_api.db.models import (
     Teacher,
     User,
 )
+from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.providers.base import LLMProvider
 from bangla_gpt_api.retrieval.base import RankingIndex
 from bangla_gpt_api.schemas import MeResponse
-from bangla_gpt_api.security import decrypt_pii
+from bangla_gpt_api.security import decrypt_pii, write_audit
+from bangla_gpt_api.services.circuit_breaker import CircuitBreaker
 from bangla_gpt_api.services.tutor import TutorService
+
+logger = logging.getLogger(__name__)
 
 
 class AppContext:
@@ -51,6 +56,8 @@ class AppContext:
         tutor: TutorService | None,
         session_factory: Callable[[], Session],
         ai_job_tasks: set,
+        circuit_breaker: CircuitBreaker | None = None,
+        corpus_identity: dict | None = None,
     ) -> None:
         self.settings = settings
         self.cache = cache
@@ -61,6 +68,14 @@ class AppContext:
         # Strong references to fire-and-forget AiJob tasks (asyncio may
         # garbage-collect bare create_task handles).
         self.ai_job_tasks = ai_job_tasks
+        # F-123: the public /status page reports the assistant as healthy only
+        # when the provider is configured AND its circuit is not open, so a
+        # total provider outage cannot read as "all ok".
+        self.circuit_breaker = circuit_breaker
+        # F-082: kind, chunk count, artifact digest and manifest hash of the
+        # corpus the index was built from. None when no provider/index was
+        # built (nothing is served, so there is no identity to name).
+        self.corpus_identity = corpus_identity
 
 
 def get_ctx(request: Request) -> AppContext:
@@ -90,10 +105,19 @@ bearer_scheme = HTTPBearer(auto_error=False)
 BearerCredentials = Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)]
 
 
-def _unauthorized(detail: str = "Not authenticated") -> HTTPException:
+def _unauthorized(
+    detail: str = "Not authenticated", *, code: str = "unauthenticated"
+) -> HTTPException:
+    """401 in the same coded envelope as every business-rule failure.
+
+    Auth guards used to answer ``{"detail": "<string>"}``, so a client
+    branching on ``detail.code`` (see apps/web errors.ts) could not classify
+    a 401 the way it classifies a coded rejection; the machine-readable code
+    is now stable and the human message is preserved (F-067).
+    """
     return HTTPException(
         status_code=401,
-        detail=detail,
+        detail={"code": code, "message": detail},
         headers={"WWW-Authenticate": "Bearer"},
     )
 
@@ -176,7 +200,7 @@ def get_current_user(
         payload = decode_token(credentials.credentials, settings=ctx.settings)
         user_id = int(payload["sub"])
     except (pyjwt.PyJWTError, KeyError, TypeError, ValueError) as exc:
-        raise _unauthorized("Invalid or expired token") from exc
+        raise _unauthorized("Invalid or expired token", code="invalid_token") from exc
     # Every minted token carries a jti, and a logout (POST /auth/logout)
     # or an account-wide revoke parks it in the shared cache (Redis when
     # configured: revocation then holds across workers/restarts; memory
@@ -200,16 +224,16 @@ def get_current_user(
             raise revocation_store_unavailable() from exc
         if revoked is True:
             if payload.get("imp"):
-                raise _unauthorized("Impersonation session has ended")
-            raise _unauthorized("Session ended; please log in again")
+                raise _unauthorized("Impersonation session has ended", code="session_ended")
+            raise _unauthorized("Session ended; please log in again", code="session_ended")
     # AUTH-001: MFA step-up tokens (mfa:true, token_type "mfa") are accepted
     # ONLY by POST /auth/mfa/challenge — never as API credentials.
     if payload.get("mfa") is True:
-        raise _unauthorized("MFA verification required")
+        raise _unauthorized("MFA verification required", code="mfa_required")
     request.state.jwt_claims = payload
     user = db.get(User, user_id)
     if user is None:
-        raise _unauthorized("Invalid or expired token")
+        raise _unauthorized("Invalid or expired token", code="invalid_token")
     # F-05 token epoch: a password change/reset refuses every token issued
     # in an EARLIER second than the rotation. The rotation response token is
     # minted naturally (PyJWT rejects future iat), so same-second mints
@@ -225,7 +249,7 @@ def get_current_user(
         )
         iat = payload.get("iat")
         if not isinstance(iat, int) or iat < inv_ts:
-            raise _unauthorized("Session expired; please log in again")
+            raise _unauthorized("Session expired; please log in again", code="session_expired")
     if user.must_change_password and request.url.path not in _FORCE_CHANGE_EXEMPT_PATHS:
         raise HTTPException(
             status_code=403,
@@ -300,8 +324,9 @@ def _provider_lacks_vision(app_ctx: AppContext) -> bool:
 # school-layer home for standalone accounts — F-04): before this anchor
 # they had NO tenancy wall and could read roster/analytics data of every
 # real school platform-wide. Once a teacher is attached to a school,
-# students and classrooms of OTHER schools stay invisible (403 other_school,
-# same code the /school/* routes use).
+# students and classrooms of OTHER schools are answered as not found
+# (F-144: the 403 "other_school" code the /school/* scope guards still use
+# made this wall an existence oracle for staff ids).
 def _default_school_id(db: Session) -> int:
     """Id of the shared default school, created lazily like common's
     get-or-create helper (kept local to avoid a deps -> common import)."""
@@ -351,27 +376,81 @@ def _student_in_school(db: Session, school_id: int, student_id: int) -> bool:
     return db.scalar(select(probe)) is True
 
 
+def _audit_tenant_mismatch(
+    db: Session,
+    user: User,
+    *,
+    kind: str,
+    object_id: int,
+    object_school_id: int | None,
+) -> None:
+    """Record a cross-tenant touch and answer exactly like a missing row.
+
+    F-144: the tenancy wall used to answer 403 ``other_school`` for an
+    object that exists in another school and 404 ``*_not_found`` for one
+    that does not, so any staff account could enumerate sequential ids
+    across tenants. The response now carries the not-found shape; the fact
+    that the id EXISTS somewhere else is written here (ids and the school
+    mismatch only -- no name, no content) so support can still tell a
+    mis-typed id from a cross-tenant probe during an incident review.
+    """
+    write_audit(
+        db,
+        action="cross_tenant_denied",
+        actor_user_id=user.id,
+        actor_role=user.role,
+        target=f"{kind}:{object_id}",
+        detail={"object_school_id": object_school_id, "actor_school_id": user.school_id},
+    )
+    db.commit()
+    json_log(
+        logger,
+        logging.WARNING,
+        "cross_tenant_denied",
+        kind=kind,
+        object_id=object_id,
+        actor_user_id=user.id,
+        actor_role=user.role,
+    )
+
+
 def _assert_student_in_school(db: Session, user: User, student: Student) -> Student:
-    """Tenancy gate for per-student reads/writes (closes cross-school IDOR)."""
+    """Tenancy gate for per-student reads/writes (closes cross-school IDOR).
+
+    F-144: a student outside the caller's school is answered with the SAME
+    404 the caller gets for an id that does not exist, so the wall no longer
+    doubles as an existence oracle for staff ids (see
+    :func:`_audit_tenant_mismatch` for the server-side record of the attempt).
+    """
     school_id = _tenant_school_id(db, user)
     if school_id is None:
         return student
     if not _student_in_school(db, school_id, student.id):
+        _audit_tenant_mismatch(
+            db, user, kind="student", object_id=student.id, object_school_id=None
+        )
         raise HTTPException(
-            status_code=403,
-            detail={"code": "other_school", "message": "Student is outside your school"},
+            status_code=404, detail={"code": "student_not_found", "message": "Student not found"}
         )
     return student
 
 
 def _assert_room_in_school(db: Session, user: User, room: ClassRoom) -> ClassRoom:
+    """Classroom counterpart of :func:`_assert_student_in_school` (F-144).
+
+    The 404 body is byte-identical to ``common._classroom_or_404``, which is
+    what a caller sees for a classroom id that was never issued.
+    """
     school_id = _tenant_school_id(db, user)
     if school_id is None:
         return room
     if room.school_id != school_id:
+        _audit_tenant_mismatch(
+            db, user, kind="classroom", object_id=room.id, object_school_id=room.school_id
+        )
         raise HTTPException(
-            status_code=403,
-            detail={"code": "other_school", "message": "Classroom is outside your school"},
+            status_code=404,
+            detail={"code": "classroom_not_found", "message": "classroom not found"},
         )
     return room
 

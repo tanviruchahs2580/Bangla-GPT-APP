@@ -85,11 +85,13 @@ def _output_format(source: object, mime: str) -> str:
     if mime == "image/jpeg":
         return "JPEG"
     try:
-        alpha = source.getbands()[-1] == "A"  # type: ignore[attr-defined]
+        # Pillow ships no stubs in this dependency set, so the attribute set is
+        # untyped here; the except below is the documented fallback.
+        alpha = source.getbands()[-1] == "A"  # type: ignore[attr-defined]  # Pillow untyped
         if not alpha:
             return "JPEG"
         # A fully opaque alpha channel is still no reason to send PNG.
-        extrema = source.getchannel("A").getextrema()  # type: ignore[attr-defined]
+        extrema = source.getchannel("A").getextrema()  # type: ignore[attr-defined]  # Pillow untyped
         return "PNG" if extrema[0] < 255 else "JPEG"
     except (AttributeError, ValueError, OSError):
         return "PNG"

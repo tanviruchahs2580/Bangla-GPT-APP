@@ -11,10 +11,11 @@ from bangla_gpt_api.providers.base import LLMProvider, ProviderError
 from bangla_gpt_api.retrieval.base import RankingIndex
 from bangla_gpt_api.schemas import SourceRef
 from bangla_gpt_api.services.context import RequestContext, set_current_context
+from bangla_gpt_api.services.generators._evidence import evidence_blocks
 from bangla_gpt_api.services.generators._json import extract_json_object, require_echo
 from bangla_gpt_api.services.router import Route, set_current_route
 from bangla_gpt_api.services.safety import AGE_RULE_SENTENCE
-from bangla_gpt_api.services.tutor import EVIDENCE_CLOSE, EVIDENCE_OPEN, sanitize_evidence
+from bangla_gpt_api.services.tutor import sanitize_evidence
 
 ANSWER_KEY_JSON_MARKER = "ANSWER_KEY_JSON_V1"
 
@@ -44,9 +45,7 @@ def build_answer_key_prompt(
     questions: list[str],
     hits: list,
 ) -> str:
-    blocks = "\n".join(
-        f"{EVIDENCE_OPEN}\n{sanitize_evidence(hit.chunk.text)}\n{EVIDENCE_CLOSE}" for hit in hits
-    )
+    blocks = evidence_blocks(hits)
     numbered = "\n".join(f"{i}. {q}" for i, q in enumerate(questions, start=1))
     return (
         f"{ANSWER_KEY_JSON_MARKER}\n"

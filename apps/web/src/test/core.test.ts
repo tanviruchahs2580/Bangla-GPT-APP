@@ -12,6 +12,40 @@ describe("friendlyError", () => {
     ).toContain("মিনিট");
   });
 
+  it("unwraps the FastAPI detail envelope every page passes in", () => {
+    // The catchers hand friendlyError the raw body, which for FastAPI is
+    // {detail: {code, message}}: reading only the top level missed every
+    // coded error and the surface fell back to the generic copy (the tutor's
+    // corrupted-image 422 image_invalid was the measured case).
+    expect(
+      friendlyError({ detail: { code: "image_invalid", message: "bad" } }).text,
+    ).toBe(t("errImageInvalid"));
+    expect(friendlyError({ detail: { code: "llm_unavailable" } }).action).toBe(
+      "retry",
+    );
+    // The legacy Bengali string detail reaches the same map once unwrapped.
+    expect(
+      friendlyError({ detail: "ইমেইল বা পাসওয়ার্ড সঠিক নয়।" }).text,
+    ).toBe(t("errBadCredentials"));
+    // An unknown body still gets the generic copy and a retry.
+    expect(friendlyError({ detail: { message: "?" } }).action).toBe("retry");
+  });
+
+  it("maps every image-attachment code the tutor route can answer", () => {
+    // The route answers three codes for an attached photo; only the first was
+    // mapped, so the two newer ones showed "something went wrong" for a file
+    // verdict and a deployment fault respectively.
+    expect(friendlyError({ detail: { code: "image_invalid" } }).text).toBe(
+      t("errImageInvalid"),
+    );
+    expect(
+      friendlyError({ detail: { code: "image_type_mismatch" } }).text,
+    ).toBe(t("errImageInvalid"));
+    expect(
+      friendlyError({ detail: { code: "image_support_unavailable" } }).text,
+    ).toBe(t("errServiceUnavailable"));
+  });
+
   it("maps login-infrastructure codes to retry/mfa copy (no generic dead-end)", () => {
     expect(friendlyError({ code: "mfa_required" }).action).toBe("mfa");
     expect(friendlyError({ code: "bad_mfa_code" }).action).toBe("mfa");
@@ -103,7 +137,9 @@ describe("friendlyError", () => {
 describe("i18n", () => {
   it("defaults to Bengali with interpolation support", () => {
     const out = t("partialQuizNote", { got: 4, want: 5 });
-    expect(out).toContain("4");
-    expect(out).toContain("5");
+    // Numbers are quantities and take Bangla digits under bn (F-113 numeral
+    // policy); the old assertion expected Latin digits at the boundary.
+    expect(out).toContain("৪");
+    expect(out).toContain("৫");
   });
 });

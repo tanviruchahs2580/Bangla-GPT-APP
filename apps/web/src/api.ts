@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/react";
 import { downloadBlob } from "./lib/download";
 import { asText } from "./lib/text";
 import { LAST_RESULT_KEY } from "./lib/quizExplain";
@@ -6,24 +7,91 @@ import { clearQuizDraft } from "./lib/quizDraft";
 
 const API_BASE: string = import.meta.env.VITE_API_BASE ?? "/api";
 
-/** Absolute API base for direct navigation links (downloads etc.). */
-export const apiBase = API_BASE;
+/**
+ * Correlation id (F-121). The API logs one per request, echoes it in
+ * `X-Request-ID`, and matches it against the structured log line; without one
+ * a student reporting a failure cannot give support an id that resolves to
+ * the server trace. The server accepts `[A-Za-z0-9._-]{1,64}` and generates
+ * its own when the header is absent, so a client-generated value is always a
+ * valid inbound id. The fallback path uses the Web Crypto generator, not
+ * Math.random(): the id joins auth-flow error reports to server traces, and a
+ * predictable id there is CodeQL-flagged insecure randomness (js/insecure-randomness).
+ */
+const REQUEST_ID_HEADER = "X-Request-ID";
+
+function newRequestId(): string {
+  const uuid =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : Array.from(crypto.getRandomValues(new Uint8Array(16)))
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("");
+  return uuid.replace(/-/g, "").slice(0, 32);
+}
+
+/**
+ * Return the id the server echoed (its log line carries that one), register it
+ * with Sentry so an error event can be joined to the same trace, and fall back
+ * to the sent value for transports that answered without the header.
+ */
+function noteRequestId(sent: string, res?: Response): string {
+  const id = res?.headers.get(REQUEST_ID_HEADER)?.trim() || sent;
+  Sentry.setTag("request_id", id);
+  return id;
+}
 
 export class ApiError extends Error {
   status: number;
   code?: string;
   rawDetail: unknown;
+  /**
+   * Seconds the server asked the client to wait (429 `Retry-After`), when it
+   * sent one. FE-05: the header used to be discarded, so every surface could
+   * only say "try again later" with no relationship to the server's window.
+   */
+  retryAfterSeconds?: number;
+  /**
+   * Correlation id for this request (F-121): quote it in a bug report and it
+   * resolves to the server log line.
+   */
+  requestId?: string;
   constructor(
     status: number,
     message: string,
     code?: string,
     rawDetail?: unknown,
+    retryAfterSeconds?: number,
+    requestId?: string,
   ) {
     super(message);
     this.status = status;
     this.code = code;
     this.rawDetail = rawDetail;
+    this.retryAfterSeconds = retryAfterSeconds;
+    this.requestId = requestId;
   }
+}
+
+/**
+ * `Retry-After` is either delta-seconds or an HTTP date (RFC 9110). Anything
+ * unparseable, negative or absurdly large is dropped rather than surfaced.
+ */
+const MAX_RETRY_AFTER_SECONDS = 3600;
+function parseRetryAfter(header: string | null): number | undefined {
+  if (!header) return undefined;
+  const trimmed = header.trim();
+  if (/^\d+$/.test(trimmed)) {
+    const seconds = Number(trimmed);
+    return seconds > 0 && seconds <= MAX_RETRY_AFTER_SECONDS
+      ? seconds
+      : undefined;
+  }
+  const when = Date.parse(trimmed);
+  if (Number.isNaN(when)) return undefined;
+  const seconds = Math.round((when - Date.now()) / 1000);
+  return seconds > 0 && seconds <= MAX_RETRY_AFTER_SECONDS
+    ? seconds
+    : undefined;
 }
 
 export interface MeResponse {
@@ -33,6 +101,8 @@ export interface MeResponse {
   profile_id: number | null;
   name: string | null;
   class_level: number | null;
+  /** guardian phone at rest (S5.6): delivered in cleartext to the owner only. */
+  phone: string | null;
 }
 
 const TOKEN_KEY = "bgpt_token";
@@ -84,11 +154,16 @@ function jwtPayload(token: string): Record<string, unknown> | null {
 
 async function rawRenew(token: string): Promise<boolean> {
   try {
+    const requestId = newRequestId();
     const res = await fetch(`${API_BASE}/auth/renew`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        [REQUEST_ID_HEADER]: requestId,
+      },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
+    noteRequestId(requestId, res);
     if (!res.ok) return false;
     const body = (await res.json()) as { access_token?: string };
     if (!body.access_token || typeof body.access_token !== "string")
@@ -103,7 +178,7 @@ async function rawRenew(token: string): Promise<boolean> {
 }
 
 /** Renew-once single flight; safe to call on every API call. */
-export function maybeRenewSession(): void {
+function maybeRenewSession(): void {
   const token = getToken();
   if (!token) return;
   const exp = jwtPayload(token)?.["exp"];
@@ -142,11 +217,18 @@ export const STREAM_CONNECT_TIMEOUT_MS = 20_000;
 export const STREAM_STALL_TIMEOUT_MS = 45_000;
 
 /** Machine-coded timeout error so `friendlyError` and tests can name it. */
-function timeoutError(): ApiError {
-  return new ApiError(0, "request timed out", "timeout", {
-    code: "timeout",
-    message: "request timed out",
-  });
+function timeoutError(requestId?: string): ApiError {
+  return new ApiError(
+    0,
+    "request timed out",
+    "timeout",
+    {
+      code: "timeout",
+      message: "request timed out",
+    },
+    undefined,
+    requestId,
+  );
 }
 
 function isAbortError(e: unknown): boolean {
@@ -345,7 +427,7 @@ async function parseSse(
   return done;
 }
 
-export async function api<T>(
+async function api<T>(
   path: string,
   options: RequestInit = {},
   opts?: {
@@ -366,6 +448,8 @@ export async function api<T>(
   }
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  const requestId = newRequestId();
+  headers.set(REQUEST_ID_HEADER, requestId);
 
   // F-015: every non-streaming request is bounded. A caller signal (the
   // tutor's Stop) is combined so either can end the request.
@@ -388,10 +472,18 @@ export async function api<T>(
         // A caller-initiated abort must stay an AbortError: callers use it
         // to tell "the user pressed Stop" from a real failure.
         if (caller?.aborted) throw e;
-        if (guard.timedOut()) throw timeoutError();
+        if (guard.timedOut()) throw timeoutError(requestId);
       }
-      throw new ApiError(0, "network error", "network");
+      throw new ApiError(
+        0,
+        "network error",
+        "network",
+        undefined,
+        undefined,
+        requestId,
+      );
     }
+    const correlationId = noteRequestId(requestId, res);
     if (res.status === 204) return undefined as T;
     if (!res.ok) {
       let parsed: { message: string; code?: string } = {
@@ -404,7 +496,7 @@ export async function api<T>(
         jsonParseFailed = true;
       }
       // A stalled error body is still a stalled request.
-      if (guard.timedOut()) throw timeoutError();
+      if (guard.timedOut()) throw timeoutError(correlationId);
       if (!parsed.code) {
         // Upstream HTML error pages (dead Cloudflare tunnel 502, proxy 503)
         // carry no machine code — attach one so the UI shows a retry hint
@@ -422,13 +514,22 @@ export async function api<T>(
         !AUTH_401_PATHS.some((p) => path.startsWith(p))
       )
         onUnauthorized?.();
-      throw new ApiError(res.status, parsed.message, parsed.code, parsed);
+      throw new ApiError(
+        res.status,
+        parsed.message,
+        parsed.code,
+        parsed,
+        res.status === 429
+          ? parseRetryAfter(res.headers.get("retry-after"))
+          : undefined,
+        correlationId,
+      );
     }
     try {
       return (await res.json()) as T;
     } catch (e) {
       if (guard.timedOut() || (isAbortError(e) && !caller?.aborted))
-        throw timeoutError();
+        throw timeoutError(correlationId);
       throw e;
     }
   } finally {
@@ -487,6 +588,8 @@ export async function postStream<T>(
   const headers = new Headers({ "Content-Type": "application/json" });
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  const requestId = newRequestId();
+  headers.set(REQUEST_ID_HEADER, requestId);
   assertApiBaseUsable();
 
   const controller = new AbortController();
@@ -502,7 +605,7 @@ export async function postStream<T>(
     if (timer !== undefined) clearTimeout(timer);
     timer = setTimeout(() => {
       timedOut = true;
-      const err = timeoutError();
+      const err = timeoutError(requestId);
       rejectGate(err);
       // Tear the real request down too; the race below reports the timeout.
       controller.abort(err);
@@ -522,6 +625,7 @@ export async function postStream<T>(
       body: JSON.stringify(body),
       signal: combineSignals([options?.signal, controller.signal]),
     });
+    const correlationId = noteRequestId(requestId, res);
     if (!res.ok) {
       // postStream bypassed `api()`, so it reported every failure as a generic
       // outage: a 429 rate limit read as "AI unavailable", and an expired session
@@ -534,13 +638,27 @@ export async function postStream<T>(
       } catch {
         /* upstream HTML error page: fall back to the status text */
       }
-      if (timedOut) throw timeoutError();
+      if (timedOut) throw timeoutError(correlationId);
       if (res.status === 401 && !AUTH_401_PATHS.some((p) => path.startsWith(p)))
         onUnauthorized?.();
-      throw new ApiError(res.status, parsed.message, parsed.code, parsed);
+      throw new ApiError(
+        res.status,
+        parsed.message,
+        parsed.code,
+        parsed,
+        undefined,
+        correlationId,
+      );
     }
     if (!res.headers.get("content-type")?.includes("text/event-stream"))
-      throw new ApiError(res.status, "stream unavailable", "llm_unavailable");
+      throw new ApiError(
+        res.status,
+        "stream unavailable",
+        "llm_unavailable",
+        undefined,
+        undefined,
+        correlationId,
+      );
     // Still inside the first-byte window until the first chunk arrives; each
     // chunk then resets the (shorter-windowed) inter-chunk stall deadline.
     const done = await parseSse(
@@ -550,7 +668,14 @@ export async function postStream<T>(
       options?.onReset,
     );
     if (done && "__error" in done)
-      throw new ApiError(502, "stream failed", "llm_unavailable");
+      throw new ApiError(
+        502,
+        "stream failed",
+        "llm_unavailable",
+        undefined,
+        undefined,
+        correlationId,
+      );
     if (!done) {
       // No terminal frame: a proxy timeout, or the server died mid-answer.
       // Resolving null handed callers an object they dereference, so a truncated
@@ -559,6 +684,9 @@ export async function postStream<T>(
         502,
         "stream ended before completion",
         "llm_unavailable",
+        undefined,
+        undefined,
+        correlationId,
       );
     }
     return done as T;
@@ -697,10 +825,30 @@ export async function changePassword(
 
 /** Student generates a single-use code (BGPT-XXXXXXXXXXXXXXXX) a parent can redeem to link. */
 export async function generateInviteCode(): Promise<{
+  id: number;
   code: string;
   expires_in_minutes: number;
 }> {
-  return post("/students/me/invite-code");
+  return post<import("./types").ParentInviteOut>("/students/me/invite-code");
+}
+
+/**
+ * Live guardian invites of the signed-in student (F-IV2-3).
+ *
+ * The id in each row is what `revokeInviteCode` needs; the code itself is
+ * returned only by the create response, so a listing cannot leak one.
+ */
+export async function getLiveInviteCodes(): Promise<
+  { id: number; created_at: string; expires_at: string }[]
+> {
+  return get<import("./types").ParentInviteStatusOut[]>(
+    "/students/me/invite-code",
+  );
+}
+
+/** Revoke a live guardian invite so its code can no longer link a parent. */
+export async function revokeInviteCode(id: number): Promise<void> {
+  await del(`/students/me/invite-code/${id}`);
 }
 
 /**
@@ -736,6 +884,15 @@ export async function fetchMe(): Promise<SessionProbe> {
     if (e instanceof ApiError && e.status === 401) {
       await logout();
       return { status: "unauthenticated" };
+    }
+    // 429 is the server saying "too fast", not "your token is dead": the
+    // per-user bound on GET /users/me is 10/min, and a student who reloads
+    // (or a suite that navigates) can exceed it. Treating it as an auth
+    // failure called logout() and revoked the very session the throttle was
+    // protecting — the retry copy with the server's own Retry-After is the
+    // honest answer, and the token must survive it.
+    if (e instanceof ApiError && e.status === 429) {
+      return { status: "unreachable" };
     }
     // 403 is a real answer ("your session is no longer permitted"), not an
     // outage, so it ends the session. Anything else — a network error, a 5xx,
@@ -1001,6 +1158,8 @@ export async function getBlob(
   const headers = new Headers();
   const token = getToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  const requestId = newRequestId();
+  headers.set(REQUEST_ID_HEADER, requestId);
   assertApiBaseUsable();
   const guard = timeoutGuard(REQUEST_TIMEOUT_MS);
   try {
@@ -1012,9 +1171,17 @@ export async function getBlob(
       });
     } catch (e) {
       if (e instanceof ApiError) throw e;
-      if (guard.timedOut()) throw timeoutError();
-      throw new ApiError(0, "network error", "network");
+      if (guard.timedOut()) throw timeoutError(requestId);
+      throw new ApiError(
+        0,
+        "network error",
+        "network",
+        undefined,
+        undefined,
+        requestId,
+      );
     }
+    const correlationId = noteRequestId(requestId, res);
     if (res.status === 401 && !AUTH_401_PATHS.some((p) => path.startsWith(p)))
       onUnauthorized?.();
     if (!res.ok) {
@@ -1026,8 +1193,15 @@ export async function getBlob(
       } catch {
         /* upstream HTML error page: fall back to the status text */
       }
-      if (guard.timedOut()) throw timeoutError();
-      throw new ApiError(res.status, parsed.message, parsed.code, parsed);
+      if (guard.timedOut()) throw timeoutError(correlationId);
+      throw new ApiError(
+        res.status,
+        parsed.message,
+        parsed.code,
+        parsed,
+        undefined,
+        correlationId,
+      );
     }
     return {
       blob: await res.blob(),
@@ -1187,6 +1361,8 @@ export interface AdminAiQuality {
   thumbs_down: number;
   low_confidence_count: number;
   by_model: Record<string, number>;
+  cost_usd_by_model: Record<string, number>;
+  cost_usd_total: number;
 }
 
 export const getAdminAiQuality = (days = 30) =>

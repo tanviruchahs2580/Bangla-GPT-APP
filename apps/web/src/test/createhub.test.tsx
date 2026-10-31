@@ -105,11 +105,28 @@ it("generates a worksheet synchronously with the chosen class and subject", asyn
     </QueryClientProvider>,
   );
   await screen.findByText("Photosynthesis worksheet");
-  await user.click(screen.getByRole("button", { name: t("genNow") }));
+  // Worksheet generation retrieves textbook evidence, so the API requires a
+  // chapter (WorksheetIn.chapter is min_length=1). The old assertion clicked
+  // Generate with the field empty and blessed a request the API answers 422;
+  // the gate is asserted first, then the request with the chapter.
+  const generate = screen.getByRole("button", { name: t("genNow") });
+  expect(generate).toBeDisabled();
+  fireEvent.change(
+    screen.getByRole("textbox", { name: t("chapterRequired") }),
+    {
+      target: { value: "Photosynthesis" },
+    },
+  );
+  expect(generate).toBeEnabled();
+  await user.click(generate);
   await waitFor(() =>
     expect(apiMock.post).toHaveBeenCalledWith(
       "/teacher/generate/worksheet",
-      expect.objectContaining({ class_level: 6, subject: "science" }),
+      expect.objectContaining({
+        class_level: 6,
+        subject: "science",
+        chapter: "Photosynthesis",
+      }),
     ),
   );
   expect(

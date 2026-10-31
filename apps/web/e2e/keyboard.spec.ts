@@ -29,25 +29,37 @@ async function focused(page: Page): Promise<string> {
   })
 }
 
+/**
+ * The ring predicate, evaluated in the page. Module scope so waitForFunction
+ * can serialise it (an inline closure capturing `page` cannot be).
+ */
+function ringVisible(): boolean {
+  const el = document.activeElement as HTMLElement | null
+  if (!el) return false
+  const style = getComputedStyle(el)
+  const outline =
+    style.outlineStyle !== 'none' && Number.parseFloat(style.outlineWidth || '0') > 0
+  return outline || style.boxShadow !== 'none'
+}
+
+/** Wait (bounded) for the frame that paints the ring; false when it never does. */
+async function ringAppears(page: Page, timeout = 250): Promise<boolean> {
+  try {
+    await page.waitForFunction(ringVisible, undefined, { timeout, polling: 25 })
+    return true
+  } catch {
+    return false
+  }
+}
+
 /** True when the focused element paints a focus indicator. */
 async function focusIsVisible(page: Page): Promise<boolean> {
-  const hasRing = () =>
-    page.evaluate(() => {
-      const el = document.activeElement as HTMLElement | null
-      if (!el) return false
-      const style = getComputedStyle(el)
-      const outline =
-        style.outlineStyle !== 'none' && Number.parseFloat(style.outlineWidth || '0') > 0
-      return outline || style.boxShadow !== 'none'
-    })
-  // Polls instead of sampling once: the `:focus-visible` ring is applied in the
-  // frame after the Tab, and on a loaded CI runner a single sample landed before
-  // it often enough to flake this suite (measured 2026-10-21 on two different
-  // stops). The assertion is unchanged -- a stop with no ring still fails.
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    if (await hasRing()) return true
-    await page.waitForTimeout(50)
-  }
+  // Waits on the ring's own signal instead of sampling plus a fixed sleep: the
+  // `:focus-visible` ring is applied in the frame after the Tab, and a single
+  // early sample flaked this suite on a loaded runner (measured 2026-10-21 on
+  // two different stops; F-160 converted the polling sleeps to this wait).
+  // The assertion is unchanged -- a stop with no ring still fails.
+  if (await ringAppears(page)) return true
   if (await isFocusVisible(page)) return false // the ring is genuinely absent
   // The stop holds focus without the browser's `:focus-visible` flag, which
   // means the focus was re-established programmatically (a re-render) rather
@@ -58,11 +70,7 @@ async function focusIsVisible(page: Page): Promise<boolean> {
   // nothing, the assertion fails as before.
   await page.keyboard.press('Shift+Tab')
   await page.keyboard.press('Tab')
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    if (await hasRing()) return true
-    await page.waitForTimeout(50)
-  }
-  return false
+  return ringAppears(page)
 }
 
 /** Whether the focused element carries the browser's keyboard-focus flag. */
@@ -111,33 +119,31 @@ async function tabSweep(page: Page, maxStops = 60): Promise<string[]> {
   throw new Error(`tab sequence did not terminate within ${maxStops} stops: ${stops.join(' > ')}`)
 }
 
-test('the first keyboard stop on a public page is the language switch, with a visible ring', async ({
+test('the first keyboard stop on a public page is the skip link, and it jumps to main', async ({
   page,
 }) => {
-  // a1929ad asserted a skip link here; this branch ships none (the SkipLink
-  // component is absent from src). The keyboard contract that remains is
-  // still asserted in full: a deterministic first stop, a visible focus
-  // indicator on it, and the sweep below proves every later stop paints one
-  // too. First stop = the public language toggle (App.tsx renders it before
-  // the routes for anonymous visitors, I18N-12).
+  // F-003/A11Y-02: the shell ships the skip link again (it was lost with the
+  // SkipLink work) and App.tsx renders it before PublicLanguageToggle, so it is
+  // the deterministic first stop on the public routes too. The focus ring is
+  // asserted in full, and the sweep below proves every later stop paints one.
   await openRoute(page, '/login')
   await page.keyboard.press('Tab')
   const first = await focused(page)
-  // Class-order independent: the toggle renders `icon-btn public-lang-toggle`,
-  // and focused() reports only the FIRST class, so a prefix match broke when
-  // the shared icon-btn class moved ahead of the specific one.
-  const isFirstStopToggle = await page.evaluate(() =>
+  // Class-order independent: focused() reports only the FIRST class.
+  const isFirstStopSkipLink = await page.evaluate(() =>
     Boolean(
       (document.activeElement as HTMLElement | null)?.classList.contains(
-        'public-lang-toggle',
+        'skip-link',
       ),
     ),
   )
-  expect(isFirstStopToggle, `first keyboard stop was ${first}`).toBe(true)
+  expect(isFirstStopSkipLink, `first keyboard stop was ${first}`).toBe(true)
   expect(await focusIsVisible(page)).toBe(true)
-  // The toggle is operable from the keyboard alone: Enter lands the focus
-  // somewhere real (never lost to <body>), and the language actually moves.
+  // Activating it lands the page on the main landmark: the hash moves to the
+  // skip target, and focus is never lost to <body>.
   await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/#main-content$/)
+  expect(await page.locator('main#main-content').count()).toBe(1)
   expect(await focused(page)).not.toBe('body')
 })
 
@@ -270,6 +276,12 @@ test('admin searches users by keyboard alone', async ({ page }) => {
 test('school admin dashboard is reachable and tabbable', async ({ page }) => {
   await signIn(page, 'schooladmin1@e2e.test')
   await expect(page).toHaveURL(/\/school$/)
+  // Wait for the dashboard's own content, not just the URL: the tab stops come
+  // from the loaded panels (the first full-suite run swept a half-rendered page
+  // and counted 3 stops). The heading is the page's stable signal.
+  await expect(
+    page.getByRole('heading', { name: /স্কুল|School/i }).first(),
+  ).toBeVisible({ timeout: 20_000 })
   const stops = await tabSweep(page, 40)
   expect(stops.length).toBeGreaterThan(3)
 })

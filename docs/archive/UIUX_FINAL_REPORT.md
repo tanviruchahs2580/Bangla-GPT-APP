@@ -1,3 +1,11 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [README.md](README.md).
+
+> **Ratings/grades in this file were self-assessed by the session that wrote it,
+> not produced by `score.py` from the findings register; treat them as assertions
+> and do not cite them (F-150; see [README.md](README.md)).**
+
 # UI/UX Final Report — Bangla GPT Tutor Renovation (v0.6.2 → working tree)
 
 ## 1. Executive summary

@@ -90,17 +90,37 @@ jobs:
         # Tests/Coverage steps above must keep running exactly as before.
         env:
           REDIS_URL: redis://127.0.0.1:6379/0
-        run: pytest tests/test_cache_v2.py -q
+        # F-163/TEST-05: every pytest leg runs under pytest-randomly with a
+        # FIXED seed. Fixed, because a random seed per run would make a red
+        # CI irreproducible (pytest-randomly prints the seed on failure, so a
+        # local re-run reproduces the order); random, because the seed shuffles
+        # both files and test functions, so an order dependence that only
+        # surfaces on developer machines now surfaces here.
+        run: pytest tests/test_cache_v2.py -q -p randomly --randomly-seed=20261030
 
       - name: Coverage gate (branch coverage, fail_under from pyproject)
         # Coverage used to be measured by nobody: fail_under was 0, no job
         # passed --cov, and pytest-cov was not a declared dev dependency.
+        # The JSON report feeds the per-module floors step below; the XML
+        # report stays the uploaded artifact.
         run: >-
           pytest -q
+          -p randomly
+          --randomly-seed=20261030
           --cov=bangla_gpt_api
           --cov-branch
           --cov-report=term-missing
           --cov-report=xml
+          --cov-report=json
+        working-directory: apps/api
+
+      - name: Per-module coverage floors (critical paths)
+        # F-058/TEST-02: the global fail_under says nothing about *where* the
+        # coverage sits -- a well-covered schema module can hide a thin
+        # authorization or privacy path. The floor table was measured on the
+        # full suite (2026-10-30) and lives in the script; a module dropping
+        # below its floor fails here, and the floors may only rise.
+        run: python scripts/check_coverage_floors.py coverage.json
         working-directory: apps/api
 
       - name: Upload coverage report
@@ -119,12 +139,42 @@ jobs:
         # runtime dependency, but pip-audit scans the whole environment and so
         # picks up whatever setuptools the runner image happens to ship. The
         # Python 3.11 image carried 79.0.1, which PYSEC-2026-3447 flags
-        # (fixed in 83.0.0), failing a leg over tooling we do not ship. Upgrade
-        # to the fixed release before auditing so the gate reports real,
-        # application-relevant vulnerabilities instead of runner drift.
+        # (fixed in 83.0.0); 83.0.0 is itself now flagged by GHSA-xmj3-9gf7-h52w
+        # (fixed in 84.1.0), so the pin moves with the advisory. Upgrade to
+        # exactly the fixed release before auditing so the gate reports
+        # real, application-relevant vulnerabilities instead of runner drift
+        # (GIT-08/F-186: an exact pin, so a future setuptools release cannot
+        # change what this step audits).
         run: |
-          python -m pip install --quiet --upgrade "setuptools>=83.0.0"
-          python -m pip_audit
+          python -m pip install --quiet --upgrade "setuptools==84.1.0"
+          # Audit the SHIPPED SET (the hash-verified lock), not the runner
+          # environment: the environment contains the editable bangla-gpt-api
+          # install, which pip-audit cannot look up on PyPI and which makes
+          # the run exit non-zero even after printing "No known
+          # vulnerabilities found" (measured: runs 41167712721 and
+          # 41169377283, both Python jobs, with and without --skip-editable).
+          # Auditing -r constraints.txt --no-deps is what this gate means
+          # (SUP-02: the locked set is what ships) and cannot drift with the
+          # runner image.
+          python -m pip_audit -r constraints.txt --no-deps
+
+      - name: Import-linter contracts (API layering)
+        # ARCH-02/F-069: the layering (db is a leaf, retrieval below services,
+        # providers not reaching into routers, ...) was convention-only. The
+        # contracts live in .importlinter at the repository root; the tool is
+        # installed here rather than added to the hash-locked dev extra, the
+        # same way the sbom job installs cyclonedx-bom. Runs after pip-audit so
+        # the audit scans the declared environment, not this tooling.
+        #
+        # This step overrides the job's apps/api working directory: the
+        # contract is root-relative, and a cwd-dependent relative --config
+        # path exited "could not read any configuration" on CI (runs
+        # 41088562436 and 41170827746, both measured). The packages the
+        # contracts resolve are installed in the same environment either way.
+        working-directory: .
+        run: |
+          python -m pip install --quiet "import-linter==2.15"
+          lint-imports --config .importlinter
 
       - name: Alembic migration check
         # Dedicated throwaway DB (step isolation): a genuine up/down/up cycle
@@ -145,6 +195,121 @@ jobs:
         env:
           DATABASE_URL: sqlite:////tmp/ci_smoke.db
         run: python -c "from bangla_gpt_api.main import create_app; app = create_app(); print(len(app.openapi()['paths']), 'openapi paths ok')"
+
+      - name: OpenAPI fixture matches the served schema (F-157)
+        # apps/web/src/test/fixtures/openapi.json is the committed snapshot
+        # the web contract test reads (vitest has no server). Regenerating it
+        # here and diffing means a schema change that ships without the
+        # fixture following fails this job instead of drifting silently.
+        run: |
+          python scripts/export_openapi_types.py
+          git diff --exit-code -- ../web/src/test/fixtures/openapi.json
+
+  quickstart-windows:
+    name: Quick start (Windows PowerShell)
+    # DOC-01: the README quick start is written for Windows PowerShell
+    # (`.venv\Scripts\...`), and until this job existed no pipeline ran that
+    # spelling -- the ubuntu `api` job covers the Linux form of the same two
+    # install commands. This job runs the documented steps as written, boots
+    # the documented server command (without --reload: a file watcher adds
+    # nothing in CI) and probes /health, then installs and builds the web
+    # dashboard the same way.
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/api/constraints.txt
+
+      # The README's web quick start runs under Node 24/npm 11 (engines in
+      # apps/web/package.json). The windows runner image ships Node 22 and its
+      # npm 10 refuses the npm-11 lockfile ("Missing: esbuild@0.28.2 from lock
+      # file"), so this job sets the documented toolchain up itself, the same
+      # way the web and e2e jobs do.
+      - name: Set up Node 24
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: API quick start (README, PowerShell)
+        # The README's exact commands. --require-hashes makes a broken pin
+        # fail here exactly as it would on a contributor's machine.
+        run: |
+          cd apps/api
+          python -m venv .venv
+          .venv\Scripts\python -m pip install --require-hashes -r constraints.txt
+          .venv\Scripts\python -m pip install --no-deps -e ".[dev]"
+
+      - name: Boot the dev server and probe /health
+        run: |
+          cd apps/api
+          $proc = Start-Process -FilePath ".venv\Scripts\python.exe" `
+            -ArgumentList "-m", "uvicorn", "bangla_gpt_api.main:app", "--port", "8300" `
+            -PassThru -NoNewWindow
+          try {
+            for ($i = 0; $i -lt 60; $i++) {
+              try {
+                $health = Invoke-RestMethod -Uri "http://127.0.0.1:8300/health" -TimeoutSec 2
+                if ($health.status -eq "ok") { Write-Host "quick start /health ok"; exit 0 }
+              } catch { Start-Sleep -Seconds 1 }
+            }
+            throw "documented server command never became healthy"
+          } finally {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Web quick start (README, PowerShell)
+        # npm ci + the documented type-checked build; the unit/E2E suites run
+        # in the ubuntu web/e2e jobs, so this leg only proves the Windows path.
+        working-directory: apps/web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Visual regression matrix (F-156 / TEST-11)
+        # The 60 committed baselines are Windows-rasterised by design
+        # (e2e/visual.spec.ts: cross-OS text rasterisation measured at 3-5%+,
+        # far past the 5% comparator is impossible to budget honestly), so
+        # the matrix can only be compared on a Windows runner. This is the
+        # pipeline's one windows-latest job and the workflow-table guard
+        # freezes the job set, so the step lives here, after the npm ci
+        # above, mirroring the e2e job's tooling (playwright browser install,
+        # report upload). E2E_PYTHON points the harness's seed + uvicorn at
+        # the venv the API quick start created.
+        #
+        # If the runner's font stack ever drifts past the 5% comparator, the
+        # failure artifact shows the exact screens; regenerating from the
+        # runner (`npx playwright test visual --update-snapshots`) and
+        # re-reviewing the baselines is the documented follow-up, not a
+        # tolerance bump.
+        working-directory: apps/web
+        env:
+          E2E_PYTHON: ${{ github.workspace }}/apps/api/.venv/Scripts/python.exe
+          CI: "true"
+        run: |
+          npx --no-install playwright install chromium
+          npx --no-install playwright test visual
+
+      - name: Upload visual report on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-visual-report
+          path: apps/web/.playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
 
   postgres:
     name: Postgres engine check (alembic + API flows)
@@ -213,7 +378,7 @@ jobs:
         run: alembic check
 
       - name: Postgres-backed API journey tests
-        run: pytest tests/test_postgres_smoke.py -v
+        run: pytest tests/test_postgres_smoke.py -v -p randomly --randomly-seed=20261030
 
       - name: Postgres-only single-use/race tests (T-017)
         # tests/test_single_use_tokens.py says "the `postgres` CI job sets it
@@ -223,7 +388,7 @@ jobs:
         # on PostgreSQL before the fix) were asserted nowhere in CI despite the
         # service being right here. TEST_DATABASE_URL is already set job-wide
         # and the alembic steps above have created the schema in bgpt_ci.
-        run: pytest tests/test_single_use_tokens.py -q
+        run: pytest tests/test_single_use_tokens.py -q -p randomly --randomly-seed=20261030
 
       - name: Full domain suite on Postgres (engine parity)
         # BGPT_TEST_DATABASE_URL switches every default-fixture test to this
@@ -242,6 +407,7 @@ jobs:
           BGPT_TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/bgpt_ci
         run: |
           pytest -q \
+            -p randomly --randomly-seed=20261030 \
             --deselect tests/test_postgres_smoke.py \
             --deselect tests/test_single_use_tokens.py
         # Measured locally: 1106 passed / 6 skipped on PostgreSQL. The step
@@ -273,7 +439,9 @@ jobs:
         working-directory: apps/api
         run: |
           python -m pip install --upgrade pip
-          python -m pip install "cyclonedx-bom>=7"
+          # GIT-08/F-186: exact pin, so an SBOM is generated by a known tool
+          # release (the job's output is an artifact other systems consume).
+          python -m pip install "cyclonedx-bom==7.6.0"
           python -m cyclonedx_py requirements constraints.txt --output-format JSON --output-file sbom-python.json
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -330,16 +498,25 @@ jobs:
 
       # S5.6: gate the shipped dependency set (the deployed image is static
       # nginx; vite/esbuild dev-server advisories are dev-machine-only and
-      # triaged in docs/security_scans.md -- run a full `npm audit` there too).
+      # triaged in docs/security/security_scans.md -- run a full `npm audit`
+      # there too).
       - name: Dependency audit (npm audit, prod deps)
         run: npm audit --audit-level=high --omit=dev
 
-      # H-03: thresholds are enforced in vite.config.ts (lines/functions/
-      # statements 55, branches 75) — a run that drops below them exits 1,
-      # so frontend coverage can no longer regress silently while the
-      # backend enforces fail_under=80.
+      # H-03: thresholds are enforced in vite.config.ts (lines 68,
+      # functions 60, branches 60, statements 70) — a run that drops below
+      # them exits 1, so frontend coverage can no longer regress silently
+      # while the backend enforces fail_under=80.
       - name: Unit tests with coverage gate (vitest)
-        run: npm run test:coverage -- --no-file-parallelism
+        # F-163/TEST-05: shuffled files and tests with a FIXED seed, mirroring
+        # the pytest legs. Vitest reports the seed, so a failure is
+        # reproducible with the same command; --no-file-parallelism keeps the
+        # memory profile of the run what it was.
+        run: >-
+          npm run test:coverage --
+          --no-file-parallelism
+          --sequence.shuffle
+          --sequence.seed=20261030
 
       # FEQ-02: the web app had no linter at all. Type-aware ESLint with
       # --max-warnings 0, so a warning fails the build rather than scrolling by.
@@ -354,8 +531,22 @@ jobs:
       - name: Format check (prettier)
         run: npm run format:check
 
+      # F-096/FE-13: knip sat in devDependencies while nothing ran it, so
+      # unused files, exports, types and unlisted dependencies could
+      # accumulate with no gate. The step fails on any finding; knip.json
+      # names the test/e2e/api entry points so test-only imports stay alive.
+      - name: Dead code and unused exports (knip)
+        run: npm run deadcode
+
       - name: Build (tsc + vite)
         run: npm run build
+
+      # F-125/PERF-04: the budgets in lighthouserc.json are the desktop
+      # baseline measured in wave 2 (LCP 4 s, CLS 0.1, TBT 3 s, score 0.5,
+      # gzip budgets per resource type); before this step nothing gated the
+      # built bundle on them. ubuntu-latest ships Chrome, which lhci drives.
+      - name: Lighthouse budgets (desktop preset)
+        run: npx --yes @lhci/cli@0.15.1 autorun --config=lighthouserc.json
 
   guardrails:
     name: Repository guardrails
@@ -443,6 +634,99 @@ jobs:
         # deleted.
         run: python3 apps/api/scripts/check_doc_paths.py
 
+      - name: Every bundled image is named in THIRD_PARTY_NOTICES.md
+        # REPO-07/F-137: the checker existed but ran only in `make docs-check`,
+        # so a new asset could land with no notices row. It fails when an image
+        # under apps/web/src/assets/ or an apps/web/public/icon-* is not named
+        # in the notices file (the provenance rows themselves stay an owner
+        # action recorded there).
+        run: python3 scripts/check_asset_notices.py
+
+      - name: README and docs/ci.md agree with the workflows
+        # F-008: the README's CI table invented a `golden-eval` job inside
+        # ci.yml, omitted the sbom/guardrails jobs and never listed four of the
+        # nine workflows -- while asserting it had been "read off the
+        # workflow's own on: block". Derive those facts here instead: one row
+        # per workflow file, every job id named in its row, and a trigger cell
+        # that names exactly the event keys in the file's on: block.
+        run: |
+          python3 - <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          WORKFLOWS = Path(".github/workflows")
+          EVENT_KEYWORDS = (
+              "branch_protection_rule",
+              "pull_request",
+              "push",
+              "schedule",
+              "workflow_dispatch",
+              "workflow_run",
+          )
+
+          def on_keys(text: str) -> list[str]:
+              lines = text.splitlines()
+              start = lines.index("on:")
+              keys = []
+              for line in lines[start + 1 :]:
+                  if line and not line[0].isspace():
+                      break
+                  match = re.match(r"^  ([a-z_]+):", line)
+                  if match:
+                      keys.append(match.group(1))
+              return keys
+
+          def job_keys(text: str) -> list[str]:
+              lines = text.splitlines()
+              start = lines.index("jobs:")
+              keys = []
+              for line in lines[start + 1 :]:
+                  match = re.match(r"^  ([a-z][a-z0-9_-]*):\s*(?:#.*)?$", line)
+                  if match:
+                      keys.append(match.group(1))
+              return keys
+
+          problems: list[str] = []
+          rows = {}
+          for line in Path("README.md").read_text(encoding="utf-8").splitlines():
+              match = re.match(r"^\| `([a-z0-9_.-]+\.yml)`", line)
+              if match:
+                  rows[match.group(1)] = line.lower()
+
+          files = sorted(p.name for p in WORKFLOWS.glob("*.yml"))
+          for name in sorted(set(files) - set(rows)):
+              problems.append(f"README CI table has no row for workflow {name}")
+          for name in sorted(set(rows) - set(files)):
+              problems.append(f"README CI table names a workflow that does not exist: {name}")
+
+          ci_doc = Path("docs/ci.md").read_text(encoding="utf-8")
+          for name in files:
+              text = (WORKFLOWS / name).read_text(encoding="utf-8")
+              row = rows.get(name, "")
+              for job in job_keys(text):
+                  if not re.search(rf"\b{re.escape(job)}\b", row):
+                      problems.append(f"README row for {name} does not name its job `{job}`")
+              events = on_keys(text)
+              for key in events:
+                  if key not in row:
+                      problems.append(f"README row for {name} does not name its trigger `{key}`")
+              for keyword in EVENT_KEYWORDS:
+                  if keyword in row and keyword not in events:
+                      problems.append(
+                          f"README row for {name} claims trigger `{keyword}` the workflow lacks"
+                      )
+          for job in job_keys((WORKFLOWS / "ci.yml").read_text(encoding="utf-8")):
+              if f"`{job}`" not in ci_doc:
+                  problems.append(f"docs/ci.md does not document ci.yml job `{job}`")
+
+          for problem in problems:
+              print("::error::" + problem)
+          if problems:
+              sys.exit(1)
+          print(f"workflow tables agree: {len(files)} workflows, README and docs/ci.md in step")
+          PY
+
       - name: CHANGELOG covers every commit
         # VCS-08: the changelog is generated from git history, so it cannot
         # claim anything that did not happen. This fails if a released or
@@ -522,6 +806,160 @@ jobs:
           print(f'mojibake scan clean across {len(files)} text files')
           PY
 
+      # SEC-18: the SAST gate the audit could only mark INFERRED (semgrep was
+      # not installed anywhere). Registry rulesets are pinned by the scanner
+      # version; the scan scope and the triaged allowlist live in
+      # .semgrepignore (every entry carries its reason there and in
+      # docs/security/security_scans.md). ERROR-severity findings fail the
+      # job; WARNING-level findings are triaged in the register instead, so a
+      # rule that is not a defect cannot red the build. The 60 s per-rule
+      # timeout beats semgrep's 30 s default, which timed out on the largest
+      # workflow files (28 rule files skipped) under a loaded machine.
+      - name: Semgrep (blocking, ERROR severity)
+        env:
+          SEMGREP_ENABLE_VERSION_CHECK: "0"
+          SEMGREP_SEND_METRICS: "off"
+        run: |
+          python -m pip install --quiet "semgrep==1.182.1"
+          semgrep \
+            --config p/python --config p/typescript --config p/react \
+            --config p/docker --config p/github-actions --config p/secrets \
+            --severity ERROR --error --timeout 60 --metrics=off .
+
+      # Dockerfile lint, blocking. The one accepted rule (DL3008) and its
+      # reason live in .hadolint.yaml: postgresql-client is deliberately
+      # unpinned while openssl and libssl3t64 are pinned in the Dockerfile
+      # with the refresh procedure documented there.
+      - name: Hadolint (Dockerfiles)
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work \
+            hadolint/hadolint@sha256:32dac94127fd60b7b7e3fbfc65e1383b9b5e25c9bfd7b8536de7a539fe68a12d \
+            hadolint Dockerfile apps/web/Dockerfile
+
+      # SEC-18 dependency gate for the shipped web bundle. The python side is
+      # already covered by pip-audit in the api job and by the image scan in
+      # the docker job; this closes the npm tree that the static image ships
+      # with the same fixable-HIGH/CRITICAL threshold the image scan uses.
+      # trivy suppresses dev dependencies by default, which matches what the
+      # image contains and what `npm audit --omit=dev` gates one job over.
+      - name: Trivy dependency scan (shipped npm bundle)
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work \
+            aquasec/trivy:0.58.0@sha256:b88012e2a0a309d6a8a00463d4e63e5e513377fb74eccbc8f9b0f8f81940ebeb \
+            fs --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
+            --exit-code 1 --skip-dirs node_modules --skip-dirs dist \
+            apps/web/package-lock.json
+
+      # F-006/BE-05: complexity used to be measured by nobody. `ruff check`
+      # (C901, mccabe max-complexity 20 in apps/api/pyproject.toml) refuses new
+      # offenders, but ruff's count and radon's grade disagree on boolean-heavy
+      # functions, so this is the independent radon view: no block at grade D
+      # (complexity 21) or worse outside a recorded budget.
+      #
+      # The budget is a ratchet. A new D+ block, or a recorded block whose
+      # score rose, fails the job. An entry that no longer offends only prints
+      # a warning, so a cross-stream refactor that splits a listed function
+      # cannot red another stream's change -- but the entry must be deleted in
+      # the next commit, and the numbers may only ever fall. Adding an entry
+      # requires the written reason in its comment.
+      - name: Complexity ratchet (radon, grade D and worse)
+        working-directory: apps/api
+        run: |
+          python -m pip install --quiet "radon==6.0.1"
+          python - <<'PY'
+          import json
+          import subprocess
+          import sys
+
+          # path::function (Class.method for methods) -> measured radon score.
+          BUDGET = {
+              # Wave-2 split verify_corpus_manifest, build_data_export and
+              # ask_stream: the first sections moved into named helpers
+              # (nctb/manifest.py, gdpr.py _conversation_sections and
+              # tutor.py _classify_streamed_answer), and the CI-repair pass
+              # finished the job for the other two -- build_data_export ->
+              # _user_activity_tables/_profile_content_tables (37 -> 10) and
+              # ask_stream -> _retrieve_and_gate/_stream_events (26 -> 18) --
+              # so all three now sit at grade C or better and their entries
+              # are gone rather than raised. The blocks below stay recorded
+              # at their measured scores until their own streams split them.
+              "src/bangla_gpt_api/data/nctb_loader.py::load_nctb_corpus": 33,  # corpus build
+              "src/bangla_gpt_api/evaluation/fairness_probes.py::validate_fixture": 32,  # eval tooling
+              "src/bangla_gpt_api/evaluation/golden_v3.py::check_golden": 24,  # eval tooling
+              "src/bangla_gpt_api/evaluation/metrics.py::run_suite": 36,  # eval tooling
+              "src/bangla_gpt_api/services/tutor.py::TutorService._coverage_details": 34,  # tutor stream
+          }
+          raw = subprocess.run(
+              [sys.executable, "-m", "radon", "cc", "src", "-s", "-j"],
+              capture_output=True,
+              text=True,
+              check=True,
+          ).stdout
+          findings = {}
+          for path, blocks in json.loads(raw).items():
+              for block in blocks:
+                  if block["complexity"] > 20:
+                      name = block["name"]
+                      if block.get("classname"):
+                          name = f"{block['classname']}.{name}"
+                      findings[f"{path.replace(chr(92), '/')}::{name}"] = block["complexity"]
+          regressions = []
+          for key, score in sorted(findings.items()):
+              limit = BUDGET.get(key)
+              if limit is None:
+                  regressions.append(f"new block above complexity 20: {key} ({score})")
+              elif score > limit:
+                  regressions.append(f"{key} rose from {limit} to {score}")
+          for key in sorted(BUDGET):
+              if key not in findings:
+                  print(f"::warning::stale complexity budget entry ({key}); delete it")
+          if regressions:
+              for line in regressions:
+                  print(f"::error::{line}")
+              sys.exit(1)
+          print(
+              f"complexity ratchet holds: {len(findings)} block(s) above 20, "
+              "all inside the recorded budget"
+          )
+          PY
+
+      # F-073/BE-07: dead code used to be found by hand. vulture at 100 %
+      # confidence is precise enough to gate on: the one entry below is the
+      # only survivor, with its reason, and a new finding fails. Stale entries
+      # warn instead of failing, so a cross-stream cleanup cannot red another
+      # stream's change -- but the entry must then be deleted here. The
+      # manifest.py 'check_files' entry was exactly that: the wave-2 close-out
+      # deleted it once vulture stopped reporting the symbol.
+      - name: Dead code (vulture, 100% confidence, allowlisted)
+        working-directory: apps/api
+        run: |
+          python -m pip install --quiet "vulture==2.16"
+          python - <<'PY'
+          import subprocess
+          import sys
+
+          ALLOWED = {
+              # The unreachable yield is what makes the stub an async
+              # generator, which is the interface the tutor calls.
+              "tests/test_scale_hardening.py:144: unreachable code after 'raise' (100% confidence)",
+          }
+          out = subprocess.run(
+              [sys.executable, "-m", "vulture", "src", "tests", "--min-confidence", "100"],
+              capture_output=True,
+              text=True,
+          ).stdout
+          findings = [line.strip() for line in out.splitlines() if line.strip()]
+          fresh = [line for line in findings if line not in ALLOWED]
+          for line in fresh:
+              print(f"::error::{line}")
+          for line in sorted(ALLOWED):
+              if line not in findings:
+                  print(f"::warning::stale vulture allowlist entry ({line}); delete it")
+          if fresh:
+              sys.exit(1)
+          print(f"vulture clean at 100% confidence ({len(findings)} allowlisted finding(s))")
+          PY
+
   e2e:
     name: E2E (playwright, chromium)
     # C-01: the browser layer of the pyramid had vanished from main — the
@@ -576,22 +1014,94 @@ jobs:
           CI: "true"
         run: npm run test:e2e
 
-      - name: Offline shell (PWA) against the production bundle
+      - name: "Production bundle: offline shell and throttled perf"
         # B-06: the offline fallback is a marquee feature for rural 2G
         # students and its spec only registers the service worker on the
         # preview harness. A second playwright pass builds once and serves
         # `vite preview`; only the offline-shell spec is selected.
+        #
+        # w2-perf's Slow-3G interactivity budgets belong to the same pass:
+        # they are claims about the shipped bundle, and the dev harness's
+        # unbundled module graph cannot fit them under throttle regardless of
+        # the product (the spec skips that test off the preview harness for
+        # exactly that reason).
         env:
           E2E_PYTHON: python
           E2E_WEB: preview
           CI: "true"
-        run: npx playwright test offline-shell
+        run: npx playwright test offline-shell w2-perf
 
       - name: Upload report on failure
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: playwright-report
+          path: apps/web/.playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  e2e-engines:
+    name: E2E (playwright, three engines)
+    # F-025: playwright.engines.config.ts (letter-spacing, conjunct/tofu
+    # clipping, font-weight and Intl assertions) was wired to no workflow, so
+    # a regression that only breaks Gecko/WebKit Bangla shaping merged green
+    # while the multi-engine claim went unchecked -- and the e2e job above
+    # installs chromium only, so it cannot run this pass. Pull requests only:
+    # the 40-minute chromium pass already gates every push, and this is the
+    # slower double-install companion to it, not a nightly.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/api/constraints.txt
+
+      - name: Install web dependencies
+        run: npm ci
+
+      # Same interpreter contract as the chromium job: the engines config
+      # inherits the base harness (seeded mock-provider API + dev server).
+      - name: Install API package (hash-verified constraints)
+        working-directory: apps/api
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --require-hashes -r constraints.txt
+          python -m pip install --no-deps -e .
+
+      - name: Install the browsers this pass drives
+        # All three: the config runs the spec in chromium, firefox and webkit,
+        # and chromium's headless shell is not part of the sibling job's
+        # chromium install in a fresh runner cache (measured: every test failed
+        # with "Executable doesn't exist ... chrome-headless-shell-linux64").
+        run: npx playwright install chromium firefox webkit --with-deps
+
+      - name: Run the three-engine pass (chromium, firefox, webkit)
+        env:
+          E2E_PYTHON: python
+          CI: "true"
+        run: npx playwright test -c playwright.engines.config.ts
+
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-engines-report
           path: apps/web/.playwright-report/
           retention-days: 7
           if-no-files-found: ignore
@@ -605,8 +1115,33 @@ jobs:
         with:
           persist-credentials: false
 
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
       - name: Build image
-        run: docker build -t bangla-gpt-api:ci .
+        # F-078: this job predated the buildx move and rebuilt every layer on
+        # every push; the cache scope is separate from release.yml's so a PR
+        # build cannot evict a release cache (or the other way round).
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          load: true
+          tags: bangla-gpt-api:ci
+          build-args: |
+            APP_VERSION=ci
+            APP_REVISION=${{ github.sha }}
+          cache-from: type=gha,scope=ci-api
+          cache-to: type=gha,scope=ci-api,mode=max
+
+      - name: Assert image provenance labels
+        # F-153 guard: a label regression fails here instead of being found on
+        # a host months later.
+        run: |
+          set -e
+          source=$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.source" }}' bangla-gpt-api:ci)
+          revision=$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' bangla-gpt-api:ci)
+          echo "source=$source revision=$revision"
+          [ "$source" = "https://github.com/tanviruchahs2580/Bangla-GPT-APP" ] || { echo "::error title=Missing OCI source label::got $source"; exit 1; }
+          [ "$revision" = "${{ github.sha }}" ] || { echo "::error title=Wrong OCI revision label::got $revision"; exit 1; }
 
       - name: Trivy vulnerability gate (fail on FIXABLE high/critical)
         # NOTE: the previously pinned digest did not exist upstream
@@ -627,7 +1162,7 @@ jobs:
       - name: Wait for health endpoint
         run: |
           set -e
-          for i in $(seq 1 15); do
+          for _ in $(seq 1 15); do
             if curl -fsS http://127.0.0.1:8080/health | grep -q '"status":"ok"'; then
               echo "Container healthy"; exit 0
             fi
@@ -637,8 +1172,40 @@ jobs:
           docker logs api-smoke
           exit 1
 
-      - name: Readiness uses mock provider inside image
-        run: curl -fsS http://127.0.0.1:8080/ready | grep -q '"provider":"mock"'
+      - name: Liveness and readiness probes inside the image
+        # F-078: /live was never exercised here, so a build that keeps the
+        # static /health payload but breaks the request loop would pass.
+        run: |
+          set -e
+          curl -fsS http://127.0.0.1:8080/live | grep -q '"status":"alive"'
+          curl -fsS http://127.0.0.1:8080/ready | grep -q '"provider":"mock"'
+
+      - name: Insecure production boot is refused (typo'd ENV)
+        # The parked deploy contract (apps/api/eval/parked_specs/
+        # test_deploy_contracts.py) pins that CI executes the image's most
+        # valuable property: ENV=prodction is an unrecognized name, so the
+        # boot guard must treat it as production and refuse to start with
+        # the default secrets -- a typo'd ENV once booted production
+        # unguarded (test_env_gate.py pins the code side). Measured against
+        # the wave-2 image: exit 3, "Refusing to start" in the worker log.
+        run: |
+          set -e
+          if docker run --rm -e ENV=prodction bangla-gpt-api:ci > /tmp/refusal.log 2>&1; then
+            echo "::error title=Insecure boot accepted::ENV=prodction started the image"
+            exit 1
+          fi
+          grep -q "Refusing to start" /tmp/refusal.log
+
+      - name: Generate image SBOM (per-PR inventory of what shipped)
+        # F-078: release.yml owns the attested image SBOMs; this one makes the
+        # cheap per-PR job prove the image contents can be inventoried at all
+        # (same pinned action as the sbom job).
+        uses: anchore/sbom-action@43a17d6e7add2b5535efe4dcae9952337c479a93 # v0.20.11
+        with:
+          image: bangla-gpt-api:ci
+          format: cyclonedx-json
+          output-file: sbom-api-image.cdx.json
+          artifact-name: sbom-api-image.cdx.json
 
       - name: k6 load gate (smoke profile, thresholds enforced)
         # M-12: load/k6-tutor.js carried "Gates (CI/release)" thresholds that

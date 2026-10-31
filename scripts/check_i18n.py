@@ -7,8 +7,17 @@ Run from CI so the defects found during the 2026-10-09 audit cannot come back:
 
 Parity is already enforced at compile time by
 `const en: Dict = Record<keyof typeof bn, string>` in apps/web/src/i18n.ts.
-This script is the runtime backstop and adds two checks TypeScript cannot:
-placeholder parity, and Bangla values that contain no Bengali at all.
+This script is the runtime backstop and adds what TypeScript cannot:
+
+* placeholder parity, and Bangla values that contain no Bengali at all;
+* the glossary's banned variants and register policy (`docs/glossary-bn.md`);
+* counted English nouns without a singular form in `EN_SINGULAR`;
+* dictionary keys nothing renders (dead copy a reviewer still has to read).
+
+The dictionary is parsed as key/value pairs, including values the formatter
+wrapped over several lines: the first version of this parser matched one line
+per entry, so every wrapped value (a growing share of the dictionary) was
+silently skipped by all checks.
 """
 
 from __future__ import annotations
@@ -18,9 +27,14 @@ import re
 import sys
 from pathlib import Path
 
-I18N = Path(__file__).resolve().parents[1] / "apps" / "web" / "src" / "i18n.ts"
+REPO = Path(__file__).resolve().parents[1]
+I18N = REPO / "apps" / "web" / "src" / "i18n.ts"
+WEB_SRC = REPO / "apps" / "web" / "src"
 
-KEY = re.compile(r"^\s{2}([A-Za-z_][A-Za-z0-9_]*):\s*(.*?),?\s*$", re.MULTILINE)
+KEY = re.compile(
+    r'^\s{2}([A-Za-z_][A-Za-z0-9_]*):\s*("(?:[^"\\]|\\.)*")\s*,?\s*$',
+    re.MULTILINE | re.DOTALL,
+)
 BENGALI = re.compile(r"[\u0980-\u09FF]")
 LATIN_WORD = re.compile(r"[A-Za-z]{3,}")
 PLACEHOLDER = re.compile(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}")
@@ -42,13 +56,70 @@ ACRONYM_ALLOWLIST = {
 # copy visible, and every entry costs that visibility.
 PENDING_BANGLA_REVIEW: set[str] = set()
 
+# Banned variant -> canonical term, from docs/glossary-bn.md. A value that
+# reintroduces a retired variant fails here rather than on a reviewer's desk.
+# Only the exact retired forms are banned: নম্বর stays for marks on a paper,
+# উৎস stays for a content version's origin, মুছে ফেলা হয়েছে stays as a state.
+BANNED_VARIANTS: dict[str, str] = {
+    "লেসন প্ল্যান": "পাঠ পরিকল্পনা",
+    "হোমওয়ার্ক": "বাড়ির কাজ",
+    "রিভিশন": "পুনরালোচনা",
+    "স্ট্রিক": "ধারাবাহিকতা",
+    "সেভ করা": "সংরক্ষিত",
+    "সেভ হয়েছে": "সংরক্ষিত হয়েছে",
+    "মুছে ফেলুন": "মুছুন",
+    "উৎস থেকে": "সূত্র থেকে",
+    "সহায়তা প্ল্যান": "সহায়তা পরিকল্পনা",
+    "স্টাডি মেটেরিয়াল": "পাঠসহায়ক উপকরণ",
+    "সাশ্রয়ী সময়": "সাশ্রয় হওয়া সময়",
+    "পরিসংখ্যা": "পরিসংখ্যান",
+    "উদ্বেগজনক": "দুশ্চিন্তার",
+    "সহায়তা যাচাই": "সহায়তা সেশনে প্রবেশ করুন",
+    "গড় নম্বর": "গড় স্কোর",
+}
+
+#: Keys whose Bangla value may address the learner informally. The glossary's
+#: register policy allows তুমি only where the string is the learner's own
+#: words (tutor chips) or the AI persona's own question in an answer body.
+INFORMAL_VOICE_KEYS = {
+    "suggestTeach",
+    "suggestSolve",
+    "suggestQuizMe",
+    "suggestImage",
+    "imgSolve",
+    "imgExplain",
+    "imgCheck",
+    "imgSteps",
+    "saCheck",
+}
+INFORMAL_MARKER = re.compile("তুমি|তোমার|তোমাকে|তোমরা")
+
+#: Key prefixes the client resolves at runtime from a server value, so the
+#: name never appears as a literal: notif_* wire codes become camelCase keys
+#: in NotificationBell, and sugg_* report codes arrive verbatim from the API.
+DYNAMIC_KEY_PREFIXES = ("notif", "sugg_")
+
+#: Keys a server-supplied code selects verbatim (StudentMemoryOut).
+DYNAMIC_KEYS = {"memory_on_disable_note"}
+
+#: A counted English noun: a numeric placeholder, up to two modifier words,
+#: then a plural noun. `heatmapSummary` is deliberately count-agnostic
+#: (label:value pairs) and does not match.
+COUNTED_NOUN = re.compile(
+    r"\{(?:n|count|focus|days|questions|active|done|total|got|want)\}"
+    r"(?:\s+\w+){0,2}\s+(questions|quizzes|students|minutes|days|sources|points|"
+    r"attempts|chapters|classes)\b",
+    re.IGNORECASE,
+)
+
 
 def parse(block: str) -> dict[str, str]:
     out: dict[str, str] = {}
     for m in KEY.finditer(block):
-        k, v = m.group(1), m.group(2).strip().rstrip(",").strip()
-        if len(v) >= 2 and v[0] in "\"'" and v[-1] == v[0]:
-            out[k] = v[1:-1]
+        k, v = m.group(1), m.group(2)
+        # Wrapped values arrive with the formatter's newline and indentation;
+        # collapse to the single line a user actually reads.
+        out[k] = " ".join(v[1:-1].split())
     return out
 
 
@@ -69,6 +140,108 @@ def dict_block(src: str, opener: str, closer: str | None) -> str:
     return src[start : end + len(closer)]
 
 
+def check_glossary(bn: dict[str, str]) -> list[str]:
+    failures: list[str] = []
+    for key, value in sorted(bn.items()):
+        for banned, canonical in BANNED_VARIANTS.items():
+            # The canonical term may contain the banned one as a prefix
+            # (পরিসংখ্যান / পরিসংখ্যা); strip it before looking for the
+            # retired form.
+            if banned in value.replace(canonical, ""):
+                failures.append(
+                    f"glossary: {key!r} uses the retired variant {banned!r} "
+                    f"-- use {canonical!r} (docs/glossary-bn.md)"
+                )
+        if key not in INFORMAL_VOICE_KEYS:
+            marker = INFORMAL_MARKER.search(value)
+            if marker:
+                failures.append(
+                    f"register: {key!r} addresses the user informally "
+                    f"({marker.group(0)!r}); only the student-voice keys in "
+                    "INFORMAL_VOICE_KEYS may (docs/glossary-bn.md)"
+                )
+    return failures
+
+
+def check_english_plurals(en: dict[str, str], singular: dict[str, str]) -> list[str]:
+    failures: list[str] = []
+    for key, value in sorted(en.items()):
+        if not COUNTED_NOUN.search(value):
+            continue
+        # A key may carry its singular as a sibling key instead of an
+        # EN_SINGULAR entry (activityQuestions/activityQuestion predates the
+        # table and its call sites select the form themselves).
+        if key in singular or (key.endswith("s") and key[:-1] in en):
+            continue
+        failures.append(
+            f"plural: {key!r} counts a plural noun but has no singular form "
+            "(neither an EN_SINGULAR entry nor a sibling key); the en "
+            f"sentence would read '...1 ...' at one: {value!r}"
+        )
+    for key, value in sorted(singular.items()):
+        if key not in en:
+            failures.append(f"plural: EN_SINGULAR names unknown key {key!r}")
+            continue
+        if value == en[key]:
+            failures.append(f"plural: EN_SINGULAR[{key!r}] equals the plural sentence")
+        if COUNTED_NOUN.search(value):
+            failures.append(
+                f"plural: EN_SINGULAR[{key!r}] still counts a plural noun: {value!r}"
+            )
+    return failures
+
+
+def check_unused_keys(bn: dict[str, str]) -> list[str]:
+    """Dictionary keys no source file can render.
+
+    A key is live when its name appears as a string literal anywhere under
+    apps/web/src (a `t("key")` call, or a map/lookup holding the name), or
+    when it is named below as a key the client resolves from a server value.
+    Tests count as references: a key a test drives through the component is
+    wired, and the point of the check is dead copy, not unused test fixtures.
+    """
+    blob = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in WEB_SRC.rglob("*")
+        if path.suffix in {".ts", ".tsx"} and path != I18N
+    )
+    failures: list[str] = []
+    for key in sorted(bn):
+        if key.startswith(DYNAMIC_KEY_PREFIXES) or key in DYNAMIC_KEYS:
+            continue
+        if f'"{key}"' in blob or f"'{key}'" in blob:
+            continue
+        failures.append(
+            f"unused key: {key!r} is in the dictionary but no source file "
+            "renders it -- delete it, wire it, or name it in DYNAMIC_KEYS"
+        )
+    return failures
+
+
+def check_error_keys(bn: dict[str, str]) -> list[str]:
+    """Every copy key the error table names must exist in the dictionary.
+
+    `apps/web/src/errors.ts` maps API detail codes to dictionary keys; a key
+    renamed in the dictionary without the table following (or a typo in the
+    table) silently degrades that code to the reasonless generic message
+    (F-111). The reverse direction -- every API code having copy -- needs the
+    table's own change set; this half is enforceable today.
+    """
+    path = WEB_SRC / "errors.ts"
+    if not path.exists():  # pragma: no cover - structural change in the app
+        return []
+    source = path.read_text(encoding="utf-8")
+    failures: list[str] = []
+    for match in re.finditer(r':\s*"(err[A-Za-z0-9_]*)"', source):
+        key = match.group(1)
+        if key not in bn:
+            failures.append(
+                f"error table: errors.ts maps a code to {key!r}, which is not "
+                "in the dictionary -- the code falls back to the generic message"
+            )
+    return failures
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument(
@@ -80,6 +253,7 @@ def main() -> int:
     try:
         bn = parse(dict_block(src, "const bn = {", "const en: Dict = {"))
         en = parse(dict_block(src, "const en: Dict = {", "\n};"))
+        singular = parse(dict_block(src, "const EN_SINGULAR", "\n};"))
     except ValueError as exc:  # pragma: no cover - structural change in i18n.ts
         print(f"check_i18n: cannot locate the bn/en dictionaries in {I18N}: {exc}")
         return 2
@@ -117,9 +291,24 @@ def main() -> int:
             "if its Bangla copy has landed, delete it from the list"
         )
 
+    glossary = check_glossary(bn)
+    plural = check_english_plurals(en, singular)
+    unused = check_unused_keys(bn)
+    error_keys = check_error_keys(bn)
+    failures.extend(glossary)
+    failures.extend(plural)
+    failures.extend(unused)
+    failures.extend(error_keys)
+
     print(f"i18n: {len(bn)} bn keys, {len(en)} en keys")
     print(f"  english-in-bn      : {len(leaks)}")
-    print(f"  parity/placeholder : {len(failures) - len(leaks)}")
+    print(
+        f"  parity/placeholder : {len(failures) - len(leaks) - len(glossary) - len(plural) - len(unused) - len(error_keys)}"
+    )
+    print(f"  glossary/register  : {len(glossary)}")
+    print(f"  plural             : {len(plural)}")
+    print(f"  unused keys        : {len(unused)}")
+    print(f"  error-table keys   : {len(error_keys)}")
 
     if failures:
         print("\nFAILURES:")
@@ -128,8 +317,9 @@ def main() -> int:
         if args.report:
             return 0
         print(
-            "\nIf an English value in bn is a deliberate product decision, add its key to\n"
-            "ACRONYM_ALLOWLIST with a comment, rather than deleting the check."
+            "\nA banned variant or an informal string in product voice is fixed in\n"
+            "apps/web/src/i18n.ts, not here; a counted noun without a singular form\n"
+            "gets one in EN_SINGULAR, next to the en dictionary."
         )
         return 1
 

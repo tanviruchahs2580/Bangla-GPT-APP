@@ -24,16 +24,16 @@ Configured in `apps/api/pyproject.toml` under `[tool.mypy]`:
 | `no_implicit_reexport` | `import x` must say `from x import y as y` |
 | `strict_bytes` | `str`/`bytes` confusion |
 
-`mypy src` is clean on 110 source files with all of these on.
+`mypy src` is clean on 132 source files with all of these on.
 
 ## What is still off, and what it costs
 
-Measured on 2026-10-09 against `src/` (110 files):
+Measured on 2026-10-30 against `src/` (132 files) - re-measured after wave 2, the counts below are current:
 
 | Flag | Errors | Nature of the work |
 | --- | --- | --- |
-| `disallow_any_generics` | 161 | Bare `dict` / `list` annotations. Each needs a decision about the real key and value types; guessing them would be worse than leaving them implicit, because a wrong annotation silences real errors later. |
-| `disallow_untyped_defs` | 24 | Public functions with no annotations. Mechanical, but touches the module boundary of the evaluation runner, ingestion and logging. |
+| `disallow_any_generics` | 285 | Bare `dict` / `list` annotations. Each needs a decision about the real key and value types; guessing them would be worse than leaving them implicit, because a wrong annotation silences real errors later. |
+| `disallow_untyped_defs` | 28 | Public functions with no annotations. Mechanical, but touches the module boundary of the evaluation runner, ingestion and logging. |
 | `disallow_untyped_decorators` | 0 today | Would apply to any decorator applied to an untyped function; the code has none. |
 | `disallow_any_decorated` | 0 today | Same. |
 | `no_partialtypes` | 0 today | Same. |
@@ -50,14 +50,14 @@ done in one commit.
 
 **Stage 1 - done (2026-10-09).** The ten flags above, all clean.
 
-**Stage 2 - `disallow_untyped_defs` (24 errors).** Annotate the public
+**Stage 2 - `disallow_untyped_defs` (28 errors).** Annotate the public
 functions in `evaluation/runner.py`, `nctb/acquisition.py`,
 `nctb/bijoy.py`, `logging_config.py`, `services/circuit_breaker.py` and the
 rest. No behaviour change; each function's types are already implied by its
 body and its callers. Owner: whoever next touches those modules.
 Target: within two sprints of this file's date.
 
-**Stage 3 - `disallow_any_generics` (161 errors).** Do it module by module,
+**Stage 3 - `disallow_any_generics` (285 errors).** Do it module by module,
 starting where the types are already known (`db/session.py`,
 `providers/base.py`) and finishing where they are genuinely open
 (`services/learn.py`, `services/govt_report.py`). Each module should be a

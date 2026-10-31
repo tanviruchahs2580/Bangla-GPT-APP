@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="robots" content="noindex" />
-    <title>অফলাইন — বাংলা GPT টিউটর</title>
+    <title>অফলাইন / Offline — বাংলা GPT টিউটর</title>
     <style>
       :root { color-scheme: light dark; }
       body {
@@ -16,47 +16,54 @@
         body { background: #12140e; color: #e8e6df; }
       }
       main { max-width: 26rem; }
-      .icon { font-size: 3rem; margin-bottom: 0.5rem; }
+      svg { width: 44px; height: 44px; margin-bottom: 0.4rem; }
       h1 { font-size: 1.4rem; margin: 0.2rem 0 0.6rem; }
-      p { margin: 0.3rem 0; line-height: 1.6; }
+      h2 { font-size: 1.1rem; margin: 1.6rem 0 0.4rem; }
+      p { margin: 0.3rem 0; line-height: 1.7; }
+      hr { border: 0; border-top: 1px solid currentColor; opacity: 0.2; margin: 1.6rem 0 0; }
       button {
         margin-top: 1rem; padding: 0.6rem 1.4rem; font: inherit; cursor: pointer;
         border-radius: 10px; border: 1px solid #166534; background: #166534; color: #fff;
       }
       button[disabled] { opacity: 0.6; cursor: default; }
-      .status { font-size: 0.85rem; opacity: 0.75; margin-top: 0.8rem; }
+      .status { font-size: 0.9rem; opacity: 0.8; margin-top: 0.8rem; }
     </style>
   </head>
   <body>
+    <!-- UX-06: the fallback carries both languages (Bengali first, the
+         product's primary language; the English block below for the
+         stakeholders and teachers who use the English UI). The signal glyph
+         is an SVG, not an emoji: emoji render differently per Android vendor
+         (UX-12). -->
     <main>
-      <div class="icon" aria-hidden="true">📶</div>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 20h.01" />
+        <path d="M8.5 16.429a5 5 0 0 1 7 0" />
+        <path d="M5 12.859a10 10 0 0 1 5.17-2.69" />
+        <path d="M19 12.859a10 10 0 0 0-2.007-1.523" />
+        <path d="M2 8.82a15 15 0 0 1 4.177-2.643" />
+        <path d="M22 8.82a15 15 0 0 0-11.288-3.764" />
+        <path d="m2 2 20 20" />
+      </svg>
       <h1>আপনি এখন অফলাইনে আছেন</h1>
       <p>সংযোগ ফিরলে অ্যাপটি নিজেই নতুন করে লোড হবে।</p>
       <p>ওয়াই-ফাই বা মোবাইল ডেটা চালু করে আবার চেষ্টা করুন।</p>
-      <button id="retry" type="button">আবার চেষ্টা করুন</button>
+      <button id="retry" type="button">আবার চেষ্টা করুন / Try again</button>
       <p class="status" id="status" role="status" aria-live="polite">
-        সংযোগের অপেক্ষায়…
+        সংযোগের অপেক্ষায়… / Waiting for a connection…
       </p>
+
+      <hr />
+      <section lang="en">
+        <h2>You are offline</h2>
+        <p>The app reloads by itself as soon as the connection is back.</p>
+        <p>Turn on Wi-Fi or mobile data, then try again.</p>
+      </section>
     </main>
-    <script>
-      // Auto-reload the moment connectivity returns; manual retry always available.
-      var retryBtn = document.getElementById("retry");
-      var statusEl = document.getElementById("status");
-      function attempt() {
-        retryBtn.disabled = true;
-        statusEl.textContent = "সংযোগ পরীক্ষা করা হচ্ছে…";
-        fetch("/", { method: "HEAD", cache: "no-store" })
-          .then(function () { window.location.reload(); })
-          .catch(function () {
-            statusEl.textContent = "এখনো অফলাইন — সংযোগের অপেক্ষায়…";
-            retryBtn.disabled = false;
-          });
-      }
-      retryBtn.addEventListener("click", attempt);
-      window.addEventListener("online", function () {
-        statusEl.textContent = "সংযোগ ফিরেছে — লোড হচ্ছে…";
-        setTimeout(function () { window.location.reload(); }, 400);
-      });
-    </script>
+    <!-- PWA-02/FE-07: an external same-origin script, not an inline one: both
+         deployments ship `script-src 'self'` without a hash, and the inline
+         handler was blocked by it (the retry button did nothing). -->
+    <script src="/offline-retry.js" defer></script>
   </body>
 </html>

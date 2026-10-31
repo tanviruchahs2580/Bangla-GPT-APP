@@ -13,6 +13,7 @@ import {
   Spinner,
 } from "../components/ui";
 import { setLang, t } from "../i18n";
+import { BANGLA_NAME_FIXTURES } from "./banglaNames";
 
 function ModalHarness({ onClose }: { onClose?: () => void }) {
   const [open, setOpen] = useState(true);
@@ -107,6 +108,32 @@ describe("ui primitives", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("required");
   });
 
+  it("Field ties the error and the hint to the control it wraps", () => {
+    // F-060/A11Y-08: the announced error must also be reachable FROM the
+    // field, and the hint announced WITH it -- otherwise a screen reader
+    // hears a failure it cannot navigate back to.
+    const { rerender } = render(
+      <Field label={t("classLevel")} htmlFor="cls" hint="1-6">
+        <input id="cls" />
+      </Field>,
+    );
+    const input = screen.getByRole("textbox");
+    const hint = screen.getByText("1-6");
+    expect(input).toHaveAttribute("aria-describedby", hint.id);
+    expect(input).not.toHaveAttribute("aria-invalid");
+
+    rerender(
+      <Field label={t("classLevel")} htmlFor="cls" hint="1-6" error="required">
+        <input id="cls" />
+      </Field>,
+    );
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    // The error replaces the hint, and the description points at the alert.
+    const alert = screen.getByRole("alert");
+    expect(input).toHaveAttribute("aria-describedby", alert.id);
+    expect(screen.queryByText("1-6")).not.toBeInTheDocument();
+  });
+
   it("Segmented is a labelled toggle group: aria-pressed state + onChange", async () => {
     // role=group + aria-pressed, not tablist/tab: these pick a filter and have
     // no tabpanels, so a tablist role promised an arrow-key contract the
@@ -142,6 +169,17 @@ describe("ui primitives", () => {
     const av = screen.getByText("ক");
     expect(av.className).toContain("avatar-lg");
     expect(av.className).toContain("avatar-ai");
+  });
+
+  it("renders the first grapheme of every BD-convention fixture name", () => {
+    // F-115: real rosters carry long compound and matra-heavy names; the
+    // initial must be the name's own first character, not a byte or a Latin
+    // fallback.
+    for (const name of BANGLA_NAME_FIXTURES) {
+      const { unmount } = render(<Avatar name={name} />);
+      expect(screen.getByText(name[0])).toBeInTheDocument();
+      unmount();
+    }
   });
 
   it("Spinner announces the localized loading label by default", () => {

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Bot } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { get, getTeacherWorkload, post } from "../../api";
 import type {
@@ -7,7 +8,7 @@ import type {
   SupportPlanRow,
   WeakMatrix,
 } from "../../types";
-import { Badge, Button, Card, LoadError } from "../../components/ui";
+import { Badge, Button, Card, LoadError, TrendMark } from "../../components/ui";
 import { friendlyError } from "../../errors";
 import { t } from "../../i18n";
 
@@ -155,7 +156,7 @@ export default function AnalyticsPage() {
   const levels = Array.from(new Set(rooms.map((r) => r.class_level)));
 
   return (
-    <main className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       <section className="section-head">
         <h1 className="page-title">{t("tNavAnalytics")}</h1>
       </section>
@@ -190,7 +191,7 @@ export default function AnalyticsPage() {
         ) : (
           <div role="status">
             <p className="ai-insight-line">
-              <span aria-hidden>🤖</span> <strong>{t("anaCiTop")}:</strong>{" "}
+              <Bot size={16} aria-hidden /> <strong>{t("anaCiTop")}:</strong>{" "}
               {ci.top}
             </p>
             {ci.more.map((m) => (
@@ -264,7 +265,7 @@ export default function AnalyticsPage() {
                       {s.avg_score_pct !== null
                         ? `${Math.round(s.avg_score_pct)}%`
                         : "·"}{" "}
-                      {s.trend === "down" ? "▼" : s.trend === "up" ? "▲" : "–"}
+                      <TrendMark trend={s.trend} />
                     </td>
                   ))}
                 </tr>

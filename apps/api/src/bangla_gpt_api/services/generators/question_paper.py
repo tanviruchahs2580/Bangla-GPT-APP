@@ -13,9 +13,10 @@ from bangla_gpt_api.retrieval.base import RankingIndex
 from bangla_gpt_api.retrieval.bm25 import tokenize
 from bangla_gpt_api.retrieval.hybrid import light_stem
 from bangla_gpt_api.services.context import RequestContext, set_current_context
+from bangla_gpt_api.services.generators._evidence import evidence_block
+from bangla_gpt_api.services.generators._json import require_semantic_validation
 from bangla_gpt_api.services.router import Route, set_current_route
 from bangla_gpt_api.services.safety import AGE_RULE_SENTENCE
-from bangla_gpt_api.services.tutor import EVIDENCE_CLOSE, EVIDENCE_OPEN, sanitize_evidence
 
 QP_JSON_MARKER = "QP_JSON_V1"
 
@@ -97,9 +98,7 @@ def build_qp_prompt(
     counts: dict[str, int],
     evidence: list[str],
 ) -> str:
-    blocks = "\n".join(
-        f"{EVIDENCE_OPEN}\n{sanitize_evidence(text)}\n{EVIDENCE_CLOSE}" for text in evidence
-    )
+    blocks = "\n".join(evidence_block(text) for text in evidence)
     spec = f"SPEC: easy={counts['easy']} medium={counts['medium']} hard={counts['hard']} "
     spec += "chapters=" + "|".join(chapters)
     return (
@@ -127,6 +126,47 @@ def _jaccard(a: set[str], b: set[str]) -> float:
     return len(a & b) / len(union)
 
 
+def _shape_question(i: int, q: object, chapters: list[str], marks: int) -> dict[str, object]:
+    """Validate one provider question and shape it for the paper.
+
+    Every refusal names the index so a bad payload is diagnosable from the
+    502 body's log line; labels and chapters fall back instead of refusing
+    (the provider cannot know the teacher's chapter list).
+    """
+    if not isinstance(q, dict):
+        raise ProviderError(f"question {i} is not an object")
+    text = q.get("text")
+    options = q.get("options")
+    answer = q.get("answer_index")
+    if not isinstance(text, str) or not text.strip():
+        raise ProviderError(f"question {i} has no text")
+    if (
+        not isinstance(options, list)
+        or len(options) != 4
+        or not all(isinstance(o, str) and o.strip() for o in options)
+    ):
+        raise ProviderError(f"question {i} must have exactly four non-empty options")
+    # bool is an int subclass: `True` must never pass as answer option b.
+    if not isinstance(answer, int) or isinstance(answer, bool) or not 0 <= answer <= 3:
+        raise ProviderError(f"question {i} answer_index must be 0-3")
+    difficulty = q.get("difficulty", "medium")
+    if difficulty not in DIFFICULTY_LABELS:
+        difficulty = "medium"
+    chapter = q.get("chapter")
+    if not isinstance(chapter, str) or chapter not in chapters:
+        chapter = chapters[0] if chapters else ""
+    return {
+        "ref": f"q{i + 1}",
+        "text": text.strip(),
+        "options": [str(o).strip() for o in options],
+        "answer_index": int(answer),
+        "marks": marks,
+        "difficulty": str(difficulty),
+        "chapter": chapter,
+        "reviewed": False,
+    }
+
+
 def parse_qp_payload(
     raw: str, chapters: list[str], *, total_marks: int | None = None
 ) -> list[dict[str, object]]:
@@ -150,43 +190,7 @@ def parse_qp_payload(
     marks_plan = (
         allocate_marks(total_marks, len(questions)) if total_marks else [1] * len(questions)
     )
-    out: list[dict[str, object]] = []
-    for i, q in enumerate(questions):
-        if not isinstance(q, dict):
-            raise ProviderError(f"question {i} is not an object")
-        text = q.get("text")
-        options = q.get("options")
-        answer = q.get("answer_index")
-        difficulty = q.get("difficulty", "medium")
-        if not isinstance(text, str) or not text.strip():
-            raise ProviderError(f"question {i} has no text")
-        if (
-            not isinstance(options, list)
-            or len(options) != 4
-            or not all(isinstance(o, str) and o.strip() for o in options)
-        ):
-            raise ProviderError(f"question {i} must have exactly four non-empty options")
-        # bool is an int subclass: `True` must never pass as answer option b.
-        if not isinstance(answer, int) or isinstance(answer, bool) or not 0 <= answer <= 3:
-            raise ProviderError(f"question {i} answer_index must be 0-3")
-        if difficulty not in DIFFICULTY_LABELS:
-            difficulty = "medium"
-        chapter = q.get("chapter")
-        if not isinstance(chapter, str) or chapter not in chapters:
-            chapter = chapters[0] if chapters else ""
-        out.append(
-            {
-                "ref": f"q{i + 1}",
-                "text": text.strip(),
-                "options": [str(o).strip() for o in options],
-                "answer_index": int(answer),
-                "marks": marks_plan[i],
-                "difficulty": str(difficulty),
-                "chapter": chapter,
-                "reviewed": False,
-            }
-        )
-    return out
+    return [_shape_question(i, q, chapters, marks_plan[i]) for i, q in enumerate(questions)]
 
 
 def validate_paper(
@@ -212,7 +216,7 @@ def validate_paper(
     token_sets: dict[str, set[str]] = {}
     for q in questions:
         ref = str(q["ref"])
-        q_terms = _stem_tokens(str(q["text"]) + " " + " ".join(q["options"]))  # type: ignore[arg-type]
+        q_terms = _stem_tokens(str(q["text"]) + " " + " ".join(q["options"]))  # type: ignore[arg-type]  # stored payload is untyped JSON by contract
         token_sets[ref] = _stem_tokens(str(q["text"]))
         cov = _coverage(q_terms, all_terms)
         per_question[ref] = round(cov, 3)
@@ -297,5 +301,16 @@ async def generate_question_paper(
     set_current_route(Route.TOOL)
     raw = await provider.generate(prompt, system=QP_SYSTEM_PROMPT)
     questions = parse_qp_payload(raw, chapters, total_marks=marks)
+    # F-118: the shape parser accepts four non-empty options; the SPEC line
+    # asked for exact per-difficulty counts and distinct choices, so a payload
+    # with duplicate options or the wrong count must fail closed before the
+    # alignment/dedupe gate -- those gates judge content, not the key.
+    require_semantic_validation(
+        "question_paper",
+        questions,
+        expected_count=sum(counts.values()),
+        total_marks=marks,
+        counts=counts,
+    )
     meta = validate_paper(questions, counts, evidence, total_marks=marks)
     return questions, meta

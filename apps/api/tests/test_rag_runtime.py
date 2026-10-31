@@ -53,6 +53,11 @@ class _RecordingIndex:
 
     def search(self, query: str, **_kwargs: Any) -> list:
         if self.search_delay:
+            # The sleep IS the subject: the event-loop-freedom test measures
+            # wall-clock concurrency against this fake retrieval latency
+            # (0.3 s, asserted to cost < delay*1.8). Replacing it with a
+            # no-op clock would delete the proof that retrieval runs off
+            # the event loop, so the wait stays with the measured margin.
             time.sleep(self.search_delay)
         self.queries.append(query)
         return []

@@ -63,6 +63,7 @@ const PLAN: LessonPlan = {
   chapter: "kosh",
   minutes: 35,
   level: "average",
+  document_id: null,
 };
 
 const SECTION_LABEL_KEYS = [

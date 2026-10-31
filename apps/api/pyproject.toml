@@ -35,6 +35,10 @@ dependencies = [
     # SCS-06: pydantic and starlette are imported directly across the codebase,
     # so they are declared rather than relied on transitively via fastapi.
     "pydantic>=2.7",
+    # SCS-06: schemas.py imports PydanticCustomError from pydantic_core
+    # directly. pydantic pins its own pydantic-core exactly, so this floor
+    # only records the direct import; deptry's DEP003 was the signal.
+    "pydantic-core>=2.7",
     "starlette>=0.37",
     "pydantic-settings>=2.4",
     "sqlalchemy>=2.0",
@@ -83,6 +87,18 @@ dev = [
   "ruff>=0.6",
   "mypy>=1.11",
   "pip-audit>=2.7",
+  # F-151: scripts/check_lockfile.py parses the pins with `packaging` and runs
+  # in the guardrails job on every PR. It only arrived transitively before,
+  # so a lock refresh could have turned a green gate into an ImportError.
+  "packaging>=24",
+  # F-155: the property tests (tests/test_w2_be_properties.py) need hypothesis;
+  # CI installs the dev extra from the hash-verified lock, so the package must
+  # be in the lock or the property tests skip silently on every runner.
+  "hypothesis>=6",
+  # F-163: the CI pytest legs run with `-p randomly`; without the plugin in
+  # the lock that leg would fail on the runner even though it is installed on
+  # developer machines.
+  "pytest-randomly>=3",
 ]
 
 [build-system]
@@ -112,9 +128,15 @@ exclude = ["alembic", "eval/parked_specs"]
 
 [tool.ruff.lint]
 # Families added in CQ-01, each with the violations it surfaces either fixed
-# at the call site or justified below. C90 (complexity) is deliberately NOT
-# here yet: it is the subject of the CQ-03 refactor, and enabling it before
-# that refactor would only red the build. It lands with a ratcheted max.
+# at the call site or justified below.
+#
+# C901 (C90) enforces the complexity budget: max-complexity 20 is the radon
+# "no grade D or worse" line, and the same number is enforced independently by
+# the radon ratchet step in .github/workflows/ci.yml. The functions still
+# above it live in files owned by other wave-2 workstreams (or are the three
+# end-to-end test flows); each carries a per-file ignore below naming the
+# function and its score. That list is a ratchet: it may only shrink, a new
+# entry needs a written reason, and the budget itself only falls.
 select = [
     "E",    # pycodestyle errors
     "F",    # pyflakes
@@ -131,7 +153,9 @@ select = [
     "ASYNC",# async footguns
     "N",    # pep8-naming
     "W",    # pycodestyle warnings
+    "C901", # complexity (rated against mccabe.max-complexity; see the ratchet)
 ]
+
 # Every entry is a deliberate decision, not a backlog:
 #   E501            - line length is enforced by `ruff format`, which does not
 #                     produce unreadable wrapping; duplicating it as a lint
@@ -147,8 +171,9 @@ select = [
 #                     every call site and test to satisfy a style rule.
 #   N813            - the one camelcase import is a deliberate alias for a
 #                     lazily imported class, so the local name is lowercase.
-#   T201 (cli)     - `src/bangla_gpt_api/evaluation/cli.py` is a command-line
-#                     tool; printing is its entire output contract.
+#   T201 (cli)     - `src/bangla_gpt_api/evaluation/cli.py` and
+#                     `src/bangla_gpt_api/evaluation/fairness_probes.py` are
+#                     command-line tools; printing is their output contract.
 #   B011 (tests)    - test_phase1_exploits.py asserts that `assert False` and
 #                     friends are caught by static analysis. Removing the
 #                     literals would delete the test's subject matter.
@@ -195,8 +220,23 @@ ignore = [
 #                     credentials, literal SQL, subprocess calls, prints in
 #                     diagnostics and unused unpacked fixtures are how tests
 #                     are written
+[tool.ruff.lint.mccabe]
+# radon's D grade starts at 21, so a function at or below this is never a
+# D-or-worse block in the CI radon ratchet.
+max-complexity = 20
+
 [tool.ruff.lint.per-file-ignores]
+# C901 ratchet (F-006/BE-05). Each line is a debt marker with the score ruff
+# measured when the entry was recorded, not an exemption policy: when the
+# function is split, the line must be deleted, and the budget only falls.
+# These three hold functions above max-complexity 20 and belong to other
+# wave-2 workstreams (the nctb pipeline and the tutor service); the split is
+# handed to their owners rather than done across the boundary.
+"src/bangla_gpt_api/data/nctb_loader.py" = ["C901"]  # load_nctb_corpus 23
+"src/bangla_gpt_api/nctb/chunking.py" = ["C901"]     # chunk_pages 23
+"src/bangla_gpt_api/services/tutor.py" = ["C901"]    # ask_stream 21
 "src/bangla_gpt_api/evaluation/cli.py" = ["T201"]
+"src/bangla_gpt_api/evaluation/fairness_probes.py" = ["T201", "C901"]  # validate_fixture E(32)
 "scripts/*" = ["T201", "S101", "S603", "S311", "S607", "S404"]
 "tests/test_phase1_exploits.py" = ["B011"]
 "tests/*" = [
@@ -216,6 +256,17 @@ ignore = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# A deprecation warning is a dated dependency or a dated call site; the audit
+# found the suite reporting one and shipping it silently (F-159/TEST-01), so
+# the whole suite treats them as failures. The single accepted exception is
+# starlette's httpx shim inside its own TestClient: it is the framework's
+# transition notice, fired from third-party code this repo does not own, and
+# it disappears when starlette ships the shimmed import by default. Removing
+# this ignore is the goal of the next starlette upgrade.
+filterwarnings = [
+    "error::DeprecationWarning",
+    "ignore:Using .httpx. with .starlette.testclient. is deprecated",
+]
 markers = [
     "skipif: conditional skip (pytest.mark.skipif)",
     "integration: slow integration tests requiring external services",
@@ -223,6 +274,9 @@ markers = [
 
 [tool.coverage.run]
 source = ["bangla_gpt_api"]
+# Branch coverage belongs in the config, not only in the CI command line: a
+# local run must measure what the gate enforces (F-058).
+branch = true
 omit = [
     "*/alembic/*",
     "*/tests/*",
@@ -257,11 +311,14 @@ exclude_lines = [
 #   DEP002 - gunicorn, uvicorn-worker, psycopg, uharfbuzz (used through the
 #            Dockerfile CMD / SQLAlchemy driver URL / fpdf2 runtime shaping,
 #            never via an `import` deptry can see), and the dev tools
-#            (pytest*, ruff, mypy, pip-audit) that are executed, not imported.
+#            (pytest-asyncio, pytest-cov, ruff, mypy, pip-audit) that are
+#            executed, not imported.
 #   DEP001 - `_changelog_common`, a sibling module of the scripts in
 #            apps/api/scripts/ imported through a sys.path insert (its own
 #            module, not a distribution). Add it to known_first_party if
 #            deptry is ever wired into CI.
+# DEP003 is empty since 2026-10-29: `packaging` (scripts/check_lockfile.py)
+# and `pydantic_core` (schemas.py) are declared on purpose instead.
 known_first_party = ["bangla_gpt_api"]
 
 [tool.mypy]
@@ -285,10 +342,11 @@ warn_unreachable = true         # dead code after a terminating branch
 no_implicit_reexport = true     # `import x` must say `from x import y as y`
 strict_bytes = true
 
-# Still off, deliberately, with the measured cost on 2026-10-10:
-#   disallow_any_generics    161 - bare `dict`/`list` annotations that need a
+# Still off, deliberately, with the measured cost (re-measured 2026-10-30):
+#   disallow_any_generics    285 - bare `dict`/`list` annotations that need a
 #                                   per-site decision about key/value types
-#   disallow_untyped_defs     24 - untyped public functions
+#   disallow_untyped_defs      28 - untyped public functions in 14 of 132
+#                                   source files (`mypy src --disallow-untyped-defs`)
 #   disallow_untyped_decorators, disallow_any_decorated, no_partialtypes,
 #   disallow_subclassing_any, extra_checks - no measurable benefit today
 # Removing any of the above from this list is a deliberate act: see the plan.

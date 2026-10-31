@@ -1,0 +1,164 @@
+# AI incident response
+
+Procedure for AI-related incidents at BASE_SHA `7e8525e2` (2026-10-29): a
+flagged or harmful answer, a self-harm disclosure, an abuse disclosure, or a
+teacher escalation. The document separates what the code does today from the
+human procedure, which is proposed and needs owner confirmation. No gap is
+claimed as implemented unless a `file:line` exists; open gaps carry their
+finding id.
+
+## 1. What the system does today (implemented)
+
+- Every student free-text question passes a keyword screen before retrieval (`services/safety.py:83-106`). Six categories exist: self_harm, weapon_synthesis, drug_synthesis, sexual_content, violence, personal_data (`services/safety.py:25-57`). Romanized/English variants exist only for self_harm.
+- A refusal returns supportive copy, never an error page and never the matched pattern (`services/safety.py:109-117`). Self-harm refusals include the helpline sentence built from `SAFE_HELPLINES` in `services/safety.py`; the entries are the DGHS-documented 16263 and 999 with their source and retrieval date in the comment, and the guard test enforces that no unlisted number can be added.
+- The refusal is persisted as a reason code on the chat message (`ChatMessage.refused_reason`). The admin board aggregates it by reason and class over a window — counts only, deliberately no content and no identity (`routers/admin.py:330-365`). A self-harm disclosure therefore produces a count and a supportive answer to the child, and is visible to no human beyond those counts.
+- Answer feedback (thumbs up/down, optional comment) goes to an admin triage queue: oldest untriaged first, reporter identity withheld beyond user id, internal note field (`routers/tutor.py:944-1016`; `db/models.py:320-345`). Triage is manual.
+- There is no escalation concept in the codebase: a search for "escalat" over `apps/`, `docs/` and `scripts/` finds no path that notifies a teacher, counsellor, parent or anyone else about a disclosure or a flagged answer (audit F-LLM-12 / F-029). `SECURITY.md` covers data incidents only.
+- A runtime kill switch exists (F-031, 2026-10-29): `AI_GENERATION_ENABLED=false` refuses tutor/chat generation with the normal refusal envelope (`refused_reason=ai_generation_disabled`) while retrieval, `/search`, the reader and quizzes stay up (section 8).
+- Generation can also be disabled by changing `LLM_PROVIDER` at deploy time, but that also removes the retrieval index: with an unusable provider the app answers `/ready` 503, `/tutor/ask` 503 `tutor_unavailable` and `/search` 503 `index_unavailable` (probe `.qa-work/evidence/E-AIG-06/`; `initialize/dependencies.py:240-311` builds the index inside the provider-valid branch). That path remains the only lever for the teacher generator routes (section 8, scope note).
+
+## 2. Severity levels (proposed; owner must approve before these are commitments)
+
+| Level | Trigger | Examples | Response target (proposed) |
+|---|---|---|---|
+| SEV-1 | A minor is at risk of harm, or a harmful answer reached a minor | Self-harm or abuse disclosure with no human follow-up; hate/bullying content in a delivered answer; helpline copy found wrong | Acknowledge within 1 h; child-safety owner engaged same day; school safeguarding lead informed per section 4 |
+| SEV-2 | Safety control regressed, or wrong answers at scale | Refusal screen bypass found; coverage gate serving out-of-corpus answers in production; systematic uncited answers | Acknowledge within 1 school day; decide mitigation/rollback within 3 days |
+| SEV-3 | Single flagged answer, quality complaint, provider degradation | One thumbs-down with a comment; one bad worksheet; provider latency/outage | Triaged via the feedback queue within 5 school days |
+
+Response times are proposals; the repository records no incident timelines.
+
+## 3. Tools available during any incident
+
+- Refusal counts by reason and class, 1-365 days (`routers/admin.py:330-365`).
+- Feedback queue with notes (`routers/tutor.py:944-1016`).
+- Append-only audit trail of privileged actions, ids and counts only (`audit_log`; SEC-15 evidence E-SEC-15-1).
+- Provider config change plus redeploy, and release/DB rollback (`docs/runbook.md:297-320`).
+
+## 4. Event procedures
+
+1. **Flagged answer** (thumbs-down, comment, or a report).
+   1. An admin works the queue (`/admin/feedback`), reads the complaint, writes the internal note (`routers/tutor.py:984-1016`).
+   2. Classify: content defect (product bug, open a finding), model/config regression (section 5), or user error (no action).
+   3. A safety-classified answer continues as SEV-2 or SEV-1 below.
+2. **Self-harm disclosure.**
+   1. The child already received the supportive refusal and the helpline sentence; no human is notified by the system today (section 1).
+   2. Proposed: the child-safety owner (or the on-call duty holder) reviews the refusal counts for the window and, with the school safeguarding lead, decides whether the guardian must be contacted. This is manual and must respect the privacy decision already made in code: the audit deliberately withholds message content and identity (`routers/admin.py:330-365`). Reading a child's chat beyond the disclosed policy needs a documented legal basis — legal review required.
+   3. Proposed minimum implementation (owner decision): a safety event visible to one designated school role, k-anonymity-aware, with a documented retention; today no such record exists (F-LLM-12).
+3. **Abuse disclosure** (coercion, exploitation, sexual content about a third party). Same flow as a self-harm disclosure, with the school safeguarding lead as the primary human contact. Whether staff have a mandatory reporting duty under Bangladesh law is a legal question the repository does not answer; obtain legal review before promising any reporting behaviour in the UI.
+4. **Teacher escalation** (a teacher disputes an answer, worksheet or question paper): today the teacher submits feedback with a comment and an admin triages it (section 1) — there is no teacher-to-admin escalation channel and no notification when the note is written. Proposed: generated question papers route to the existing review flows, and the AI owner is tagged when the same defect appears twice.
+5. **Provider outage or cost spike.** Verify the coded failures first: `/tutor/ask` 502 `llm_unavailable` is the bounded provider-down path (`.qa-work/audit/ARCH/report.md` failure-mode table); cost is visible on the admin AI-quality board (`.qa-work/audit/RAG/report.md`, RAG-25). Treat sustained 5xx or a budget breach as SEV-3/SEV-2 and use section 5.
+
+## 5. Disabling generation and rollback (documented, manual)
+
+- **Disable generation (preferred, config-only).** Set
+  `AI_GENERATION_ENABLED=false` and restart the API: tutor/chat generation
+  returns the refusal envelope instead of calling a provider, while
+  retrieval, `/search`, the reader and quizzes keep working (section 8).
+  This is the lever for SEV-1/SEV-2 answer-quality or abuse incidents.
+- **Disable generation the old way (deploy-time, blunt).** Set an unusable
+  `LLM_PROVIDER` (or unset the API key) and redeploy. Known consequence: the
+  retrieval index is not built, so `/search` also returns 503
+  `index_unavailable` alongside `/tutor/ask` 503 `tutor_unavailable`
+  (E-AIG-06), and it is the only lever that also stops the teacher generator
+  routes. Restore by reverting the config and redeploying.
+- **Release rollback:** redeploy the previous tag per `docs/runbook.md:297-320`.
+- **Database rollback:** `alembic downgrade <revision>` after a backup (`docs/runbook.md:318-320`); never without the backup step.
+- **Provider fault isolation:** the optional fallback provider and circuit breaker exist (`providers/__init__.py:77-125`); switching primary provider is a config change and must be followed by re-running the eval gate (`docs/ai/system-card.md` section 9).
+- **Not available:** a restart-free switch. `AI_GENERATION_ENABLED` is read at boot (no admin endpoint flips it), and the teacher generator routes are not covered by it (section 8).
+
+## 6. Notification list and the helpline
+
+- Proposed recipients, by role: platform on-call (availability), child-safety owner (SEV-1/2 safety), school safeguarding lead (school-side follow-up), data-protection owner (privacy), engineering lead (model/config regressions). Names, numbers and duty rota live with the owner, not in this repository.
+- The helplines the product shows are exactly the `SAFE_HELPLINES` entries (16263, 999), each documented by the Directorate General of Health Services with a source URL and retrieval date on the constant. Do not edit them from memory or add a number without a source: `apps/api/tests/test_qa_helpline_policy.py` blocks unlisted numbers, and a wrong number remains a SEV-1 trigger.
+
+## 7. After an incident
+
+1. Record: date, level, trigger, actions taken, which release/config the rollback used.
+2. Add or update the regression guard (a test where the defect is testable offline; a documented manual check where it is not).
+3. Update `docs/ai/risk-register.md` residual status and the system card when a limitation changes.
+4. Keep findings traceable: reference the finding id (`.qa-work/findings.csv` while the QA run is open, the issue tracker after it closes).
+
+Open gaps this procedure cannot paper over: no human escalation path (F-LLM-12 / F-029) and the unverified helpline (F-LLM-11). The runtime kill switch gap (F-LLM-14 / F-031) is closed for the student generation surfaces as of 2026-10-29 (section 8).
+
+## 8. Runtime kill switch (implemented 2026-10-29, F-031)
+
+`AI_GENERATION_ENABLED=false` (env var / `.env`) turns off **student-facing
+generation**: `POST /tutor/ask` and both chat-turn routes
+(`/tutor/conversations/{id}/messages[/stream]`) answer with the standard
+refusal envelope — HTTP 200, `grounded=false`,
+`refused_reason=ai_generation_disabled`, confidence 0.0, and localized copy
+saying generation is paused while the textbook, search and quizzes still
+work. Chat turns are still persisted (user message + refusal reply) so
+conversation history stays coherent, and **no ledger row is reserved**, so a
+paused generation books no phantom spend.
+
+Operator steps:
+
+1. Set `AI_GENERATION_ENABLED=false` in the deployment environment (the
+   variable lives in `.env.example` / `.env.production.example`) and restart
+   the API. The boot log records
+   `ai_generation_disabled: tutor/chat generation refuses ...` — its absence
+   means the flag did not reach the process.
+2. Verify: `/search` still answers 200 (retrieval untouched), a tutor ask
+   returns 200 with `refused_reason=ai_generation_disabled`, and `/ready`
+   stays green (provider and index construction are untouched, unlike the
+   `LLM_PROVIDER` lever in section 5).
+3. Resume by setting the flag back to `true` and restarting. No data was
+   deleted; the guard test
+   `apps/api/tests/test_qa_kill_switch.py` pins enabled/disabled behaviour,
+   the persisted refusal, and that search/ready stay 200.
+
+Scope note: the switch covers the student tutor/chat surfaces only. The
+teacher generator routes (`/teacher/*`) still call the provider; stopping
+those requires the section 5 `LLM_PROVIDER` lever (which also takes search
+down) or a future extension of this flag. There is **no admin endpoint to
+flip it** and no config reload — it is a deploy-time configuration, not a
+live control.
+
+## 9. Escalation path: implemented versus manual (2026-10-29)
+
+This section states, for the child-safety disclosure flow, exactly which parts
+a machine performs and which parts a human must perform. It is written against
+the code on this branch; nothing here describes a feature that does not exist.
+
+Implemented (automated):
+
+1. A self-harm or other unsafe disclosure is refused with supportive copy and
+   a helpline drawn from `SAFE_HELPLINES` (`services/safety.py`); the refusal
+   reason is persisted on the chat message (`ChatMessage.refused_reason`) and
+   metered on `bgpt_rag_gate_refusals_total{reason}`.
+2. `GET /admin/safety/refusals` aggregates those refusals by reason and class
+   over a window — counts only, no identity and no content
+   (`routers/admin.py:330-365`). A disclosure is therefore visible in
+   aggregate the morning after, and invisible in individual detail by design.
+3. `GET /admin/ai/quality` reports refusals by reason, thumbs up/down and the
+   share of low-confidence answers over the same window, so a rise in
+   `self_harm` refusals or in down-votes is observable without reading any
+   child's message.
+4. Every answer, including every refusal, now carries a privacy-safe trace —
+   query fingerprint, outcome, refusal reason, retrieved chunk ids, citation
+   verdict, latency (`evaluation/observability.py`, `TRACE_STORE`) — so an
+   investigation can reconstruct what the system did without retaining what
+   the child wrote.
+
+Manual (no code path exists; the escalation is a human procedure):
+
+1. Nobody is notified automatically. No email, no queue entry and no teacher
+   or counsellor task is created for a disclosure; a search for "escalat" over
+   the application code still finds no notification path, and the triage queue
+   for flagged answers (`routers/tutor.py:944-1016`) is manual as well.
+2. The on-call responder watches the refusal aggregates (section 3 of the
+   implemented list) and acts on the procedure in sections 4-6: classify
+   severity, decide on school-side follow-up, contact the safeguarding lead
+   listed by role in section 6.
+3. A refusing turn does not page anyone. Treat a self-harm refusal count above
+   the school's expected baseline as the trigger for review, and record the
+   review in the incident register. Until a notification path exists, the
+   escalation is only as fast as that review — the honest state of the
+   control, and an owner-visible gap rather than a claim of coverage.
+
+What a responder can and cannot see: reason counts, class-level splits,
+refusal timestamps, feedback ratings and per-answer traces (system-side only).
+A responder cannot see the child's question, the conversation or the child's
+identity from the AI-quality surfaces; reaching the child is a school-side,
+consent-bound process, never an API call.

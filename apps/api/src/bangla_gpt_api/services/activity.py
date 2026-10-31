@@ -1,11 +1,18 @@
-"""daily activity, streaks and heatmap (Asia/Dhaka day boundaries)."""
+"""daily activity, streaks, heatmap and the chapter-accuracy rollups
+every student/guardian/class view shares (Asia/Dhaka day boundaries)."""
 
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta, timezone, tzinfo
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
+
+if TYPE_CHECKING:
+    # Only for the annotations below; the runtime imports stay lazy.
+    from bangla_gpt_api.schemas import ActivitySummary, ChapterStat
 
 try:  # preferred: real IANA zone when tzdata is available
     from zoneinfo import ZoneInfo
@@ -60,6 +67,85 @@ def heatmap_days(rows: list[_ActivityRow], today_iso: str, days: int) -> list[di
         iso = (today - timedelta(days=i)).isoformat()
         out.append(counts.get(iso, {"questions": 0, "quizzes": 0, "minutes": 0}))
     return out
+
+
+def activity_summary(db: Session, student_id: int, days: int) -> ActivitySummary:
+    """The one activity summary every surface returns (F-072).
+
+    The student route and the guardian route carried byte-identical copies
+    that could drift apart silently; both now call this. Lazy imports keep
+    the service importable without the models/schemas layer.
+    """
+    from bangla_gpt_api.db.models import DailyActivity
+    from bangla_gpt_api.schemas import ActivityDay, ActivitySummary
+
+    today = dhaka_date(datetime.now(UTC))
+    rows = (
+        db.execute(
+            select(DailyActivity)
+            .where(DailyActivity.student_id == student_id)
+            .order_by(DailyActivity.date)
+        )
+        .scalars()
+        .all()
+    )
+    window = heatmap_days(list(rows), today, days)
+    anchor = date.fromisoformat(today)
+    date_axis = [(anchor - timedelta(days=i)).isoformat() for i in range(days - 1, -1, -1)]
+    active = {r.date for r in rows if (r.questions or r.quizzes or r.minutes)}
+    return ActivitySummary(
+        streak=streak_days(active, today),
+        today=today,
+        days=[ActivityDay(date=d, **c) for d, c in zip(date_axis, window, strict=True)],
+    )
+
+
+def sorted_chapter_stats(stats: dict[str, list[int]]) -> list[ChapterStat]:
+    """ChapterStat rows from ``{chapter: [asked, correct]}``, weakest first.
+
+    One conversion shared by the student, guardian and classroom views: the
+    three had written the same comprehension, so a rounding or ordering
+    change in one was invisible to the others (F-072).
+    """
+    from bangla_gpt_api.schemas import ChapterStat
+
+    return sorted(
+        (
+            ChapterStat(
+                chapter=chapter,
+                asked=asked,
+                correct=correct_count,
+                accuracy=round(100.0 * correct_count / asked, 2),
+            )
+            for chapter, (asked, correct_count) in stats.items()
+        ),
+        key=lambda s: s.accuracy,
+    )
+
+
+def graded_attempt_stats(db: Session, graded: list) -> tuple[list[ChapterStat], float | None]:
+    """``(by-chapter accuracy, average pct)`` for a list of graded attempts.
+
+    Shared by the guardian progress view and the student dashboard, whose
+    private copies of the loop could disagree about per-chapter accuracy.
+    """
+    from bangla_gpt_api.db.models import AnswerLog
+
+    stats: dict[str, list[int]] = defaultdict(lambda: [0, 0])
+    if graded:
+        for row in (
+            db.execute(select(AnswerLog).where(AnswerLog.attempt_id.in_([a.id for a in graded])))
+            .scalars()
+            .all()
+        ):
+            stats[row.chapter][0] += 1
+            stats[row.chapter][1] += row.is_correct
+    avg_score = (
+        round(sum(a.score_pct for a in graded if a.score_pct is not None) / len(graded), 2)
+        if graded
+        else None
+    )
+    return sorted_chapter_stats(stats), avg_score
 
 
 def record_activity(

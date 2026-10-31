@@ -42,6 +42,9 @@ def sync_corpus(
 ) -> int:
     if client is None:
         try:
+            # boto3 is an optional tool dependency, deliberately absent from
+            # the API manifest (the lazy import above keeps the API process
+            # free of it), so mypy cannot resolve the module here.
             import boto3  # type: ignore[import-not-found]
         except ImportError as exc:  # pragma: no cover - depends on environment
             raise RuntimeError(

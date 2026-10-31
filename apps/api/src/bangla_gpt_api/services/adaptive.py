@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 from bangla_gpt_api.db.models import PracticeItem, StudentAbility
 from bangla_gpt_api.services import knowledge
 
-if TYPE_CHECKING:  # pragma: no cover
+if TYPE_CHECKING:
     from bangla_gpt_api.curriculum.models import Chunk
     from bangla_gpt_api.services.quiz import GeneratedQuestion
 

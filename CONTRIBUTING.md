@@ -9,10 +9,34 @@ only the rules that the CI cannot enforce for you.
   agreed before the work is done.
 - `main` is the integration branch. Branch from it, never commit to it
   directly.
+- Participation is covered by [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), which
+  also states the project-specific rule about children's data.
+
+## Setup
+
+1. **API** — the README "Quick start" carries the exact commands for both
+   PowerShell and Linux; CI runs the same two steps (`pip install
+   --require-hashes -r constraints.txt`, then `pip install --no-deps -e
+   ".[dev]"`). Python 3.11+ is required.
+2. **Web** — `npm ci` in `apps/web` (Node 24 / npm 11; `.nvmrc` pins 24).
+3. **Optional but recommended** — `pip install pre-commit && pre-commit
+   install`: the hook set is a subset of CI and catches whitespace, JSON/TOML
+   and private-key problems before the push. `.pre-commit-config.yaml` states
+   what is deliberately left to CI and why.
+4. **Or in one step** — `make setup` runs 1–3 (GNU make + bash; see the
+   Makefile header for the other targets).
+
+A fresh-clone bootstrap was measured end-to-end on 2026-10-30 (Windows 11,
+Git Bash, warm pip cache, ≈10.8 GiB free): clone 5 s → `python -m venv .venv`
+40 s → hash-locked install 263 s → editable install 24 s → `npm ci` 226 s →
+`npm run build` 65 s, ≈21 minutes in total, and the dev server answered
+`/health` and `/ready` 200 at the end. Disk after the installs: venv 258 MB,
+`apps/web/node_modules` 348 MB, `dist/` 4 MB. A cold pip/npm cache adds to the
+two install steps; CI runs the same commands in the `quickstart-windows` job.
 
 ## Branches and commits
 
-```
+```bash
 git switch main && git pull
 git switch -c fix/short-description
 ```
@@ -23,6 +47,10 @@ git switch -c fix/short-description
   ("Add retry to the ingestion worker"), then a blank line, then the body.
   Explain *why* — the diff already says *what*. Reference the issue or the
   finding id when one exists (`Refs: #123`).
+- Commit with a GitHub noreply address (`<id>+<user>@users.noreply.github.com`),
+  not a personal one. A personal address in the author field is permanent in
+  published history (GIT-09/F-103); `.mailmap` maps the historic address for
+  display only, it does not rewrite the commits.
 - Do not commit secrets, `.env` files, real student data, or generated
   artefacts. `.env.example` is the template; copy it to `.env` locally.
 
@@ -61,7 +89,7 @@ builds the same dependency set.
 
 When you change `pyproject.toml`, regenerate the lock in the same pull request:
 
-```
+```bash
 pip install pip-tools
 cd apps/api
 pip-compile --generate-hashes --allow-unsafe --extra dev --strip-extras
@@ -92,7 +120,7 @@ The `Dockerfile` pins `python:3.12-slim` to a digest, and the two explicitly
 installed Debian packages to the versions that digest resolves to. To move the
 base, re-resolve both and change them together:
 
-```
+```bash
 docker run --rm --entrypoint sh python:3.12-slim@sha256:<digest> \
   -c "apt-get update -qq && apt-cache policy openssl libssl3t64"
 ```
@@ -139,6 +167,29 @@ that touches authentication, PII handling, migrations, or CI configuration.
 Match the surrounding code. The linters are configured in `apps/api/pyproject.toml`;
 when a suppression is genuinely necessary, put the reason in the comment — an
 unexplained `# noqa` or `# type: ignore` will be asked about in review.
+
+### File names
+
+A `_v2` suffix marks the second generation of a suite or dataset
+(`test_cache_v2.py`, `eval/golden_v2.json`, `eval/redteam_v2.json`,
+`eval/baseline_v2.json` and their siblings). The base name is intentionally
+absent: the first generation was replaced rather than kept side by side, and
+the QA reports and the eval-gate job refer to these names, so rename only with
+every reference updated in the same change.
+
+## Repository size
+
+Fourteen tracked files exceed 500 KB (8.4 MB total, measured 2026-10-30): nine
+Playwright visual-regression baselines under
+`apps/web/e2e/__screenshots__/visual.spec.ts/` and five renovation-evidence
+screenshots under `docs/uiux_renovation_evidence/wave4/after/`. Decision
+(2026-10-29): keep them in git — the baselines make visual regressions
+reviewable and refreshable, and the evidence set is the durable record of that
+UI pass. Re-run the inventory (`git ls-files` + file sizes) when the baselines
+are regenerated; the count moves with them. The `check-added-large-files`
+pre-commit hook caps **newly added** files at 512 KB (it inspects added files
+per commit), so a new large file needs an explicit decision recorded here, not
+a silent `--no-verify`.
 
 ## Security issues
 

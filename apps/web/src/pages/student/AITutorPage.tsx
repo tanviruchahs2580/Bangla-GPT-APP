@@ -1,22 +1,8 @@
 import { asText } from "../../lib/text";
-import { formatServerDate } from "../../lib/datetime";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation, useNavigate } from "react-router-dom";
-import {
-  ArrowLeft,
-  Bookmark,
-  Check,
-  MessageSquarePlus,
-  Paperclip,
-  RefreshCcw,
-  Search,
-  Send,
-  Square,
-  ThumbsUp,
-  ThumbsDown,
-  X,
-} from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { ArrowLeft, MessageSquarePlus } from "lucide-react";
 import { createNote, del, get, patch, post, postStream } from "../../api";
 import type {
   ChatDoneEvent,
@@ -26,18 +12,17 @@ import type {
   SourceRef,
 } from "../../types";
 import { useAuth } from "../../AuthContext";
-import { Badge, Button, Card, Modal } from "../../components/ui";
-import { ConversationChip } from "../../components/ConversationChip";
-import { AiSparkle, BrandMark } from "../../components/BrandMark";
-import { VoiceButton } from "../../components/VoiceButton";
+import { Button, Card } from "../../components/ui";
 import { friendlyError } from "../../errors";
 import { t } from "../../i18n";
 import { getLowData } from "../../lib/lowData";
 import { toast } from "../../lib/toast";
 import { track } from "../../lib/analytics";
-import { explainMessage, type QuizExplainPayload } from "../../lib/quizExplain";
-import { SafeMarkdownLazy as SafeMarkdown } from "../../lib/safeMarkdownLazy";
-import { parseStructuredAnswer } from "../../lib/structuredAnswer";
+import { EvidenceModal } from "./tutor/EvidenceModal";
+import { useTutorHandoff } from "./tutor/useTutorHandoff";
+import { TutorComposer } from "./tutor/TutorComposer";
+import { TutorHistory } from "./tutor/TutorHistory";
+import { TutorThread } from "./tutor/TutorThread";
 
 // labels from i18n, evaluated per render (lang switch remounts).
 const subjectOptions = () => [
@@ -46,29 +31,14 @@ const subjectOptions = () => [
   { value: "bangla", label: t("subjectBangla") },
 ];
 
-// explicit teaching strategies accepted by ChatSendRequest.strategy.
-const STRATEGIES = [
-  "simple",
-  "example",
-  "book_language",
-  "steps",
-  "analogy",
-] as const;
-const STRAT_LABELS: Record<
-  (typeof STRATEGIES)[number],
-  "stratSimple" | "stratExample" | "stratBook" | "stratSteps" | "stratAnalogy"
-> = {
-  simple: "stratSimple",
-  example: "stratExample",
-  book_language: "stratBook",
-  steps: "stratSteps",
-  analogy: "stratAnalogy",
-};
+// Attachment contract. The API re-validates both server-side (422
+// image_invalid); these bounds must stay in step with docs/API.md.
+const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
+const MAX_IMAGE_BYTES = 1_500_000;
 
 export default function AITutorPage() {
   const { me } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [subject, setSubject] = useState("science");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -159,7 +129,11 @@ export default function AITutorPage() {
   // POST is still in flight; a ref can.
   const sendingRef = useRef(false);
 
-  const { data: conversations, refetch: refetchConvs } = useQuery({
+  const {
+    data: conversations,
+    isError: conversationsError,
+    refetch: refetchConvs,
+  } = useQuery({
     queryKey: ["conversations"],
     queryFn: () => get<ConversationOut[]>("/tutor/conversations"),
   });
@@ -358,46 +332,48 @@ export default function AITutorPage() {
     ],
   );
 
-  // Follow-up chips ("explain simpler" / "give an example") re-ask the
-  // PREVIOUS question with an explicit strategy. Sending the chip's own
-  // phrase as the message made retrieval search for "explain simpler", which
-  // the coverage gate rightly refused (measured on the live build,
-  // 2026-10-24). The question carries the corpus overlap; the strategy is
-  // what the user is asking for — the same split as the composer's explicit
-  // strategy chips.
+  /**
+   * Follow-up chips ("explain simpler" / "give an example") re-ask the
+   * PREVIOUS question with an explicit strategy. Sending the chip's own
+   * phrase as the message made retrieval search for "explain simpler", which
+   * the coverage gate rightly refused (measured on the live build,
+   * 2026-10-24). The question carries the corpus overlap; the strategy is
+   * what the user is asking for — the same split as the composer's explicit
+   * strategy chips.
+   */
+  const questionBefore = (index: number): string | undefined =>
+    [...messages.slice(0, index)].reverse().find((x) => x.role === "user")
+      ?.content;
+
   const resendWithStrategy = (index: number, key: string) => {
-    const q = [...messages.slice(0, index)]
-      .reverse()
-      .find((x) => x.role === "user")?.content;
+    const q = questionBefore(index);
     if (q) void send(q, { strategy: key });
   };
 
-  // a wrong quiz item can arrive here as `location.state.explain` —
-  // ask once, then drop the explain payload so a refresh does not re-ask.
-  const quizContextRef = useRef(false);
-  const [backToResult, setBackToResult] = useState(false);
-  useEffect(() => {
-    const st = location.state as {
-      explain?: QuizExplainPayload;
-      backToResult?: boolean;
-    } | null;
-    if (!st?.explain || quizContextRef.current) return;
-    quizContextRef.current = true;
-    if (st.backToResult) setBackToResult(true);
-    void send(explainMessage(st.explain));
-    void navigate(location.pathname, { replace: true, state: null });
-  }, [location, navigate, send]);
+  const reteachFrom = (index: number) => {
+    // 'আমি বুঝিন': re-ask the same question with the next teaching strategy
+    // (server rotates conversation strategy).
+    const q = questionBefore(index);
+    if (q) void send(q, { reteach: true });
+  };
 
-  // the search box's "ask in Tutor" action hands the question over via
-  // location.state.ask — ask it once, then clear the payload (like explain).
-  const askSentRef = useRef(false);
-  useEffect(() => {
-    const st = location.state as { ask?: string } | null;
-    if (!st?.ask || askSentRef.current) return;
-    askSentRef.current = true;
-    void send(st.ask);
-    void navigate(location.pathname, { replace: true, state: null });
-  }, [location, navigate, send]);
+  const regenerateFrom = (index: number) => {
+    const q = questionBefore(index);
+    if (q) void send(q);
+  };
+
+  const chooseStrategy = (next: string | null) => {
+    setStrategy(next);
+    if (next) track("tutor_strategy_chosen", { strategy: next });
+  };
+
+  // a wrong quiz item and the search box's question both arrive as
+  // location.state; one hook owns asking each exactly once.
+  const [backToResult, setBackToResult] = useState(false);
+  useTutorHandoff(
+    (text) => void send(text),
+    () => setBackToResult(true),
+  );
 
   const rate = async (messageId: number, rating: 1 | -1) => {
     try {
@@ -435,10 +411,14 @@ export default function AITutorPage() {
   // turn. Server re-validates mime + decoded size and answers 422 image_invalid.
   const attachFile = (f: File | null) => {
     if (!f) return;
-    if (
-      !["image/png", "image/jpeg", "image/webp"].includes(f.type) ||
-      f.size > 1_500_000
-    ) {
+    // Two distinct refusals with two distinct sentences: a renamed non-image
+    // (a PDF, a text snapshot) used to be reported as "too large", so the
+    // student retried with a smaller file of the same unusable kind.
+    if (!IMAGE_TYPES.includes(f.type)) {
+      setError(t("imageTypeUnsupported"));
+      return;
+    }
+    if (f.size > MAX_IMAGE_BYTES) {
       setError(t("imageTooLarge"));
       return;
     }
@@ -504,9 +484,9 @@ export default function AITutorPage() {
   };
 
   return (
-    <main className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       <section className="section-head">
-        <h2>{t("aiTutor")}</h2>
+        <h1>{t("aiTutor")}</h1>
         <Button variant="soft" size="sm" onClick={newChat}>
           <MessageSquarePlus size={16} aria-hidden /> {t("newChat")}
         </Button>
@@ -536,81 +516,32 @@ export default function AITutorPage() {
         ))}
       </div>
 
-      {/* history search */}
-      <div className="row-flex chat-search-row">
-        <input
-          className="input chat-search-input"
-          value={query}
-          placeholder={t("searchHistory")}
-          aria-label={t("searchHistory")}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && runSearch()}
-        />
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={runSearch}
-          aria-label={t("searchHistory")}
-        >
-          <Search size={16} aria-hidden />
-        </Button>
-      </div>
-      {hits && (
-        <div className="stack chips-gap">
-          {hits.length === 0 && <span className="muted">{t("noResults")}</span>}
-          {hits.slice(0, 6).map((h) => (
-            <button
-              key={h.message_id}
-              className="btn btn-ghost search-hit-btn"
-              onClick={() => {
-                void loadConversation(h.conversation_id);
-                setHits(null);
-                setQuery("");
-              }}
-            >
-              <div>
-                <div className="row-title">
-                  {h.conversation_title ?? `#${h.conversation_id}`}
-                </div>
-                <div className="row-sub">{h.snippet}</div>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {conversations && conversations.length > 0 && (
-        <div className="chips chips-gap">
-          {conversations.slice(0, 8).map((c) =>
-            renamingId === c.id ? (
-              <input
-                key={c.id}
-                className="input conv-rename-input"
-                value={renameValue}
-                aria-label={t("rename")}
-                onChange={(e) => setRenameValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void commitRename(c.id);
-                  if (e.key === "Escape") setRenamingId(null);
-                }}
-                onBlur={() => void commitRename(c.id)}
-              />
-            ) : (
-              <ConversationChip
-                key={c.id}
-                title={c.title ?? `#${c.id}`}
-                active={conversationId === c.id}
-                onOpen={() => loadConversation(c.id)}
-                onRename={() => {
-                  setRenamingId(c.id);
-                  setRenameValue(c.title ?? "");
-                }}
-                onDelete={() => void removeConversation(c.id)}
-              />
-            ),
-          )}
-        </div>
-      )}
+      <TutorHistory
+        query={query}
+        onQuery={setQuery}
+        onSearch={() => void runSearch()}
+        hits={hits}
+        onOpenHit={(h) => {
+          void loadConversation(h.conversation_id);
+          setHits(null);
+          setQuery("");
+        }}
+        conversations={conversations}
+        conversationsError={conversationsError}
+        onRetryConversations={() => void refetchConvs()}
+        conversationId={conversationId}
+        renamingId={renamingId}
+        renameValue={renameValue}
+        onRenameStart={(c) => {
+          setRenamingId(c.id);
+          setRenameValue(c.title ?? "");
+        }}
+        onRenameChange={setRenameValue}
+        onRenameCommit={(id) => void commitRename(id)}
+        onRenameCancel={() => setRenamingId(null)}
+        onOpenConversation={(id) => void loadConversation(id)}
+        onDeleteConversation={(id) => void removeConversation(id)}
+      />
 
       <Card className="chat-card">
         {/* One polite announcement when an answer completes (F-016/F-064):
@@ -624,430 +555,49 @@ export default function AITutorPage() {
         >
           {announcement}
         </div>
-        <div ref={viewportRef} className="chat-thread chat-viewport">
-          {messages.length === 0 && !streaming && (
-            <div className="center empty-state">
-              <div className="empty-mark" aria-hidden>
-                <BrandMark size={56} />
-              </div>
-              <div className="empty-title">{t("emptyChatTitle")}</div>
-              <p className="muted">{t("emptyChatSub")}</p>
-              <div className="suggest-row">
-                {[t("suggestTeach"), t("suggestSolve"), t("suggestQuizMe")].map(
-                  (q) => (
-                    <button
-                      key={q}
-                      type="button"
-                      className="suggest-chip"
-                      onClick={() => setInput(q)}
-                    >
-                      {q}
-                    </button>
-                  ),
-                )}
-                <button
-                  type="button"
-                  className="suggest-chip suggest-chip-image"
-                  onClick={() => fileRef.current?.click()}
-                >
-                  {t("suggestImage")}
-                </button>
-              </div>
-            </div>
-          )}
-          {messages.map((m, i) => {
-            const prev = messages[i - 1];
-            const tight = prev && prev.role === m.role;
-            const day = formatServerDate(m.created_at, {
-              day: "numeric",
-              month: "short",
-            });
-            const prevDay = formatServerDate(prev?.created_at, {
-              day: "numeric",
-              month: "short",
-            });
-            const showDay = day && day !== prevDay;
-            return (
-              <div
-                key={m.id || i}
-                className={tight ? "chat-group-tight" : undefined}
-              >
-                {showDay && (
-                  <div className="chat-day" aria-hidden>
-                    {day}
-                  </div>
-                )}
-                <div className={`bubble ${m.role}`}>
-                  {m.role === "assistant" && (
-                    <span className="bubble-id" aria-hidden>
-                      <AiSparkle size={14} /> AI
-                    </span>
-                  )}
-                  {m.role === "assistant" ? (
-                    <AssistantContent content={m.content} />
-                  ) : (
-                    m.content
-                  )}
-                  {streaming && i === messages.length - 1 && (
-                    <span className="stream-cursor" aria-hidden />
-                  )}
-                </div>
-                {!streaming &&
-                  m.role === "assistant" &&
-                  m.grounded &&
-                  m.id !== 0 && (
-                    // smart action bar: one obvious row under every answer.
-                    <div
-                      className="chips chips-gap action-bar"
-                      role="group"
-                      aria-label={t("quickFollowups")}
-                    >
-                      <button
-                        className="chip"
-                        onClick={() => resendWithStrategy(i, "simple")}
-                      >
-                        {t("chipSimpler")}
-                      </button>
-                      <button
-                        className="chip"
-                        onClick={() => resendWithStrategy(i, "example")}
-                      >
-                        {t("chipExample")}
-                      </button>
-                      <button
-                        className="chip"
-                        onClick={() =>
-                          navigate(`/student/quiz?subject=${subject}`)
-                        }
-                      >
-                        {t("chipQuiz")}
-                      </button>
-                      <button
-                        className="chip"
-                        onClick={() => navigate("/student/quiz")}
-                      >
-                        {t("actionPractice")}
-                      </button>
-                    </div>
-                  )}
-                {m.role === "assistant" && m.confidence != null && (
-                  <div className="confidence-row">
-                    <Badge tone={m.confidence >= 0.6 ? "ok" : "warn"}>
-                      {t("confidenceBadge", {
-                        pct: String(Math.round(m.confidence * 100)),
-                      })}
-                    </Badge>
-                    {/* low-confidence state: distinct, not alarming. */}
-                    {m.confidence < 0.6 && (
-                      <p className="low-conf-hint" role="status">
-                        {t("lowConfidenceHint")}
-                      </p>
-                    )}
-                  </div>
-                )}
-                {m.role === "assistant" &&
-                  ((m.sources && m.sources.length > 0) ||
-                    m.grounded === false) && (
-                    <div className="sources">
-                      {/* Grounding honesty: a server-verdict of ungrounded is
-                         the student-visible truth even when the server sends
-                         ZERO sources with it — an unverified answer must not
-                         look identical to a cited one just because its
-                         sources were withheld. */}
-                      {m.grounded === false || m.refused_reason ? (
-                        <Badge tone="warn">{t("unsupportedBadge")}</Badge>
-                      ) : (
-                        <Badge tone="teal">
-                          <Check size={12} aria-hidden /> {t("supportedBadge")}
-                        </Badge>
-                      )}
-                      {m.sources && m.sources.length > 0 && (
-                        <div className="row-flex source-row">
-                          {m.sources.map((s: SourceRef, si) => (
-                            <button
-                              className="source-chip"
-                              key={si}
-                              onClick={() => setEvidence(s)}
-                              aria-label={`${t("evidenceTitle")}: ${s.chapter || s.book}`}
-                            >
-                              {s.chapter || s.book}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      {m.id !== 0 && (
-                        <div className="row-flex rate-row">
-                          <button
-                            className="icon-btn rate-btn"
-                            aria-label={t("rateUp")}
-                            onClick={() => rate(m.id, 1)}
-                          >
-                            {thanks === m.id ? (
-                              <Check size={16} aria-hidden />
-                            ) : (
-                              <ThumbsUp size={16} aria-hidden />
-                            )}
-                          </button>
-                          <button
-                            className="icon-btn rate-btn"
-                            aria-label={t("rateDown")}
-                            onClick={() => rate(m.id, -1)}
-                          >
-                            <ThumbsDown size={16} aria-hidden />
-                          </button>
-                          {m.grounded && (
-                            <button
-                              className="chip"
-                              onClick={() => {
-                                // 'আমি বুঝিন': re-ask the same question with the
-                                // next teaching strategy (server rotates conversation strategy).
-                                const q = [...messages.slice(0, i)]
-                                  .reverse()
-                                  .find((x) => x.role === "user")?.content;
-                                if (q) void send(q, { reteach: true });
-                              }}
-                            >
-                              {t("reteach")}
-                            </button>
-                          )}
-                          <button
-                            className="icon-btn rate-btn"
-                            aria-label={t("saveAsNote")}
-                            onClick={() => void saveNote(m)}
-                          >
-                            {savedId === m.id ? (
-                              <Check size={16} aria-hidden />
-                            ) : (
-                              <Bookmark size={16} aria-hidden />
-                            )}
-                          </button>
-                          {i === messages.length - 1 && (
-                            <button
-                              className="chip"
-                              onClick={() => {
-                                const q = [...messages.slice(0, i)]
-                                  .reverse()
-                                  .find((x) => x.role === "user")?.content;
-                                if (q) void send(q);
-                              }}
-                            >
-                              <RefreshCcw size={13} aria-hidden />{" "}
-                              {t("regenerate")}
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-              </div>
-            );
-          })}
-          {streaming && (
-            <div className="bubble assistant">
-              <span className="bubble-id" aria-hidden>
-                <AiSparkle size={14} /> AI
-              </span>
-              <span className="typing-dots">
-                <span /> <span /> <span />
-              </span>
-              <span className="stream-cursor" aria-hidden />
-              <span className="visually-hidden">{t("thinking")}</span>
-            </div>
-          )}
-        </div>
+        <TutorThread
+          viewportRef={viewportRef}
+          messages={messages}
+          streaming={streaming}
+          subject={subject}
+          thanks={thanks}
+          savedId={savedId}
+          onSuggest={setInput}
+          onPickImage={() => fileRef.current?.click()}
+          onResendStrategy={resendWithStrategy}
+          onReteach={reteachFrom}
+          onRegenerate={regenerateFrom}
+          onQuiz={(s) => navigate(`/student/quiz?subject=${s}`)}
+          onPractice={() => navigate("/student/quiz")}
+          onEvidence={setEvidence}
+          onRate={(id, rating) => void rate(id, rating)}
+          onSaveNote={(m) => void saveNote(m)}
+        />
 
-        {error && <p className="error error-flush">{error}</p>}
-
-        <div
-          className="chips strategy-row"
-          role="group"
-          aria-label={t("strategyTitle")}
-        >
-          {STRATEGIES.map((s) => (
-            <button
-              key={s}
-              className={`chip${strategy === s ? " active" : ""}`}
-              aria-pressed={strategy === s}
-              onClick={() => {
-                const next = strategy === s ? null : s;
-                setStrategy(next);
-                if (next) track("tutor_strategy_chosen", { strategy: next });
-              }}
-            >
-              {t(STRAT_LABELS[s])}
-            </button>
-          ))}
-        </div>
-        {image && (
-          <div className="attach-row attach-flow">
-            <div className="row-flex">
-              <img
-                src={`data:${image.mime_type};base64,${image.data_base64}`}
-                alt=""
-                className="attach-preview"
-              />
-              <button
-                className="icon-btn rate-btn"
-                aria-label={t("removeImage")}
-                onClick={() => setImage(null)}
-              >
-                <X size={14} aria-hidden />
-              </button>
-            </div>
-            {/* image-question path: capture → preview → pick intent. */}
-            <div
-              className="chips attach-intents"
-              role="group"
-              aria-label={t("imgPromptTitle")}
-            >
-              <span className="muted muted-sm attach-intent-label">
-                {t("imgPromptTitle")}
-              </span>
-              {(
-                [
-                  ["imgSolve", "imgSolve"],
-                  ["imgExplain", "imgExplain"],
-                  ["imgCheck", "imgCheck"],
-                  ["imgSteps", "imgSteps"],
-                ] as const
-              ).map(([key]) => (
-                <button
-                  key={key}
-                  className="chip"
-                  onClick={() => void send(t(key))}
-                >
-                  {t(key)}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="chat-input">
-          <input
-            className="input"
-            value={input}
-            placeholder={t("askPlaceholder")}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && send()}
-            aria-label={t("askPlaceholder")}
-          />
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            hidden
-            onChange={(e) => {
-              attachFile(e.target.files?.[0] ?? null);
-              e.target.value = "";
-            }}
-          />
-          <button
-            className="icon-btn rate-btn"
-            aria-label={t("attachImage")}
-            onClick={() => fileRef.current?.click()}
-          >
-            <Paperclip size={16} aria-hidden />
-          </button>
-          <VoiceButton
-            onTranscript={(text) =>
-              setInput((cur) => (cur ? cur + " " + text : text))
-            }
-          />
-          {sending ? (
-            <Button
-              variant="soft"
-              onClick={() => abortRef.current?.abort()}
-              aria-label={t("stopGenerating")}
-            >
-              <Square size={18} aria-hidden />
-            </Button>
-          ) : (
-            <Button
-              variant="primary"
-              onClick={() => send()}
-              disabled={!input.trim()}
-              aria-label={t("send")}
-            >
-              <Send size={18} aria-hidden />
-            </Button>
-          )}
-        </div>
-        {me && (
-          <span className="muted chat-foot-note">{t("continueTutor")}</span>
-        )}
+        <TutorComposer
+          error={error}
+          strategy={strategy}
+          onStrategy={chooseStrategy}
+          image={image}
+          onRemoveImage={() => setImage(null)}
+          onSendIntent={(text) => void send(text)}
+          input={input}
+          onInput={setInput}
+          onSend={() => void send()}
+          sending={sending}
+          onStop={() => abortRef.current?.abort()}
+          fileRef={fileRef}
+          onAttach={attachFile}
+          onTranscript={(text) =>
+            setInput((cur) => (cur ? cur + " " + text : text))
+          }
+          showFootNote={!!me}
+        />
       </Card>
 
       {evidence && (
         <EvidenceModal source={evidence} onClose={() => setEvidence(null)} />
       )}
     </main>
-  );
-}
-
-/** full sanitized textbook evidence behind the source chip. */
-function EvidenceModal({
-  source,
-  onClose,
-}: {
-  source: SourceRef;
-  onClose: () => void;
-}) {
-  // This used to reimplement the shared Modal primitive with a weaker
-  // contract — no scroll lock, a focusable backdrop OUTSIDE the trap
-  // (Shift+Tab could land on it), role=dialog nested inside a
-  // role=button backdrop, and the better primitive left dead in tests. The
-  // primitive now owns the portal, focus trap, Escape, scroll lock and
-  // focus restore; this component supplies only the evidence body.
-  const path = [source.book, source.chapter, source.section]
-    .filter(Boolean)
-    .join(" › ");
-  return (
-    <Modal open onClose={onClose} title={t("evidenceTitle")}>
-      <p className="muted evidence-path">
-        {path}
-        {source.page != null ? ` · ${t("page")} ${source.page}` : ""}
-      </p>
-      <blockquote className="evidence-quote">
-        {source.excerpt ?? source.chapter}
-      </blockquote>
-    </Modal>
-  );
-}
-
-/** renders the sectioned answer layout when present, plain markdown otherwise. */
-function AssistantContent({ content }: { content: string }) {
-  const parsed = parseStructuredAnswer(content);
-  if (!parsed.structured) return <SafeMarkdown content={content} />;
-  return (
-    <div className="structured-answer">
-      {parsed.simple && (
-        <section>
-          <h4 className="section-label">{t("saSimple")}</h4>
-          <SafeMarkdown content={parsed.simple} />
-        </section>
-      )}
-      {parsed.example && (
-        <section>
-          <h4 className="section-label">{t("saExample")}</h4>
-          <SafeMarkdown content={parsed.example} />
-        </section>
-      )}
-      {parsed.points.length > 0 && (
-        <section>
-          <h4 className="section-label">{t("saPoints")}</h4>
-          <ul>
-            {parsed.points.map((p, i) => (
-              <li key={i}>{p}</li>
-            ))}
-          </ul>
-        </section>
-      )}
-      {parsed.check && (
-        <section className="check-question">
-          <SafeMarkdown content={`${t("saCheck")} ${parsed.check}`.trim()} />
-        </section>
-      )}
-    </div>
   );
 }

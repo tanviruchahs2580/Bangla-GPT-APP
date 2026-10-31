@@ -1,0 +1,30 @@
+{
+  "$schema": "https://raw.githubusercontent.com/GoogleChrome/lighthouse-ci/main/docs/configuration.md",
+  "ci": {
+    "collect": {
+      "staticDistDir": "./dist",
+      "url": ["http://localhost/"],
+      "numberOfRuns": 1,
+      "settings": {
+        "preset": "desktop",
+        "onlyCategories": ["performance"]
+      }
+    },
+    "assert": {
+      "assertions": {
+        "categories:performance": ["error", { "minScore": 0.5 }],
+        "largest-contentful-paint": ["error", { "maxNumericValue": 4000 }],
+        "cumulative-layout-shift": ["error", { "maxNumericValue": 0.1 }],
+        "total-blocking-time": ["error", { "maxNumericValue": 3000 }],
+        "resource-summary:script:size": ["error", { "maxNumericValue": 1200000 }],
+        "resource-summary:stylesheet:size": ["error", { "maxNumericValue": 160000 }],
+        "resource-summary:font:size": ["error", { "maxNumericValue": 700000 }],
+        "resource-summary:total:size": ["error", { "maxNumericValue": 2000000 }]
+      }
+    },
+    "upload": {
+      "target": "filesystem",
+      "outputDir": "./.lighthouseci"
+    }
+  }
+}

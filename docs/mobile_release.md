@@ -15,7 +15,7 @@ push). The service worker registers in production builds only
 
 Verification: `npm run build` then check `dist/` contains
 `manifest.webmanifest`, `sw.js`, `theme-boot.js`, icons — all present in
-this repo's build; Lighthouse PWA audit is a 🖐 human step on real phones.
+this repo's build; Lighthouse PWA audit is a human step on real phones.
 
 ## 2. Native Android wrapper (Capacitor 7)
 
@@ -75,7 +75,7 @@ path. What remains owner-side:
    label is done: `res/values-bn/strings.xml` carries "বাংলা GPT টিউটর" for
    Bengali locales, with the English fallback in `values/strings.xml`.
 
-### 🖐 Push notifications (FCM) — intentionally not wired yet
+### Push notifications (FCM) — intentionally not wired yet
 
 Push requires human/external work: a Firebase console project,
 `google-services.json` dropped into `android/app/`,
@@ -83,13 +83,13 @@ Push requires human/external work: a Firebase console project,
 plugins, and a server-side send path (the API currently has no push
 sender). The weekly parent digest and assignment reminders email today
 (SMTP via `services/mailer.py`, gated by `SMTP_ENABLED`); push is an ADD-ON,
-tracked as a 🖐 follow-up, not a
+tracked as a follow-up, not a
 silent gap: no code claims FCM exists.
 
 ### iOS
 
 Needs a macOS host (Xcode) — `npx cap add ios && npx cap sync ios &&
-npx cap open ios`. Out of scope locally; 🖐.
+npx cap open ios`. Out of scope locally (needs a macOS host).
 
 ## Status page note
 

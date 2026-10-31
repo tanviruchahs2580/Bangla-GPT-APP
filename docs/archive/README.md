@@ -5,6 +5,20 @@ contradict each other and the current tree (e.g. some predate the circuit
 breaker, the router split, MFA and the usage ledger). They are kept for
 history only — **do not quote them as current status**.
 
+**Every file carries its own banner.** All 57 report files under
+`docs/archive/` open with a "historical, not current" or "archived —
+superseded" line: nothing here describes current state, and no file here may
+be cited as a source of truth. `scripts/check_archive_banners.py` re-checks
+that property on every run, so a file cannot lose its banner silently.
+
+**Ratings and gate claims are self-assessed.** The "x/10" tables and
+"CI green" lines in some reports were written by the session that produced
+them, not by `score.py` against the findings register; where a claim carries
+no evidence id, treat it as an assertion, not a measurement. Fifteen reports
+carry a numeric score or grade table; each of them now states that disclaimer
+in the file itself, directly under the banner (F-150). The remaining reports
+carry the banner but no score.
+
 Current sources of truth live one level up (living docs):
 
 - `../architecture.md` — verified decisions + pending items
@@ -12,7 +26,12 @@ Current sources of truth live one level up (living docs):
   (the generated `../route_baseline.md` and the live `/openapi.json` are the
   full route list)
 - `../runbook.md` — operations runbook
-- `../qa/QA_REPORT_2026-10-17.md` — the single current QA record
+- `../qa/QA_REPORT_2026-10-30.md` — the single current QA record
+- `QA_REPORT_2026-10-29.md` — superseded 2026-10-30 by the record above
+- `QA_REPORT_2026-10-27.md` — superseded 2026-10-29 by the record above
+  (this pointer is updated when a record is rotated into the archive; if the
+  path does not resolve, read `../qa/` directly rather than trusting a name
+  here)
 
 Point-in-time session and audit reports belong in this directory — never
 beside the living docs, and never promoted as a source of truth. The

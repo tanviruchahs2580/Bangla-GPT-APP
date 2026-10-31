@@ -5,6 +5,15 @@ All authenticated endpoints expect `Authorization: Bearer <JWT>` from `POST /aut
 Errors use `{"detail": "..."}` with correct semantics: 401 unauthenticated · 403 forbidden ·
 404 not found · 409 conflict · 413 too large · 422 validation · 429 rate-limited · 503 not ready.
 
+This file is hand-written and covers the core surface below plus the streaming
+and pagination contracts. The **full** surface is the served schema at
+`/openapi.json` (the authority for tooling and tests); `docs/route_baseline.md`
+is a dated inventory snapshot that can lag it. Operations this file does not
+describe (short tests, bulk assignments, question papers, schools,
+notifications, KG re-teach, admin center, status page, …) exist and are
+documented there — never assume the absence of a section here means the
+absence of an operation.
+
 ## Health & observability
 
 | Method | Path | Auth | Purpose |
@@ -20,7 +29,7 @@ Every non-preflight response carries `X-Request-ID` (echoed if supplied, otherwi
 
 | Method | Path | Auth | Body / notes |
 |---|---|---|---|
-| POST | `/auth/register` | - | `{email, password(min 8), name, role: student\|teacher\|parent, class_level?, guardian_consent?}` - `class_level` AND `guardian_consent: true` required for students; admin role cannot be self-registered. Returns 201 `{user_id, role, profile_id}` |
+| POST | `/auth/register` | - | `{email, password(min 8), name, role: student\|teacher\|parent, class_level?, guardian_consent?, phone?}` - `class_level` AND `guardian_consent: true` required for students; admin role cannot be self-registered; `phone` must be a BD mobile and is stored in the canonical `01[3-9]XXXXXXXX` form. Returns 201 `{user_id, role, profile_id}`, or 409 `email_taken` for a registered address (default `REGISTRATION_EMAIL_CONFLICT=disclose`); with `generic` both a new and a taken address answer 202 `{"status":"accepted"}` and the taken one creates nothing (F-143; see `docs/security/threat-model.md`) |
 | POST | `/auth/login` | - | `{email, password}` → `{access_token, must_change_password}` (HS256 JWT: `sub`, `role`, `exp`). MFA-enabled accounts get HTTP 202 + `token_type: "mfa"` step-up token (5 min, rejected by normal routes) — complete with `/auth/mfa/challenge` |
 | POST | `/auth/forgot` | - | `{email}` → always `202 {"status":"accepted"}` (anti-enumeration). Emails a single-use reset token (30 min); token stored only as SHA-256 hash. Dev fallback logs the token to console when SMTP is off and ENV≠production |
 | POST | `/auth/reset` | - | `{token, new_password(min 8)}` → fresh `{access_token}`; single-use + expiry enforced |
@@ -56,6 +65,72 @@ until the password is rotated.
 | Method | Path | Auth | Body / notes |
 |---|---|---|---|
 | POST | `/tutor/ask` | any | `{question(3..1000), class_level(1-12), subject?}` → `{answer, grounded, sources[]}`. Refuses (`grounded=false`) without retrieval evidence — hallucination guard |
+| POST | `/tutor/conversations/{conversation_id}/messages/stream` | owner | SSE twin of `POST .../messages` — see "Streaming (SSE)" below |
+
+## Streaming (SSE)
+
+`POST /tutor/conversations/{conversation_id}/messages/stream` takes the same
+body as the JSON send (`{message(3..1000), class_level?, subject?, chapter?,
+reteach?, low_data?, strategy?, image?}`) and answers
+`Content-Type: text/event-stream`. Conversation ownership is checked exactly as
+for the JSON route (404 for a foreign id).
+
+Frames, in order (blank line terminated, `data:` is JSON):
+
+| Event | Payload | When |
+|---|---|---|
+| `token` | `{"text": "..."}` | One per provider chunk; concatenate. The vision-unsupported refusal arrives as a single token |
+| `: ping` | — | SSE comment every 15 s of inactivity (retrieval and time-to-first-token can take tens of seconds). Ignore comment lines |
+| `done` | `{user_message_id, message_id, answer, grounded, sources[], refused_reason, citation_verified, confidence}` | Turn finished and persisted; `confidence` is recomputed from the cited evidence (`[0,1]`) |
+| `error` | `{"code": "llm_unavailable"}` | Provider failed mid-turn (or produced nothing): the user turn stays persisted, **no** assistant message is created, and no `done` follows |
+
+Client contract: **the absence of `done` is a failure**, not an empty answer.
+The shipped web client treats a stream that ends without a terminal frame as a
+502 and drops any partial text. A `reset` frame is reserved for fallback
+restarts; the current server does not emit one.
+
+Behaviour notes:
+
+- Persistence: the user turn is committed before streaming starts; the
+  assistant reply is written when the stream completes.
+- Abort: closing the connection cancels the provider work and records the
+  partial text in the usage ledger. A client-side `AbortController` does the
+  same (the web client's `postStream` uses one).
+- Auth: `EventSource` cannot set an `Authorization` header, so integrators
+  must use `fetch` and read the body stream — which is what the web client
+  does.
+- Rate limits: the request counts against every matching rule — `/tutor`
+  (60/min per IP) **and** `/tutor/conversations` (30/min per user by default;
+  unauthenticated callers fall back to their IP).
+- Proxies: the response carries `Cache-Control: no-cache` and
+  `X-Accel-Buffering: no`, which nginx honours per response. A proxy that
+  ignores the header still needs buffering disabled for this path: the bundled
+  nginx sets `proxy_buffering off` and a 3600 s read timeout
+  (`apps/web/deploy/nginx.conf`), and the bundled Caddy already disables
+  response buffering. Any proxy you add must do the same, or tokens arrive in
+  one blob or the stream is cut mid-answer.
+
+## Pagination
+
+Admin list endpoints share one offset/limit contract — no cursor, no
+`Link` header. `limit` is 1–200 (default 50), `offset` is ≥ 0 (default 0);
+`total` is the count **after** the filters and is the number to page over:
+
+| Endpoint | Query | Response |
+|---|---|---|
+| `GET /admin/users` | `q` (email substring), `role`, `limit`, `offset` | `{total, items: [{id, email, role, created_at}]}` |
+| `GET /admin/audit` | `action`, `limit`, `offset` | `{rows: [{id, created_at, actor_user_id, actor_role, action, target, detail}], total, limit, offset}` — newest first |
+| `GET /admin/feedback` | `status` (`open`\|`all`), `limit`, `offset` | `{rows: [...], total, open_count, limit, offset}` — oldest first |
+
+Page with `offset += limit` until `offset >= total`; a page may be shorter than
+`limit` while `total` still grows (inserts are not snapshot-isolated). Keep
+`limit` at the 200 maximum only when the caller can handle the payload —
+`/admin/audit` rows carry an arbitrary `detail` object.
+
+Two list endpoints are **not** paginated by design: `GET
+/tutor/conversations/{conversation_id}/messages` returns the newest `limit`
+messages (default 200, max 500) in chronological order — a payload cap, not a
+pager — and `GET /tutor/messages/search` always returns the newest 25 hits.
 
 ## Students & quizzes
 

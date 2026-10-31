@@ -22,13 +22,13 @@ export interface ProxyEnv {
 //: FastAPI origin arrive immediately, so this only fires on a hung or
 //: black-holed origin. It is deliberately separate from the body deadline:
 //: SSE answers legitimately stream for minutes.
-export const UPSTREAM_CONNECT_TIMEOUT_MS = 20_000;
+const UPSTREAM_CONNECT_TIMEOUT_MS = 20_000;
 //: Whole-body deadline for NON-streaming responses. Without it a JSON
 //: request against an origin that accepts the socket and then goes silent
 //: kept the edge invocation (and its billing) alive long after the client's
 //: own 20 s timeout had already failed the request. SSE bodies are exempt —
 //: the client enforces a stall deadline and a disconnect cancels them.
-export const UPSTREAM_TOTAL_TIMEOUT_MS = 60_000;
+const UPSTREAM_TOTAL_TIMEOUT_MS = 60_000;
 
 /** Hop-by-hop and derived headers must never be forwarded. */
 const HOP_BY_HOP = new Set([

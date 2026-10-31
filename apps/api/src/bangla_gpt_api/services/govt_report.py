@@ -53,7 +53,13 @@ def effective_min_cell(requested: int | None) -> int:
     return max(MIN_CELL_FLOOR, int(requested))
 
 
-EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+# Every quantifier is bounded (RFC 5321: 64-char local part, 255-char domain,
+# at most 8 labels counted in this corpus) so the scan is linear in the input;
+# the unbounded form this replaces re-scanned a long word run from every start
+# position and took seconds on a whole-export string (F-076). The '@'
+# precondition in pii_violations skips the pattern for text that cannot hold
+# an address.
+EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,255}(?:\.[A-Za-z0-9-]{1,255}){1,8}")
 PHONEISH_RE = re.compile(r"[+\d][\d\s-]{9,}")
 # Values a spreadsheet would execute; Bangla text never starts with these.
 _FORMULA_PREFIX = ("=", "+", "-", "@", "\t", "\r")
@@ -214,7 +220,9 @@ def pii_violations(text: str) -> list[str]:
     responding and by tests with canary data.
     """
     violations: list[str] = []
-    emails = EMAIL_RE.findall(text)
+    # Cheap precondition first: without an '@' no address can match, and the
+    # export text is the largest string this service scans (F-076).
+    emails = EMAIL_RE.findall(text) if "@" in text else []
     if emails:
         violations.append(f"{len(emails)} email-shaped token(s)")
     phones = [p for p in PHONEISH_RE.findall(text) if not _is_safe_number(p)]

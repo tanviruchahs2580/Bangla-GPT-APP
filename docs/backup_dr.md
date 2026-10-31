@@ -74,7 +74,7 @@ Evidence: drill output `PASS... (9s restore)`; postgres log during recovery:
 recovery complete`, new timeline 2 selected.
 
 The weekly cadence on the real staging box is the human/infra step
-(staging server itself is pending 🖐); until then run the drill locally --
+(a staging server itself is still pending); until then run the drill locally --
 it is host-agnostic (needs docker only). Schedule suggestion:
 `0 4 * * 1 cd /srv/bangla-gpt && bash scripts/pgbackrest_drill.sh`.
 
@@ -94,7 +94,7 @@ rehearsal with `PRAGMA integrity_check`). Postgres + pgBackRest above is the
 production path.
 
 **WAL and raw file copies.** Since the engine now runs SQLite in WAL mode
-(`db/session.py`: `journal_mode=WAL`, `busy_timeout=5000`,
+(`db/session.py`: `journal_mode=WAL`, `busy_timeout=15000` ms,
 `foreign_keys=ON`), a committed transaction may live in the `app.db-wal`
 sidecar until the next checkpoint. The online-backup script above is
 WAL-aware and remains the supported path. An ad-hoc raw copy is only a

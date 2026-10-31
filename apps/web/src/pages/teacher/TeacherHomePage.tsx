@@ -99,7 +99,7 @@ export default function TeacherHomePage() {
   }, [wm]);
 
   return (
-    <main className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       {loadError && (
         <div className="muted" role="status">
           {t("thLoadError")}{" "}
@@ -109,7 +109,7 @@ export default function TeacherHomePage() {
         </div>
       )}
       <section className="hero teacher-hero">
-        <h2>{t("thGreeting", { name: me?.name ?? "" })}</h2>
+        <h1>{t("thGreeting", { name: me?.name ?? "" })}</h1>
         <p>{t("teacherDashboard")}</p>
       </section>
 

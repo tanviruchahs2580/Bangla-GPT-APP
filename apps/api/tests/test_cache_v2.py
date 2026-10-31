@@ -4,7 +4,6 @@ and (when REDIS_URL points at a real Redis) cross-instance consistency.
 """
 
 import os
-import time
 import uuid
 
 import pytest
@@ -22,11 +21,29 @@ from bangla_gpt_api.curriculum.models import Chunk
 from bangla_gpt_api.main import create_app
 from bangla_gpt_api.ratelimit import RedisRateLimiter
 from bangla_gpt_api.retrieval.bm25 import Hit
-from conftest import engine_url
+from conftest import engine_url, poll_until
 
 PASSWORD = "supersecret1"
 REDIS_URL = os.environ.get("REDIS_URL")
 needs_redis = pytest.mark.skipif(not REDIS_URL, reason="REDIS_URL not set")
+
+
+class _FakeMonotonic:
+    """Deterministic stand-in for the ``time`` module inside caching.py.
+
+    MemoryCache reads ``time.monotonic()`` for every expiry decision, so the
+    TTL tests advance this clock instead of sleeping real seconds (F-161) --
+    expiry semantics stay the subject while the wait becomes arithmetic.
+    """
+
+    def __init__(self) -> None:
+        self.now = 1_000.0
+
+    def monotonic(self) -> float:
+        return self.now
+
+    def advance(self, seconds: float) -> None:
+        self.now += seconds
 
 
 def _chunk(idx: int, class_level: int = 6) -> Chunk:
@@ -82,11 +99,13 @@ def test_memory_cache_roundtrip_and_miss():
     assert c.get_json("k") == {"a": [1, 2]}
 
 
-def test_memory_cache_ttl_expiry():
+def test_memory_cache_ttl_expiry(monkeypatch):
+    clock = _FakeMonotonic()
+    monkeypatch.setattr("bangla_gpt_api.caching.time", clock)
     c = MemoryCache()
     c.set_json("k", 1, ttl=0.05)
     assert c.get_json("k") == 1
-    time.sleep(0.08)
+    clock.advance(0.06)  # expiry compares with >=, so any past-TTL reading suffices
     assert c.get_json("k") is None
 
 
@@ -98,12 +117,14 @@ def test_memory_cache_returns_deep_copies():
     assert c.get_json("k") == {"v": [1]}
 
 
-def test_memory_cache_bounded_eviction():
+def test_memory_cache_bounded_eviction(monkeypatch):
+    clock = _FakeMonotonic()
+    monkeypatch.setattr("bangla_gpt_api.caching.time", clock)
     c = MemoryCache(max_keys=2)
     c.set_json("a", 1, ttl=30)
-    time.sleep(0.01)
+    clock.advance(1.0)  # strictly orders the entries' expiry without real waiting
     c.set_json("b", 2, ttl=30)
-    time.sleep(0.01)
+    clock.advance(1.0)
     c.set_json("c", 3, ttl=30)
     assert c.get_json("a") is None  # oldest expiry evicted
     assert c.get_json("b") == 2
@@ -291,7 +312,14 @@ def test_redis_cache_roundtrip_and_ttl():
     c.set_json(key, {"v": [1, 2], "s": "x"}, ttl=30)
     assert c.get_json(key) == {"v": [1, 2], "s": "x"}
     c.set_json(key + ":ttl", 1, ttl=1)
-    time.sleep(1.4)
+    # Only Redis's own clock can prove the key ages out (the wrapper clamps
+    # EX to 1s and the server is the expirer), so the test waits on the
+    # server -- polled until the first read past expiry, never a fixed sleep.
+    poll_until(
+        lambda: True if c.get_json(key + ":ttl") is None else None,
+        timeout=5.0,
+        describe=lambda: f"{key}:ttl never expired on the Redis server",
+    )
     assert c.get_json(key + ":ttl") is None
 
 
@@ -367,12 +395,25 @@ def test_memory_add_if_absent_claims_exactly_once() -> None:
     assert cache.get_json("k") == 1
 
 
-def test_memory_add_if_absent_respects_plain_writes_and_expiry() -> None:
+def test_memory_add_if_absent_respects_plain_writes_and_expiry(monkeypatch) -> None:
+    """A live plain write blocks the claim; an expired one does not.
+
+    The two phases use separate keys with a generous TTL for the blocking
+    phase. The clock is injected (F-161), so a scheduler stall between the
+    write and the claim cannot expire the entry first and fail the "live
+    value must block" assertion the way the old 0.05 s-TTL version could on
+    a loaded CI runner (observed once in three full-suite runs on
+    2026-10-29); the expiry phase advances the clock past the short TTL
+    deterministically.
+    """
+    clock = _FakeMonotonic()
+    monkeypatch.setattr("bangla_gpt_api.caching.time", clock)
     cache = MemoryCache()
-    cache.set_json("k", {"v": 1}, 0.05)
-    assert cache.add_if_absent("k", 1, 60.0) is False, "a live value must block the claim"
-    time.sleep(0.06)
-    assert cache.add_if_absent("k", 1, 60.0) is True, "an expired entry must not block"
+    cache.set_json("live", {"v": 1}, 30.0)
+    assert cache.add_if_absent("live", 1, 60.0) is False, "a live value must block the claim"
+    cache.set_json("expiring", {"v": 1}, 0.05)
+    clock.advance(0.06)
+    assert cache.add_if_absent("expiring", 1, 60.0) is True, "an expired entry must not block"
 
 
 def test_memory_add_if_absent_is_atomic_under_threads() -> None:

@@ -1,5 +1,7 @@
+- link "মূল কনটেন্টে যান":
+  - /url: "#main-content"
 - banner:
-  - button "হোমে যান": বাংলা GPT টিউটর
+  - button "বাংলা GPT টিউটর — হোমে যান"
   - combobox "খুঁজুন…"
   - navigation "সেটিংস":
     - text: E2E Visual Student
@@ -8,7 +10,7 @@
     - button "ডার্ক মোড"
     - button "লগআউট"
 - main:
-  - heading "AI টিউটর" [level=2]
+  - heading "AI টিউটর" [level=1]
   - button "নতুন চ্যাট"
   - button "বিজ্ঞান"
   - button "গণিত"

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import logging
+import tomllib
 from functools import lru_cache
+from pathlib import Path
+from typing import Literal, cast
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -31,19 +34,32 @@ NON_PRODUCTION_ENVS = frozenset({"development", "dev", "local", "test", "ci", "p
 DEFAULT_JWT_SECRET = "dev-insecure-change-me"  # noqa: S105 - an obvious placeholder or a fixture name, not a credential
 
 
+def _project_version() -> str:
+    """Read the release version from ``apps/api/pyproject.toml``.
+
+    The manifest is the repository's single source of truth (README: "Nothing
+    else may carry a version number"); the installed distribution metadata is
+    generated from it at install time.
+    """
+    manifest = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    with manifest.open("rb") as fh:
+        return cast(str, tomllib.load(fh)["project"]["version"])
+
+
 def _get_version() -> str:
     """Read version from the installed package metadata.
 
-    Falls back to a hardcoded constant when the package is not installed
-    (editable install, test harness, or bare-source execution).
+    Source-tree runs (bare execution, a harness with no installed
+    distribution) fall back to the same pyproject.toml the metadata is built
+    from, so the fallback tracks the release manifest instead of a literal
+    that drifts on every version bump (F-053).
     """
     try:
         from importlib.metadata import version as _version
 
         return _version("bangla-gpt-api")
     except Exception:
-        # Fallback for bare-source execution (must track pyproject version).
-        return "0.9.2"
+        return _project_version()
 
 
 class Settings(BaseSettings):
@@ -88,9 +104,36 @@ class Settings(BaseSettings):
     # 0 (default) = unlimited. When set, generation entry points refuse with
     # 429 ai_budget_exceeded once the user's current-month ledger hits the cap.
     ai_monthly_budget_usd_per_user: float = 0.0
+    # F-031: operator kill switch for AI generation. false = the tutor/chat
+    # generation surfaces answer with a localized refusal envelope
+    # (refused_reason=ai_generation_disabled) instead of calling a provider;
+    # retrieval, /search, the reader and quizzes keep working, and provider/
+    # index construction is untouched (unlike unsetting LLM_PROVIDER, which
+    # also removes the index). Default true keeps generation on.
+    ai_generation_enabled: bool = True
+    # RAG-27: retrieval-only degraded mode. When the provider cannot serve a
+    # turn (ProviderError after its retries and circuit breaker) and this is
+    # true, the tutoring surfaces answer with the retrieved textbook excerpts
+    # and their citations -- an explicitly ungrounded response
+    # (refused_reason=provider_unavailable) -- instead of the 502
+    # llm_unavailable envelope. Default false keeps the pinned 502 contract;
+    # enable it where an excerpt is more useful to a student than an error.
+    retrieval_only_fallback_enabled: bool = False
     # Circuit breaker thresholds
     circuit_breaker_failure_threshold: int = 3  # failures before opening
     circuit_breaker_reset_timeout_seconds: float = 60.0  # seconds before half-open
+    # PRIV-06: which vendor tier key this deployment runs on. The vendor's
+    # free tier uses submitted content to improve its products, which must
+    # not happen silently for children's questions (docs/playstore/
+    # data-safety.md). The Literal makes a typo a loud boot failure instead
+    # of a silently unguarded value.
+    llm_data_use_tier: Literal["unset", "free", "paid"] = "unset"
+    # PRIV-06: set true only after the tier's data-use/retention terms have
+    # been looked up and recorded (with a date) per data-safety.md open item
+    # 1. A production boot with LLM_DATA_USE_TIER=free refuses without it;
+    # "unset" stays a deploy-time decision between this and the owner's
+    # paid-tier confirmation.
+    llm_data_use_acknowledged: bool = False
 
     # --- RAG v2 retrieval ---
     # "hybrid" = lexical BM25 lane + vector lane fused by reciprocal rank
@@ -117,6 +160,27 @@ class Settings(BaseSettings):
     jwt_issuer: str = "bangla-gpt-api"
     jwt_audience: str = "bangla-gpt-clients"
     password_reset_token_minutes: int = 30
+    # SEC-02: the length floor of the documented password policy (NIST
+    # SP 800-63B-4 s3.1.1.2; see auth/security.py for the full citation).
+    # 8 is the product's documented contract and the figure the policy allows
+    # for a password used only as one factor of MFA; the policy requires 15
+    # for single-factor passwords, so an operator running without mandatory
+    # MFA raises this to 15. Length is the ONLY structural rule -- no
+    # composition requirements, and passphrases up to PASSWORD_MAX_LENGTH
+    # (128) are accepted.
+    password_min_length: int = 8
+    # SEC-02/F-143: what POST /auth/register answers for an address that is
+    # already registered. "disclose" (default) keeps the documented 409
+    # email_taken: signup gets an immediate, actionable answer, and a
+    # stranger's retry cannot appear to succeed on an existing account. It
+    # is also an unauthenticated enumeration oracle the sibling credential
+    # routes do not have. "generic" answers 202 {"status": "accepted"} for
+    # both a new and a taken address, closing the oracle at the cost of a
+    # registration that creates nothing and says so only in the log; that
+    # mode expects an SMTP-backed, API-first deployment (the auto-login
+    # 201 body is only produced under "disclose"). Owner decision:
+    # docs/security/threat-model.md records both postures and the trade.
+    registration_email_conflict: Literal["disclose", "generic"] = "disclose"
 
     # --- admin bootstrap / lifecycle ---
     admin_email: str | None = None
@@ -179,6 +243,26 @@ class Settings(BaseSettings):
     # a year of history is generous for dashboards and audits while keeping
     # the table bounded for accounts that live for years.
     ai_usage_retention_days: int = 365
+    # F-007: ai_jobs rows were only ever removed by account erasure, so the
+    # payload/result JSON of every finished job accumulated forever. Thirty
+    # days covers a teacher's own review window and any incident review that
+    # starts promptly; in-flight rows are never swept.
+    ai_jobs_retention_days: int = 30
+
+    # --- AI job lifecycle (F-007) ---
+    # Total runner executions for one job, at least 1. Transient provider
+    # failures (ProviderError / transport errors) get the remaining attempts
+    # with exponential backoff; caller-fixable failures (bad payload, unknown
+    # kind) fail on the first attempt -- see jobs.ai_job_retry_plan.
+    ai_job_max_attempts: int = 3
+    # First backoff delay in seconds; doubles per attempt, capped at 4 s (the
+    # provider chain's own ceiling), so a bounded retry chain stays inside
+    # the same order of magnitude as one provider call.
+    ai_job_retry_backoff_seconds: float = 0.5
+    # How long an Idempotency-Key stays replayable on POST /teacher/jobs. A
+    # repeat inside the window returns the SAME job (one provider call); a
+    # repeat after it is a new request.
+    ai_job_idempotency_window_minutes: int = 1440
 
     # --- parent invites ---
     invite_ttl_minutes: int = 1440
@@ -194,6 +278,11 @@ class Settings(BaseSettings):
     smtp_user: str | None = None
     smtp_password: str | None = None
     smtp_from: str | None = None
+    # ANON-06: true (default) requires the relay to speak STARTTLS -- reset and
+    # verification codes must not cross the wire in cleartext. False is for a
+    # local sink without TLS (mailpit on 1025, the documented test container):
+    # the mailer then upgrades opportunistically when the relay advertises it.
+    smtp_require_starttls: bool = True
 
     # --- parent weekly digest ---
     # Sunday ~22:00 Dhaka, once per ISO week; summary aggregates only, never
@@ -210,6 +299,14 @@ class Settings(BaseSettings):
 
     # --- data ---
     nctb_corpus_dir: str | None = None
+    # F-016: with NCTB_CORPUS_DIR empty (the compose default) the tutor falls
+    # back to the bundled 78-chunk synthetic sample corpus and cites it as
+    # evidence. That fallback is a legitimate start-small mode, so it gets an
+    # explicit opt-in instead of being deleted; a production boot with a
+    # billable provider and no corpus is refused without it
+    # (see _validate_corpus in main.py and the load-time guard in
+    # initialize/dependencies.py).
+    allow_bundled_sample_corpus_in_production: bool = False
 
     # --- default rate limit rules (merged over per-field settings in middleware_stack) ---
     # NOTE: the chat LLM routes are /tutor/conversations/{id}/messages[/stream];
@@ -248,9 +345,31 @@ class Settings(BaseSettings):
         # throttled like forgot/reset to avoid email-spam abuse.
         "/auth/resend-verification": (10, "ip"),
         "/auth/verify-email": (10, "ip"),
+        # F-147: /auth/join-school is unauthenticated, redeems a staff
+        # invite code and CREATES a staff account on success, so an
+        # unthrottled caller had a free guessing oracle (and a free
+        # account-creation pump) from one address.
+        "/auth/join-school": (10, "ip"),
         # The invite code is 64 bits, but an unthrottled redeem is still a free
         # oracle for guessing one.
         "/parents/link/invite": (10, "ip"),
+        # F-127: /users was never rated. DELETE /users/me performs an
+        # Argon2id current-password check (a guessing oracle for a stolen
+        # token), the sessions-revoke endpoint is destructive, and GET
+        # /users/me is on the hot path -- a per-user bound covers all three
+        # (school NATs share one IP, so user scope is the correct key).
+        "/users/me": (10, "user"),
+        # F-148: the export materialises every conversation/message/attempt
+        # of one account; the tighter rule is deliberate and below the
+        # /users/me bound that also matches this path.
+        "/users/me/export": (5, "user"),
+        # Platform-wide rebuild of the aggregate report; admin-only but not
+        # free (full-table aggregates).
+        "/admin/reports": (10, "user"),
+        # F-140: the retention sweep is destructive and irreversible, so it
+        # is confirmation-gated (see routers/admin.py) AND bounded -- a
+        # confirmed caller must not be able to loop it at full speed.
+        "/admin/maintenance": (5, "user"),
         # The costly teacher AI paths: each spends provider tokens on a
         # teacher's behalf, so without a per-user bound one token can loop at
         # full network speed and the bill lands on the account (SEC-002).
@@ -297,6 +416,21 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> list[str]:
         return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
+
+    @property
+    def has_billable_llm_provider(self) -> bool:
+        """True when a configured provider bills per token (not the mock).
+
+        Used by the production boot guards (F-016 corpus, F-034 AI budget):
+        the mock provider is itself refused in production unless the offline
+        demo opt-in is set, and its ledger cost is exactly 0, so there is no
+        spend ceiling to enforce and no real answer served from a sample
+        corpus. A named fallback provider counts too -- it can serve traffic.
+        """
+        return any(
+            name.strip().lower() not in ("", "mock")
+            for name in (self.llm_provider, self.llm_fallback_provider)
+        )
 
 
 @lru_cache

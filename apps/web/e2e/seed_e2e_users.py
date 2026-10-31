@@ -14,7 +14,9 @@ any other data alone. Usage::
     .venv/Scripts/python.exe apps/web/e2e/seed_e2e_users.py
 
 Honours ``DATABASE_URL`` exactly like the API does, so the seeded rows always
-land in the database the API under test is serving.
+land in the database the API under test is serving. Refuses to run unless
+``ENV`` names a development/CI lane: the shared password below must never
+exist on a production database (F-015).
 """
 
 from __future__ import annotations
@@ -30,7 +32,7 @@ if _SRC.is_dir() and str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
 from bangla_gpt_api.auth.security import hash_password
-from bangla_gpt_api.config import Settings
+from bangla_gpt_api.config import NON_PRODUCTION_ENVS, Settings
 from bangla_gpt_api.db.models import Parent, School, Student, Teacher, User
 from bangla_gpt_api.db.session import (
     init_db,
@@ -85,8 +87,32 @@ def _upsert_user(db, email: str, role: str) -> User:
     return user
 
 
+def _refuse_outside_test_envs(settings: Settings) -> None:
+    """Refuse to seed unless ENV explicitly names a development/CI lane (F-015).
+
+    This script upserts five accounts -- including a platform admin and a
+    school_admin bound to ``E2E-SCHOOL`` -- with the shared literal password
+    below, against whatever ``DATABASE_URL`` the shell exports, exactly like
+    the API. It was written for CI, where that URL is always ephemeral; run
+    once from a shell holding a production .env, it publishes a privileged
+    account with a known password on the live system. The app-side convention
+    (``NON_PRODUCTION_ENVS``) is used rather than ``is_production`` so an
+    unrecognized or misspelled ENV also fails closed.
+    """
+    if settings.env.strip().lower() in NON_PRODUCTION_ENVS:
+        return
+    raise SystemExit(
+        f"Refusing to seed e2e accounts: ENV={settings.env!r} is not a "
+        f"development/CI lane ({', '.join(sorted(NON_PRODUCTION_ENVS))}). "
+        "The seeded accounts share a published password; point this at a "
+        "disposable database instead, e.g. "
+        "ENV=test DATABASE_URL=sqlite:///./e2e.db."
+    )
+
+
 def seed() -> None:
     settings = Settings()  # reads DATABASE_URL like the API under test
+    _refuse_outside_test_envs(settings)
     engine = make_engine(settings)
     init_db(engine)
     db = make_session_factory(engine)()
@@ -122,7 +148,18 @@ def seed() -> None:
             db.execute(select(Parent).where(Parent.user_id == parent_user.id)).scalar_one_or_none()
             is None
         ):
-            db.add(Parent(user_id=parent_user.id, name="E2E Parent"))
+            # F-115: a matra-heavy BD-convention name, so the real parent
+            # screens render one. The student/teacher names stay Latin because
+            # committed e2e assertions pin them ("E2E Student" in the smoke,
+            # qa and w2 flow specs) and the visual baselines record them; the
+            # varied name fixture set for unit tests lives in
+            # apps/web/src/test/banglaNames.ts.
+            db.add(
+                Parent(
+                    user_id=parent_user.id,
+                    name="মোছাম্মৎ নূরজাহান বেগম",
+                )
+            )
 
         _upsert_user(db, ACCOUNTS["admin"], "admin")
 

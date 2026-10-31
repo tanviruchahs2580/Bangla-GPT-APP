@@ -1,14 +1,12 @@
 import { asText, suggestionSentence } from "../../lib/text";
 import { downloadBlob } from "../../lib/download";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   Brain,
   Download,
   FileText,
   Flame,
-  KeyRound,
   LogOut,
   Moon,
   ShieldCheck,
@@ -18,7 +16,6 @@ import {
 import {
   clearMyMemory,
   del,
-  generateInviteCode,
   get,
   getMyMemory,
   getMyPrefs,
@@ -28,11 +25,19 @@ import {
   deleteNote,
   getNotes,
 } from "../../api";
+import ParentInviteCard from "../../components/ParentInviteCard";
 import { track } from "../../lib/analytics";
 import { formatServerDateTime } from "../../lib/datetime";
 import type { ActivitySummary } from "../../types";
 import { useAuth } from "../../AuthContext";
-import { Avatar, Badge, Button, Card, Segmented } from "../../components/ui";
+import {
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  LoadError,
+  Segmented,
+} from "../../components/ui";
 import { friendlyError } from "../../errors";
 import { getLang, setLang, t, tSubject } from "../../i18n";
 import { roleLabel } from "../../lib/roles";
@@ -68,7 +73,6 @@ function memoryFactRows(
 
 export default function MePage() {
   const { me, signOut } = useAuth();
-  const navigate = useNavigate();
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -76,14 +80,8 @@ export default function MePage() {
   // password and DELETE /users/me carries it in the body.
   const [delPassword, setDelPassword] = useState("");
   const [revokeBusy, setRevokeBusy] = useState(false);
-  const [invite, setInvite] = useState<{
-    code: string;
-    expires_in_minutes: number;
-  } | null>(null);
-  const [inviteBusy, setInviteBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
-  const [inviteError, setInviteError] = useState<string | null>(null);
   const [dark, setDark] = useState(currentTheme() === "dark");
   // low-data mode (skip images + short tutor answers)
   const [lowData, setLowDataState] = useState(getLowData());
@@ -95,7 +93,11 @@ export default function MePage() {
     queryFn: getMyPrefs,
     enabled: isStudent,
   });
-  const { data: mem, refetch: refetchMem } = useQuery({
+  const {
+    data: mem,
+    isError: memError,
+    refetch: refetchMem,
+  } = useQuery({
     queryKey: ["my-memory"],
     queryFn: getMyMemory,
     enabled: isStudent,
@@ -105,7 +107,12 @@ export default function MePage() {
   );
   // The tutor's bookmark button has always written notes; until now nothing
   // could read them back, so "Saved" was a claim the product could not honour.
-  const { data: notes, refetch: refetchNotes } = useQuery({
+  // F-021: a failed fetch must not read as "you have no saved notes".
+  const {
+    data: notes,
+    isError: notesError,
+    refetch: refetchNotes,
+  } = useQuery({
     queryKey: ["my-notes"],
     queryFn: () => getNotes(),
   });
@@ -118,7 +125,11 @@ export default function MePage() {
       /* the list refetch is the source of truth; a failed delete stays visible */
     }
   };
-  const { data: report } = useQuery({
+  const {
+    data: report,
+    isError: reportError,
+    refetch: refetchReport,
+  } = useQuery({
     queryKey: ["my-report", reportPeriod],
     queryFn: () => getMyReport(reportPeriod),
     enabled: isStudent,
@@ -141,8 +152,12 @@ export default function MePage() {
 
   useEffect(() => {
     if (!prefs) return;
-    setStyle(asText(prefs.learning_prefs.explanation_style ?? "standard"));
-    setFocus(asText(prefs.learning_prefs.subject_focus ?? ""));
+    // Defensive: a prefs payload without `learning_prefs` (or without the
+    // style key) must degrade to the defaults, not crash the effect -- a test
+    // mock with a partial payload found this as an uncaught TypeError.
+    const learning = prefs.learning_prefs ?? {};
+    setStyle(asText(learning.explanation_style ?? "standard"));
+    setFocus(asText(learning.subject_focus ?? ""));
     setMemory(prefs.memory_enabled);
   }, [prefs]);
 
@@ -187,28 +202,15 @@ export default function MePage() {
   };
 
   // daily practice heatmap + streak (GitHub-style grid).
-  const { data: activity } = useQuery({
+  const {
+    data: activity,
+    isError: activityError,
+    refetch: refetchActivity,
+  } = useQuery({
     queryKey: ["activity", me?.profile_id],
     queryFn: () => get<ActivitySummary>(`/students/${me?.profile_id}/activity`),
     enabled: me?.role === "student" && me?.profile_id != null,
   });
-
-  const createInvite = async () => {
-    setInviteBusy(true);
-    setInviteError(null);
-    try {
-      const inv = await generateInviteCode();
-      setInvite(inv);
-      track("parent_invite_generated");
-    } catch (e) {
-      setInviteError(
-        friendlyError((e as { rawDetail?: unknown }).rawDetail)?.text ??
-          t("errorGeneric"),
-      );
-    } finally {
-      setInviteBusy(false);
-    }
-  };
 
   // Auth is header-based, so a plain <a href> download would 401; fetch the
   // JSON with the session token and hand the browser a blob URL instead.
@@ -236,8 +238,10 @@ export default function MePage() {
     setError(null);
     try {
       await del("/users/me", { password: delPassword });
+      // signOut() wipes storage/offline copies and only then redirects
+      // (AuthContext, F-036); navigating here too raced that redirect with a
+      // second, hard navigation and could cut the wipe short.
       signOut();
-      void navigate("/login");
     } catch (e) {
       setError(
         friendlyError((e as { rawDetail?: unknown }).rawDetail)?.text ??
@@ -248,9 +252,9 @@ export default function MePage() {
   };
 
   return (
-    <main className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       <section className="section-head">
-        <h2>{t("me")}</h2>
+        <h1>{t("me")}</h1>
       </section>
 
       <Card>
@@ -293,80 +297,92 @@ export default function MePage() {
         </div>
       </Card>
 
-      {me?.role === "student" && activity && (
+      {me?.role === "student" && (activity || activityError) && (
         <Card>
           <div className="card-title">{t("activityTitle")}</div>
-          <div className="row-flex gap-3">
-            <span className="quick-icon">
-              <Flame size={20} aria-hidden />
-            </span>
-            <div className="row-main">
-              <div className="row-title">
-                {t("streakLabel", { days: activity.streak })}
+          {/* F-021: a failed activity fetch used to remove the whole card, so
+              "your streak" simply stopped existing instead of saying so. */}
+          {activity ? (
+            <>
+              <div className="row-flex gap-3">
+                <span className="quick-icon">
+                  <Flame size={20} aria-hidden />
+                </span>
+                <div className="row-main">
+                  <div className="row-title">
+                    {t("streakLabel", { days: activity.streak })}
+                  </div>
+                  <div className="row-sub">{t("activityHint")}</div>
+                </div>
               </div>
-              <div className="row-sub">{t("activityHint")}</div>
-            </div>
-          </div>
-          {(() => {
-            // FE-11: the per-day data lived only in title tooltips —
-            // invisible to keyboards and screen readers. The grid is now
-            // a labelled image equivalent: one summary name carries the
-            // counts a glance would take from the colors.
-            const totals = activity.days.reduce(
-              (acc, d) => {
-                acc.questions += d.questions;
-                acc.quizzes += d.quizzes;
-                if (d.questions + d.quizzes > 0) acc.active += 1;
-                return acc;
-              },
-              { questions: 0, quizzes: 0, active: 0 },
-            );
-            const gridLabel = t("heatmapSummary", {
-              questions: totals.questions,
-              active: totals.active,
-              days: activity.days.length,
-            });
-            return (
-              <div
-                className="heatmap"
-                data-testid="activity-heatmap"
-                role="img"
-                aria-label={gridLabel}
-              >
-                <span className="sr-only">{gridLabel}</span>
-                {activity.days.map((d) => {
-                  const total = d.questions + d.quizzes;
-                  const lvl =
-                    total === 0 ? 0 : total <= 2 ? 1 : total <= 5 ? 2 : 3;
-                  const title = [
-                    d.date,
-                    t(
-                      d.questions === 1
-                        ? "activityQuestion"
-                        : "activityQuestions",
-                      { n: d.questions },
-                    ),
-                    t("activityQuizzes", { n: d.quizzes }),
-                    t("activityMinutes", { n: d.minutes }),
-                  ].join(" · ");
-                  return (
-                    <span
-                      key={d.date}
-                      className={`heat-cell lvl-${lvl}`}
-                      title={title}
-                    />
-                  );
-                })}
-              </div>
-            );
-          })()}
+              {(() => {
+                // FE-11: the per-day data lived only in title tooltips —
+                // invisible to keyboards and screen readers. The grid is now
+                // a labelled image equivalent: one summary name carries the
+                // counts a glance would take from the colors.
+                const totals = activity.days.reduce(
+                  (acc, d) => {
+                    acc.questions += d.questions;
+                    acc.quizzes += d.quizzes;
+                    if (d.questions + d.quizzes > 0) acc.active += 1;
+                    return acc;
+                  },
+                  { questions: 0, quizzes: 0, active: 0 },
+                );
+                const gridLabel = t("heatmapSummary", {
+                  questions: totals.questions,
+                  active: totals.active,
+                  days: activity.days.length,
+                });
+                return (
+                  <div
+                    className="heatmap"
+                    data-testid="activity-heatmap"
+                    role="img"
+                    aria-label={gridLabel}
+                  >
+                    <span className="sr-only">{gridLabel}</span>
+                    {activity.days.map((d) => {
+                      const total = d.questions + d.quizzes;
+                      const lvl =
+                        total === 0 ? 0 : total <= 2 ? 1 : total <= 5 ? 2 : 3;
+                      const title = [
+                        d.date,
+                        t(
+                          d.questions === 1
+                            ? "activityQuestion"
+                            : "activityQuestions",
+                          { n: d.questions },
+                        ),
+                        t("activityQuizzes", { n: d.quizzes }),
+                        t("activityMinutes", { n: d.minutes }),
+                      ].join(" · ");
+                      return (
+                        <span
+                          key={d.date}
+                          className={`heat-cell lvl-${lvl}`}
+                          title={title}
+                        />
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </>
+          ) : (
+            <LoadError onRetry={() => void refetchActivity()} />
+          )}
         </Card>
       )}
 
-      {(isStudent || (notes ?? []).length > 0) && (
+      {(isStudent || (notes ?? []).length > 0 || notesError) && (
         <Card>
           <div className="card-title">{t("savedNotesTitle")}</div>
-          {(notes ?? []).length === 0 ? (
+          {notesError ? (
+            /* F-021: "no saved notes" after a failure was a confident, wrong
+               statement -- the student's bookmarked answers looked deleted. */
+            <LoadError onRetry={() => void refetchNotes()} />
+          ) : (notes ?? []).length === 0 ? (
             <p className="muted text-sm m-0">{t("savedNotesEmpty")}</p>
           ) : (
             <ul className="stack notes-list">
@@ -395,35 +411,7 @@ export default function MePage() {
         </Card>
       )}
 
-      {me?.role === "student" && (
-        <Card>
-          <div className="card-title">{t("parentInviteTitle")}</div>
-          <p className="muted text-sm m-0">{t("parentInviteHint")}</p>
-          {invite ? (
-            <div className="stack">
-              <div className="row-flex gap-2">
-                <KeyRound size={18} aria-hidden />
-                <strong className="invite-code">{invite.code}</strong>
-              </div>
-              <p className="muted text-sm m-0">
-                {t("parentInviteExpires", {
-                  minutes: invite.expires_in_minutes,
-                })}
-              </p>
-            </div>
-          ) : (
-            <Button variant="teal" onClick={createInvite} disabled={inviteBusy}>
-              {inviteBusy ? (
-                <span className="spinner" aria-hidden />
-              ) : (
-                <KeyRound size={16} aria-hidden />
-              )}
-              {t("parentInviteGenerate")}
-            </Button>
-          )}
-          {inviteError && <p className="error m-0">{inviteError}</p>}
-        </Card>
-      )}
+      {me?.role === "student" && <ParentInviteCard />}
 
       {me?.role === "student" && (
         <Card>
@@ -498,6 +486,10 @@ export default function MePage() {
               <Brain size={15} aria-hidden /> {t("clearMemory")}
             </Button>
           </div>
+          {/* F-021: a failed facts fetch removed the list silently. */}
+          {memError && !mem && (
+            <LoadError className="mt-3" onRetry={() => void refetchMem()} />
+          )}
           {mem && (
             <div className="mt-3">
               <div className="wrap-list">
@@ -556,6 +548,15 @@ export default function MePage() {
               )}
             </div>
           )}
+        </Card>
+      )}
+
+      {me?.role === "student" && reportError && !report && (
+        /* F-021: a failed report fetch used to unmount the whole section, so
+           the period control and the report vanished with no explanation. */
+        <Card>
+          <div className="card-title">{t("myReportTitle")}</div>
+          <LoadError onRetry={() => void refetchReport()} />
         </Card>
       )}
 
