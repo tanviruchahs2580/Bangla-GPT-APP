@@ -147,13 +147,16 @@ jobs:
         # change what this step audits).
         run: |
           python -m pip install --quiet --upgrade "setuptools==84.1.0"
-          # bangla-gpt-api itself is the editable install pip-audit cannot
-          # look up on PyPI: it prints the skip table and then exits non-zero
-          # anyway (measured on the 2026-10-31 run 41167712721, both Python
-          # jobs, after "No known vulnerabilities found"). --skip-editable is
-          # the documented way to audit everything else and pass clean - the
-          # gate still fails on any real vulnerability in the locked set.
-          python -m pip_audit --skip-editable
+          # Audit the SHIPPED SET (the hash-verified lock), not the runner
+          # environment: the environment contains the editable bangla-gpt-api
+          # install, which pip-audit cannot look up on PyPI and which makes
+          # the run exit non-zero even after printing "No known
+          # vulnerabilities found" (measured: runs 41167712721 and
+          # 41169377283, both Python jobs, with and without --skip-editable).
+          # Auditing -r constraints.txt --no-deps is what this gate means
+          # (SUP-02: the locked set is what ships) and cannot drift with the
+          # runner image.
+          python -m pip_audit -r constraints.txt --no-deps
 
       - name: Import-linter contracts (API layering)
         # ARCH-02/F-069: the layering (db is a leaf, retrieval below services,

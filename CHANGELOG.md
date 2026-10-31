@@ -175,6 +175,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - ci(guardrails): gate semgrep, hadolint and the shipped npm tree
 - ci(release): refuse tag/version drift and tag images by commit sha
 - ci(security): scope the gitleaks allowlist to values, not test paths
+- ci: audit the locked set with --skip-editable
 - ci: gate per-module coverage floors and Lighthouse budgets
 - ci: give the Windows quick-start job the documented Node 24
 - ci: pin setuptools to the release fix for GHSA-xmj3-9gf7-h52w
