@@ -279,6 +279,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - test(web): pin the maintenance route, the bilingual fallback and page size
 - test(web): pin the tutor capture and regenerate the reviewed baselines
 - test(web): read the teacher greeting from the h1 the page now has
+- test(web): record the composer ceiling raise the CodeQL fix required
 - test(web): record the justified page-size raises in the ratchet
 - test(web): repair the wave-2 C1 flow spec before running it
 - test(web): replace the remaining e2e fixed sleeps with signal waits
