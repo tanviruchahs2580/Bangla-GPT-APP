@@ -24,10 +24,11 @@ test('login screen accessible tree and language (bn), reviewed ARIA baseline', a
   await useVariant(page, { theme: 'light', lang: 'bn' })
   await openRoute(page, '/login')
   expect(await page.locator('html').getAttribute('lang')).toBe('bn')
-  // What a screen reader is handed first on this branch's public pages: a
-  // level-1 heading, the single login form and the language switch. (a1929ad
-  // also asserted a skip link and main#main-content; this branch ships
-  // neither on /login -- the ARIA baseline below records the tree as it is.)
+  // What a screen reader is handed first on the public pages (F-003): the skip
+  // link, the language switch, then the page's main landmark with its level-1
+  // heading and the single login form -- the ARIA baseline below records the
+  // tree as it is.
+  await expect(page.locator('a.skip-link')).toBeAttached()
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
   await expect(page.locator('form')).toHaveCount(1)
   await expect(page.locator('button.public-lang-toggle')).toBeVisible()
@@ -51,10 +52,11 @@ test('tutor screen landmarks, live region and reviewed ARIA baseline (bn)', asyn
   await signIn(page, 'student2@e2e.test')
   await openRoute(page, '/student/tutor')
   expect(await page.locator('html').getAttribute('lang')).toBe('bn')
-  // One main landmark (the page-owned <main className="shell-main">) and a
-  // navigation landmark from the shell: the tutor page must not hand the
-  // screen reader a bare div soup.
+  // One main landmark -- the page's own, and it is the skip link's target
+  // (F-003) -- plus a navigation landmark from the shell: the tutor page must
+  // not hand the screen reader a bare div soup.
   await expect(page.locator('main')).toHaveCount(1)
+  await expect(page.locator('main#main-content')).toHaveCount(1)
   await expect(page.locator('nav').first()).toBeVisible()
   // The streaming announcement channel: a polite status region that stays
   // empty while tokens stream and carries one sentence when the answer is done.

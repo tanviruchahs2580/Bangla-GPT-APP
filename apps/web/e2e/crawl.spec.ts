@@ -99,16 +99,23 @@ function watchErrors(page: Page, findings: Finding[], where: string): void {
 async function crawlRoute(page: Page, route: string, findings: Finding[]): Promise<void> {
   await openRoute(page, route)
 
-  // Landmark contract on this branch: the student/teacher pages own a
-  // <main className="shell-main">; the public and staff pages (login,
-  // register, forgot, legal, status, parent, admin) ship none -- a1929ad's
-  // main#main-content was lost with the SkipLink work. What still must hold
-  // everywhere: never MORE than one main (a double landmark is a real
-  // defect), and at least one heading -- a route that mounts an empty div
-  // is a dead link.
+  // Landmark contract (F-003): every route renders exactly one main landmark
+  // and that landmark is the skip link's target (#main-content), plus at least
+  // one heading -- a route that mounts an empty div is a dead link. A second
+  // main is a real defect, and a missing one leaves the shell's skip link
+  // pointing at nothing.
   const main = page.locator('main, [role="main"]')
-  if ((await main.count()) > 1) {
-    findings.push({ where: route, what: `multiple main landmarks, found ${await main.count()}` })
+  const mainCount = await main.count()
+  if (mainCount !== 1) {
+    findings.push({ where: route, what: `expected exactly one main landmark, found ${mainCount}` })
+  } else if ((await page.locator('main#main-content').count()) !== 1) {
+    findings.push({
+      where: route,
+      what: 'the main landmark is not the skip link target #main-content',
+    })
+  }
+  if ((await page.locator('a.skip-link[href="#main-content"]').count()) !== 1) {
+    findings.push({ where: route, what: 'no skip link targeting #main-content' })
   }
   if ((await page.getByRole('heading').count()) === 0) {
     findings.push({ where: route, what: 'no heading rendered' })

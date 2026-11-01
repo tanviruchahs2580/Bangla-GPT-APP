@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { LearnChapterPage } from "../pages/student/LearnPage";
+import { clearOfflineChapters } from "../lib/offlineStore";
 import { t } from "../i18n";
 
 const apiMock = vi.hoisted(() => ({
@@ -174,5 +175,23 @@ describe("unified workspace tabs", () => {
 
     await userEvent.click(screen.getByRole("button", { name: t("retry") }));
     expect(await screen.findByText("কোষ কী")).toBeTruthy();
+  });
+
+  it("the offline copy control exposes its saved state (F-203)", async () => {
+    // The button used to change only its pixels: the accessible name stayed
+    // "Download chapter" and nothing said the chapter was saved, so a screen
+    // reader could not tell the copy was on the device.
+    await clearOfflineChapters();
+    renderChapter();
+    const button = await screen.findByRole("button", {
+      name: t("downloadChapter"),
+    });
+    expect(button).toHaveAttribute("aria-pressed", "false");
+
+    await userEvent.click(button);
+    await waitFor(() => expect(button).toHaveAttribute("aria-pressed", "true"));
+    // The visible label switches to "Saved" as well; both channels agree.
+    expect(button).toHaveTextContent(t("downloaded"));
+    await clearOfflineChapters();
   });
 });

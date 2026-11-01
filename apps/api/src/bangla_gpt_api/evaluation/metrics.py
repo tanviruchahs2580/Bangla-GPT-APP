@@ -18,18 +18,56 @@ input once a provider is configured -- see:func:`faithfulness`):
   against the recorded baseline FAILS, with per-metric detail.
 *:func:`run_suite` -- executes the golden set through a TutorService and
   aggregates all four metrics plus refusal precision/recall.
+*:func:`language_verdict` / :func:`script_violations` -- the deterministic
+  language-integrity legs (RAG-21/F-120): Assamese letters, Devanagari,
+  replacement characters, NFC, and whether a Bangla question got a Bangla
+  answer. The register/fluency legs stay a human or live-model judgement and
+  the CLI labels them UNVERIFIED-LIVE.
 """
 
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 
+from bangla_gpt_api.evaluation.stats import interval_report, paired_bootstrap
+
 GATE_PP = 2.0  # percentage points; spec: fail the build on >2% regression
+
+#: Absolute floor for the language-consistency leg (RAG-21/F-132). The spec's
+#: floor is 99%: a Bangla question answered overwhelmingly in another script is
+#: a failure regardless of what the baseline recorded.
+LANGUAGE_CONSISTENCY_FLOOR = 0.99
+
+#: Bootstrap seed for the paired comparison against the committed baseline.
+#: Fixed, not random: a gate that reports different numbers on identical input
+#: is not a gate.
+COMPARISON_SEED = 20261029
 
 _BENGALI_RE = re.compile(r"[\u0980-\u09ff]")
 _LATIN_RE = re.compile(r"[A-Za-z]")
+#: Assamese letters that share the Bangla block and must never appear in an
+#: answer to a Bangla-medium student (RAG-21; the repo's bn_scan gate uses the
+#: same two codepoints for tracked text).
+_ASSAMESE_RE = re.compile(r"[\u09f0\u09f1]")
+#: Devanagari letters and signs. The dandas (U+0964/U+0965) are excluded --
+#: Bengali uses the same two codepoints for its full stop, so a danda is not
+#: evidence of Devanagari text. Same class as scripts/bn_scan.py.
+_DEVANAGARI_RE = re.compile(r"[\u0900-\u0963\u0966-\u097f]")
+#: U+FFFD: a decoding failure that survives into an answer renders as a box.
+_REPLACEMENT_RE = re.compile("\ufffd")
+#: Character-level rules applied to a generated answer (F-120/LLM-14).
+#: Deliberately a subset of scripts/bn_scan.py's repo-text checks: mixed-script
+#: tokens and ZWJ/ZWNJ are review candidates in source text, but Bangla prose
+#: legitimately carries Latin loanwords and the joiner is orthographically
+#: required (র্যাপিড), so those would be false alarms on an answer.
+_SCRIPT_RULES: dict[str, re.Pattern[str]] = {
+    "assamese_letters": _ASSAMESE_RE,
+    "devanagari_letters": _DEVANAGARI_RE,
+    "replacement_char": _REPLACEMENT_RE,
+}
 _DANDA = "।"  # danda -- the Bengali full stop
 _SENTENCE_SPLIT = re.compile(r"[।\n]+")
 # Mock/answer-structure scaffolding (providers/mock.py layout): the "[mock]"
@@ -93,6 +131,62 @@ def grammar_score(text: str) -> float:
     return round(max(0.0, min(1.0, score)), 4)
 
 
+def bengali_letter_share(text: str) -> float:
+    """Bengali share of all Bengali-or-Latin characters in ``text``.
+
+    Script, not language: the Bengali block (letters and digits alike) counts
+    on one side and ASCII letters on the other, so a Bangla sentence with
+    numbers is still Bangla and a Latin sentence is not. Deterministic,
+    mock-capable, pinned by unit tests; 0.0 when the text has neither.
+    """
+    bengali = len(_BENGALI_RE.findall(text))
+    latin = len(_LATIN_RE.findall(text))
+    if bengali + latin == 0:
+        return 0.0
+    return round(bengali / (bengali + latin), 4)
+
+
+def assamese_letters(text: str) -> int:
+    """Count of U+09F0/U+09F1 in ``text`` (must be 0 in served answers)."""
+    return len(_ASSAMESE_RE.findall(text))
+
+
+def language_verdict(question: str, answer: str, *, min_share: float = 0.5) -> dict:
+    """Deterministic language-integrity verdict for one answer (RAG-21).
+
+    ``consistent`` is False when a Bangla-script question (share >= 0.5) is
+    answered with a mostly non-Bangla reply, and ``assamese`` counts letters
+    that the repo's own unicode gate forbids in shipped text. Both legs run
+    under the mock provider; the register/fluency legs stay a human/model
+    judgement and are reported as UNVERIFIED-LIVE by the CLI.
+    """
+    question_share = bengali_letter_share(question)
+    answer_share = bengali_letter_share(answer)
+    bengali_question = question_share >= min_share
+    return {
+        "bengali_question": bengali_question,
+        "answer_bengali_share": answer_share,
+        "consistent": (not bengali_question) or answer_share >= min_share,
+        "assamese": assamese_letters(answer),
+    }
+
+
+def script_violations(answer: str) -> list[str]:
+    """Deterministic answer-side script-integrity failures (F-120/LLM-14).
+
+    The repo's unicode gate (scripts/bn_scan.py) only ever saw tracked text, so
+    a real model could ship Assamese letters or mangled glyphs into a
+    child-facing answer and nothing would fail. This is the same character
+    check applied to generated text: the rule names are a bounded set, and an
+    empty list means the answer is clean. Register and naturalness are not
+    checked here -- those stay a human or live-model judgement.
+    """
+    violations = [name for name, pattern in _SCRIPT_RULES.items() if pattern.search(answer)]
+    if unicodedata.normalize("NFC", answer) != answer:
+        violations.append("not_nfc")
+    return violations
+
+
 def _overlap_fraction(answer: str, evidence: list[str]) -> float:
     """Fraction of answer sentences that appear in the evidence (deterministic)."""
     ev_text = _squash(" ".join(evidence))
@@ -135,6 +229,19 @@ class SuiteMetrics:
     faithfulness_mode: str
     grammar_avg: float
     failures: list[dict] = field(default_factory=list)
+    #: 0/1 per item, in run order: the paired-bootstrap input. Equal to
+    #: ``grounded_rate * total`` but per item, which is what pairing needs.
+    item_scores: list[int] = field(default_factory=list)
+    #: Raw counts behind the four proportions (Wilson intervals need k and n).
+    counts: dict[str, int] = field(default_factory=dict)
+    #: Per-stratum match counts keyed by the item's own labels
+    #: (split, question_type, query_form, negative_kind, class_subject).
+    strata: dict[str, dict] = field(default_factory=dict)
+    #: RAG-21 deterministic language-integrity legs: rate of consistent
+    #: answers to Bangla questions and the count of Assamese letters seen.
+    language_consistency: float = 1.0
+    assamese_letter_violations: int = 0
+    language_violations: list[dict] = field(default_factory=list)
 
     def as_dict(self) -> dict:
         return {
@@ -146,7 +253,29 @@ class SuiteMetrics:
             "faithfulness_avg": self.faithfulness_avg,
             "faithfulness_mode": self.faithfulness_mode,
             "grammar_avg": self.grammar_avg,
+            "language_consistency": self.language_consistency,
+            "assamese_letter_violations": self.assamese_letter_violations,
         }
+
+    def intervals(self) -> dict[str, dict]:
+        """Wilson 95% intervals for every proportion the report prints."""
+        counts = self.counts
+        return {
+            "grounded_rate": interval_report(counts.get("matched", 0), counts.get("total", 0)),
+            "coverage_true": interval_report(
+                counts.get("answered_true", 0), counts.get("true_total", 0)
+            ),
+            "coverage_false": interval_report(
+                counts.get("refused_false", 0), counts.get("false_total", 0)
+            ),
+            "precision_true": interval_report(
+                counts.get("answered_true", 0), counts.get("answered_total", 0)
+            ),
+        }
+
+
+#: Item labels the suite stratifies by, when the golden items carry them.
+STRATA_FIELDS = ("split", "question_type", "query_form", "negative_kind")
 
 
 async def run_suite(
@@ -172,6 +301,12 @@ async def run_suite(
     modes: set[str] = set()
     grammar_sum = 0.0
     failures: list[dict] = []
+    item_scores: list[int] = []
+    strata: dict[str, dict[str, dict[str, int]]] = {field_name: {} for field_name in STRATA_FIELDS}
+    strata.setdefault("class_subject", {})
+    language_violations: list[dict] = []
+    language_judged = language_consistent = 0
+    assamese_violations = 0
     for item in items:
         resp = await tutor.ask(item["question"], item["class_level"], item.get("subject") or None)
         if responses is not None:
@@ -186,6 +321,7 @@ async def run_suite(
             if not resp.grounded:
                 refused_false += 1
         ok = (resp.grounded and expect == "answer") or (not resp.grounded and expect == "refuse")
+        item_scores.append(1 if ok else 0)
         if ok:
             matched += 1
         else:
@@ -199,6 +335,16 @@ async def run_suite(
                     "refused_reason": getattr(resp, "refused_reason", None),
                 }
             )
+        labels = {
+            **{field_name: item.get(field_name) for field_name in STRATA_FIELDS},
+            "class_subject": f"{item['class_level']}:{item.get('subject') or '-'}",
+        }
+        for field_name, value in labels.items():
+            if value is None:
+                continue
+            bucket = strata[field_name].setdefault(str(value), {"n": 0, "matched": 0})
+            bucket["n"] += 1
+            bucket["matched"] += 1 if ok else 0
         if resp.grounded:
             answered_total += 1
             # sources are SourceRef models (schemas.py, excerpt: str | None);
@@ -211,6 +357,27 @@ async def run_suite(
             faith_sum += faith["score"]
             modes.add(faith["mode"])
             grammar_sum += grammar_score(resp.answer)
+        verdict = language_verdict(item["question"], resp.answer)
+        if verdict["bengali_question"]:
+            language_judged += 1
+            language_consistent += 1 if verdict["consistent"] else 0
+            if not verdict["consistent"]:
+                language_violations.append(
+                    {
+                        "question": item["question"],
+                        "rule": "language_consistency",
+                        "answer_bengali_share": verdict["answer_bengali_share"],
+                    }
+                )
+        if verdict["assamese"]:
+            assamese_violations += verdict["assamese"]
+            language_violations.append(
+                {
+                    "question": item["question"],
+                    "rule": "assamese_letters",
+                    "count": verdict["assamese"],
+                }
+            )
     return SuiteMetrics(
         total=len(items),
         grounded_rate=round(matched / len(items), 4) if items else 0.0,
@@ -221,7 +388,62 @@ async def run_suite(
         faithfulness_mode="+".join(sorted(modes)) if modes else "none",
         grammar_avg=round(grammar_sum / answered_total, 4) if answered_total else 0.0,
         failures=failures,
+        item_scores=item_scores,
+        counts={
+            "total": len(items),
+            "matched": matched,
+            "true_total": true_total,
+            "answered_true": answered_true,
+            "false_total": false_total,
+            "refused_false": refused_false,
+            "answered_total": answered_total,
+        },
+        strata=strata,
+        language_consistency=(
+            round(language_consistent / language_judged, 4) if language_judged else 1.0
+        ),
+        assamese_letter_violations=assamese_violations,
+        language_violations=language_violations,
     )
+
+
+def retrieval_hit_at_k(
+    index: Any,
+    items: list[dict],
+    *,
+    k: int = 3,
+    chapter_key: str = "chapter",
+) -> dict:
+    """Retrieval hit@k against each item's expected chapter (F-050/RAG-23).
+
+    The golden items that expect an answer carry the chapter their evidence
+    lives in; ``hit@k`` asks whether the served index returned a chunk of that
+    chapter inside the top ``k``. Refusal-expectation items are excluded: they
+    have no chapter to hit by construction (their absence is what family C /
+    the red-team set measure). Deterministic and model-free — it measures the
+    retrieval lane CI gates, not generation.
+    """
+    looked_up = [item for item in items if item.get("expect") == "answer" and item.get(chapter_key)]
+    missed: list[dict] = []
+    for item in looked_up:
+        hits = index.search(
+            item["question"],
+            class_level=item["class_level"],
+            subject=item.get("subject") or None,
+            top_k=k,
+        )
+        wanted = str(item[chapter_key]).strip()
+        if not any(str(hit.chunk.meta.chapter).strip() == wanted for hit in hits):
+            missed.append({"question": item["question"], "chapter": wanted})
+    total = len(looked_up)
+    hit = total - len(missed)
+    return {
+        "k": k,
+        "n": total,
+        "hit": hit,
+        "hit_rate": round(hit / total, 4) if total else 0.0,
+        "misses": missed,
+    }
 
 
 def compare_gate(baseline: dict, current: dict) -> tuple[bool, list[str]]:
@@ -249,5 +471,94 @@ def compare_gate(baseline: dict, current: dict) -> tuple[bool, list[str]]:
         lines.append(
             f"{key}: baseline={base:.4f} current={cur:.4f} drop={drop_pp:+.2f}pp "
             + ("PASS" if ok else f"FAIL(>{GATE_PP:.0f}pp)")
+        )
+    return passed, lines
+
+
+def _language_gate(baseline: dict, current: SuiteMetrics) -> tuple[bool, list[str]]:
+    """Language-integrity legs of the gate (RAG-21/F-132).
+
+    Two rules the ``>2pp`` comparison cannot express, because they are not
+    rate drops: an Assamese letter in a child-facing answer is a failure at any
+    count, and language consistency has an absolute 99% floor beside the
+    regression rule. The floors are as binding as the six compared metrics --
+    a report that printed them without gating them would be an unenforced
+    claim.
+    """
+    passed = True
+    lines: list[str] = []
+    baseline_consistency = baseline.get("language_consistency")
+    consistency = current.language_consistency
+    floor_ok = consistency >= LANGUAGE_CONSISTENCY_FLOOR
+    if baseline_consistency is None:
+        lines.append(
+            f"language_consistency: current={consistency:.4f} "
+            f"floor={LANGUAGE_CONSISTENCY_FLOOR:.2f} (no baseline value) "
+            + ("PASS" if floor_ok else "FAIL")
+        )
+        passed = passed and floor_ok
+    else:
+        base = float(baseline_consistency)
+        drop_pp = round((base - consistency) * 100.0, 4)
+        drop_ok = drop_pp <= GATE_PP + 1e-9
+        ok = floor_ok and drop_ok
+        lines.append(
+            f"language_consistency: baseline={base:.4f} current={consistency:.4f} "
+            f"drop={drop_pp:+.2f}pp floor={LANGUAGE_CONSISTENCY_FLOOR:.2f} "
+            + ("PASS" if ok else f"FAIL(>{GATE_PP:.0f}pp or < floor)")
+        )
+        passed = passed and ok
+    assamese = current.assamese_letter_violations
+    lines.append(
+        f"assamese_letter_violations: current={assamese} floor=0 "
+        + ("PASS" if assamese == 0 else "FAIL")
+    )
+    passed = passed and assamese == 0
+    return passed, lines
+
+
+def compare_gate_with_intervals(
+    baseline: dict,
+    current: SuiteMetrics,
+    *,
+    baseline_scores: list[int] | None = None,
+    seed: int = COMPARISON_SEED,
+) -> tuple[bool, list[str]]:
+    """``compare_gate`` plus Wilson intervals, a paired bootstrap and the
+    language-integrity floors.
+
+    The pass/fail rule for the six rates is unchanged (the spec's fixed 2pp
+    threshold); what is added is the evidence needed to read the numbers -- n,
+    a Wilson 95% interval per proportion, and, when the baseline carries
+    per-item scores, a paired bootstrap of the difference -- plus the two
+    language legs of :func:`_language_gate`. A delta whose interval covers zero
+    prints as "no measurable difference" so a claim of improvement cannot be
+    read into noise.
+    """
+    passed, lines = compare_gate(baseline, current.as_dict())
+    intervals = current.intervals()
+    for key, interval in intervals.items():
+        lines.append(
+            f"{key}: n={interval['n']} rate={interval['rate']:.4f} "
+            f"wilson95=[{interval['ci95_low']:.4f}, {interval['ci95_high']:.4f}]"
+        )
+    language_passed, language_lines = _language_gate(baseline, current)
+    lines.extend(language_lines)
+    passed = passed and language_passed
+    if baseline_scores is not None and len(baseline_scores) == len(current.item_scores):
+        bootstrap = paired_bootstrap(baseline_scores, current.item_scores, seed=seed)
+        if bootstrap["significant"]:
+            verdict = "measurable difference"
+        else:
+            verdict = "no measurable difference"
+        lines.append(
+            f"grounded_rate paired bootstrap (seed={seed}, n={bootstrap['n']}): "
+            f"delta={bootstrap['mean_diff']:+.4f} "
+            f"95% CI [{bootstrap['ci_low']:+.4f}, {bootstrap['ci_high']:+.4f}] -> {verdict}"
+        )
+    elif baseline_scores is not None:
+        lines.append(
+            "grounded_rate paired bootstrap: skipped (baseline has "
+            f"{len(baseline_scores)} item scores, current run {len(current.item_scores)})"
         )
     return passed, lines

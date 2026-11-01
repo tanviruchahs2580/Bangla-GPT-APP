@@ -1,10 +1,17 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { configure, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import MePage from "../pages/student/MePage";
 import { t } from "../i18n";
 import type { ActivityDay, ActivitySummary } from "../types";
+
+// F-023: RTL's default 1 s asyncUtilTimeout is shorter than this page's cold
+// render on a loaded machine (the same file measured 8.4 s for one test, and
+// the orchestrator's baseline recorded 2/2 failing runs), so the first findBy*
+// timed out intermittently. The assertions are unchanged; the wait budget now
+// matches the 15 s testTimeout in vite.config.ts.
+configure({ asyncUtilTimeout: 8000 });
 
 const apiMock = vi.hoisted(() => ({
   get: vi.fn(),
@@ -96,5 +103,28 @@ describe("streak heatmap UI", () => {
     renderPage();
     await screen.findByText(t("streakLabel", { days: 3 }));
     expect(apiMock.get).toHaveBeenCalledWith("/students/7/activity");
+  });
+
+  // F-021: the whole activity card used to unmount on failure, so a student
+  // whose request failed simply had no streak section — indistinguishable
+  // from a zero streak.
+  it("surfaces a failed activity query instead of dropping the card", async () => {
+    apiMock.get.mockImplementation((path: string) => {
+      if (path.startsWith("/students/7/activity"))
+        return Promise.reject(new Error("boom"));
+      return Promise.resolve(null);
+    });
+    renderPage();
+
+    const title = await screen.findByText(t("activityTitle"));
+    const section = title.closest(".card") as HTMLElement;
+    expect(await within(section).findByRole("alert")).toHaveTextContent(
+      t("errorGeneric"),
+    );
+    expect(
+      within(section).getByRole("button", { name: t("retry") }),
+    ).toBeInTheDocument();
+    expect(within(section).queryByTestId("activity-heatmap")).toBeNull();
+    expect(screen.queryByText(t("streakLabel", { days: 0 }))).toBeNull();
   });
 });

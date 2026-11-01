@@ -10,11 +10,31 @@
 # and re-run the trivy scan. Never replace the digest with the tag.
 FROM python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1 AS runtime
 
+# Single stage, deliberately (DOCK-01/F-089). Every Python artifact is a
+# prebuilt wheel pinned by hash in constraints.txt, and this image installs no
+# compiler toolchain, so there is nothing to build in a separate stage: a
+# builder stage would pull the same base again and copy the same site-packages
+# with no size or cache gain. The single stage is also the stage trivy scans,
+# so what is scanned is exactly what runs.
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
+
+# OCI provenance labels (F-153): the pipeline attests the pushed digest, but
+# nothing inside the image let an inspector map a running container back to a
+# commit. build-push-action feeds the ARGs in release.yml and the CI docker
+# job; the defaults keep a plain `docker build .` working.
+ARG APP_VERSION=dev
+ARG APP_REVISION=unknown
+LABEL org.opencontainers.image.title="bangla-gpt-api" \
+      org.opencontainers.image.description="Bangla GPT APP API - NCTB-grounded tutor service" \
+      org.opencontainers.image.source="https://github.com/tanviruchahs2580/Bangla-GPT-APP" \
+      org.opencontainers.image.revision="${APP_REVISION}" \
+      org.opencontainers.image.version="${APP_VERSION}" \
+      org.opencontainers.image.licenses="MIT"
 
 # Security patching of base-layer packages with available vendor fixes
 # (rescanned with trivy; remaining unfixed advisories documented in the
@@ -85,7 +105,12 @@ ENV WEB_CONCURRENCY=2
 
 EXPOSE 8000
 
+# /ready, not /health: /health is the constant {"status":"ok"} and stayed
+# green while the database, cache or provider were down -- the compose
+# healthcheck and the release gate already read /ready, and the deploy
+# contract (apps/api/eval/parked_specs/test_deploy_contracts.py) pins the
+# image to the same probe.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD ["python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status==200 else 1)"]
+    CMD ["python", "-c", "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3).status==200 else 1)"]
 
 CMD ["sh", "-c", "exec gunicorn bangla_gpt_api.main:app -k uvicorn_worker.UvicornWorker -w ${WEB_CONCURRENCY} -b 0.0.0.0:8000 --timeout 60 --graceful-timeout 30 --max-requests 1000 --max-requests-jitter 100 --access-logfile -"]

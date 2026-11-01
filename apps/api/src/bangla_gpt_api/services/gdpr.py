@@ -70,7 +70,10 @@ class _DataExportV2(DataExportResponse):
     chapter progress, revision items, the AI-usage ledger and analytics events
     -- all stored per user -- while ``DELETE /users/me`` cascaded through
     every one of them. A data subject received a partial answer to "what do
-    you hold about me".
+    you hold about me". F-040 added the graded-answer record (``answer_log``),
+    the AI-memory preferences (``learning_prefs``/``memory_enabled``) and the
+    per-attempt ``quiz_json``; v1's four sections and v2's table list are
+    otherwise unchanged, so the version marker stays "2".
 
     Extending the schema in a local subclass keeps the served OpenAPI document
     honest (the versioned endpoint really returns these fields) without
@@ -88,6 +91,15 @@ class _DataExportV2(DataExportResponse):
     notes: list[dict] = Field(default_factory=list)
     notifications: list[dict] = Field(default_factory=list)
     chapter_progress: list[dict] = Field(default_factory=list)
+    # F-040: the child's graded-answer record. It is a child-scoped table the
+    # erasure cascade deletes; the export skipped it, so a subject access
+    # request answered without the question text and chosen answers.
+    answer_log: list[dict] = Field(default_factory=list)
+    # DB-01/F-040 follow-up: the relational bulk-assignment membership rows
+    # (assignment_recipients) are as much the student's record as the JSON
+    # list the export already carries, and they are what the erasure path
+    # deletes row by row.
+    assignment_memberships: list[dict] = Field(default_factory=list)
     revision_items: list[dict] = Field(default_factory=list)
     concept_mastery: list[dict] = Field(default_factory=list)
     student_abilities: list[dict] = Field(default_factory=list)
@@ -113,197 +125,316 @@ def _iso(value: datetime | None) -> str | None:
     return value.isoformat() if value else None
 
 
-def build_data_export(db: Session, user: User) -> _DataExportV2:
-    """Everything stored about this account (self-service portability)."""
-    student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one_or_none()
-    teacher = db.execute(select(Teacher).where(Teacher.user_id == user.id)).scalar_one_or_none()
-    parent = db.execute(select(Parent).where(Parent.user_id == user.id)).scalar_one_or_none()
+def _student_learning_sections(
+    db: Session, student: Student | None, attempt_rows: list[QuizAttempt]
+) -> dict[str, list[dict]]:
+    """Every student-scoped learning table the export must carry (F-063/F-040).
 
-    profile: dict
-    attempt_rows: list[QuizAttempt] = []
-    links: list[dict] = []
-    if student is not None:
-        profile = {
-            "type": "student",
-            "id": student.id,
-            "name": student.name,
-            "class_level": student.class_level,
-            "consent_version": student.consent_version,
-            "consent_at": student.consent_at.isoformat() if student.consent_at else None,
-        }
-        attempt_rows = list(
-            db.execute(select(QuizAttempt).where(QuizAttempt.student_id == student.id)).scalars()
-        )
-        for link in db.execute(
-            select(ParentStudentLink).where(ParentStudentLink.student_id == student.id)
-        ).scalars():
-            links.append({"direction": "linked_by", "parent_id": link.parent_id})
-    elif teacher is not None:
-        profile = {"type": "teacher", "id": teacher.id, "name": teacher.name}
-    elif parent is not None:
-        profile = {"type": "parent", "id": parent.id, "name": parent.name}
-        for link in db.execute(
-            select(ParentStudentLink).where(ParentStudentLink.parent_id == parent.id)
-        ).scalars():
-            links.append({"direction": "links", "student_id": link.student_id})
-    else:
-        profile = {"type": None}
-
-    attempts = [
+    Returns the seven section lists keyed by the response field name; an unset
+    student yields empty lists. Extracted from ``build_data_export`` so the
+    builder reads one section per concept instead of forty branches, and so the
+    completeness of this section can be reviewed and tested on its own.
+    """
+    sections: dict[str, list[dict]] = {
+        "chapter_progress": [],
+        "answer_log": [],
+        "assignment_memberships": [],
+        "revision_items": [],
+        "concept_mastery": [],
+        "student_abilities": [],
+        "classrooms": [],
+    }
+    if student is None:
+        return sections
+    sections["chapter_progress"] = [
         {
-            "id": a.id,
-            "subject": a.subject,
-            "class_level": a.class_level,
-            "status": a.status,
-            "total": a.total,
-            "correct": a.correct,
-            "score_pct": a.score_pct,
-            "created_at": a.created_at.isoformat() if a.created_at else None,
-        }
-        for a in attempt_rows
-    ]
-    # F-063: a student's export stopped at quiz scores. The conversations and
-    # chat messages -- the largest body of personal data this product holds
-    # about a child -- were not exported at all, so the "download everything
-    # we hold about you" endpoint answered with a fraction of the truth.
-    conversations: list[dict] = []
-    chat_messages: list[dict] = []
-    learning_activity: list[dict] = []
-    if student is not None:
-        conv_rows = list(
-            db.execute(select(Conversation).where(Conversation.student_id == student.id)).scalars()
-        )
-        conv_ids = [c.id for c in conv_rows]
-        conversations = [
-            {
-                "id": c.id,
-                "title": c.title,
-                "created_at": c.created_at.isoformat() if c.created_at else None,
-            }
-            for c in conv_rows
-        ]
-        if conv_ids:
-            for m in (
-                db.execute(select(ChatMessage).where(ChatMessage.conversation_id.in_(conv_ids)))
-                .scalars()
-                .all()
-            ):
-                chat_messages.append(
-                    {
-                        "conversation_id": m.conversation_id,
-                        "role": m.role,
-                        "content": m.content,
-                        "created_at": m.created_at.isoformat() if m.created_at else None,
-                    }
-                )
-        learning_activity = [
-            {
-                "date": row.date,
-                "questions": row.questions,
-                "quizzes": row.quizzes,
-                "minutes": row.minutes,
-            }
-            for row in (
-                db.execute(select(DailyActivity).where(DailyActivity.student_id == student.id))
-                .scalars()
-                .all()
-            )
-        ]
-
-    # audit event 2/5: data_export (self-service; only the fact is
-    # logged -- the payload itself never touches logs or audit rows).
-    write_audit(
-        db,
-        action="data_export",
-        actor_user_id=user.id,
-        actor_role=user.role,
-        target=f"user:{user.id}",
-        detail={"format": "json"},
-    )
-    db.commit()
-
-    # --- S-021: the remaining per-user tables -------------------------------
-    # Everything below is stored per user or per profile and was missing from
-    # the export while DELETE /users/me removed it. Queried after the audit
-    # write above so a failure changes nothing about the audit trail.
-    notes = [
-        {
-            "id": n.id,
-            "title": n.title,
-            "body": n.body,
-            "source": n.source,
-            "source_ref": n.source_ref,
-            "created_at": _iso(n.created_at),
-        }
-        for n in db.execute(select(SavedNote).where(SavedNote.user_id == user.id)).scalars()
-    ]
-    notifications = [
-        {
-            "id": n.id,
-            "kind": n.kind,
-            "code": n.code,
-            "params": n.params,
-            "link": n.link,
-            "read_at": _iso(n.read_at),
-            "created_at": _iso(n.created_at),
-        }
-        for n in db.execute(
-            select(Notification).where(Notification.user_id == user.id).order_by(Notification.id)
-        ).scalars()
-    ]
-    ai_usage = [
-        {
-            "id": row.id,
-            "route": row.route,
-            "model": row.model,
-            "prompt_tokens": row.prompt_tokens,
-            "completion_tokens": row.completion_tokens,
-            "estimated_cost_usd": row.estimated_cost_usd,
-            "created_at": _iso(row.created_at),
+            "subject": row.subject,
+            "chapter": row.chapter,
+            "class_level": row.class_level,
+            "read_pct": row.read_pct,
+            "completed": row.completed,
+            "bookmarked": row.bookmarked,
+            "updated_at": _iso(row.updated_at),
         }
         for row in db.execute(
-            select(AiUsage).where(AiUsage.user_id == user.id).order_by(AiUsage.id)
+            select(ChapterProgress)
+            .where(ChapterProgress.student_id == student.id)
+            .order_by(ChapterProgress.id)
         ).scalars()
     ]
-    analytics_events = [
+    sections["revision_items"] = [
         {
             "id": row.id,
-            "name": row.name,
-            "role": row.role,
-            "props": row.props,
-            "created_at": _iso(row.created_at),
+            "question": row.question,
+            "options": row.options_json,
+            "correct_index": row.correct_index,
+            "chapter": row.chapter,
+            "subject": row.subject,
+            "class_level": row.class_level,
+            "reps": row.reps,
+            "interval_days": row.interval_days,
+            "ease_factor": row.ease_factor,
+            "due_date": row.due_date,
+            "updated_at": _iso(row.updated_at),
         }
         for row in db.execute(
-            select(AnalyticsEventRow)
-            .where(AnalyticsEventRow.user_id == user.id)
-            .order_by(AnalyticsEventRow.id)
+            select(RevisionItem)
+            .where(RevisionItem.student_id == student.id)
+            .order_by(RevisionItem.id)
         ).scalars()
     ]
-    feedback_rows = [
+    attempt_ids = [a.id for a in attempt_rows]
+    sections["assignment_memberships"] = [
         {
-            "id": row.id,
-            "rating": row.rating,
-            "comment": row.comment,
-            "message_id": row.message_id,
+            "assignment_id": row.assignment_id,
             "attempt_id": row.attempt_id,
             "created_at": _iso(row.created_at),
         }
         for row in db.execute(
-            select(Feedback).where(Feedback.user_id == user.id).order_by(Feedback.id)
+            select(AssignmentRecipient)
+            .where(AssignmentRecipient.student_id == student.id)
+            .order_by(AssignmentRecipient.id)
         ).scalars()
     ]
-    ai_jobs = [
+    if attempt_ids:
+        sections["answer_log"] = [
+            {
+                "id": row.id,
+                "attempt_id": row.attempt_id,
+                "seq": row.seq,
+                "question_text": row.question_text,
+                "chosen": row.chosen,
+                "correct_index": row.correct_index,
+                "is_correct": row.is_correct,
+                "chapter": row.chapter,
+                "book": row.book,
+                "created_at": _iso(row.created_at),
+            }
+            for row in db.execute(
+                select(AnswerLog)
+                .where(AnswerLog.attempt_id.in_(attempt_ids))
+                .order_by(AnswerLog.id)
+            ).scalars()
+        ]
+    sections["concept_mastery"] = [
         {
-            "id": row.id,
-            "kind": row.kind,
-            "status": row.status,
-            "created_at": _iso(row.created_at),
+            "concept_id": row.concept_id,
+            "correct": row.correct,
+            "total": row.total,
             "updated_at": _iso(row.updated_at),
         }
         for row in db.execute(
-            select(AiJob).where(AiJob.user_id == user.id).order_by(AiJob.id)
+            select(ConceptMastery)
+            .where(ConceptMastery.student_id == student.id)
+            .order_by(ConceptMastery.concept_id)
         ).scalars()
     ]
+    sections["student_abilities"] = [
+        {
+            "concept": row.concept,
+            "class_level": row.class_level,
+            "ability": row.ability,
+            "attempts": row.attempts,
+            "updated_at": _iso(row.updated_at),
+        }
+        for row in db.execute(
+            select(StudentAbility)
+            .where(StudentAbility.student_id == student.id)
+            .order_by(StudentAbility.concept)
+        ).scalars()
+    ]
+    sections["classrooms"] = [
+        {
+            "classroom_id": room.id,
+            "school_id": room.school_id,
+            "class_level": room.class_level,
+            "section": room.section,
+            "as": "student",
+        }
+        for room in db.execute(
+            select(ClassRoom)
+            .join(ClassStudent, ClassStudent.classroom_id == ClassRoom.id)
+            .where(ClassStudent.student_id == student.id)
+            .order_by(ClassRoom.id)
+        ).scalars()
+    ]
+    return sections
+
+
+def _teacher_classroom_rows(db: Session, teacher: Teacher | None) -> list[dict]:
+    """A teacher's classroom assignments (class_teachers), the staff mirror."""
+    if teacher is None:
+        return []
+    return [
+        {
+            "classroom_id": room.id,
+            "school_id": room.school_id,
+            "class_level": room.class_level,
+            "section": room.section,
+            "subject": assignment.subject,
+            "as": "teacher",
+        }
+        for room, assignment in db.execute(
+            select(ClassRoom, ClassTeacher)
+            .join(ClassTeacher, ClassTeacher.classroom_id == ClassRoom.id)
+            .where(ClassTeacher.teacher_id == teacher.id)
+            .order_by(ClassRoom.id)
+        ).all()
+    ]
+
+
+def _conversation_sections(
+    db: Session, student: Student | None
+) -> tuple[list[dict], list[dict], list[dict]]:
+    """The child's conversations, messages and daily activity (F-063).
+
+    Extracted from ``build_data_export`` (radon E-grade) so the builder reads
+    one section per concept; ``student is None`` yields three empty lists.
+    """
+    if student is None:
+        return [], [], []
+    conv_rows = list(
+        db.execute(select(Conversation).where(Conversation.student_id == student.id)).scalars()
+    )
+    conv_ids = [c.id for c in conv_rows]
+    conversations = [
+        {
+            "id": c.id,
+            "title": c.title,
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+        }
+        for c in conv_rows
+    ]
+    chat_messages: list[dict] = []
+    if conv_ids:
+        for m in (
+            db.execute(select(ChatMessage).where(ChatMessage.conversation_id.in_(conv_ids)))
+            .scalars()
+            .all()
+        ):
+            chat_messages.append(
+                {
+                    "conversation_id": m.conversation_id,
+                    "role": m.role,
+                    "content": m.content,
+                    "created_at": m.created_at.isoformat() if m.created_at else None,
+                }
+            )
+    learning_activity = [
+        {
+            "date": row.date,
+            "questions": row.questions,
+            "quizzes": row.quizzes,
+            "minutes": row.minutes,
+        }
+        for row in (
+            db.execute(select(DailyActivity).where(DailyActivity.student_id == student.id))
+            .scalars()
+            .all()
+        )
+    ]
+    return conversations, chat_messages, learning_activity
+
+
+def _user_activity_tables(db: Session, user: User) -> dict[str, list[dict]]:
+    """The per-user activity rows the export carries (S-021).
+
+    Keyed by the ``_DataExportV2`` field name; every table is user-scoped.
+    """
+    return {
+        "notes": [
+            {
+                "id": n.id,
+                "title": n.title,
+                "body": n.body,
+                "source": n.source,
+                "source_ref": n.source_ref,
+                "created_at": _iso(n.created_at),
+            }
+            for n in db.execute(select(SavedNote).where(SavedNote.user_id == user.id)).scalars()
+        ],
+        "notifications": [
+            {
+                "id": n.id,
+                "kind": n.kind,
+                "code": n.code,
+                "params": n.params,
+                "link": n.link,
+                "read_at": _iso(n.read_at),
+                "created_at": _iso(n.created_at),
+            }
+            for n in db.execute(
+                select(Notification)
+                .where(Notification.user_id == user.id)
+                .order_by(Notification.id)
+            ).scalars()
+        ],
+        "ai_usage": [
+            {
+                "id": row.id,
+                "route": row.route,
+                "model": row.model,
+                "prompt_tokens": row.prompt_tokens,
+                "completion_tokens": row.completion_tokens,
+                "estimated_cost_usd": row.estimated_cost_usd,
+                "created_at": _iso(row.created_at),
+            }
+            for row in db.execute(
+                select(AiUsage).where(AiUsage.user_id == user.id).order_by(AiUsage.id)
+            ).scalars()
+        ],
+        "analytics_events": [
+            {
+                "id": row.id,
+                "name": row.name,
+                "role": row.role,
+                "props": row.props,
+                "created_at": _iso(row.created_at),
+            }
+            for row in db.execute(
+                select(AnalyticsEventRow)
+                .where(AnalyticsEventRow.user_id == user.id)
+                .order_by(AnalyticsEventRow.id)
+            ).scalars()
+        ],
+        "feedback": [
+            {
+                "id": row.id,
+                "rating": row.rating,
+                "comment": row.comment,
+                "message_id": row.message_id,
+                "attempt_id": row.attempt_id,
+                "created_at": _iso(row.created_at),
+            }
+            for row in db.execute(
+                select(Feedback).where(Feedback.user_id == user.id).order_by(Feedback.id)
+            ).scalars()
+        ],
+        "ai_jobs": [
+            {
+                "id": row.id,
+                "kind": row.kind,
+                "status": row.status,
+                "created_at": _iso(row.created_at),
+                "updated_at": _iso(row.updated_at),
+            }
+            for row in db.execute(
+                select(AiJob).where(AiJob.user_id == user.id).order_by(AiJob.id)
+            ).scalars()
+        ],
+    }
+
+
+def _profile_content_tables(
+    db: Session, user: User, student: Student | None
+) -> dict[str, list[dict]]:
+    """The authored/credential metadata rows the export carries (S-021).
+
+    Keyed by the ``_DataExportV2`` field name. The document sections are
+    teacher-scoped (the caller's own rows), the invite and support-plan
+    sections gain the student scope when the account has a student profile --
+    the same rows ``erase_account_everything`` deletes.
+    """
     teacher_documents = [
         {
             "id": row.id,
@@ -470,92 +601,117 @@ def build_data_export(db: Session, user: User) -> _DataExportV2:
             select(AuditLog).where(AuditLog.actor_user_id == user.id).order_by(AuditLog.id)
         ).scalars()
     ]
+    return {
+        "teacher_documents": teacher_documents,
+        "question_papers": question_papers,
+        "question_bank": question_bank,
+        "short_tests": short_tests,
+        "assignments": assignments,
+        "support_plans": support_plans,
+        "parent_invites": parent_invites,
+        "student_invites": student_invites,
+        "password_resets": password_resets,
+        "email_verifications": email_verifications,
+        "audit_events": audit_events,
+    }
 
-    # Student-scoped learning tables not covered by the v1 sections.
-    chapter_progress: list[dict] = []
-    revision_items: list[dict] = []
-    concept_mastery: list[dict] = []
-    student_abilities: list[dict] = []
-    classrooms: list[dict] = []
+
+def build_data_export(db: Session, user: User) -> _DataExportV2:
+    """Everything stored about this account (self-service portability)."""
+    student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one_or_none()
+    teacher = db.execute(select(Teacher).where(Teacher.user_id == user.id)).scalar_one_or_none()
+    parent = db.execute(select(Parent).where(Parent.user_id == user.id)).scalar_one_or_none()
+
+    profile: dict
+    attempt_rows: list[QuizAttempt] = []
+    links: list[dict] = []
     if student is not None:
-        chapter_progress = [
-            {
-                "subject": row.subject,
-                "chapter": row.chapter,
-                "class_level": row.class_level,
-                "read_pct": row.read_pct,
-                "completed": row.completed,
-                "bookmarked": row.bookmarked,
-                "updated_at": _iso(row.updated_at),
-            }
-            for row in db.execute(
-                select(ChapterProgress)
-                .where(ChapterProgress.student_id == student.id)
-                .order_by(ChapterProgress.id)
-            ).scalars()
-        ]
-        revision_items = [
-            {
-                "id": row.id,
-                "question": row.question,
-                "options": row.options_json,
-                "correct_index": row.correct_index,
-                "chapter": row.chapter,
-                "subject": row.subject,
-                "class_level": row.class_level,
-                "reps": row.reps,
-                "interval_days": row.interval_days,
-                "ease_factor": row.ease_factor,
-                "due_date": row.due_date,
-                "updated_at": _iso(row.updated_at),
-            }
-            for row in db.execute(
-                select(RevisionItem)
-                .where(RevisionItem.student_id == student.id)
-                .order_by(RevisionItem.id)
-            ).scalars()
-        ]
-        concept_mastery = [
-            {
-                "concept_id": row.concept_id,
-                "correct": row.correct,
-                "total": row.total,
-                "updated_at": _iso(row.updated_at),
-            }
-            for row in db.execute(
-                select(ConceptMastery)
-                .where(ConceptMastery.student_id == student.id)
-                .order_by(ConceptMastery.concept_id)
-            ).scalars()
-        ]
-        student_abilities = [
-            {
-                "concept": row.concept,
-                "class_level": row.class_level,
-                "ability": row.ability,
-                "attempts": row.attempts,
-                "updated_at": _iso(row.updated_at),
-            }
-            for row in db.execute(
-                select(StudentAbility)
-                .where(StudentAbility.student_id == student.id)
-                .order_by(StudentAbility.concept)
-            ).scalars()
-        ]
-        classrooms = [
-            {
-                "classroom_id": room.id,
-                "school_id": room.school_id,
-                "class_level": room.class_level,
-                "section": room.section,
-            }
-            for room in db.execute(
-                select(ClassRoom)
-                .join(ClassStudent, ClassStudent.classroom_id == ClassRoom.id)
-                .where(ClassStudent.student_id == student.id)
-                .order_by(ClassRoom.id)
-            ).scalars()
-        ]
+        profile = {
+            "type": "student",
+            "id": student.id,
+            "name": student.name,
+            "class_level": student.class_level,
+            # F-040: the AI-memory preferences the student sees and can clear
+            # in the UI were never exported.
+            "learning_prefs": student.learning_prefs,
+            "memory_enabled": student.memory_enabled,
+            "consent_version": student.consent_version,
+            "consent_at": student.consent_at.isoformat() if student.consent_at else None,
+        }
+        attempt_rows = list(
+            db.execute(select(QuizAttempt).where(QuizAttempt.student_id == student.id)).scalars()
+        )
+        for link in db.execute(
+            select(ParentStudentLink).where(ParentStudentLink.student_id == student.id)
+        ).scalars():
+            links.append({"direction": "linked_by", "parent_id": link.parent_id})
+    elif teacher is not None:
+        profile = {
+            "type": "teacher",
+            "id": teacher.id,
+            "name": teacher.name,
+            # F-040 follow-up: the teacher's own workflow preferences are
+            # stored about them and were the one profile field omitted.
+            "prefs": teacher.prefs,
+        }
+    elif parent is not None:
+        profile = {"type": "parent", "id": parent.id, "name": parent.name}
+        for link in db.execute(
+            select(ParentStudentLink).where(ParentStudentLink.parent_id == parent.id)
+        ).scalars():
+            links.append({"direction": "links", "student_id": link.student_id})
+    else:
+        profile = {"type": None}
+
+    attempts = [
+        {
+            "id": a.id,
+            "subject": a.subject,
+            "class_level": a.class_level,
+            "status": a.status,
+            "total": a.total,
+            "correct": a.correct,
+            "score_pct": a.score_pct,
+            # F-040: the question set itself (stem, options, correct index)
+            # lives here; the export showed only the resulting score.
+            "quiz_json": a.quiz_json,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+        }
+        for a in attempt_rows
+    ]
+    # F-063: a student's export stopped at quiz scores. The conversations and
+    # chat messages -- the largest body of personal data this product holds
+    # about a child -- were not exported at all, so the "download everything
+    # we hold about you" endpoint answered with a fraction of the truth.
+    conversations, chat_messages, learning_activity = _conversation_sections(db, student)
+
+    # audit event 2/5: data_export (self-service; only the fact is
+    # logged -- the payload itself never touches logs or audit rows).
+    write_audit(
+        db,
+        action="data_export",
+        actor_user_id=user.id,
+        actor_role=user.role,
+        target=f"user:{user.id}",
+        detail={"format": "json"},
+    )
+    db.commit()
+
+    # --- S-021: the remaining per-user tables -------------------------------
+    # Everything below is stored per user or per profile and was missing from
+    # the export while DELETE /users/me removed it. Queried after the audit
+    # write above so a failure changes nothing about the audit trail.
+    activity = _user_activity_tables(db, user)
+    content = _profile_content_tables(db, user, student)
+    learning = _student_learning_sections(db, student, attempt_rows)
+    chapter_progress = learning["chapter_progress"]
+    answer_log = learning["answer_log"]
+    assignment_memberships = learning["assignment_memberships"]
+    revision_items = learning["revision_items"]
+    concept_mastery = learning["concept_mastery"]
+    student_abilities = learning["student_abilities"]
+
+    classrooms = _teacher_classroom_rows(db, teacher)
 
     return _DataExportV2(
         schema_version=EXPORT_SCHEMA_VERSION,
@@ -571,28 +727,30 @@ def build_data_export(db: Session, user: User) -> _DataExportV2:
         conversations=conversations,
         chat_messages=chat_messages,
         learning_activity=learning_activity,
-        notes=notes,
-        notifications=notifications,
+        notes=activity["notes"],
+        notifications=activity["notifications"],
         chapter_progress=chapter_progress,
+        assignment_memberships=assignment_memberships,
+        answer_log=answer_log,
         revision_items=revision_items,
         concept_mastery=concept_mastery,
         student_abilities=student_abilities,
         classrooms=classrooms,
-        ai_usage=ai_usage,
-        analytics_events=analytics_events,
-        feedback=feedback_rows,
-        ai_jobs=ai_jobs,
-        teacher_documents=teacher_documents,
-        question_papers=question_papers,
-        question_bank=question_bank,
-        short_tests=short_tests,
-        assignments=assignments,
-        support_plans=support_plans,
-        parent_invites=parent_invites,
-        student_invites=student_invites,
-        password_resets=password_resets,
-        email_verifications=email_verifications,
-        audit_events=audit_events,
+        ai_usage=activity["ai_usage"],
+        analytics_events=activity["analytics_events"],
+        feedback=activity["feedback"],
+        ai_jobs=activity["ai_jobs"],
+        teacher_documents=content["teacher_documents"],
+        question_papers=content["question_papers"],
+        question_bank=content["question_bank"],
+        short_tests=content["short_tests"],
+        assignments=content["assignments"],
+        support_plans=content["support_plans"],
+        parent_invites=content["parent_invites"],
+        student_invites=content["student_invites"],
+        password_resets=content["password_resets"],
+        email_verifications=content["email_verifications"],
+        audit_events=content["audit_events"],
     )
 
 

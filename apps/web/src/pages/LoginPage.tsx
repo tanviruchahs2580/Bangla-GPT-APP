@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { changePassword, login, mfaChallenge } from "../api";
 import { useAuth } from "../AuthContext";
 import { friendlyError, type ErrorCopy } from "../errors";
@@ -13,6 +13,10 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<ErrorCopy | null>(null);
   const [busy, setBusy] = useState(false);
+  // FE-10: `busy` only updates after a render, so a same-tick double submit
+  // (double click, or Enter plus click) could fire two POSTs. The ref is set
+  // synchronously, the state stays for the disabled button.
+  const busyRef = useRef(false);
   // MFA step-up: login answers 202 mfa_required with a purpose-bound token
   // (NOT a session). The OTP form exchanges it for a real session; the
   // step-up token is never stored as one.
@@ -29,7 +33,8 @@ export default function LoginPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (busy) return;
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -71,13 +76,15 @@ export default function LoginPage() {
         }),
       );
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }
 
   async function submitMfa(e: React.FormEvent) {
     e.preventDefault();
-    if (busy || !mfaToken) return;
+    if (busyRef.current || !mfaToken) return;
+    busyRef.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -103,14 +110,17 @@ export default function LoginPage() {
         }),
       );
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }
 
   async function submitPasswordChange(e: React.FormEvent) {
     e.preventDefault();
-    if (busy) return;
+    if (busyRef.current) return;
+    busyRef.current = true;
     if (newPassword !== confirmPassword) {
+      busyRef.current = false;
       setError({ text: t("passwordMismatch") });
       return;
     }
@@ -128,13 +138,18 @@ export default function LoginPage() {
         }),
       );
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }
 
   if (mfaToken) {
     return (
-      <div className="splash splash-login auth-shell">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="splash splash-login auth-shell"
+      >
         <Card className="auth-card">
           <h2>{t("mfaTitle")}</h2>
           <p className="muted">{t("mfaHint")}</p>
@@ -166,13 +181,17 @@ export default function LoginPage() {
             </Button>
           </form>
         </Card>
-      </div>
+      </main>
     );
   }
 
   if (pendingMe) {
     return (
-      <div className="splash splash-login auth-shell">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="splash splash-login auth-shell"
+      >
         <Card className="auth-card">
           <h2>{t("forceChangeTitle")}</h2>
           <p className="muted">{t("forceChangeSub")}</p>
@@ -228,12 +247,16 @@ export default function LoginPage() {
             </Button>
           </form>
         </Card>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="splash splash-login auth-shell">
+    <main
+      id="main-content"
+      tabIndex={-1}
+      className="splash splash-login auth-shell"
+    >
       <section className="auth-brand">
         <div className="auth-brand-head">
           <span className="auth-brand-logo" aria-hidden>
@@ -325,6 +348,6 @@ export default function LoginPage() {
           <a href="/register">{t("register")}</a>
         </div>
       </Card>
-    </div>
+    </main>
   );
 }

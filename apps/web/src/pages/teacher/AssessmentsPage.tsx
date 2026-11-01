@@ -7,14 +7,19 @@ import type {
   AssignmentRow,
   ClassRoom,
   QPaper,
+  QuizStarted,
   RosterEntry,
+  ShortTest,
 } from "../../types";
-import { Badge, Button, Card, Stat } from "../../components/ui";
+import { Check, ChevronLeft, Pencil } from "lucide-react";
+import { Badge, Button, Card, LoadError, Stat } from "../../components/ui";
 import { QPaperReviewPanel } from "../../components/teacher/QPaperReviewPanel";
+import { ShortTestRow } from "../../components/teacher/ShortTestRow";
 import { friendlyError } from "../../errors";
-import { t } from "../../i18n";
+import { formatNumber, t } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { formatServerDateTime } from "../../lib/datetime";
+import { byClassLevelThenSection } from "../../lib/localeSort";
 
 const errText = (err: unknown): string =>
   friendlyError((err as { rawDetail?: unknown }).rawDetail)?.text ??
@@ -37,11 +42,7 @@ export default function AssessmentsPage() {
   const roomsQuery = useQuery({
     queryKey: ["teacher", "classrooms"],
     queryFn: () => get<ClassRoom[]>("/teacher/classrooms"),
-    select: (rs) =>
-      [...rs].sort(
-        (a, b) =>
-          a.class_level - b.class_level || a.section.localeCompare(b.section),
-      ),
+    select: byClassLevelThenSection,
   });
   const rooms = useMemo(() => roomsQuery.data ?? [], [roomsQuery.data]);
   const rosterQuery = useQuery({
@@ -110,7 +111,7 @@ export default function AssessmentsPage() {
     setAssignBusy(true);
     setAssignMsg(null);
     try {
-      const started = await post<{ attempt_id: number }>("/quizzes", {
+      const started = await post<QuizStarted>("/quizzes", {
         student_id: assignTo,
         class_level: selected.class_level,
         subject: assignSubject,
@@ -197,7 +198,7 @@ export default function AssessmentsPage() {
   ];
 
   return (
-    <main className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       <section className="section-head">
         <h1 className="page-title">{t("asmTitle")}</h1>
       </section>
@@ -237,7 +238,7 @@ export default function AssessmentsPage() {
                 onClick={() => setOpenQp(null)}
                 aria-label={t("back")}
               >
-                ← {t("back")}
+                <ChevronLeft size={16} aria-hidden /> {t("back")}
               </Button>
               <QPaperReviewPanel
                 qp={openQp}
@@ -254,14 +255,22 @@ export default function AssessmentsPage() {
           ) : (
             <Card title={t("asmTabPapers")}>
               <p className="muted muted-sm">{t("asmCreateInCreate")}</p>
-              {qps.length === 0 ? (
+              {qpsQuery.isError ? (
+                /* F-021: "no documents yet" after a failed fetch is a claim
+                   about the teacher's work, not about the request. */
+                <LoadError onRetry={() => void qpsQuery.refetch()} />
+              ) : qps.length === 0 ? (
                 <p className="muted">{t("noDocumentsYet")}</p>
               ) : (
                 <div className="stack">
                   {qps.map((qp) => (
                     <div key={qp.id} className="row qp-review-row">
                       <span className="quick-icon tile-teal" aria-hidden>
-                        {qp.status === "final" ? "✓" : "✎"}
+                        {qp.status === "final" ? (
+                          <Check size={16} />
+                        ) : (
+                          <Pencil size={16} />
+                        )}
                       </span>
                       <div className="row-main">
                         <div className="row-title">
@@ -269,9 +278,13 @@ export default function AssessmentsPage() {
                           {t("classLabel")} {qp.class_level}
                         </div>
                         <div className="row-sub">
-                          {qp.questions.length}Q · {qp.marks} {t("qpMarks")} ·{" "}
-                          {qp.questions.filter((q) => q.reviewed).length}/
-                          {qp.questions.length} {t("stepApprove")}
+                          {formatNumber(qp.questions.length)}Q ·{" "}
+                          {formatNumber(qp.marks)} {t("qpMarks")} ·{" "}
+                          {formatNumber(
+                            qp.questions.filter((q) => q.reviewed).length,
+                          )}
+                          /{formatNumber(qp.questions.length)}{" "}
+                          {t("stepApprove")}
                         </div>
                       </div>
                       <Badge tone={qp.status === "final" ? "ok" : "teal"}>
@@ -486,7 +499,10 @@ export default function AssessmentsPage() {
           )}
 
           <Card title={t("asmResults")}>
-            {assigns.length === 0 ? (
+            {assignsQuery.isError ? (
+              /* F-021: a failed list used to read as "nothing assigned". */
+              <LoadError onRetry={() => void assignsQuery.refetch()} />
+            ) : assigns.length === 0 ? (
               <p className="muted">{t("baNone")}</p>
             ) : (
               <div className="stack">
@@ -581,28 +597,19 @@ function AssignmentResult({ rows }: { rows: AssignmentProgressRow[] }) {
 
 /** Short-test list (read-only here; creation lives in Create). */
 function ShortTestList() {
-  const { data } = useQuery({
+  const { data, isError, refetch } = useQuery({
     queryKey: ["teacher", "shorttests"],
-    queryFn: () =>
-      get<
-        Array<{
-          id: number;
-          chapter: string;
-          subject: string;
-          questions: unknown[];
-          attempts: unknown[];
-        }>
-      >("/teacher/shorttests"),
+    queryFn: () => get<ShortTest[]>("/teacher/shorttests"),
   });
   const rows = data ?? [];
+  // F-021: the same empty-vs-failed confusion as the paper and assignment
+  // lists on this page.
+  if (isError) return <LoadError onRetry={() => void refetch()} />;
   if (rows.length === 0) return <p className="muted">{t("stEmpty")}</p>;
   return (
     <ul>
       {rows.slice(0, 8).map((st) => (
-        <li key={st.id}>
-          {st.chapter} · {st.subject} · {st.questions.length}Q ·{" "}
-          {t("stAssigned", { n: st.attempts.length })}
-        </li>
+        <ShortTestRow key={st.id} test={st} />
       ))}
     </ul>
   );

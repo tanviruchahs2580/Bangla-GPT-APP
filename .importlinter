@@ -1,0 +1,76 @@
+; Dependency-direction contracts for the API package (ARCH-02 / F-069).
+;
+; The layering was convention-only: nothing failed when a persistence module
+; imported a service or an evaluation helper reached into the routers. These
+; contracts encode the directions that hold today and that a reviewer would
+; reject a change to; they run in CI (`lint-imports`).
+;
+; Not expressed here: a single strict layer list. Two edges make that
+; impossible without a refactor (services <-> providers both import each
+; other: the mock provider reuses the answer-structure helpers, and the gemini
+; provider reads the request context that services set up). The contracts
+; below are the subset that is true and worth enforcing; widening them is a
+; follow-up once those two edges are broken.
+
+[importlinter]
+root_packages =
+    bangla_gpt_api
+
+[importlinter:contract:db-is-a-leaf]
+name = db does not reach into any layer above it
+type = forbidden
+source_modules =
+    bangla_gpt_api.db
+forbidden_modules =
+    bangla_gpt_api.services
+    bangla_gpt_api.routers
+    bangla_gpt_api.retrieval
+    bangla_gpt_api.providers
+    bangla_gpt_api.evaluation
+    bangla_gpt_api.nctb
+    bangla_gpt_api.jobs
+
+[importlinter:contract:retrieval-does-not-reach-up]
+name = retrieval is below services and routers
+type = forbidden
+source_modules =
+    bangla_gpt_api.retrieval
+forbidden_modules =
+    bangla_gpt_api.services
+    bangla_gpt_api.routers
+    bangla_gpt_api.evaluation
+    bangla_gpt_api.initialize
+
+[importlinter:contract:providers-do-not-reach-up]
+name = providers do not reach into routers, jobs or the composition root
+type = forbidden
+source_modules =
+    bangla_gpt_api.providers
+forbidden_modules =
+    bangla_gpt_api.routers
+    bangla_gpt_api.jobs
+    bangla_gpt_api.initialize
+
+[importlinter:contract:nctb-below-services]
+name = nctb ingestion does not reach into services or routers
+type = forbidden
+source_modules =
+    bangla_gpt_api.nctb
+forbidden_modules =
+    bangla_gpt_api.services
+    bangla_gpt_api.routers
+    bangla_gpt_api.evaluation
+    bangla_gpt_api.initialize
+
+; `bangla_gpt_api.curriculum` is a PEP 420 namespace package (no
+; __init__.py), which import-linter cannot address as a contract source; it
+; imports nothing today, so nothing is lost by leaving it out.
+
+[importlinter:contract:evaluation-is-offline-tooling]
+name = evaluation does not reach into routers
+type = forbidden
+source_modules =
+    bangla_gpt_api.evaluation
+forbidden_modules =
+    bangla_gpt_api.routers
+    bangla_gpt_api.initialize

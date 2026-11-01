@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Bot, ChevronLeft } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { get, post } from "../../api";
 import type {
@@ -9,9 +10,17 @@ import type {
   SupportPlanRow,
   WeakMatrix,
 } from "../../types";
-import { Badge, Button, Card, ProgressRing, Stat } from "../../components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  ProgressRing,
+  Stat,
+  TrendMark,
+} from "../../components/ui";
 import { friendlyError } from "../../errors";
 import { t } from "../../i18n";
+import { byClassLevelThenSection } from "../../lib/localeSort";
 
 const errText = (err: unknown): string =>
   friendlyError((err as { rawDetail?: unknown }).rawDetail)?.text ??
@@ -63,11 +72,7 @@ export default function ClassesPage() {
   const roomsQuery = useQuery({
     queryKey: ["teacher", "classrooms"],
     queryFn: () => get<ClassRoom[]>("/teacher/classrooms"),
-    select: (rs) =>
-      [...rs].sort(
-        (a, b) =>
-          a.class_level - b.class_level || a.section.localeCompare(b.section),
-      ),
+    select: byClassLevelThenSection,
   });
   // stable identity while loading: the auto-select effect and the
   // students memo key on this array
@@ -198,7 +203,7 @@ export default function ClassesPage() {
     // The roster is derived state, recomputed whenever its inputs change.
     // detailId is deliberately absent: including it would rebuild the
     // map on every detail open/close, and the map is only read from.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- detailId is read-only for this derived map; including it would rebuild the roster on every open/close
   }, [roster, search, filter, wm]);
 
   const detail =
@@ -255,7 +260,7 @@ export default function ClassesPage() {
   }, [wm]);
 
   return (
-    <main className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       <section className="section-head">
         <h1 className="page-title">{t("tNavClasses")}</h1>
         <Button variant="soft" size="sm" onClick={refresh}>
@@ -369,7 +374,7 @@ export default function ClassesPage() {
           </div>
           {insight && (
             <p className="ai-insight-line section-gap-top" role="status">
-              <span aria-hidden>🤖</span>{" "}
+              <Bot size={16} aria-hidden />{" "}
               {t(insight.key, insight.vars as Record<string, string | number>)}
             </p>
           )}
@@ -384,7 +389,7 @@ export default function ClassesPage() {
             onClick={() => setDetailId(null)}
             aria-label={t("clsBackToList")}
           >
-            ← {t("clsBackToList")}
+            <ChevronLeft size={16} aria-hidden /> {t("clsBackToList")}
           </Button>
           <div className="row-flex section-gap-top gap-4">
             <ProgressRing
@@ -412,12 +417,7 @@ export default function ClassesPage() {
                 {detailWm && (
                   <>
                     {" "}
-                    · {t("wmTrend")}:{" "}
-                    {detailWm.trend === "down"
-                      ? "▼"
-                      : detailWm.trend === "up"
-                        ? "▲"
-                        : "–"}
+                    · {t("wmTrend")}: <TrendMark trend={detailWm.trend} />
                     {detailWm.at_risk && (
                       <Badge tone="warn"> {t("spRisk")}</Badge>
                     )}

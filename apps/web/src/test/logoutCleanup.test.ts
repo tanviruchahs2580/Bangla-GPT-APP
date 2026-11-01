@@ -29,6 +29,8 @@ const USER_KEYS = [
   "lastChapter",
   "bgpt-lowdata",
   "bgpt_teacher_default_class",
+  // PWA-03: which user's offline copies the device holds is per-user state.
+  "bgpt_offline_owner",
 ];
 
 function fixture(): ChapterContentOut {
@@ -53,7 +55,7 @@ afterEach(async () => {
   // no open()), then leave the in-memory store empty for the next test.
   vi.unstubAllGlobals();
   for (const rec of await downloadedChapters()) {
-    await deleteChapter(rec.subject, rec.chapter, rec.classLevel);
+    await deleteChapter(rec.userId, rec.subject, rec.chapter, rec.classLevel);
   }
   localStorage.clear();
   sessionStorage.clear();
@@ -66,7 +68,7 @@ describe("logout clears user data (F-036)", () => {
     localStorage.setItem("bgpt_theme", "dark");
     localStorage.setItem("fontScale", "1.4");
     sessionStorage.setItem(LAST_RESULT_KEY, JSON.stringify({ score: 92 }));
-    await saveChapter("science", "cell", 6, fixture());
+    await saveChapter(1, "science", "cell", 6, fixture());
     expect(await downloadedChapters()).toHaveLength(1);
 
     const cacheSpy = vi.fn();

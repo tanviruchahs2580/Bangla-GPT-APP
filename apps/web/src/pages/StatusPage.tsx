@@ -40,8 +40,8 @@ export default function StatusPage() {
   const ok = data?.status === "ok";
 
   return (
-    <div className="card card-narrow">
-      <h2>{t("statusPage")}</h2>
+    <main id="main-content" tabIndex={-1} className="card card-narrow">
+      <h1>{t("statusPage")}</h1>
       {error && (
         <p className="error" role="alert">
           {error}
@@ -95,6 +95,6 @@ export default function StatusPage() {
       <p>
         <Link to="/login">{t("login")}</Link>
       </p>
-    </div>
+    </main>
   );
 }

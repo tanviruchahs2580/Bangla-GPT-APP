@@ -114,7 +114,9 @@ def test_assign_whole_classroom_fast_and_logged(
     assert logs, "assignment must log shorttest_assigned with elapsed_ms"
     logged = json.loads(logs[-1].getMessage())
     assert logged["students"] == 5
-    # PASS-WHEN: generate->assign p95 <= 10s (single run far below target)
+    # PASS-WHEN: generate->assign p95 <= 10s. The bound is the documented
+    # target, kept as a hang/serialisation detector; the wall clock is only
+    # meaningful on a quiet machine, the CI job timeout is the hard stop.
     assert logged["elapsed_ms"] < 10_000
     assert wall_ms < 10_000
 

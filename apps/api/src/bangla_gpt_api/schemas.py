@@ -1,14 +1,46 @@
-from datetime import datetime
-from typing import Any, Literal, cast
+import re
+from datetime import UTC, datetime
+from typing import Annotated, Any, Literal, cast
 
 from pydantic import (
+    AfterValidator,
     BaseModel,
     ConfigDict,
     Field,
+    PlainSerializer,
     StrictBool,
+    WithJsonSchema,
+    field_validator,
     model_serializer,
     model_validator,
 )
+from pydantic_core import PydanticCustomError
+
+
+def _utc_iso_z(value: datetime) -> str:
+    """ISO-8601 UTC with a ``Z`` suffix; a naive value is read as UTC.
+
+    Columns are naive UTC (SQLite has no timezone type) but the write path
+    keeps the tz-aware in-memory default (``expire_on_commit=False``), so the
+    same row used to serialise as ``...Z`` on create and ``...`` on re-read.
+    ECMAScript parses an offset-less date-time as LOCAL time, shifting every
+    displayed timestamp by the viewer's offset, so one serialiser now
+    normalises both paths (F-063).
+    """
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
+#: Wire type for every datetime an API response carries. The serializer runs
+#: in JSON mode only, so python-mode dumps and ORM comparisons keep real
+#: datetimes; the explicit schema keeps ``format: date-time`` in the served
+#: OpenAPI document (a bare PlainSerializer would degrade it to a string).
+UtcDateTime = Annotated[
+    datetime,
+    PlainSerializer(_utc_iso_z, return_type=str, when_used="json"),
+    WithJsonSchema({"type": "string", "format": "date-time"}, mode="serialization"),
+]
 
 # --- explicit explanation strategies -----------------------------------
 
@@ -37,6 +69,66 @@ ExplanationStyle = Literal["simple", "standard", "detailed"]
 MAX_QUIZ_QUESTIONS = 25
 
 
+# --- identity-text hygiene (F-005 / API-04) ------------------------------
+# Two classes are rejected, and only these two:
+#   * U+0000 -- not storable by PostgreSQL at all, so accepting one here is a
+#     500 on the production engine;
+#   * the bidi embedding/override/isolate controls (U+202A-U+202E,
+#     U+2066-U+2069) -- they let a value render as a different string in
+#     rosters, reports and generated PDFs.
+# Other C0/C1 characters stay allowed on purpose: PostgreSQL stores them, and
+# legacy rows and fixtures carry mis-encoded bytes that a blanket control-char
+# ban would start refusing (tests/test_auth_teacher.py registers such names).
+# Applied to identity/profile fields (names, emails, phones, invite codes,
+# school names). Free-text bodies -- chat turns, notes, feedback comments --
+# deliberately keep the whole range: bidirectional text is legitimate inside
+# prose and those surfaces quote content instead of rendering it as an
+# identity. Rejection is a 422 whose error type carries the stable code
+# ``invalid_characters``.
+_FORBIDDEN_IDENTITY_CHARS_RE = re.compile("[\u0000\u202a-\u202e\u2066-\u2069]")
+
+
+def reject_control_characters(value: str) -> str:
+    """Reject control and bidi-formatting characters in an identity field."""
+    if _FORBIDDEN_IDENTITY_CHARS_RE.search(value):
+        raise PydanticCustomError(
+            "invalid_characters",
+            "must not contain control or bidirectional formatting characters",
+        )
+    return value
+
+
+#: A user-identity string: name, email, phone or invite code.
+IdentityText = Annotated[str, AfterValidator(reject_control_characters)]
+
+#: Bangladesh mobile in local or E.164 form, with the separators a person
+#: actually types on a phone keypad (spaces, dashes, parentheses). Mirrors the
+#: recogniser in services/pii._MOBILE_RE: one shape for the guardian-contact
+#: channel and the PII redactor.
+_BD_MOBILE_RE = re.compile(r"(?:\+?880|0)(1[3-9]\d{8})")
+
+
+def canonical_guardian_phone(value: str) -> str:
+    """Canonicalise a hand-typed Bangladeshi mobile number (F-115).
+
+    Accepts ``01[3-9]XXXXXXXX`` and its ``+880``/``880`` E.164 spellings and
+    returns the local form, so storage, the mailer and the PII redactor all
+    see the same string. Anything else -- a landline, a foreign number, a
+    stray digit string -- is refused with the stable ``invalid_phone`` error
+    type; before this the field accepted any 32-character string, and the
+    number a guardian typed was never checked against the format the rest of
+    the pipeline recognises.
+    """
+    compact = re.sub(r"[\s\-()]+", "", value or "")
+    match = _BD_MOBILE_RE.fullmatch(compact)
+    if match is None:
+        raise PydanticCustomError(
+            "invalid_phone",
+            "must be a Bangladesh mobile number (01[3-9]XXXXXXXX or +8801[3-9]XXXXXXXX)",
+        )
+    return f"0{match.group(1)}"
+
+
 class QuizExplainContext(BaseModel):
     """quiz review context handed to the tutor for a wrong item."""
 
@@ -48,8 +140,8 @@ class QuizExplainContext(BaseModel):
 
 
 class AskRequest(BaseModel):
-    question: str = Field(min_length=3, max_length=1000)
-    class_level: int = Field(ge=1, le=12)
+    question: str = Field(min_length=3, max_length=1000, examples=["কোষ কী?"])
+    class_level: int = Field(ge=1, le=12, examples=[6])
     # Bounded to the columns these are written to (subject VARCHAR(60),
     # chapter VARCHAR(200)) and to what is sensible to interpolate into the
     # provider prompt. Unbounded, a long value was a 500 on PostgreSQL
@@ -74,6 +166,27 @@ class SourceRef(BaseModel):
     score: float
     # sanitized evidence excerpt shown in the source → evidence modal.
     excerpt: str | None = None
+    # F-082: digest of the corpus build this citation was retrieved from, so
+    # an answer can be traced to the corpus revision that produced it.
+    corpus_version: str | None = Field(
+        default=None,
+        description=(
+            "Corpus build digest the citation was retrieved from; the same "
+            "digest /admin/system/info reports for the served corpus."
+        ),
+    )
+
+
+#: Served description of every confidence value. F-119/LLM-10: the number is
+#: a retrieval heuristic, not a calibration result, and the OpenAPI contract
+#: must say so -- the web badge draws its label from this field, and a schema
+#: without the qualifier invites reading it as a probability.
+CONFIDENCE_FIELD_DESCRIPTION = (
+    "Retrieval-confidence heuristic (not a calibrated probability): a blend of "
+    "evidence breadth and source score computed at answer time. A high value "
+    "means the retrieved textbook evidence is strong, not that the answer is "
+    "measured correct."
+)
 
 
 class AskResponse(BaseModel):
@@ -84,8 +197,8 @@ class AskResponse(BaseModel):
     refused_reason: str | None = None
     # Soft post-generation signal that the answer leans on the cited evidence.
     citation_verified: bool | None = None
-    # honest numeric confidence (formula in services/safety).
-    confidence: float | None = None
+    # F-119: heuristic retrieval signal (formula in services/safety).
+    confidence: float | None = Field(default=None, description=CONFIDENCE_FIELD_DESCRIPTION)
 
 
 class ConversationCreate(BaseModel):
@@ -106,7 +219,7 @@ class MessageSearchHit(BaseModel):
     message_id: int
     role: str
     snippet: str
-    created_at: datetime
+    created_at: UtcDateTime
 
 
 class ConversationOut(BaseModel):
@@ -114,14 +227,14 @@ class ConversationOut(BaseModel):
     title: str | None
     # last explanation strategy (drives the 'আমি বুঝিন' re-teach cycle).
     last_strategy: str | None = None
-    created_at: datetime
+    created_at: UtcDateTime
     message_count: int = 0
 
 
 class ChatSendRequest(BaseModel):
-    message: str = Field(min_length=3, max_length=1000)
-    class_level: int | None = Field(default=None, ge=1, le=12)
-    subject: str | None = Field(default=None, max_length=60)
+    message: str = Field(min_length=3, max_length=1000, examples=["সালোকসংশ্লেষণ কীভাবে কাজ করে?"])
+    class_level: int | None = Field(default=None, ge=1, le=12, examples=[6])
+    subject: str | None = Field(default=None, max_length=60, examples=["science"])
     # optional chapter context chip.
     chapter: str | None = Field(default=None, max_length=200)
     # 'আমি বুঝিন' — force the next re-teach strategy for this turn.
@@ -146,11 +259,10 @@ class ChatMessageOut(BaseModel):
     refused_reason: str | None = None
     sources: list[SourceRef] = []
     rating: int | None = None
-    created_at: datetime
-    # honest numeric confidence (formula documented in
-    # main._answer_confidence). None for user turns / pre-wave answers read
-    # before this field existed is impossible -- it is always computed.
-    confidence: float | None = None
+    created_at: UtcDateTime
+    # F-119: heuristic retrieval signal (formula in services/safety), never a
+    # calibrated probability. None for user turns.
+    confidence: float | None = Field(default=None, description=CONFIDENCE_FIELD_DESCRIPTION)
 
 
 class FeedbackRequest(BaseModel):
@@ -159,7 +271,7 @@ class FeedbackRequest(BaseModel):
     # answer, and an aggregate that counts only -1/+1 is then correct rather
     # than incomplete. Tightening this to Literal[-1, 1] removes comment-only
     # feedback and breaks the coded 400 that a body with no target must get.
-    rating: int = Field(ge=-1, le=1)
+    rating: int = Field(ge=-1, le=1, examples=[1])
     message_id: int | None = None
     attempt_id: int | None = None
     comment: str | None = Field(default=None, max_length=500)
@@ -183,9 +295,11 @@ _EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
 
 
 class RegisterRequest(BaseModel):
-    email: str = Field(min_length=5, max_length=255, pattern=_EMAIL_PATTERN)
-    password: str = Field(min_length=8, max_length=128)
-    name: str = Field(min_length=2, max_length=120)
+    email: IdentityText = Field(
+        min_length=5, max_length=255, pattern=_EMAIL_PATTERN, examples=["parent@example.com"]
+    )
+    password: str = Field(min_length=8, max_length=128, examples=["correct horse battery"])
+    name: IdentityText = Field(min_length=2, max_length=120, examples=["Rahim Uddin"])
     role: Literal["student", "teacher", "parent"]
     class_level: int | None = Field(default=None, ge=1, le=12)
     # Parental/guardian consent is mandatory for student accounts (minors).
@@ -195,8 +309,17 @@ class RegisterRequest(BaseModel):
     # ValueError, which surfaced as an undocumented 422.
     guardian_consent: bool = False
     # optional guardian phone (parent role); stored encrypted when
-    # PII_ENC_KEY is configured.
-    phone: str | None = Field(default=None, max_length=32)
+    # PII_ENC_KEY is configured. Validated and canonicalised to the local
+    # 01[3-9]XXXXXXXX form (F-115); a blank string stays None.
+    phone: IdentityText | None = Field(default=None, max_length=32)
+
+    @field_validator("phone")
+    @classmethod
+    def _canonical_phone(cls, value: str | None) -> str | None:
+        stripped = (value or "").strip()
+        if not stripped:
+            return None
+        return canonical_guardian_phone(stripped)
 
 
 class RegisterResponse(BaseModel):
@@ -206,8 +329,8 @@ class RegisterResponse(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email: str = Field(min_length=5, max_length=255)
-    password: str = Field(min_length=1, max_length=128)
+    email: IdentityText = Field(min_length=5, max_length=255, examples=["parent@example.com"])
+    password: str = Field(min_length=1, max_length=128, examples=["correct horse battery"])
 
 
 class TokenResponse(BaseModel):
@@ -217,7 +340,7 @@ class TokenResponse(BaseModel):
 
 
 class ForgotPasswordRequest(BaseModel):
-    email: str = Field(min_length=5, max_length=255)
+    email: IdentityText = Field(min_length=5, max_length=255)
 
 
 class ResetPasswordRequest(BaseModel):
@@ -241,7 +364,7 @@ class ResendVerificationRequest(BaseModel):
     always answers 202 with a generic body to avoid account enumeration.
     """
 
-    email: str | None = Field(default=None, min_length=5, max_length=255)
+    email: IdentityText | None = Field(default=None, min_length=5, max_length=255)
 
 
 # --- pagination contract (M-08) ---------------------------------------------
@@ -425,7 +548,7 @@ class ConsentStatusOut(BaseModel):
     student_id: int
     current_version: str
     accepted_version: str | None
-    accepted_at: datetime | None
+    accepted_at: UtcDateTime | None
     needs_reconfirm: bool
 
 
@@ -455,7 +578,7 @@ class QuizStartRequest(BaseModel):
     subject: str | None = Field(default=None, max_length=60)
     # chapter preselect for the workspace "অনুশীলন" tab.
     chapter: str | None = Field(default=None, max_length=200)
-    num_questions: int = Field(default=5, ge=1, le=10)
+    num_questions: int = Field(default=5, ge=1, le=10, examples=[5])
 
 
 class QuizQuestionPublic(BaseModel):
@@ -516,7 +639,7 @@ class UserPublic(BaseModel):
     id: int
     email: str
     role: str
-    created_at: datetime
+    created_at: UtcDateTime
 
 
 class AuditRowOut(BaseModel):
@@ -524,7 +647,7 @@ class AuditRowOut(BaseModel):
     message content or PII -- only ids and outcome metadata."""
 
     id: int
-    created_at: datetime
+    created_at: UtcDateTime
     actor_user_id: int | None
     actor_role: str
     action: str
@@ -573,9 +696,9 @@ class FeedbackAdminRow(BaseModel):
     message_id: int | None
     attempt_id: int | None
     triaged: bool
-    triaged_at: datetime | None
+    triaged_at: UtcDateTime | None
     note: str | None
-    created_at: datetime
+    created_at: UtcDateTime
 
 
 class FeedbackQueuePage(BaseModel):
@@ -601,7 +724,7 @@ class StatusOut(BaseModel):
 
     status: str  # ok | degraded
     components: list[StatusComponent]
-    checked_at: datetime
+    checked_at: UtcDateTime
 
 
 class AdminOverview(BaseModel):
@@ -622,6 +745,31 @@ class ParentInviteLinkRequest(BaseModel):
     code: str = Field(min_length=8, max_length=128)
 
 
+class ParentInviteOut(BaseModel):
+    """A freshly issued guardian invite.
+
+    The plaintext code is returned exactly once; the id is the handle
+    ``DELETE /students/me/invite-code/{invite_id}`` revokes it by. Without
+    the id in the response revocation was unreachable (F-IV2-3).
+    """
+
+    id: int
+    code: str
+    expires_in_minutes: int
+
+
+class ParentInviteStatusOut(BaseModel):
+    """One live guardian invite as listed back to its student.
+
+    Codes and hashes are never returned here: the create response is the only
+    place the plaintext appears, so a list read cannot surface a stale secret.
+    """
+
+    id: int
+    created_at: UtcDateTime
+    expires_at: UtcDateTime
+
+
 class AdminUsersPage(BaseModel):
     total: int
     items: list[UserPublic]
@@ -634,7 +782,7 @@ class RefusalAuditOut(BaseModel):
     total_refusals: int
     by_reason: dict[str, int]
     by_class: dict[str, int]
-    last_refusal_at: datetime | None = None
+    last_refusal_at: UtcDateTime | None = None
 
 
 class ContinueLearning(BaseModel):
@@ -682,7 +830,7 @@ class ChapterProgressOut(BaseModel):
     read_pct: int
     completed: bool
     bookmarked: bool
-    updated_at: datetime | None = None
+    updated_at: UtcDateTime | None = None
 
 
 class ClassRoomOut(BaseModel):
@@ -764,7 +912,7 @@ class TeacherContentOut(ChapterContentKey):
 class ChapterContentVersionOut(ChapterContentKey):
     version: int
     source: str
-    created_at: datetime | None = None
+    created_at: UtcDateTime | None = None
     created_by: int | None = None
 
 
@@ -817,9 +965,9 @@ class QPOut(BaseModel):
     status: str  # draft | final
     questions: list[QPQuestion]
     meta: dict[str, object] = {}
-    reviewed_at: datetime | None = None
-    finalized_at: datetime | None = None
-    created_at: datetime | None = None
+    reviewed_at: UtcDateTime | None = None
+    finalized_at: UtcDateTime | None = None
+    created_at: UtcDateTime | None = None
 
 
 class QPReviewDecision(BaseModel):
@@ -867,7 +1015,7 @@ class ShortTestOut(BaseModel):
     duration_min: int
     questions: list[QuizQuestionPublic]
     attempts: list[dict[str, int]]
-    created_at: datetime | None = None
+    created_at: UtcDateTime | None = None
 
 
 class ShortTestMineOut(BaseModel):
@@ -879,8 +1027,8 @@ class ShortTestMineOut(BaseModel):
     num_questions: int
     duration_min: int
     questions: list[QuizQuestionPublic]
-    created_at: datetime | None = None
-    expires_at: datetime | None = None
+    created_at: UtcDateTime | None = None
+    expires_at: UtcDateTime | None = None
     expired: bool = False
 
 
@@ -947,7 +1095,7 @@ class SupportPlanOut(BaseModel):
     class_level: int
     focus_concepts: list[str]
     plan: dict[str, object]
-    created_at: datetime | None = None
+    created_at: UtcDateTime | None = None
 
 
 class AssignmentIn(BaseModel):
@@ -966,10 +1114,10 @@ class AssignmentOut(BaseModel):
     subject: str
     chapter: str
     num_questions: int
-    due_at: datetime
+    due_at: UtcDateTime
     questions: list[QuizQuestionPublic]
     attempts: list[dict[str, int]]
-    created_at: datetime | None = None
+    created_at: UtcDateTime | None = None
 
 
 class AssignmentProgressRow(BaseModel):
@@ -989,7 +1137,7 @@ class AssignmentMineOut(BaseModel):
     subject: str
     chapter: str
     questions: list[QuizQuestionPublic]
-    due_at: datetime
+    due_at: UtcDateTime
     overdue: bool
     done: bool
 
@@ -998,14 +1146,14 @@ class AssignmentMineOut(BaseModel):
 
 
 class SchoolCreateIn(BaseModel):
-    name: str = Field(min_length=2, max_length=200)
+    name: IdentityText = Field(min_length=2, max_length=200)
 
 
 class SchoolOut(BaseModel):
     id: int
     name: str
     code: str
-    created_at: datetime
+    created_at: UtcDateTime
 
 
 class SchoolInviteIn(BaseModel):
@@ -1017,17 +1165,17 @@ class SchoolInviteOut(BaseModel):
     school_id: int
     role: str
     code: str  # plaintext, returned exactly once
-    created_at: datetime
-    expires_at: datetime
+    created_at: UtcDateTime
+    expires_at: UtcDateTime
 
 
 class SchoolJoinIn(BaseModel):
     """Redeem a school invite code to create the staff account."""
 
-    invite_code: str = Field(min_length=4, max_length=64)
-    email: str = Field(min_length=5, max_length=255, pattern=_EMAIL_PATTERN)
+    invite_code: IdentityText = Field(min_length=4, max_length=64)
+    email: IdentityText = Field(min_length=5, max_length=255, pattern=_EMAIL_PATTERN)
     password: str = Field(min_length=8, max_length=128)
-    name: str = Field(min_length=2, max_length=120)
+    name: IdentityText = Field(min_length=2, max_length=120)
 
 
 class SchoolStaffOut(BaseModel):
@@ -1113,7 +1261,7 @@ class AdminSchoolStatsOut(BaseModel):
     id: int
     name: str
     code: str
-    created_at: datetime
+    created_at: UtcDateTime
     teachers: int
     classrooms: int
     students: int
@@ -1129,7 +1277,7 @@ class ContentVersionRowOut(BaseModel):
     current_version: int
     versions_total: int
     source: str  # ai | teacher (current version)
-    updated_at: datetime | None = None
+    updated_at: UtcDateTime | None = None
     updated_by_email: str | None = None
 
 
@@ -1140,9 +1288,9 @@ class SchoolInviteAdminOut(BaseModel):
     school_id: int
     role: str
     used: bool
-    created_at: datetime
-    used_at: datetime | None = None
-    expires_at: datetime | None = None
+    created_at: UtcDateTime
+    used_at: UtcDateTime | None = None
+    expires_at: UtcDateTime | None = None
 
 
 class KgGapOut(BaseModel):
@@ -1217,7 +1365,7 @@ class TeacherDocumentOut(BaseModel):
     chapter: str | None = None
     title: str
     payload: dict[str, Any] = {}
-    created_at: datetime | None = None
+    created_at: UtcDateTime | None = None
 
 
 class GenerateDocumentOut(TeacherDocumentOut):
@@ -1268,7 +1416,7 @@ class SavedNoteOut(BaseModel):
     body: str
     source: str
     source_ref: NoteSourceRef | None = None
-    created_at: datetime | None = None
+    created_at: UtcDateTime | None = None
 
 
 # --- notification feed -------------------------------------------------
@@ -1281,8 +1429,8 @@ class NotificationOut(BaseModel):
     code: str
     params: dict[str, Any] = {}
     link: str | None = None
-    read_at: datetime | None = None
-    created_at: datetime | None = None
+    read_at: UtcDateTime | None = None
+    created_at: UtcDateTime | None = None
 
 
 class NotificationListOut(BaseModel):
@@ -1312,8 +1460,8 @@ class AiJobOut(BaseModel):
     payload: dict[str, Any] = {}
     result: dict[str, Any] | None = None
     error: str | None = None
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
+    created_at: UtcDateTime | None = None
+    updated_at: UtcDateTime | None = None
 
 
 # --- teacher workload metric ------------------------------------------
@@ -1462,8 +1610,14 @@ class AdminAiQualityOut(BaseModel):
     refusals_by_reason: dict[str, int] = {}
     thumbs_up: int = 0
     thumbs_down: int = 0
-    # confidence < 0.5 under the documented formula (see main._answer_confidence)
-    low_confidence_count: int = 0
+    # confidence < 0.5 under the heuristic formula (services/safety.answer_confidence)
+    low_confidence_count: int = Field(
+        default=0,
+        description=(
+            "Answers whose heuristic retrieval-confidence fell below 0.5. "
+            "A triage counter, not a calibrated error rate."
+        ),
+    )
     # ChatMessage carries no model column -> always empty today (audit finding).
     by_model: dict[str, int] = {}
     # AI-002: estimated LLM spend (USD) over the same window, from ai_usage.

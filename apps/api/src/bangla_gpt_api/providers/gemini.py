@@ -25,12 +25,12 @@ import httpx
 from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.metrics import PROVIDER_LATENCY_SECONDS
 from bangla_gpt_api.providers.base import (
-    MAX_BACKOFF_SECONDS as _MAX_BACKOFF_SECONDS,
-)
-from bangla_gpt_api.providers.base import (
     ProviderError,
     ProviderSettings,
+    backoff_delay_seconds,
+    finish_stream,
     fit_timeout,
+    track_provider_health,
 )
 from bangla_gpt_api.services.context import get_current_context
 
@@ -180,6 +180,7 @@ class GeminiProvider:
             await self._http.aclose()
             self._http = None
 
+    @track_provider_health
     async def stream(
         self, prompt: str, *, system: str | None = None, image: dict | None = None
     ) -> AsyncIterator[str]:
@@ -212,25 +213,18 @@ class GeminiProvider:
                                 emitted_any = True
                                 chars += len(delta)
                                 yield delta
-                        if emitted:
-                            latency_ms = int((time.perf_counter() - start) * 1000)
-                            PROVIDER_LATENCY_SECONDS.labels(provider=self.name).observe(
-                                latency_ms / 1000
-                            )
-                            json_log(
-                                logger,
-                                logging.INFO,
-                                "gemini_stream",
-                                model=self.model,
-                                latency_ms=latency_ms,
-                                prompt_chars=len(prompt),
-                                answer_chars=chars,
-                                chunks=emitted,
-                                retries=attempt,
-                                **_context_log_fields(),
-                            )
-                            return
-                        raise ProviderError("Gemini stream produced no text")
+                        finish_stream(
+                            name="Gemini",
+                            event="gemini_stream",
+                            model=self.model,
+                            prompt_chars=len(prompt),
+                            answer_chars=chars,
+                            chunks=emitted,
+                            started=start,
+                            attempt=attempt,
+                            extra_fields=_context_log_fields(),
+                        )
+                        return
                     status = response.status_code
                     body = await response.aread()
             except httpx.HTTPError as exc:
@@ -245,17 +239,18 @@ class GeminiProvider:
                         else f"Gemini stream failed: {exc}"
                     )
                     raise ProviderError(detail) from exc
-                await asyncio.sleep(min(0.5 * (2**attempt), _MAX_BACKOFF_SECONDS))
+                await asyncio.sleep(backoff_delay_seconds(attempt))
                 attempt += 1
                 continue
 
             retryable = status in _RETRYABLE_STATUS
             if retryable and attempt < self._max_retries:
-                await asyncio.sleep(min(0.5 * (2**attempt), _MAX_BACKOFF_SECONDS))
+                await asyncio.sleep(backoff_delay_seconds(attempt))
                 attempt += 1
                 continue
             raise ProviderError(f"Gemini API error {status}: {_error_message_text(body)}")
 
+    @track_provider_health
     async def generate(
         self, prompt: str, *, system: str | None = None, image: dict | None = None
     ) -> str:
@@ -278,7 +273,7 @@ class GeminiProvider:
                         else f"Gemini request failed: {exc}"
                     )
                     raise ProviderError(detail) from exc
-                await asyncio.sleep(min(0.5 * (2**attempt), _MAX_BACKOFF_SECONDS))
+                await asyncio.sleep(backoff_delay_seconds(attempt))
                 attempt += 1
                 continue
 
@@ -305,7 +300,7 @@ class GeminiProvider:
 
             retryable = response.status_code in _RETRYABLE_STATUS
             if retryable and attempt < self._max_retries:
-                await asyncio.sleep(min(0.5 * (2**attempt), _MAX_BACKOFF_SECONDS))
+                await asyncio.sleep(backoff_delay_seconds(attempt))
                 attempt += 1
                 continue
             raise ProviderError(

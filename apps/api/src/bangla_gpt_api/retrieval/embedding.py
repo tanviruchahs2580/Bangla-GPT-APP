@@ -101,6 +101,11 @@ def build_embedder(settings: object) -> Embedder:
     is staging human input. Until then ``EMBEDDING_MODEL`` stays empty and
     this returns the local embedder; naming one without the backend wired is
     a configuration error, not a silent downgrade.
+
+    The embedder identity is checked against the corpus manifest
+    (F-129/RAG-11) when one is present: a corpus measured with embedder A and
+    served with embedder B has different vectors for the same chunks, so the
+    recorded retrieval numbers no longer describe the deployment.
     """
     model = str(getattr(settings, "embedding_model", "") or "").strip()
     if model:
@@ -108,4 +113,29 @@ def build_embedder(settings: object) -> Embedder:
             f"embedding model '{model}' requires the staging embedding backend "
             "(human input, R8); leave EMBEDDING_MODEL empty for the local vector lane"
         )
-    return HashingEmbedder()
+    embedder = HashingEmbedder()
+    _verify_embedder_identity(settings, embedder)
+    return embedder
+
+
+def _verify_embedder_identity(settings: object, embedder: Embedder) -> None:
+    """Refuse to serve a manifest-pinned corpus with a different embedder."""
+    from pathlib import Path
+
+    corpus_dir = str(getattr(settings, "nctb_corpus_dir", "") or "").strip()
+    if not corpus_dir:
+        return
+    from bangla_gpt_api.nctb.manifest import corpus_manifest_path, read_json
+    from bangla_gpt_api.retrieval.index_manifest import embedder_problems
+
+    manifest_path = corpus_manifest_path(Path(corpus_dir))
+    if not manifest_path.exists():
+        return
+    declared = (read_json(manifest_path).get("derived") or {}).get("embedder")
+    problems = embedder_problems(declared, name=embedder.name, dim=getattr(embedder, "dim", None))
+    if problems:
+        raise ProviderNotConfigured(
+            f"the corpus at {corpus_dir} was built and measured with a different "
+            f"embedder ({'; '.join(problems)}); the recorded retrieval numbers "
+            "would not describe this deployment"
+        )

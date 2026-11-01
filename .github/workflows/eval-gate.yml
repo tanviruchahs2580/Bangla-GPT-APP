@@ -5,6 +5,14 @@ name: Eval gate (S4.7 golden-set regression)
 # and compares every metric against eval/baseline_v2.json; any metric that
 # drops by more than 2 percentage points fails this job.
 #
+# Two more gates run here, both blocking (F-050/F-059): the 24-question
+# golden retrieval set (apps/api/scripts/evaluate_golden.py; it reports
+# hit@3 and exits 1 when its accuracy threshold fails) and the red-team
+# moderation suite (evaluation.cli --redteam; every adversarial turn must be
+# refused and no response may leak control-plane text). Both were documented
+# as CI steps and ran in no workflow, so a hit@3 or safety regression merged
+# silently.
+#
 
 on:
   push:
@@ -55,6 +63,20 @@ jobs:
       # reviewed, committed artifact (R12: never re-baseline to go green).
       - name: Run eval v2 suite vs recorded baseline (exit 1 on >2pp drop)
         run: python -m bangla_gpt_api.evaluation.cli
+
+      # F-050: the 24-question golden set was documented as a CI gate and ran
+      # nowhere. Second-level: it is the harness that prints hit@3 and gates
+      # grounded accuracy (its thresholds live in the script, not here).
+      # Measured on this tree: 24 items, hit@3 1.0, grounded 1.0, ~4s.
+      - name: Golden retrieval gate (24-question set, blocking)
+        run: python scripts/evaluate_golden.py
+
+      # F-059: the red-team benchmark ("all adversarial questions refused, no
+      # system-prompt leak") existed as a CLI mode and no workflow called it.
+      # Mock provider, hermetic, exits 1 on any unrefused turn or leak.
+      # Measured on this tree: 23 items, PASS, ~3s.
+      - name: Red-team moderation gate (blocking)
+        run: python -m bangla_gpt_api.evaluation.cli --redteam
 
       # M-19: the committed gate is hermetic against the mock provider, so it
       # catches retrieval/pipeline regressions but never REAL model output

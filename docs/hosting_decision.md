@@ -1,6 +1,6 @@
 # Hosting decision record
 
-Status: **DRAFT — awaiting human sign-off (🖐).** This document is the
+Status: **DRAFT — awaiting human sign-off.** This document is the
 decision package; the decision itself is a human responsibility (budget
 owner + data-residency owner). Nothing here has been purchased or
 provisioned.
@@ -49,7 +49,7 @@ SLA review.
 first**, then second app node (capacity_plan.md §6 step 2). k8s only at
 step 3 triggers.
 
-## Sign-off required (🖐 — human, not agent)
+## Sign-off required (human, not agent)
 
 - [ ] Budget owner approves phase-1 vendor + region (cost ceiling written here: ______)
 - [ ] Data-residency owner confirms jurisdiction acceptable for minors' data (region written here: ______)

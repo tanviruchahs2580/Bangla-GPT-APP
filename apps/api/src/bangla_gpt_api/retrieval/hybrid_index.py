@@ -12,13 +12,14 @@ documents the feature set and why each weight is what it is); a model-based
 reranker replaces exactly one stage of this pipeline when one is benchmarked.
 """
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 
 from bangla_gpt_api.curriculum.models import Chunk
 from bangla_gpt_api.retrieval.bm25 import BM25Index, Hit, indexable_text, tokenize
 from bangla_gpt_api.retrieval.embedding import Embedder, bengali_bigrams
 from bangla_gpt_api.retrieval.fusion import reciprocal_rank_fusion
 from bangla_gpt_api.retrieval.hybrid import light_stem, trigram_similarity
+from bangla_gpt_api.retrieval.normalize import normalize_nfkc
 from bangla_gpt_api.retrieval.query_analysis import (
     content_terms,
     coverage_weights,
@@ -221,6 +222,10 @@ class HybridIndex:
         top_k: int = 4,
         min_score: float = 0.0,
     ) -> list[Hit]:
+        # Every lane below (lexical, vector, rerank, the shared-Bangla-character
+        # gate) must see the same query string the corpus was built with; a
+        # ZWNJ or a decomposed য় must not change the hit set (F-104).
+        query = normalize_nfkc(query)
         candidate_k = max(top_k * _CANDIDATE_FACTOR, top_k + 1)
         bm25_hits = self.bm25.search(
             query,
@@ -274,12 +279,3 @@ class HybridIndex:
         ]
         ranked.sort(key=lambda hit: (-hit.score, hit.chunk.id))
         return ranked[:top_k]
-
-
-def iter_corpus_search(
-    index: BM25Index | HybridIndex,
-    queries: Iterable[str],
-    **filters: object,
-) -> list[list[Hit]]:
-    """Batch helper for the hit@k evaluation harness (keeps top_k explicit)."""
-    return [index.search(q, **filters) for q in queries]  # type: ignore[arg-type]

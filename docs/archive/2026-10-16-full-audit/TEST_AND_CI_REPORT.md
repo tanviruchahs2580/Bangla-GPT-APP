@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [../README.md](../README.md).
+
 # TEST & CI REPORT — Bangla GPT APP (2026-10-16)
 
 All commands were executed in this working tree. Logs are in `logs/`. Where a

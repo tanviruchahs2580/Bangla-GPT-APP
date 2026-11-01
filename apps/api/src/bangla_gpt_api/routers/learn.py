@@ -5,8 +5,7 @@ Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 """
 
 import logging
-from collections import defaultdict
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Annotated, Any, cast
 from urllib.parse import quote
 
@@ -22,22 +21,20 @@ from bangla_gpt_api.db.models import (
     ChapterProgress,
     ClassStudent,
     ClassTeacher,
-    DailyActivity,
     QuizAttempt,
     RevisionItem,
     Student,
     Teacher,
     User,
 )
+from bangla_gpt_api.retrieval.normalize import normalize_nfkc
 from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded, message
 from bangla_gpt_api.schemas import (
     SMALL_PAGE_DEFAULT_LIMIT,
     SMALL_PAGE_MAX_LIMIT,
-    ActivityDay,
     ActivitySummary,
     ChapterProgressIn,
     ChapterProgressOut,
-    ChapterStat,
     ContinueLearning,
     DashboardSummary,
     KgGapOut,
@@ -68,10 +65,11 @@ from bangla_gpt_api.services import (
     weakness,
 )
 from bangla_gpt_api.services.activity import (
+    activity_summary,
     dhaka_date,
-    heatmap_days,
+    graded_attempt_stats,
     record_activity,
-    streak_days,
+    sorted_chapter_stats,
 )
 from bangla_gpt_api.services.learn import (
     ChapterContentOut,
@@ -431,18 +429,7 @@ def get_progress(student_id: int, db: DbSession, user: CurrentUser) -> StudentPr
         .group_by(AnswerLog.chapter)
     ).all()
     stats: dict[str, list[int]] = {ch: [asked, int(correct or 0)] for ch, asked, correct in g_rows}
-    by_chapter = sorted(
-        (
-            ChapterStat(
-                chapter=chapter,
-                asked=asked,
-                correct=correct_count,
-                accuracy=round(100.0 * correct_count / asked, 2),
-            )
-            for chapter, (asked, correct_count) in stats.items()
-        ),
-        key=lambda s: s.accuracy,
-    )
+    by_chapter = sorted_chapter_stats(stats)
     weak_chapters = weakness.weak_names(db, student.id)
 
     return StudentProgress(
@@ -463,25 +450,7 @@ def get_activity(
 ) -> ActivitySummary:
     """streak + GitHub-style daily heatmap (Asia/Dhaka days)."""
     authorize_student_access(db, student_id, user)
-    today = dhaka_date(datetime.now(UTC))
-    rows = (
-        db.execute(
-            select(DailyActivity)
-            .where(DailyActivity.student_id == student_id)
-            .order_by(DailyActivity.date)
-        )
-        .scalars()
-        .all()
-    )
-    window = heatmap_days(list(rows), today, days)
-    anchor = date.fromisoformat(today)
-    date_axis = [(anchor - timedelta(days=i)).isoformat() for i in range(days - 1, -1, -1)]
-    active = {r.date for r in rows if (r.questions or r.quizzes or r.minutes)}
-    return ActivitySummary(
-        streak=streak_days(active, today),
-        today=today,
-        days=[ActivityDay(date=d, **c) for d, c in zip(date_axis, window, strict=True)],
-    )
+    return activity_summary(db, student_id, days)
 
 
 # ------------------------------------------------------------------
@@ -600,43 +569,29 @@ async def kg_rebuild(
 # ------------------------------------------------------------------
 
 
-@router.get("/search", response_model=SearchResponse)
-def global_search(
-    app_ctx: Ctx,
-    user: CurrentUser,
-    q: Annotated[str, Query(min_length=1, max_length=100)],
-) -> SearchResponse:
-    """one search box for the whole curriculum.
+def _subject_hits(chunks: list, query: str, limit: int = 3) -> list[SearchHit]:
+    """Subject entries whose slug or book title matches the query text.
 
-    Question-like queries set ``ask_action`` so the UI can offer the
-    ask-in-Tutor action; chapter and question-section hits are deduped
-    per chapter (the question hit is the more specific pointer).
+    Subject names are matched directly (not by relevance score), so they lead
+    the result list and are capped: a query that matches every subject is
+    served by the chapter/question hits below it.
+
+    The query folds through the shared normalizer (F-104, residual): the
+    retrieval lanes already fold ZWNJ/ZWJ and decomposed yya spellings, so a
+    subject query typed the same way as the other lanes must not be the one
+    lane that misses. The book title is folded on both sides for the same
+    reason -- it is Bangla text a student can type with either encoding.
     """
-    if app_ctx.index is None:
-        raise HTTPException(
-            status_code=503,
-            detail={"code": "index_unavailable", "message": "Curriculum index unavailable"},
-        )
-    query = q.strip()
-    if not query:
-        raise HTTPException(
-            status_code=422,
-            detail={"code": "empty_query", "message": "Query must not be blank"},
-        )
-    ask = _is_question_like(query)
-    hits = app_ctx.index.search(query, top_k=24, min_score=0.5)
-
+    norm = normalize_nfkc(query).casefold()
     out: list[SearchHit] = []
-    # Subject entries match the slug or the Bangla book title directly.
-    norm = query.casefold()
-    subjects_seen: set[str] = set()
-    for chunk in app_ctx.index.chunks:
+    seen: set[str] = set()
+    for chunk in chunks:
         slug = chunk.meta.subject
-        if slug in subjects_seen:
+        if slug in seen:
             continue
         book = chunk.meta.book or slug
-        if norm == slug.casefold() or norm in slug or norm in book.casefold():
-            subjects_seen.add(slug)
+        if norm == slug.casefold() or norm in slug or norm in normalize_nfkc(book).casefold():
+            seen.add(slug)
             out.append(
                 SearchHit(
                     kind="subject",
@@ -646,17 +601,26 @@ def global_search(
                     score=1000.0,
                 )
             )
-        if len(subjects_seen) >= 3:
+        if len(seen) >= limit:
             break
+    return out
 
-    def chapter_href(subject: str, chapter: str, class_level: int) -> str:
-        return f"/student/learn/{quote(subject)}/{quote(chapter)}?class={class_level}"
 
+def _chapter_href(subject: str, chapter: str, class_level: int) -> str:
+    return f"/student/learn/{quote(subject)}/{quote(chapter)}?class={class_level}"
+
+
+def _ranked_hits(hits: list, limit: int = 10) -> list[SearchHit]:
+    """Chapter and question-section hits, deduped per chapter and ranked.
+
+    The question hit is the more specific pointer, so a chapter that owns one
+    is represented by it alone.
+    """
     chapters: dict[tuple[str, str, int], SearchHit] = {}
     questions: dict[tuple[str, str, int, str], SearchHit] = {}
     for hit in hits:
         meta = hit.chunk.meta
-        href = chapter_href(meta.subject, meta.chapter, meta.class_level)
+        href = _chapter_href(meta.subject, meta.chapter, meta.class_level)
         section = meta.section or ""
         qkey = (meta.subject, meta.chapter, meta.class_level, section)
         if section and _is_question_like(section) and qkey not in questions:
@@ -683,7 +647,36 @@ def global_search(
         key=lambda h: h.score,
         reverse=True,
     )
-    out.extend(merged[:10])
+    return merged[:limit]
+
+
+@router.get("/search", response_model=SearchResponse)
+def global_search(
+    app_ctx: Ctx,
+    user: CurrentUser,
+    q: Annotated[str, Query(min_length=1, max_length=100)],
+) -> SearchResponse:
+    """one search box for the whole curriculum.
+
+    Question-like queries set ``ask_action`` so the UI can offer the
+    ask-in-Tutor action; chapter and question-section hits are deduped
+    per chapter (the question hit is the more specific pointer).
+    """
+    if app_ctx.index is None:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "index_unavailable", "message": "Curriculum index unavailable"},
+        )
+    query = q.strip()
+    if not query:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "empty_query", "message": "Query must not be blank"},
+        )
+    ask = _is_question_like(query)
+    hits = app_ctx.index.search(query, top_k=24, min_score=0.5)
+    out = _subject_hits(app_ctx.index.chunks, query)
+    out.extend(_ranked_hits(hits))
     return SearchResponse(query=query, ask_action=ask, hits=out)
 
 
@@ -713,60 +706,84 @@ def dashboard_summary(
     return summary
 
 
+QUICK_ACTIONS: tuple[QuickAction, ...] = (
+    QuickAction(label="পাঠ্যবই পড়ুন", to="/student/learn", icon="book"),
+    QuickAction(label="AI-কে প্রশ্ন করুন", to="/student/tutor", icon="zap"),
+    QuickAction(label="কুইজ দিন", to="/student/quiz", icon="graduation"),
+)
+
+
+def _continue_learning(graded: list[QuizAttempt]) -> ContinueLearning | None:
+    """Last graded attempt's first question chapter, when it names one."""
+    if not graded:
+        return None
+    # Attempts with no created_at sort last. The sentinel is naive on
+    # purpose: created_at is stored as naive UTC throughout this codebase
+    # (SQLite has no timezone type), so an aware sentinel would raise
+    # TypeError on comparison instead of sorting.
+    last = sorted(graded, key=lambda a: a.created_at or datetime.min, reverse=True)[0]
+    if not last.quiz_json:
+        return None
+    first = last.quiz_json[0] if isinstance(last.quiz_json, list) and last.quiz_json else None
+    if not (first and isinstance(first, dict) and first.get("chapter")):
+        return None
+    return ContinueLearning(
+        subject=last.subject,
+        chapter=first["chapter"],
+        class_level=last.class_level,
+        excerpt=first.get("question_text", "")[:120],
+    )
+
+
+def _recommendation(graded: list[QuizAttempt], weak: list[str]) -> Recommendation | None:
+    """Weak-chapter practice first, a general nudge when there is any history."""
+    if weak:
+        subject = next(
+            (
+                a.subject
+                for a in graded
+                if a.quiz_json
+                and any(q.get("chapter") == weak[0] for q in a.quiz_json if isinstance(q, dict))
+            ),
+            None,
+        )
+        return Recommendation(
+            type="weak_quiz",
+            subject=subject or "science",
+            chapter=weak[0],
+            reason="দুর্বল অধ্যায়",
+        )
+    if graded:
+        return Recommendation(type="general", reason="নতুন কুইজ চেষ্টা করুন")
+    return None
+
+
 def _build_dashboard_summary(app_ctx: Ctx, db: Session, user: User, today: str) -> DashboardSummary:
     me = _build_me_response(app_ctx, db, user)
-    quick_actions = [
-        QuickAction(label="পাঠ্যবই পড়ুন", to="/student/learn", icon="book"),
-        QuickAction(label="AI-কে প্রশ্ন করুন", to="/student/tutor", icon="zap"),
-        QuickAction(label="কুইজ দিন", to="/student/quiz", icon="graduation"),
-    ]
     if user.role != "student":
         return DashboardSummary(
             user=me,
             today=today,
             continue_learning=None,
-            quick_actions=quick_actions,
+            quick_actions=list(QUICK_ACTIONS),
             recommendation=None,
             progress=None,
         )
-    # Student progress (reuse logic minimally)
     student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one_or_none()
     if student is None:
         return DashboardSummary(
             user=me,
             today=today,
-            quick_actions=quick_actions,
+            quick_actions=list(QUICK_ACTIONS),
             recommendation=None,
             progress=None,
         )
-    # Compute progress
     attempts = (
         db.execute(select(QuizAttempt).where(QuizAttempt.student_id == student.id)).scalars().all()
     )
     graded = [a for a in attempts if a.status == "graded"]
-    stats: dict[str, list[int]] = defaultdict(lambda: [0, 0])
-    if graded:
-        rows = (
-            db.execute(select(AnswerLog).where(AnswerLog.attempt_id.in_([a.id for a in graded])))
-            .scalars()
-            .all()
-        )
-        for r in rows:
-            stats[r.chapter][0] += 1
-            stats[r.chapter][1] += r.is_correct
-    by_chapter = sorted(
-        (
-            ChapterStat(chapter=k, asked=v[0], correct=v[1], accuracy=round(100.0 * v[1] / v[0], 2))
-            for k, v in stats.items()
-        ),
-        key=lambda s: s.accuracy,
-    )
+    by_chapter, avg_score = graded_attempt_stats(db, graded)
     weak = weakness.weak_names(db, student.id)
-    avg_score = (
-        round(sum(a.score_pct for a in graded if a.score_pct is not None) / len(graded), 2)
-        if graded
-        else None
-    )
     progress = StudentProgress(
         student=StudentResponse(id=student.id, name=student.name, class_level=student.class_level),
         attempts_graded=len(graded),
@@ -774,48 +791,12 @@ def _build_dashboard_summary(app_ctx: Ctx, db: Session, user: User, today: str) 
         by_chapter=by_chapter,
         weak_chapters=weak,
     )
-    # Continue: last graded attempt's first question chapter
-    continue_learning = None
-    if graded:
-        # Attempts with no created_at sort last. The sentinel is naive on
-        # purpose: created_at is stored as naive UTC throughout this codebase
-        # (SQLite has no timezone type), so an aware sentinel would raise
-        # TypeError on comparison instead of sorting.
-        never = datetime.min
-        last = sorted(graded, key=lambda a: a.created_at or never, reverse=True)[0]
-        if last.quiz_json:
-            first = (
-                last.quiz_json[0] if isinstance(last.quiz_json, list) and last.quiz_json else None
-            )
-            if first and isinstance(first, dict) and first.get("chapter"):
-                continue_learning = ContinueLearning(
-                    subject=last.subject,
-                    chapter=first["chapter"],
-                    class_level=last.class_level,
-                    excerpt=first.get("question_text", "")[:120],
-                )
-    # Recommendation: weak first, else general
-    recommendation = None
-    if weak:
-        # Find subject for weak chapter via last attempt or default science
-        subj = None
-        for a in graded:
-            if a.quiz_json and any(
-                q.get("chapter") == weak[0] for q in a.quiz_json if isinstance(q, dict)
-            ):
-                subj = a.subject
-                break
-        recommendation = Recommendation(
-            type="weak_quiz", subject=subj or "science", chapter=weak[0], reason="দুর্বল অধ্যায়"
-        )
-    elif graded:
-        recommendation = Recommendation(type="general", reason="নতুন কুইজ চেষ্টা করুন")
     return DashboardSummary(
         user=me,
         today=today,
-        continue_learning=continue_learning,
-        quick_actions=quick_actions,
-        recommendation=recommendation,
+        continue_learning=_continue_learning(graded),
+        quick_actions=list(QUICK_ACTIONS),
+        recommendation=_recommendation(graded, weak),
         progress=progress,
     )
 
@@ -835,7 +816,11 @@ def get_learn_progress(
         q = q.where(ChapterProgress.subject == subject)
     if class_level:
         q = q.where(ChapterProgress.class_level == class_level)
-    rows = db.execute(q.order_by(ChapterProgress.updated_at.desc())).scalars().all()
+    rows = (
+        db.execute(q.order_by(ChapterProgress.updated_at.desc(), ChapterProgress.id.desc()))
+        .scalars()
+        .all()
+    )
     return [
         ChapterProgressOut(
             subject=r.subject,

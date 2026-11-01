@@ -32,6 +32,9 @@ class _FakePaginator:
         self._pages = pages
 
     def paginate(self, Bucket, Prefix):  # noqa: N803 - boto3 kwarg names
+        # boto3 passes both by keyword; the fake serves its canned pages and
+        # the values are part of the call contract, not the behaviour.
+        _ = (Bucket, Prefix)
         return self._pages
 
 

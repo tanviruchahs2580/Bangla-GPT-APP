@@ -7,7 +7,7 @@
  */
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import MePage from "../pages/student/MePage";
@@ -97,6 +97,26 @@ describe("me-page report suggestion", () => {
     await waitFor(() => expect(document.body.textContent).toContain(expected));
     expect(document.body.textContent).not.toContain("{chapters}");
     expect(document.body.textContent).toContain("কোষ, শ্বসন");
+  });
+
+  // F-021: a failed report fetch used to unmount the whole report section —
+  // including the weekly/monthly control — with no explanation.
+  it("surfaces a failed report instead of dropping the section", async () => {
+    apiMock.getMyReport.mockRejectedValue(new Error("boom"));
+    apiMock.get.mockResolvedValue(null);
+
+    renderPage();
+
+    const title = await screen.findByText(t("myReportTitle"), undefined, {
+      timeout: 8000,
+    });
+    const section = title.closest(".card") as HTMLElement;
+    expect(await within(section).findByRole("alert")).toHaveTextContent(
+      t("errorGeneric"),
+    );
+    expect(
+      within(section).getByRole("button", { name: t("retry") }),
+    ).toBeInTheDocument();
   });
 
   it("has copy for every server-supplied note code", () => {

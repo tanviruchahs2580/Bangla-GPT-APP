@@ -35,4 +35,3 @@ live_evidence
 # Docs and tests are not build inputs
 *.md
 src/test
-run_web_tests.ps1

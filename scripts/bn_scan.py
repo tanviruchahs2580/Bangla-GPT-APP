@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """bn_scan.py - read-only Bangla text hygiene scanner.
 
 Copied verbatim from Appendix C.3 of the audit prompt. Lives in the sandbox
@@ -8,17 +7,37 @@ Usage (Windows):
   git ls-files | python bn_scan.py --list-from-stdin
 Every hit is a CANDIDATE for review. Never auto-fix prose from this output (AH-21).
 """
+
 import re
 import sys
 import unicodedata
 from collections import Counter
 from pathlib import Path
 
-TEXT_EXT = {".py", ".ts", ".tsx", ".js", ".jsx", ".json", ".md", ".txt", ".html", ".css",
-            ".yml", ".yaml", ".toml", ".csv", ".sql", ".po", ".ini", ".cfg", ".svg"}
+TEXT_EXT = {
+    ".py",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".json",
+    ".md",
+    ".txt",
+    ".html",
+    ".css",
+    ".yml",
+    ".yaml",
+    ".toml",
+    ".csv",
+    ".sql",
+    ".po",
+    ".ini",
+    ".cfg",
+    ".svg",
+}
 MAX_BYTES = 5_000_000
-BN = "\u0980-\u09ff"   # Bengali block
-ZW = "\u200c\u200d"    # ZWNJ, ZWJ
+BN = "\u0980-\u09ff"  # Bengali block
+ZW = "\u200c\u200d"  # ZWNJ, ZWJ
 TOKEN = f"[A-Za-z0-9{BN}{ZW}]"
 
 CHECKS = {
@@ -54,7 +73,7 @@ def scan(path: Path, totals: Counter) -> None:
                 if name != "MIXED_SCRIPT_TOKEN":
                     ch = m.group(0).strip()[-1:] or m.group(0)[-1:]
                     label = f"U+{ord(ch):04X} {unicodedata.name(ch, 'UNNAMED')}"
-                ctx = line[max(0, m.start() - 12): m.end() + 12]
+                ctx = line[max(0, m.start() - 12) : m.end() + 12]
                 print(f"{path}:{lineno}:{m.start() + 1}  {name}  {label}  | {ctx}")
 
 

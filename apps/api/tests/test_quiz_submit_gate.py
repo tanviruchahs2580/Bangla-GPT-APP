@@ -19,7 +19,7 @@ The gate now splits at submissions:
   roster) is a coded 403 -- that is the forgery case this gate exists
   for;
 * self-registered students stay invisible to teachers entirely (the F-04
-  wall answers ``other_school`` before this gate is reached), unchanged.
+  wall answers ``student_not_found`` before this gate is reached, F-144).
 
 Bengali literals are Unicode escapes only (house rule for API tests).
 """
@@ -211,8 +211,10 @@ def test_self_registered_student_stays_walled_from_teachers(
         json={"answers": [0] * len(started.json()["questions"])},
         headers=teacher_headers,
     )
-    assert res.status_code == 403
-    assert res.json()["detail"]["code"] == "other_school"
+    # F-144: the tenancy wall answers 404 student_not_found, the same
+    # shape a nonexistent id gets.
+    assert res.status_code == 404
+    assert res.json()["detail"]["code"] == "student_not_found"
     # and the student's own submission is unaffected
     own = client.post(
         f"/quizzes/{started.json()['attempt_id']}/submit",

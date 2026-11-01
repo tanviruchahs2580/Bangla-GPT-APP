@@ -1,0 +1,55 @@
+name: Feature request
+description: Propose a change in behaviour for students, teachers, parents or operators
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the problem before the solution. Anything touching children's
+        data, AI answers or moderation should say what safety impact you
+        expect; the project's launch gates live in
+        `docs/LAUNCH_READINESS_CHECKLIST.md`.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is hard or impossible today, and for whom (role, class level, language)?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: The behaviour you want. If it changes an API response or a DB column, say so.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other ways to solve the same problem, and why you prefer the proposal.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Tutor / RAG / AI answers
+        - Student or teacher workflow
+        - Parent or school-admin workflow
+        - Bangla i18n / accessibility
+        - Operations / deploy / monitoring
+        - Documentation / developer experience
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmations
+      options:
+        - label: I searched existing issues and pull requests for this.
+          required: true
+        - label: This does not include real children's data.
+          required: true

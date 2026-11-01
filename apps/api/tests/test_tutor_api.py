@@ -252,7 +252,7 @@ def test_chat_turn_failure_leaves_no_dangling_user_message(tmp_path) -> None:
             json={"title": "যাচাই"},
             headers=headers,
         )
-        assert conv.status_code in (200, 201), conv.text
+        assert conv.status_code == 201, conv.text
         conv_id = conv.json()["id"]
 
         res = client.post(

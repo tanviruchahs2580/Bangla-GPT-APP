@@ -32,7 +32,7 @@ from sqlalchemy import delete, func, select
 
 from bangla_gpt_api.db.models import Concept, ConceptMastery, ConceptPrerequisite
 
-if TYPE_CHECKING:  # pragma: no cover
+if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
 
     from sqlalchemy.orm import Session

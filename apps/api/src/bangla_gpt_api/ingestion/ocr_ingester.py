@@ -74,27 +74,3 @@ def ocr_image_to_text(
             out_base.with_suffix(".txt").write_text("[fixture]", encoding="utf-8")
             runner(command)
         return out_base.with_suffix(".txt").read_text(encoding="utf-8")
-
-
-def ingest_pdf_via_ocr(
-    pdf_path: str | Path,
-    render_pages: Callable[[Path, int], list[Path]],
-    *,
-    lang: str = "ben",
-    dpi: int = 200,
-) -> list[str]:
-    """OCR every rendered page of a PDF.
-
-    ``render_pages(pdf_path, dpi)`` must return page-image paths; wiring a
-    concrete renderer (pdf2image/poppler or pdfium) stays an explicit,
-    documented step because rendering tooling differs per platform.
-    """
-    assert_ingest_permission()
-    pdf = Path(pdf_path)
-    if not pdf.exists():
-        raise FileNotFoundError(pdf)
-    pages: list[str] = []
-    for image in render_pages(pdf, dpi):
-        text = ocr_image_to_text(image, lang=lang)
-        pages.append(text)
-    return pages

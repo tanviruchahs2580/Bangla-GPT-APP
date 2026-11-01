@@ -11,11 +11,26 @@
 # check_readme_contract.py and check_i18n.py need the full apps/web tree and
 # so stay in CI only.
 #
+# GIT-10/F-099 (pre-commit parity): mypy, eslint, prettier and gitleaks now
+# run on `git push` (the pre-push stage), which is where their environment
+# exists. Each needs the project's own toolchain -- the repo venv,
+# apps/web's node_modules, the gitleaks binary -- which an isolated
+# pre-commit hook env cannot provide without duplicating the api/web CI
+# jobs; the system-language hooks below use the developer's environment
+# instead, and the file-hygiene/ruff hooks keep running on every commit.
+# CI stays the authority for all four (the api/web jobs run the tools
+# directly, the guardrails job runs gitleaks over the full clone), so the
+# pre-push stage is local feedback, never the gate. A machine without one of
+# the tools fails that hook with a clear "command not found" rather than
+# silently skipping it.
+#
 # CI enforcement: `.github/workflows/ci.yml` (guardrails job) runs
 # `pre-commit run --all-files` against the pinned revision below, so a tree
-# that violates this file cannot merge. Keep the two in step.
+# that violates this file cannot merge. Keep the two in step. That command
+# runs the default pre-commit stage only, so the pre-push hooks above cannot
+# break a runner that does not have the tools installed.
 
-default_install_hook_types: [pre-commit]
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -23,17 +38,19 @@ repos:
     hooks:
       - id: check-added-large-files
         args: [--maxkb=512]
+      - id: check-json
       - id: check-merge-conflict
+      - id: check-toml
       - id: check-yaml
       - id: end-of-file-fixer
       - id: mixed-line-ending
         args: [--fix=lf]
-        # .gitattributes pins *.ps1 to CRLF (`*.ps1 text eol=crlf`, for the
-        # Windows PowerShell helpers under apps/web) and .editorconfig agrees
-        # ([*.{bat,ps1}] end_of_line = crlf), so --fix=lf was rewriting
-        # apps/web/run_web_tests.ps1 to LF on every run and contradicting a
-        # checked-in attribute. The attribute file wins; this hook keeps
-        # normalising every other text file to LF. (T-040b)
+        # .gitattributes pins *.ps1 to CRLF (`*.ps1 text eol=crlf`) and
+        # .editorconfig agrees ([*.{bat,ps1}] end_of_line = crlf), so --fix=lf
+        # rewrote a checked-in PowerShell helper to LF on every run and
+        # contradicted the attribute. The attribute file wins; this hook keeps
+        # normalising every other text file to LF. The exclusion stays for the
+        # next .ps1 that lands (none is tracked today). (T-040b)
         exclude: \.ps1$
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
@@ -47,6 +64,48 @@ repos:
         files: ^(apps/api/(src|tests|scripts)/|scripts/)
       - id: ruff-format
         files: ^apps/api/(src|tests|scripts)/
+
+  # Conventional Commit subjects, so the history a release tool reads stays
+  # machine-parseable. Runs on the commit-msg stage (installed by default,
+  # see default_install_hook_types above); it never runs under
+  # `pre-commit run --all-files`, which is a file-based pass.
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.5.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+
+  # The four environment-dependent checks (GIT-10/F-099). System-language
+  # local hooks on the pre-push stage: they use the developer's venv,
+  # node_modules and gitleaks binary exactly as CI does, so a failure here is
+  # the same result the pipeline will produce. See the header for why they
+  # are not commit-stage hooks.
+  - repo: local
+    hooks:
+      - id: gitleaks-history
+        name: gitleaks (full history, redacted)
+        language: system
+        entry: gitleaks git --no-banner --redact
+        pass_filenames: false
+        stages: [pre-push]
+      - id: mypy-api
+        name: mypy (apps/api)
+        language: system
+        entry: bash -c 'cd apps/api && if [ -x ../../.venv/Scripts/python.exe ]; then exec ../../.venv/Scripts/python.exe -m mypy src; else exec ../../.venv/bin/python -m mypy src; fi'
+        pass_filenames: false
+        stages: [pre-push]
+      - id: eslint-web
+        name: eslint (apps/web, zero warnings)
+        language: system
+        entry: bash -c 'cd apps/web && exec npx --no-install eslint src --max-warnings 0'
+        pass_filenames: false
+        stages: [pre-push]
+      - id: prettier-web
+        name: prettier (apps/web)
+        language: system
+        entry: bash -c 'cd apps/web && exec npx --no-install prettier --check src'
+        pass_filenames: false
+        stages: [pre-push]
 
 # Exclusions for generated corpora, eval fixtures and the frozen docs archive.
 #

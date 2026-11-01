@@ -1,0 +1,12 @@
+# FE-18: the browser support matrix, kept in step with `build.target` in
+# vite.config.ts. The product's primary hardware is entry-level Android
+# running Chrome 100-era WebViews plus school desktops; Firefox 100 and
+# Safari 15 are the floors for the desktop and iOS lanes.
+#
+# Used by tooling that reads browserslist (autoprefixer, babel) and as the
+# documented matrix the three-engine Playwright pass exercises.
+chrome >= 100
+firefox >= 100
+safari >= 15
+edge >= 100
+not dead

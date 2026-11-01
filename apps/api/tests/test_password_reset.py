@@ -326,6 +326,29 @@ def _bearer(client: TestClient, email: str, password: str = PASSWORD) -> dict:
     return {"Authorization": f"Bearer {res.json()['access_token']}"}
 
 
+def _bearer_minted_in_the_past(
+    client: TestClient, email: str, monkeypatch: pytest.MonkeyPatch
+) -> dict:
+    """Login with the token clock pinned an hour back (F-161).
+
+    The F-05 epoch comparison is integer-second, so these tests used to sleep
+    1.1s to cross a second boundary. Minting the token with a past ``iat``
+    makes "issued before the rotation" deterministic with no wall-clock wait;
+    only the iat source is patched, never the clock the rotation stamp reads.
+    """
+    from bangla_gpt_api.auth import security
+
+    class _PastClock:
+        @staticmethod
+        def time() -> float:
+            return time.time() - 3600
+
+    monkeypatch.setattr(security, "time", _PastClock)
+    headers = _bearer(client, email)
+    monkeypatch.setattr(security, "time", time)
+    return headers
+
+
 def _register_student(client: TestClient, email: str = "kid@example.com") -> dict:
     res = client.post(
         "/auth/register",
@@ -342,13 +365,14 @@ def _register_student(client: TestClient, email: str = "kid@example.com") -> dic
     return res.json()
 
 
-def test_change_password_revokes_older_tokens(client: TestClient) -> None:
+def test_change_password_revokes_older_tokens(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _register_student(client)
-    old = _bearer(client, "kid@example.com")
+    # second-precision epoch boundary: the old token's iat second must be
+    # strictly earlier than the rotation second (injected, not slept for).
+    old = _bearer_minted_in_the_past(client, "kid@example.com", monkeypatch)
     assert client.get("/users/me", headers=old).status_code == 200
-    # second-precision epoch boundary: make sure the old token's iat second
-    # is strictly earlier than the rotation second
-    time.sleep(1.1)
 
     res = client.post(
         "/auth/change-password",
@@ -371,13 +395,12 @@ def test_change_password_revokes_older_tokens(client: TestClient) -> None:
 
 
 def test_password_reset_revokes_older_tokens(
-    client: TestClient, caplog: pytest.LogCaptureFixture
+    client: TestClient, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _register_student(client, "kid2@example.com")
-    old = _bearer(client, "kid2@example.com")
-    # second-precision epoch boundary: the old token must be from an
-    # earlier second than the rotation
-    time.sleep(1.1)
+    # second-precision epoch boundary: the old token must be from an earlier
+    # second than the rotation (injected, not slept for).
+    old = _bearer_minted_in_the_past(client, "kid2@example.com", monkeypatch)
 
     token = _capture_reset_token(client, "kid2@example.com", caplog)
     res = client.post("/auth/reset", json={"token": token, "new_password": "reset-pass-12"})

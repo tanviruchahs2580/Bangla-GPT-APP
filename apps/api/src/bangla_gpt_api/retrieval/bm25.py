@@ -10,6 +10,7 @@ from bangla_gpt_api.retrieval.hybrid import (
     trigram_jaccard,
     trigram_ngrams,
 )
+from bangla_gpt_api.retrieval.normalize import normalize_nfkc
 from bangla_gpt_api.retrieval.query_analysis import english_gloss_terms, is_stop_word
 from bangla_gpt_api.retrieval.vocabulary import CorpusVocabulary
 
@@ -99,6 +100,11 @@ class BM25Index:
         top_k: int = 4,
         min_score: float = 0.0,
     ) -> list[Hit]:
+        # One normalization at the query boundary (F-104): the tokenizer and
+        # the trigram lane both fold through the shared normalizer, so a word
+        # typed with a zero-width joiner or in the decomposed য় form ranks
+        # like the word the corpus was ingested with.
+        query = normalize_nfkc(query)
         raw_terms = tokenize(query)
         query_terms = expand_query(
             [light_stem(t) for t in raw_terms],

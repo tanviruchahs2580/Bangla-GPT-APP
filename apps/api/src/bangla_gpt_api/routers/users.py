@@ -10,7 +10,9 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException, Request, Response
 from sqlalchemy import func, select
 
+from bangla_gpt_api.auth import impersonation
 from bangla_gpt_api.auth.security import verify_password
+from bangla_gpt_api.caching import CacheUnavailable
 from bangla_gpt_api.db.models import (
     Parent,
     ParentStudentLink,
@@ -41,6 +43,7 @@ from .deps import (
     _build_me_response,
     authorize_student_access,
     forbid_impersonation,
+    revocation_store_unavailable,
 )
 
 router = APIRouter(responses=AUTH_GUARD_RESPONSES)
@@ -59,13 +62,23 @@ def read_me(app_ctx: Ctx, db: DbSession, user: CurrentUser) -> MeResponse:
 
 
 @router.post("/users/me/sessions/revoke", status_code=204)
-def revoke_my_sessions(db: DbSession, user: CurrentUser) -> Response:
+def revoke_my_sessions(
+    app_ctx: Ctx, request: Request, db: DbSession, user: CurrentUser
+) -> Response:
     """Sign out EVERYWHERE (S-011): stamps the token epoch, so every
     outstanding bearer token of this account fails the F-05 epoch check on
     its next request. DB-backed, so it holds even when the shared cache is
     unreachable and survives restarts — the account-wide counterpart to
     POST /auth/logout (which ends exactly one session).
+
+    Refused from an impersonated session (F-146 scope limit): revoking the
+    account's sessions is a destructive account-state change that outlives
+    the 15-minute support window. Ending the ADMIN session also ends the
+    impersonation windows it opened (the jti index in
+    ``auth.impersonation``), which is why the presented token's jti is read
+    here.
     """
+    forbid_impersonation(request)
     user.sessions_invalidated_at = datetime.now(UTC)
     write_audit(
         db,
@@ -76,6 +89,27 @@ def revoke_my_sessions(db: DbSession, user: CurrentUser) -> Response:
         detail={},
     )
     db.commit()
+    # F-146: an account-wide revoke is the strongest "end this session"
+    # there is, so the impersonation windows this session opened must not
+    # survive it. Strict: a store outage must not answer 204 while an
+    # impersonated token keeps working.
+    claims = getattr(request.state, "jwt_claims", None) or {}
+    jti = claims.get("jti")
+    if isinstance(jti, str) and jti and claims.get("imp") is not True:
+        try:
+            ended = impersonation.revoke_session(app_ctx.cache, admin_jti=jti)
+        except CacheUnavailable as exc:
+            raise revocation_store_unavailable() from exc
+        if ended:
+            write_audit(
+                db,
+                action="impersonation",
+                actor_user_id=user.id,
+                actor_role=user.role,
+                target=f"user:{user.id}",
+                detail={"phase": "session_end", "revoked_sessions": ended},
+            )
+            db.commit()
     return Response(status_code=204)
 
 

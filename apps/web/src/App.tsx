@@ -23,6 +23,8 @@ import { AppShell } from "./AppShell";
 import { Skeleton } from "./components/ui";
 import { RouteErrorBoundary } from "./components/AppErrorBoundary";
 import { PublicLanguageToggle } from "./components/PublicLanguageToggle";
+import { SkipLink } from "./components/SkipLink";
+import { UpdateBanner } from "./components/UpdateBanner";
 import { onLangChange, t } from "./i18n";
 
 const LoginPage = lazy(() => import("./pages/LoginPage"));
@@ -62,6 +64,8 @@ const ParentDashboard = lazy(() => import("./pages/ParentDashboard"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const SchoolDashboard = lazy(() => import("./pages/SchoolDashboard"));
 const StatusPage = lazy(() => import("./pages/StatusPage"));
+const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
+const MaintenancePage = lazy(() => import("./pages/MaintenancePage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -182,7 +186,10 @@ function RoutesSwitch() {
   return (
     <>
       {/* I18N-12: an anonymous visitor sees these pages without AppShell, so
-          the language switch has to be rendered here or not at all. */}
+          the language switch has to be rendered here or not at all. A11Y-02:
+          the same is true of the skip link, which must be the first focusable
+          element on the public routes too. */}
+      {!me && <SkipLink />}
       {!me && <PublicLanguageToggle />}
       <Routes>
         <Route path="/" element={<Navigate to={home} replace />} />
@@ -259,6 +266,15 @@ function RoutesSwitch() {
           element={
             <RouteErrorBoundary>
               <StatusPage />
+            </RouteErrorBoundary>
+          }
+        />
+        {/* UX-06: the deployment rewrites to this route during a window. */}
+        <Route
+          path="/maintenance"
+          element={
+            <RouteErrorBoundary>
+              <MaintenancePage />
             </RouteErrorBoundary>
           }
         />
@@ -385,7 +401,14 @@ function RoutesSwitch() {
           }
         />
 
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route
+          path="*"
+          element={
+            <RouteErrorBoundary>
+              <NotFoundPage />
+            </RouteErrorBoundary>
+          }
+        />
       </Routes>
     </>
   );
@@ -393,8 +416,8 @@ function RoutesSwitch() {
 
 function App() {
   // I18N: a language switch re-renders this component IN PLACE. The elements
-  // below are recreated on every render, so every t() call re-evaluates in
-  // the new language while every mounted component keeps its state. The
+  // below are recreated on every render, so every t() call re-evaluates in the
+  // new language while every mounted component keeps its state. The
   // previous shape keyed a wrapper by a counter, which REMOUNTED the whole
   // tree: switching language mid-quiz discarded the in-progress attempt, a
   // streaming tutor answer was aborted, and half-filled forms reset — all
@@ -405,12 +428,27 @@ function App() {
   return (
     <BrowserRouter>
       <DocumentTitle tick={langTick} />
+      <ScrollToTop />
       <Suspense fallback={<Loading />}>
         <RoutesSwitch />
         <Footer />
       </Suspense>
+      <UpdateBanner />
     </BrowserRouter>
   );
+}
+
+/**
+ * UX-09: a bottom-nav tap from a long page used to mount the next route at
+ * the previous scroll offset. An instant jump to the top on every pathname
+ * change — no animation, so reduced-motion users see the same behaviour.
+ */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
 }
 
 /** Per-route document titles, longest prefix first. */
@@ -428,6 +466,7 @@ const ROUTE_TITLES: Array<[string, Parameters<typeof t>[0]]> = [
   ["/register", "register"],
   ["/forgot", "resetTitle"],
   ["/status", "statusPage"],
+  ["/maintenance", "apiUnreachableTitle"],
   ["/privacy", "privacy"],
   ["/terms", "terms"],
 ];

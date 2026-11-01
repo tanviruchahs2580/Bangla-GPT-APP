@@ -22,7 +22,11 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[3]
+from bangla_gpt_api.providers.base import LLM_TOTAL_BUDGET_SECONDS, WORKER_TIMEOUT_SECONDS
+
+# This file lives at apps/api/eval/parked_specs/, four levels below the repo
+# root (parked_specs -> eval -> api -> apps -> root).
+ROOT = Path(__file__).resolve().parents[4]
 COMPOSE = ROOT / "docker-compose.yml"
 API_DOCKERFILE = ROOT / "Dockerfile"
 WEB_DOCKERFILE = ROOT / "apps" / "web" / "Dockerfile"
@@ -118,15 +122,28 @@ def test_api_dockerfile_healthcheck_uses_ready() -> None:
     assert "/health'" not in _text(API_DOCKERFILE)
 
 
-def test_api_dockerfile_worker_timeout_exceeds_worst_case_generation() -> None:
-    """gunicorn SIGKILLs a worker past --timeout.
+def test_api_dockerfile_worker_timeout_fits_the_llm_budget_clamp() -> None:
+    """gunicorn SIGKILLs a worker past --timeout, taking every concurrent
+    request on that worker with it.
 
-    LLM_TIMEOUT_SECONDS (30) x LLM_MAX_RETRIES (2) plus backoff already exceeds
-    the old 60s, so a slow but healthy generation could be killed mid-answer.
+    The earlier version of this test demanded --timeout >= 120 because the
+    naive LLM budget (30s x 3 attempts + backoff = 91.5s) could exceed the
+    old 60s. F-080 fixed the cause instead: providers clamp the per-attempt
+    timeout so the whole chain fits LLM_TOTAL_BUDGET_SECONDS (45s), and the
+    boot guard (main._validate_llm_budget) refuses to start when the clamped
+    worst case reaches WORKER_TIMEOUT_SECONDS (60s). The container's
+    --timeout must therefore be at least the worker timeout the app assumes,
+    or a slow-but-healthy generation is killed mid-answer.
     """
+    assert LLM_TOTAL_BUDGET_SECONDS < WORKER_TIMEOUT_SECONDS, (
+        "the clamp budget must sit below the worker timeout it protects"
+    )
     text = _text(API_DOCKERFILE)
     timeout = int(re.search(r"--timeout (\d+)", text).group(1))
-    assert timeout >= 120, f"worker timeout {timeout}s is shorter than the LLM budget"
+    assert timeout >= WORKER_TIMEOUT_SECONDS, (
+        f"worker timeout {timeout}s is shorter than the app's assumed "
+        f"WORKER_TIMEOUT_SECONDS ({WORKER_TIMEOUT_SECONDS:.0f}s)"
+    )
 
 
 def test_api_dockerfile_declares_version_and_revision_labels() -> None:

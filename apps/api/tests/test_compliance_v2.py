@@ -187,7 +187,9 @@ def test_retention_real_sweep_deletes_expired_and_audits_counts_only(pair) -> No
     _register(client, "s58real@example.com")
     old_conv_id = _seed_expired(factory)
 
-    res = client.post("/admin/maintenance/purge", headers=_admin_headers(client))
+    res = client.post(
+        "/admin/maintenance/purge", params={"confirm": "true"}, headers=_admin_headers(client)
+    )
     assert res.status_code == 200
     body = res.json()
     assert body["dry_run"] is False

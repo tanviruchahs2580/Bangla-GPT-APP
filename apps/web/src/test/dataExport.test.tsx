@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -14,6 +14,16 @@ const apiMock = vi.hoisted(() => ({
   patch: vi.fn(),
   del: vi.fn(),
   generateInviteCode: vi.fn(),
+  // The page reads its sections through these wrappers. They are mocked with
+  // benign payloads so a test that fails ONE call (the export) still exercises
+  // the other sections' happy path: since F-021 every failed section renders a
+  // retryable LoadError, and a blanket `null` mock would make the page look
+  // like four simultaneous outages rather than the single export failure the
+  // test is about.
+  getMyPrefs: vi.fn(),
+  getMyMemory: vi.fn(),
+  getNotes: vi.fn(),
+  getMyReport: vi.fn(),
   apiBase: "/api",
 }));
 
@@ -60,8 +70,18 @@ describe("data export button (BUG-2 regression)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authMock.useAuth.mockReturnValue({ me, signOut: vi.fn() });
+    apiMock.getMyPrefs.mockResolvedValue({
+      memory_enabled: true,
+      learning_prefs: { explanation_style: "standard", subject_focus: "" },
+    });
+    apiMock.getMyMemory.mockResolvedValue({ memory_enabled: true, facts: [] });
+    apiMock.getNotes.mockResolvedValue([]);
+    apiMock.getMyReport.mockResolvedValue(null);
     apiMock.get.mockImplementation((path: string) => {
       if (path === "/users/me/export") return Promise.resolve(EXPORT_PAYLOAD);
+      if (path.endsWith("/activity")) {
+        return Promise.resolve({ days: [], streak: 0, minutes: 0 });
+      }
       return Promise.resolve(null);
     });
     // jsdom does not implement blob URLs; stub the object-URL round-trip.
@@ -90,13 +110,24 @@ describe("data export button (BUG-2 regression)", () => {
   it("surfaces a friendly error when the export call fails", async () => {
     apiMock.get.mockImplementation((path: string) => {
       if (path === "/users/me/export") return Promise.reject(new Error("nope"));
+      if (path.endsWith("/activity")) {
+        return Promise.resolve({ days: [], streak: 0, minutes: 0 });
+      }
       return Promise.resolve(null);
     });
     renderPage();
-    await userEvent.click(await screen.findByText(t("exportData")));
-    expect(
-      await screen.findByText(friendlyError("nope").text),
-    ).toBeInTheDocument();
+    const exportButton = await screen.findByText(t("exportData"));
+    await userEvent.click(exportButton);
+    // Scoped to the export card: the same generic copy can legitimately appear
+    // in other sections' LoadError blocks, and the assertion here is about the
+    // export path specifically.
+    const exportCard = exportButton.closest(".card") as HTMLElement;
+    expect(exportCard).not.toBeNull();
+    await waitFor(() =>
+      expect(
+        within(exportCard).getByText(friendlyError("nope").text),
+      ).toBeInTheDocument(),
+    );
     expect(URL.createObjectURL).not.toHaveBeenCalled();
   });
 });

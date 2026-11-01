@@ -9,12 +9,15 @@ import logging
 import secrets
 import time
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import jwt as pyjwt
 from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
+from bangla_gpt_api.auth import impersonation
 from bangla_gpt_api.auth.mfa import new_secret, otpauth_uri, verify_code
 from bangla_gpt_api.auth.security import (
     _burn_password_check,
@@ -23,6 +26,7 @@ from bangla_gpt_api.auth.security import (
     hash_password,
     is_common_password,
     needs_rehash,
+    password_length_problem,
     verify_password,
 )
 from bangla_gpt_api.auth.single_use import claim_single_use, fetch_by_hash
@@ -57,10 +61,11 @@ from bangla_gpt_api.schemas import (
     TokenResponse,
     VerifyEmailRequest,
 )
-from bangla_gpt_api.security import PiiKeyUnconfigured, encrypt_pii_strict
+from bangla_gpt_api.security import PiiKeyUnconfigured, encrypt_pii_strict, write_audit
 from bangla_gpt_api.services.mailer import send_mail, smtp_configured
 from bangla_gpt_api.services.verification import send_verification_email
 
+from .common import request_language
 from .deps import (
     CONSENT_VERSION,
     BearerCredentials,
@@ -97,6 +102,11 @@ LOGIN_LOCKED_CODE = "account_locked"
 # cool-down would break it. 5/hour absorbs every legitimate flow (a lost
 # first mail, a typo fix, one retry) while capping the bomb.
 _MAIL_QUOTA_PER_ADDRESS_PER_HOUR = 5
+#: The rolling window that quota is counted over. Named (F-195): the TTL and
+#: the count in ``_MAIL_QUOTA_PER_ADDRESS_PER_HOUR`` are one rule, and a
+#: future tuning change must move both or the bound silently means
+#: something else.
+_MAIL_QUOTA_WINDOW_SECONDS = 3600.0
 
 
 def _address_mail_quota_allows(app_ctx: Ctx, email: str, kind: str) -> bool:
@@ -109,7 +119,7 @@ def _address_mail_quota_allows(app_ctx: Ctx, email: str, kind: str) -> bool:
     """
     key = f"mailq:{kind}:{email.strip().lower()}"
     try:
-        count = int(app_ctx.cache.incr(key, ttl=3600.0))
+        count = int(app_ctx.cache.incr(key, ttl=_MAIL_QUOTA_WINDOW_SECONDS))
     except CacheUnavailable:
         return True
     except Exception:  # pragma: no cover - defensive, same posture as above
@@ -146,11 +156,22 @@ def _encrypt_guardian_phone(app_ctx: Ctx, phone: str | None) -> str | None:
 
 
 @router.post(
-    "/auth/register", response_model=RegisterResponse, status_code=201, responses=coded(409)
+    "/auth/register",
+    response_model=RegisterResponse,
+    status_code=201,
+    responses={
+        **coded(409),
+        202: {
+            "description": (
+                "Generic accepted envelope; returned instead of 201/409 when "
+                "REGISTRATION_EMAIL_CONFLICT=generic (F-143)"
+            )
+        },
+    },
 )
 def register(
     app_ctx: Ctx, request: Request, payload: RegisterRequest, db: DbSession
-) -> RegisterResponse:
+) -> RegisterResponse | Response:
     # Student accounts need a class level and recorded guardian consent. The
     # schema cannot express "required only when role is student", so the rule
     # lives here as a documented 409 (conflict with the account's required
@@ -172,10 +193,17 @@ def register(
                     "message": "guardian_consent is required when role is 'student'",
                 },
             )
-    _reject_common_password(payload.password)
+    _enforce_password_policy(app_ctx.settings, payload.password)
+    # F-143: under the generic policy the route never states whether the
+    # address is new -- a taken address is acknowledged with the same 202
+    # envelope the success path returns, and nothing is created or mailed.
+    generic_conflict = app_ctx.settings.registration_email_conflict == "generic"
     email = payload.email.strip().lower()
     existing = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if existing is not None:
+        if generic_conflict:
+            json_log(logger, logging.INFO, "register_email_conflict", policy="generic")
+            return JSONResponse(status_code=202, content={"status": "accepted"})
         raise HTTPException(
             status_code=409,
             detail={"code": "email_taken", "message": "Email already registered"},
@@ -196,6 +224,11 @@ def register(
         db.flush()
     except IntegrityError as exc:
         db.rollback()
+        if generic_conflict:
+            # Concurrent registration won the race against the same address:
+            # under the generic policy that is the same non-answer as above.
+            json_log(logger, logging.INFO, "register_email_conflict", policy="generic")
+            return JSONResponse(status_code=202, content={"status": "accepted"})
         raise HTTPException(
             status_code=409,
             detail={"code": "email_taken", "message": "Email already registered"},
@@ -224,7 +257,19 @@ def register(
     db.add(profile)
     db.commit()
     if not verified:
-        send_verification_email(db, app_ctx.settings, user)
+        # F-107: the copy follows the language the client asked for; an
+        # absent or unsupported tag keeps the shipped bilingual mail.
+        send_verification_email(
+            db,
+            app_ctx.settings,
+            user,
+            lang=request_language(request.headers.get("accept-language")),
+        )
+    if generic_conflict:
+        # Success answers the same envelope the taken-address branch does;
+        # the 201 RegisterResponse (and its auto-login shape) belongs to the
+        # default policy.
+        return JSONResponse(status_code=202, content={"status": "accepted"})
     return RegisterResponse(user_id=user.id, role=user.role, profile_id=profile.id)
 
 
@@ -273,6 +318,7 @@ def verify_email(app_ctx: Ctx, payload: VerifyEmailRequest, db: DbSession) -> To
 @router.post("/auth/resend-verification", status_code=202)
 def resend_verification(
     app_ctx: Ctx,
+    request: Request,
     db: DbSession,
     credentials: BearerCredentials,
     payload: ResendVerificationRequest | None = None,
@@ -299,7 +345,13 @@ def resend_verification(
         target = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
     if target is not None and smtp_configured(app_ctx.settings) and not target.email_verified:
         if _address_mail_quota_allows(app_ctx, target.email, "verify"):
-            send_verification_email(db, app_ctx.settings, target)
+            # F-107: same language contract as /auth/register.
+            send_verification_email(
+                db,
+                app_ctx.settings,
+                target,
+                lang=request_language(request.headers.get("accept-language")),
+            )
         else:
             # Quota: the 202 body is identical either way (enumeration-safe);
             # only the SMTP send is withheld. Logged for ops visibility.
@@ -331,6 +383,17 @@ def _lock_remaining_seconds(user: User, now: datetime) -> int | None:
     if remaining <= 0:
         return None
     return max(1, int(remaining))
+
+
+def _hashed_email(email: str) -> str:
+    """Stable pseudonym for a login-failure log line (F-056).
+
+    The raw address is PII and the repo's redaction conventions strip it from
+    logs anyway; a truncated SHA-256 lets an operator confirm "this was the
+    account I think it was" by hashing a candidate, without the log sink ever
+    holding the address itself.
+    """
+    return hashlib.sha256(email.strip().lower().encode()).hexdigest()[:16]
 
 
 def _record_failed_login(db: DbSession, user_id: int, now: datetime) -> int:
@@ -393,6 +456,16 @@ def login(app_ctx: Ctx, response: Response, payload: LoginRequest, db: DbSession
     # way, against a fixed decoy hash.
     if user is None:
         _burn_password_check(payload.password)
+        # F-056/SEC-15: a failed sign-in against an unknown address wrote no
+        # trace at all, so credential stuffing was invisible to operators.
+        # Ids/counts/hashes only -- the raw email never reaches the log sink.
+        json_log(
+            logger,
+            logging.WARNING,
+            "login_failed",
+            reason="unknown_email",
+            email_sha256=_hashed_email(email),
+        )
         raise HTTPException(
             status_code=401,
             detail={"code": "bad_credentials", "message": "Incorrect email or password"},
@@ -405,6 +478,13 @@ def login(app_ctx: Ctx, response: Response, payload: LoginRequest, db: DbSession
     # response time of a locked account in the same band as a normal login.
     lock_remaining = _lock_remaining_seconds(user, now)
     if lock_remaining is not None:
+        json_log(
+            logger,
+            logging.WARNING,
+            "login_refused_locked",
+            user_id=user.id,
+            retry_after_seconds=lock_remaining,
+        )
         raise HTTPException(
             status_code=429,
             detail={
@@ -419,7 +499,27 @@ def login(app_ctx: Ctx, response: Response, payload: LoginRequest, db: DbSession
         # progressive lock. The response body stays exactly the same as for
         # an unknown address (and as before this change). The count itself is
         # atomic in the database — see ``_record_failed_login``.
-        _record_failed_login(db, user.id, now)
+        failed_count = _record_failed_login(db, user.id, now)
+        # F-056/SEC-15: the DB counter is reset to 0 by the next successful
+        # sign-in, so without a log line a brute force against one account
+        # left nothing greppable for detection or incident review.
+        json_log(
+            logger,
+            logging.WARNING,
+            "login_failed",
+            reason="bad_credentials",
+            user_id=user.id,
+            failed_count=failed_count,
+        )
+        if failed_count >= _LOGIN_LOCKOUT_THRESHOLD:
+            json_log(
+                logger,
+                logging.WARNING,
+                "account_locked",
+                user_id=user.id,
+                failed_count=failed_count,
+                lock_seconds=_lockout_seconds(failed_count),
+            )
         raise HTTPException(
             status_code=401,
             detail={"code": "bad_credentials", "message": "Incorrect email or password"},
@@ -460,7 +560,7 @@ def login(app_ctx: Ctx, response: Response, payload: LoginRequest, db: DbSession
 
 
 @router.post("/auth/logout", status_code=204, responses=coded(400))
-def logout(app_ctx: Ctx, request: Request, user: CurrentUser) -> None:
+def logout(app_ctx: Ctx, request: Request, db: DbSession, user: CurrentUser) -> None:
     """End THIS session now (S-011).
 
     The presented token's jti is parked in the fail-closed revocation store
@@ -470,6 +570,14 @@ def logout(app_ctx: Ctx, request: Request, user: CurrentUser) -> None:
     per-session kill switch). Every token carries a jti; one that does not
     is a legacy mint and is refused — silently accepting it would let a
     caller believe a session was ended when it was not.
+
+    F-146: the namespace must match the token's claims. An impersonation
+    token is checked against ``imp_revoke:`` in ``get_current_user``, so
+    writing ``revoke:`` for it answered 204 while the token kept working —
+    a dishonest sign-out. The matching namespace is written, and any
+    impersonation window this admin session OPENED is ended with it (the
+    support window is a subset of the session that authorised it). The
+    implicit end is audited, so the trail shows why those tokens stopped.
     """
     claims = getattr(request.state, "jwt_claims", None) or {}
     jti = claims.get("jti")
@@ -483,7 +591,21 @@ def logout(app_ctx: Ctx, request: Request, user: CurrentUser) -> None:
     # Strict (F-08 discipline): returning 204 while the write failed would
     # claim an end that did not happen.
     try:
-        app_ctx.cache.set_json_strict(f"revoke:{jti}", True, ttl)
+        if claims.get("imp") is True:
+            app_ctx.cache.set_json_strict(f"imp_revoke:{jti}", True, ttl)
+        else:
+            app_ctx.cache.set_json_strict(f"revoke:{jti}", True, ttl)
+            ended = impersonation.revoke_session(app_ctx.cache, admin_jti=jti)
+            if ended:
+                write_audit(
+                    db,
+                    action="impersonation",
+                    actor_user_id=user.id,
+                    actor_role=user.role,
+                    target=f"user:{user.id}",
+                    detail={"phase": "session_end", "revoked_sessions": ended},
+                )
+                db.commit()
     except CacheUnavailable as exc:
         raise revocation_store_unavailable() from exc
 
@@ -617,6 +739,24 @@ def _reject_common_password(password: str) -> None:
         )
 
 
+def _enforce_password_policy(settings: Any, password: str) -> None:
+    """The documented policy: length floor plus the blocklist (SEC-02).
+
+    Named separately from ``_reject_common_password`` so a new credential
+    entry point cannot pick up one half of the policy and miss the other.
+    The only structural rule is length (NIST SP 800-63B-4 s3.1.1.2 forbids
+    composition rules), and the floor comes from Settings so an operator can
+    raise it to the single-factor 15 without touching code.
+    """
+    _reject_common_password(password)
+    problem = password_length_problem(password, minimum=settings.password_min_length)
+    if problem is not None:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "password_too_short", "message": problem},
+        )
+
+
 @router.post("/auth/forgot", status_code=202)
 def forgot_password(app_ctx: Ctx, payload: ForgotPasswordRequest, db: DbSession) -> dict:
     """Start a password reset.
@@ -708,7 +848,7 @@ def reset_password(app_ctx: Ctx, payload: ResetPasswordRequest, db: DbSession) -
             status_code=400,
             detail={"code": "invalid_token", "message": "Invalid or expired reset token"},
         )
-    _reject_common_password(payload.new_password)
+    _enforce_password_policy(app_ctx.settings, payload.new_password)
     user.password_hash = hash_password(payload.new_password)
     user.must_change_password = False
     # F-05: rotate the token epoch — every access token issued in an
@@ -726,8 +866,18 @@ def reset_password(app_ctx: Ctx, payload: ResetPasswordRequest, db: DbSession) -
     responses={**AUTH_GUARD_RESPONSES, **message(400), **coded(409)},
 )
 def change_password(
-    app_ctx: Ctx, payload: ChangePasswordRequest, db: DbSession, user: CurrentUser
+    app_ctx: Ctx,
+    request: Request,
+    payload: ChangePasswordRequest,
+    db: DbSession,
+    user: CurrentUser,
 ) -> TokenResponse:
+    # F-146 scope limit: a credential change is not available from a support
+    # session. The impersonated window is 15 minutes and read-shaped, the
+    # new password outlives it, and the token epoch rotation would end every
+    # session the account holder is using -- a visiting admin must not be
+    # able to do either.
+    forbid_impersonation(request)
     if not verify_password(payload.current_password, user.password_hash):
         raise HTTPException(
             status_code=400,
@@ -741,7 +891,7 @@ def change_password(
                 "message": "New password must differ from the current one",
             },
         )
-    _reject_common_password(payload.new_password)
+    _enforce_password_policy(app_ctx.settings, payload.new_password)
     now = datetime.now(UTC).replace(tzinfo=None)
     user.password_hash = hash_password(payload.new_password)
     user.must_change_password = False

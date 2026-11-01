@@ -39,7 +39,7 @@ changes its date is worse than no register.
 
 Advisory data is refreshed by:
 
-```
+```bash
 python -m pip_audit -r apps/api/constraints.txt
 npm audit --audit-level=high --omit=dev --prefix apps/web
 ```

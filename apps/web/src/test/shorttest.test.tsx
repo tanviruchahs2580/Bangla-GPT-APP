@@ -167,4 +167,43 @@ describe("short test assignment card", () => {
       ),
     );
   });
+
+  // F-021: an empty classroom <select> and an empty "recent tests" list after a
+  // failed query looked exactly like a teacher with no classes and no tests.
+  it("surfaces a failed classroom query instead of an empty picker", async () => {
+    apiMock.get.mockImplementation((path: string) =>
+      path === "/teacher/classrooms"
+        ? Promise.reject(new Error("boom"))
+        : Promise.resolve(null),
+    );
+    renderPage();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(t("errorGeneric"));
+    expect(
+      screen.getByRole("button", { name: t("retry") }),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText(t("classrooms"))).toBeNull();
+  });
+
+  it("surfaces a failed short-test list instead of 'nothing assigned'", async () => {
+    apiMock.get.mockImplementation((path: string) =>
+      path === "/teacher/shorttests"
+        ? Promise.reject(new Error("boom"))
+        : Promise.resolve(
+            path === "/teacher/classrooms"
+              ? structuredClone(ROOMS)
+              : path.endsWith("/roster")
+                ? structuredClone(ROSTER)
+                : null,
+          ),
+    );
+    renderPage();
+
+    await screen.findByLabelText(t("classrooms"));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      t("errorGeneric"),
+    );
+    expect(screen.queryByText(t("stEmpty"))).toBeNull();
+  });
 });

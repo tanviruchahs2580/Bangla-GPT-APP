@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability (private)
+    url: https://github.com/tanviruchahs2580/Bangla-GPT-APP/security/advisories/new
+    about: Do not open a public issue for a vulnerability. SECURITY.md describes the scope and response targets.
+  - name: Contributing, CI and merge conventions
+    url: https://github.com/tanviruchahs2580/Bangla-GPT-APP/blob/main/CONTRIBUTING.md
+    about: Read this before opening a pull request.
+  - name: Documentation index
+    url: https://github.com/tanviruchahs2580/Bangla-GPT-APP/blob/main/docs/README.md
+    about: Living docs (architecture, runbook, deployment, AI system card).

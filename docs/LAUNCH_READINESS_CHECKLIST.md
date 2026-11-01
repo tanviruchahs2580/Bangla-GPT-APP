@@ -26,8 +26,11 @@
 - [ ] **Moderation red-team sign-off**: run through
       `tests/test_product_v3.py::test_unsafe_questions_get_supportive_refusal`
       categories manually in staging; document any gaps found with Gemini live.
-- [ ] **Helpline accuracy**: verify the mental-health helpline number shown in
-      self-harm refusals (`services/safety.py`) is current.
+- [ ] **Helpline accuracy**: the self-harm refusal copy (`services/safety.py`)
+      now shows only the numbers the Directorate General of Health Services
+      publishes itself (16263, 999), with the source URLs and retrieval date in
+      the code comment. Confirm both numbers are still current; the owner can
+      add a mental-health line by extending `SAFE_HELPLINES` with its source.
 
 ## 2. UAT with real users (1 school, 20–50 students)
 
@@ -36,8 +39,8 @@
 - [ ] Each student: ask 5 curriculum questions, take 2 quizzes, check progress.
 - [ ] Teacher: assign quiz from dashboard; read class analytics.
 - [ ] Parent: redeem invite code; view child progress.
-- [ ] Collect structured feedback (👍👎 counts in DB `feedback` table +
-      one 15-minute interview per teacher).
+- [ ] Collect structured feedback (positive/negative counts in the DB
+      `feedback` table + one 15-minute interview per teacher).
 - [ ] Exit criteria: ≥80% "understood the answer" on grounded responses;
       zero P0/P1 defects open.
 

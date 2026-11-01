@@ -8,11 +8,20 @@
 """
 
 import logging
+import math
 import time
 from collections import defaultdict, deque
 from typing import Protocol, cast
 
 logger = logging.getLogger(__name__)
+
+#: Both backends count in one-minute windows.
+WINDOW_SECONDS = 60.0
+
+#: Per-socket Redis deadlines. A limiter backend that answers slowly must
+#: not hold the request open: the fallback posture (fail-open/closed) is
+#: decided the moment the backend misses this bound.
+REDIS_SOCKET_TIMEOUT_SECONDS = 1.0
 
 
 class RateLimitBackendError(RuntimeError):
@@ -22,6 +31,14 @@ class RateLimitBackendError(RuntimeError):
 class RateLimiter(Protocol):
     def check(self, key: str, limit: int) -> bool:
         """Return True when the request is allowed under ``limit``/minute."""
+        ...
+
+    def retry_after(self, key: str) -> int:
+        """Seconds until a request rejected right now may be retried.
+
+        Used to fill the ``Retry-After`` header on a 429 so a throttled
+        client waits instead of polling (API-05). Always at least 1.
+        """
         ...
 
 
@@ -40,7 +57,7 @@ class MemoryRateLimiter:
     def _evict(self, now: float) -> None:
         if len(self._hits) < self._max_keys:
             return
-        stale = [k for k, dq in self._hits.items() if not dq or now - dq[-1] >= 60.0]
+        stale = [k for k, dq in self._hits.items() if not dq or now - dq[-1] >= WINDOW_SECONDS]
         for k in stale:
             del self._hits[k]
         # Make room for the key about to be inserted so len never exceeds
@@ -54,12 +71,29 @@ class MemoryRateLimiter:
         now = time.monotonic()
         self._evict(now)
         hits = self._hits[key]
-        while hits and now - hits[0] >= 60.0:
+        while hits and now - hits[0] >= WINDOW_SECONDS:
             hits.popleft()
         if len(hits) >= limit:
             return False
         hits.append(now)
         return True
+
+    def retry_after(self, key: str) -> int:
+        """Seconds until the oldest hit leaves the sliding window.
+
+        The window admits a new request as soon as the hit that made it full
+        expires, so the wait is measured from that oldest hit. A key with no
+        live hits is not throttled and gets the floor value.
+        """
+        now = time.monotonic()
+        hits = self._hits.get(key)
+        if hits is None:
+            return 1
+        while hits and now - hits[0] >= WINDOW_SECONDS:
+            hits.popleft()
+        if not hits:
+            return 1
+        return max(1, math.ceil(hits[0] + WINDOW_SECONDS - now))
 
 
 class RedisRateLimiter:
@@ -68,7 +102,10 @@ class RedisRateLimiter:
 
         self._fail_open = fail_open
         self._redis: redis.Redis = redis.Redis.from_url(
-            url, socket_connect_timeout=1.0, socket_timeout=1.0, decode_responses=True
+            url,
+            socket_connect_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
+            socket_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
+            decode_responses=True,
         )
 
     def check(self, key: str, limit: int) -> bool:
@@ -88,6 +125,10 @@ class RedisRateLimiter:
             if self._fail_open:
                 return True
             raise RateLimitBackendError("Redis rate-limit backend unreachable") from None
+
+    def retry_after(self, key: str) -> int:
+        """Seconds until the fixed window rolls over."""
+        return max(1, math.ceil(60 - time.time() % 60))
 
 
 def build_limiter(settings) -> RateLimiter:  # noqa: ANN001 (Settings import cycle)

@@ -20,6 +20,24 @@ def test_memory_limiter_enforces_window() -> None:
     assert limiter.check("other", 3) is True
 
 
+def test_memory_limiter_retry_after_counts_down_the_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Retry-After is measured from the oldest hit that filled the window."""
+    clock = {"t": 1_000.0}
+    monkeypatch.setattr("bangla_gpt_api.ratelimit.time.monotonic", lambda: clock["t"])
+    limiter = MemoryRateLimiter()
+    assert limiter.retry_after("k") == 1  # nothing recorded: floor value
+    assert limiter.check("k", 1) is True
+    clock["t"] += 0.25
+    assert limiter.check("k", 1) is False
+    assert limiter.retry_after("k") == 60  # ceil(60 - 0.25)
+    clock["t"] += 30.0
+    assert limiter.retry_after("k") == 30
+    clock["t"] += 30.0  # past the window: the stale hit is gone
+    assert limiter.retry_after("k") == 1
+
+
 class FakeRedis:
     def __init__(self, fail: bool = False) -> None:
         self.store: dict[str, int] = {}
@@ -46,6 +64,14 @@ def test_redis_limiter_fixed_window(monkeypatch: pytest.MonkeyPatch) -> None:
     # a different minute window resets the counter
     monkeypatch.setattr(time, "time", lambda: 3600.0)
     assert limiter.check("login|1.2.3.4", 2) is True
+
+
+def test_redis_limiter_retry_after_uses_window_end(monkeypatch: pytest.MonkeyPatch) -> None:
+    limiter = RedisRateLimiter("redis://localhost:6379/0")
+    monkeypatch.setattr("bangla_gpt_api.ratelimit.time.time", lambda: 3_600.5)
+    assert limiter.retry_after("login|1.2.3.4") == 60  # ceil(60 - 0.5)
+    monkeypatch.setattr("bangla_gpt_api.ratelimit.time.time", lambda: 3_630.5)
+    assert limiter.retry_after("login|1.2.3.4") == 30
 
 
 def test_redis_fail_open_and_closed(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -212,7 +212,9 @@ test("a teacher signs in and sees the teacher dashboard", async ({ page }) => {
   await expect(page.getByText("Teacher dashboard")).toBeVisible();
   // The dashboard's own data fetch resolved (stats card, not a permanent
   // "loading" skeleton): the greeting is rendered from /users/me.
-  await expect(page.locator("h2").first()).toContainText("E2E Teacher");
+  // F-168: the greeting is the page's h1 now, not the first h2 -- the old
+  // locator matched whatever section heading came first once it moved.
+  await expect(page.locator("h1").first()).toContainText("E2E Teacher");
 });
 
 test("a student generates a parent invite code and the parent links with it", async ({

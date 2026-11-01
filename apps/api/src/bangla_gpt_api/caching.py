@@ -43,6 +43,9 @@ SUMMARY_CACHE_TTL_SECONDS = 60.0
 # Corpus is static per boot (loaded at startup), so retrieval results are
 # safe to share for minutes; keep modest so a hot-fix restart still wins.
 RAG_CACHE_TTL_SECONDS = 300.0
+#: Per-socket Redis deadlines for the cache backend; a slow cache degrades
+#: to a miss rather than holding the request open.
+REDIS_SOCKET_TIMEOUT_SECONDS = 1.0
 
 
 class CacheUnavailable(RuntimeError):
@@ -188,7 +191,10 @@ class RedisCache:
         import redis  # declared hard dependency, lazy import like the limiter
 
         self._redis: redis.Redis = redis.Redis.from_url(
-            url, socket_connect_timeout=1.0, socket_timeout=1.0, decode_responses=True
+            url,
+            socket_connect_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
+            socket_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
+            decode_responses=True,
         )
 
     def get_json(self, key: str) -> Any:

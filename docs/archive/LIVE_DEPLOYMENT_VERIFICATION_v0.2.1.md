@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [README.md](README.md).
+
 # Live Deployment Verification — v0.2.1 (real Gemini key)
 
 Date: 2026-08-26 · Base: `f7fd9ac` · Scope: deployable-stage validation of every

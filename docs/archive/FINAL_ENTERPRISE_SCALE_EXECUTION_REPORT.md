@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [README.md](README.md).
+
 # Final Report — Purpose Review, Enterprise/National-Scale Parameter Execution & Full QA
 
 **Date:** 2026-09-03 · **Role:** Senior full-stack engineer (agency engagement) · **Base:** release `v0.4.0` (commit `40f2ff9`)

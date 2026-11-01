@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [README.md](README.md).
+
 # Final Enterprise Report — v0.2.0 (Gap Plan B1–B19)
 
 Date: 2026-08-26 · Base: `1c5abc8` (gap analysis) · This release: `8158915`

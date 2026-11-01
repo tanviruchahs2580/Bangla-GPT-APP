@@ -170,6 +170,12 @@ export function CreateHub({
     return base;
   };
 
+  // Every generator that retrieves textbook evidence requires a chapter
+  // (WorksheetIn.chapter is min_length=1); only the answer key can work from
+  // its own question list. The forms used to label the worksheet's chapter
+  // "optional" and post anyway, which the API answered 422.
+  const needsChapter = kind !== "answer_key";
+
   const generateNow = async () => {
     setBusy(true);
     setMsg(null);
@@ -272,9 +278,7 @@ export function CreateHub({
         </label>
         <label className="field">
           <span className="lbl">
-            {kind === "homework" || kind === "rubric"
-              ? t("chapterRequired")
-              : t("chapterOptional")}
+            {needsChapter ? t("chapterRequired") : t("chapterOptional")}
           </span>
           <input
             className="input"
@@ -296,15 +300,16 @@ export function CreateHub({
       )}
 
       <div className="row-flex gap-2 mt-3">
-        {/* Server-side contracts: answer_key needs question lines; homework and
-            rubric need a chapter. Keep the buttons quiet until they exist. */}
+        {/* Server-side contracts: answer_key needs question lines; every
+            other kind needs a chapter. Keep the buttons quiet until they
+            exist -- an unanswerable request must not leave the page. */}
         <Button
           variant="primary"
           onClick={() => void generateNow()}
           disabled={
             busy ||
             (kind === "answer_key" && !body().questions) ||
-            ((kind === "homework" || kind === "rubric") && !chapter.trim())
+            (needsChapter && !chapter.trim())
           }
         >
           {busy ? <span className="spinner" aria-hidden /> : null} {t("genNow")}
@@ -315,7 +320,7 @@ export function CreateHub({
           disabled={
             busy ||
             (kind === "answer_key" && !body().questions) ||
-            ((kind === "homework" || kind === "rubric") && !chapter.trim())
+            (needsChapter && !chapter.trim())
           }
         >
           {t("genLater")}
@@ -466,13 +471,14 @@ export function CreateHub({
             </div>
           ))}
         </div>
-        {openDoc != null && docs.find((d) => d.id === openDoc) && (
-          <div className="card mt-2">
-            <PayloadView
-              payload={docs.find((d) => d.id === openDoc)!.payload}
-            />
-          </div>
-        )}
+        {(() => {
+          const open = docs.find((d) => d.id === openDoc);
+          return open ? (
+            <div className="card mt-2">
+              <PayloadView payload={open.payload} />
+            </div>
+          ) : null;
+        })()}
       </div>
 
       {workload && (

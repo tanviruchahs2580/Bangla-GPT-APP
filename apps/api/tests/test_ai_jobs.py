@@ -5,14 +5,11 @@ MUST use TestClient as a context manager (`with...`) to keep that event loop
 alive between requests, and poll the job until it settles.
 """
 
-import time
-
-import pytest
 from fastapi.testclient import TestClient
 
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
-from conftest import engine_url
+from conftest import engine_url, poll_until
 
 PASSWORD = "supersecret1"
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -45,16 +42,20 @@ def _headers(client: TestClient, email: str) -> dict:
 
 
 def _wait(client: TestClient, headers: dict, job_id: str, target: str, timeout: float = 15.0):
-    deadline = time.monotonic() + timeout
-    body = None
-    while time.monotonic() < deadline:
+    last: dict = {}
+
+    def settled():
         res = client.get(f"/teacher/jobs/{job_id}", headers=headers)
         assert res.status_code == 200
         body = res.json()
-        if body["status"] in (target, "failed"):
-            return body
-        time.sleep(0.05)
-    pytest.fail(f"job never reached {target}: last={body}")
+        last.update(body)
+        return body if body["status"] in (target, "failed") else None
+
+    return poll_until(
+        settled,
+        timeout=timeout,
+        describe=lambda: f"job never reached {target}: last={last}",
+    )
 
 
 def test_job_ready_with_document_result(tmp_path) -> None:

@@ -76,6 +76,7 @@ const INVITES: SchoolInviteAdmin[] = [
     role: "teacher",
     used: false,
     created_at: "2026-09-01T10:00:00",
+    expires_at: "2026-09-08T10:00:00",
     used_at: null,
   },
   {
@@ -84,6 +85,7 @@ const INVITES: SchoolInviteAdmin[] = [
     role: "school_admin",
     used: true,
     created_at: "2026-08-30T10:00:00",
+    expires_at: null,
     used_at: "2026-08-31T10:00:00",
   },
 ];
@@ -132,12 +134,16 @@ describe("admin center", () => {
   it("renders per-school stats and current content versions", async () => {
     renderAdmin();
     await screen.findByText(t("admSchools"));
-    expect(screen.getByText("Adm School")).toBeInTheDocument();
-    expect(screen.getByText("SCH-ABC")).toBeInTheDocument();
-    expect(screen.getByText("4")).toBeInTheDocument(); // sessions_7d
-    expect(screen.getByText("science · 6")).toBeInTheDocument();
-    expect(screen.getByText("v3 (3)")).toBeInTheDocument();
-    expect(screen.getByText("root@example.com")).toBeInTheDocument();
+    // findBy*, not getBy*: the schools and versions cards own their queries
+    // since the F-094 split, so each fetched value arrives on its own tick
+    // and a synchronous sample of the first commit is a race (the whole
+    // assertions are unchanged otherwise).
+    expect(await screen.findByText("Adm School")).toBeInTheDocument();
+    expect(await screen.findByText("SCH-ABC")).toBeInTheDocument();
+    expect(await screen.findByText("4")).toBeInTheDocument(); // sessions_7d
+    expect(await screen.findByText("science · 6")).toBeInTheDocument();
+    expect(await screen.findByText("v3 (3)")).toBeInTheDocument();
+    expect(await screen.findByText("root@example.com")).toBeInTheDocument();
     expect(apiMock.get).toHaveBeenCalledWith("/admin/schools/stats");
     expect(apiMock.get).toHaveBeenCalledWith("/admin/content/versions");
   });
@@ -154,7 +160,7 @@ describe("admin center", () => {
     await waitFor(() =>
       expect(screen.getByText(t("admNoSchools"))).toBeInTheDocument(),
     );
-    expect(screen.getByText(t("admNoVersions"))).toBeInTheDocument();
+    expect(await screen.findByText(t("admNoVersions"))).toBeInTheDocument();
   });
 
   it("creates an invite once (plaintext shown once) and revokes an active one", async () => {

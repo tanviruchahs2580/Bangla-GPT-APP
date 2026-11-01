@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [README.md](README.md).
+
 # FINAL ENTERPRISE VALIDATION REPORT — MASTER (v0.3.1)
 
 > Consolidated per the Enterprise Post-Build Validation Master Prompt.

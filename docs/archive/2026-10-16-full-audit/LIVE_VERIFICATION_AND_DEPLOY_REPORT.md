@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [../README.md](../README.md).
+
 # LIVE VERIFICATION & DEPLOY REPORT — Bangla GPT APP (2026-10-16, second session)
 
 Session scope: verify every function and parameter as a real user on a running

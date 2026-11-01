@@ -33,7 +33,6 @@ from bangla_gpt_api.db.models import (
 )
 from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES
 from bangla_gpt_api.schemas import (
-    ChapterStat,
     ClassAnalytics,
     ClassImportIn,
     ClassImportOut,
@@ -44,6 +43,7 @@ from bangla_gpt_api.schemas import (
     StudentBrief,
 )
 from bangla_gpt_api.services import weakness
+from bangla_gpt_api.services.activity import sorted_chapter_stats
 
 from .common import (
     _classroom_or_404,
@@ -112,18 +112,7 @@ def teacher_analytics(
                 stats[row.chapter][0] += 1
                 stats[row.chapter][1] += row.is_correct
 
-    chapters = sorted(
-        (
-            ChapterStat(
-                chapter=chapter,
-                asked=asked,
-                correct=correct_count,
-                accuracy=round(100.0 * correct_count / asked, 2),
-            )
-            for chapter, (asked, correct_count) in stats.items()
-        ),
-        key=lambda s: s.accuracy,
-    )
+    chapters = sorted_chapter_stats(stats)
 
     return ClassAnalytics(
         class_level=class_level,

@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [../README.md](../README.md).
+
 # FEATURE REGRESSION MATRIX — Bangla GPT APP (2026-10-16)
 
 Machine-readable per-endpoint rows: `FEATURE_REGRESSION_MATRIX.csv`

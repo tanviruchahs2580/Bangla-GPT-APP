@@ -190,6 +190,15 @@ The rest of the required values:
 Rotating `PII_ENC_KEY` invalidates existing guardian-phone ciphertext. Re-encrypt
 before you rotate; `docs/runbook.md` has the procedure.
 
+`docker-compose.yml` forwards every key in the table above (and the rest of the
+documented Settings keys) from this `.env` as `KEY: ${KEY:-default}`, so no
+compose edit is needed for any of them. Two defaults matter: `METRICS_REQUIRE_AUTH`
+defaults to `true` (the production guard refuses `false`) and
+`AI_MONTHLY_BUDGET_USD_PER_USER` defaults to `0`, which disables the per-user AI
+budget — set a positive value if you want generation metered. The api healthcheck
+probes `/ready` (dependencies), not the constant `/health`, so `--wait` in the
+next section means the stack is actually usable.
+
 ## 7. Start the API and confirm it boots
 
 ```bash

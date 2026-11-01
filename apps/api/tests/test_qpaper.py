@@ -142,7 +142,9 @@ def test_draft_created_unreviewed_and_fast(client, teacher_headers, caplog) -> N
     draft_logs = [r for r in caplog.records if "qp_draft" in r.getMessage()]
     assert draft_logs, "draft must log qp_draft with elapsed_ms"
     logged = json.loads(draft_logs[-1].getMessage())
-    assert logged["elapsed_ms"] < 60_000  # PASS-WHEN: draft <60s
+    # PASS-WHEN: draft <60s; a hang detector on a quiet machine, not a
+    # benchmark (the CI job timeout is the hard stop).
+    assert logged["elapsed_ms"] < 60_000
 
 
 def test_draft_difficulty_percentages_must_sum_100(client, teacher_headers) -> None:

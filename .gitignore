@@ -132,3 +132,7 @@ playwright/.auth/
 
 # Playwright MCP browser-tool artifacts (agent tooling, not app output)
 .playwright-mcp/
+
+# Android release output dropped at the repo root: the apk/bundle trees are
+# ~12 MB of build output; the durable artifacts are the workflow uploads.
+.apk-latest/

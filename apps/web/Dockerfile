@@ -17,6 +17,9 @@ FROM nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e591939
 RUN apk upgrade --no-cache
 
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
+# The nginx config includes this snippet from every location block (nginx
+# drops inherited add_header once a location declares its own).
+COPY deploy/security-headers.conf /etc/nginx/snippets/security-headers.conf
 COPY --from=build /src/dist /usr/share/nginx/html
 
 EXPOSE 80

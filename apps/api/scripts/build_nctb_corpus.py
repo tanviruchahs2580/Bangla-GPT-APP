@@ -1,13 +1,20 @@
 """NCTB corpus build CLI.
 
 Usage (from apps/api, with the package venv active):
-    python scripts/build_nctb_corpus.py --data-dir../../data/nctb \
+    python scripts/build_nctb_corpus.py --data-dir ../../data/nctb \
         --subset ssc-science --delay 2.0
 
 Stages:
     1. acquire — respectful download of officially linked PDFs
     2. process — extract pages + QC + chunking + JSONL artifacts
     3. classes — derived class detection stamped onto chunk files
+    4. report — cross-source duplicate statistics + corpus manifest
+
+The build is reproducible: the same raw PDFs and the same pipeline code
+produce byte-identical chunk files, and the manifest records the code
+fingerprint, source hashes and artifact digests that prove it. After a build,
+run scripts/evaluate_nctb_retrieval.py (which finalizes the manifest's derived
+digests) and scripts/check_corpus_manifest.py (which fails on any drift).
 
 Subsets:
     ssc-science: Secondary বাংলা/ইংরেজি/গণিত/বিজ্ঞান-শাখা/ICT
@@ -18,13 +25,20 @@ Subsets:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
 from bangla_gpt_api.data.nctb_loader import attach_detected_classes
 from bangla_gpt_api.nctb import HSC_ARTIFACTS, SECONDARY_ARTIFACTS
 from bangla_gpt_api.nctb.acquisition import acquire_many
-from bangla_gpt_api.nctb.corpus import load_manifest, process_source
+from bangla_gpt_api.nctb.corpus import (
+    build_corpus_manifest,
+    load_manifest,
+    process_source,
+    record_cross_source_report,
+)
+from bangla_gpt_api.nctb.manifest import CORPUS_MANIFEST_NAME
 
 SUBSETS = {
     "ssc-science": [
@@ -111,7 +125,54 @@ def main() -> int:
     for source_id, detected in detections.items():
         print(f"  {source_id}: {'class ' + str(detected) if detected else 'UNDETECTED'}")
 
-    print(f"\nQuality report: {report_path}")
+    cross = record_cross_source_report(report_path, out_normalized)
+    print("\nCross-source duplicates (quality_report._cross_source):")
+    print(
+        f"  chunks={cross['total_chunks']} unique_texts={cross['unique_texts']} "
+        f"duplicate_chunks={cross['duplicate_chunks']} "
+        f"cross_source_texts={cross['cross_source_texts']} "
+        f"cross_source_duplicate_chunks={cross['cross_source_duplicate_chunks']}"
+    )
+
+    reports = json.loads(report_path.read_text(encoding="utf-8"))
+    empty_chapter = [
+        source_id
+        for source_id, row in reports.items()
+        if source_id != "_cross_source" and row.get("chunks") and not row.get("chunks_with_chapter")
+    ]
+    print("\nChapter coverage:")
+    for source_id, row in sorted(reports.items()):
+        if source_id == "_cross_source" or not row.get("chunks"):
+            continue
+        print(
+            f"  {source_id}: {row.get('chunks_with_chapter')}/{row.get('chunks')} "
+            f"({row.get('chapter_coverage')})"
+        )
+    if empty_chapter:
+        # A source with no chapter metadata is a fact to record, not a silent
+        # hole: chapter-scoped filters and metrics are blind there (F-081).
+        print(
+            "  WARNING no chapter headings detected in: "
+            + ", ".join(sorted(empty_chapter))
+            + " — chapter filters are unavailable for those documents"
+        )
+
+    manifest = build_corpus_manifest(
+        args.data_dir,
+        records,
+        report_path=report_path,
+        extracted_dir=out_extracted,
+        normalized_dir=out_normalized,
+    )
+    manifest_path = args.data_dir / "manifests" / CORPUS_MANIFEST_NAME
+    print(f"\nCorpus manifest: {manifest_path}")
+    print(f"  chunks={manifest['totals']['chunks']}")
+    print(f"  pipeline fingerprint: {manifest['pipeline']['code_fingerprint']}")
+    print(
+        "  next: scripts/evaluate_nctb_retrieval.py "
+        f"{args.data_dir} (finalizes the manifest), then "
+        "scripts/check_corpus_manifest.py"
+    )
     return 0
 
 

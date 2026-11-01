@@ -11,43 +11,51 @@
 #    1  const TOKEN (apps/web/src/test/authSession.test.ts:4) fixture
 #    1  a false positive on box-drawing glyphs in an archived report
 #
-# The problem this solves is not a leak but the 82 recurring false positives:
-# with no baseline, a real credential would be buried among them. The scope is
-# deliberately narrow -- test paths only, plus one archived file -- so anything
-# outside them still fails the gate.
+# The problem this solves is not a leak but the recurring false positives:
+# with no baseline, a real credential would be buried among them.
+#
+# GIT-02/F-100 (2026-10-30): the baseline used to allowlist two whole test
+# file globs (`(^|/)tests?/.*\.py$`, `(^|/)apps/web/src/test/.*\.tsx?$`), so a
+# genuine secret pasted into any test file would never fail the gate. The path
+# entries are gone: every reviewed non-credential is now expressed as a
+# value-shaped regex (the pattern the admin_password entry already used), and
+# `gitleaks git . --log-opts=--all` and a scan of the tracked tree both report
+# zero findings with this file. A planted synthetic key under apps/api/tests/
+# is still reported (verified while writing this change).
 #
 # NOTE: this must use [allowlist]. Using [[rules]] here *adds* rules and makes
 # the count worse, not better.
-#
-# Reviewed 2026-10-09 during the engineering audit.
-#
-# T-029 (2026-10-16): a full-history scan (`gitleaks git . --log-opts=--all`)
-# exits 1 on one finding the 2026-10-09 review could not see because it scanned
-# the working tree, not the history: commit 8bd0556 has the archived ASCII-art
-# report at its pre-move path (repo root), and this path is not covered by the
-# docs/archive/ entry below. The hit is reviewed and is a false positive: the
-# box-drawing diagram line reads `Auth: JWT+RBAC+tenancy guards` and the
-# generic-api-key rule reads `JWT+RBAC+tenancy` as a key/value pair. The entry
-# added below is scoped to that exact matched TEXT (any file, any commit), not
-# to the file: a real secret anywhere -- including on another line of the same
-# report, if the report were ever edited -- still fails the gate.
-#
-# A path-only entry for that filename was considered and rejected: gitleaks
-# exempts the whole FILE for a path allowlist entry, which would have silenced
-# a genuine secret anywhere in the report. Confirmed with a local fixture: the
-# path entry hid a planted key on another line of the same-named file, while
-# the text-scoped entry below did not.
 
 [extend]
 useDefault = true
 
 [allowlist]
-description = "Test fixtures and one archived report: reviewed non-credentials"
+description = "Reviewed non-credentials, scoped by value, never by path"
 regexTarget = "match"
 regexes = [
-  # Fixture secrets are explicitly marked as test values.
+  # Fixture secrets that name themselves test/unit/dummy/fake values.
   '''(SECRET|KEY|TOKEN|PASSWORD)\s*[:=]\s*["'](test|unit|dummy|fake)''',
-  '''jwt_secret\s*[:=]\s*["'](test|other)''',
+  # jwt_secret fixtures, in both Python-kwarg and JSON spellings. `test-`
+  # covers the older fixtures, `other-` the negative-test decoy, `bench-` the
+  # bench script's throwaway, `w2-obs-` the wave-2 observability suite's
+  # named constant (used as a jwt_secret in test_w2_obs_request_id.py).
+  '''jwt_secret["']?\s*[:=]\s*["'](test|other|bench)-''',
+  '''SECRET\s*=\s*["']w2-obs-secret-''',
+  # The CI DAST job's placeholder JWT secret (commit removed since).
+  '''JWT_SECRET=(ci-dast|bench)-secret-''',
+  # The shared 57-character high-entropy constant the boot-guard suites need:
+  # the production entropy guard (F-067) rejects short values, so the tests
+  # use one full-literal fixture -- full-literal here too, so any other value
+  # still fails.
+  '''Zk7Qp2XvN8mR4tYcW1bH6jL3sD9fG5aE0uI2oP7xV4qM8nC6rT1wY3zB5''',
+  # The redaction test's fake API key (an explicit 0-9a-j placeholder run).
+  '''api_key["']?\s*[:=]\s*["']sk-0123456789abcdefghij''',
+  # The old corpus quality report's token_counter value; a counter name the
+  # generic-api-key rule reads as a key/value pair.
+  '''token_counter["']?\s*[:=]\s*["']heuristic-''',
+  # The canonical jwt.io example token, used as the frontend fetch fixture.
+  # Its header/payload are public constants; the signature is a placeholder.
+  '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.eyJzdWIiOiIxIiwicm9sZSI6InN0dWRlbnQifQ\.sig''',
   # AUD-2026-10-27: was value-unanchored, which whitelisted ANY
   # `admin_password = "<anything>"` assignment tree-wide -- exactly the
   # platform's highest-value credential. Anchored to the seven reviewed
@@ -65,14 +73,7 @@ regexes = [
   # T-029: the exact text gitleaks matches inside the archived ASCII-art
   # diagram line `Auth: JWT+RBAC+tenancy guards` (commit 8bd0556 at the file's
   # pre-move root path). Content-scoped, so only this reviewed value is
-  # pardoned -- not the file that happens to contain it.
+  # pardoned -- not the file that happens to contain it. A path entry for that
+  # report was considered and rejected for the same reason.
   '''^Auth: JWT\+RBAC\+tenancy''',
-]
-paths = [
-  # Test suites only. Production code is never allowlisted here.
-  '''(^|/)tests?/.*\.py$''',
-  '''(^|/)apps/web/src/test/.*\.tsx?$''',
-  # Single archived report; the hit is box-drawing glyphs, not a key.
-  # Not anchored with ^ : gitleaks reports absolute paths.
-  '''docs/archive/BANGLA_GPT_ENTERPRISE_ARCHITECTURE_QA_AUDIT\.md$''',
 ]

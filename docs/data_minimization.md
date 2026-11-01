@@ -1,55 +1,197 @@
-# Data-Minimization Review
+# Data-Minimization and Data-Inventory Review
 
-Scope: every table in `apps/api/src/bangla_gpt_api/db/models.py` plus the
-log surfaces. Reviewer: engineering (self-review). **Bangladesh legal
-review is a human step and is NOT done here — see
-[`archive/PROGRESS.md`](archive/PROGRESS.md).**
+Derived table-by-table from `apps/api/src/bangla_gpt_api/db/models.py` (all 42
+ORM classes at the time of writing), the retention policy in
+`services/retention.py` and the windows in `config.py`. Reviewer:
+engineering (self-review), 2026-10-29. **Bangladesh legal review is a human
+step and is NOT done here — see [`archive/PROGRESS.md`](archive/PROGRESS.md).**
 
-Legend: **KEEP** = required for the product or a legal obligation;
-**MINIMIZED** = stored, but with active reduction (hashing, encryption,
-short TTL, sweep); **NONE** = we deliberately do not store it.
+Legend:
 
-## Field-by-field
+- **Retention**: `sweep=<n>d` = deleted by the retention job after `n` days
+  (`services/retention.py`, nightly arq job + `POST /admin/maintenance/purge`);
+  `token` = swept `expires_at + 30 days` (`TOKEN_GRACE_DAYS`); `erasure` =
+  deleted on `DELETE /users/me` (`services/gdpr.py::erase_account_everything`);
+  `unbounded` = no sweep today, lives until erasure (flagged where that is a
+  gap).
+- **Access**: which role can read the row back through the API; "aggregates"
+  means counts/scores without the row's text content.
 
-| Data | Where | Verdict | Why / minimization applied |
+## 1. Accounts, profiles and enrollment
+
+| Data | Where (table) | Purpose | Retention | Access | Minimization |
+| --- | --- | --- | --- | --- | --- |
+| Email | `users.email` | Login identity, reset/verification mail, parent digest recipient | erasure | self; admin (`GET /admin/users`) | The only contact channel; no phone/name on the account row. |
+| Password | `users.password_hash` | Authentication | erasure | never returned | Argon2id hash only; `sessions_invalidated_at` invalidates tokens on rotation. |
+| Role, school_id, flags | `users` (`role`, `school_id`, `must_change_password`, `email_verified`) | Authorization, tenancy, forced password change after invite | erasure | self; admin | No extra attributes stored. |
+| MFA secret | `users.totp_secret` | TOTP second factor | erasure | never returned | Stored only after proof of possession at verify; NULL = MFA off. |
+| Login lockout state | `users.failed_login_count`, `locked_until` | Brute-force lockout | erasure | never returned | Counters, no attempt log. |
+| Student name, class | `students.name`, `students.class_level` | Addressing, class-appropriate content | erasure | self; teacher of the class; linked parent; admin | Single name field; no birth date, address or national ID anywhere in the schema. |
+| Learning prefs / AI memory | `students.learning_prefs` (JSON, whitelisted keys `explanation_style`, `subject_focus`), `students.memory_enabled` | Per-student explanation style + memory opt-out | erasure | self (shown and cleared in the UI); exported | Keyed dict, not free text; annotated as dict (no migration needed). |
+| Guardian consent | `students.consent_version`, `consent_at`, `consent_ip` | Legal evidence of guardian consent (D20) | erasure (policy horizon on paper only, see gaps) | self; admin | IP kept only as consent evidence, never joined to logs or analytics. `consent_ip` must be validated as an IP by the confirm flow. |
+| Teacher name, prefs | `teachers.name`, `teachers.prefs` | Addressing, teacher UI state | erasure | self; admin | Free-form JSON prefs, teacher-authored. |
+| Parent name | `parents.name` | Addressing | erasure | self; admin | — |
+| Guardian phone | `parents.phone_enc` | Optional contact field | erasure | never returned by any route; never exported | Fernet-encrypted when `PII_ENC_KEY` is set; production boot requires the key (B-04). |
+| Parent↔child link | `parent_student_links` | Who may view a child's progress | erasure (both ends) | parent (link owner) | Pair of ids only; no relationship label. |
+| School tenancy | `schools.name/code`, `classrooms.class_level/section`, `class_students`, `class_teachers` | Roster and class scoping | erasure | teacher (own classrooms), school_admin, admin | Institutional data, no personal attributes beyond the code. |
+| Invites / claim codes | `parent_invites`, `student_invites`, `school_invites` | Single-use linking / account claim codes | `token` (used parent invites; student/staff invites swept on expiry only via erasure today) | self (code returned once at creation) | Only the SHA-256 hash is stored; plaintext returned exactly once. `student_invites.email` holds the address the roster import will activate. |
+| Reset / verification tokens | `password_resets`, `email_verifications` | Single-use credentials for reset / email verification | `token` (`expires_at + 30d`) | never returned | SHA-256 hashes only; `used_at` marks consumption. |
+
+## 2. Learning activity
+
+| Data | Where (table) | Purpose | Retention | Access | Minimization |
+| --- | --- | --- | --- | --- | --- |
+| Conversations | `conversations` (`student_id`, `title`, `last_strategy`) | Multi-turn tutoring and the "আমি বুঝিন" strategy loop | `sweep=chat_retention_days` (default 180) | owner student | Title truncated from the first question; no separate topic model. |
+| Chat turns | `chat_messages` (`role`, `content`, `grounded`, `refused_reason`, `sources_json`, `rating`) | The transcript itself + grounding verdict + thumbs rating | `sweep=180d` (messages deleted with their conversation; feedback pointers nulled first) | owner student; admin sees refusal **counts** by reason/class (`GET /admin/safety/refusals`), never content | Content is the child's own text; PII is redacted at the provider egress (`services/tutor.py::build_evidence_prompt`) but the stored turn is raw by design (shown back to the student). |
+| Quiz attempts | `quiz_attempts` (`quiz_json`, `total`, `correct`, `score_pct`) | Grading, weak-chapter detection | erasure (unbounded) | student; teacher (class analytics, short tests, assignments); linked parent (progress); admin | Question sets are NCTB corpus content, not user-authored. |
+| Graded answers | `answer_log` (`question_text`, `chosen`, `correct_index`, `chapter`, `book`) | Per-question record; feeds concept mastery | `sweep=answer_log_retention_days` (730) | aggregates to teacher/parent dashboards; student via own progress | Content is curriculum text; the row carries no free text authored by the child. |
+| Chapter progress | `chapter_progress` (`read_pct`, `completed`, `bookmarked`) | Reader progress per chapter | erasure | self; teacher (roster); linked parent | Counts/booleans only. |
+| Daily activity | `daily_activity` (`date`, `questions`, `quizzes`, `minutes`) | Streaks and heatmap | erasure | self; parent | Minute counts are a coarse 1-per-question estimate, no client timing trusted. |
+| Revision queue | `revision_queue` (`question`, `options_json`, `ease_factor`, `due_date`) | SM-2-lite spaced repetition | erasure | self | Curriculum questions + scheduling state. |
+| Concept mastery / ability | `concept_mastery`, `student_abilities` | Knowledge-graph rollups | erasure | aggregates on teacher/parent/student dashboards | Per-concept counts and Elo-style ability; no free text. |
+| Support plans | `support_plans` (`focus_concepts`, `plan`) | Teacher-facing plan for at-risk students | erasure | teacher (author); admin | Rule-generated from weak concepts. |
+| Saved notes | `saved_notes` (`title`, `body`, `source`, `source_ref`) | User notes clipped from tutor/chapter | erasure (unbounded) | owner user | User-authored; no sweep today (gap). |
+| Notifications | `notifications` (`kind`, `code`, `params`, `link`, `read_at`) | In-app feed | erasure (unbounded) | owner user | `code` is an i18n key resolved client-side; `params` carries ids/counts/safe labels only. |
+| Feedback | `feedback` (`rating`, `comment`, `triaged`, `triage_note`) | Thumbs + triage queue | erasure | targeting user opens it via the owner check; admin triage queue (`GET /admin/feedback`), reporter identity withheld beyond user id | Comment is optional, 500 chars. |
+| Chapter content | `chapter_contents` (`payload`, `created_by`) | Generated/edited study material per chapter | unbounded (shared artifact) | students/teachers read it as curriculum | Shared, not per-student; `created_by` is nulled at erasure. |
+
+## 3. Teacher/AI-generated artifacts and ledgers
+
+| Data | Where (table) | Purpose | Retention | Access | Minimization |
+| --- | --- | --- | --- | --- | --- |
+| Teacher documents | `teacher_documents` (`kind`, `payload`, `title`) | Lesson plans, worksheets, answer keys, homework, rubrics | erasure (unbounded) | owner teacher | Payload is the validated generator output. |
+| Question papers | `question_papers` (`difficulty`, `chapters`, `questions`, `meta`) | Draft/final exam papers with the teacher review gate | erasure | owner teacher | HIL gate: finalize only after every question is explicitly reviewed. |
+| Question bank | `question_bank` (`dedupe_key`, `question_text`, `options`, `source`) | Reviewed question reuse across papers | erasure | teacher who reviewed it | `dedupe_key` is a content hash, not a person. |
+| Short tests / assignments | `short_tests`, `assignments`, `assignment_recipients` | Class-wide and selected-group quizzes | erasure | teacher (owner); student sees own attempt | `attempts` JSON is duplicated membership; `assignment_recipients` is the indexable copy. |
+| AI jobs | `ai_jobs` (`kind`, `payload`, `result`, `error`) | Async generation job lifecycle | erasure (unbounded) | owner user | `error` capped at 300 chars; job body is the artifact request. |
+| AI usage ledger | `ai_usage` (`route`, `model`, `prompt_tokens`, `completion_tokens`, `estimated_cost_usd`) | Budget gate + cost dashboards | `sweep=ai_usage_retention_days` (365) | aggregated by model on the admin AI-quality board (`GET /admin/ai/quality`) | Token counts are planning estimates (`services/costs.py`), never prompts or answers. |
+| Analytics events | `analytics_events` (`name`, `role`, `props`) | Product analytics | `sweep=analytics_retention_days` (180) | admin dashboards, aggregated; row keeps `user_id` until erasure nulls it | See the corrected statement below. |
+| Audit trail | `audit_log` (`actor_user_id`, `action`, `target`, `detail`) | Append-only privileged-action record | never deleted; attribution nulled at erasure | admin (`GET /admin/audit`) | `detail` holds ids and counts only — never message content, never PII. |
+| Job ledger | `job_runs` (`job`, `period_key`, `outcome`) | Idempotency for scheduled jobs | unbounded | ops | Period keys and outcomes only. |
+| KG nodes / practice items | `concepts`, `concept_prerequisites`, `practice_items` | Curriculum knowledge graph and adaptive Elo items | unbounded | all readers (curriculum) | No user identifiers; `practice_items` aggregates attempts/correct. |
+
+## 4. The corrected analytics statement (was wrong)
+
+The previous revision of this file said prop **values** "are never persisted".
+That was false when written: `POST /events` persisted any primitive string
+under any key not on the drop-list, so a client could store free text or a
+phone number in the 180-day trail (audit PRIV-02). The fix (commit
+`c56dce8`, F-039) added a **value allowlist** on top of the key drop-list in
+`routers/common.py::_sanitize_event_props`. What actually persists today:
+
+- `bool` / `int` / `float` values, key names truncated to 40 chars, keys
+  matching the PII drop-list removed (unchanged behaviour).
+- A string value only when it is a short machine code: ≤40 chars, lowercase
+  ASCII letters/digits plus `_.:-`, no spaces, no non-ASCII (Bangla free text
+  is dropped), no run of 6+ digits (BD mobile/NID patterns) and no
+  `redact_pii` match. **Free text is dropped, not stored.**
+- Trade-off: free-text values no longer persist, which includes the web
+  client's `chapter_open`/`chapter_read` `subject`/`chapter` values (Bangla
+  strings fail the ASCII machine-code shape) — the endpoint contract (202
+  accepted) is unchanged. Events whose props are machine codes, booleans or
+  numbers (e.g. `report_viewed` role/period, `tutor_question_sent`
+  booleans, `quiz_completed` counts, `tutor_feedback` rating) still persist.
+
+## 5. Retention: what the sweep enforces (and what it does not)
+
+`services/retention.py::run_retention_sweep` runs nightly (`jobs
+.run_retention_sweep`) and via `POST /admin/maintenance/purge`
+(`dry_run=true` produces the compliance evidence report). Counts-only in
+both the report and the audit row; deletes are chunked (`DELETE_CHUNK =
+5_000`) with a commit per chunk (DB-03).
+
+Swept: conversations + messages (`chat_retention_days`, 180), analytics
+events (`analytics_retention_days`, 180), answer log
+(`answer_log_retention_days`, 730), AI usage (`ai_usage_retention_days`,
+365), password resets / email verifications / used parent invites
+(`expires_at + 30d`).
+
+**Not swept today** (live until account erasure or actor deletion):
+`quiz_attempts`, `chapter_progress`, `daily_activity`, `revision_queue`,
+`concept_mastery`, `student_abilities`, `support_plans`, `saved_notes`,
+`notifications`, `feedback`, `teacher_documents`, `question_papers`,
+`short_tests`, `assignments`, `question_bank`, `chapter_contents`, `ai_jobs`,
+`student_invites`, `school_invites`, `job_runs`. `audit_log` is append-only by
+design. `PII_ENC_KEY` is deliberately NOT in backups (docs/backup_dr.md).
+
+## 6. Third-party flows (where data leaves the platform)
+
+| Flow | Code | What leaves | Minimization |
 | --- | --- | --- | --- |
-| Email | `users.email` | KEEP | Login identity; no other contact channel exists. |
-| Password | `users.password_hash` | MINIMIZED | Argon2id hash only, never plaintext (S2 hardening). |
-| Role / school_id / flags | `users` | KEEP | Authorization model; no extra attributes stored. |
-| Name, class_level | `students`, `teachers`, `parents` | KEEP | Product function (addressing, class content). Single field, no birth dates, no addresses, no national IDs — we never ask for them. |
-| Guardian phone | `parents.phone_enc` | MINIMIZED | Fernet-encrypted at rest when `PII_ENC_KEY` is set; required in production by config guard. Never logged, never exported. Empty when not given. |
-| Consent `version` / `at` / `ip` | `students` | KEEP | Legal evidence of guardian consent. `consent_ip` is retained **only** as consent evidence (statutory-limitation horizon), never used for analytics, never joined to logs. Consent evidence stays current via the re-confirm flow (`GET /students/{id}/consent`, `POST /students/{id}/consent/reconfirm`). |
-| Chat content | `conversations`, `chat_messages` | MINIMIZED | Needed for multi-turn tutoring and the "ami bujhi na" loop. Retention: `chat_retention_days` (default 180) then hard-deleted by the retention sweep (endpoint + nightly job — see "What the sweep enforces" below). |
-| Quiz attempts / answers | `quiz_attempts`, `answer_log` | KEEP | Core pedagogy (weak-chapter detection). Content is NCTB corpus text, not user-authored PII. |
-| Reset / verification / invite tokens | `password_resets`, `email_verifications`, `parent_invites` | MINIMIZED | Only SHA-256 **hashes** stored; single-use; swept after expiry + 30-day grace (`retention.py`). |
-| Feedback (thumbs + optional comment) | `feedback` | KEEP | Product improvement; not joined to chat content beyond ids. Triage queue lands in `GET /admin/feedback` (oldest open first). |
-| Analytics events | — | NONE | `/events` logs event **name** and prop **keys** only — prop values (arbitrary client input) are never persisted or logged (main.py `record_event`). |
-| Audit trail | `audit_log` | MINIMIZED | Append-only, five privileged actions; `detail` holds ids and **counts only** — never message content, never PII. Covered by tests. |
-| Provider prompts/responses | — | NONE | No Gemini request/response logging. Provider calls keep no raw transcript on our side beyond the chat rows we already own. |
-| Server logs | `logs/*.jsonl`, stdout | MINIMIZED | Structured JSON with whitelisted keys; secret redaction + content guard; rotation configured in S4.x. |
-| Job ledger | `job_runs` | KEEP | Scheduling bookkeeping; period keys and count summaries only. |
+| LLM provider (Gemini / OpenAI-compatible) | `services/tutor.py::build_evidence_prompt`, `providers/` | The assembled prompt: system rules, retrieved corpus evidence, up to `chat_history_messages` (8) prior turns, the current question; the image part on vision turns | Phone/email/NID patterns are redacted from question **and** history before egress (`redact_pii`, metered per kind); evidence/history are delimiter-sanitized; no raw request/response logging (the `ai_call` log line carries char counts and route only). Prompt-side spend is metered per user. |
+| SMTP | `services/mailer.py`, `services/verification.py`, `services/parent_digest.py` | Recipient email, reset/verification link, weekly digest (aggregates and chapter labels only) | Mail is optional in production only if SMTP is deliberately configured (boot guard requires it); digest body never contains conversation content. |
+| Sentry (optional) | `initialize/observability.py` | Error events, `extra` payloads, breadcrumbs | `before_send=scrub_sentry_event` (F-043) replaces email/phone/Bearer/vendor-token strings and drops unbounded object reprs; only active when `SENTRY_DSN` is set. |
+| Web client | `apps/web/src/lib/safeMarkdown.tsx` | Links/images inside rendered answers cannot reach arbitrary hosts (scheme + same-origin + data:image allowlists) | No third-party analytics scripts; fonts self-hosted. |
 
-## What the sweep enforces
+## 7. Honest gaps (not fixed this step)
 
-`services/retention.py` is the single policy point, used by
-`POST /admin/maintenance/purge` (with `dry_run=true` for evidence) and the
-nightly arq job:
-
-* Conversations + their messages older than `chat_retention_days` — deleted.
-* Expired password-reset / email-verification rows older than 30 days — deleted.
-* **Used** parent invites older than 30 days — deleted (unused invites stay
-  until their own expiry so a student's shared code still works).
-* Report and audit row carry counts only. `PII_ENC_KEY` is
-  deliberately NOT in backups (docs/backup_dr.md).
-
-## Honest gaps (not fixed this step)
-
-* No automatic **account-dormancy** purge yet — self-service deletion exists
-  (`DELETE /users/me`), but a signed-up-and-abandoned student keeps data
-  until admin action. Candidate for a later step.
-* `consent_at`/`consent_ip` horizon is policy-on-paper (limitation period),
+- No automatic **account-dormancy** purge: self-service deletion exists and
+  cascades every owned row, but a signed-up-and-abandoned student keeps data
+  until admin action.
+- `consent_at`/`consent_ip` horizon is policy-on-paper (limitation period),
   not a coded expiry.
-* Web analytics: the frontend loads no third-party analytics — but the
-  Hind Siliguri font is currently self-hosted; keep it that way (tokens).
-* Teacher/parent names have no retention sweep (needed while accounts are
+- The table above marks unswept tables `unbounded`; the largest of those
+  (`quiz_attempts`/`answer_log` are partly bounded, but chapter progress,
+  daily activity, revision items, notes, notifications, teacher documents,
+  AI jobs) have no cadence beyond erasure. Owner decision needed on windows.
+- Teacher/parent names have no retention sweep (needed while accounts are
   active; dormancy gap above).
+
+## 8. Browser storage inventory (PRIV-09)
+
+Added by the wave-2 fixer stream (PRIV-09); the keys and the wipe behaviour
+below were read from the web client sources named in the `Where` column.
+
+| Storage | Key | Purpose | Lifetime / scope | Wiped on sign-out |
+| --- | --- | --- | --- | --- |
+| localStorage | `bgpt_token` | Session JWT for the API | until logout or expiry | yes (`api.ts` `USER_STORAGE_KEYS`) |
+| localStorage | `lastChapter` | Resume position on Home | device | yes |
+| localStorage | `bgpt_teacher_default_class` | Teacher's default class picker | device | yes |
+| localStorage | `bgpt-lowdata` | Low-data mode preference | device | kept by design (device pref, F-036) |
+| localStorage | `fontScale` | Text-size accessibility preference (`LearnPage.tsx`) | device | kept by design (a low-vision user must not lose it on sign-out) |
+| localStorage | `bgpt_lang`, `bgpt_theme` | Language and theme | device | kept by design |
+| localStorage | `bgpt_offline_owner` | Which account owns the downloaded chapters (`offlineStore.ts`) | device | cleared with the IndexedDB store below |
+| sessionStorage | `bgpt_admin_token_backup` | Parked platform-admin credential during impersonation | per tab (`api.ts`) | yes, both storages |
+| sessionStorage | `bgpt_impersonating` | Impersonated user id (banner state) | per tab | yes, both storages |
+| sessionStorage | `bangla-gpt:last-quiz-result` | Last graded result for the explain back-link (`quizExplain.ts`) | per tab | yes |
+| sessionStorage | `bgpt_quiz_draft` | In-flight quiz draft (`quizDraft.ts`) | per tab | yes |
+| IndexedDB | `bgpt-offline` / `chapters` (schema v2) | Downloaded chapter content for offline reading | device, owner-scoped | yes (`clearOfflineChapters`; in-memory fallback when IndexedDB is unavailable) |
+
+Cookies: **none**. `grep -rn "document.cookie" apps/web/src` returns no hit
+and the API never sets one (auth is the bearer header only, there is no
+`Set-Cookie` in `apps/api/src`), so there is no cookie banner to gate and no
+cookie-based CSRF surface to pair (SEC-09). The only optional third-party
+code is the Sentry bundle, loaded only when the build sets `VITE_SENTRY_DSN`
+(section 6).
+
+Flag for legal review (not answered here): whether the first-party
+`analytics_events` rows (section 5) or any of the device preferences above
+need a consent surface in the launch jurisdictions.
+
+## 9. Applicable-law flags (PRIV-10)
+
+The frameworks below are the ones named in tracked documents; this section
+records what the repository says, not a compliance conclusion.
+
+| Framework | Where stated | What it means for this product |
+| --- | --- | --- |
+| Bangladesh Digital Security Act / Cyber Security Act 2023; no comprehensive GDPR-equivalent statute yet | `docs/dpa_template.md:8-10` | Contract terms (the DPA template) carry more weight than a statutory regime; a Bangladeshi lawyer must review the template before any school signs. |
+| Children Act 2013 and BTRC/ICT guidance | `docs/LAUNCH_READINESS_CHECKLIST.md:18-20` | The registration consent checkbox, `/privacy` and `/terms` copy need a lawyer's review; the checklist item is open. |
+| GDPR-style principles applied voluntarily | `README.md:35`, `docs/API.md:44-45` | Self-service export and erasure exist; the wording claims the feature, not GDPR compliance. |
+| Google Play Families policy | `docs/playstore/content-rating.md:34-35` | The repo states the app is not built to the policy's content and ads requirements; declaring it would be a false claim. |
+
+Technical controls observed, mapped to the principle they serve (each has a
+test or a boot guard named elsewhere in this document):
+
+| Control | Where | Principle |
+| --- | --- | --- |
+| Self-service export and erasure (`GET /users/me/export`, `DELETE /users/me`) | `services/gdpr.py`, `routers/users.py` | access, rectification, portability |
+| Retention sweep with a dry-run report and a confirmation-gated purge | `services/retention.py`, `routers/admin.py` | storage limitation |
+| k-anonymity floor on the aggregate authority report | `services/govt_report.py` | purpose limitation |
+| Pre-provider PII redaction and metadata-stripped images | `services/tutor.py`, `services/pii.py` | data minimisation |
+| Fernet-encrypted guardian phone, Argon2id password hashes | `security.py`, `auth/security.py` | integrity and confidentiality |
+| Consent version/at/ip evidence at registration | `routers/auth.py`, `routers/deps.py` | accountability |
+| Provider data-use tier declaration with a production boot refusal on an unacknowledged free tier | `config.py`, `main.py::_validate_llm_data_use` | lawfulness of the transfer basis (PRIV-06) |
+
+**Legal review required.** None of the above is asserted as compliance, and
+the reviewer and date have not been recorded in-repo.

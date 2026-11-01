@@ -52,6 +52,29 @@ def _login(client: TestClient, email: str) -> dict:
     return {"Authorization": f"Bearer {res.json()['access_token']}"}
 
 
+def _login_minted_in_the_past(
+    client: TestClient, email: str, monkeypatch: pytest.MonkeyPatch
+) -> dict:
+    """Login with the token clock pinned an hour back (F-161).
+
+    The F-05 epoch comparison is integer-second, so the revocation test used
+    to sleep 1.1s to put the tokens strictly before the stamp. Pinning the
+    minted ``iat`` makes that ordering deterministic without the wall-clock
+    wait; only the iat source is patched.
+    """
+    from bangla_gpt_api.auth import security
+
+    class _PastClock:
+        @staticmethod
+        def time() -> float:
+            return time.time() - 3600
+
+    monkeypatch.setattr(security, "time", _PastClock)
+    headers = _login(client, email)
+    monkeypatch.setattr(security, "time", time)
+    return headers
+
+
 def _me(client: TestClient, headers: dict) -> int:
     return client.get("/users/me", headers=headers).status_code
 
@@ -72,16 +95,18 @@ def test_logout_revokes_only_the_presented_token(client: TestClient) -> None:
     assert _me(client, second) == 200
 
 
-def test_sessions_revoke_kills_every_token(client: TestClient) -> None:
+def test_sessions_revoke_kills_every_token(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _register(client, "everywhere@example.com")
-    a = _login(client, "everywhere@example.com")
-    b = _login(client, "everywhere@example.com")
-
     # The F-05 epoch comparison is integer-second: tokens minted in the SAME
     # second as the stamp intentionally survive (see deps.py - a sub-second
     # boundary is not expressible with integer iat, and change-password must
-    # return a usable token). Cross that boundary deterministically.
-    time.sleep(1.1)
+    # return a usable token). The past-minted tokens cross that boundary
+    # deterministically, with no sleep.
+    a = _login_minted_in_the_past(client, "everywhere@example.com", monkeypatch)
+    b = _login_minted_in_the_past(client, "everywhere@example.com", monkeypatch)
+
     res = client.post("/users/me/sessions/revoke", headers=a)
     assert res.status_code == 204
 

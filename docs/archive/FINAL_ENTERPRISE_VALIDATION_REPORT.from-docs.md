@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [README.md](README.md).
+
 # FINAL ENTERPRISE VALIDATION REPORT — Bangla GPT APP v0.3.1
 **Commit:** `1e3c949` + 70 modified files (working tree) · **Tag:** `v0.2.1` (last published) → RC `v0.3.1` pending owner approval · **Date:** 2026-08-26 · **Validator:** Enterprise Post-Build Validation (Principal Architect + 20 roles) · **Environment:** Windows 11 (win32), Python 3.12.10, Node 24.19.0, Docker 29.7.2 · **Mode:** Staging rehearsal (production deployment not authorized)
 

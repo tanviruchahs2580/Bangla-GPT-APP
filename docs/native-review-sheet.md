@@ -8,10 +8,10 @@ file is generated; this one is the **record**, and it is hand-written.
 
 | Area | Strings | Reviewed | Notes |
 |---|---|---|---|
-| In-app copy (`apps/web/src/i18n.ts`) | see the sheet | ☐ not started | needs a native speaker |
-| Literals outside the dictionary | see the sheet | ☐ not started | the sheet marks them `(literal)` |
-| API user-facing copy (refusals, safety, digests) | see the sheet | ☐ not started | |
-| Play Store listing copy (ships with the Play pack) | 2 descriptions + 15 bullets | ☐ not started | submission-blocking |
+| In-app copy (`apps/web/src/i18n.ts`) | see the sheet | not started | needs a native speaker |
+| Literals outside the dictionary | see the sheet | not started | the sheet marks them `(literal)` |
+| API user-facing copy (refusals, safety, digests) | see the sheet | not started | |
+| Play Store listing copy (ships with the Play pack) | 2 descriptions + 15 bullets | not started | submission-blocking |
 
 Nothing above has been reviewed. This file exists so the review has a place to
 land — a review that lives in a chat thread is not a review.

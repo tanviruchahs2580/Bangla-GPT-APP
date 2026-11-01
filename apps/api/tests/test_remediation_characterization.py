@@ -154,7 +154,7 @@ def test_shorttest_creation(tmp_path):
     rc = c.post(
         "/teacher/classrooms", json={"class_level": 6, "section": "GEN"}, headers=_auth(teach_tok)
     )
-    assert rc.status_code in (200, 201), rc.text
+    assert rc.status_code == 201, rc.text
     room_id = rc.json()["id"]
     # try create shorttest without content -> expect 422 no_quiz_for_filter
     st = c.post(
@@ -197,7 +197,7 @@ def test_parent_link_flow(tmp_path):
     link = c.post(
         "/parents/link/invite", json={"invite_code": code, "code": code}, headers=_auth(par_tok)
     )
-    assert link.status_code in (200, 201), link.text
+    assert link.status_code == 201, link.text
     # parent can see children
     ch = c.get("/parents/me/children", headers=_auth(par_tok))
     assert ch.status_code == 200

@@ -1,0 +1,12 @@
+# hadolint configuration -- the guardrails job runs `hadolint Dockerfile
+# apps/web/Dockerfile` as a blocking step, so this file is the triaged
+# allowlist for the two Dockerfiles in the tree.
+ignored:
+  # DL3008 (pin apt-get versions): `postgresql-client` is deliberately
+  # unpinned. pg_dump talks to the server over the wire and tolerates newer
+  # servers, while pinning it to the digest-pinned base's candidate would
+  # make the backup image un-buildable on the next security rebuild of the
+  # base. The two packages that DO need determinism (openssl, libssl3t64)
+  # are pinned in the Dockerfile itself, with the refresh procedure
+  # documented there. Reason recorded in docs/security/security_scans.md.
+  - DL3008

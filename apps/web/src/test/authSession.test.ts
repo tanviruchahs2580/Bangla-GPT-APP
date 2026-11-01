@@ -56,6 +56,31 @@ describe("auth session resilience (instant-logout fix)", () => {
     expect(getToken()).toBe(TOKEN);
   });
 
+  it("a 429 on the session probe keeps the session instead of revoking it", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation((input: unknown) => {
+        if (asText(input).endsWith("/auth/logout")) {
+          return Promise.resolve(jsonResponse({}, 204));
+        }
+        return Promise.resolve(
+          jsonResponse({ detail: { code: "rate_limited" } }, 429),
+        );
+      });
+    localStorage.setItem("bgpt_token", TOKEN);
+
+    // The per-user bound on GET /users/me (10/min) is a throttle, not an
+    // authentication verdict: the token must survive, and the app must not
+    // call the revoke endpoint on the way out.
+    expect(await fetchMe()).toEqual({ status: "unreachable" });
+    expect(getToken()).toBe(TOKEN);
+    expect(
+      fetchSpy.mock.calls.some(([input]) =>
+        asText(input).endsWith("/auth/logout"),
+      ),
+    ).toBe(false);
+  });
+
   it("login succeeds end-to-end when verify passes", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation((input: unknown) => {
       const url = String(input);

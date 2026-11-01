@@ -16,6 +16,7 @@
 
 import js from '@eslint/js';
 import globals from 'globals';
+import importX from 'eslint-plugin-import-x';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
@@ -47,9 +48,24 @@ export default tseslint.config(
       // Its rules are spread in `rules` below.
       'react-hooks': reactHooks,
       'jsx-a11y': jsxA11y,
+      // F-184: the check names an import plugin. Cycles between modules only
+      // surface at bundle time (or as an undefined binding at runtime); this
+      // is the plugin's cycle rule, not its whole recommended set, because
+      // most of that set overlaps type-aware checks already on.
+      'import-x': importX,
     },
     settings: {
       react: { version: 'detect' },
+      // F-184: the built-in node resolver only resolves .js/.json by default,
+      // so extensionless TS imports (the house style) would resolve to
+      // nothing and no-cycle would silently never fire. Both the extension
+      // list and the resolver options are required: import-x's ExportMap uses
+      // `import-x/extensions`, the rule's resolver uses the node options. No
+      // tsconfig path aliases exist, so this is the whole configuration.
+      'import-x/extensions': ['.ts', '.tsx', '.js', '.jsx'],
+      'import-x/resolver': {
+        node: { extensions: ['.ts', '.tsx', '.js', '.jsx'] },
+      },
     },
     rules: {
       // `recommended` carries rules-of-hooks and exhaustive-deps;
@@ -57,7 +73,6 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       ...reactHooks.configs['recommended-latest'].rules,
       ...jsxA11y.flatConfigs.recommended.rules,
-      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
 
       // Unused arguments prefixed with `_` are deliberate (callbacks,
       // interface conformance); anything else unused is a mistake.
@@ -87,24 +102,30 @@ export default tseslint.config(
         { checksVoidReturn: { attributes: false } },
       ],
 
-      // Non-null assertions. Left OFF, with the reason recorded rather than
-      // suppressed line by line: all 14 remaining sites are the query
-      // enable-guard idiom -
-      //     useQuery({ queryFn: () => f(active!, id), enabled: !!active })
-      // where TypeScript cannot see that `enabled` gates the call. Rewriting
-      // each one into a redundant `if (!active) return` would add noise
-      // without removing a real possibility of a null crash.
-      // Re-enable this if the codebase stops using react-query guards.
-      '@typescript-eslint/no-non-null-assertion': 'off',
+      // Non-null assertions (`x!`) hide a real null from the type checker.
+      // FE-02: this rule was off with a rationale that the 14 sites were all
+      // react-query enable-guard idioms; every production site is now written
+      // with an explicit guard instead, so the rule is on. (Tests keep their
+      // own override below: asserting a query result is how a test asserts.)
+      '@typescript-eslint/no-non-null-assertion': 'error',
 
       // Fast-refresh granularity only: it complains when a module exports a
       // component alongside a hook or constant, which costs a full reload in
       // dev but is not a defect in the shipped code. Colocating a page with
-      // its helpers is the more common, more readable layout.
+      // its helpers is the more common, more readable layout, and FE-02's
+      // review accepted this one global disable with that reason written
+      // down (the plugin still runs for the export-shape rules it shares).
       'react-refresh/only-export-components': 'off',
 
       // Console noise in shipped UI code is usually debugging left behind.
       'no-console': ['warn', { allow: ['warn', 'error'] }],
+
+      // FE-03: the >500-line pages are being split (AITutorPage first, its
+      // sections now live under src/pages/student/tutor/). The extracted
+      // modules are capped immediately so the split cannot regress while the
+      // remaining pages land; the rule extends to src/pages as each page is
+      // split, and the register's F-094 tracks the remainder.
+      'max-lines': 'off',
 
       // `role="student"` on <RequireAuth> is a prop of our own component, not
       // a DOM aria role; ignoreNonDOM stops jsx-a11y from reading it as one.
@@ -113,6 +134,21 @@ export default tseslint.config(
       eqeqeq: ['error', 'smart'],
       'prefer-const': 'error',
       'no-var': 'error',
+
+      // F-184: a cycle between modules has no type error and no test failure
+      // until something imports the stale half; fail it at lint time.
+      'import-x/no-cycle': 'error',
+    },
+  },
+
+  // ---- extracted page sections: line budget (FE-03) -----------------------
+  {
+    files: ['src/pages/student/tutor/**/*.tsx'],
+    rules: {
+      'max-lines': [
+        'error',
+        { max: 300, skipBlankLines: true, skipComments: true },
+      ],
     },
   },
 

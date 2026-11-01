@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Callable
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
@@ -159,12 +160,21 @@ def _build_tutor(
     circuit_breaker: CircuitBreaker | None,
     fallback_provider: LLMProvider | None,
     term_stats: TermStats | None = None,
+    *,
+    retrieval_only_fallback: bool = False,
+    corpus_digest: str | None = None,
 ) -> TutorService:
     """Construct the TutorService with optional circuit breaker + fallback.
 
     ``term_stats`` carries corpus document frequencies to the grounding gate
     (weighted content-term coverage). Optional: absence degrades the gate to
     uniform weights over content terms, never to a lie.
+
+    ``retrieval_only_fallback`` (RAG-27) is the operator's degraded-mode flag:
+    a provider outage answers with cited excerpts instead of the 502.
+
+    ``corpus_digest`` (F-082) is stamped on every trace and citation so an
+    answer names the corpus build that produced it.
     """
     return TutorService(
         index=index,
@@ -173,6 +183,8 @@ def _build_tutor(
         circuit_breaker=circuit_breaker,
         fallback_provider=fallback_provider,
         term_stats=term_stats,
+        retrieval_only_fallback=retrieval_only_fallback,
+        corpus_digest=corpus_digest,
     )
 
 
@@ -188,11 +200,9 @@ def _load_corpus_chunks(settings: Settings) -> tuple[list[Chunk], str]:
     crash); it is just not allowed to be invisible anymore.
     """
     if settings.nctb_corpus_dir:
-        from pathlib import Path as _Path
-
         from bangla_gpt_api.data.nctb_loader import load_nctb_corpus
 
-        corpus_root = _Path(settings.nctb_corpus_dir)
+        corpus_root = Path(settings.nctb_corpus_dir)
         chunks = load_nctb_corpus(
             corpus_root / "normalized",
             quality_report_path=corpus_root / "quality_report.json",
@@ -200,6 +210,42 @@ def _load_corpus_chunks(settings: Settings) -> tuple[list[Chunk], str]:
         if chunks:
             return chunks, "nctb"
     return load_sample_corpus(), "bundled-sample"
+
+
+def _served_corpus_identity(settings: Settings, chunks: list[Chunk], kind: str) -> dict:
+    """Build-identifying record of the corpus the index was built from (F-082).
+
+    ``digest`` is the tracked artifact digest when the corpus has chunk files
+    on disk (the same recipe the boot log and ``check_corpus_manifest.py``
+    verify), and the served-chunk digest otherwise. ``manifest_sha256`` names
+    the quality report the build was verified against; it is None for corpora
+    with no tracked artifacts (the bundled sample).
+    """
+    from bangla_gpt_api.nctb.manifest import sha256_file
+    from bangla_gpt_api.retrieval.index_manifest import (
+        chunk_files,
+        corpus_digest,
+        served_chunks_digest,
+    )
+
+    digest: str | None = None
+    manifest_sha256: str | None = None
+    corpus_root = Path(settings.nctb_corpus_dir) if settings.nctb_corpus_dir else None
+    if corpus_root is not None:
+        paths = chunk_files(corpus_root)
+        if paths:
+            digest = corpus_digest(paths)
+        quality_report = corpus_root / "quality_report.json"
+        if quality_report.is_file():
+            manifest_sha256 = sha256_file(quality_report)
+    if digest is None:
+        digest = served_chunks_digest(chunks)
+    return {
+        "kind": kind,
+        "chunks": len(chunks),
+        "digest": digest,
+        "manifest_sha256": manifest_sha256,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -243,6 +289,20 @@ def build_dependencies(
     tutor: TutorService | None = None
     if provider is not None:
         chunks, corpus_identity = _load_corpus_chunks(settings)
+        # F-082: one identity record for the corpus the index serves. Logged
+        # here, served by /admin/system/info and stamped on every answer trace
+        # and citation, so an answer can be traced to the build that produced
+        # it without correlating boot logs.
+        corpus_record = _served_corpus_identity(settings, chunks, corpus_identity)
+        json_log(
+            logger,
+            logging.INFO,
+            "rag_corpus_identity",
+            corpus=corpus_identity,
+            chunks=corpus_record["chunks"],
+            digest=corpus_record["digest"],
+            manifest_sha256=corpus_record["manifest_sha256"],
+        )
         # Corpus identity is boot-level operational state: which corpus the
         # tutor actually serves, how many evidence chunks it has, and whether
         # a configured NCTB directory degraded to the bundled sample. Logged
@@ -261,6 +321,25 @@ def build_dependencies(
                 "rag_corpus_fallback: NCTB_CORPUS_DIR=%s produced no usable "
                 "chunks; the tutor is serving the bundled sample corpus",
                 settings.nctb_corpus_dir,
+            )
+        # F-016: the log line above and the metric made the degradation
+        # visible, but a billable production deployment could still serve the
+        # synthetic sample to children. _validate_corpus in main.py refuses the
+        # "directory unset" case before this code runs; this is the second
+        # door -- a configured directory that yields no usable chunks.
+        if (
+            corpus_identity == "bundled-sample"
+            and settings.is_production
+            and settings.has_billable_llm_provider
+            and not settings.allow_bundled_sample_corpus_in_production
+        ):
+            raise RuntimeError(
+                "Refusing to start: the tutor would serve the bundled "
+                "synthetic sample corpus in production "
+                f"(NCTB_CORPUS_DIR={settings.nctb_corpus_dir or '<unset>'!r} "
+                "produced no usable chunks). Fix the corpus directory, or set "
+                "ALLOW_BUNDLED_SAMPLE_CORPUS_IN_PRODUCTION=true for a "
+                "deliberate offline demo."
             )
 
         from bangla_gpt_api.caching import RAG_CACHE_TTL_SECONDS, CachedRankingIndex
@@ -306,9 +385,12 @@ def build_dependencies(
             circuit_breaker,
             fallback_provider,
             term_stats=term_stats,
+            retrieval_only_fallback=settings.retrieval_only_fallback_enabled,
+            corpus_digest=corpus_record["digest"],
         )
     else:
         tutor = None
+        corpus_record = None
 
     # --- Database ---
     if _me_fn is None:
@@ -331,6 +413,8 @@ def build_dependencies(
         tutor=tutor,
         session_factory=session_factory,
         ai_job_tasks=set(),
+        circuit_breaker=circuit_breaker,
+        corpus_identity=corpus_record,
     )
 
     return ctx, provider, fast_provider, engine, session_factory

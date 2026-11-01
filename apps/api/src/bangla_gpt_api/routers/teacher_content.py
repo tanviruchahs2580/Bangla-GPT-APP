@@ -74,6 +74,7 @@ from bangla_gpt_api.services.question_bank import (
 )
 
 from .common import (
+    DocumentInputError,
     _doc_in_for,
     _generate_document,
     _persist_document,
@@ -113,7 +114,7 @@ def _content_current(
             ChapterContent.class_level == class_level,
             ChapterContent.chapter == chapter,
         )
-        .order_by(ChapterContent.version.desc())
+        .order_by(ChapterContent.version.desc(), ChapterContent.id.desc())
         .limit(1)
     ).scalar_one_or_none()
 
@@ -263,7 +264,7 @@ def teacher_content_history(
                 ChapterContent.class_level == class_level,
                 ChapterContent.chapter == chapter,
             )
-            .order_by(ChapterContent.version.desc())
+            .order_by(ChapterContent.version.desc(), ChapterContent.id.desc())
         )
         .scalars()
         .all()
@@ -662,48 +663,42 @@ def teacher_qp_review(
     return _qp_out(qp)
 
 
-@router.post("/teacher/qpapers/{qp_id}/replace", response_model=QPOut)
-async def teacher_qp_replace(
-    app_ctx: Ctx, qp_id: int, payload: QPReplaceIn, db: DbSession, teacher: AIGenerationUser
-) -> QPOut:
-    """Swap ONE question for a freshly generated one; still needs review."""
-
-    def _load() -> tuple[QuestionPaper, list[dict[str, Any]], dict[str, Any], str, str]:
-        qp = _qp_or_404(db, qp_id, teacher)
-        _qp_editable(qp)
-        questions = [dict(q) for q in qp.questions]
-        target = next((q for q in questions if str(q["ref"]) == payload.ref), None)
-        if target is None:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "code": "unknown_question_ref",
-                    "message": f"unknown question ref: {payload.ref}",
-                },
-            )
-        return (
-            qp,
-            questions,
-            target,
-            (payload.difficulty or str(target["difficulty"])),
-            (payload.chapter or str(target["chapter"])),
+def _load_replace_target(
+    db: Session, qp_id: int, teacher: User, ref: str
+) -> tuple[QuestionPaper, list[dict[str, Any]], dict[str, Any], str, str]:
+    """Load the editable paper and the question a swap targets."""
+    qp = _qp_or_404(db, qp_id, teacher)
+    _qp_editable(qp)
+    questions = [dict(q) for q in qp.questions]
+    target = next((q for q in questions if str(q["ref"]) == ref), None)
+    if target is None:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "unknown_question_ref", "message": f"unknown question ref: {ref}"},
         )
+    return (qp, questions, target, str(target["difficulty"]), str(target["chapter"]))
 
-    qp, questions, target, label, chapter = await asyncio.to_thread(_load)
-    started = time.perf_counter()
-    reuse_source = "ai"
-    # reuse a reviewed bank question when one fits (MCQ-complete,
-    # not already on the paper); the AI draft path stays the fallback.
-    replacement: dict[str, Any] | None = None
-    for row in await asyncio.to_thread(
-        find_reusable,
+
+def _bank_replacement(
+    db: Session,
+    qp: QuestionPaper,
+    teacher: User,
+    target: dict[str, Any],
+    label: str,
+    chapter: str,
+) -> dict[str, Any] | None:
+    """A reviewed bank question that fits, or None when only AI can serve.
+
+    Reuse first: an MCQ-complete reviewed row not already on the paper.
+    """
+    for row in find_reusable(
         db,
         class_level=qp.class_level,
         school_id=teacher.school_id,
         include_all_schools=teacher.role == "admin",
         subject=qp.subject,
         chapter=chapter,
-        exclude_texts=[str(q["text"]) for q in questions],
+        exclude_texts=[str(q["text"]) for q in qp.questions],
         limit=8,
     ):
         idx = row.answer_index
@@ -712,7 +707,7 @@ async def teacher_qp_replace(
         if not 0 <= idx <= 3:
             continue
         row.times_reused += 1
-        replacement = {
+        return {
             "ref": str(target["ref"]),
             "text": row.question_text,
             "options": [str(o) for o in row.options],
@@ -722,30 +717,71 @@ async def teacher_qp_replace(
             "chapter": chapter,
             "reviewed": False,
         }
-        reuse_source = "bank"
-        break
+    return None
 
-    def _persist(replacement: dict[str, Any]) -> None:
-        if reuse_source == "ai":
-            replacement["ref"] = str(target["ref"])
-            replacement["difficulty"] = label
-            replacement["chapter"] = chapter
-            replacement["reviewed"] = False
-        questions[questions.index(target)] = replacement
-        qp.questions = questions
-        qp.reviewed_at = None
-        db.commit()
-        db.refresh(qp)
-        json_log(
-            logger,
-            logging.INFO,
-            "qp_replace",
-            qp_id=qp.id,
-            ref=payload.ref,
-            reuse_source=reuse_source,
-            elapsed_ms=int((time.perf_counter() - started) * 1000),
-        )
 
+def _pick_fresh_candidate(
+    fresh: list[dict[str, Any]], questions: list[dict[str, Any]], label: str, chapter: str
+) -> dict[str, Any] | None:
+    """First fresh draft not already on the paper, preferring label+chapter."""
+    used = {str(q["text"]) for q in questions}
+    usable = [q for q in fresh if str(q["text"]) not in used]
+    candidates = (
+        [q for q in usable if str(q["difficulty"]) == label and str(q["chapter"]) == chapter]
+        or [q for q in usable if str(q["chapter"]) == chapter]
+        or usable
+    )
+    return candidates[0] if candidates else None
+
+
+def _persist_replacement(
+    db: Session,
+    qp: QuestionPaper,
+    questions: list[dict[str, Any]],
+    target: dict[str, Any],
+    replacement: dict[str, Any],
+    *,
+    source: str,
+    ref: str,
+    started: float,
+) -> None:
+    if source == "ai":
+        replacement["ref"] = str(target["ref"])
+        replacement["difficulty"] = str(target["difficulty"])
+        replacement["chapter"] = str(target["chapter"])
+        replacement["reviewed"] = False
+    questions[questions.index(target)] = replacement
+    qp.questions = questions
+    qp.reviewed_at = None
+    db.commit()
+    db.refresh(qp)
+    json_log(
+        logger,
+        logging.INFO,
+        "qp_replace",
+        qp_id=qp.id,
+        ref=ref,
+        reuse_source=source,
+        elapsed_ms=int((time.perf_counter() - started) * 1000),
+    )
+
+
+@router.post("/teacher/qpapers/{qp_id}/replace", response_model=QPOut)
+async def teacher_qp_replace(
+    app_ctx: Ctx, qp_id: int, payload: QPReplaceIn, db: DbSession, teacher: AIGenerationUser
+) -> QPOut:
+    """Swap ONE question for a freshly generated one; still needs review."""
+    qp, questions, target, label, chapter = await asyncio.to_thread(
+        _load_replace_target, db, qp_id, teacher, payload.ref
+    )
+    # An explicit payload override wins over the target's own label/chapter.
+    label = payload.difficulty or label
+    chapter = payload.chapter or chapter
+    started = time.perf_counter()
+    replacement = await asyncio.to_thread(
+        _bank_replacement, db, qp, teacher, target, label, chapter
+    )
+    source = "bank" if replacement is not None else "ai"
     if replacement is None:
         ctx = await asyncio.to_thread(
             _request_context,
@@ -767,25 +803,23 @@ async def teacher_qp_replace(
             dict(qp.difficulty),
             context=ctx,
         )
-        used = {str(q["text"]) for q in questions}
-        candidates = (
-            [
-                q
-                for q in fresh
-                if str(q["text"]) not in used
-                and str(q["difficulty"]) == label
-                and str(q["chapter"]) == chapter
-            ]
-            or [q for q in fresh if str(q["text"]) not in used and str(q["chapter"]) == chapter]
-            or [q for q in fresh if str(q["text"]) not in used]
-        )
-        replacement = candidates[0] if candidates else None
+        replacement = _pick_fresh_candidate(fresh, questions, label, chapter)
     if replacement is None:
         raise HTTPException(
             status_code=502,
             detail={"code": "no_replacement", "message": "no distinct replacement question"},
         )
-    await asyncio.to_thread(_persist, replacement)
+    await asyncio.to_thread(
+        _persist_replacement,
+        db,
+        qp,
+        questions,
+        target,
+        replacement,
+        source=source,
+        ref=payload.ref,
+        started=started,
+    )
     return _qp_out(qp)
 
 
@@ -955,24 +989,34 @@ async def teacher_generate_document(
     try:
         gen_in = _doc_in_for(kind, body)
     except ValidationError as exc:
+        # Coded 422 like every other rejection (F-074): the pydantic error
+        # list leaked the internal validation shape and was the last list-
+        # shaped detail in routers/. Field locations are logged, not echoed.
+        json_log(
+            logger,
+            logging.INFO,
+            "teacher_document_payload_invalid",
+            kind=kind,
+            fields=[str(e["loc"][0]) if e["loc"] else "?" for e in exc.errors()[:5]],
+        )
         raise HTTPException(
             status_code=422,
-            detail=[
-                {"loc": [str(p) for p in e["loc"]], "msg": str(e["msg"])} for e in exc.errors()[:5]
-            ],
+            detail={"code": "invalid_payload", "message": f"invalid {kind} payload"},
         ) from exc
     started = time.perf_counter()
     try:
         doc_payload, sources, chapter = await _generate_document(app_ctx, db, teacher, kind, gen_in)
-    except LookupError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except DocumentInputError as exc:
+        # status/code/message are authored for the client in common.py; no
+        # str(exc) of an arbitrary exception reaches the body (F-074).
+        raise HTTPException(
+            status_code=exc.status_code, detail={"code": exc.code, "message": str(exc)}
+        ) from exc
     except ProviderError as exc:
         raise HTTPException(
             status_code=502,
             detail={"code": "llm_unavailable", "message": f"{kind} generation failed"},
         ) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     def _finalize(doc_payload: dict, chapter: str | None) -> TeacherDocument:
         doc = _persist_document(

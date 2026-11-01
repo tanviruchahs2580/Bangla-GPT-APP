@@ -136,8 +136,12 @@ def test_consent_reconfirm_denied_across_schools(tmp_path) -> None:
         json={"accepted": True},
         headers=teacher,
     )
-    assert denied.status_code == 403
-    assert denied.json()["detail"]["code"] == "other_school"
+    # F-144: the tenancy wall answers the same 404 a missing student gets,
+    # so a staff account cannot use the status code to tell "exists in
+    # another school" from "does not exist". The old assertion pinned the
+    # 403 other_school body, which was exactly the existence oracle.
+    assert denied.status_code == 404
+    assert denied.json()["detail"]["code"] == "student_not_found"
 
 
 def test_consent_reconfirm_admin_still_allowed(tmp_path) -> None:

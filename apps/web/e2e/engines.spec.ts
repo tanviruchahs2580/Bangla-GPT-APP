@@ -215,15 +215,14 @@ test("only loaded font weights are used for Bangla (no synthetic bold)", async (
       );
       if (sameFamily.length === 0) continue; // the engine fell through the stack
       const weights = sameFamily.map((face) => Number(face.split("@")[1]));
-      if (!weights.includes(Number(weight))) {
-        const nearest = weights.some(
-          (w) => w > Number(weight) || w < Number(weight),
+      // The synthesis case is a request with no loaded face at or above it
+      // (the audit's `font-weight: 800` against a stack that ships up to 700).
+      // The previous predicate was `w > weight || w < weight`, which is true
+      // for any non-empty face list, so this assertion could never fail.
+      if (!weights.some((w) => w >= Number(weight)))
+        missing.push(
+          `${element.tagName}.${(element.getAttribute("class") ?? "").split(" ")[0]} ${family}@${weight}`,
         );
-        if (!nearest)
-          missing.push(
-            `${element.tagName}.${(element.getAttribute("class") ?? "").split(" ")[0]} ${family}@${weight}`,
-          );
-      }
     }
     return {
       missing: [...new Set(missing)].slice(0, 10),

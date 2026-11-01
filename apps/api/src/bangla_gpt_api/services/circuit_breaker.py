@@ -208,7 +208,7 @@ class CircuitBreakerMiddleware:
             )
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> bool:
+    async def __aexit__(self, exc_type, _exc_val, _exc_tb) -> bool:
         if exc_type is not None:
             self._breaker.record_failure()
         else:

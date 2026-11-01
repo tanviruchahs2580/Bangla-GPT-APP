@@ -19,8 +19,6 @@ coming back, by enumerating the app's own routes instead of a hand-written
 list that could rot.
 """
 
-import time
-
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -30,7 +28,7 @@ from bangla_gpt_api.db.models import AiJob
 from bangla_gpt_api.db.session import make_engine, make_session_factory
 from bangla_gpt_api.initialize.middleware_stack import _effective_rules
 from bangla_gpt_api.main import PUBLIC_OPERATIONS, create_app
-from conftest import engine_url
+from conftest import engine_url, poll_until
 
 PASSWORD = "supersecret1"
 JWT = "test-secret-0123456789abcdef0123456789"
@@ -99,6 +97,11 @@ def test_register_is_rate_limited(tmp_path) -> None:
     refused = client.post("/auth/register", json=_register_payload("bulk10@example.com"))
     assert refused.status_code == 429
     assert refused.json()["detail"]["code"] == "rate_limited"
+    # API-05: the other 429 producer (login lockout) already sent Retry-After;
+    # the middleware limiter must too, or a throttled client can only guess.
+    retry_after = refused.headers.get("Retry-After")
+    assert retry_after is not None, refused.headers
+    assert 1 <= int(retry_after) <= 60
 
 
 def test_register_rule_ships_by_default() -> None:
@@ -218,17 +221,21 @@ def test_teacher_jobs_are_rate_limited_end_to_end(tmp_path) -> None:
 
 def _wait_job_settled(factory, job_id: str, timeout: float = 30.0) -> None:
     """Wait for the detached job task to stop writing (see the docstring)."""
-    deadline = time.monotonic() + timeout
-    last = None
-    while time.monotonic() < deadline:
+    last = {"status": None}
+
+    def settled() -> str | None:
         with factory() as session:
-            last = session.execute(
+            status = session.execute(
                 select(AiJob.status).where(AiJob.id == job_id)
             ).scalar_one_or_none()
-        if last in ("ready", "failed"):
-            return
-        time.sleep(0.05)
-    pytest.fail(f"job {job_id} never settled (last status: {last})")
+        last["status"] = status
+        return status if status in ("ready", "failed") else None
+
+    poll_until(
+        settled,
+        timeout=timeout,
+        describe=lambda: f"job {job_id} never settled (last status: {last['status']})",
+    )
 
 
 # --- the invariant ----------------------------------------------------------

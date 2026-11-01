@@ -1,7 +1,12 @@
 # Operations Runbook — Bangla GPT APP
 
 Audience: engineer/SRE deploying or operating the platform.
-Every command below has been executed and verified on this codebase.
+
+Commands that run on a development machine were executed against this tree on
+2026-10-29: start/stop (§1), the migration cycle (§3), backup + restore (§4),
+the rolling-deploy demo (§3), the JWT rotation (§10). Commands that need a
+deploy host, an SSH key, Vercel or Cloudflare credentials are marked host-side
+and were verified against the workflow/config that implements them, not run.
 
 ## 1. Start locally (dev)
 
@@ -26,7 +31,7 @@ curl http://127.0.0.1:8000/ready
 > `JWT_SECRET`; the pytest suite already uses 39-char test secrets, so its
 > warnings come only from the shortest-lived dev-default cases.
 
-Web dashboard (dev): `cd apps/web && npm ci && npm run dev` → http://localhost:5173
+Web dashboard (dev): `cd apps/web && npm ci && npm run dev` → <http://localhost:5173>
 (dev server proxies `/api/*` to `http://127.0.0.1:8000`). Production build: `npm run build`.
 
 ## 2. Staging / production deployment (docker compose)
@@ -147,7 +152,6 @@ mix of inline workers plus an ARQ cron still sends each weekly digest (and
 runs each nightly rollup) **at most once**; losers skip with `already_ran`.
 The digest needs working SMTP (`SMTP_ENABLED` + relay, §2 production list);
 without SMTP it logs `skipped=smtp_not_configured` instead of failing.
-
 
 ## 3. Database migrations
 
@@ -272,6 +276,13 @@ Alert rules ship in `deploy/prometheus/alerts.yml`:
 - `APIScrapeDown` — scrape target down 2 min (critical)
 - `UnhandledExceptions` — any unhandled exception increase
 - `DiskNearFull` — requires node_exporter (fires only when present)
+- `HighRAGRefusalRate` — the evidence gate refuses >50% of grounded attempts
+  for 15 min (warning). The corpus-degradation signal (for example a mis-set
+  `NCTB_CORPUS_DIR` leaving the 78-chunk bundled sample): check
+  `bgpt_rag_index_chunks` and the `rag_corpus_loaded` boot line first, then §8.
+- `RAGCitationCheckFailures` — a grounded answer failed citation verification
+  in the last 15 min (warning). Inspect the `ai_call` / `tutor_retrieval` logs
+  for the request id.
 
 Logs are JSON lines to stdout with `X-Request-ID` correlation. `LOG_LEVEL`
 controls verbosity (DEBUG/INFO/WARNING/ERROR/CRITICAL).
@@ -317,6 +328,11 @@ Quarterly rotation procedure:
   that the workflow did not implement.
 - **DB rollback:** `alembic downgrade <revision>` (verified cycle). Always take
   a backup (§4) before downgrading.
+- **Rehearse the release rollback** (host-side, needs two tags and a staging
+  stack): `scripts/rollback_drill.sh [CURRENT_TAG]` runs the workflow's exact
+  sequence — checkout the previous tag, `compose pull`, `compose up --wait` —
+  against a staging project and asserts the previous release comes up healthy.
+  It is the drill for the rollback path release.yml performs automatically.
 - **Bad release prevention:** CI gates (lint/format/type/tests/pip-audit/
   migrations incl. Postgres/golden-eval/container smoke) must pass before merge.
 
@@ -369,6 +385,7 @@ Quarterly rotation procedure:
 ## 10. v0.3 additions (chat, invites, retention)
 
 ### Secrets rotation (expanded)
+
 - `JWT_SECRET`: rotate via `python -c "import secrets;print(secrets.token_urlsafe(48))"`.
   Rotation invalidates all sessions (users simply log in again); do it in a
   maintenance window. Update the compose `.env` and restart `api`.
@@ -495,6 +512,7 @@ stable and removes this whole failure class; it needs the budget and residency s
 recorded in `docs/hosting_decision.md`.
 
 ### Capacity plan & load testing
+
 - Baseline: 2 uvicorn workers handle ~120 concurrent quiz journeys at
   p95<300 ms (DB-bound). The LLM path is upstream-bound: budget ~2-8 s p95
   per ask at free-tier quota; scale by upgrading tier / adding keys, not
@@ -503,17 +521,20 @@ recorded in `docs/hosting_decision.md`.
   before each release; thresholds inside fail on SLO breach.
 
 ### Data retention (D20)
+
 - Conversations older than `CHAT_RETENTION_DAYS` (default 180) are purged by
   `POST /admin/maintenance/purge` (admin-only). Schedule it daily:
   `0 3 * * * curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" http://api:8000/admin/maintenance/purge`
   or trigger from the admin dashboard button weekly until automated.
 
 ### Email verification
+
 - With `SMTP_ENABLED=true`, registration requires email verification before
   first login (`email_unverified` code drives UI copy + resend link).
 - Without SMTP, accounts auto-verify (dev/small deployments only).
 
 ### Support ops & SLA
+
 - Public status page: the web app serves `/status` from `GET /status`
   (presence/booleans only -- safe to link publicly; never exposes counts).
   Check the API directly with `curl http://api:8000/status`; a `degraded`
@@ -530,3 +551,52 @@ recorded in `docs/hosting_decision.md`.
   ended with the banner's exit button (revokes the token server-side).
   Both start and exit land in `GET /admin/audit?action=impersonation`.
   Admin-role targets are rejected server-side (support never gets powers).
+
+## 11. Incident first response (common incidents)
+
+Triage by symptom; each row names the first check and the section that carries
+the procedure.
+
+| Symptom | First check | Then |
+|---|---|---|
+| Nobody can log in | `curl -s -o /dev/null -w '%{http_code}\n' https://bangla-gpt-app.vercel.app/api/health` — `502` is the origin, `200` means look elsewhere | §10 "API origin down" (rotate the tunnel), or §7 (roll back a bad release) |
+| `HighHTTP5xxRate` / `APIScrapeDown` firing | `docker compose --profile core logs api`; every line carries `X-Request-ID` | §5, §7 |
+| `/ready` 503 `database_unavailable` | SQLite volume present / `pg_isready` for the Postgres profile | §4, §3 |
+| `/ready` 503 naming the provider | Confirm `LLM_PROVIDER` and its key; a provider outage answers `/tutor/ask` 502 `llm_unavailable` while `/ready` stays 200 | §8, §10 (key rotation) |
+| Protected routes answering 503 | Redis down and `RATE_LIMIT_FAIL_OPEN=false` fail closed by design | §8; restart `redis`, or accept the outage |
+| `DiskNearFull` or write errors | `df -h` on the host and in the container; prune backups beyond `BACKUP_KEEP_DAYS` | §4 |
+| Backup missing or restore rehearsal red | `docker compose logs backup`; rerun `restore_test.py` | §4 |
+| Release deployed, behaviour wrong | Redeploy the previous tag | §7 |
+| Suspicion that children's data was exposed | Preserve evidence (do not delete logs or the DB volume) | Report per [SECURITY.md](../SECURITY.md) with "data incident" in the subject — this table does not cover data incidents |
+| Unsafe AI answer, or generation must stop | Decide whether to disable generation (`AI_GENERATION_ENABLED=false`, restart `api`) | [ai/incident-response.md](ai/incident-response.md) |
+
+Detection latency: the scheduled uptime probe is best-effort — GitHub throttles
+`schedule` runs, and 2026-10-23..28 saw 35 runs (2-7 per day) instead of the
+nominal every 15 min, so a failure can be noticed hours late. The workflow's
+`page` job files a deduplicated issue and `resolve` closes it on the next green
+probe. Treat the probe as a backstop, not a pager.
+
+After any incident, record what happened, the impact and the follow-up action
+in the current QA record or a follow-up issue; do not edit an archived report
+to match the new facts.
+
+### Planned maintenance window
+
+The web app ships a maintenance screen at the `/maintenance` route
+(`apps/web/src/pages/MaintenancePage.tsx`; the same honest copy the API-outage
+state uses — the account is fine, nothing was lost), and the offline shell
+(`apps/web/public/offline.html`) is bilingual and cached by the service worker,
+so an already-open tab stays usable while the API is down. Opening a window is
+a one-line change in the web tier's rewrite plus a redeploy:
+
+- compose/nginx: in `apps/web/deploy/nginx.conf`, add an exact-match
+  `location = /maintenance` before `location /`, then make `location /` return
+  a 302 to `/maintenance`. Keep the `/assets/`, `/sw.js` and `/index.html`
+  blocks as they are — hashed assets must keep loading for the screen to
+  render. Rebuild the web image and `docker compose --profile web up -d web`.
+- Vercel: point the catch-all rewrite in `apps/web/vercel.json` at
+  `/maintenance` (add `maintenance` to the exception group) and redeploy.
+
+The API stays up through the window so `/health` and `/ready` keep answering
+for the uptime probe. After the window, revert the rewrite and redeploy — do
+not leave the app pinned to the maintenance copy.

@@ -74,7 +74,11 @@ def test_dashboard_today_agrees_with_dhaka_activity_day(tmp_path, monkeypatch):
     """
     c = _client(tmp_path)
     h = _register_login(c, "dash3@example.com")
+    # The Dhaka day is computed in two places: the dashboard cache key in
+    # routers/learn.py and the shared activity summary in services/activity.py
+    # (extracted there by F-072), so both clocks are pinned.
     monkeypatch.setattr("bangla_gpt_api.routers.learn.datetime", _FixedInstant)
+    monkeypatch.setattr("bangla_gpt_api.services.activity.datetime", _FixedInstant)
     pid = c.get("/users/me", headers=h).json()["profile_id"]
     summary = c.get("/dashboard/summary", headers=h).json()
     activity = c.get(f"/students/{pid}/activity", headers=h).json()

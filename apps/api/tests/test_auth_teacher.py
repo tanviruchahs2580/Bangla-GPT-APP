@@ -189,12 +189,17 @@ def test_cross_student_data_isolation_and_teacher_access(client: TestClient) -> 
     _register(client, "teach@example.com", role="teacher")
     teacher_headers = _login_headers(client, "teach@example.com")
     teacher_view = client.get(f"/students/{a_id}/progress", headers=teacher_headers)
-    assert teacher_view.status_code == 403
-    assert teacher_view.json()["detail"]["code"] == "other_school"
+    # F-144: a student outside the teacher's school is answered as not
+    # found (the 403 other_school body used to confirm the id existed).
+    assert teacher_view.status_code == 404
+    assert teacher_view.json()["detail"]["code"] == "student_not_found"
     teacher_generate = client.post(
         "/quizzes", json={"student_id": a_id, "num_questions": 2}, headers=teacher_headers
     )
-    assert teacher_generate.status_code == 403
+    # F-144: the quiz-start path runs the same tenancy gate, so an
+    # out-of-school student is answered as not found here too.
+    assert teacher_generate.status_code == 404
+    assert teacher_generate.json()["detail"]["code"] == "student_not_found"
 
 
 def test_teacher_roster_and_class_analytics(client: TestClient) -> None:

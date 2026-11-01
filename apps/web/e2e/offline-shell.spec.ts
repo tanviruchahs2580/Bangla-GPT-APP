@@ -57,7 +57,7 @@ test('the service worker installs, caches the hashed bundle, and boots offline',
   // this, "offline" is an HTML page that boots no React at all.
   const cachedAssets = await page.evaluate(async () => {
     // Discover the worker's cache by prefix instead of hardcoding the name:
-    // the cache name carries a maintenance-bump suffix (bgpt-v2 -> bgpt-v3)
+    // the cache name carries a maintenance-bump suffix (bgpt-v2 -> bgpt-v4)
     // and the assertion is about *content*, not the label.
     const names = (await caches.keys()).filter((name) => name.startsWith('bgpt-'))
     const keys = (await Promise.all(names.map((name) => caches.open(name).then((c) => c.keys())))).flat()

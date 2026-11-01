@@ -9,21 +9,31 @@ the audit's: a store listing is user-visible copy, so "answers cite their
 sources" is only writable because the tutor's answer contract requires citations
 and the coverage gate abstains instead of guessing.
 
+**Corpus wording (F-126).** The retrieval corpus is the NCTB national
+*curriculum* documents (the 2012 curriculum framework and the subject
+curricula), not the student textbooks: the textbook PDFs are not exposed as
+static downloads on nctb.gov.bd and remain an explicit data gap
+(`docs/NCTB_DATA_PIPELINE.md` §1). The copy below therefore says
+"curriculum-grounded" / "শিক্ষাক্রমভিত্তিক", never "textbook-grounded" — the
+former is what the citations can actually show. The app's in-app string
+`trustNctb` and `index.html`'s `og:description` still carry the textbook
+wording; that drift is handed to the web stream (see the QA register F-126).
+
 ## bn-BD (default)
 
 **অ্যাপের নাম (≤30):** `বাংলা GPT টিউটর` (15 characters)
 
 **সংক্ষিপ্ত বিবরণ (≤80):**
-`শ্রেণি ৬-১০ · পাঠ্যবইভিত্তিক উত্তর, সূত্রসহ`
+`শ্রেণি ৬-১০ · শিক্ষাক্রমভিত্তিক উত্তর, সূত্রসহ`
 
 **পূর্ণ বিবরণ:**
 
 ```text
-বাংলা GPT টিউটর — ষষ্ঠ থেকে দশম শ্রেণির পাঠ্যবইভিত্তিক পড়াশোনার সহায়ক।
+বাংলা GPT টিউটর — ষষ্ঠ থেকে দশম শ্রেণির শিক্ষাক্রমভিত্তিক পড়াশোনার সহায়ক।
 
 যা করে:
-• প্রশ্ন লিখুন বা ছবি সংযুক্ত করুন — উত্তর আসে পাঠ্যবইয়ের অংশ থেকে, সাথে সূত্র দেখানো হয়
-• প্রতিটি উত্তরের নিচে সূত্র থাকে; পাঠ্যবইয়ে ভিত্তি না থাকলে অনুমান না করে সরাসরি জানিয়ে দেয় যে উত্তরটি দেওয়া সম্ভব নয়
+• প্রশ্ন লিখুন বা ছবি সংযুক্ত করুন — উত্তর আসে এনসিটিবি শিক্ষাক্রম ডকুমেন্টের অংশ থেকে, সাথে সূত্র দেখানো হয়
+• প্রতিটি উত্তরের নিচে সূত্র থাকে; শিক্ষাক্রমে ভিত্তি না থাকলে অনুমান না করে সরাসরি জানিয়ে দেয় যে উত্তরটি দেওয়া সম্ভব নয়
 • অনুশীলনী, কুইজ ও অগ্রগতির হিসাব
 • শিক্ষকের জন্য ক্লাসরুম, প্রশ্নপত্র ও কনটেন্ট তৈরি
 • অভিভাবকের জন্য সন্তানের অগ্রগতির সারসংক্ষেপ
@@ -49,17 +59,17 @@ and the coverage gate abstains instead of guessing.
 **App name (≤30):** `Bangla GPT Tutor`
 
 **Short description (≤80):**
-`Homework help grounded in the NCTB textbooks, with the source shown`
+`Homework help grounded in the NCTB curriculum, with the source shown`
 
 **Full description:**
 
 ```text
-Bangla GPT Tutor helps students in classes 6-10 study from their own textbooks.
+Bangla GPT Tutor helps students in classes 6-10 study with the NCTB curriculum.
 
 What it does:
 • Ask by typing or by photo of the question
-• Answers are built from textbook passages and show their sources
-• Refuses instead of guessing when the textbook does not cover the question
+• Answers are built from NCTB curriculum passages and show their sources
+• Refuses instead of guessing when the curriculum documents do not cover the question
 • Practice sets, quizzes and progress tracking
 • Teachers get classrooms, question papers and content tools
 • Parents get a progress summary

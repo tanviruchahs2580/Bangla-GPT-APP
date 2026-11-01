@@ -1,5 +1,5 @@
-import { expect, type Page } from '@playwright/test'
-import AxeBuilder from '@axe-core/playwright'
+import { expect, type Page } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 
 /**
  * Shared plumbing for the browser accessibility sweep (AUD-G-10 / G-10, G-11).
@@ -11,21 +11,23 @@ import AxeBuilder from '@axe-core/playwright'
  * drives the built app in Chromium instead.
  */
 
-export const THEMES = ['light', 'dark'] as const
-export const LANGS = ['bn', 'en'] as const
+const THEMES = ["light", "dark"] as const;
+const LANGS = ["bn", "en"] as const;
 
-export type Theme = (typeof THEMES)[number]
-export type Lang = (typeof LANGS)[number]
+export type Theme = (typeof THEMES)[number];
+export type Lang = (typeof LANGS)[number];
 export interface Variant {
-  theme: Theme
-  lang: Lang
+  theme: Theme;
+  lang: Lang;
 }
 
 /** The four combinations G-10 asks for: light/dark x bn/en. */
-export const VARIANTS: Variant[] = THEMES.flatMap((theme) => LANGS.map((lang) => ({ theme, lang })))
+export const VARIANTS: Variant[] = THEMES.flatMap((theme) =>
+  LANGS.map((lang) => ({ theme, lang })),
+);
 
-export function label(variant: Variant): string {
-  return `${variant.theme}-${variant.lang}`
+function label(variant: Variant): string {
+  return `${variant.theme}-${variant.lang}`;
 }
 
 /**
@@ -36,14 +38,14 @@ export function label(variant: Variant): string {
 export async function useVariant(page: Page, variant: Variant): Promise<void> {
   await page.addInitScript(
     ([theme, lang]) => {
-      window.localStorage.setItem('bgpt_theme', theme)
-      window.localStorage.setItem('bgpt_lang', lang)
+      window.localStorage.setItem("bgpt_theme", theme);
+      window.localStorage.setItem("bgpt_lang", lang);
     },
     [variant.theme, variant.lang] as const,
-  )
+  );
 }
 
-export const PASSWORD = 'E2ePass!2345'
+export const PASSWORD = "E2ePass!2345";
 
 /**
  * The tutor composer's accessible name (bn and en), for specs that type into
@@ -53,19 +55,20 @@ export const PASSWORD = 'E2ePass!2345'
  * `disabled`, and the spec timed out (found by VA2 while re-running the
  * screen-reader spec).
  */
-export const COMPOSER_LABEL = /পাঠ্যবই থেকে যেকোনো প্রশ্ন লিখুন|Ask anything from your textbook/
+export const COMPOSER_LABEL =
+  /পাঠ্যবই থেকে যেকোনো প্রশ্ন লিখুন|Ask anything from your textbook/;
 
 export async function signIn(page: Page, email: string): Promise<void> {
-  await page.goto('/login', { waitUntil: 'domcontentloaded' })
-  await page.locator('#email').fill(email)
-  await page.locator('#password').fill(PASSWORD)
-  await page.locator('form button[type="submit"]').click()
+  await page.goto("/login", { waitUntil: "domcontentloaded" });
+  await page.locator("#email").fill(email);
+  await page.locator("#password").fill(PASSWORD);
+  await page.locator('form button[type="submit"]').click();
   // 60s, not the suite's 20s: the whole stack shares one machine in some
   // runs, and a slow /auth/login under load is not a login failure.
-  await expect(page).not.toHaveURL(/\/login$/, { timeout: 60_000 })
+  await expect(page).not.toHaveURL(/\/login$/, { timeout: 60_000 });
   await expect
-    .poll(() => page.evaluate(() => window.localStorage.getItem('bgpt_token')))
-    .toBeTruthy()
+    .poll(() => page.evaluate(() => window.localStorage.getItem("bgpt_token")))
+    .toBeTruthy();
 }
 
 /**
@@ -75,26 +78,43 @@ export async function signIn(page: Page, email: string): Promise<void> {
  * `networkidle` is best-effort because the tutor page keeps an SSE connection
  * open while an answer streams; it is not used as the sole readiness signal.
  *
- * The readiness landmark is `#root > *`, not `<main>`: this branch's public
- * and staff pages (login, register, parent, admin, status, legal) render
- * their own layouts without a main landmark -- only the student/teacher
- * pages carry `<main className="shell-main">`. Waiting for main would hang
- * the sweep on every public route.
+ * The readiness landmark is `#root > *`: every route renders a
+ * `main#main-content` now (F-003), but the root selector keeps the wait
+ * independent of the page's own markup, so a route added later cannot hang the
+ * sweep by rendering its landmarks late.
  */
 export async function openRoute(page: Page, route: string): Promise<void> {
-  await page.goto(route, { waitUntil: 'domcontentloaded' })
-  await page.locator('#root > *').first().waitFor({ state: 'attached' })
-  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => undefined)
-  await page.evaluate(() => document.fonts.ready).catch(() => undefined)
+  await page.goto(route, { waitUntil: "domcontentloaded" });
+  await page.locator("#root > *").first().waitFor({ state: "attached" });
+  await page
+    .waitForLoadState("networkidle", { timeout: 10_000 })
+    .catch(() => undefined);
+  await page.evaluate(() => document.fonts.ready).catch(() => undefined);
+}
+
+/**
+ * Wait two animation frames after a style or DOM change.
+ *
+ * The layout has provably been applied once the next frame has rendered; this
+ * is the signal a screenshot or a geometry assertion needs, and it replaces
+ * the fixed sleeps those call sites used to carry (F-160).
+ */
+export async function settleLayout(page: Page): Promise<void> {
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
 }
 
 export interface AxeFinding {
-  route: string
-  variant: string
-  id: string
-  impact: string
-  nodes: number
-  targets: string[]
+  route: string;
+  variant: string;
+  id: string;
+  impact: string;
+  nodes: number;
+  targets: string[];
 }
 
 /**
@@ -107,33 +127,35 @@ export async function axeRoute(
   route: string,
   variant: Variant,
 ): Promise<{ blocking: AxeFinding[]; advisory: AxeFinding[] }> {
-  await openRoute(page, route)
+  await openRoute(page, route);
   const results = await new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-    .analyze()
-  const toFinding = (violation: (typeof results.violations)[number]): AxeFinding => ({
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+    .analyze();
+  const toFinding = (
+    violation: (typeof results.violations)[number],
+  ): AxeFinding => ({
     route,
     variant: label(variant),
     id: violation.id,
-    impact: violation.impact ?? 'unknown',
+    impact: violation.impact ?? "unknown",
     nodes: violation.nodes.length,
-    targets: violation.nodes.slice(0, 3).map((node) => node.target.join(' ')),
-  })
+    targets: violation.nodes.slice(0, 3).map((node) => node.target.join(" ")),
+  });
   return {
     blocking: results.violations
-      .filter((v) => v.impact === 'serious' || v.impact === 'critical')
+      .filter((v) => v.impact === "serious" || v.impact === "critical")
       .map(toFinding),
     advisory: results.violations
-      .filter((v) => v.impact !== 'serious' && v.impact !== 'critical')
+      .filter((v) => v.impact !== "serious" && v.impact !== "critical")
       .map(toFinding),
-  }
+  };
 }
 
 export function describeFindings(findings: AxeFinding[]): string {
   return findings
     .map(
       (f) =>
-        `${f.variant} ${f.route}: ${f.id} (${f.impact}, ${f.nodes} node(s)) ${f.targets.join(' | ')}`,
+        `${f.variant} ${f.route}: ${f.id} (${f.impact}, ${f.nodes} node(s)) ${f.targets.join(" | ")}`,
     )
-    .join('\n')
+    .join("\n");
 }

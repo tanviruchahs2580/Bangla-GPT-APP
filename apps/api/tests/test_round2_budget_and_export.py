@@ -224,14 +224,14 @@ def test_export_includes_conversations_and_messages(tmp_path) -> None:
     # Seed a conversation through the API, which is the path a real chat uses
     # (POST /tutor/ask is the stateless one-shot form).
     created = client.post("/tutor/conversations", json={"title": "গণিত"}, headers=headers)
-    assert created.status_code in (200, 201), created.text
+    assert created.status_code == 201, created.text
     conv_id = created.json()["id"]
     msg = client.post(
         f"/tutor/conversations/{conv_id}/messages",
         json={"message": "২+২ কত?"},
         headers=headers,
     )
-    assert msg.status_code in (200, 201), msg.text
+    assert msg.status_code == 200, msg.text  # the JSON messages route's default
 
     export = client.get("/users/me/export", headers=headers)
     assert export.status_code == 200, export.text

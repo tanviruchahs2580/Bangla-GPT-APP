@@ -1,44 +1,23 @@
 import { useEffect, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   BookOpen,
   Bookmark,
-  Download,
+  Check,
+  Circle,
   FileText,
-  Square,
-  Volume2,
+  Play,
 } from "lucide-react";
-import {
-  getChapterContent,
-  getLearnProgress,
-  getSubjectChapters,
-  getSubjects,
-  post,
-  upsertLearnProgress,
-} from "../../api";
+import { getLearnProgress, getSubjectChapters, getSubjects } from "../../api";
 import { track } from "../../lib/analytics";
-import type {
-  AskResponse,
-  ChapterSummaryOut,
-  QuizResult,
-  QuizStarted,
-  SubjectOut,
-} from "../../types";
+import type { ChapterSummaryOut, SubjectOut } from "../../types";
 import { useAuth } from "../../AuthContext";
 import { Card, LoadError } from "../../components/ui";
-import { invalidateStudyCaches } from "../../lib/invalidate";
+import { OfflineLibrary } from "../../components/OfflineLibrary";
 import { t, tSubject } from "../../i18n";
 import { cn } from "../../lib/cn";
-import { chapterBadge, ttsSupported as ttsAvailable } from "../../lib/progress";
-import { QuizOptionGroup } from "../../components/QuizOptionGroup";
-import { SafeMarkdownLazy as SafeMarkdown } from "../../lib/safeMarkdownLazy";
-import {
-  fetchChapterWithOfflineFallback,
-  loadChapter,
-  saveChapter,
-} from "../../lib/offlineStore";
-import { getLowData } from "../../lib/lowData";
+import { chapterBadge } from "../../lib/progress";
 
 const SUBJECT_TONE: Record<string, string> = {
   science: "tile-teal",
@@ -61,7 +40,10 @@ export function LearnPage() {
   const [activeSubject, setActiveSubject] = useState<string | null>(null);
   const chaptersQuery = useQuery({
     queryKey: ["chapters", activeSubject, selected],
-    queryFn: () => getSubjectChapters(activeSubject!, selected),
+    queryFn: () => {
+      if (!activeSubject) throw new Error("no subject selected");
+      return getSubjectChapters(activeSubject, selected);
+    },
     enabled: !!activeSubject,
   });
   // one progress query for the whole class powers both the subject
@@ -115,9 +97,9 @@ export function LearnPage() {
   };
 
   return (
-    <main className="shell-main">
+    <main id="main-content" tabIndex={-1} className="shell-main">
       <section className="section-head">
-        <h2>{t("subjects")}</h2>
+        <h1>{t("subjects")}</h1>
       </section>
 
       <div
@@ -206,6 +188,17 @@ export function LearnPage() {
         </div>
       )}
 
+      {me && (
+        <OfflineLibrary
+          userId={me.user_id}
+          onOpen={(rec) =>
+            void navigate(
+              `/student/learn/${encodeURIComponent(rec.subject)}/${encodeURIComponent(rec.chapter)}?class=${rec.classLevel}`,
+            )
+          }
+        />
+      )}
+
       {activeSubject && (
         <>
           <section className="section-head">
@@ -233,11 +226,13 @@ export function LearnPage() {
                 const prog = progressMap.get(ch.chapter);
                 const badgeKind = chapterBadge(prog);
                 const icon =
-                  badgeKind === "done"
-                    ? "✓"
-                    : badgeKind === "reading"
-                      ? "▶"
-                      : "○";
+                  badgeKind === "done" ? (
+                    <Check size={12} />
+                  ) : badgeKind === "reading" ? (
+                    <Play size={12} />
+                  ) : (
+                    <Circle size={12} />
+                  );
                 // The bar reports the progress the reader actually recorded.
                 // It used to read `prog ? 45 : 0`, so every in-progress
                 // chapter claimed the same invented 45%: a chapter read to 20%
@@ -308,663 +303,4 @@ export function LearnPage() {
   );
 }
 
-export function LearnChapterPage() {
-  const { subject, chapter, searchParams } = useRouteParams();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const classLevel = Number(searchParams.get("class")) || undefined;
-  // one normalized class number keeps the offline key stable
-  const offlineClass = classLevel ?? 6;
-
-  const query = useQuery({
-    queryKey: ["chapterContent", subject, chapter, classLevel],
-    // network first; a saved offline copy covers network failure.
-    queryFn: () =>
-      fetchChapterWithOfflineFallback(subject!, chapter!, offlineClass, () =>
-        getChapterContent(subject!, chapter!, classLevel),
-      ),
-    enabled: !!subject && !!chapter,
-  });
-
-  const [fontScale, setFontScale] = useState(() => {
-    try {
-      const v = localStorage.getItem("fontScale");
-      return v ? parseFloat(v) : 1;
-    } catch {
-      return 1;
-    }
-  });
-  const [speaking, setSpeaking] = useState(false);
-  const [bookmarked, setBookmarked] = useState(false);
-  // unified workspace tabs — পড়া | অনুশীলন | জিজ্ঞাসা (no page exit).
-  const [tab, setTab] = useState<"read" | "practice" | "ask">("read");
-  // offline-copy availability + download button state
-  const [saved, setSaved] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  const progressQuery = useQuery({
-    queryKey: ["learnProgressOne", subject, chapter, classLevel],
-    queryFn: () => getLearnProgress(subject!, classLevel),
-    enabled: !!subject && !!chapter,
-  });
-
-  useEffect(() => {
-    const p = (progressQuery.data ?? []).find((x) => x.chapter === chapter);
-    if (p) setBookmarked(p.bookmarked);
-  }, [progressQuery.data, chapter]);
-
-  useEffect(() => {
-    if (!subject || !chapter) return;
-    let alive = true;
-    loadChapter(subject, chapter, offlineClass)
-      .then((rec) => {
-        if (alive) setSaved(!!rec);
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, [subject, chapter, offlineClass]);
-
-  useEffect(() => {
-    if (subject && chapter && classLevel) {
-      try {
-        localStorage.setItem(
-          "lastChapter",
-          JSON.stringify({ subject, chapter, class_level: classLevel }),
-        );
-        localStorage.setItem("fontScale", String(fontScale));
-      } catch {
-        /* best-effort: a parse failure must not block startup */
-      }
-    }
-  }, [subject, chapter, classLevel, fontScale]);
-
-  // Mark read progress on view
-  useEffect(() => {
-    if (!query.data || !subject || !chapter || !classLevel) return;
-    const t = setTimeout(() => {
-      upsertLearnProgress({
-        subject,
-        chapter,
-        class_level: classLevel,
-        read_pct: 40,
-      })
-        .then(() => invalidateStudyCaches(queryClient))
-        .catch(() => {});
-      track("chapter_read", { subject, chapter });
-    }, 1500);
-    let lastReported = 70;
-    const onScroll = () => {
-      const pct = Math.min(
-        100,
-        Math.round(
-          (window.scrollY /
-            Math.max(1, document.body.scrollHeight - window.innerHeight)) *
-            100,
-        ),
-      );
-      if (pct <= 70) return;
-      // Throttle. This fired on every scroll event past 70%, which on a
-      // touch-scroll of a long chapter is dozens of authenticated POSTs per
-      // view -- each one a row in chapter_progress (BUG-006). Report the
-      // furthest point reached instead of the instantaneous one.
-      if (pct <= lastReported) return;
-      lastReported = pct;
-      upsertLearnProgress({
-        subject,
-        chapter,
-        class_level: classLevel,
-        read_pct: pct,
-        completed: pct > 90,
-      })
-        // The write is what the "reading"/"done" badge and the subject ring
-        // read; without this the list behind the reader stayed stale.
-        .then(() => invalidateStudyCaches(queryClient))
-        .catch(() => {});
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      clearTimeout(t);
-      window.removeEventListener("scroll", onScroll);
-    };
-  }, [query.data, subject, chapter, classLevel, queryClient]);
-
-  const toggleBookmark = async () => {
-    if (!subject || !chapter || !classLevel) return;
-    const next = !bookmarked;
-    setBookmarked(next);
-    try {
-      await upsertLearnProgress({
-        subject,
-        chapter,
-        class_level: classLevel,
-        bookmarked: next,
-      });
-      invalidateStudyCaches(queryClient);
-    } catch {
-      /* Bookmarking is best-effort: a failed write must not drop the reader
-         out of the chapter they are reading. */
-    }
-  };
-
-  const speak = () => {
-    try {
-      if (!("speechSynthesis" in window) || !content) return;
-      if (speaking) {
-        window.speechSynthesis.cancel();
-        setSpeaking(false);
-        return;
-      }
-      const text = content.sections
-        .map((s) => `${s.section} ${s.text}`)
-        .join(" ");
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.lang = "bn-BD";
-      utter.onend = () => setSpeaking(false);
-      utter.onerror = () => setSpeaking(false);
-      setSpeaking(true);
-      window.speechSynthesis.speak(utter);
-    } catch {
-      setSpeaking(false);
-    }
-  };
-
-  const content = query.data?.content;
-  const offlineCopy = query.data?.offline === true;
-  const ttsSupported = ttsAvailable();
-
-  const download = async () => {
-    if (!content || !subject || !chapter) return;
-    setSaving(true);
-    try {
-      await saveChapter(subject, chapter, offlineClass, content);
-      setSaved(true);
-    } catch {
-      /* storage may be unavailable; the offline copy stays optional */
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <main className="shell-main">
-      <button
-        className="btn btn-ghost btn-sm chips-gap"
-        onClick={() => navigate(-1)}
-      >
-        ← {t("back")}
-      </button>
-      {query.isLoading ? (
-        <Card>
-          <div className="skeleton skeleton-text" />
-          <div className="skeleton skeleton-text" />
-          <div className="skeleton skeleton-card" />
-        </Card>
-      ) : query.isError ? (
-        <Card>
-          <div className="center muted" role="alert">
-            {t("loadFailed")}{" "}
-            <button
-              className="btn btn-sm btn-ghost"
-              onClick={() => query.refetch()}
-            >
-              {t("retry")}
-            </button>
-          </div>
-        </Card>
-      ) : !content ? (
-        <Card>
-          <div className="center muted">{t("noChapters")}</div>
-        </Card>
-      ) : (
-        <Card>
-          <div className="reader-controls">
-            <span className="badge badge-teal">{content.subject}</span>
-            <span className="badge">
-              {t("classLabel")} {content.class_level}
-            </span>
-            <button
-              key={String(bookmarked)}
-              className={`btn btn-sm ${bookmarked ? "btn-teal bookmark-pop" : "btn-ghost"}`}
-              onClick={toggleBookmark}
-              aria-label={t("bookmark")}
-              aria-pressed={bookmarked}
-            >
-              <Bookmark
-                size={14}
-                aria-hidden
-                fill={bookmarked ? "currentColor" : "none"}
-              />{" "}
-              {t("bookmark")}
-            </button>
-            {ttsSupported && (
-              <button
-                className="btn btn-sm btn-ghost"
-                onClick={speak}
-                aria-label={t("listen")}
-                aria-pressed={speaking}
-              >
-                {speaking ? (
-                  <Square size={14} aria-hidden />
-                ) : (
-                  <Volume2 size={14} aria-hidden />
-                )}{" "}
-                {speaking ? t("stop") : t("listen")}
-              </button>
-            )}
-            {offlineCopy && <span className="badge">{t("offlineBadge")}</span>}
-            <button
-              className={`btn btn-sm ${saved ? "btn-teal" : "btn-ghost"}`}
-              onClick={download}
-              disabled={saving}
-              aria-label={t("downloadChapter")}
-            >
-              <Download size={14} aria-hidden />{" "}
-              {saved ? t("downloaded") : t("downloadChapter")}
-            </button>
-            <span className="row-flex font-scale-row">
-              <span className="muted muted-sm" aria-hidden>
-                A
-              </span>
-              <input
-                type="range"
-                min={0.8}
-                max={1.4}
-                step={0.1}
-                value={fontScale}
-                onChange={(e) => setFontScale(parseFloat(e.target.value))}
-                className="font-range"
-                aria-label={t("locFontSize")}
-              />
-              <span className="muted muted-sm" aria-hidden>
-                A+
-              </span>
-            </span>
-          </div>
-
-          {/* in-page tabs — read / practice / ask without leaving the chapter.
-              APG tabs model: roving tabindex + arrow keys move selection and
-              focus together; each button controls its panel by id. */}
-          <div
-            className="chips workspace-tabs"
-            role="tablist"
-            aria-label={t("locWorkspace")}
-            tabIndex={-1}
-            onKeyDown={(e) => {
-              const keys = ["read", "practice", "ask"] as const;
-              const at = keys.indexOf(tab);
-              let next: (typeof keys)[number] | null = null;
-              if (e.key === "ArrowRight" || e.key === "ArrowDown")
-                next = keys[(at + 1) % keys.length];
-              else if (e.key === "ArrowLeft" || e.key === "ArrowUp")
-                next = keys[(at + keys.length - 1) % keys.length];
-              else if (e.key === "Home") next = keys[0];
-              else if (e.key === "End") next = keys[keys.length - 1];
-              if (next === null) return;
-              e.preventDefault();
-              setTab(next);
-              // selection follows focus; the panel host carries the id
-              requestAnimationFrame(() =>
-                document.getElementById(`workspace-tab-${next}`)?.focus(),
-              );
-            }}
-          >
-            {(["read", "practice", "ask"] as const).map((k) => (
-              <button
-                key={k}
-                id={`workspace-tab-${k}`}
-                role="tab"
-                aria-selected={tab === k}
-                aria-controls="workspace-tab-panel"
-                tabIndex={tab === k ? 0 : -1}
-                className={cn("chip", tab === k && "active")}
-                onClick={() => setTab(k)}
-              >
-                {k === "read"
-                  ? t("tabRead")
-                  : k === "practice"
-                    ? t("tabPractice")
-                    : t("tabAsk")}
-              </button>
-            ))}
-          </div>
-
-          <div
-            id="workspace-tab-panel"
-            role="tabpanel"
-            tabIndex={-1}
-            hidden={false}
-          >
-            {tab === "read" && (
-              <>
-                <h1 className="card-title reader-title">{content.chapter}</h1>
-                <p className="muted">
-                  <BookOpen size={15} className="reader-book" aria-hidden />{" "}
-                  {content.book}
-                </p>
-                <div
-                  className="md stack reader-md"
-                  style={{
-                    fontSize: `${fontScale}em`,
-                  }}
-                >
-                  {content.sections.map((s, i) => (
-                    <div key={i}>
-                      {s.section && <h3>{s.section}</h3>}
-                      <SafeMarkdown content={s.text} />
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-            {tab !== "ask" && (
-              /* visible "AI suggestion: continue with X" card. */
-              <div className="ai-suggest-card" role="status">
-                <span className="ai-suggest-label" aria-hidden>
-                  <Bookmark size={14} /> {t("aiSuggestion")}
-                </span>
-                <span className="ai-suggest-text">
-                  {(progressQuery.data ?? []).find((x) => x.chapter === chapter)
-                    ?.completed
-                    ? t("nextSuggestionAsk")
-                    : t("nextSuggestionPractice")}
-                </span>
-                <button
-                  className="btn btn-soft btn-sm"
-                  onClick={() =>
-                    setTab(
-                      (progressQuery.data ?? []).find(
-                        (x) => x.chapter === chapter,
-                      )?.completed
-                        ? "ask"
-                        : "practice",
-                    )
-                  }
-                >
-                  {(progressQuery.data ?? []).find((x) => x.chapter === chapter)
-                    ?.completed
-                    ? t("tabAsk")
-                    : t("tabPractice")}
-                </button>
-              </div>
-            )}
-            {tab === "practice" && (
-              <ChapterPractice
-                subject={content.subject}
-                chapter={content.chapter}
-                classLevel={content.class_level}
-              />
-            )}
-            {tab === "ask" && (
-              <ChapterAsk
-                subject={content.subject}
-                chapter={content.chapter}
-                classLevel={content.class_level}
-              />
-            )}
-          </div>
-        </Card>
-      )}
-    </main>
-  );
-}
-
-function useRouteParams(): {
-  subject: string | null;
-  chapter: string | null;
-  searchParams: URLSearchParams;
-} {
-  const parts = window.location.pathname.split("/").filter(Boolean);
-  // /student/learn/{subject}/{chapter}
-  const idx = parts.indexOf("learn");
-  const subject = idx >= 0 ? (parts[idx + 1] ?? null) : null;
-  const chapter = idx >= 0 ? (parts[idx + 2] ?? null) : null;
-  return {
-    subject,
-    chapter: chapter ? decodeURIComponent(chapter) : null,
-    searchParams: new URLSearchParams(window.location.search),
-  };
-}
-
-/** অনুশীলন tab: mini quiz with the chapter preselected, no page exit. */
-function ChapterPractice({
-  subject,
-  chapter,
-  classLevel,
-}: {
-  subject: string;
-  chapter: string;
-  classLevel: number;
-}) {
-  const { me } = useAuth();
-  const [started, setStarted] = useState<QuizStarted | null>(null);
-  const [answers, setAnswers] = useState<Record<number, number>>({});
-  const [current, setCurrent] = useState(0);
-  const [result, setResult] = useState<QuizResult | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const start = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await post<QuizStarted>("/quizzes", {
-        student_id: me?.profile_id,
-        class_level: classLevel,
-        subject,
-        chapter,
-        num_questions: 5,
-      });
-      setStarted(res);
-      setAnswers({});
-      setCurrent(0);
-      setResult(null);
-    } catch (e) {
-      const detail = (e as { rawDetail?: { message?: string } }).rawDetail;
-      setError(
-        typeof detail === "object" && detail?.message
-          ? detail.message
-          : t("errorGeneric"),
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const submit = async () => {
-    if (!started) return;
-    setBusy(true);
-    try {
-      const res = await post<QuizResult>(
-        `/quizzes/${started.attempt_id}/submit`,
-        {
-          answers: started.questions.map((_, i) => answers[i] ?? -1),
-        },
-      );
-      setResult(res);
-      setStarted(null);
-    } catch {
-      setError(t("errorGeneric"));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  if (result) {
-    return (
-      <div className="stack">
-        <div className="center">
-          <div className="stat-value">{Math.round(result.score_pct)}%</div>
-          <div className="muted">
-            {t("correctOutOf", {
-              correct: result.correct,
-              total: result.total,
-            })}
-          </div>
-        </div>
-        {result.review.map((r, i) => (
-          <Card key={i} className="quiz-review-row">
-            <div className="row-title">{r.question_text}</div>
-            <div className="row-sub">
-              {r.is_correct ? "✓" : `✗ — ${r.options[r.correct_index] ?? ""}`}
-            </div>
-          </Card>
-        ))}
-        <button className="btn btn-soft" onClick={start} disabled={busy}>
-          {t("startQuiz")} ↻
-        </button>
-      </div>
-    );
-  }
-
-  if (started) {
-    const q = started.questions[current];
-    const chosen = answers[current];
-    return (
-      <div className="stack">
-        <div className="row-flex">
-          <span className="badge">
-            {current + 1}/{started.questions.length}
-          </span>
-          <span className="muted muted-sm">{chapter}</span>
-        </div>
-        <div className="row-title quiz-q-title">{q.question_text}</div>
-        {/* Same component as the quiz page: the tab used to announce
-            role="radio" with every option in the tab order and no arrow keys,
-            which is the defect QuizPage was fixed for. */}
-        <QuizOptionGroup
-          options={q.options}
-          chosen={chosen}
-          label={q.question_text}
-          onChoose={(oi) => setAnswers((a) => ({ ...a, [current]: oi }))}
-        />
-        <div className="row-flex quiz-pager">
-          <button
-            className="btn btn-ghost btn-sm"
-            disabled={current === 0}
-            onClick={() => setCurrent((c) => c - 1)}
-          >
-            ← {t("previousQuestion")}
-          </button>
-          {current < started.questions.length - 1 ? (
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={() => setCurrent((c) => c + 1)}
-            >
-              {t("nextQuestion")} →
-            </button>
-          ) : (
-            <button
-              className="btn btn-teal btn-sm"
-              onClick={submit}
-              disabled={busy}
-            >
-              {t("finishQuiz")}
-            </button>
-          )}
-        </div>
-        {error && <p className="error">{error}</p>}
-      </div>
-    );
-  }
-
-  return (
-    <div className="stack center">
-      <p className="muted">
-        {t("practiceThisChapter")} — {chapter}
-      </p>
-      <button
-        className="btn btn-primary"
-        onClick={start}
-        disabled={busy || !me?.profile_id}
-      >
-        {t("startQuiz")}
-      </button>
-      {error && <p className="error">{error}</p>}
-    </div>
-  );
-}
-
-/** জিজ্ঞাসা tab: tutor scoped to this chapter via the chapter context chip. */
-function ChapterAsk({
-  subject,
-  chapter,
-  classLevel,
-}: {
-  subject: string;
-  chapter: string;
-  classLevel: number;
-}) {
-  const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState<AskResponse | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const ask = async () => {
-    const q = question.trim();
-    if (q.length < 3 || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await post<AskResponse>("/tutor/ask", {
-        question: q,
-        class_level: classLevel,
-        subject,
-        chapter,
-        low_data: getLowData(),
-      });
-      setAnswer(res);
-      setQuestion("");
-    } catch {
-      setError(t("errorGeneric"));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="stack">
-      <div className="row-flex ask-context-row">
-        <span className="badge badge-teal">
-          {t("contextChip")}: {chapter}
-        </span>
-      </div>
-      <div className="row-flex ask-row">
-        <input
-          className="input ask-input"
-          value={question}
-          placeholder={t("askAboutChapter")}
-          onChange={(e) => setQuestion(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") void ask();
-          }}
-        />
-        <button
-          className="btn btn-primary"
-          onClick={ask}
-          disabled={busy || question.trim().length < 3}
-        >
-          {t("send")}
-        </button>
-      </div>
-      {busy && <p className="muted">{t("thinking")}</p>}
-      {error && <p className="error">{error}</p>}
-      {answer && (
-        <Card className="chapter-card">
-          <div className="chips-gap">
-            <span className={answer.grounded ? "badge badge-teal" : "badge"}>
-              {answer.grounded ? t("supportedBadge") : t("unsupportedBadge")}
-            </span>
-          </div>
-          <SafeMarkdown content={answer.answer} />
-          {answer.sources.length > 0 && (
-            <p className="muted muted-sm section-gap-top">
-              {t("chapter")}: {answer.sources[0].chapter}
-            </p>
-          )}
-        </Card>
-      )}
-    </div>
-  );
-}
+export { LearnChapterPage } from "./learn/LearnChapterPage";

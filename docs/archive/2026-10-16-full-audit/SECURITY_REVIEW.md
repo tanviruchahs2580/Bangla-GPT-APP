@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [../README.md](../README.md).
+
 # SECURITY REVIEW — Bangla GPT APP (2026-10-16)
 
 Scope: source review + local execution + the isolated local stack. No probe was

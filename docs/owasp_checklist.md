@@ -8,6 +8,7 @@ Legend: [DONE] implemented + tested | [PARTIAL] implemented, limitation noted
 | [RISK] accepted, documented below.
 
 ## A01 -- Broken Access Control
+
 - [DONE] Route-level auth on every non-public endpoint via `CurrentUser`
   dependency (JWT bearer); 401 unauthenticated, 403 wrong role.
   Tests: `apps/api/tests/test_security_v2.py::test_audit_view_is_admin_only`,
@@ -22,6 +23,7 @@ Legend: [DONE] implemented + tested | [PARTIAL] implemented, limitation noted
 - [DONE] Role changes are admin-only and audited (see A09).
 
 ## A02 -- Cryptographic Failures
+
 - [DONE] Passwords: Argon2id at the OWASP Password Storage Cheat Sheet
   parameters — `time_cost=2`, `memory_cost=19 MiB`, `parallelism=1`
   (`apps/api/src/bangla_gpt_api/auth/security.py`, `PasswordHasher`). Never
@@ -42,6 +44,7 @@ Legend: [DONE] implemented + tested | [PARTIAL] implemented, limitation noted
   scale; RS256 keypair rotation is a post-item.
 
 ## A03 -- Injection
+
 - [DONE] SQL: SQLAlchemy ORM/Core only; no string-formatted SQL anywhere in
   `apps/api/src`.
 - [DONE] Prompt injection: system/user separation + injected-instruction guard
@@ -58,8 +61,9 @@ Legend: [DONE] implemented + tested | [PARTIAL] implemented, limitation noted
   header comment in `deploy/caddy/Caddyfile`.
 
 ## A04 -- Insecure Design
+
 - [DONE] Fail-closed production boot: `enforce_production_safety()`
-  (`apps/api/src/bangla_gpt_api/config.py`) refuses mock provider, wildcard
+  (`apps/api/src/bangla_gpt_api/main.py`) refuses mock provider, wildcard
   CORS, default admin password, missing `PII_ENC_KEY`, bad
   `RATE_LIMIT_BACKEND` in prod. Tests: `test_admin_hardening.py`,
   `test_security_v2.py::test_production_boot_requires_pii_enc_key` (with a
@@ -68,11 +72,12 @@ Legend: [DONE] implemented + tested | [PARTIAL] implemented, limitation noted
   only logging of chat activity, guardian-visible data export.
 
 ## A05 -- Security Misconfiguration
+
 - [DONE] Security headers on every API response
   (`SecurityHeadersMiddleware`; `test_security_headers.py`): nosniff,
   frame-ancestors/DENY, referrer-policy, CSP; on the SPA via Caddy
   (`deploy/caddy/Caddyfile`): same set + HSTS includeSubDomains.
-- [DONE] CORS: explicit allowlist from `CORS_ORIGINS`; no wildcard in prod
+- [DONE] CORS: explicit allowlist from `ALLOWED_ORIGINS`; no wildcard in prod
   (enforced at boot). Tests: `test_cors.py`.
 - [DONE] `Server` header stripped at the edge (`-Server` in Caddyfile).
 - [DONE] `/docs`, `/redoc`, `/openapi.json` are development-only surfaces:
@@ -82,6 +87,7 @@ Legend: [DONE] implemented + tested | [PARTIAL] implemented, limitation noted
   production, where they are the point.
 
 ## A06 -- Vulnerable & Outdated Components
+
 - [DONE] CI gates: `pip-audit` on the API job and
   `npm audit --audit-level=high --omit=dev` on the web job
   (`.github/workflows/ci.yml`). Triage register: `docs/security_scans.md`.
@@ -90,6 +96,7 @@ Legend: [DONE] implemented + tested | [PARTIAL] implemented, limitation noted
   ship.
 
 ## A07 -- Identification & Authentication Failures
+
 - [DONE] Rate limits at the app layer: `/auth/login` per-IP and tutor
   endpoints per-user (`main.py` limiter table;
   `test_ratelimit_backends.py`, `test_auth_teacher.py`).
@@ -107,6 +114,7 @@ Legend: [DONE] implemented + tested | [PARTIAL] implemented, limitation noted
   Independent of the per-IP rate limit above, so rotating IPs does not reset it.
 
 ## A08 -- Software & Data Integrity Failures
+
 - [DONE] Migrations are append-only Alembic revisions; CI runs
   upgrade-head -> downgrade-base -> upgrade-head on every push.
 - [DONE] Supply chain: lockfiles committed (`package-lock.json`, pinned
@@ -119,6 +127,7 @@ Legend: [DONE] implemented + tested | [PARTIAL] implemented, limitation noted
   `test_security_v2.py::test_impersonated_token_is_short_lived_and_attributable`.
 
 ## A09 -- Logging & Monitoring Failures
+
 - [DONE] Audit trail (`audit_log` table, migration
   `f9a0b1c2d3e4`): role_change, data_export, purge, qp_finalize,
   impersonation -- all five verified end-to-end including actor attribution,
@@ -132,6 +141,7 @@ Legend: [DONE] implemented + tested | [PARTIAL] implemented, limitation noted
   (`test_request_context.py`, `test_health_observability.py`).
 
 ## A10 -- Server-Side Request Forgery
+
 - [DONE] LLM/provider egress goes only to fixed base URLs from config
   (Gemini SDK client in `providers/gemini.py`); no user-controlled URLs are
   fetched server-side.

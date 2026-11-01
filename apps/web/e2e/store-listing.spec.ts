@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { openRoute, signIn, useVariant } from "./a11y";
+import { openRoute, settleLayout, signIn, useVariant } from "./a11y";
 
 /**
  * Play Store listing assets (docs/playstore/listing.md): phone screenshots
@@ -121,7 +121,10 @@ test.describe("Play Store listing assets", () => {
           await signIn(page, screen.email);
         }
         await openRoute(page, screen.route);
-        await page.waitForTimeout(400); // settle lazy chunks before the capture
+        // openRoute already waits for the lazy chunks (networkidle) and the
+        // fonts; one laid-out frame later the capture cannot catch a
+        // half-applied layout (F-160: this replaced a 400 ms sleep).
+        await settleLayout(page);
         await page.screenshot({
           path: join(OUT_DIR, `${screen.slug}--${lang}.jpg`),
           type: "jpeg",

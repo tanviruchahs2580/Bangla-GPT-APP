@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Check } from "lucide-react";
 import { getBlob, post } from "../../api";
 import { downloadBlob } from "../../lib/download";
 import type { QPaper } from "../../types";
@@ -12,7 +13,7 @@ const errText = (err: unknown): string =>
 
 // gate, now visible: a paper is publishable only once every question
 // has been reviewed — surface progress instead of an error toast after the fact.
-export function QPaperStepper({ qp }: { qp: QPaper }) {
+function QPaperStepper({ qp }: { qp: QPaper }) {
   const reviewed = qp.questions.filter((q) => q.reviewed).length;
   const total = qp.questions.length;
   const final = qp.status === "final";
@@ -42,7 +43,7 @@ export function QPaperStepper({ qp }: { qp: QPaper }) {
           aria-current={i + 1 === step ? "step" : undefined}
         >
           <span className="qp-step-dot" aria-hidden>
-            {i + 1 < step ? "✓" : i + 1}
+            {i + 1 < step ? <Check size={12} /> : i + 1}
           </span>
           <span className="qp-step-label">{label}</span>
         </div>
@@ -52,7 +53,7 @@ export function QPaperStepper({ qp }: { qp: QPaper }) {
 }
 
 /** Validation checklist rendered from the backend's own gates (qp.meta). */
-export function QPaperValidation({ qp }: { qp: QPaper }) {
+function QPaperValidation({ qp }: { qp: QPaper }) {
   const meta = qp.meta ?? {};
   const hasChecks =
     meta.alignment_min != null || meta.difficulty_actual != null;
@@ -103,7 +104,7 @@ export function QPaperValidation({ qp }: { qp: QPaper }) {
             className={`qp-val-dot ${r.ok === true ? "ok" : r.ok === false ? "warn" : "muted"}`}
             aria-hidden
           >
-            {r.ok === true ? "✓" : r.ok === false ? "!" : "–"}
+            {r.ok === true ? <Check size={12} /> : r.ok === false ? "!" : "–"}
           </span>
           <span className="qp-val-label">{r.label}</span>
           <span className="muted muted-sm">{r.note}</span>

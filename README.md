@@ -8,9 +8,12 @@ review flows, curriculum coverage and weakness analytics, classroom management,
 school tenancy isolation, child-safety moderation, PWA + Android (Capacitor),
 and bn/en i18n with dark mode.
 
-**Current version: 0.9.2** (see `apps/api/pyproject.toml` / `apps/web/package.json`).
+**Current version: 0.9.3.** The single source of truth is
+`apps/api/pyproject.toml` (`[project] version`), mirrored by
+`apps/web/package.json`; release tags, the GHCR image tags and this line follow
+it. Nothing else may carry a version number.
 
-- **Live web app:** https://bangla-gpt-app.vercel.app
+- **Live web app:** <https://bangla-gpt-app.vercel.app>
 - **Production API origin (FE-01):** the Vercel frontend forwards `/api/*`
   through an edge proxy (`apps/web/api/[[...path]].ts`) to the origin set in
   the `API_ORIGIN` project environment variable — no tunnel URL is baked into
@@ -50,25 +53,42 @@ set, and `/metrics` then requires `Authorization: Bearer $METRICS_TOKEN`
 (`main.py::_validate_metrics`). A developer running `uvicorn` locally sees the
 open endpoint; that is not what a deployed instance does.
 
-This table covers the core surface only — the app registers 135 operations
-(134 OpenAPI operations over 116 unique path templates; short tests, bulk
-assignments, question papers, schools, notifications, KG re-teach, admin
-center, status page). For the whole surface use the checked-in inventory
-[docs/route_baseline.md](docs/route_baseline.md) or the live `/openapi.json`
-from a running instance. [docs/API.md](docs/API.md) is the hand-written
-request/response reference for the 31 core/auth/users/tutor/quiz/teacher/
-parent/admin operations it documents — useful detail, not the full surface.
+This table covers the core surface only — short tests, bulk assignments,
+question papers, schools, notifications, KG re-teach, admin center and the
+status page are not listed here. The full surface is the served schema at
+`/openapi.json` (the author for tooling and tests); the checked-in
+[docs/route_baseline.md](docs/route_baseline.md) is a dated inventory snapshot
+and can lag it. [docs/API.md](docs/API.md) is the hand-written
+request/response reference for the core/auth/users/tutor/quiz/teacher/parent/
+admin operations it documents, including the SSE stream and the paginated
+endpoints — useful detail, not the full surface. No operation counts are
+repeated here on purpose: they go stale with every route change, and the
+schema is one request away.
 Operations: [docs/runbook.md](docs/runbook.md).
 Launch gates for the owner: [docs/LAUNCH_READINESS_CHECKLIST.md](docs/LAUNCH_READINESS_CHECKLIST.md).
 RAG design: [docs/RAG_ARCHITECTURE.md](docs/RAG_ARCHITECTURE.md).
 NCTB pipeline: [docs/NCTB_DATA_PIPELINE.md](docs/NCTB_DATA_PIPELINE.md).
-Current QA record: [docs/qa/QA_REPORT_2026-10-27.md](docs/qa/QA_REPORT_2026-10-27.md)
+Current QA record: [docs/qa/QA_REPORT_2026-10-30.md](docs/qa/QA_REPORT_2026-10-30.md)
 (superseded records archived:
+[docs/archive/QA_REPORT_2026-10-29.md](docs/archive/QA_REPORT_2026-10-29.md),
+[docs/archive/QA_REPORT_2026-10-27.md](docs/archive/QA_REPORT_2026-10-27.md),
 [docs/archive/QA_REPORT_2026-10-17.md](docs/archive/QA_REPORT_2026-10-17.md),
 [docs/archive/qa-audit-2026-10-16.md](docs/archive/qa-audit-2026-10-16.md),
 [docs/archive/qa-audit-2026-10-14.md](docs/archive/qa-audit-2026-10-14.md)).
 
 ## Quick start
+
+Prerequisites:
+
+- **Python 3.11 or newer** (`requires-python = ">=3.11"` in
+  `apps/api/pyproject.toml`; CI runs 3.11 and 3.12).
+- **Node 24 with npm 11** (`engines` in `apps/web/package.json`; `.nvmrc`
+  pins 24 for nvm users).
+- **Docker**, only for the Docker section below.
+
+CI runs both install two-steps: the Linux form in the `Lint & test` job, the
+PowerShell form (venv, install, dev server, web build) in the `Quick start
+(Windows PowerShell)` job.
 
 ```powershell
 cd apps/api
@@ -135,8 +155,11 @@ docker build -t bangla-gpt-api:local .
 #   docker compose --profile core --profile web --profile postgres --profile tls up -d --wait
 #
 # ENV defaults to "production", and the app refuses to boot in production
-# without a real JWT_SECRET and admin credentials - that gate is deliberate.
-# For a local stack, run as test. The API is published to the host on
+# without a real JWT_SECRET, admin credentials, PII_ENC_KEY and the
+# METRICS_REQUIRE_AUTH/METRICS_TOKEN pair - that gate is deliberate.
+# For a local stack, run as test. A production run needs the full key list
+# from deploy/DEPLOYMENT.md section 6 in .env; compose forwards every one of
+# them, so no compose edit is needed. The API is published to the host on
 # 127.0.0.1:8000 by default (only a host-side tunnel needs that; Caddy reaches
 # it as api:8000 over the Compose network). API_HOST_PORT moves the port and
 # API_HOST_BIND widens the interface - 0.0.0.0 exposes the API to the network.
@@ -174,20 +197,27 @@ Environment variables are documented in `.env.example`. Default
 
 ## CI/CD
 
-| Workflow | What it does | Trigger |
-|---|---|---|
-| `ci.yml` | api: ruff → format → mypy → pytest (3.11+3.12) → pip-audit → alembic cycle → smoke; postgres: alembic cycle + drift + smoke/race + **full domain suite on Postgres**; golden-eval: golden retrieval + eval-v2 baseline gate + red-team gate; web: tsc + build + vitest with **coverage thresholds**; e2e: **Playwright chromium against the real app**; docker build + k6 load gate + probes | push/PR to main |
-| `eval-gate.yml` | golden retrieval benchmark w/ grounded-accuracy gate + eval-v2 regression vs committed baseline | push/PR to main, or manual |
-| `codeql.yml` | CodeQL SAST (security-extended) over the API (python) and web (javascript-typescript); findings to the Security tab | push/PR to main, weekly |
-| `release.yml` | CI-gated: tag → GHCR images → optional SSH deploy w/ health-gated rollback | tag `v*.*.*`, or manual |
-| `vercel-deploy.yml` | production web deploy (CI-gated) | `workflow_run` on a green `API CI` for main, or manual |
+All nine workflows under `.github/workflows/`, with the job ids each one runs:
 
-This table is itself checkable: every row above was read off the workflow's own
-`on:` block, and two rows used to disagree with it (`vercel-deploy.yml` was
-listed as "push to main" when it runs on a `workflow_run`, and `eval-gate.yml`
-as main-push-only when it also runs on pull requests). A trigger table that is
-wrong is worse than absent, because it is what an operator consults before
-concluding a pipeline is broken.
+| Workflow | What it does (job ids) | Trigger |
+|---|---|---|
+| `ci.yml` | `api` — ruff check → ruff format → mypy → pytest on 3.11 and 3.12 (coverage gate) → pip-audit → alembic up/down/up → import smoke → OpenAPI-fixture diff; `quickstart-windows` — the README's PowerShell quick start (venv → hash-locked install → dev server `/health` → `npm ci` + build) on `windows-latest`, then the Windows-rasterised visual regression matrix; `postgres` — migration cycle + `alembic check` drift + journey/race tests + the **full domain suite on Postgres**; `sbom` — CycloneDX manifests for python and web; `web` — npm audit → vitest coverage → eslint → prettier → tsc+vite build; `guardrails` — the repo-contract checks below, including the readme/workflow-table guard; `e2e` — Playwright chromium against the real app plus the offline shell; `e2e-engines` — the Bangla shaping/`Intl` specs on firefox and webkit as well (pull requests only); `docker` — image build → Trivy gate → `/health`+`/ready` probes → k6 smoke | push to `main`, pull_request to `main`, workflow_dispatch |
+| `eval-gate.yml` | `eval-gate` — golden v2 suite vs the committed baseline (>2pp regression fails), the 24-question golden retrieval gate (`apps/api/scripts/evaluate_golden.py`) and the red-team moderation gate (`evaluation.cli --redteam`); optional non-blocking real-model probe on manual dispatch | push/pull_request to `main`, workflow_dispatch |
+| `codeql.yml` | `analyze` — CodeQL SAST (security-extended) over python and javascript-typescript; SARIF lands in the Security tab | push/pull_request to `main`, schedule weekly |
+| `release.yml` | `ci-gate` — fails when green CI for the commit is missing and when the tag != the package version; `build-push` — GHCR images tagged with both the release tag and the commit sha, with SBOM + provenance; `scan-images` — Trivy + attestation verification of the pushed digests; `deploy` — SSH deploy with health-gated rollback (only when `DEPLOY_ENABLED=true`) | push tags `v*.*.*`, workflow_dispatch |
+| `vercel-deploy.yml` | `deploy` — production web deploy after a green `API CI` on the same sha, with a post-deploy `/api/health` smoke | workflow_run on a completed `API CI` for `main`, workflow_dispatch |
+| `android-release.yml` | `bundle` — release-signed AAB + APK artifacts (never uploads to Play by itself); `debug-assemble` — proves the Android shell assembles from the current web bundle | workflow_dispatch, push tags `v*`, pull_request touching `apps/web/**` |
+| `uptime.yml` | `probe` — public `/api/health` (plus the optional origin probe); `page` — files a deduplicated issue when the probe fails; `resolve` — closes it on the next green probe | schedule every 15 min, workflow_dispatch |
+| `scorecard.yml` | `analysis` — OpenSSF Scorecard; SARIF into the Security tab | branch_protection_rule, schedule weekly, push to `main`, workflow_dispatch |
+| `secret-masking.yml` | `echo-dummy` + `verify-masking` — echoes a throwaway secret and asserts the job log never contains it | workflow_dispatch only |
+
+This table is checked by the `guardrails` job in `ci.yml`
+(`README and docs/ci.md agree with the workflows`): every workflow file must
+have a row here, the row must name every job id in the file, and the trigger
+cell must name exactly the event keys in that workflow's own `on:` block. The
+guard exists because the previous table was wrong in all three ways — it
+invented a `golden-eval` job inside `ci.yml`, dropped the `sbom` and
+`guardrails` jobs, and four of the nine workflows were absent entirely.
 
 ## Documentation conventions
 

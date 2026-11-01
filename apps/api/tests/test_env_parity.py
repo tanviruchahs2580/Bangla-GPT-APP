@@ -36,6 +36,7 @@ INFRA_ONLY = {
     "BACKUP_KEEP_DAYS",  # backup sidecar retention
     "DOMAIN",  # Caddy site address
     "GRAFANA_ADMIN_PASSWORD",  # monitoring stack login
+    "GRAFANA_ADMIN_USER",  # monitoring stack login (compose default: admin)
     "PGBR_STANZA",  # pgBackRest stanza name (backup sidecar)
     "POSTGRES_DB",  # postgres service bootstrap
     "POSTGRES_PASSWORD",  # postgres service bootstrap

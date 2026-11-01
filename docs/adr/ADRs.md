@@ -7,6 +7,7 @@ The original `main.py` was ~7000 lines with all business logic, middleware, and 
 ## Decision
 
 Refactor into a modular monolith with:
+
 - Thin `main.py` (581 lines today) delegating to `initialize/` subpackage
 - 13 domain routers in `routers/`
 - 35 service modules in `services/` (incl. `generators/`)
@@ -43,6 +44,7 @@ The platform must support multiple AI providers (Gemini, OpenAI, OpenRouter, Oll
 ## Decision
 
 Define an `LLMProvider` protocol with factory pattern:
+
 - `mock` provider is the default and always available
 - Real providers are loaded only when their API key is set
 - `/ready` endpoint returns 503 if configured provider is unavailable
@@ -75,6 +77,7 @@ Pure BM25 retrieval misses semantic matches; pure vector retrieval misses exact 
 ## Decision
 
 Implement hybrid retrieval (`RetrievalMode.hybrid`) combining:
+
 1. **BM25 lane** — Lexical matching with Bangla-aware tokenizer (U+0980-U+09FF)
 2. **Vector lane** — Deterministic local embeddings (or real multilingual model)
 3. **Fusion** — Reciprocal Rank Fusion (RRF) with configurable weights
@@ -201,6 +204,7 @@ The platform has a static frontend SPA and a long-running API server with SSE st
 ## Decision
 
 Split deployment into two services:
+
 1. **Vercel** — Static SPA with `/api/*` proxy rewrite to API origin
 2. **API origin** — Any long-running host (VM, Docker, PaaS) with Cloudflare tunnel or direct DNS
 
@@ -266,6 +270,7 @@ Student PII (phone numbers, emails) stored in database must be encrypted at rest
 ## Decision
 
 Use Fernet symmetric encryption (from `cryptography` library):
+
 - Helper functions `encrypt_pii()` / `decrypt_pii()` in `security.py` handle
   encrypt/decrypt; the single encrypted column today is `parents.phone_enc`
 - Encryption key from the `PII_ENC_KEY` env var (production boot refuses to

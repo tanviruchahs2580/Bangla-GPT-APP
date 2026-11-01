@@ -32,6 +32,7 @@ const HEALTH: SchoolHealth = {
   strong_pct: 40,
   support_pct: 20,
   risk_pct: 40,
+  capacity: 120,
   at_risk: [
     {
       student_id: 11,

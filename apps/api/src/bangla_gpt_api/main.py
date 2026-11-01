@@ -63,7 +63,7 @@ from bangla_gpt_api.retrieval.hybrid_index import HybridIndex  # noqa: F401 (re-
 from bangla_gpt_api.routers import register_routers
 from bangla_gpt_api.routers._error_contract import CodedDetail, MessageDetail
 from bangla_gpt_api.routers.deps import CONSENT_VERSION
-from bangla_gpt_api.services.circuit_breaker import CircuitBreaker  # noqa: F401
+from bangla_gpt_api.services.circuit_breaker import CircuitBreaker  # noqa: F401 - re-exported for tests
 from bangla_gpt_api.services.tutor import TutorService  # noqa: F401 (re-exported for tests)
 
 __all__ = ["CONSENT_VERSION", "app", "create_app", "enforce_production_safety"]
@@ -122,7 +122,10 @@ def enforce_production_safety(settings: Settings) -> None:
         _validate_metrics,
         _validate_rate_limit_redis,
         _validate_llm_provider,
+        _validate_corpus,
+        _validate_ai_budget,
         _validate_llm_budget,
+        _validate_llm_data_use,
     ):
         try:
             problems.extend(validator(settings))
@@ -347,6 +350,58 @@ def _mock_allowed(settings: Settings) -> bool:
     )
 
 
+def _validate_corpus(settings: Settings) -> list[str]:
+    """A billable production tutor must not answer from the bundled sample (F-016).
+
+    With NCTB_CORPUS_DIR empty -- the documented compose default -- the loader
+    falls back to the 78-chunk synthetic sample corpus and the tutor cites it
+    as evidence to children. The fallback used to be reported only by a log
+    line and a metric, so a Gemini-configured deployment could serve the
+    sample to real students with nothing in /ready showing it. The mock
+    provider is exempt: it is itself refused in production unless the offline
+    demo opt-in is set, serves no real answer, and the sample is coherent with
+    a deliberate demo.
+    """
+    if settings.allow_bundled_sample_corpus_in_production:
+        return []
+    if not settings.has_billable_llm_provider:
+        return []
+    if not (settings.nctb_corpus_dir or "").strip():
+        return [
+            "NCTB_CORPUS_DIR is empty and the LLM provider is billable: the "
+            "tutor would answer children from the bundled synthetic sample "
+            "corpus and cite it as evidence. Point NCTB_CORPUS_DIR at the "
+            "built corpus, or set "
+            "ALLOW_BUNDLED_SAMPLE_CORPUS_IN_PRODUCTION=true for a deliberate "
+            "offline demo."
+        ]
+    return []
+
+
+def _validate_ai_budget(settings: Settings) -> list[str]:
+    """A billable production deployment must ship a per-user spend cap (F-034).
+
+    ``ai_monthly_budget_usd_per_user`` defaults to 0 = unlimited and the
+    documented production template never mentioned the key, so an operator
+    following the template ran with no ceiling at all: the reserve-before-call
+    ledger (services/costs.py) works, but the gate was switched off by
+    configuration and one looping or abusive account was bounded only by 30
+    requests/minute. Refusing boot makes the cap an explicit deployment
+    decision; the mock provider is exempt for the same reason as in
+    ``_validate_corpus`` (it bills exactly 0).
+    """
+    if not settings.has_billable_llm_provider:
+        return []
+    if float(settings.ai_monthly_budget_usd_per_user or 0.0) <= 0:
+        return [
+            "AI_MONTHLY_BUDGET_USD_PER_USER must be a positive monthly cap in "
+            "production when a billable LLM provider is configured (0 means "
+            "unlimited). A conservative starting value is 5 (USD per user per "
+            "month); raise it deliberately once real usage is measured."
+        ]
+    return []
+
+
 def _validate_llm_budget(settings: Settings) -> list[str]:
     """The retry chain must finish before the worker is killed.
 
@@ -370,6 +425,34 @@ def _validate_llm_budget(settings: Settings) -> list[str]:
             "LLM_MAX_RETRIES, or raise --timeout in the container CMD."
         ]
     return []
+
+
+def _validate_llm_data_use(settings: Settings) -> list[str]:
+    """A free-tier provider key must not serve children's content unacknowledged.
+
+    PRIV-06: the vendor's free tier uses submitted content to improve its
+    products (docs/playstore/data-safety.md). Whether the deployed key is
+    free or paid is an owner-side fact the repository cannot observe, so the
+    deployment must state it: with LLM_DATA_USE_TIER=free the boot refuses
+    until the operator has confirmed and recorded the data-use/retention
+    terms (LLM_DATA_USE_ACKNOWLEDGED=true, the acknowledgement data-safety.md
+    open item 1 asks for). "unset" is deliberately not refused here -- that
+    decision, paid tier vs recorded free-tier basis, is the owner's and is
+    tracked as F-042.
+    """
+    if not settings.has_billable_llm_provider:
+        return []
+    if settings.llm_data_use_tier != "free" or settings.llm_data_use_acknowledged:
+        return []
+    return [
+        "LLM_DATA_USE_TIER=free: the provider's free tier uses submitted "
+        "content to improve its products, which must not happen for "
+        "children's questions without a recorded basis. Confirm the vendor's "
+        "data-use/retention terms and record them with a date "
+        "(docs/playstore/data-safety.md, open item 1), then set "
+        "LLM_DATA_USE_ACKNOWLEDGED=true -- or run a paid-tier key with "
+        "LLM_DATA_USE_TIER=paid."
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -470,7 +553,7 @@ def _mark_public_operations(app: object) -> None:
     and the document has no global `security`, so a deliberate decision is
     invisible in the contract.
     """
-    original = app.openapi  # type: ignore[attr-defined]
+    original = app.openapi  # type: ignore[attr-defined]  # app is typed object on purpose (see below)
 
     def openapi() -> dict[str, Any]:
         spec: dict[str, Any] = original()
@@ -489,7 +572,7 @@ def _mark_public_operations(app: object) -> None:
 
     # Replacing the attribute on the FastAPI instance is the documented way to
     # customise the schema; mypy types `app` as a bare object here.
-    app.openapi = openapi  # type: ignore[attr-defined]
+    app.openapi = openapi  # type: ignore[attr-defined]  # FastAPI's own extension point
 
 
 _HTTP_METHODS = frozenset({"get", "post", "put", "patch", "delete", "head", "options"})
@@ -520,6 +603,15 @@ def create_app(settings: Settings | None = None) -> object:
     # Phase 2: Production safety gate (fail-fast)
     enforce_production_safety(settings)
 
+    if not settings.ai_generation_enabled:
+        # F-031 kill switch: a deliberate operator state, said once at boot so
+        # the refusal traffic (refused_reason=ai_generation_disabled) is
+        # attributable in the logs; retrieval/search/reader/quizzes stay up.
+        logger.warning(
+            "ai_generation_disabled: tutor/chat generation refuses with "
+            "refused_reason=ai_generation_disabled; retrieval and search stay available"
+        )
+
     # Phase 3: Bare FastAPI app. CORS lives exclusively in
     # initialize.middleware_stack.build_middleware_stack (registered once,
     # together with the rest of the middleware order).
@@ -536,6 +628,15 @@ def create_app(settings: Settings | None = None) -> object:
     app = FastAPI(
         title=settings.app_name,
         version=settings.version,
+        # F-119/LLM-10: every tutoring answer carries a `confidence` value. It
+        # is a heuristic retrieval signal, never a calibrated probability; the
+        # OpenAPI summary repeats the qualifier so a client reading only /docs
+        # cannot mistake it for one.
+        description=(
+            "Tutoring answers carry a `confidence` value. It is a heuristic "
+            "retrieval signal (evidence breadth and source score), never a "
+            "calibrated probability of a correct answer."
+        ),
         docs_url="/docs" if serve_docs else None,
         redoc_url="/redoc" if serve_docs else None,
         openapi_url="/openapi.json" if serve_docs else None,

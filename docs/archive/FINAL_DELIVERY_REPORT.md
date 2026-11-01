@@ -1,3 +1,7 @@
+> **Historical, not current.** Kept for history only; this snapshot does
+> not describe the current tree and must not be quoted as current status.
+> Current sources of truth: [README.md](README.md).
+
 # Final Delivery Report — Bangla GPT APP (Phase 8)
 
 **Repository:** `tanviruchahs2580/Bangla-GPT-APP` @ `C:\Projects\BanglaGptApp`

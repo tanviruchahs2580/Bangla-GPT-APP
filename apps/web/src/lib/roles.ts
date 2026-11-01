@@ -12,7 +12,7 @@
 
 import { t } from "../i18n";
 
-export const ROLE_LABEL: Record<string, Parameters<typeof t>[0]> = {
+const ROLE_LABEL: Record<string, Parameters<typeof t>[0]> = {
   student: "roleStudent",
   teacher: "roleTeacher",
   parent: "roleParent",

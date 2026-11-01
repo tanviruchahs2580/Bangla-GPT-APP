@@ -1,0 +1,154 @@
+{
+  "n_family_a": 40,
+  "n_family_b": 80,
+  "seed": 20260825,
+  "note": "per-mode index build, recall and search latency on the same sampled queries; rerank_overhead is the p50 difference between the fused mode with and without the reranker",
+  "modes": {
+    "lexical_only": {
+      "index_build_seconds": 165.874,
+      "family_A_self_sentence": {
+        "n": 40,
+        "recall_at_1": 0.975,
+        "recall_at_5": 1.0,
+        "mrr": 0.9875,
+        "recall_at_1_ci95": [
+          0.8712,
+          0.9956
+        ],
+        "recall_at_5_ci95": [
+          0.9124,
+          1.0
+        ]
+      },
+      "family_B_chapter_title": {
+        "n": 80,
+        "recall_at_1": 1.0,
+        "recall_at_5": 1.0,
+        "mrr": 1.0,
+        "recall_at_1_ci95": [
+          0.9542,
+          1.0
+        ],
+        "recall_at_5_ci95": [
+          0.9542,
+          1.0
+        ]
+      },
+      "search_latency_ms": {
+        "n": 120,
+        "p50": 301.0,
+        "p95": 10688.0
+      }
+    },
+    "vector_only": {
+      "index_build_seconds": 79.847,
+      "family_A_self_sentence": {
+        "n": 40,
+        "recall_at_1": 0.45,
+        "recall_at_5": 0.65,
+        "mrr": 0.5333,
+        "recall_at_1_ci95": [
+          0.3071,
+          0.6017
+        ],
+        "recall_at_5_ci95": [
+          0.4951,
+          0.7787
+        ]
+      },
+      "family_B_chapter_title": {
+        "n": 80,
+        "recall_at_1": 0.925,
+        "recall_at_5": 0.9625,
+        "mrr": 0.9365,
+        "recall_at_1_ci95": [
+          0.8459,
+          0.9652
+        ],
+        "recall_at_5_ci95": [
+          0.8955,
+          0.9872
+        ]
+      },
+      "search_latency_ms": {
+        "n": 120,
+        "p50": 19.0,
+        "p95": 44.0
+      }
+    },
+    "hybrid_no_rerank": {
+      "index_build_seconds": 113.307,
+      "family_A_self_sentence": {
+        "n": 40,
+        "recall_at_1": 0.6,
+        "recall_at_5": 0.875,
+        "mrr": 0.7104,
+        "recall_at_1_ci95": [
+          0.446,
+          0.7365
+        ],
+        "recall_at_5_ci95": [
+          0.7389,
+          0.9454
+        ]
+      },
+      "family_B_chapter_title": {
+        "n": 80,
+        "recall_at_1": 0.9625,
+        "recall_at_5": 1.0,
+        "mrr": 0.9812,
+        "recall_at_1_ci95": [
+          0.8955,
+          0.9872
+        ],
+        "recall_at_5_ci95": [
+          0.9542,
+          1.0
+        ]
+      },
+      "search_latency_ms": {
+        "n": 120,
+        "p50": 102.0,
+        "p95": 926.0
+      }
+    },
+    "hybrid_rerank": {
+      "index_build_seconds": 55.295,
+      "family_A_self_sentence": {
+        "n": 40,
+        "recall_at_1": 0.975,
+        "recall_at_5": 1.0,
+        "mrr": 0.9875,
+        "recall_at_1_ci95": [
+          0.8712,
+          0.9956
+        ],
+        "recall_at_5_ci95": [
+          0.9124,
+          1.0
+        ]
+      },
+      "family_B_chapter_title": {
+        "n": 80,
+        "recall_at_1": 1.0,
+        "recall_at_5": 1.0,
+        "mrr": 1.0,
+        "recall_at_1_ci95": [
+          0.9542,
+          1.0
+        ],
+        "recall_at_5_ci95": [
+          0.9542,
+          1.0
+        ]
+      },
+      "search_latency_ms": {
+        "n": 120,
+        "p50": 9926.0,
+        "p95": 26807.0
+      }
+    }
+  },
+  "rerank_overhead_p50_ms": 9824.0,
+  "label": "wave2 A1 after dedupe+nfkc+tokens"
+}

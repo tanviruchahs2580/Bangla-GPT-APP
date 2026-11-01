@@ -147,7 +147,7 @@ def test_roster_briefs_batched_and_identical(tmp_path, monkeypatch) -> None:
         event.listen(
             eng,
             "before_cursor_execute",
-            lambda c, cur, st, p, ctx, em: statements.append(st),
+            lambda c, cur, st, p, ctx, _em: statements.append(st),
         )
         return eng
 
