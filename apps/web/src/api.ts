@@ -842,9 +842,7 @@ export async function generateInviteCode(): Promise<{
 export async function getLiveInviteCodes(): Promise<
   { id: number; created_at: string; expires_at: string }[]
 > {
-  return get<ParentInviteStatusOut[]>(
-    "/students/me/invite-code",
-  );
+  return get<ParentInviteStatusOut[]>("/students/me/invite-code");
 }
 
 /** Revoke a live guardian invite so its code can no longer link a parent. */
