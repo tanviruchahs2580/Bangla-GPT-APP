@@ -8,7 +8,7 @@
 # To move the base: docker pull python:3.12-slim, read the digest from
 # `docker image inspect --format '{{index .RepoDigests 0}}'`, update this line,
 # and re-run the trivy scan. Never replace the digest with the tag.
-FROM python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1 AS runtime
+FROM python:3.15-slim@sha256:94d3426f1def7db4a106a232ac121bfd975393e5dfd40a619b955fae45fe7913 AS runtime
 
 # Single stage, deliberately (DOCK-01/F-089). Every Python artifact is a
 # prebuilt wheel pinned by hash in constraints.txt, and this image installs no
