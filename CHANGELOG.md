@@ -91,6 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): stop the phone rule from masking request ids in logs
 - fix(api): stop the second redaction pass from destroying structured log lines
 - fix(api): validate and canonicalise the guardian phone, share Bangla name fixtures
+- fix(api): write the openapi fixture with platform-independent bytes
 - fix(ci): stop splicing contexts into the deploy script and land the SEC-18 triage
 - fix(compose): forward the production boot-guard keys from .env
 - fix(deploy): align the web build context and worker healthchecks
@@ -178,9 +179,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - ci: audit the locked set with --skip-editable
 - ci: audit the shipped lock, not the runner environment
 - ci: gate per-module coverage floors and Lighthouse budgets
+- ci: gate the visual matrix on a windows runner; close the last test-infra gaps
 - ci: give the Windows quick-start job the documented Node 24
 - ci: pin setuptools to the release fix for GHSA-xmj3-9gf7-h52w
 - ci: quote a step name that broke the workflow parse
+- ci: run the import-linter step once, from the repository root
 - ci: run the suites shuffled and pin the workflow tool installs
 - ci: run the three-engine Bangla pass and guard the workflow tables
 
@@ -208,6 +211,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(qa): publish the 2026-10-29 QA report and archive the predecessor
 - docs(qa): publish the 2026-10-30 report and close the wave-2 register
 - docs(qa): reconcile the wave-2 report with the register and verification
+- docs(qa): record the production deploy and the Android login outage root cause
 - docs(qa): refresh the native-review sheet and check in the docs lint config
 - docs(qa): tag the F-203 flow evidence in the register copy of the report
 - docs(rag): correct the script-share definition and record the latency spread
@@ -245,6 +249,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - test(api),docs: cover the auth race/degraded paths and regenerate the changelog
 - test(api): assert a refused admission leaves the generation lane usable
 - test(api): assert the messages route's real 200 instead of accepting either code
+- test(api): end the remaining fixed wall-clock waits in the suite
 - test(api): enforce per-module coverage floors on the critical paths
 - test(api): execute SEC-08/SEC-09 injection and client-boundary probes
 - test(api): give the seam factory the new corpus_digest attribute
@@ -261,6 +266,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - test(e2e): expect the assignment deadline in the product zone
 - test(e2e): let the preview service-worker test register its worker
 - test(e2e): lift the harness tutor limiter to the sanctioned 240
+- test(e2e): make the X-02 session-clock flow deterministic on any runner
 - test(e2e): pin the next-user chip check to the server-side list
 - test(e2e): reach the seeded history via search and budget 3G on the bundle
 - test(e2e): reconcile the wave-2 specs with the shipped app
@@ -274,6 +280,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - test(web): follow the retitled copy and the Bangla digit policy in the e2e flows
 - test(web): give asynchronous assertions a fair runner budget
 - test(web): give the activity heatmap suite a local wait budget
+- test(web): hold the client types to the served OpenAPI schema
 - test(web): isolate module state so shuffled runs are deterministic
 - test(web): lock the offline page to what script-src 'self' allows
 - test(web): make the no-synthetic-bold engine assertion able to fail

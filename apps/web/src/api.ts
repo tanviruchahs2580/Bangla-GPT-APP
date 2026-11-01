@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/react";
+import type { ParentInviteOut, ParentInviteStatusOut } from "./types";
 import { downloadBlob } from "./lib/download";
 import { asText } from "./lib/text";
 import { LAST_RESULT_KEY } from "./lib/quizExplain";
@@ -829,7 +830,7 @@ export async function generateInviteCode(): Promise<{
   code: string;
   expires_in_minutes: number;
 }> {
-  return post<import("./types").ParentInviteOut>("/students/me/invite-code");
+  return post<ParentInviteOut>("/students/me/invite-code");
 }
 
 /**
@@ -841,7 +842,7 @@ export async function generateInviteCode(): Promise<{
 export async function getLiveInviteCodes(): Promise<
   { id: number; created_at: string; expires_at: string }[]
 > {
-  return get<import("./types").ParentInviteStatusOut[]>(
+  return get<ParentInviteStatusOut[]>(
     "/students/me/invite-code",
   );
 }
