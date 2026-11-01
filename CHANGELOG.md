@@ -109,6 +109,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): gate read-aloud on an installed Bengali voice
 - fix(web): give every route one outline and one page heading
 - fix(web): give the trend its meaning back to assistive tech
+- fix(web): import the invite types instead of inline module refs
 - fix(web): keep the bell count outside parentheses in its name
 - fix(web): keep the session when the server throttles the probe
 - fix(web): keep white label text above AA on every accent fill
@@ -318,6 +319,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - style(scripts): state why the boto3 import carries a type ignore
 - style(tests,docs): satisfy the end-of-file and line-ending hooks
 - style(web): format the wave-2 files and use a string-built glyph regex
+- style(web): prettier the invite type imports
 - style(web): wrap the attachment test's file list at the formatter's width
 - style: land the hook normalisations from the wave-2 close-out
 
