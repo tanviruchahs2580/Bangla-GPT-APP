@@ -148,3 +148,12 @@ def test_embed_raises_on_malformed_row() -> None:
     embedder = _embedder(lambda request: httpx.Response(200, json={"data": ["junk"]}))
     with pytest.raises(ProviderError, match="malformed"):
         embedder.embed(["প্রশ্ন"])
+
+
+def test_embed_rejects_vector_count_mismatch() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": [{"index": 0, "embedding": [1.0, 0.0]}]})
+
+    embedder = _embedder(handler)
+    with pytest.raises(ProviderError, match="vectors for"):
+        embedder.embed(["এক", "দুই"])  # 2 inputs, endpoint returns 1 vector
