@@ -128,3 +128,23 @@ def test_embed_rejects_malformed_payload() -> None:
     embedder = _embedder(lambda request: httpx.Response(200, json={"data": ["junk"]}))
     with pytest.raises(ProviderError):
         embedder.embed(["প্রশ্ন"])
+
+
+def test_embed_raises_on_non_retryable_status() -> None:
+    embedder = _embedder(lambda request: httpx.Response(401, text="bad key"))
+    with pytest.raises(ProviderError, match="401"):
+        embedder.embed(["প্রশ্ন"])
+
+
+def test_embed_rejects_non_numeric_vector() -> None:
+    embedder = _embedder(
+        lambda request: httpx.Response(200, json={"data": [{"index": 0, "embedding": ["x"]}]})
+    )
+    with pytest.raises(ProviderError, match="non-numeric"):
+        embedder.embed(["প্রশ্ন"])
+
+
+def test_embed_raises_on_malformed_row() -> None:
+    embedder = _embedder(lambda request: httpx.Response(200, json={"data": ["junk"]}))
+    with pytest.raises(ProviderError, match="malformed"):
+        embedder.embed(["প্রশ্ন"])

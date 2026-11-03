@@ -91,3 +91,18 @@ def test_postings_cover_every_indexed_term() -> None:
     for doc, tf in enumerate(index.term_freqs):
         for term, count in tf.items():
             assert (doc, count) in index._postings[term]
+
+
+def test_postings_scan_honours_min_score_lanes() -> None:
+    # Pins the two score-combination arcs the postings fold added: the
+    # soft-replacement lane (score <= min_score) and the additive lane
+    # (score > min_score) must both behave exactly like the legacy scan.
+    index = BM25Index(load_sample_corpus())
+    strong = index.search("কোষ কী", class_level=6, min_score=2.0)
+    legacy_strong = _reference_search(index, "কোষ কী", class_level=6, min_score=2.0)
+    assert [(h.chunk.id, h.score) for h in strong] == [(h.chunk.id, h.score) for h in legacy_strong]
+    gibberish = index.search("zzqq blorg", class_level=6)
+    legacy_gibberish = _reference_search(index, "zzqq blorg", class_level=6)
+    assert [(h.chunk.id, h.score) for h in gibberish] == [
+        (h.chunk.id, h.score) for h in legacy_gibberish
+    ]

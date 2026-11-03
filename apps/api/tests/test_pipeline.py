@@ -93,3 +93,26 @@ def test_irrelevant_query_returns_no_hits() -> None:
 @pytest.fixture
 def client() -> TestClient:
     return TestClient(create_app(Settings(env="test")))
+
+
+def test_ingester_splits_long_paragraph_on_sentences() -> None:
+    # The char-limit splitter must never cut a sentence in half and must
+    # exercise both sides of the accumulate/flush boundary (F-06/B3).
+    meta = _ingest_meta()
+    # numbered sentences keep every piece content-distinct, so the
+    # content-addressed dedupe cannot collapse them (B5 path) and this test
+    # isolates the splitter alone
+    sentences = [f"দীর্ঘ বাক্য নম্বর {i} একদম শেষ পর্যন্ত চলে।" for i in range(40)]
+    body = " ".join(sentences)
+    sentence = sentences[0]
+    chunks = TextIngester().ingest(body, meta)
+    assert len(chunks) >= 2
+    # each accumulated piece may overshoot only to the sentence that broke
+    # the limit — never by an entire unsplit remainder
+    assert all(len(c.text) <= 700 + len(sentence) for c in chunks)
+    for piece in chunks:
+        assert piece.text.strip().endswith("।"), "every split piece ends at a sentence boundary"
+    joined = " ".join(c.text for c in chunks)
+    assert all(f"বাক্য নম্বর {i} " in joined for i in range(40)), (
+        "splitting must preserve every sentence exactly once"
+    )
