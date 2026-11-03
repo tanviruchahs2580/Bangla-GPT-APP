@@ -153,7 +153,7 @@ def test_gate_coverage_histogram_observes_refusal_and_pass(
 class _TinyStats:
     """TermStats double: one in-corpus term, one unknown to the corpus."""
 
-    total_documents = 100
+    total_documents = 2500  # floor-active scale (>= OUT_OF_DOMAIN_MIN_DOCUMENTS)
 
     def document_frequency(self, term: str) -> int:
         return 5 if term == "দাম" else 0
@@ -194,7 +194,7 @@ def test_gate_still_passes_when_corpus_knows_the_question() -> None:
     hit.score = 4.2
 
     class _AllKnown:
-        total_documents = 100
+        total_documents = 2500
 
         def document_frequency(self, term: str) -> int:
             return 5
