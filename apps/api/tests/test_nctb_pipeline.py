@@ -202,6 +202,8 @@ class TestChunking:
     def test_unusable_pages_skipped(self) -> None:
         pages = [PageText(1, ""), PageText(2, "\ufffd garbage")]
         assert chunk_pages(pages, source_id="s2") == []
+
+
 class TestCorpusLoader:
     def _write_pipeline_outputs(self, tmp_path: Path) -> tuple[Path, Path]:
         extracted = tmp_path / "extracted"

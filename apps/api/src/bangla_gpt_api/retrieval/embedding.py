@@ -121,7 +121,7 @@ class RemoteEmbedder:
         api_key: str,
         timeout: float = 30.0,
         batch_size: int = _REMOTE_BATCH,
-        transport: object | None = None,
+        transport: httpx.BaseTransport | None = None,
     ) -> None:
         # plain attribute, not a property: the Embedder protocol declares a
         # mutable `name: str`, which a read-only property would not satisfy

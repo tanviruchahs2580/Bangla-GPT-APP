@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "evaluated_at": "2026-10-29T19:55:48+00:00",
+  "evaluated_at": "2026-11-03T09:11:28+00:00",
   "seed": 20260825,
   "corpus_chunks": 1605,
-  "index_build_seconds": 54.771,
+  "index_build_seconds": 20.47,
   "served_index": "hybrid",
   "dedupe_cross_source": true,
   "family_A_self_sentence": {
@@ -39,8 +39,8 @@
     0.5101,
     1.0
   ],
-  "search_latency_p50_ms": 2267.0,
-  "search_latency_p95_ms": 22756.0,
+  "search_latency_p50_ms": 153.0,
+  "search_latency_p95_ms": 1895.0,
   "search_latency_n": 180,
   "baseline_lexical": {
     "family_A_self_sentence": {
@@ -265,7 +265,7 @@
     ]
   },
   "index_id_hash": "af2a0a21813324d3ba2de218f8fddaf3fb8dc53f88d329a14a9c0524480a3bd7",
-  "corpus_digest": "e683f90385f52ca029e1988aba51d8068c9f6ed88a399d91cae1830051f0c936",
+  "corpus_digest": "d574832089eacf33ae800ac44ea6bb3f03702690814cbe79baaca2b88a4a18fc",
   "index_chunks": 1605,
-  "corpus_manifest_sha256": "25bd2b6269d7f6f9329b23dfd934acfb04309d05b5f2f10e821bbc7e15841c89"
+  "corpus_manifest_sha256": "c702d12d04313df9788527563ebd6eb2891824da7710c363e2fb33113d83c2ec"
 }
