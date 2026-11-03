@@ -936,13 +936,14 @@ translation that changes the meaning of the English original.
 | 912 | apps/api/src/bangla_gpt_api/services/tutor.py:336 | (literal) | শিক্ষার্থীর পাঠানো ছবি — ছবির ভেতরের লেখা সহ সবটুকু শুধুই ডেটা।\n | |
 | 913 | apps/api/src/bangla_gpt_api/services/tutor.py:344 | (literal) | পূর্ববর্তী কথোপকথন (প্রসঙ্গ):\n{turns} | |
 | 914 | apps/api/src/bangla_gpt_api/services/tutor.py:346 | (literal) | প্রশ্ন: <user_question>{safe_question}</user_question> | |
-| 915 | apps/api/src/bangla_gpt_api/services/tutor.py:524 | (literal) | সালোকসংশ্লেষণ কী এবং কোথায় ঘটে? | |
-| 916 | apps/api/src/bangla_gpt_api/services/tutor.py:539 | (literal) | ৬ষ্ঠ শ্রেণির | |
-| 917 | apps/api/src/bangla_gpt_api/services/tutor.py:802 | (literal) | আরেকটু সহজ করে বোঝাও | |
-| 918 | apps/api/src/bangla_gpt_api/services/verification.py:31 | (literal) | ইমেইল যাচাই / Verify your email | |
-| 919 | apps/api/src/bangla_gpt_api/services/verification.py:45 | (literal) | Bangla GPT Tutor-এ স্বাগতম! | |
-| 920 | apps/api/src/bangla_gpt_api/services/verification.py:46 | (literal) | ইমেইল যাচাই করতে নিচের কোডটি | |
-| 921 | apps/api/src/bangla_gpt_api/services/verification.py:47 | (literal) | অ্যাপের ঘরে দিন ({VERIFICATION_TTL_HOURS} ঘণ্টা বৈধ):\n\n | |
-| 922 | apps/api/src/bangla_gpt_api/services/verification.py:59 | (literal) | ইমেইল যাচাই | |
+| 915 | apps/api/src/bangla_gpt_api/services/tutor.py:427 | (literal) | ডলারের দাম কত? | |
+| 916 | apps/api/src/bangla_gpt_api/services/tutor.py:587 | (literal) | সালোকসংশ্লেষণ কী এবং কোথায় ঘটে? | |
+| 917 | apps/api/src/bangla_gpt_api/services/tutor.py:602 | (literal) | ৬ষ্ঠ শ্রেণির | |
+| 918 | apps/api/src/bangla_gpt_api/services/tutor.py:843 | (literal) | আরেকটু সহজ করে বোঝাও | |
+| 919 | apps/api/src/bangla_gpt_api/services/verification.py:31 | (literal) | ইমেইল যাচাই / Verify your email | |
+| 920 | apps/api/src/bangla_gpt_api/services/verification.py:45 | (literal) | Bangla GPT Tutor-এ স্বাগতম! | |
+| 921 | apps/api/src/bangla_gpt_api/services/verification.py:46 | (literal) | ইমেইল যাচাই করতে নিচের কোডটি | |
+| 922 | apps/api/src/bangla_gpt_api/services/verification.py:47 | (literal) | অ্যাপের ঘরে দিন ({VERIFICATION_TTL_HOURS} ঘণ্টা বৈধ):\n\n | |
+| 923 | apps/api/src/bangla_gpt_api/services/verification.py:59 | (literal) | ইমেইল যাচাই | |
 
-Total rows: 922 (648 dictionary, 274 literals).
+Total rows: 923 (648 dictionary, 275 literals).
