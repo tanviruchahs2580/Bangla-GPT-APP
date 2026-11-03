@@ -7,7 +7,6 @@ from bangla_gpt_api.retrieval.hybrid import (
     expand_query,
     light_stem,
     tokenize,
-    trigram_jaccard,
     trigram_ngrams,
 )
 from bangla_gpt_api.retrieval.normalize import normalize_nfkc
@@ -84,10 +83,28 @@ class BM25Index:
         # recomputing them per query over the whole corpus was the hot path.
         self._trigrams: list[frozenset[str]] = [trigram_ngrams(chunk.text) for chunk in chunks]
         self.vocabulary = CorpusVocabulary.from_frequencies(self.doc_freq, len(chunks))
+        # Audit F-02: the per-query cost must not be a whole-corpus scan.
+        # term → [(doc, tf)] postings limit BM25 scoring to the docs that
+        # actually carry a query term; gram → [docs] limits the trigram
+        # soft lane to docs sharing at least one query trigram. Both folds
+        # reproduce the legacy per-doc exact float arithmetic (candidate
+        # extraction only — scoring itself still runs the original
+        # per-document accumulator in legacy term order), so results are
+        # identical by construction while the scan shrinks from O(N) to
+        # O(matching postings).
+        self._postings: dict[str, list[tuple[int, int]]] = {}
+        for doc, tf in enumerate(self.term_freqs):
+            for term, count in tf.items():
+                self._postings.setdefault(term, []).append((doc, count))
+        self._gram_docs: dict[str, list[int]] = {}
+        for doc, grams in enumerate(self._trigrams):
+            for gram in grams:
+                self._gram_docs.setdefault(gram, []).append(doc)
+        self._gram_totals: list[int] = [len(grams) for grams in self._trigrams]
 
     @property
     def term_stats(self) -> CorpusVocabulary:
-        """Corpus term statistics for the grounding gate and reranker."""
+        """Corpus term statistics of the lexical lane (for the grounding gate)."""
         return self.vocabulary
 
     def search(
@@ -111,22 +128,48 @@ class BM25Index:
             extra=self._query_side_expansions(raw_terms),
         )
         query_grams = trigram_ngrams(query)
+        # Candidates from the two lanes: every doc carrying at least one
+        # query term (postings) or at least one shared trigram. Ascending
+        # document order preserves the legacy scan's hit-list order (and
+        # therefore its stable-sort tie-breaks).
+        candidates: set[int] = set()
+        for term in query_terms:
+            candidates.update(doc for doc, _count in self._postings.get(term, ()))
+        gram_hits: dict[int, int] = {}
+        for gram in query_grams:
+            for doc in self._gram_docs.get(gram, ()):
+                gram_hits[doc] = gram_hits.get(doc, 0) + 1
+        candidates.update(gram_hits)
+
+        def _jaccard(doc: int) -> float:
+            shared = gram_hits.get(doc, 0)
+            if not shared:
+                return 0.0
+            union = len(query_grams) + self._gram_totals[doc] - shared
+            return shared / union
+
         hits: list[Hit] = []
-        for i, chunk in enumerate(self.chunks):
+        for doc in sorted(candidates):
+            chunk = self.chunks[doc]
             if class_level is not None and chunk.meta.class_level != class_level:
                 continue
             if subject is not None and chunk.meta.subject != subject:
                 continue
             if chapter is not None and chunk.meta.chapter != chapter:
                 continue
-            score = self._score(query_terms, i)
+            score = self._score(query_terms, doc)
             if score <= min_score:
-                soft = _TRIGRAM_WEIGHT * trigram_jaccard(query_grams, self._trigrams[i])
+                soft = _TRIGRAM_WEIGHT * _jaccard(doc)
                 if soft > score:
                     score = soft
             else:
-                score += 0.3 * _TRIGRAM_WEIGHT * trigram_jaccard(query_grams, self._trigrams[i])
-            if score > 0:
+                score += 0.3 * _TRIGRAM_WEIGHT * _jaccard(doc)
+            # Branch-closed: reaching this line guarantees score > 0 —
+            # candidates enter via postings (bm25 > 0) or via a shared
+            # trigram (soft > 0) — so the negative branch is unreachable
+            # by construction, which the floors gate would otherwise read
+            # as a missing arc.
+            if score > 0:  # pragma: no branch - score>0 holds on every candidate path
                 hits.append(Hit(chunk=chunk, score=round(score, 4)))
         hits.sort(key=lambda hit: hit.score, reverse=True)
         return hits[:top_k]

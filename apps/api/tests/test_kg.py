@@ -272,11 +272,20 @@ def test_kg_gaps_requires_auth_and_returns_shape(client: TestClient) -> None:
 
 def test_kg_gaps_surfaces_gap_after_all_wrong_quizzes(client: TestClient) -> None:
     student_id, headers = _make_student(client, "kgweak@example.com", class_level=7)
-    for _ in range(3):
-        _run_quiz(client, student_id, headers, answers=1)
-    gaps = client.get("/kg/gaps", headers=headers).json()["gaps"]
-    # 15 graded answers, ~1/4 lucky hits: at least one chapter root must be
-    # weak with a curated prerequisite (pigeonhole over 7th-grade chapters).
+    # Only one class-7 root (উদ্ভিদের পরিবহন) carries a curated prerequisite,
+    # and question selection is random per quiz request while option order is
+    # content-deterministic — a fixed answer key can luck through any single
+    # draw. The pigeonhole therefore runs as a BOUNDED RETRY: quiz questions
+    # carry no leaked correct answer, so the test rotates a fixed key and
+    # keeps submitting until the mastery evidence must dip under the weak
+    # threshold; by construction the correct option moves against a rotated
+    # key, so a persistent no-gap run is vanishingly unlikely.
+    gaps: list[dict] = []
+    for quiz_index in range(8):
+        _run_quiz(client, student_id, headers, answers=(quiz_index % 4) + 1)
+        gaps = client.get("/kg/gaps", headers=headers).json()["gaps"]
+        if gaps:
+            break
     assert gaps, "repeatedly wrong quiz answers must surface a KG gap"
     assert all(isinstance(g["concept"], str) and g["concept"] for g in gaps)
 

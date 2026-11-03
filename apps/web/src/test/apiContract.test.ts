@@ -190,6 +190,8 @@ describe("the committed OpenAPI fixture against the client", () => {
     "get /admin/schools":
       "the admin card reads /admin/schools/stats (per-school rows)",
     "get /admin/system/info": OPS_ONLY,
+    "post /admin/reindex":
+      "operator-only curl action (no admin web card yet); the API-doc audit ships it",
     "get /health": INFRA_PROBE,
     "get /kg/gaps": OPS_ONLY,
     "get /live": INFRA_PROBE,

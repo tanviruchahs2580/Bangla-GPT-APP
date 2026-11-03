@@ -1,0 +1,77 @@
+name: retrieval-eval (nightly real-corpus regression)
+
+# The committed baseline `data/nctb/retrieval_eval.json` (family A
+# self-sentence recall/mono-recall, family B chapter titles, family C
+# adversarial refusals, p50/p95 latency) measures the REAL corpus — but that
+# corpus is copyrighted and deliberately NOT distributed with the repo
+# (data/nctb is gitignored). A hosted runner therefore has nothing to
+# measure; the job skips honestly with a notice in that case. On a runner
+# that DOES carry the corpus (operator-supplied artifact cache or
+# self-hosted), a nightly deviation from the committed baseline fails the
+# job and uploads the fresh report — the same "never re-baseline to go
+# green" discipline as the PR eval-gate (R12), except this one is allowed to
+# fail loudly overnight instead of during merges.
+
+on:
+  schedule:
+    - cron: "31 22 * * *" # nightly; GitHub may throttle schedules
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  retrieval-regression:
+    name: Real-corpus retrieval regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/api/constraints.txt
+
+      - name: Install package (hash-verified constraints)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --require-hashes -r constraints.txt
+          python -m pip install --no-deps -e ".[dev]"
+
+      - name: Check corpus availability
+        id: corpus
+        run: |
+          if [ -f ../../data/nctb/quality_report.json ] && compgen -G "../../data/nctb/normalized/*.chunks.jsonl" > /dev/null; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::data/nctb corpus is not distributed with the repo; the nightly real-corpus regression ran nowhere."
+          fi
+
+      - name: Snapshot committed baseline
+        if: steps.corpus.outputs.present == 'true'
+        run: git show HEAD:data/nctb/retrieval_eval.json > baseline_committed.json
+
+      - name: Run real-corpus retrieval eval
+        if: steps.corpus.outputs.present == 'true'
+        run: python scripts/evaluate_nctb_retrieval.py
+
+      - name: Fail on regression vs the committed baseline (R12)
+        if: steps.corpus.outputs.present == 'true'
+        run: python scripts/check_retrieval_baseline.py --baseline baseline_committed.json --current ../../data/nctb/retrieval_eval.json
+
+      - name: Upload fresh retrieval report
+        if: steps.corpus.outputs.present == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: retrieval-eval-report
+          path: data/nctb/retrieval_eval.json
+          if-no-files-found: ignore

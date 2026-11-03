@@ -650,6 +650,36 @@ def _ranked_hits(hits: list, limit: int = 10) -> list[SearchHit]:
     return merged[:limit]
 
 
+def _dedupe_and_floor(hits: list, *, relative_floor: float = 0.35) -> list:
+    """Drop weak tail hits and byte-identical passages from global search.
+
+    ``relative_floor`` is a fraction of the top rerank score, not an
+    absolute BM25 value: rerank magnitudes do not transfer across corpora
+    (TutorService documents the same invariant for its min-score floor), so
+    the search floor must not either — the previous absolute 0.5 sat far
+    below a single real lexical match and filtered nothing. The
+    whitespace-normalized text fingerprint dedupes the multi-class copies
+    the NCTB loader emits for undetected-class sources (same passage,
+    distinct chunk ids), which otherwise crowd one text into several of
+    the 24 result slots.
+    """
+    if not hits:
+        return hits
+    top = float(hits[0].score)
+    floor = relative_floor * top if top > 0 else 0.0
+    kept: list = []
+    seen_texts: set[str] = set()
+    for hit in hits:
+        fingerprint = " ".join(hit.chunk.text.split())
+        if fingerprint in seen_texts:
+            continue
+        if floor > 0 and float(hit.score) < floor:
+            continue
+        seen_texts.add(fingerprint)
+        kept.append(hit)
+    return kept
+
+
 @router.get("/search", response_model=SearchResponse)
 def global_search(
     app_ctx: Ctx,
@@ -674,7 +704,7 @@ def global_search(
             detail={"code": "empty_query", "message": "Query must not be blank"},
         )
     ask = _is_question_like(query)
-    hits = app_ctx.index.search(query, top_k=24, min_score=0.5)
+    hits = _dedupe_and_floor(app_ctx.index.search(query, top_k=24, min_score=0.0))
     out = _subject_hits(app_ctx.index.chunks, query)
     out.extend(_ranked_hits(hits))
     return SearchResponse(query=query, ask_action=ask, hits=out)

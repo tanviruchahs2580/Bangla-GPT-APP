@@ -4037,6 +4037,30 @@
         "title": "RegisterResponse",
         "type": "object"
       },
+      "ReindexOut": {
+        "description": "Result of a hot retrieval-index rebuild (POST /admin/reindex).\n\nCounts and durations only — the corpus itself never travels in an\nadmin API response.",
+        "properties": {
+          "build_seconds": {
+            "title": "Build Seconds",
+            "type": "number"
+          },
+          "corpus_chunks": {
+            "title": "Corpus Chunks",
+            "type": "integer"
+          },
+          "retrieval_mode": {
+            "title": "Retrieval Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "corpus_chunks",
+          "build_seconds",
+          "retrieval_mode"
+        ],
+        "title": "ReindexOut",
+        "type": "object"
+      },
       "ResendVerificationRequest": {
         "description": "Unauthenticated resend for users stuck at login with email_unverified.\n\nThe login endpoint issues no token for unverified accounts, so the\nprevious authed-only resend was unreachable exactly when needed.\nEmail is optional so already-authed callers can omit it (server uses\ntheir identity); unauthenticated callers must supply it. The endpoint\nalways answers 202 with a generic body to avoid account enumeration.",
         "properties": {
@@ -7163,6 +7187,73 @@
           }
         ],
         "summary": "Admin Purge Expired",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/admin/reindex": {
+      "post": {
+        "description": "Hot rebuild of the retrieval index from the configured corpus (F-18).\n\nThe index is otherwise built exactly once per worker at boot; a corpus\nupdate used to require a rolling restart. This endpoint loads the corpus\nafresh, builds a COMPLETE new index + term statistics, and swaps them\nonto the app context under a lock — in-flight requests keep their\ncaptured old references and finish on them, new requests see the new\ncorpus. Cached answer keys age out naturally: each index carries its\ncorpus fingerprint in the cache keys. An audit row records who rebuilt,\nwhen.\n\nSlow by design (a full corpus embed + index build) and therefore\nsynchronous: an admin explicitly asked for it.",
+        "operationId": "admin_reindex_admin_reindex_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReindexOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Missing or invalid credentials"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Authenticated but not permitted"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Rate limit exceeded"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageDetail"
+                }
+              }
+            },
+            "description": "Rate limiter backend unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Admin Reindex",
         "tags": [
           "admin"
         ]

@@ -13,6 +13,7 @@ from bangla_gpt_api.schemas import SourceRef
 from bangla_gpt_api.services.context import RequestContext, set_current_context
 from bangla_gpt_api.services.generators._evidence import evidence_blocks
 from bangla_gpt_api.services.generators._json import extract_json_object, require_echo
+from bangla_gpt_api.services.generators.evidence import trim_evidence_hits
 from bangla_gpt_api.services.router import Route, set_current_route
 from bangla_gpt_api.services.safety import AGE_RULE_SENTENCE
 from bangla_gpt_api.services.tutor import sanitize_evidence
@@ -124,7 +125,9 @@ async def generate_answer_key(
     if not questions:
         raise ProviderError("answer key needs at least one question")
     hits = (
-        index.search(chapter, class_level=class_level, subject=subject, top_k=top_k)
+        trim_evidence_hits(
+            index.search(chapter, class_level=class_level, subject=subject, top_k=top_k)
+        )
         if chapter
         else []
     )

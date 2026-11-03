@@ -15,6 +15,7 @@ from bangla_gpt_api.schemas import SourceRef
 from bangla_gpt_api.services.context import RequestContext, set_current_context
 from bangla_gpt_api.services.generators._evidence import evidence_blocks
 from bangla_gpt_api.services.generators._json import require_echo, strip_code_fences
+from bangla_gpt_api.services.generators.evidence import trim_evidence_hits
 from bangla_gpt_api.services.router import Route, set_current_route
 from bangla_gpt_api.services.safety import AGE_RULE_SENTENCE
 from bangla_gpt_api.services.tutor import sanitize_evidence
@@ -112,7 +113,9 @@ async def generate_lesson_plan(
     context: RequestContext | None = None,
 ) -> tuple[dict[str, str], list[SourceRef]]:
     """One retrieval + exactly one provider call -> eight lesson sections."""
-    hits = index.search(chapter, class_level=class_level, subject=subject, top_k=top_k)
+    hits = trim_evidence_hits(
+        index.search(chapter, class_level=class_level, subject=subject, top_k=top_k)
+    )
     if not hits:
         raise ProviderError("no textbook evidence found for this chapter")
     prompt = build_lesson_prompt(class_level, subject, chapter, minutes, level, hits)

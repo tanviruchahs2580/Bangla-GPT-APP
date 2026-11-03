@@ -15,6 +15,7 @@ from bangla_gpt_api.retrieval.hybrid import light_stem
 from bangla_gpt_api.services.context import RequestContext, set_current_context
 from bangla_gpt_api.services.generators._evidence import evidence_block
 from bangla_gpt_api.services.generators._json import require_semantic_validation
+from bangla_gpt_api.services.generators.evidence import trim_evidence_texts
 from bangla_gpt_api.services.router import Route, set_current_route
 from bangla_gpt_api.services.safety import AGE_RULE_SENTENCE
 
@@ -290,6 +291,10 @@ async def generate_question_paper(
             if hit.chunk.text not in seen:
                 seen.add(hit.chunk.text)
                 evidence.append(hit.chunk.text)
+    # A multi-chapter paper used to carry chapters x top_k passages into one
+    # prompt with no ceiling: the trimmed list is what both the model and the
+    # alignment validator (`validate_paper` reads `evidence`) now agree on.
+    evidence = trim_evidence_texts(evidence)
     if not evidence:
         raise ProviderError("no textbook evidence found for these chapters")
     prompt = build_qp_prompt(class_level, subject, chapters, counts, evidence)

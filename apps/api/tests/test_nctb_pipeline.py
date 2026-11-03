@@ -181,6 +181,24 @@ class TestChunking:
         for chunk in chunk_pages(self._pages(), source_id="s1"):
             assert chunk.page_start >= 1 and chunk.page_end >= chunk.page_start
 
+    def test_section_markers_carry_metadata_not_just_flush(self) -> None:
+        # The retrieval units after a section marker must carry the marker
+        # line as METADATA, not only use it as a flush boundary:
+        # indexable_text double-weights section headings and the vector lane
+        # prefixes them — both silently no-op on a corpus with empty sections.
+        chunks = chunk_pages(self._pages(), source_id="s1")
+        chapter_one = [c for c in chunks if c.chapter == "কোষ"]
+        pre_marker = [c for c in chapter_one if c.section == ""]
+        post_marker = [c for c in chapter_one if c.section == "অনুশীলনী"]
+        assert pre_marker and post_marker, "section metadata must split the chapter units"
+        assert all("অনুশীলনী" in c.text for c in post_marker), "marker text stays in the body"
+
+    def test_chapter_heading_resets_section_scope(self) -> None:
+        chunks = chunk_pages(self._pages(), source_id="s1")
+        chapter_two = [c for c in chunks if c.chapter == "কোষ বিভাজন"]
+        assert chapter_two
+        assert all(c.section == "" for c in chapter_two)
+
     def test_unusable_pages_skipped(self) -> None:
         pages = [PageText(1, ""), PageText(2, "\ufffd garbage")]
         assert chunk_pages(pages, source_id="s2") == []

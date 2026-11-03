@@ -90,8 +90,9 @@ class RawChunk:
     text: str  # normalized text used for indexing
     original_text: str
     chapter: str
-    page_start: int
-    page_end: int
+    section: str = ""
+    page_start: int = 0
+    page_end: int = 0
     source_spans: list[SourceSpan] = field(default_factory=list)
 
 
@@ -350,6 +351,11 @@ def chunk_pages(
     """Build chapter-parented, section-aware chunks with page provenance."""
     chunks: list[RawChunk] = []
     current_chapter = ""
+    # The most recent section-marker line inside the current chapter, carried
+    # as RETRIEVAL METADATA onto the units it bounds (audit F-03): without it
+    # indexable_text's heading double-weighting and the vector lane's heading
+    # prefix silently no-op on the production corpus.
+    current_section = ""
     buffer: list[_Line] = []
     buffer_tokens = 0
     chapter_seq = 0
@@ -417,6 +423,7 @@ def chunk_pages(
                     text=chunk_text,
                     original_text=_original_text(piece_spans, pages),
                     chapter=current_chapter,
+                    section=current_section,
                     page_start=min(page_numbers),
                     page_end=max(page_numbers),
                     source_spans=piece_spans,
@@ -438,9 +445,11 @@ def chunk_pages(
                     flush()
                     chapter_seq += 1
                     current_chapter = heading
+                    current_section = ""
                 else:
                     if any(hint in line for hint in SECTION_HINTS) and len(line) < 60:
                         flush()  # section boundary -> a fresh retrieval unit
+                        current_section = line
                     line_abs = [restore_map[stripped_start + offset] for offset in range(len(line))]
                     normalized = normalize_bangla_with_offsets(line)
                     buffer.append(

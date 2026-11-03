@@ -140,10 +140,32 @@ class Settings(BaseSettings):
     # fusion, then lexically reranked (retrieval/hybrid_index.py).
     # "bm25" = lexical lane only (v1 baseline).
     retrieval_mode: str = "hybrid"
-    # Real multilingual embedding models are a staging human decision.
     # Empty -> the deterministic local hash-ngram embedder serves the vector
-    # lane; naming a model without the staging backend is a config error.
+    # lane. Naming a model turns the vector lane into a real remote
+    # embedder, which additionally requires an endpoint + key below — a
+    # model name without a backend is a configuration error (retrieval/
+    # embedding.py::build_embedder), never a silent downgrade.
     embedding_model: str = ""
+    # Remote embedding endpoint (POST {base}/embeddings, OpenAI-compatible).
+    # Switching EMBEDDING_MODEL invalidates every previously produced
+    # vector — bump the corpus version alongside the model.
+    embedding_api_base: str = "https://api.openai.com/v1"
+    embedding_api_key: str = ""
+    # Retrieval-shape knobs (audit F-05/D1). The defaults ARE the measured
+    # values the grounding/rerank work shipped with; overrides exist for
+    # offline benchmark sweeps against the committed eval baselines, not for
+    # live hot-guessing. Changing any of these moves the grounding gate and
+    # the ranking — re-run the golden eval before production.
+    rag_top_k: int = 3
+    rag_min_coverage: float = 0.5
+    rag_rrf_k: int = 60
+    rag_candidate_factor: int = 3
+    rag_w_rrf: float = 1.0
+    rag_w_coverage: float = 0.5
+    rag_w_proximity: float = 0.8
+    rag_w_trigram: float = 0.3
+    rag_proximity_window: int = 40
+    rag_max_evidence_chars: int = 9000
 
     # --- persistence ---
     # File-based SQLite by default so local dev data survives restarts.

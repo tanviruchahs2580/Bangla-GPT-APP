@@ -80,8 +80,23 @@ SUBJECT_KEYS = {
 }
 
 
+_WARNED_SUBJECTS: set[str] = set()
+
+
 def _subject_key(subject_bn: str) -> str:
-    return SUBJECT_KEYS.get(subject_bn, "general")
+    if subject_bn in SUBJECT_KEYS:
+        return SUBJECT_KEYS[subject_bn]
+    # The 'general' fallback keeps stored chunk ids stable across rebuilds,
+    # but a silent misfile made the source unfindable under any real subject
+    # filter. It stays for compatibility; the gap is now operator-visible.
+    if subject_bn not in _WARNED_SUBJECTS:
+        _WARNED_SUBJECTS.add(subject_bn)
+        logger.warning(
+            "nctb_loader: unmapped subject %r indexed as 'general'; add it to "
+            "SUBJECT_KEYS so subject filters can reach these sources",
+            subject_bn,
+        )
+    return "general"
 
 
 def cover_text(pages_payload: dict) -> str:
@@ -229,7 +244,6 @@ def load_nctb_corpus(
             curriculum_year=year,
             subject=_subject_key(subject_bn),
             book=subject_bn,
-            section=None,
             language="bn",
             version=version,
             content_type="nctb",
@@ -268,6 +282,11 @@ def load_nctb_corpus(
                         meta=CurriculumMeta(
                             class_level=class_level,
                             chapter=data.get("chapter", ""),
+                            # Section metadata rides the row (audit F-03):
+                            # heading-weighted indexing no-ops when it is empty.
+                            # F-03: empty string is the established "no section" value the
+                            # retrieval lanes already fold away (indexable_text uses `or ""`).
+                            section=data.get("section"),
                             page=data.get("page_start"),
                             **meta_kwargs,
                         ),

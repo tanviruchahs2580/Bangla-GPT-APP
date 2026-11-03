@@ -30,6 +30,7 @@ from bangla_gpt_api.db.models import (
     User,
 )
 from bangla_gpt_api.logging_config import json_log
+from bangla_gpt_api.metrics import RAG_INDEX_REBUILDS_TOTAL
 from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES
 from bangla_gpt_api.schemas import (
     AdminAiQualityOut,
@@ -40,6 +41,7 @@ from bangla_gpt_api.schemas import (
     ImpersonateOut,
     ImpersonateRequest,
     RefusalAuditOut,
+    ReindexOut,
     RoleUpdateRequest,
     UserPublic,
 )
@@ -533,3 +535,56 @@ def admin_purge_expired(
         )
         db.commit()
     return report
+
+
+@router.post("/admin/reindex", response_model=ReindexOut)
+def admin_reindex(app_ctx: Ctx, admin: AdminUser, db: DbSession) -> ReindexOut:
+    """Hot rebuild of the retrieval index from the configured corpus (F-18).
+
+    The index is otherwise built exactly once per worker at boot; a corpus
+    update used to require a rolling restart. This endpoint loads the corpus
+    afresh, builds a COMPLETE new index + term statistics, and swaps them
+    onto the app context under a lock — in-flight requests keep their
+    captured old references and finish on them, new requests see the new
+    corpus. Cached answer keys age out naturally: each index carries its
+    corpus fingerprint in the cache keys. An audit row records who rebuilt,
+    when.
+
+    Slow by design (a full corpus embed + index build) and therefore
+    synchronous: an admin explicitly asked for it.
+    """
+    from bangla_gpt_api.initialize.dependencies import build_retrieval_index
+
+    if app_ctx.tutor is None or app_ctx.index is None:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "index_unavailable", "message": "Curriculum index unavailable"},
+        )
+    started = time.perf_counter()
+    with app_ctx.reindex_lock:
+        new_index, term_stats, corpus_record = build_retrieval_index(
+            app_ctx.settings, app_ctx.cache
+        )
+        retargeted = app_ctx.tutor.retarget_index(
+            new_index, term_stats, corpus_digest=corpus_record["digest"]
+        )
+        app_ctx.index = new_index
+        app_ctx.tutor = retargeted
+    seconds = round(time.perf_counter() - started, 3)
+    chunks = len(new_index.chunks)
+    RAG_INDEX_REBUILDS_TOTAL.inc()
+    write_audit(
+        db,
+        action="reindex",
+        actor_user_id=admin.id,
+        actor_role=admin.role,
+        target="retrieval_index",
+        detail={"corpus_chunks": chunks, "build_seconds": seconds},
+    )
+    db.commit()
+    logger.info("rag_index_rebuilt", extra={"chunks": chunks, "seconds": seconds})
+    return ReindexOut(
+        corpus_chunks=chunks,
+        build_seconds=seconds,
+        retrieval_mode=app_ctx.settings.retrieval_mode.strip().lower(),
+    )

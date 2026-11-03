@@ -12,9 +12,11 @@ documents the feature set and why each weight is what it is); a model-based
 reranker replaces exactly one stage of this pipeline when one is benchmarked.
 """
 
+import time
 from collections.abc import Callable
 
 from bangla_gpt_api.curriculum.models import Chunk
+from bangla_gpt_api.metrics import RAG_LANE_LATENCY_SECONDS
 from bangla_gpt_api.retrieval.bm25 import BM25Index, Hit, indexable_text, tokenize
 from bangla_gpt_api.retrieval.embedding import Embedder, bengali_bigrams
 from bangla_gpt_api.retrieval.fusion import reciprocal_rank_fusion
@@ -79,7 +81,11 @@ def _minimal_window(positions: list[list[int]]) -> int:
     return best if best < 10**9 else 10**9
 
 
-def make_lexical_rerank(term_stats: TermStats | None = None) -> Reranker:
+def make_lexical_rerank(
+    term_stats: TermStats | None = None,
+    *,
+    proximity_window: int = _PROXIMITY_WINDOW,
+) -> Reranker:
     """Build the deterministic reranker, frequency-aware when the corpus says so.
 
     Features per candidate, computed over the text the lexical lane indexes
@@ -149,7 +155,16 @@ def make_lexical_rerank(term_stats: TermStats | None = None) -> Reranker:
                 [i for i, tok in enumerate(text_tokens) if light_stem(tok) == term]
                 for term in covered
             ]
-            proximity = len(covered) / max(_minimal_window(positions), 1) if covered else 0.0
+            # F-08 (audit): normalize by the share of the question's terms
+            # covered. A chunk matching ONE of five query terms must not draw
+            # the max proximity bonus (its minimal window is trivially 1);
+            # multi-term coverage inside one sentence still reaches 1.0.
+            window = min(_minimal_window(positions), proximity_window) if covered else 1
+            proximity = (
+                (len(covered) / max(window, 1)) * (len(covered) / len(query_terms))
+                if covered and query_terms
+                else 0.0
+            )
             tri = trigram_similarity(query, indexable_text(chunk))
             scores.append(
                 lexical_base
@@ -194,6 +209,8 @@ class HybridIndex:
         *,
         reranker: Reranker | None = None,
         rrf_k: int = _RRF_K,
+        candidate_factor: int = _CANDIDATE_FACTOR,
+        proximity_window: int = _PROXIMITY_WINDOW,
         k1: float = 1.5,
         b: float = 0.75,
     ) -> None:
@@ -201,11 +218,15 @@ class HybridIndex:
         self.bm25 = BM25Index(chunks, k1=k1, b=b)
         self.vector = VectorIndex(chunks, embedder)
         self.rrf_k = rrf_k
+        self._candidate_factor = max(candidate_factor, 1)
+        self._proximity_window = max(proximity_window, 1)
         # The default reranker is the corpus-aware one: statistics come from
         # this index's own lexical lane, so reranking, the grounding gate and
         # the query expansion all read the same document frequencies. An
         # explicit reranker still wins (tests, experiments).
-        self.reranker: Reranker = reranker or make_lexical_rerank(self.bm25.term_stats)
+        self.reranker: Reranker = reranker or make_lexical_rerank(
+            self.bm25.term_stats, proximity_window=self._proximity_window
+        )
 
     @property
     def term_stats(self) -> TermStats:
@@ -226,7 +247,8 @@ class HybridIndex:
         # gate) must see the same query string the corpus was built with; a
         # ZWNJ or a decomposed য় must not change the hit set (F-104).
         query = normalize_nfkc(query)
-        candidate_k = max(top_k * _CANDIDATE_FACTOR, top_k + 1)
+        candidate_k = max(top_k * self._candidate_factor, top_k + 1)
+        lane_started = time.perf_counter()
         bm25_hits = self.bm25.search(
             query,
             class_level=class_level,
@@ -235,6 +257,8 @@ class HybridIndex:
             top_k=candidate_k,
             min_score=0.0,
         )
+        RAG_LANE_LATENCY_SECONDS.labels(lane="bm25").observe(time.perf_counter() - lane_started)
+        lane_started = time.perf_counter()
         vector_hits = self.vector.search(
             query,
             class_level=class_level,
@@ -243,6 +267,7 @@ class HybridIndex:
             top_k=candidate_k,
             min_score=0.0,
         )
+        RAG_LANE_LATENCY_SECONDS.labels(lane="vector").observe(time.perf_counter() - lane_started)
         # Grounding guard: hashed-bucket collisions give a gibberish
         # query a small positive cosine against unrelated text, so a vector-
         # only candidate (found by NO lexical lane) must share Bangla

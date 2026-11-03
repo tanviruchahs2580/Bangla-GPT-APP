@@ -1599,6 +1599,18 @@ class ParentReportOut(BaseModel):
 # --- admin AI quality -----------------------------------------------------
 
 
+class ReindexOut(BaseModel):
+    """Result of a hot retrieval-index rebuild (POST /admin/reindex).
+
+    Counts and durations only — the corpus itself never travels in an
+    admin API response.
+    """
+
+    corpus_chunks: int
+    build_seconds: float
+    retrieval_mode: str
+
+
 class AdminAiQualityOut(BaseModel):
     """Counts only, never message content."""
 

@@ -21,7 +21,7 @@
     "chunks_with_chapter": 0,
     "chapter_coverage": 0.0,
     "content_version": "v1:ca0bb834d1b2",
-    "built_at": "2026-10-29T18:38:42+00:00",
+    "built_at": "2026-11-03T09:01:59+00:00",
     "shared_text_chunks_with_other_sources": 49
   },
   "nctb-secondary-afda21d8556d": {
@@ -46,7 +46,7 @@
     "chunks_with_chapter": 0,
     "chapter_coverage": 0.0,
     "content_version": "v1:537d2fbf64e9",
-    "built_at": "2026-10-29T18:39:19+00:00",
+    "built_at": "2026-11-03T09:02:04+00:00",
     "shared_text_chunks_with_other_sources": 1
   },
   "nctb-secondary-be50d8aff8d5": {
@@ -71,7 +71,7 @@
     "chunks_with_chapter": 16,
     "chapter_coverage": 0.1798,
     "content_version": "v1:d35787da9b1d",
-    "built_at": "2026-10-29T18:40:12+00:00",
+    "built_at": "2026-11-03T09:02:12+00:00",
     "shared_text_chunks_with_other_sources": 46
   },
   "nctb-secondary-e39c58d35764": {
@@ -96,7 +96,7 @@
     "chunks_with_chapter": 22,
     "chapter_coverage": 0.2683,
     "content_version": "v1:7e5160d72a38",
-    "built_at": "2026-10-29T18:42:03+00:00",
+    "built_at": "2026-11-03T09:02:27+00:00",
     "shared_text_chunks_with_other_sources": 50
   },
   "nctb-secondary-ca0d6bd886b7": {
@@ -121,7 +121,7 @@
     "chunks_with_chapter": 24,
     "chapter_coverage": 0.2791,
     "content_version": "v1:17c22d7e89d8",
-    "built_at": "2026-10-29T18:43:41+00:00",
+    "built_at": "2026-11-03T09:02:35+00:00",
     "shared_text_chunks_with_other_sources": 50
   },
   "nctb-hsc-28d03c592c2c": {
@@ -146,7 +146,7 @@
     "chunks_with_chapter": 34,
     "chapter_coverage": 0.382,
     "content_version": "v1:4bab4adf0487",
-    "built_at": "2026-10-29T19:05:07+00:00",
+    "built_at": "2026-11-03T09:05:14+00:00",
     "shared_text_chunks_with_other_sources": 49
   },
   "nctb-hsc-a513203336f6": {
@@ -171,7 +171,7 @@
     "chunks_with_chapter": 15,
     "chapter_coverage": 0.2027,
     "content_version": "v1:cd17f741e26c",
-    "built_at": "2026-10-29T19:12:16+00:00",
+    "built_at": "2026-11-03T09:06:03+00:00",
     "shared_text_chunks_with_other_sources": 50
   },
   "nctb-hsc-ca39e5957513": {
@@ -196,7 +196,7 @@
     "chunks_with_chapter": 25,
     "chapter_coverage": 0.3086,
     "content_version": "v1:6d856b59b212",
-    "built_at": "2026-10-29T19:25:23+00:00",
+    "built_at": "2026-11-03T09:07:50+00:00",
     "shared_text_chunks_with_other_sources": 49
   },
   "nctb-hsc-9c44bb8ff649": {
@@ -221,7 +221,7 @@
     "chunks_with_chapter": 33,
     "chapter_coverage": 0.3402,
     "content_version": "v1:ea30a7a6eacd",
-    "built_at": "2026-10-29T19:31:21+00:00",
+    "built_at": "2026-11-03T09:09:25+00:00",
     "shared_text_chunks_with_other_sources": 48
   },
   "_cross_source": {

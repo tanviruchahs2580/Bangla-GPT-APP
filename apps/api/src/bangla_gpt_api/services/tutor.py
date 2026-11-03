@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import logging
+import math
 import re
 import time
 import unicodedata
@@ -25,6 +26,7 @@ from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.metrics import (
     PII_REDACTED_TOTAL,
     RAG_CITATION_CHECKS_TOTAL,
+    RAG_GATE_COVERAGE,
     RAG_GATE_OUTCOMES_TOTAL,
     RAG_GATE_REFUSALS_TOTAL,
     RAG_RETRIEVAL_LATENCY_SECONDS,
@@ -379,6 +381,69 @@ class _StreamRun:
     busy: bool = False
 
 
+def _resolve_query_groups(
+    query_terms: tuple[str, ...],
+    *,
+    roman_matcher,
+) -> list[tuple[str, tuple[str, ...]]]:
+    """Group each raw query term with its candidate corpus surfaces.
+
+    Cross-script resolution (F-051): the retrieval lanes widen a query
+    through the glossary (cell -> কোষ) and the roman lane
+    (bhognangsho -> ভগ্নাংশ); the gate must see the SAME resolved terms or it
+    would refuse, for script reasons, a question retrieval just answered.
+    The candidates of one raw term are **alternatives** — the surfaces the
+    token may stand for — not separate requirements. Graceful degradation:
+    statistics without the matching surfaces resolve nothing, and the gate
+    proceeds on the raw terms.
+    """
+    groups: list[tuple[str, tuple[str, ...]]] = []
+    for term in query_terms:
+        candidates: tuple[str, ...] = (term,)
+        if term.isascii():
+            substitutes = english_gloss_terms(term)
+            if not substitutes and roman_matcher is not None:
+                substitutes = tuple(roman_matcher(term))
+            if substitutes:
+                candidates = tuple(dict.fromkeys((term, *substitutes)))
+        groups.append((term, candidates))
+    return groups
+
+
+def _in_corpus_weight_fraction(
+    groups: list[tuple[str, tuple[str, ...]]],
+    *,
+    absent_names: frozenset[str],
+    document_frequency,
+    total_documents: int,
+) -> float:
+    """In-corpus share of the question's total IDF weight (audit F-11/D2).
+
+    Absent groups weigh the ln(1+N) ceiling — the corpus cannot contain
+    them, so they carry the maximum discriminative weight. In-corpus groups
+    weigh the rarest known surface's ln(1+N/df), exactly what
+    :meth:`TutorService._coverage_details` weights its coverage with, so the
+    fraction compares like with like. A question whose subject world sits
+    outside the textbook ("ডলারের দাম কত?") keeps its in-corpus share below
+    the gate's floor and refuses before incidental vocabulary manufactures
+    coverage.
+    """
+    absent_weight = len(absent_names) * math.log1p(total_documents)
+    in_weight = sum(
+        math.log1p(
+            total_documents
+            / max(
+                min(document_frequency(c) for c in candidates if document_frequency(c) > 0),
+                1,
+            )
+        )
+        for raw, candidates in groups
+        if raw not in absent_names
+    )
+    total_weight = in_weight + absent_weight
+    return in_weight / total_weight if total_weight > 0 else 0.0
+
+
 class TutorService:
     def __init__(
         self,
@@ -447,6 +512,34 @@ class TutorService:
             else None
         )
 
+    def retarget_index(
+        self,
+        index: RankingIndex,
+        term_stats: TermStats | None,
+        *,
+        corpus_digest: str | None = None,
+    ) -> "TutorService":
+        """Same wiring, a new corpus snapshot (admin reindex, audit F-18).
+
+        The rebuilt index + fresh term statistics ride the provider, fast
+        lane, breaker and gate thresholds of THIS tutor, so a hot reindex
+        can never silently change routing or grounding policy. The corpus
+        digest moves with the corpus, not with the instance: the caller
+        stamps the rebuilt build's digest (F-082).
+        """
+        return TutorService(
+            index=index,
+            provider=self.provider,
+            fast_provider=self.fast_provider,
+            circuit_breaker=self._breaker,
+            fallback_provider=self._fallback,
+            term_stats=term_stats,
+            retrieval_only_fallback=self.retrieval_only_fallback,
+            corpus_digest=corpus_digest if corpus_digest is not None else self.corpus_digest,
+            top_k=self.top_k,
+            min_coverage=self.min_coverage,
+        )
+
     # Trigram similarity a near-identical evidence token must clear for a
     # missed query term to still count as covered. 0.6 admits single-keystroke
     # slips (dropped conjunct/vowel, e.g. সালোকসংশলেষণ for সালোকসংশ্লেষণ ≈ 0.75)
@@ -459,6 +552,16 @@ class TutorService:
     #: "out-of-domain budget" in docs/RAG_ARCHITECTURE.md; pinned by
     #: tests/test_qa_grounding_gate.py against the family-C probe questions.
     OUT_OF_CORPUS_ABSENT_BUDGET = 2
+
+    #: Minimum share of the question's IDF weight the corpus must know
+    #: (audit F-11/D2) before the coverage gate is even computed — one
+    #: dominating out-of-corpus term must not ride in-corpus vocabulary.
+    #: 0.7 takes real-corpus family C refusals to 1.00; see the gate comment
+    #: for why it only engages at corpus scale.
+    OUT_OF_DOMAIN_WEIGHT_FRACTION = 0.7
+
+    #: Corpus scale where the weight floor is meaningful (see the gate).
+    OUT_OF_DOMAIN_MIN_DOCUMENTS = 200
 
     def _term_covered(self, term: str, evidence_terms: set[str]) -> bool:
         """Exact stem match, else one conservative near-match allowance.
@@ -538,19 +641,9 @@ class TutorService:
             query_terms = tuple(
                 dict.fromkeys(light_stem(t) for t in tokenize(question) if len(t) >= 2)
             )
-        # Graceful degradation: statistics without the matching surfaces
-        # resolve nothing, and the gate proceeds on the raw terms.
-        roman_matcher = getattr(self.term_stats, "match_roman", None)
-        groups: list[tuple[str, tuple[str, ...]]] = []
-        for term in query_terms:
-            candidates: tuple[str, ...] = (term,)
-            if term.isascii():
-                substitutes = english_gloss_terms(term)
-                if not substitutes and roman_matcher is not None:
-                    substitutes = tuple(roman_matcher(term))
-                if substitutes:
-                    candidates = tuple(dict.fromkeys((term, *substitutes)))
-            groups.append((term, candidates))
+        groups = _resolve_query_groups(
+            query_terms, roman_matcher=getattr(self.term_stats, "match_roman", None)
+        )
         if not groups or not hits:
             return 0.0, False
 
@@ -580,6 +673,36 @@ class TutorService:
                     budget=self.OUT_OF_CORPUS_ABSENT_BUDGET,
                 )
                 return 0.0, False
+            # Out-of-corpus weight floor (audit F-11/D2): even when the
+            # absent-count budget admits a question, one unbounded IDF term
+            # naming the world outside the textbook ("ডলারের দাম কত?", where
+            # দাম/সপ্তাহ are mere passengers) must not be carried by the
+            # corpus vocabulary it happens to touch. The in-corpus share of
+            # the question's TOTAL IDF weight must reach
+            # OUT_OF_DOMAIN_WEIGHT_FRACTION, where absent terms weigh the
+            # ln(1+N) ceiling. The comparison is only meaningful where IDF
+            # concentration is: at corpus scale the unknown weight ln(1+N)
+            # dwarfs a ubiquitous term's ln(2); on a fixture corpus of a
+            # dozen chunks the fractions degenerate (caught by the full
+            # suite), so below OUT_OF_DOMAIN_MIN_DOCUMENTS documents the
+            # absent-count budget above is the only out-of-corpus rule.
+            if absent and self.term_stats.total_documents >= (self.OUT_OF_DOMAIN_MIN_DOCUMENTS):
+                fraction = _in_corpus_weight_fraction(
+                    groups,
+                    absent_names=frozenset(absent),
+                    document_frequency=document_frequency,
+                    total_documents=self.term_stats.total_documents,
+                )
+                if fraction < self.OUT_OF_DOMAIN_WEIGHT_FRACTION:
+                    json_log(
+                        logger,
+                        logging.INFO,
+                        "tutor_retrieval",
+                        gate="out_of_domain",
+                        in_corpus_weight_fraction=round(fraction, 4),
+                        out_of_corpus_terms=len(absent),
+                    )
+                    return 0.0, False
             in_corpus = [
                 (raw, candidates)
                 for raw, candidates in groups
@@ -1376,6 +1499,10 @@ class TutorService:
         coverage_value, gate_pass = self._coverage_details(retrieval_query, hits)
         gate_ms = int((time.perf_counter() - gate_started) * 1000)
         RAG_GATE_OUTCOMES_TOTAL.labels(gate="pass" if gate_pass else "refuse").inc()
+        # Coverage DISTRIBUTION (audit F-21/C4): a bimodal shift — masses
+        # piling at 0.0 or just under the threshold — is the earliest signal
+        # that a corpus change moved the gate, before any refusal alert.
+        RAG_GATE_COVERAGE.observe(coverage_value)
         stage_ms = {"rewrite": rewrite_ms, "retrieval": retrieval_ms, "gate": gate_ms}
         for stage, value in stage_ms.items():
             observe_stage(stage, value / 1000.0)
@@ -1525,12 +1652,10 @@ class TutorService:
         unsafe = _screen_safety(question)
         if unsafe:
             refusal_copy, reason = unsafe
-            yield StreamEvent(type="token", text=refusal_copy)
-            yield StreamEvent(
-                type="final",
-                response=AskResponse(answer=refusal_copy, grounded=False, refused_reason=reason),
-            )
-            RAG_GATE_REFUSALS_TOTAL.labels(reason=reason).inc()
+            # Same funnel as ask(): one place increments the counter and
+            # derives the refusal confidence, so the streamed contract
+            # (including confidence=0.0) cannot drift from the non-streamed.
+            response = self._refusal(refusal_copy, reason)
             self._record_trace(
                 question=question,
                 outcome="safety_refusal",
@@ -1541,6 +1666,8 @@ class TutorService:
                 parameters={"stage": "safety_screen", "stream": True},
                 latency_ms={"total": int((time.perf_counter() - turn_started) * 1000)},
             )
+            yield StreamEvent(type="token", text=response.answer)
+            yield StreamEvent(type="final", response=response)
             return
 
         # Same event-loop offload as the non-stream path: an SSE turn must not
@@ -1559,8 +1686,9 @@ class TutorService:
         rewrite_applied = retrieval.rewrite_applied
         rewrite_terms = retrieval.rewrite_terms
         if not retrieval.gate_pass:
-            yield StreamEvent(type="token", text=INSUFFICIENT_EVIDENCE_ANSWER)
-            RAG_GATE_REFUSALS_TOTAL.labels(reason="insufficient_evidence").inc()
+            # Same funnel as the streamed safety refusal: confidence 0.0 and
+            # exactly one counter increment, trace preserved.
+            response = self._refusal(INSUFFICIENT_EVIDENCE_ANSWER, "insufficient_evidence")
             self._record_trace(
                 question=question,
                 outcome="insufficient_evidence",
@@ -1573,14 +1701,8 @@ class TutorService:
                 rewrite_applied=rewrite_applied,
                 rewrite_terms=rewrite_terms,
             )
-            yield StreamEvent(
-                type="final",
-                response=AskResponse(
-                    answer=INSUFFICIENT_EVIDENCE_ANSWER,
-                    grounded=False,
-                    refused_reason="insufficient_evidence",
-                ),
-            )
+            yield StreamEvent(type="token", text=response.answer)
+            yield StreamEvent(type="final", response=response)
             return
 
         # F-129: same single evidence set as the non-stream path -- the budget

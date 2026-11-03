@@ -35,6 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - feat(dx): add the Makefile task runner and the contributor setup path
 - feat(eval): add the semantic validation layer for structured outputs
 - feat(eval): generate the golden set from curriculum constructs, with intervals
+- feat(rag): P1 corpus quality — section metadata, sentence packing, content-addressed ids, shared lexicon, evidence budget
+- feat(rag): P2/P3 retrieval performance, live reindex, gate honesty, calibrated confidence and citations
+- feat(rag): port surviving audit features onto the v3-hardened upstream baseline
 - feat(web): apply the numeral and plural policy at the i18n boundary
 - feat(web): bound, scope and version the offline layer
 - feat(web): pin the PWA identity, prompt for updates, and show a real 404
@@ -101,8 +104,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(eval,api): satisfy the full-tree type check on the new modules
 - fix(pwa): offline navigations answer 200 — restore the install prompt
 - fix(pwa): the offline-shell spec discovers the cache by prefix; changelog regen
+- fix(rag): P0 audit fixes — calibrated confidence, refusal parity, search hygiene
+- fix(rag): out-of-corpus weight floor gated on corpus scale; kg gap test made deterministic
+- fix(rag): satisfy the CI ratchets on the audit port
+- fix(rag): state the pragma reason the slop guard demands (embedding retry tail)
 - fix(scripts): make the smoke, backup and rolling-deploy scripts honest
 - fix(scripts): stop piping curl output into the interpreter
+- fix(tests): audit-p2 fixtures use the canonical engine_url (Linux CI sqlite path)
 - fix(web): close the two CodeQL alerts on the wave-2 code
 - fix(web): delete the account with one navigation
 - fix(web): format and sort with the app language, not the device
@@ -240,7 +248,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate the changelog for the CI-repair commits
 - docs: regenerate the changelog for the CI-repair round 2
 - docs: regenerate the changelog for the hardening wave
+- docs: regenerate the changelog for the type-import commits
 - docs: regenerate the native-review sheet after the badge copy change
+- docs: route baseline regenerated with POST /admin/reindex; changelog
 - docs: state the CI coverage of both quick-start paths precisely
 - docs: state the live SQLite busy_timeout in the backup runbook
 
@@ -273,6 +283,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - test(e2e): reconcile the wave-2 specs with the shipped app
 - test(e2e): search for the seed's last turn, not a doubled index
 - test(e2e): select the 6/W2 room wherever the teacher UI renders a roster
+- test(rag): bm25 module at demonstrated 100% branch coverage — dead score-gate branch documented via pragma, term_stats pin, synthetic-corpus arc probes
+- test(rag): close the per-module floor gaps the port introduced (embedding endpoint errors, bm25 min_score arcs, paragraph splitter)
+- test(rag): embedding endpoint count-mismatch rejection covers the remaining floor line
 - test(scripts): catch an error-table key that left the dictionary
 - test(web): assert the ZWNJ form against the fold the app performs
 - test(web): carry BD-convention names through fixtures and the parent seed
@@ -306,11 +319,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(corpus): regenerate the tracked artifacts from one build
 - chore(dx): close the cheap pre-commit parity gaps
 - chore(git): map the historic personal address in a mailmap
+- chore(openapi): regenerate the served-schema fixture for POST /admin/reindex and document the operator-only gap in the web contract test
+- chore(rag): audit follow-through — refreshed eval baseline, red-team 36, nightly real-corpus workflow
+- chore(rag): rebase polish — transport typing, v3 corpus artifacts regenerated
 - chore(web): add the dead-code and import-cycle gates to the dev toolchain
 - chore(web): gate knip in CI and wire it into make
 - chore(web,scripts): drop the three unrendered locale keys and gate new ones
 - chore: add the pre-push and commit-msg hooks the note listed
 - chore: ignore the Android build output at the repo root
+- chore: regenerate the CHANGELOG
+- chore: regenerate the CHANGELOG (native-review commit)
+- chore: regenerate the native-review sheet
+- chore: regenerate the native-review sheet for the audit string changes
 
 ### Style
 
@@ -322,10 +342,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - style(web): prettier the invite type imports
 - style(web): wrap the attachment test's file list at the formatter's width
 - style: land the hook normalisations from the wave-2 close-out
+- style: pre-commit end-of-file normalisation
+- style: pre-commit/ruff normalisation on the audit port (line endings, import order, sheet)
+- style: ruff-format the loader section comment; changelog
 
 ### Other
 
 - Merge pull request #93 from tanviruchahs2580/fix/pwa-install-offline-200
+- Merge pull request #94 from tanviruchahs2580/qa/enterprise-v2-hardening
 - ci,style: point lint-imports at the root contract; format the composer; refresh the review sheet
 
 ## v0.9.3 - 2026-10-27
