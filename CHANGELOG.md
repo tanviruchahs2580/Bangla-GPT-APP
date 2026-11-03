@@ -283,7 +283,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - test(e2e): reconcile the wave-2 specs with the shipped app
 - test(e2e): search for the seed's last turn, not a doubled index
 - test(e2e): select the 6/W2 room wherever the teacher UI renders a roster
+- test(rag): bm25 module at demonstrated 100% branch coverage — dead score-gate branch documented via pragma, term_stats pin, synthetic-corpus arc probes
 - test(rag): close the per-module floor gaps the port introduced (embedding endpoint errors, bm25 min_score arcs, paragraph splitter)
+- test(rag): embedding endpoint count-mismatch rejection covers the remaining floor line
 - test(scripts): catch an error-table key that left the dictionary
 - test(web): assert the ZWNJ form against the fold the app performs
 - test(web): carry BD-convention names through fixtures and the parent seed
@@ -339,6 +341,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - style(web): prettier the invite type imports
 - style(web): wrap the attachment test's file list at the formatter's width
 - style: land the hook normalisations from the wave-2 close-out
+- style: pre-commit end-of-file normalisation
 - style: pre-commit/ruff normalisation on the audit port (line endings, import order, sheet)
 - style: ruff-format the loader section comment; changelog
 
