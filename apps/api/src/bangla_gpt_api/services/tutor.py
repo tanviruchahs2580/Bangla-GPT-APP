@@ -686,9 +686,7 @@ class TutorService:
             # dozen chunks the fractions degenerate (caught by the full
             # suite), so below OUT_OF_DOMAIN_MIN_DOCUMENTS documents the
             # absent-count budget above is the only out-of-corpus rule.
-            if absent and self.term_stats.total_documents >= (
-                self.OUT_OF_DOMAIN_MIN_DOCUMENTS
-            ):
+            if absent and self.term_stats.total_documents >= (self.OUT_OF_DOMAIN_MIN_DOCUMENTS):
                 fraction = _in_corpus_weight_fraction(
                     groups,
                     absent_names=frozenset(absent),

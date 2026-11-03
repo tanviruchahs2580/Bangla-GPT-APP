@@ -285,8 +285,8 @@ def load_nctb_corpus(
                             # Section metadata rides the row (audit F-03):
                             # heading-weighted indexing no-ops when it is empty.
                             # F-03: empty string is the established "no section" value the
-            # retrieval lanes already fold away (indexable_text uses `or ""`).
-            section=data.get("section"),
+                            # retrieval lanes already fold away (indexable_text uses `or ""`).
+                            section=data.get("section"),
                             page=data.get("page_start"),
                             **meta_kwargs,
                         ),

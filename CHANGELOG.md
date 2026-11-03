@@ -106,6 +106,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(pwa): the offline-shell spec discovers the cache by prefix; changelog regen
 - fix(rag): P0 audit fixes — calibrated confidence, refusal parity, search hygiene
 - fix(rag): out-of-corpus weight floor gated on corpus scale; kg gap test made deterministic
+- fix(rag): satisfy the CI ratchets on the audit port
 - fix(rag): state the pragma reason the slop guard demands (embedding retry tail)
 - fix(scripts): make the smoke, backup and rolling-deploy scripts honest
 - fix(scripts): stop piping curl output into the interpreter
