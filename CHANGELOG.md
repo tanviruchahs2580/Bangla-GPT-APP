@@ -35,6 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - feat(dx): add the Makefile task runner and the contributor setup path
 - feat(eval): add the semantic validation layer for structured outputs
 - feat(eval): generate the golden set from curriculum constructs, with intervals
+- feat(rag): P1 corpus quality — section metadata, sentence packing, content-addressed ids, shared lexicon, evidence budget
+- feat(rag): P2/P3 retrieval performance, live reindex, gate honesty, calibrated confidence and citations
+- feat(rag): port surviving audit features onto the v3-hardened upstream baseline
 - feat(web): apply the numeral and plural policy at the i18n boundary
 - feat(web): bound, scope and version the offline layer
 - feat(web): pin the PWA identity, prompt for updates, and show a real 404
@@ -101,6 +104,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(eval,api): satisfy the full-tree type check on the new modules
 - fix(pwa): offline navigations answer 200 — restore the install prompt
 - fix(pwa): the offline-shell spec discovers the cache by prefix; changelog regen
+- fix(rag): P0 audit fixes — calibrated confidence, refusal parity, search hygiene
+- fix(rag): out-of-corpus weight floor gated on corpus scale; kg gap test made deterministic
 - fix(scripts): make the smoke, backup and rolling-deploy scripts honest
 - fix(scripts): stop piping curl output into the interpreter
 - fix(web): close the two CodeQL alerts on the wave-2 code
@@ -240,6 +245,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate the changelog for the CI-repair commits
 - docs: regenerate the changelog for the CI-repair round 2
 - docs: regenerate the changelog for the hardening wave
+- docs: regenerate the changelog for the type-import commits
 - docs: regenerate the native-review sheet after the badge copy change
 - docs: state the CI coverage of both quick-start paths precisely
 - docs: state the live SQLite busy_timeout in the backup runbook
@@ -306,6 +312,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(corpus): regenerate the tracked artifacts from one build
 - chore(dx): close the cheap pre-commit parity gaps
 - chore(git): map the historic personal address in a mailmap
+- chore(rag): audit follow-through — refreshed eval baseline, red-team 36, nightly real-corpus workflow
+- chore(rag): rebase polish — transport typing, v3 corpus artifacts regenerated
 - chore(web): add the dead-code and import-cycle gates to the dev toolchain
 - chore(web): gate knip in CI and wire it into make
 - chore(web,scripts): drop the three unrendered locale keys and gate new ones
@@ -326,6 +334,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Other
 
 - Merge pull request #93 from tanviruchahs2580/fix/pwa-install-offline-200
+- Merge pull request #94 from tanviruchahs2580/qa/enterprise-v2-hardening
 - ci,style: point lint-imports at the root contract; format the composer; refresh the review sheet
 
 ## v0.9.3 - 2026-10-27
