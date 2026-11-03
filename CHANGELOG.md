@@ -319,6 +319,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(corpus): regenerate the tracked artifacts from one build
 - chore(dx): close the cheap pre-commit parity gaps
 - chore(git): map the historic personal address in a mailmap
+- chore(openapi): regenerate the served-schema fixture for POST /admin/reindex and document the operator-only gap in the web contract test
 - chore(rag): audit follow-through — refreshed eval baseline, red-team 36, nightly real-corpus workflow
 - chore(rag): rebase polish — transport typing, v3 corpus artifacts regenerated
 - chore(web): add the dead-code and import-cycle gates to the dev toolchain
