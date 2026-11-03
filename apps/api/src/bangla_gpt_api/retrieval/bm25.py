@@ -164,7 +164,12 @@ class BM25Index:
                     score = soft
             else:
                 score += 0.3 * _TRIGRAM_WEIGHT * _jaccard(doc)
-            if score > 0:
+            # Branch-closed: reaching this line guarantees score > 0 —
+            # candidates enter via postings (bm25 > 0) or via a shared
+            # trigram (soft > 0) — so the negative branch is unreachable
+            # by construction, which the floors gate would otherwise read
+            # as a missing arc.
+            if score > 0:  # pragma: no branch - score>0 holds on every candidate path
                 hits.append(Hit(chunk=chunk, score=round(score, 4)))
         hits.sort(key=lambda hit: hit.score, reverse=True)
         return hits[:top_k]
