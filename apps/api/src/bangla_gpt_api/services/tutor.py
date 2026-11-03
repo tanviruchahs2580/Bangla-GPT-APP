@@ -381,6 +381,69 @@ class _StreamRun:
     busy: bool = False
 
 
+def _resolve_query_groups(
+    query_terms: tuple[str, ...],
+    *,
+    roman_matcher,
+) -> list[tuple[str, tuple[str, ...]]]:
+    """Group each raw query term with its candidate corpus surfaces.
+
+    Cross-script resolution (F-051): the retrieval lanes widen a query
+    through the glossary (cell -> কোষ) and the roman lane
+    (bhognangsho -> ভগ্নাংশ); the gate must see the SAME resolved terms or it
+    would refuse, for script reasons, a question retrieval just answered.
+    The candidates of one raw term are **alternatives** — the surfaces the
+    token may stand for — not separate requirements. Graceful degradation:
+    statistics without the matching surfaces resolve nothing, and the gate
+    proceeds on the raw terms.
+    """
+    groups: list[tuple[str, tuple[str, ...]]] = []
+    for term in query_terms:
+        candidates: tuple[str, ...] = (term,)
+        if term.isascii():
+            substitutes = english_gloss_terms(term)
+            if not substitutes and roman_matcher is not None:
+                substitutes = tuple(roman_matcher(term))
+            if substitutes:
+                candidates = tuple(dict.fromkeys((term, *substitutes)))
+        groups.append((term, candidates))
+    return groups
+
+
+def _in_corpus_weight_fraction(
+    groups: list[tuple[str, tuple[str, ...]]],
+    *,
+    absent_names: frozenset[str],
+    document_frequency,
+    total_documents: int,
+) -> float:
+    """In-corpus share of the question's total IDF weight (audit F-11/D2).
+
+    Absent groups weigh the ln(1+N) ceiling — the corpus cannot contain
+    them, so they carry the maximum discriminative weight. In-corpus groups
+    weigh the rarest known surface's ln(1+N/df), exactly what
+    :meth:`TutorService._coverage_details` weights its coverage with, so the
+    fraction compares like with like. A question whose subject world sits
+    outside the textbook ("ডলারের দাম কত?") keeps its in-corpus share below
+    the gate's floor and refuses before incidental vocabulary manufactures
+    coverage.
+    """
+    absent_weight = len(absent_names) * math.log1p(total_documents)
+    in_weight = sum(
+        math.log1p(
+            total_documents
+            / max(
+                min(document_frequency(c) for c in candidates if document_frequency(c) > 0),
+                1,
+            )
+        )
+        for raw, candidates in groups
+        if raw not in absent_names
+    )
+    total_weight = in_weight + absent_weight
+    return in_weight / total_weight if total_weight > 0 else 0.0
+
+
 class TutorService:
     def __init__(
         self,
@@ -578,19 +641,9 @@ class TutorService:
             query_terms = tuple(
                 dict.fromkeys(light_stem(t) for t in tokenize(question) if len(t) >= 2)
             )
-        # Graceful degradation: statistics without the matching surfaces
-        # resolve nothing, and the gate proceeds on the raw terms.
-        roman_matcher = getattr(self.term_stats, "match_roman", None)
-        groups: list[tuple[str, tuple[str, ...]]] = []
-        for term in query_terms:
-            candidates: tuple[str, ...] = (term,)
-            if term.isascii():
-                substitutes = english_gloss_terms(term)
-                if not substitutes and roman_matcher is not None:
-                    substitutes = tuple(roman_matcher(term))
-                if substitutes:
-                    candidates = tuple(dict.fromkeys((term, *substitutes)))
-            groups.append((term, candidates))
+        groups = _resolve_query_groups(
+            query_terms, roman_matcher=getattr(self.term_stats, "match_roman", None)
+        )
         if not groups or not hits:
             return 0.0, False
 
@@ -633,25 +686,15 @@ class TutorService:
             # dozen chunks the fractions degenerate (caught by the full
             # suite), so below OUT_OF_DOMAIN_MIN_DOCUMENTS documents the
             # absent-count budget above is the only out-of-corpus rule.
-            if absent and self.term_stats.total_documents >= self.OUT_OF_DOMAIN_MIN_DOCUMENTS:
-                absent_weight = len(absent) * math.log1p(self.term_stats.total_documents)
-                in_weight = sum(
-                    math.log1p(
-                        self.term_stats.total_documents
-                        / max(
-                            min(
-                                document_frequency(c)
-                                for c in candidates
-                                if document_frequency(c) > 0
-                            ),
-                            1,
-                        )
-                    )
-                    for raw, candidates in groups
-                    if raw not in absent
+            if absent and self.term_stats.total_documents >= (
+                self.OUT_OF_DOMAIN_MIN_DOCUMENTS
+            ):
+                fraction = _in_corpus_weight_fraction(
+                    groups,
+                    absent_names=frozenset(absent),
+                    document_frequency=document_frequency,
+                    total_documents=self.term_stats.total_documents,
                 )
-                total_weight = in_weight + absent_weight
-                fraction = in_weight / total_weight if total_weight > 0 else 0.0
                 if fraction < self.OUT_OF_DOMAIN_WEIGHT_FRACTION:
                     json_log(
                         logger,

@@ -322,6 +322,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore: add the pre-push and commit-msg hooks the note listed
 - chore: ignore the Android build output at the repo root
 - chore: regenerate the CHANGELOG
+- chore: regenerate the CHANGELOG (native-review commit)
 - chore: regenerate the native-review sheet for the audit string changes
 
 ### Style
