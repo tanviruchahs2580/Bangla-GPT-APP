@@ -167,7 +167,9 @@ class RemoteEmbedder:
                         f"embedding endpoint returned {response.status_code}{hint}: {detail}"
                     )
                 return self._parse(response.json(), expected=len(batch))
-        raise ProviderError("embedding endpoint exhausted retries")  # pragma: no cover
+        raise ProviderError(
+            "embedding endpoint exhausted retries"
+        )  # pragma: no cover - _POST loop always returns or raises inside the attempts range
 
     def _parse(self, payload: object, expected: int) -> list[list[float]]:
         if not isinstance(payload, dict):
