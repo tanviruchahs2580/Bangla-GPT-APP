@@ -115,3 +115,35 @@ RAG_CITATION_CHECKS_TOTAL = Counter(
     labelnames=["result"],
     registry=REGISTRY,
 )
+
+# Per-lane retrieval latency (audit F-21/C4). The aggregate histogram above
+# cannot tell a BM25-postings slowdown from a vector-lane slowdown; the
+# offensive-query signature (gibberish riding the trigram soft lane) shows
+# up almost entirely in one lane.
+RAG_LANE_LATENCY_SECONDS = Histogram(
+    "bgpt_rag_lane_latency_seconds",
+    "Per-lane candidate-search latency inside the hybrid index.",
+    labelnames=["lane"],
+    buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5),
+    registry=REGISTRY,
+)
+
+# Grounding-gate coverage values, exported as a distribution (audit F-21).
+# A bimodal shift -- masses piling at 0.0 or just under the threshold --
+# is the earliest warning that a corpus change moved the gate, before any
+# refusal-rate alert fires.
+RAG_GATE_COVERAGE = Histogram(
+    "bgpt_rag_gate_coverage",
+    "Best-chunk weighted coverage computed by the grounding gate.",
+    buckets=(0.1, 0.25, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0),
+    registry=REGISTRY,
+)
+
+# Admin hot-reindex volume (audit F-18/C3). Every rebuild is an operator
+# action that swaps the corpus live; the ops story (when, how long, how
+# often) reads out of the average + count.
+RAG_INDEX_REBUILDS_TOTAL = Counter(
+    "bgpt_rag_index_rebuilds_total",
+    "Hot index rebuilds performed via POST /admin/reindex.",
+    registry=REGISTRY,
+)
