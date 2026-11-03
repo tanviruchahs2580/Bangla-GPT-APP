@@ -24,7 +24,12 @@ green. Its jobs:
 | `docker` | the API image builds and boots | `docker build .` |
 
 <<<<<<< HEAD
-`codeql.yml` (SAST) and `eval-gate.yml` also run on PRs. `eval-gate.yml` is
+`codeql.yml` (SAST) and `eval-gate.yml` also run on PRs.
+On a schedule, `retrieval-eval.yml` re-measures the real-corpus retrieval
+baseline (`data/nctb/retrieval_eval.json`) against the committed artifact
+(`apps/api/scripts/check_retrieval_baseline.py`); the copyrighted corpus is
+not distributed with the repo, so a runner without it skips with a notice
+instead of pretending. `eval-gate.yml` is
 three blocking steps now: the golden v2 suite against the committed baseline,
 the 24-question golden retrieval gate
 (`python scripts/evaluate_golden.py`, from `apps/api`) and the red-team

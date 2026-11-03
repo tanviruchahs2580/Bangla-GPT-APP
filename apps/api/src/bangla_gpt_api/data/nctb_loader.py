@@ -244,7 +244,6 @@ def load_nctb_corpus(
             curriculum_year=year,
             subject=_subject_key(subject_bn),
             book=subject_bn,
-            section=None,
             language="bn",
             version=version,
             content_type="nctb",
@@ -283,6 +282,9 @@ def load_nctb_corpus(
                         meta=CurriculumMeta(
                             class_level=class_level,
                             chapter=data.get("chapter", ""),
+                            # Section metadata rides the row (audit F-03):
+                            # heading-weighted indexing no-ops when it is empty.
+                            section=data.get("section") or None,
                             page=data.get("page_start"),
                             **meta_kwargs,
                         ),

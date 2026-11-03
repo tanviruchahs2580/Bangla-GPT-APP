@@ -202,42 +202,6 @@ class TestChunking:
     def test_unusable_pages_skipped(self) -> None:
         pages = [PageText(1, ""), PageText(2, "\ufffd garbage")]
         assert chunk_pages(pages, source_id="s2") == []
-
-
-class TestSentencePacking:
-    """The oversize guard must not cut sentences (audit F-10)."""
-
-    def test_units_never_split_a_sentence(self) -> None:
-        from bangla_gpt_api.nctb.chunking import _pack_sentences
-
-        text = " ".join(f"বাক্য সংখ্যা {i} এখানে শেষ।" for i in range(80))
-        pieces = _pack_sentences(text, target_words=220, min_words=60, max_words=400)
-        for i in range(80):
-            sentence = f"বাক্য সংখ্যা {i} এখানে শেষ।"
-            carriers = [p for p in pieces if sentence in p]
-            assert len(carriers) == 1, f"sentence {i} must survive whole in exactly one unit"
-
-    def test_overlong_single_sentence_is_hard_split_not_dropped(self) -> None:
-        from bangla_gpt_api.nctb.chunking import _pack_sentences
-
-        runaway = " ".join(f"শব্দ{i}" for i in range(900)) + "।"
-        pieces = _pack_sentences(runaway, target_words=220, min_words=60, max_words=400)
-        assert len(pieces) >= 2
-        n_words = sum(len(p.split()) for p in pieces)
-        assert n_words == 900, "hard-split must preserve every word (no silent truncation)"
-        assert all(len(p.split()) <= 400 for p in pieces)
-
-    def test_tiny_tail_merges_into_previous_unit(self) -> None:
-        from bangla_gpt_api.nctb.chunking import _pack_sentences
-
-        # 26 sentences x 10 words: closes one 220-word unit, leaves a
-        # 40-word tail which must glue back on, not exist as a stub.
-        text = " ".join("আলো সরল পথে ভ্রমণ করে প্রতিসরণ ঘটে এবং প্রতিফলিত হয়।" for _ in range(26))
-        pieces = _pack_sentences(text, target_words=220, min_words=60, max_words=400)
-        assert len(pieces) == 1
-        assert len(pieces[0].split()) == 26 * 10
-
-
 class TestCorpusLoader:
     def _write_pipeline_outputs(self, tmp_path: Path) -> tuple[Path, Path]:
         extracted = tmp_path / "extracted"

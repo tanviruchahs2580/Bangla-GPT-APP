@@ -17,9 +17,8 @@ backend can slot in behind the same interface later.
 
 import re
 
-from bangla_gpt_api.retrieval.normalize import normalize_nfkc
-
 from bangla_gpt_api.retrieval.lexicon import QUERY_EXPANSIONS
+from bangla_gpt_api.retrieval.normalize import normalize_nfkc
 
 # The character-class brackets are load-bearing. BAN-001 follow-up, measured
 # 2026-10-17: written unbracketed (`r"\u0980-\u09FF"`), this pattern only

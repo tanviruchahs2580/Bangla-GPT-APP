@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import logging
+import math
 import re
 import time
 import unicodedata
@@ -25,6 +26,7 @@ from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.metrics import (
     PII_REDACTED_TOTAL,
     RAG_CITATION_CHECKS_TOTAL,
+    RAG_GATE_COVERAGE,
     RAG_GATE_OUTCOMES_TOTAL,
     RAG_GATE_REFUSALS_TOTAL,
     RAG_RETRIEVAL_LATENCY_SECONDS,
@@ -447,6 +449,34 @@ class TutorService:
             else None
         )
 
+    def retarget_index(
+        self,
+        index: RankingIndex,
+        term_stats: TermStats | None,
+        *,
+        corpus_digest: str | None = None,
+    ) -> "TutorService":
+        """Same wiring, a new corpus snapshot (admin reindex, audit F-18).
+
+        The rebuilt index + fresh term statistics ride the provider, fast
+        lane, breaker and gate thresholds of THIS tutor, so a hot reindex
+        can never silently change routing or grounding policy. The corpus
+        digest moves with the corpus, not with the instance: the caller
+        stamps the rebuilt build's digest (F-082).
+        """
+        return TutorService(
+            index=index,
+            provider=self.provider,
+            fast_provider=self.fast_provider,
+            circuit_breaker=self._breaker,
+            fallback_provider=self._fallback,
+            term_stats=term_stats,
+            retrieval_only_fallback=self.retrieval_only_fallback,
+            corpus_digest=corpus_digest if corpus_digest is not None else self.corpus_digest,
+            top_k=self.top_k,
+            min_coverage=self.min_coverage,
+        )
+
     # Trigram similarity a near-identical evidence token must clear for a
     # missed query term to still count as covered. 0.6 admits single-keystroke
     # slips (dropped conjunct/vowel, e.g. সালোকসংশলেষণ for সালোকসংশ্লেষণ ≈ 0.75)
@@ -459,6 +489,16 @@ class TutorService:
     #: "out-of-domain budget" in docs/RAG_ARCHITECTURE.md; pinned by
     #: tests/test_qa_grounding_gate.py against the family-C probe questions.
     OUT_OF_CORPUS_ABSENT_BUDGET = 2
+
+    #: Minimum share of the question's IDF weight the corpus must know
+    #: (audit F-11/D2) before the coverage gate is even computed — one
+    #: dominating out-of-corpus term must not ride in-corpus vocabulary.
+    #: 0.7 takes real-corpus family C refusals to 1.00; see the gate comment
+    #: for why it only engages at corpus scale.
+    OUT_OF_DOMAIN_WEIGHT_FRACTION = 0.7
+
+    #: Corpus scale where the weight floor is meaningful (see the gate).
+    OUT_OF_DOMAIN_MIN_DOCUMENTS = 200
 
     def _term_covered(self, term: str, evidence_terms: set[str]) -> bool:
         """Exact stem match, else one conservative near-match allowance.
@@ -580,6 +620,48 @@ class TutorService:
                     budget=self.OUT_OF_CORPUS_ABSENT_BUDGET,
                 )
                 return 0.0, False
+            # Out-of-corpus weight floor (audit F-11/D2): even when the
+            # absent-count budget admits a question, one unbounded IDF term
+            # naming the world outside the textbook ("ডলারের দাম কত?", where
+            # দাম/সপ্তাহ are mere passengers) must not be carried by the
+            # corpus vocabulary it happens to touch. The in-corpus share of
+            # the question's TOTAL IDF weight must reach
+            # OUT_OF_DOMAIN_WEIGHT_FRACTION, where absent terms weigh the
+            # ln(1+N) ceiling. The comparison is only meaningful where IDF
+            # concentration is: at corpus scale the unknown weight ln(1+N)
+            # dwarfs a ubiquitous term's ln(2); on a fixture corpus of a
+            # dozen chunks the fractions degenerate (caught by the full
+            # suite), so below OUT_OF_DOMAIN_MIN_DOCUMENTS documents the
+            # absent-count budget above is the only out-of-corpus rule.
+            if absent and self.term_stats.total_documents >= self.OUT_OF_DOMAIN_MIN_DOCUMENTS:
+                absent_weight = len(absent) * math.log1p(self.term_stats.total_documents)
+                in_weight = sum(
+                    math.log1p(
+                        self.term_stats.total_documents
+                        / max(
+                            min(
+                                document_frequency(c)
+                                for c in candidates
+                                if document_frequency(c) > 0
+                            ),
+                            1,
+                        )
+                    )
+                    for raw, candidates in groups
+                    if raw not in absent
+                )
+                total_weight = in_weight + absent_weight
+                fraction = in_weight / total_weight if total_weight > 0 else 0.0
+                if fraction < self.OUT_OF_DOMAIN_WEIGHT_FRACTION:
+                    json_log(
+                        logger,
+                        logging.INFO,
+                        "tutor_retrieval",
+                        gate="out_of_domain",
+                        in_corpus_weight_fraction=round(fraction, 4),
+                        out_of_corpus_terms=len(absent),
+                    )
+                    return 0.0, False
             in_corpus = [
                 (raw, candidates)
                 for raw, candidates in groups
@@ -1376,6 +1458,10 @@ class TutorService:
         coverage_value, gate_pass = self._coverage_details(retrieval_query, hits)
         gate_ms = int((time.perf_counter() - gate_started) * 1000)
         RAG_GATE_OUTCOMES_TOTAL.labels(gate="pass" if gate_pass else "refuse").inc()
+        # Coverage DISTRIBUTION (audit F-21/C4): a bimodal shift — masses
+        # piling at 0.0 or just under the threshold — is the earliest signal
+        # that a corpus change moved the gate, before any refusal alert.
+        RAG_GATE_COVERAGE.observe(coverage_value)
         stage_ms = {"rewrite": rewrite_ms, "retrieval": retrieval_ms, "gate": gate_ms}
         for stage, value in stage_ms.items():
             observe_stage(stage, value / 1000.0)

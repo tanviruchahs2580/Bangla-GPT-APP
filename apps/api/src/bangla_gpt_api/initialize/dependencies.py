@@ -11,6 +11,7 @@ provider/engine to ``build_lifespan``.
 
 from __future__ import annotations
 
+import inspect
 import logging
 import time
 from collections.abc import Callable
@@ -163,6 +164,8 @@ def _build_tutor(
     *,
     retrieval_only_fallback: bool = False,
     corpus_digest: str | None = None,
+    top_k: int = 3,
+    min_coverage: float = 0.5,
 ) -> TutorService:
     """Construct the TutorService with optional circuit breaker + fallback.
 
@@ -175,6 +178,10 @@ def _build_tutor(
 
     ``corpus_digest`` (F-082) is stamped on every trace and citation so an
     answer names the corpus build that produced it.
+
+    ``top_k``/``min_coverage`` come from settings (RAG_TOP_K /
+    RAG_MIN_COVERAGE, audit D1) so the gate can be re-tuned after a measured
+    eval run without a code change; the defaults are the shipped values.
     """
     return TutorService(
         index=index,
@@ -185,7 +192,132 @@ def _build_tutor(
         term_stats=term_stats,
         retrieval_only_fallback=retrieval_only_fallback,
         corpus_digest=corpus_digest,
+        top_k=top_k,
+        min_coverage=min_coverage,
     )
+
+
+def build_retrieval_index(
+    settings: Settings,
+    cache: Any,
+    *,
+    hybrid_index_cls: type[HybridIndex] | None = None,
+) -> tuple[RankingIndex, TermStats | None, dict]:
+    """One corpus load + one full index build, on a cache-wrapped index.
+
+    Single source of truth for the retrieval build: ``build_dependencies``
+    calls it at boot and ``POST /admin/reindex`` calls it for a hot corpus
+    refresh (audit F-18), so the two paths cannot drift. Returns the
+    cache-wrapped index, the *inner* term statistics (the caching wrapper
+    proxies search results, not corpus statistics) and the corpus identity
+    record for the tutor's digest stamping.
+
+    ``hybrid_index_cls`` keeps the historical test seam: callers that
+    monkeypatch ``main.HybridIndex`` retain control at boot. The reindex
+    endpoint deliberately does NOT take it — it is an operator action on the
+    real pipeline.
+    """
+    chunks, corpus_identity = _load_corpus_chunks(settings)
+    corpus_record = _served_corpus_identity(settings, chunks, corpus_identity)
+    json_log(
+        logger,
+        logging.INFO,
+        "rag_corpus_identity",
+        corpus=corpus_identity,
+        chunks=corpus_record["chunks"],
+        digest=corpus_record["digest"],
+        manifest_sha256=corpus_record["manifest_sha256"],
+    )
+    # Corpus identity is boot-level operational state: which corpus the
+    # tutor actually serves, how many evidence chunks it has, and whether
+    # a configured NCTB directory degraded to the bundled sample. Logged
+    # and exported so the degradation is observable the moment it happens.
+    json_log(
+        logger,
+        logging.INFO,
+        "rag_corpus_loaded",
+        corpus=corpus_identity,
+        chunks=len(chunks),
+        requested_dir=settings.nctb_corpus_dir or None,
+    )
+    RAG_INDEX_CHUNKS.labels(corpus=corpus_identity).set(len(chunks))
+    if corpus_identity == "bundled-sample" and settings.nctb_corpus_dir:
+        logger.warning(
+            "rag_corpus_fallback: NCTB_CORPUS_DIR=%s produced no usable "
+            "chunks; the tutor is serving the bundled sample corpus",
+            settings.nctb_corpus_dir,
+        )
+    # F-016: the log line above and the metric made the degradation
+    # visible, but a billable production deployment could still serve the
+    # synthetic sample to children. _validate_corpus in main.py refuses the
+    # "directory unset" case before this code runs; this is the second
+    # door -- a configured directory that yields no usable chunks. The
+    # production guard is a BOOT concern only: a deliberate admin reindex
+    # of an already-guarded deployment re-runs the same corpus.
+    if (
+        corpus_identity == "bundled-sample"
+        and settings.is_production
+        and settings.has_billable_llm_provider
+        and not settings.allow_bundled_sample_corpus_in_production
+    ):
+        raise RuntimeError(
+            "Refusing to start: the tutor would serve the bundled "
+            "synthetic sample corpus in production "
+            f"(NCTB_CORPUS_DIR={settings.nctb_corpus_dir or '<unset>'!r} "
+            "produced no usable chunks). Fix the corpus directory, or set "
+            "ALLOW_BUNDLED_SAMPLE_CORPUS_IN_PRODUCTION=true for a "
+            "deliberate offline demo."
+        )
+
+    from bangla_gpt_api.caching import RAG_CACHE_TTL_SECONDS, CachedRankingIndex
+    from bangla_gpt_api.retrieval.embedding import build_embedder
+
+    retrieval_mode = settings.retrieval_mode.strip().lower()
+    index_build_started = time.perf_counter()
+    if retrieval_mode == "hybrid":
+        _hi_cls = hybrid_index_cls
+        if _hi_cls is None:
+            from bangla_gpt_api.retrieval.hybrid_index import HybridIndex as _real_hybrid
+
+            _hi_cls = _real_hybrid
+        # _hi_cls is resolved at runtime (mockable index in tests, real one in
+        # production), so its constructor signature is not statically known.
+        # The settings-shaped knobs (audit D1) are passed only to a class
+        # whose signature declares them; test doubles keep the 2-arg form.
+        shape_kwargs: dict[str, Any] = {
+            name: value
+            for name, value in {
+                "rrf_k": settings.rag_rrf_k,
+                "candidate_factor": settings.rag_candidate_factor,
+                "proximity_window": settings.rag_proximity_window,
+            }.items()
+            if name in inspect.signature(_hi_cls.__init__).parameters
+        }
+        inner: RankingIndex = _hi_cls(chunks, build_embedder(settings), **shape_kwargs)
+    else:
+        from bangla_gpt_api.retrieval.bm25 import BM25Index
+
+        inner = BM25Index(chunks)
+    index_build_seconds = time.perf_counter() - index_build_started
+    # Boot cost is part of the retrieval architecture (full rebuild per
+    # worker, deferred persistence): count it so a slow boot is
+    # attributable in /metrics, not only in the boot log.
+    RAG_INDEX_BUILD_SECONDS.labels(mode=retrieval_mode).observe(index_build_seconds)
+    json_log(
+        logger,
+        logging.INFO,
+        "rag_index_built",
+        mode=retrieval_mode,
+        chunks=len(chunks),
+        build_seconds=round(index_build_seconds, 2),
+    )
+
+    index = CachedRankingIndex(inner, cache, ttl=RAG_CACHE_TTL_SECONDS)
+
+    # Statistics come from the *inner* index: the caching wrapper proxies
+    # search results, not corpus statistics.
+    term_stats = getattr(inner, "term_stats", None)
+    return index, term_stats, corpus_record
 
 
 def _load_corpus_chunks(settings: Settings) -> tuple[list[Chunk], str]:
@@ -288,96 +420,15 @@ def build_dependencies(
     index: RankingIndex | None = None
     tutor: TutorService | None = None
     if provider is not None:
-        chunks, corpus_identity = _load_corpus_chunks(settings)
+        # One corpus load + one index build, shared by boot AND the admin
+        # reindex endpoint (audit F-18) so the two paths cannot drift.
+        index, term_stats, corpus_record = build_retrieval_index(
+            settings, cache, hybrid_index_cls=_hi_cls
+        )
         # F-082: one identity record for the corpus the index serves. Logged
         # here, served by /admin/system/info and stamped on every answer trace
         # and citation, so an answer can be traced to the build that produced
         # it without correlating boot logs.
-        corpus_record = _served_corpus_identity(settings, chunks, corpus_identity)
-        json_log(
-            logger,
-            logging.INFO,
-            "rag_corpus_identity",
-            corpus=corpus_identity,
-            chunks=corpus_record["chunks"],
-            digest=corpus_record["digest"],
-            manifest_sha256=corpus_record["manifest_sha256"],
-        )
-        # Corpus identity is boot-level operational state: which corpus the
-        # tutor actually serves, how many evidence chunks it has, and whether
-        # a configured NCTB directory degraded to the bundled sample. Logged
-        # and exported so the degradation is observable the moment it happens.
-        json_log(
-            logger,
-            logging.INFO,
-            "rag_corpus_loaded",
-            corpus=corpus_identity,
-            chunks=len(chunks),
-            requested_dir=settings.nctb_corpus_dir or None,
-        )
-        RAG_INDEX_CHUNKS.labels(corpus=corpus_identity).set(len(chunks))
-        if corpus_identity == "bundled-sample" and settings.nctb_corpus_dir:
-            logger.warning(
-                "rag_corpus_fallback: NCTB_CORPUS_DIR=%s produced no usable "
-                "chunks; the tutor is serving the bundled sample corpus",
-                settings.nctb_corpus_dir,
-            )
-        # F-016: the log line above and the metric made the degradation
-        # visible, but a billable production deployment could still serve the
-        # synthetic sample to children. _validate_corpus in main.py refuses the
-        # "directory unset" case before this code runs; this is the second
-        # door -- a configured directory that yields no usable chunks.
-        if (
-            corpus_identity == "bundled-sample"
-            and settings.is_production
-            and settings.has_billable_llm_provider
-            and not settings.allow_bundled_sample_corpus_in_production
-        ):
-            raise RuntimeError(
-                "Refusing to start: the tutor would serve the bundled "
-                "synthetic sample corpus in production "
-                f"(NCTB_CORPUS_DIR={settings.nctb_corpus_dir or '<unset>'!r} "
-                "produced no usable chunks). Fix the corpus directory, or set "
-                "ALLOW_BUNDLED_SAMPLE_CORPUS_IN_PRODUCTION=true for a "
-                "deliberate offline demo."
-            )
-
-        from bangla_gpt_api.caching import RAG_CACHE_TTL_SECONDS, CachedRankingIndex
-        from bangla_gpt_api.retrieval.embedding import build_embedder
-
-        retrieval_mode = settings.retrieval_mode.strip().lower()
-        index_build_started = time.perf_counter()
-        if retrieval_mode == "hybrid":
-            if _hi_cls is None:
-                from bangla_gpt_api.retrieval.hybrid_index import HybridIndex as _real_hybrid
-
-                _hi_cls = _real_hybrid
-            # _hi_cls is resolved at runtime (mockable index in tests, real one in
-            # production), so its constructor signature is not statically known.
-            inner: RankingIndex = _hi_cls(chunks, build_embedder(settings))
-        else:
-            from bangla_gpt_api.retrieval.bm25 import BM25Index
-
-            inner = BM25Index(chunks)
-        index_build_seconds = time.perf_counter() - index_build_started
-        # Boot cost is part of the retrieval architecture (full rebuild per
-        # worker, deferred persistence): count it so a slow boot is
-        # attributable in /metrics, not only in the boot log.
-        RAG_INDEX_BUILD_SECONDS.labels(mode=retrieval_mode).observe(index_build_seconds)
-        json_log(
-            logger,
-            logging.INFO,
-            "rag_index_built",
-            mode=retrieval_mode,
-            chunks=len(chunks),
-            build_seconds=round(index_build_seconds, 2),
-        )
-
-        index = CachedRankingIndex(inner, cache, ttl=RAG_CACHE_TTL_SECONDS)
-
-        # Statistics come from the *inner* index: the caching wrapper proxies
-        # search results, not corpus statistics.
-        term_stats = getattr(inner, "term_stats", None)
         tutor = _build_tutor(
             index,
             provider,
@@ -387,6 +438,8 @@ def build_dependencies(
             term_stats=term_stats,
             retrieval_only_fallback=settings.retrieval_only_fallback_enabled,
             corpus_digest=corpus_record["digest"],
+            top_k=settings.rag_top_k,
+            min_coverage=settings.rag_min_coverage,
         )
     else:
         tutor = None

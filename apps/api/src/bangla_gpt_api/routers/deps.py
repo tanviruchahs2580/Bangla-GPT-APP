@@ -7,6 +7,7 @@ the domain routers; nothing in this package may import ``main`` or any router
 
 import calendar
 import logging
+import threading
 from collections.abc import Callable, Generator
 from typing import Annotated, Any
 
@@ -68,6 +69,11 @@ class AppContext:
         # Strong references to fire-and-forget AiJob tasks (asyncio may
         # garbage-collect bare create_task handles).
         self.ai_job_tasks = ai_job_tasks
+        # Serializes hot index rebuilds (POST /admin/reindex, audit F-18):
+        # two concurrent rebuilds must not interleave their corpus loads and
+        # swap half a pipeline each. In-flight requests keep their captured
+        # old references and finish on them; the swap is reference-level.
+        self.reindex_lock = threading.RLock()
         # F-123: the public /status page reports the assistant as healthy only
         # when the provider is configured AND its circuit is not open, so a
         # total provider outage cannot read as "all ok".

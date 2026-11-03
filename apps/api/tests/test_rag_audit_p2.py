@@ -24,7 +24,7 @@ from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
 from bangla_gpt_api.metrics import REGISTRY
 from bangla_gpt_api.providers.base import LLMProvider
-from bangla_gpt_api.services.safety import citation_coverage, citation_level
+from bangla_gpt_api.services.safety import citation_check
 from bangla_gpt_api.services.tutor import TutorService
 
 PASSWORD = "Biplob#2026"
@@ -205,10 +205,12 @@ def test_gate_still_passes_when_corpus_knows_the_question() -> None:
 
 
 # ------------------------------------------------- citation bands (D4) ---
-def test_citation_level_bands_are_graded() -> None:
+def test_citation_check_passes_supported_and_flags_invention() -> None:
+    # Upstream F-129 superseded the graded-overlap bands with marker
+    # resolution + per-sentence support; the pinned behaviours that survive
+    # the upgrade: supported Bangla prose verifies, invented prose fails.
     evidence = "কোষ হলো জীবদেহের ক্ষুদ্রতম গঠনগত ও কার্যগত একক এবং কোষের প্রধান অংশ নিউক্লিয়াস।"
-    assert citation_level("কোষ হলো জীবদেহের ক্ষুদ্রতম গঠনগত একক।", evidence) == "pass"
-    assert citation_level("কোষ হলো জীবদেহের একক।", evidence) in {"weak", "pass"}
-    assert citation_level("বাইরের মাঠে ফুটবল খেলা হয় প্রচুর গোল হয় দল জেতে।", evidence) == "fail"
-    # an answer with no claim-worthy tokens (all ≤2 chars) has nothing to flag
-    assert citation_coverage("ও?", evidence) == 1.0
+    supported = citation_check("কোষ হলো জীবদেহের ক্ষুদ্রতম গঠনগত একক।", evidence)
+    assert supported.verified is True, supported.reason
+    invented = citation_check("বাইরের মাঠে ফুটবল খেলা হয় প্রচুর গোল হয় দল জেতে।", evidence)
+    assert invented.verified is False

@@ -12,10 +12,13 @@ a real embedder is a factory change, not a call-site change.
 import hashlib
 import math
 import re
+import time
 from collections.abc import Sequence
 from typing import Protocol
 
-from bangla_gpt_api.providers.base import ProviderNotConfigured
+import httpx
+
+from bangla_gpt_api.providers.base import ProviderError, ProviderNotConfigured
 
 # Letters+digits only: punctuation/hyphen n-grams are not semantic signal --
 # they let a Latin gibberish string share trigrams ('-no', 'ot-') with Bengali
@@ -94,26 +97,142 @@ class HashingEmbedder:
         return [self._vector(t) for t in texts]
 
 
+_REMOTE_RETRYABLE = frozenset({408, 429, 500, 502, 503, 504})
+_REMOTE_MAX_ATTEMPTS = 3
+_REMOTE_BATCH = 64
+
+
+class RemoteEmbedder:
+    """OpenAI-compatible ``/embeddings`` client (audit F-01/C2).
+
+    Satisfies the same contract the local stand-in documents: fixed
+    dimension, input-ordered batches, L2-normalisation on the way out. The
+    corpus manifest check (:func:`_verify_embedder_identity`) applies to this
+    lane too — a corpus measured with one embedder cannot be served with
+    another; switching ``EMBEDDING_MODEL`` means rebuilding and re-measuring
+    the corpus under the new name.
+    """
+
+    def __init__(
+        self,
+        *,
+        model: str,
+        api_base: str,
+        api_key: str,
+        timeout: float = 30.0,
+        batch_size: int = _REMOTE_BATCH,
+        transport: object | None = None,
+    ) -> None:
+        # plain attribute, not a property: the Embedder protocol declares a
+        # mutable `name: str`, which a read-only property would not satisfy
+        self.name = f"remote:{model}"
+        self.model = model
+        self.api_base = api_base.rstrip("/")
+        # dimension is discovered from the endpoint's first response; the
+        # manifest check skips the dim comparison until then
+        self.dim: int | None = None
+        self._api_key = api_key
+        self._timeout = timeout
+        self._batch_size = batch_size
+        self._transport = transport  # test seam (httpx.MockTransport)
+
+    def _client(self) -> "httpx.Client":
+        return httpx.Client(
+            base_url=self.api_base,
+            headers={"Authorization": f"Bearer {self._api_key}"},
+            timeout=self._timeout,
+            transport=self._transport,
+        )
+
+    def _post(self, batch: list[str]) -> list[list[float]]:
+        last_status = -1
+        with self._client() as client:
+            for attempt in range(_REMOTE_MAX_ATTEMPTS):
+                response = client.post(
+                    "/embeddings",
+                    json={"model": self.model, "input": batch, "encoding_format": "float"},
+                )
+                if response.status_code in _REMOTE_RETRYABLE and attempt + 1 < _REMOTE_MAX_ATTEMPTS:
+                    time.sleep(min(0.5 * 2**attempt, 4.0))
+                    last_status = response.status_code
+                    continue
+                if response.status_code != 200:
+                    detail = response.text[:200]
+                    hint = (
+                        f" (after {attempt + 1} attempts, last status {last_status})"
+                        if last_status >= 0
+                        else ""
+                    )
+                    raise ProviderError(
+                        f"embedding endpoint returned {response.status_code}{hint}: {detail}"
+                    )
+                return self._parse(response.json(), expected=len(batch))
+        raise ProviderError("embedding endpoint exhausted retries")  # pragma: no cover
+
+    def _parse(self, payload: object, expected: int) -> list[list[float]]:
+        if not isinstance(payload, dict):
+            raise ProviderError("embedding endpoint returned a non-object payload")
+        rows = payload.get("data")
+        if not isinstance(rows, list) or len(rows) != expected:
+            raise ProviderError(
+                f"embedding endpoint returned {len(rows) if isinstance(rows, list) else 'no'} "
+                f"vectors for {expected} inputs"
+            )
+        vectors: list[list[float]] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                raise ProviderError("embedding endpoint returned a malformed vector row")
+            vector = row.get("embedding")
+            if (
+                not isinstance(vector, list)
+                or not vector
+                or not all(isinstance(v, (int, float)) for v in vector)
+            ):
+                raise ProviderError("embedding endpoint returned a non-numeric vector")
+            if self.dim is None:
+                self.dim = len(vector)
+            elif len(vector) != self.dim:
+                raise ProviderError(
+                    f"embedding endpoint changed dimensions mid-corpus ({self.dim} -> {len(vector)})"
+                )
+            vectors.append([float(v) for v in vector])
+        return vectors
+
+    def embed(self, texts: Sequence[str]) -> list[list[float]]:
+        vectors: list[list[float]] = []
+        for start in range(0, len(texts), max(self._batch_size, 1)):
+            batch = [texts[start + i] for i in range(min(self._batch_size, len(texts) - start))]
+            vectors.extend(self._post(batch))
+        return [_l2_normalize(v) for v in vectors]
+
+
 def build_embedder(settings: object) -> Embedder:
     """Factory: local hashing embedder unless a real model is configured.
 
-    choosing/running a real multilingual embedding model (and pgvector)
-    is staging human input. Until then ``EMBEDDING_MODEL`` stays empty and
-    this returns the local embedder; naming one without the backend wired is
-    a configuration error, not a silent downgrade.
+    Naming ``EMBEDDING_MODEL`` selects :class:`RemoteEmbedder` and requires
+    the endpoint+key to come with it (``EMBEDDING_API_BASE``/``KEY``) — a
+    model name without a backend is a configuration error, not a silent
+    downgrade to the hashing lane, whose similarity semantics are entirely
+    different.
 
     The embedder identity is checked against the corpus manifest
-    (F-129/RAG-11) when one is present: a corpus measured with embedder A and
+    (F-129/RAG-11) in BOTH lanes: a corpus measured with embedder A and
     served with embedder B has different vectors for the same chunks, so the
     recorded retrieval numbers no longer describe the deployment.
     """
     model = str(getattr(settings, "embedding_model", "") or "").strip()
-    if model:
-        raise ProviderNotConfigured(
-            f"embedding model '{model}' requires the staging embedding backend "
-            "(human input, R8); leave EMBEDDING_MODEL empty for the local vector lane"
-        )
-    embedder = HashingEmbedder()
+    if not model:
+        embedder: Embedder = HashingEmbedder()
+    else:
+        api_base = str(getattr(settings, "embedding_api_base", "") or "").strip()
+        api_key = str(getattr(settings, "embedding_api_key", "") or "").strip()
+        if not api_base or not api_key:
+            raise ProviderNotConfigured(
+                f"embedding model '{model}' needs EMBEDDING_API_BASE and EMBEDDING_API_KEY; "
+                "leave EMBEDDING_MODEL empty for the local vector lane"
+            )
+        timeout = float(getattr(settings, "llm_timeout_seconds", 30.0) or 30.0)
+        embedder = RemoteEmbedder(model=model, api_base=api_base, api_key=api_key, timeout=timeout)
     _verify_embedder_identity(settings, embedder)
     return embedder
 
