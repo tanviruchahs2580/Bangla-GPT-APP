@@ -106,6 +106,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(pwa): the offline-shell spec discovers the cache by prefix; changelog regen
 - fix(rag): P0 audit fixes — calibrated confidence, refusal parity, search hygiene
 - fix(rag): out-of-corpus weight floor gated on corpus scale; kg gap test made deterministic
+- fix(rag): state the pragma reason the slop guard demands (embedding retry tail)
 - fix(scripts): make the smoke, backup and rolling-deploy scripts honest
 - fix(scripts): stop piping curl output into the interpreter
 - fix(web): close the two CodeQL alerts on the wave-2 code
@@ -247,6 +248,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate the changelog for the hardening wave
 - docs: regenerate the changelog for the type-import commits
 - docs: regenerate the native-review sheet after the badge copy change
+- docs: route baseline regenerated with POST /admin/reindex; changelog
 - docs: state the CI coverage of both quick-start paths precisely
 - docs: state the live SQLite busy_timeout in the backup runbook
 
