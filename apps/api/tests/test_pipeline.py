@@ -38,6 +38,35 @@ def test_sample_corpus_loads_with_curriculum_versions() -> None:
     assert all(chunk.meta.version == "sample-v1" for chunk in corpus)
 
 
+def _ingest_meta() -> CurriculumMeta:
+    return CurriculumMeta(
+        curriculum_year=2023,
+        class_level=6,
+        subject="science",
+        book="বিজ্ঞান",
+        source="s.md",
+    )
+
+
+def test_ingest_ids_are_content_addressed() -> None:
+    # Audit F-15: the id must fold the CONTENT, not a running sequence —
+    # inserting an earlier paragraph can never renumber the later chunks.
+    meta = _ingest_meta()
+    body = "প্রথম অনুচ্ছেদের বাক্য।\n\nদ্বিতীয় অনুচ্ছেদের বাক্য।\n"
+    before = TextIngester().ingest(body, meta)
+    after = TextIngester().ingest("নতুন অনুচ্ছেদের বাক্য।\n\n" + body, meta)
+    before_ids = {c.id for c in before}
+    after_ids = {c.id for c in after}
+    assert before_ids < after_ids, "existing chunks keep their ids after an insertion"
+
+
+def test_ingest_dedupes_byte_identical_passages() -> None:
+    meta = _ingest_meta()
+    body = "একই অনুচ্ছেদ দুবার এসেছে।\n\nএকই অনুচ্ছেদ দুবার এসেছে।\n"
+    chunks = TextIngester().ingest(body, meta)
+    assert len(chunks) == 1, "a repeated passage is ingested once per section scope"
+
+
 def test_retrieval_finds_relevant_chunk() -> None:
     index = BM25Index(load_sample_corpus())
     hits = index.search(

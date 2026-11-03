@@ -19,6 +19,8 @@ import re
 
 from bangla_gpt_api.retrieval.normalize import normalize_nfkc
 
+from bangla_gpt_api.retrieval.lexicon import QUERY_EXPANSIONS
+
 # The character-class brackets are load-bearing. BAN-001 follow-up, measured
 # 2026-10-17: written unbracketed (`r"\u0980-\u09FF"`), this pattern only
 # matches the literal "U+0980-dash-U+09FF" sequence -- never a Bangla word --
@@ -71,32 +73,11 @@ _SUFFIXES: tuple[str, ...] = (
 
 _MIN_STEM_LEN = 3
 
-#: Curated query-side expansion map. Keys are stemmed terms; values add
-#: related corpus vocabulary so paraphrased student questions retrieve.
-QUERY_EXPANSIONS: dict[str, frozenset[str]] = {
-    "সালোকসংশ্লেষণ": frozenset({"খাদ্য", "ক্লোরোফিল", "উদ্ভিদ", "সূর্য"}),
-    "গাছ": frozenset({"উদ্ভিদ"}),
-    "উদ্ভিদ": frozenset({"গাছ"}),
-    "পাতা": frozenset({"ক্লোরোফিল", "শিরা"}),
-    "আলো": frozenset({"প্রতিফলন", "প্রতিসরণ", "দর্পণ"}),
-    "বিদ্যুৎ": frozenset({"প্রবাহ", "রোধ", "ওহম"}),
-    "কোষ": frozenset({"নিউক্লিয়াস", "সাইটোপ্লাজম", "টিস্যু"}),
-    "ভগ্নাংশ": frozenset({"লব", "হর"}),
-    "সংখ্যা": frozenset({"মৌলিক", "পূর্ণসংখ্যা"}),
-    "কোণ": frozenset({"সমকোণ", "সূক্ষ্মকোণ", "স্থূলকোণ"}),
-    "ত্রিভুজ": frozenset({"অতিভুজ", "লম্ব", "ভূমি", "পিথাগোরাস"}),
-    # হাইপা is the colloquial abbreviation of অতিভুজ — a root *change*, so it
-    # belongs here (curated expansion) and not in the spell-checker, whose
-    # first-grapheme rule excludes it by design.
-    "হাইপা": frozenset({"অতিভুজ", "ত্রিভুজ"}),
-    "আয়না": frozenset({"প্রতিবিম্ব", "প্রতিফলন"}),
-    "লোহা": frozenset({"চুম্বক", "আকর্ষণ"}),
-    "বৃত্ত": frozenset({"পরিধি", "ব্যাসার্ধ", "ক্ষেত্রফল"}),
-    "এনজাইম": frozenset({"ভিত", "প্রভাবক"}),
-    "শ্বসন": frozenset({"অক্সিজেন", "শক্তি", "ফুসফুস"}),
-    "চুম্বক": frozenset({"মেরু", "আকর্ষণ"}),
-    "তাপ": frozenset({"তাপমাত্রা", "পরিবহন", "পরিচলন"}),
-}
+# The curated expansion map lives in retrieval/lexicon.py (audit F-12): one
+# versioned home for all curated Bangla/English query maps, with a pinned
+# consistency validator. QUERY_EXPANSIONS is re-exported from the import
+# block so existing `from hybrid import QUERY_EXPANSIONS` callers and the
+# curation rules stay in exactly one place.
 
 
 def light_stem(term: str) -> str:

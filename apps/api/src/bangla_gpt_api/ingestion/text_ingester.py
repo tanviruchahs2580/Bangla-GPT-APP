@@ -25,13 +25,12 @@ class TextIngester:
 
     def ingest(self, text: str, meta: CurriculumMeta) -> list[Chunk]:
         chunks: list[Chunk] = []
+        seen: set[str] = set()
         chapter = ""
         section = ""
-        seq = 0
         buffer: list[str] = []
 
         def flush() -> None:
-            nonlocal seq
             raw = "\n".join(buffer).strip()
             buffer.clear()
             # untrusted corpus text first loses injection/leak sentences.
@@ -40,17 +39,23 @@ class TextIngester:
             if not paragraph:
                 return
             for piece in self._split_paragraph(paragraph):
-                # A20: content hash is part of the id so a re-ingested corpus
-                # never remaps ids onto different text.
+                # Content-addressed: the id folds (source, chapter, section,
+                # text) and NOT a running sequence. The old seq-in-key design
+                # remapped every later chunk onto other ids as soon as one
+                # earlier paragraph was inserted. The seen-set makes the id
+                # space additionally collision-free: a byte-identical passage
+                # inside the same (chapter, section) scope is ingested once.
                 digest = hashlib.sha256(
-                    f"{meta.source}|{chapter}|{section}|{seq}|{piece}".encode(),
+                    f"{meta.source}|{chapter}|{section}|{piece}".encode(),
                     usedforsecurity=False,
                 ).hexdigest()[:16]
+                if digest in seen:
+                    continue
+                seen.add(digest)
                 chunk_meta = meta.model_copy(
                     update={"chapter": chapter, "section": section or None}
                 )
                 chunks.append(Chunk(id=digest, text=piece, meta=chunk_meta))
-                seq += 1
 
         for line in text.splitlines():
             stripped = line.strip()

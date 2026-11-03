@@ -34,6 +34,7 @@ import math
 from collections.abc import Iterable
 
 from bangla_gpt_api.retrieval.hybrid import light_stem, tokenize
+from bangla_gpt_api.retrieval.lexicon import ENGLISH_BANGLA_GLOSSARY
 
 # --- stop-words ---------------------------------------------------------------
 #
@@ -405,100 +406,12 @@ def weighted_coverage(
     return min(covered_weight / total, 1.0)
 
 
-# --- English → Bangla curriculum glossary (query side) ------------------------
+# --- English -> Bangla curriculum glossary (query side) ---------------------
 #
-# Code-switched questions name curriculum concepts in English ("what is
-# cell?") while the textbook evidence is Bangla. This map is the query-side
-# bridge: an English/Banglish token expands to its Bangla curriculum term(s)
-# and retrieval proceeds unchanged. It is deliberately confined to the terms
-# the NCTB class 6–10 + HSC syllabus actually uses — a general-purpose
-# dictionary would translate outside the corpus and manufacture coverage.
-# Entries are concepts, not every word: "what is" is handled by the
-# stop-word lists above, not by translation.
-
-ENGLISH_BANGLA_GLOSSARY: dict[str, frozenset[str]] = {
-    "cell": frozenset({"কোষ"}),
-    "tissue": frozenset({"টিস্যু", "কোষ"}),
-    "nucleus": frozenset({"নিউক্লিয়াস", "কোষ"}),
-    "diffusion": frozenset({"ব্যাপন"}),
-    "osmosis": frozenset({"অভিস্রবণ"}),
-    "photosynthesis": frozenset({"সালোকসংশ্লেষণ", "সালোকসংশ্লেষ"}),
-    "chlorophyll": frozenset({"ক্লোরোফিল", "পাতা"}),
-    "respiration": frozenset({"শ্বসন"}),
-    "enzyme": frozenset({"এনজাইম", "প্রভাবক"}),
-    "heredity": frozenset({"বংশগতি"}),
-    "chromosome": frozenset({"ক্রোমোজোম", "বংশগতি"}),
-    "plant": frozenset({"উদ্ভিদ", "গাছ"}),
-    "leaf": frozenset({"পাতা"}),
-    "root": frozenset({"শিকড়"}),
-    "seed": frozenset({"বীজ"}),
-    "flower": frozenset({"ফুল"}),
-    "water": frozenset({"পানি", "জল"}),
-    "air": frozenset({"বাতাস"}),
-    "oxygen": frozenset({"অক্সিজেন"}),
-    "light": frozenset({"আলো"}),
-    "mirror": frozenset({"আয়না", "প্রতিবিম্ব"}),
-    "reflection": frozenset({"প্রতিফলন", "আয়না"}),
-    "refraction": frozenset({"প্রতিসরণ"}),
-    "lens": frozenset({"লেন্স"}),
-    "shadow": frozenset({"ছায়া"}),
-    "heat": frozenset({"তাপ", "তাপমাত্রা"}),
-    "temperature": frozenset({"তাপমাত্রা"}),
-    "magnet": frozenset({"চুম্বক", "মেরু"}),
-    "electricity": frozenset({"বিদ্যুৎ", "প্রবাহ"}),
-    "current": frozenset({"প্রবাহ", "বিদ্যুৎ"}),
-    "circuit": frozenset({"বর্তনী"}),
-    "resistance": frozenset({"রোধ"}),
-    "force": frozenset({"বল"}),
-    "motion": frozenset({"গতি"}),
-    "energy": frozenset({"শক্তি"}),
-    "work": frozenset({"কাজ", "শক্তি"}),
-    "power": frozenset({"ক্ষমতা", "কাজ"}),
-    "pressure": frozenset({"চাপ"}),
-    "fraction": frozenset({"ভগ্নাংশ", "লব", "হর"}),
-    "numerator": frozenset({"লব", "ভগ্নাংশ"}),
-    "denominator": frozenset({"হর", "ভগ্নাংশ"}),
-    "prime": frozenset({"মৌলিক", "সংখ্যা"}),
-    "percentage": frozenset({"শতকরা"}),
-    "ratio": frozenset({"অনুপাত", "সমানুপাত"}),
-    "algebra": frozenset({"বীজগণিতীয় রাশি", "বীজগণিত"}),
-    "equation": frozenset({"সমীকরণ"}),
-    "variable": frozenset({"চলক", "বীজগণিতীয় রাশি"}),
-    "triangle": frozenset({"ত্রিভুজ"}),
-    "hypotenuse": frozenset({"অতিভুজ", "ত্রিভুজ"}),
-    "circle": frozenset({"বৃত্ত", "বৃত্তের ক্ষেত্রফল"}),
-    "radius": frozenset({"ব্যাসার্ধ", "বৃত্ত"}),
-    "diameter": frozenset({"ব্যাস", "বৃত্ত"}),
-    "perimeter": frozenset({"পরিধি"}),
-    "area": frozenset({"ক্ষেত্রফল"}),
-    "number": frozenset({"সংখ্যা"}),
-    "integer": frozenset({"পূর্ণসংখ্যা"}),
-    "square": frozenset({"বর্গ", "বর্গাকার"}),
-    "cube": frozenset({"ঘন", "ঘনফল"}),
-    "profit": frozenset({"লাভ"}),
-    "loss": frozenset({"ক্ষতি"}),
-    "interest": frozenset({"সুদ"}),
-    "average": frozenset({"গড়"}),
-    "speed": frozenset({"দ্রুতি", "গতি"}),
-    "exponent": frozenset({"সূচক"}),
-    "index": frozenset({"সূচক"}),
-    "gravity": frozenset({"মহাকর্ষ", "অভিকর্ষ"}),
-    "sound": frozenset({"শব্দ"}),
-    "wave": frozenset({"তরঙ্গ"}),
-    "atom": frozenset({"পরমাণু"}),
-    "molecule": frozenset({"অণু"}),
-    "acid": frozenset({"অ্যাসিড"}),
-    "base": frozenset({"ক্ষারক"}),
-    "salt": frozenset({"লবণ"}),
-    "digestion": frozenset({"পরিপাক"}),
-    "blood": frozenset({"রক্ত"}),
-    "heart": frozenset({"হৃদপিণ্ড"}),
-    "virus": frozenset({"ভাইরাস"}),
-    "bacteria": frozenset({"ব্যাকটেরিয়া"}),
-    "wifi": frozenset({"ওয়াইফাই", "বেতার"}),
-    "computer": frozenset({"কম্পিউটার"}),
-    "internet": frozenset({"ইন্টারনেট"}),
-}
+# The concept bridge lives in retrieval/lexicon.py (audit F-12) together with
+# the curated expansion map - one versioned, validator-pinned home for all
+# curated query maps. ENGLISH_BANGLA_GLOSSARY is imported at the top of this
+# module so existing imports and english_gloss_terms keep working unchanged.
 
 
 def english_gloss_terms(token: str) -> tuple[str, ...]:

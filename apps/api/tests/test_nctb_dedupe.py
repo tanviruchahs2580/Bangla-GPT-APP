@@ -14,7 +14,6 @@ def _chunk(text: str, cid: str) -> RawChunk:
         chunk_id=cid,
         parent_id=None,
         text=text,
-        original_text=text,
         chapter="c",
         page_start=1,
         page_end=1,
