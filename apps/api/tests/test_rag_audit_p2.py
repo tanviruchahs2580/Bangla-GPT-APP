@@ -21,12 +21,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from bangla_gpt_api.config import Settings
-from conftest import engine_url
 from bangla_gpt_api.main import create_app
 from bangla_gpt_api.metrics import REGISTRY
 from bangla_gpt_api.providers.base import LLMProvider
 from bangla_gpt_api.services.safety import citation_check
 from bangla_gpt_api.services.tutor import TutorService
+from conftest import engine_url
 
 PASSWORD = "Biplob#2026"
 SECRET = "test-secret-aaaaaaaaaaaaaaaa"
@@ -74,7 +74,7 @@ def test_retarget_index_carries_policy_not_corpus() -> None:
 def admin_client(tmp_path) -> TestClient:
     settings = Settings(
         env="test",
-        database_url=engine_url(tmp_path, 'audit_p2'),
+        database_url=engine_url(tmp_path, "audit_p2"),
         jwt_secret=SECRET,
         admin_email="root@example.com",
         admin_password=PASSWORD,
