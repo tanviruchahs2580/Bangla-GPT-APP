@@ -319,6 +319,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(web,scripts): drop the three unrendered locale keys and gate new ones
 - chore: add the pre-push and commit-msg hooks the note listed
 - chore: ignore the Android build output at the repo root
+- chore: regenerate the CHANGELOG
 
 ### Style
 
