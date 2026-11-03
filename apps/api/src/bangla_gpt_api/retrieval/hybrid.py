@@ -24,9 +24,10 @@ from bangla_gpt_api.retrieval.normalize import normalize_nfkc
 # matches the literal "U+0980-dash-U+09FF" sequence -- never a Bangla word --
 # so light_stem returned every term unchanged and the stemmer was inert since
 # its introduction. Bracketed, it is the Bangla-block membership test the
-# suffix stripper needs.
-_BANGLA_WORD_RE = re.compile("[A-Za-z0-9" + chr(92) + "u0980-" + chr(92) + "u09FF]+")
-_BANGLA_RE = re.compile("[" + chr(92) + "u0980-" + chr(92) + "u09FF]")
+# suffix stripper needs. (Escaped raw strings byte-match the previously
+# assembled `chr(92)` patterns, minus the assembly.)
+_BANGLA_WORD_RE = re.compile(r"[A-Za-z0-9\u0980-\u09FF]+")
+_BANGLA_RE = re.compile(r"[\u0980-\u09FF]")
 
 
 def tokenize(text: str) -> list[str]:

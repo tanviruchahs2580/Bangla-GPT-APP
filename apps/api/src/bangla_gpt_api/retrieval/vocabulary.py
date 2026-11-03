@@ -226,10 +226,6 @@ class CorpusVocabulary:
         return len(self._terms)
 
 
-def _trigrams_standalone(term: str) -> set[str]:  # pragma: no cover - parity helper
-    return _trigrams(term)
-
-
 def merged_document_frequency(
     frequency_maps: Iterable[Mapping[str, int]],
 ) -> dict[str, int]:

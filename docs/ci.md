@@ -15,6 +15,7 @@ green. Its jobs:
 | `api` | lint, format, mypy, tests, coverage floor, `pip-audit`, import-linter contracts, `alembic` check, import smoke | `cd apps/api && ruff check . && ruff format --check . && mypy src && pytest` |
 | `quickstart-windows` | the README PowerShell quick start runs on `windows-latest`: venv, hash-locked install, dev-server `/health`, `npm ci` + build, then the visual regression matrix (the baselines are Windows-rasterised by design) | the README "Quick start" PowerShell block, run on Windows |
 | `postgres` | the same domain suite on the engine production runs, plus migration drift | `BGPT_TEST_DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/bgpt_test pytest` |
+| `eval-gate` | golden-set regression gate (>2pp drop in any quality metric fails the build) | `cd apps/api && python -m bangla_gpt_api.evaluation.cli` |
 | `sbom` | CycloneDX manifests for the python lock and the installed web tree | `cd apps/api && python -m cyclonedx_py requirements constraints.txt --output-format JSON --output-file sbom-python.json` |
 | `web` | `tsc && vite build`, vitest, type-aware ESLint, prettier | `cd apps/web && npm run build && npm test && npm run lint && npm run format:check` |
 | `guardrails` | the repo's own doc/contract checks (see below) | the `apps/api/scripts/check_*.py` scripts |
@@ -22,6 +23,7 @@ green. Its jobs:
 | `e2e-engines` | the Bangla shaping/`Intl` specs on chromium, firefox and webkit (pull requests only) | `cd apps/web && npx playwright install firefox webkit --with-deps && npx playwright test -c playwright.engines.config.ts` |
 | `docker` | the API image builds and boots | `docker build .` |
 
+<<<<<<< HEAD
 `codeql.yml` (SAST) and `eval-gate.yml` also run on PRs. `eval-gate.yml` is
 three blocking steps now: the golden v2 suite against the committed baseline,
 the 24-question golden retrieval gate

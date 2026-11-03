@@ -1525,12 +1525,10 @@ class TutorService:
         unsafe = _screen_safety(question)
         if unsafe:
             refusal_copy, reason = unsafe
-            yield StreamEvent(type="token", text=refusal_copy)
-            yield StreamEvent(
-                type="final",
-                response=AskResponse(answer=refusal_copy, grounded=False, refused_reason=reason),
-            )
-            RAG_GATE_REFUSALS_TOTAL.labels(reason=reason).inc()
+            # Same funnel as ask(): one place increments the counter and
+            # derives the refusal confidence, so the streamed contract
+            # (including confidence=0.0) cannot drift from the non-streamed.
+            response = self._refusal(refusal_copy, reason)
             self._record_trace(
                 question=question,
                 outcome="safety_refusal",
@@ -1541,6 +1539,8 @@ class TutorService:
                 parameters={"stage": "safety_screen", "stream": True},
                 latency_ms={"total": int((time.perf_counter() - turn_started) * 1000)},
             )
+            yield StreamEvent(type="token", text=response.answer)
+            yield StreamEvent(type="final", response=response)
             return
 
         # Same event-loop offload as the non-stream path: an SSE turn must not
@@ -1559,8 +1559,9 @@ class TutorService:
         rewrite_applied = retrieval.rewrite_applied
         rewrite_terms = retrieval.rewrite_terms
         if not retrieval.gate_pass:
-            yield StreamEvent(type="token", text=INSUFFICIENT_EVIDENCE_ANSWER)
-            RAG_GATE_REFUSALS_TOTAL.labels(reason="insufficient_evidence").inc()
+            # Same funnel as the streamed safety refusal: confidence 0.0 and
+            # exactly one counter increment, trace preserved.
+            response = self._refusal(INSUFFICIENT_EVIDENCE_ANSWER, "insufficient_evidence")
             self._record_trace(
                 question=question,
                 outcome="insufficient_evidence",
@@ -1573,14 +1574,8 @@ class TutorService:
                 rewrite_applied=rewrite_applied,
                 rewrite_terms=rewrite_terms,
             )
-            yield StreamEvent(
-                type="final",
-                response=AskResponse(
-                    answer=INSUFFICIENT_EVIDENCE_ANSWER,
-                    grounded=False,
-                    refused_reason="insufficient_evidence",
-                ),
-            )
+            yield StreamEvent(type="token", text=response.answer)
+            yield StreamEvent(type="final", response=response)
             return
 
         # F-129: same single evidence set as the non-stream path -- the budget

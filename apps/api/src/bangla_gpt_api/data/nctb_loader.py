@@ -80,8 +80,23 @@ SUBJECT_KEYS = {
 }
 
 
+_WARNED_SUBJECTS: set[str] = set()
+
+
 def _subject_key(subject_bn: str) -> str:
-    return SUBJECT_KEYS.get(subject_bn, "general")
+    if subject_bn in SUBJECT_KEYS:
+        return SUBJECT_KEYS[subject_bn]
+    # The 'general' fallback keeps stored chunk ids stable across rebuilds,
+    # but a silent misfile made the source unfindable under any real subject
+    # filter. It stays for compatibility; the gap is now operator-visible.
+    if subject_bn not in _WARNED_SUBJECTS:
+        _WARNED_SUBJECTS.add(subject_bn)
+        logger.warning(
+            "nctb_loader: unmapped subject %r indexed as 'general'; add it to "
+            "SUBJECT_KEYS so subject filters can reach these sources",
+            subject_bn,
+        )
+    return "general"
 
 
 def cover_text(pages_payload: dict) -> str:
