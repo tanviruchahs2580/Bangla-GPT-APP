@@ -169,6 +169,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - refactor(api): split routers/common.py by concern
 - refactor(api): split the grade-D functions and enforce a complexity budget
 - refactor(api): split the three functions over the complexity budget
+- refactor(rag): split the coverage gate into helpers to stay inside its complexity budget
 - refactor(web): drop the exports knip proves unreferenced
 - refactor(web): name the last loose colours as design tokens
 - refactor(web): share the classroom sort helper across the teacher pages
@@ -256,6 +257,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: regenerate the changelog for the hardening wave
 - docs: regenerate the changelog for the type-import commits
 - docs: regenerate the native-review sheet after the badge copy change
+- docs: rotate the QA record and point the living docs at it
 - docs: route baseline regenerated with POST /admin/reindex; changelog
 - docs: state the CI coverage of both quick-start paths precisely
 - docs: state the live SQLite busy_timeout in the backup runbook
@@ -335,8 +337,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore: ignore the Android build output at the repo root
 - chore: regenerate the CHANGELOG
 - chore: regenerate the CHANGELOG (native-review commit)
+- chore: regenerate the CHANGELOG and the native-review sheet
 - chore: regenerate the native-review sheet
 - chore: regenerate the native-review sheet for the audit string changes
+- chore: regenerate the native-review sheet for the refactor's line shifts
 
 ### Style
 
