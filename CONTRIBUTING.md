@@ -189,7 +189,8 @@ Sixteen tracked files exceed 500 KB (9.54 MB total, measured 2026-11-10 with
 `apps/web/e2e/__screenshots__/visual.spec.ts/` and six renovation-evidence
 screenshots under `docs/uiux_renovation_evidence/wave4/after/`. The previous
 count in this file (fourteen files, 8.4 MB, measured 2026-10-30) was stale and
-included `apps/api/coverage.json`, which was untracked in the same change
+included the generated coverage report from `apps/api`, which was untracked in
+the same change
 (CI-FIX-009: a generated 1.31 MB artifact from a partial run). Decision
 (2026-10-29): keep the remaining images in git — the baselines make visual
 regressions reviewable and refreshable, and the evidence set is the durable
