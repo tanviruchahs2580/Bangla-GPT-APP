@@ -10,6 +10,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -275,7 +276,10 @@ class Conversation(Base):
     title: Mapped[str | None] = mapped_column(String(120), nullable=True)
     # last explanation strategy used in this conversation ('আমি বুঝিন' loop).
     last_strategy: Mapped[str | None] = mapped_column(String(24), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    # DB-FIX-003: the retention sweep's emptied-thread predicate
+    # (_expired_conversation_where, services/retention.py:98) and its count
+    # (:133) filter on this column; conversation_id alone does not serve it.
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
 
     messages: Mapped[list["ChatMessage"]] = relationship(back_populates="conversation")
 
@@ -303,7 +307,11 @@ class ChatMessage(Base):
     refused_reason: Mapped[str | None] = mapped_column(String(40), nullable=True)
     sources_json: Mapped[list | None] = mapped_column(JSON, nullable=True)
     rating: Mapped[int | None] = mapped_column(Integer, nullable=True)  # -1 | +1
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    # DB-FIX-003: chat ages on its OWN timestamp (DAT-001), swept nightly
+    # (services/retention.py:71) and filtered by the refusal audit
+    # (routers/admin.py:391). Only ix_chat_messages_conversation_id existed,
+    # so both were a full scan of the largest table.
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
 
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")
 
@@ -766,7 +774,13 @@ class AssignmentRecipient(Base):
     student_id: Mapped[int] = mapped_column(
         ForeignKey("students.id", ondelete="CASCADE"), index=True
     )
-    attempt_id: Mapped[int] = mapped_column(ForeignKey("quiz_attempts.id", ondelete="CASCADE"))
+    # DB-FIX-003: the only FK without a supporting index. Account erasure
+    # deletes every attempt of a student (services/gdpr.py:904, on the
+    # data-subject request path) and PostgreSQL then checks this child table
+    # once per deleted parent row.
+    attempt_id: Mapped[int] = mapped_column(
+        ForeignKey("quiz_attempts.id", ondelete="CASCADE"), index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 
@@ -1129,6 +1143,18 @@ class AiJob(Base):
             "attempts >= 0",
             name="ck_ai_jobs_attempts",
         ),
+        # DB-FIX-003: the retention sweep re-issues
+        # `status IN ('ready','failed') AND updated_at < cutoff LIMIT 5000`
+        # once per batch (services/retention.py:255-260). Composite rather
+        # than single-column updated_at: it serves BOTH terms (IN prefix +
+        # range), so the LIMIT can stop after 5000 index entries instead of
+        # fetching every candidate row to test status. Only 2 of the 5
+        # statuses are terminal, so the prefix filters.
+        Index(
+            "ix_ai_jobs_status_updated",
+            "status",
+            "updated_at",
+        ),
         # A unique INDEX, not a table-level UniqueConstraint: it is additive
         # on both engines (no table rebuild on SQLite) and NULL keys are
         # exempt by SQL semantics, which is what keeps the header optional.
@@ -1197,5 +1223,23 @@ class AiUsage(Base):
     model: Mapped[str] = mapped_column(String(80), default="mock")
     prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)
     completion_tokens: Mapped[int] = mapped_column(Integer, default=0)
-    estimated_cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    # DB-FIX-004: exact decimal, not binary float. A monthly budget decided
+    # by repeated float addition is not reproducible
+    # (services/costs.py::month_cost_usd sums this column at :227 and
+    # check_ai_budget compares the sum to the cap at :242). Numeric(14, 10):
+    # scale 10 matches the writer's own granularity -- estimate_cost_usd rounds
+    # to 10 decimal places (costs.py:99) and the smallest real charge is
+    # ~1.9e-06 USD (rate table at costs.py:37), which 6 dp would round away;
+    # precision 14 leaves 4 integer digits for one row. The storage and the
+    # SUM() are decimal arithmetic on PostgreSQL.
+    # asdecimal=False: the value the ORM hands back stays a float, so every
+    # reader (services/costs.py month_cost_usd, routers/admin.py spend board,
+    # services/gdpr.py export, this tree's tests) keeps the type it had -- the
+    # result processor converts the exact sum once, at the boundary, instead
+    # of leaving the ADDITION to binary floats. Switch this to True only
+    # together with a Decimal end-to-end change in services/costs.py.
+    # SQLite caveat: NUMERIC there is an affinity, not a decimal type, so
+    # exactness is a PostgreSQL guarantee; see the revision docstring
+    # (dbf1d2e3f4a5).
+    estimated_cost_usd: Mapped[float] = mapped_column(Numeric(14, 10, asdecimal=False), default=0.0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
