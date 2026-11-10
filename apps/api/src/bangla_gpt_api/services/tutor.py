@@ -2,10 +2,9 @@ import asyncio
 import hashlib
 import logging
 import math
-import re
 import time
 import unicodedata
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any
@@ -57,7 +56,11 @@ from bangla_gpt_api.services.circuit_breaker import (
     CircuitOpenError,
     ProviderFallbackRouter,
 )
-from bangla_gpt_api.services.context import RequestContext, set_current_context
+from bangla_gpt_api.services.context import (
+    RequestContext,
+    sanitize_prompt_text,
+    set_current_context,
+)
 from bangla_gpt_api.services.pii import redact_pii
 from bangla_gpt_api.services.router import (
     Route,
@@ -248,11 +251,6 @@ def prompt_sha256(system: str = SYSTEM_PROMPT) -> str:
 
 PROMPT_SHA256 = prompt_sha256()
 
-_EVIDENCE_CLOSE_RE = re.compile(r"</\s*evidence\s*>", re.IGNORECASE)
-_EVIDENCE_OPEN_RE = re.compile(r"<\s*evidence\s*>", re.IGNORECASE)
-_USER_QUESTION_RE = re.compile(r"<\s*/?\s*user_question\s*>", re.IGNORECASE)
-_IMAGE_TAG_RE = re.compile(r"<\s*/?\s*attached_image\s*>", re.IGNORECASE)
-
 # Same set the corpus pipeline strips (nctb/normalize.py): ZWSP, ZWJ, ZWNJ, BOM.
 _ZERO_WIDTH_TABLE = str.maketrans("", "", "\u200b\u200c\u200d\ufeff")
 
@@ -264,13 +262,13 @@ def sanitize_evidence(text: str) -> str:
     just as attacker-controlled as a chunk, and history is rendered into
     the prompt after the evidence blocks — unsanitized, it could re-open or
     fake an ``<evidence>`` section or break out of ``<user_question>``.
+    Client-owned quiz-explain fields (question, options, chapter) and the
+    education-context header values go through the same rewriting (RAG-001),
+    so the trusted region has one escape rule, not two. The implementation
+    lives in services.context (imported here; the reverse import would be a
+    cycle) and is shared with that module's own field interpolation.
     """
-    text = _EVIDENCE_CLOSE_RE.sub("<&#47;evidence>", text)
-    text = _EVIDENCE_OPEN_RE.sub("<&#91;evidence>", text)
-    # Same escape for the vision tag pair: untrusted text (a chunk or a prior
-    # turn) must not be able to fake the image declaration either.
-    text = _IMAGE_TAG_RE.sub("<&#91;attached_image&#93;>", text)
-    return _USER_QUESTION_RE.sub("<&#91;user_question&#93;", text)
+    return sanitize_prompt_text(text)
 
 
 def normalize_query(text: str) -> str:
@@ -384,7 +382,8 @@ class _StreamRun:
 def _resolve_query_groups(
     query_terms: tuple[str, ...],
     *,
-    roman_matcher,
+    roman_matcher: Callable[[str], Sequence[str]] | None = None,
+    spelling_matcher: Callable[[str], Sequence[str]] | None = None,
 ) -> list[tuple[str, tuple[str, ...]]]:
     """Group each raw query term with its candidate corpus surfaces.
 
@@ -396,16 +395,27 @@ def _resolve_query_groups(
     token may stand for — not separate requirements. Graceful degradation:
     statistics without the matching surfaces resolve nothing, and the gate
     proceeds on the raw terms.
+
+    The Bangla spelling lane (RAG-002) joins the same resolution list: an
+    unknown Bangla token that ``match_spelling`` repairs (স্বরন্ধি ->
+    স্বরসন্ধি) is a surface the token stands for, exactly like the roman lane,
+    and retrieval already counted it so. The lane only returns terms that ARE
+    corpus vocabulary, and ``_coverage_details`` additionally admits a repair
+    only when the top-ranked evidence carries it, so a group can never become
+    in-corpus through a repair the evidence does not actually support.
     """
     groups: list[tuple[str, tuple[str, ...]]] = []
     for term in query_terms:
         candidates: tuple[str, ...] = (term,)
+        substitutes: tuple[str, ...] = ()
         if term.isascii():
             substitutes = english_gloss_terms(term)
             if not substitutes and roman_matcher is not None:
                 substitutes = tuple(roman_matcher(term))
-            if substitutes:
-                candidates = tuple(dict.fromkeys((term, *substitutes)))
+        elif spelling_matcher is not None:
+            substitutes = tuple(spelling_matcher(term))
+        if substitutes:
+            candidates = tuple(dict.fromkeys((term, *substitutes)))
         groups.append((term, candidates))
     return groups
 
@@ -618,6 +628,27 @@ class TutorService:
         (the out-of-corpus budget keeps its meaning per raw term), and it
         counts as covered when ANY candidate matches the evidence.
 
+        Bangla spelling lane (RAG-002): the same resolution now includes the
+        spelling repair retrieval already uses (BM25Index ->
+        CorpusVocabulary.match_spelling, trigram >= 0.6). Measured on the
+        served corpus: "স্বরন্ধি কী?" retrieved the identical top chunk as
+        "স্বরসন্ধি কী?" (score 12.295 vs 7.395) yet refused at coverage 0.0,
+        because the absence check was an exact df lookup while the retrieval
+        lane had repaired the typo; golden-v3's bn_typo stratum sat at 6/37.
+        A repaired surface counts only when three measured conditions hold:
+        it genuinely exists in the vocabulary (the lane returns corpus terms,
+        df>0 filter unchanged); the top-ranked evidence carries it by the same
+        rule ``_term_covered`` applies (exact stem match, else trigram >= 0.6);
+        and a group resolved only by such a repair is an *optional* surface --
+        it satisfies the hits that carry the repaired word but never dilutes a
+        hit that does not. Each scope was measured necessary: union-scoped
+        admission refused the answerable "'সন্ধি' অধ্যায়ে কী কী পার্থক্য
+        আছে?" through the spurious অধ্যায়ে -> অনুযায়ী repair (coverage 0.5037
+        -> 0.305), while optionality without top-hit admission answered the
+        out-of-corpus negative "ঢাকার সেরা বিরিয়ানির দোকান কোথায়?"
+        (coverage 0.5522). Nothing else moved -- no threshold, top_k or
+        budget.
+
         Out-of-corpus budget (F-002/RAG-15): the documented rule is *>= 2
         content terms absent from the corpus -> refuse*
         (docs/RAG_ARCHITECTURE.md, "out-of-domain budget"). The code used to
@@ -641,10 +672,48 @@ class TutorService:
             query_terms = tuple(
                 dict.fromkeys(light_stem(t) for t in tokenize(question) if len(t) >= 2)
             )
+        if not hits:
+            return 0.0, False
+        # Tokenize each hit's indexed text once: the RAG-002 spelling-repair
+        # filter and the per-chunk coverage loop read the same terms.
+        hit_terms = [{light_stem(t) for t in tokenize(indexable_text(hit.chunk))} for hit in hits]
+        top_evidence = hit_terms[0]
+        spelling_matcher = getattr(self.term_stats, "match_spelling", None)
+
+        def _evidence_supported_spelling(term: str) -> list[str]:
+            """Repair candidates the top-ranked evidence actually supports.
+
+            ``match_spelling`` is a *retrieval* aid: it answers "what corpus
+            word could this token have meant?". For the gate that question is
+            only settled when the evidence the turn will actually answer from
+            carries the repaired surface; a repair the top chunk does not
+            carry is a different word, not this question's term. Measured:
+            union-scoped admission refused two answerable bn comparison items
+            because the spurious অধ্যায়ে -> অনুযায়ী repair (carried only by a
+            lower-ranked chunk) weighed down every hit's coverage
+            (0.679 -> 0.477), while admitting repairs without any weighting
+            flipped an out-of-corpus negative ("ঢাকার সেরা বিরিয়ানির দোকান
+            কোথায়?") into a grounded answer. The acceptance rule is the one
+            the coverage check already applies to a candidate (exact stem
+            match, else trigram >= 0.6), so a repair can never count further
+            than it can be covered.
+            """
+            if spelling_matcher is None:
+                return []
+            return [
+                candidate
+                for candidate in spelling_matcher(term)
+                if self._term_covered(candidate, top_evidence)
+            ]
+
         groups = _resolve_query_groups(
-            query_terms, roman_matcher=getattr(self.term_stats, "match_roman", None)
+            query_terms,
+            roman_matcher=getattr(self.term_stats, "match_roman", None),
+            spelling_matcher=(
+                _evidence_supported_spelling if spelling_matcher is not None else None
+            ),
         )
-        if not groups or not hits:
+        if not groups:
             return 0.0, False
 
         # Coverage is measured over the question's terms the corpus KNOWS
@@ -729,20 +798,43 @@ class TutorService:
                 },
                 self.term_stats.total_documents,
             )
+            # RAG-002: a group the vocabulary knows only through an admitted
+            # spelling repair (raw df == 0, repair df > 0) is an *optional*
+            # surface. It satisfies a hit that carries the repaired word, but
+            # it must not dilute a hit that does not: the spurious
+            # অধ্যায়ে -> অনুযায়ী repair (df=1, hence maximum weight) refused
+            # "'সন্ধি' অধ্যায়ে কী কী পার্থক্য আছে?" at coverage 0.5037 ->
+            # 0.305 although the answerable hit never contained অনুযায়ী. A
+            # guessed repair is not a requirement the student stated.
+            repair_resolved = {
+                raw
+                for raw, candidates in groups
+                if not raw.isascii()
+                and document_frequency(raw) == 0
+                and any(document_frequency(c) > 0 for c in candidates)
+            }
         else:
+            repair_resolved = set()
             weights = {raw: 1.0 for raw, _ in groups}
 
         weighted_terms = tuple(raw for raw, _ in groups)
         best_coverage = 0.0
         passed = False
-        for hit in hits:
-            evidence_terms = {light_stem(t) for t in tokenize(indexable_text(hit.chunk))}
+        for hit, evidence_terms in zip(hits, hit_terms, strict=True):
             covered = [
                 raw
                 for raw, candidates in groups
                 if any(self._term_covered(candidate, evidence_terms) for candidate in candidates)
             ]
-            coverage = weighted_coverage(weighted_terms, covered, weights)
+            covered_set = set(covered)
+            # Optional (repair-resolved) terms enter this hit's denominator
+            # only when the hit carries the repaired surface; otherwise the
+            # term behaves as absent-within-budget, the pre-RAG-002 state.
+            # A repair can lift a hit's coverage but never lower it.
+            hit_terms_weighted = tuple(
+                raw for raw in weighted_terms if raw not in repair_resolved or raw in covered_set
+            )
+            coverage = weighted_coverage(hit_terms_weighted, covered, weights)
             best_coverage = max(best_coverage, coverage)
             if coverage >= self.min_coverage and hit.score > self.min_score:
                 passed = True
@@ -977,8 +1069,15 @@ class TutorService:
                 else SHORT_ANSWER_INSTRUCTION
             )
         if extra_instruction:
-            # app-level teaching instruction (re-teach strategy swap) —
-            # trusted app text, prepended ahead of the untrusted evidence block.
+            # app-level teaching instruction (re-teach strategy swap, or the
+            # quiz-explain block composed from client question/options/chapter).
+            # The quiz-explain variant carries client-owned text, so the whole
+            # block is delimiter-escaped exactly like the evidence (RAG-001):
+            # a client string must not be able to close </evidence> or
+            # [/education-context] from inside the region the model trusts.
+            # The escape is a no-op on ordinary Bangla, so the app-authored
+            # instruction renders byte-identically for legitimate requests.
+            extra_instruction = sanitize_evidence(extra_instruction)
             blocks = f"{extra_instruction}\n\n{blocks}"
         if context is not None:
             # education context (trusted app text, same placement rule).

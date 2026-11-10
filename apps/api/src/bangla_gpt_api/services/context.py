@@ -8,14 +8,55 @@ about mastery (mastery_snapshot).
 Rules honoured here:
 - The context is TRUSTED APP TEXT injected into the USER prompt; system
   prompts stay byte-identical so their secrecy/injection protections
-  never move or change.
+  never move or change. Client-owned *values* (subject, chapter, the
+  personalization line) are still untrusted: they are length-capped and
+  delimiter-escaped before interpolation (RAG-001), so a value can neither
+  forge an ``<evidence>`` block nor close ``[education-context]`` early.
 - log_fields is safe for observability: counts, ids, concepts -- never
   message content or PII (, same discipline as product_event props).
 """
 
+import re
 from collections.abc import Mapping
 from contextvars import ContextVar
 from dataclasses import dataclass, field
+
+# --- prompt-delimiter escaping --------------------------------------------
+# ONE implementation for every untrusted prompt input. It lives here because
+# services.tutor imports this module (the reverse import would be a cycle);
+# services.tutor.sanitize_evidence delegates to it, so the education-context
+# fields and the evidence/history/question blocks escape delimiter collisions
+# by exactly the same rule. The delimiter pairs below are the trust hierarchy
+# the prompt is built from: the evidence pair, the vision pair, the
+# user-question pair and this module's education-context pair.
+_EVIDENCE_CLOSE_RE = re.compile(r"</\s*evidence\s*>", re.IGNORECASE)
+_EVIDENCE_OPEN_RE = re.compile(r"<\s*evidence\s*>", re.IGNORECASE)
+_IMAGE_TAG_RE = re.compile(r"<\s*/?\s*attached_image\s*>", re.IGNORECASE)
+_USER_QUESTION_RE = re.compile(r"<\s*/?\s*user_question\s*>", re.IGNORECASE)
+_CONTEXT_CLOSE_RE = re.compile(r"\[\s*/\s*education-context\s*\]", re.IGNORECASE)
+_CONTEXT_OPEN_RE = re.compile(r"\[\s*education-context\s*\]", re.IGNORECASE)
+
+
+def sanitize_prompt_text(text: str) -> str:
+    """Neutralize prompt-delimiter collisions inside untrusted text.
+
+    A collision is rewritten in place, never removed: the model still sees
+    what was written, but the prompt's delimiter structure cannot be forged.
+    """
+    text = _EVIDENCE_CLOSE_RE.sub("<&#47;evidence>", text)
+    text = _EVIDENCE_OPEN_RE.sub("<&#91;evidence>", text)
+    text = _IMAGE_TAG_RE.sub("<&#91;attached_image&#93;>", text)
+    text = _USER_QUESTION_RE.sub("<&#91;user_question&#93;", text)
+    text = _CONTEXT_CLOSE_RE.sub("[&#47;education-context]", text)
+    return _CONTEXT_OPEN_RE.sub("[&#91;education-context]", text)
+
+
+#: Bounds re-applied where client-owned context fields enter the prompt
+#: (RAG-001): the same lengths the request schemas and the DB columns allow
+#: (subject VARCHAR(60), chapter VARCHAR(200)). Re-applying them here keeps a
+#: direct render_block caller from blowing the prompt budget with one field.
+MAX_CONTEXT_SUBJECT_CHARS = 60
+MAX_CONTEXT_CHAPTER_CHARS = 200
 
 # --- the central structure ------------------------------------------------
 
@@ -52,7 +93,11 @@ class RequestContext:
         """Trusted app-text header prepended to the USER prompt.
 
         ASCII keys keep it stable for tests and provider-agnostic; the model
-        sees structured education context, never raw user history.
+        sees structured education context, never raw user history. The
+        interpolated values are client-owned, so each one is length-capped
+        and delimiter-escaped (RAG-001) before interpolation; the app-authored
+        wrapper and keys stay raw, so a legitimate request renders
+        byte-identically.
         """
         mastery = (
             ",".join(f"{c}={p:.0f}" for c, p in sorted(self.mastery_snapshot.items()))
@@ -62,11 +107,15 @@ class RequestContext:
         # the personalization line renders ONLY when the caller put
         # content in memory_block (memory enabled). Byte-identical output
         # when empty -- existing consumers/tests are unaffected.
-        memory_line = f"\nmemory: {self.memory_block}" if self.memory_block else ""
+        memory_line = (
+            f"\nmemory: {sanitize_prompt_text(self.memory_block)}" if self.memory_block else ""
+        )
+        subject = sanitize_prompt_text((self.subject or "any")[:MAX_CONTEXT_SUBJECT_CHARS])
+        chapter = sanitize_prompt_text((self.chapter_id or "any")[:MAX_CONTEXT_CHAPTER_CHARS])
         return (
             "[education-context]\n"
-            f"role={self.role} class_level={self.class_level} subject={self.subject or 'any'}"
-            f" chapter={self.chapter_id or 'any'} goal={self.goal}"
+            f"role={self.role} class_level={self.class_level} subject={subject}"
+            f" chapter={chapter} goal={self.goal}"
             f" history={self.history_summary} mastery_recent={mastery}"
             f"{memory_line}"
             "\n[/education-context]"
