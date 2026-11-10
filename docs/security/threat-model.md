@@ -114,12 +114,15 @@ attaching to the wrong child; unattributed linking during incident review.
 
 Controls:
 
-- The code is 64-bit, stored hashed, single-use, atomic under redeem, TTL bounded, and the redeem endpoint is limited to 10/min per IP (`routers/parent.py:156,330`; `config.py:253`; SEC-06, E-SEC-06-1).
+- The code is 64-bit, stored hashed, single-use, atomic under redeem, TTL bounded, and the redeem endpoint is limited to 10/min per IP (`routers/parent.py::create_parent_invite`, SEC-007; `config.py:377`; SEC-06, E-SEC-06-1).
 - Linked guardians see progress only, never chat transcripts (audit PRIV inventory: parent access is "report only").
+- Create, redeem and revoke each write an append-only `parent_link` audit row (`detail.phase` = `invite_created` / `linked` / `invite_revoked`; ids only, never the code), and `DELETE /students/me/invite-code/{invite_id}` kills a code immediately instead of at its TTL (F-145; `apps/api/tests/test_w2_authz_tenancy.py::test_invite_code_is_64_bit_and_audited_and_revocable`, `apps/api/tests/test_w2z_invite_revoke.py`).
+- Invite create/revoke, invite redeem, the legacy direct-link route and the consent-evidence rewrite refuse an impersonated support-session token with 403 `impersonation_forbidden` (SEC-001, the `routers/deps.py::forbid_impersonation` guard called first in each handler; `apps/api/tests/test_sec_001_impersonation_guard.py`). A refused redemption neither writes a link nor burns the code, and the child's own revocation path cannot be closed from a support session.
 
 Partial / open:
 
-- Create and redeem are not written to the audit trail, and a code cannot be revoked before its TTL (F-SEC-5).
+- A `ParentStudentLink` still has no unlink endpoint: the only removal paths are erasure of the parent account or of the student account (`services/gdpr.py`). That is why creating one is refused from a support session rather than only audited.
+- A linked guardian's own report/progress reads stay available inside a support session: the guard is applied to the state-changing routes, not the read routes (a support session exists to read a user's situation).
 
 ### 4.5 Impersonation (support sessions)
 
@@ -128,12 +131,15 @@ real session; persistence after sign-out.
 
 Controls:
 
-- Impersonation tokens are 15-minute, `jti`-bound, audited, and the UI shows an impersonation banner; sensitive routes refuse impersonated tokens via `forbid_impersonation` (`routers/auth.py:510-511,781-819`; `routers/deps.py:117-140`).
-- Renewal refuses impersonated tokens (`routers/auth.py:510-511`).
+- Impersonation tokens are 15-minute, `jti`-bound and audited (`routers/admin.py::admin_impersonate`), and the UI shows an impersonation banner (`apps/web/src/AppShell.tsx:89`).
+- State-changing routes refuse impersonated tokens via `routers/deps.py::forbid_impersonation`, called as the first statement of the handler: credential and security-state changes (change-password, TOTP enroll/verify/disable, session revoke, account erasure), irreversible destruction, and -- since SEC-001 -- guardian invite create/revoke, invite redeem, the legacy direct link and consent-evidence rewrites. Read routes stay reachable: a support session must be able to see the user's situation.
+- `POST /auth/renew` refuses impersonated tokens (`renew_unavailable`), so the 15-minute window cannot be extended.
+- Privileged rows written inside a support session keep the impersonated account as `actor_user_id` and carry `detail.impersonated: true` plus `detail.imp_by` (the admin's user id), so an incident review can tell a support-session action from a genuine self-service one (SEC-002, `security.py::write_audit`; `apps/api/tests/test_sec_002_impersonated_audit_attribution.py`). Non-impersonated requests are unchanged -- exact `detail` equality is asserted by `apps/api/tests/test_security_v2.py` and `apps/api/tests/test_delete_cascade_v2.py`.
+- `POST /auth/logout` revokes an impersonation token in its own `imp_revoke:` namespace and, when an admin session signs out, ends the impersonation windows that session opened (F-146; `apps/api/tests/test_w2_authz_tenancy.py::test_logout_revokes_an_impersonation_token`, `apps/api/tests/test_support_ops.py`).
 
 Partial / open:
 
-- `POST /auth/logout` answers 204 for an impersonation token without revoking it — proven by probe (token still valid afterwards); the exit endpoint does revoke (F-SEC-6, E-SEC-07-1).
+- `forbid_impersonation` is per-handler by design: a NEW state-changing handler that does not call it is not refused, and nothing at the route-class level enforces it.
 
 ### 4.6 Tenancy and authorization
 
