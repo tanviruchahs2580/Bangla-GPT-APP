@@ -18,7 +18,8 @@ next is written.
 | [runbook.md](runbook.md) | Operations runbook |
 | [ci.md](ci.md) | What every workflow runs, what blocks a merge, and how to reproduce it locally |
 | [route_baseline.md](route_baseline.md) | Route inventory regenerated 2026-10-30 from the app's own schema (143 method+path routes); regenerate the same way when routes change |
-| [qa/QA_REPORT_2026-10-30.md](qa/QA_REPORT_2026-10-30.md) | Current QA record |
+| [qa/QA_REPORT_2026-11-10.md](qa/QA_REPORT_2026-11-10.md) | Current QA record (enterprise audit V2 wave: 21 verified fixes, parity and gate evidence) |
+| [qa/RECEIPT_2026-11-10-enterprise-audit-v2.md](qa/RECEIPT_2026-11-10-enterprise-audit-v2.md) | Evidence receipt for that wave: every command run, its real result, and what is unverified |
 
 ## AI / data
 
