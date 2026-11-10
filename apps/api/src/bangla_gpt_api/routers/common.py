@@ -11,6 +11,7 @@ shared predicates.
 
 import hashlib
 from collections import defaultdict
+from collections.abc import Iterator, Sequence
 from typing import Any
 
 from fastapi import HTTPException
@@ -258,6 +259,21 @@ def _student_profile(db: Session, user: User) -> Student:
     return student
 
 
+#: Bind-list ceiling for one ``IN (...)`` statement. The engines' own limits
+#: are far higher (~32k binds on SQLite, 65535 on PostgreSQL), but a
+#: roster-wide list is unbounded by design: batching at 500 keeps every such
+#: query inside SQLITE_MAX_VARIABLE_NUMBER on any engine and each batch's
+#: plan small. This is the pattern ``_student_briefs`` has used since its
+#: N+1 fix, shared here so the analytics helpers cannot drift from it.
+_ID_CHUNK_SIZE = 500
+
+
+def _id_chunks(ids: Sequence[int]) -> Iterator[list[int]]:
+    """Yield ``ids`` in ``_ID_CHUNK_SIZE`` batches, never splitting a value."""
+    for i in range(0, len(ids), _ID_CHUNK_SIZE):
+        yield list(ids[i : i + _ID_CHUNK_SIZE])
+
+
 def _load_class_students(
     db: Session,
     class_level: int | None,
@@ -287,8 +303,7 @@ def _student_briefs(db: Session, students: list[Student]) -> list[StudentBrief]:
     # avg ignores NULL score_pct, matching the previous Python average.
     stats: dict[int, tuple[int, float | None]] = {}
     ids = [s.id for s in students]
-    for i in range(0, len(ids), 500):  # chunked: safe under SQLITE_MAX_VARIABLES
-        chunk = ids[i : i + 500]
+    for chunk in _id_chunks(ids):  # chunked: safe under SQLITE_MAX_VARIABLES
         for sid, n, avg in db.execute(
             select(QuizAttempt.student_id, func.count(), func.avg(QuizAttempt.score_pct))
             .where(
@@ -341,39 +356,51 @@ def _classroom_or_404(db: Session, room_id: int) -> ClassRoom:
 
 
 def _attempt_percents(db: Session, student_ids: list[int]) -> dict[int, list[float]]:
-    """Chronological graded score percentages per student (trend input)."""
+    """Chronological graded score percentages per student (trend input).
+
+    REL-003: the id list is batched at ``_ID_CHUNK_SIZE`` -- a school-wide
+    roster used to bind every id into one ``IN (...)`` (500s above the
+    engine's bind limit). Batching never splits one student's rows, so each
+    student's chronological order is unchanged.
+    """
     out: dict[int, list[float]] = defaultdict(list)
     if not student_ids:
         return out
-    rows = db.execute(
-        select(QuizAttempt.student_id, QuizAttempt.score_pct)
-        .where(
-            QuizAttempt.student_id.in_(student_ids),
-            QuizAttempt.status == "graded",
-            QuizAttempt.score_pct.is_not(None),
-        )
-        .order_by(QuizAttempt.student_id, QuizAttempt.created_at.asc())
-    ).all()
-    for sid, pct in rows:
-        if pct is not None:
-            out[sid].append(float(pct))
+    for chunk in _id_chunks(student_ids):
+        rows = db.execute(
+            select(QuizAttempt.student_id, QuizAttempt.score_pct)
+            .where(
+                QuizAttempt.student_id.in_(chunk),
+                QuizAttempt.status == "graded",
+                QuizAttempt.score_pct.is_not(None),
+            )
+            .order_by(QuizAttempt.student_id, QuizAttempt.created_at.asc())
+        ).all()
+        for sid, pct in rows:
+            if pct is not None:
+                out[sid].append(float(pct))
     return out
 
 
 def _answer_cells(db: Session, student_ids: list[int]) -> dict[int, dict[str, list[int]]]:
-    """(asked, correct) per student x concept from graded quiz answers."""
+    """(asked, correct) per student x concept from graded quiz answers.
+
+    REL-003: batched like :func:`_attempt_percents`; the counts are additive,
+    so batch boundaries are invisible in the result.
+    """
     cells: dict[int, dict[str, list[int]]] = defaultdict(lambda: defaultdict(lambda: [0, 0]))
     if not student_ids:
         return cells
-    rows = db.execute(
-        select(QuizAttempt.student_id, AnswerLog.chapter, AnswerLog.is_correct)
-        .join(AnswerLog, AnswerLog.attempt_id == QuizAttempt.id)
-        .where(QuizAttempt.student_id.in_(student_ids), QuizAttempt.status == "graded")
-    ).all()
-    for sid, chapter, ok in rows:
-        cell = cells[sid][chapter]
-        cell[0] += 1
-        cell[1] += int(ok)
+    for chunk in _id_chunks(student_ids):
+        rows = db.execute(
+            select(QuizAttempt.student_id, AnswerLog.chapter, AnswerLog.is_correct)
+            .join(AnswerLog, AnswerLog.attempt_id == QuizAttempt.id)
+            .where(QuizAttempt.student_id.in_(chunk), QuizAttempt.status == "graded")
+        ).all()
+        for sid, chapter, ok in rows:
+            cell = cells[sid][chapter]
+            cell[0] += 1
+            cell[1] += int(ok)
     return cells
 
 

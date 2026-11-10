@@ -13,6 +13,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Header, HTTPException, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from bangla_gpt_api import jobs as job_policy
 from bangla_gpt_api.db.models import (
@@ -58,6 +59,16 @@ router = APIRouter(responses=AUTH_GUARD_RESPONSES)
 #: worker thread; 30 s covers a slow write without letting a wedged thread
 #: hold shutdown open (the lifespan drain has its own 20 s bound).
 JOB_CANCEL_DB_WAIT_SECONDS = 30.0
+
+#: REL-002: window for the recovery read that follows an idempotency
+#: IntegrityError. That read must find a colliding job however old it is --
+#: the unique index (``uq_ai_jobs_idempotency``) is the authority on "this
+#: key was used", and the sweep only removes rows after
+#: ``AI_JOBS_RETENTION_DAYS``. find_idempotent_job bounds its read by a
+#: window, so the recovery call passes one wider than any row the index can
+#: still collide with (~19 years); the configured
+#: ``AI_JOB_IDEMPOTENCY_WINDOW_MINUTES`` still governs the fast path.
+_IDEMPOTENCY_RECOVERY_WINDOW_MINUTES = 10_000_000
 
 
 # --- teacher workload metric ------------------------------------------
@@ -195,6 +206,79 @@ def notification_mark_read(
 
 # --- background generation jobs (AiJob) --------------------------------
 
+# The runner's DB hops are module-level functions taking (db, job_id) rather
+# than closures so the runner coroutine stays inside the C901 complexity
+# budget while REL-001 widens its failure handling. Each runs in a worker
+# thread via the runner's `_db_call`; the session is the runner's own.
+
+
+def _ai_job_load(db: Session, job_id: str) -> tuple[AiJob, User] | None:
+    """Accept a queued job for running (queued -> generating).
+
+    None when the row or its owner vanished between queue and run.
+    """
+    job = db.get(AiJob, job_id)
+    if job is None:  # deleted between queue and run
+        return None
+    actor = db.get(User, job.user_id)
+    if actor is None:
+        return None
+    job.status = "generating"
+    job.attempts = 1
+    db.commit()
+    return job, actor
+
+
+def _ai_job_record_attempt(db: Session, job_id: str, attempt: int) -> None:
+    db.rollback()
+    fresh = db.get(AiJob, job_id)
+    if fresh is not None:
+        fresh.attempts = attempt
+        db.commit()
+
+
+def _ai_job_mark_validating(db: Session, job_id: str) -> None:
+    # F-171: the V step opens here, before the generator call, because the
+    # parse/echo/MCQ validation runs inside that call -- the label covers
+    # the work it names instead of only the persistence write. The wire
+    # value stays `validating` (the web client maps it in CreateHub
+    # JOB_LABEL), so no rename reaches the client.
+    fresh = db.get(AiJob, job_id)
+    if fresh is not None:
+        fresh.status = "validating"
+        db.commit()
+
+
+def _ai_job_mark_failed(
+    db: Session, job_id: str, exc_type_name: str, actor_role: str | None, attempts: int
+) -> str | None:
+    """Terminal failure write; returns the failed row's kind (None when the
+    row vanished between queue and run), which the caller logs."""
+    db.rollback()
+    fresh = db.get(AiJob, job_id)
+    if fresh is not None:
+        if actor_role is None:
+            # REL-001: when the run failed before ``_ai_job_load`` returned,
+            # the actor was never read -- resolve the role from the row's own
+            # owner so the analytics event keeps a truthful actor role.
+            actor = db.get(User, fresh.user_id)
+            actor_role = actor.role if actor is not None else "unknown"
+        fresh.status = "failed"
+        fresh.attempts = attempts
+        # Exception bodies can carry DB/URL fragments — persist the
+        # type name only; full tracebacks stay in server logs.
+        fresh.error = exc_type_name
+        _record_analytics(
+            db,
+            fresh.user_id,
+            actor_role,
+            "ai_job_failed",
+            {"kind": fresh.kind, "attempts": attempts},
+        )
+        db.commit()
+        return fresh.kind
+    return None
+
 
 async def _execute_ai_job(app_ctx: Ctx, job_id: str) -> None:
     """Run one AiJob to completion. Runs detached from the request, so it
@@ -211,38 +295,17 @@ async def _execute_ai_job(app_ctx: Ctx, job_id: str) -> None:
     the first attempt. Every attempt is counted on the job row, and the
     terminal failure keeps the existing user-visible shape (status ``failed``
     plus the exception TYPE name, never its message).
+
+    REL-001: the failure handling covers the WHOLE run, not only the
+    generator call. ``_ai_job_load`` and the persistence hop after a
+    successful generation used to sit outside it, so an exception there
+    propagated out of the task and left the row non-terminal
+    (``generating``/``validating``) -- a state the retention sweep
+    deliberately never deletes and the teacher UI polls forever. Both are now
+    failed and logged like any other run failure, and the task's
+    done-callback logs whatever still escapes.
     """
     db = app_ctx.session_factory()
-
-    def _load() -> tuple[AiJob, User] | None:
-        job = db.get(AiJob, job_id)
-        if job is None:  # deleted between queue and run
-            return None
-        actor = db.get(User, job.user_id)
-        if actor is None:
-            return None
-        job.status = "generating"
-        job.attempts = 1
-        db.commit()
-        return job, actor
-
-    def _record_attempt(attempt: int) -> None:
-        db.rollback()
-        fresh = db.get(AiJob, job_id)
-        if fresh is not None:
-            fresh.attempts = attempt
-            db.commit()
-
-    def _mark_validating() -> None:
-        # F-171: the V step opens here, before the generator call, because the
-        # parse/echo/MCQ validation runs inside that call -- the label covers
-        # the work it names instead of only the persistence write. The wire
-        # value stays `validating` (the web client maps it in CreateHub
-        # JOB_LABEL), so no rename reaches the client.
-        fresh = db.get(AiJob, job_id)
-        if fresh is not None:
-            fresh.status = "validating"
-            db.commit()
 
     def _persist_ready(
         job: AiJob,
@@ -276,24 +339,6 @@ async def _execute_ai_job(app_ctx: Ctx, job_id: str) -> None:
         )
         db.commit()
 
-    def _mark_failed(exc_type_name: str, actor_role: str, attempts: int) -> None:
-        db.rollback()
-        fresh = db.get(AiJob, job_id)
-        if fresh is not None:
-            fresh.status = "failed"
-            fresh.attempts = attempts
-            # Exception bodies can carry DB/URL fragments — persist the
-            # type name only; full tracebacks stay in server logs.
-            fresh.error = exc_type_name
-            _record_analytics(
-                db,
-                fresh.user_id,
-                actor_role,
-                "ai_job_failed",
-                {"kind": fresh.kind, "attempts": attempts},
-            )
-            db.commit()
-
     # SHIELD the DB hops: this task is detached, and shutdown (or TestClient's
     # portal close) cancels it after the drain window. A bare
     # `await asyncio.to_thread(commit)` cancelled mid-flight keeps running in
@@ -309,57 +354,100 @@ async def _execute_ai_job(app_ctx: Ctx, job_id: str) -> None:
         in_flight = asyncio.ensure_future(asyncio.to_thread(fn, *args, **kwargs))
         return await asyncio.shield(in_flight)
 
-    try:
-        loaded = await _db_call(_load)
-        if loaded is None:
-            return
-        job, actor = loaded
-        max_attempts, backoff = job_policy.ai_job_retry_plan(app_ctx.settings)
-        attempt = 0
-        while True:
-            attempt += 1
-            try:
-                gen_in = _doc_in_for(job.kind, dict(job.payload or {}))
-                await _db_call(_mark_validating)
-                doc_payload, _sources, chapter = await _generate_document(
-                    app_ctx, db, actor, job.kind, gen_in
-                )
-            except Exception as exc:
-                if job_policy.is_transient_failure(exc) and attempt < max_attempts:
-                    await _db_call(_record_attempt, attempt)
-                    json_log(
-                        logger,
-                        logging.WARNING,
-                        "ai_job_retry",
-                        job_id=job_id,
-                        kind=job.kind,
-                        attempt=attempt,
-                        max_attempts=max_attempts,
-                        error_type=type(exc).__name__,
-                    )
-                    await asyncio.sleep(backoff[attempt - 1])
-                    continue
-                await _db_call(_mark_failed, type(exc).__name__, actor.role, attempt)
+    async def _fail(exc: BaseException, role: str | None, attempt: int) -> None:
+        """Terminal failure: mark the row failed, then log it.
+
+        REL-001: shared by EVERY failure path of the run -- the generator
+        call, the persistence hop after generation, and a failure before
+        ``_ai_job_load`` returned -- so no exception can leave a job row stuck
+        at ``queued``/``generating``/``validating`` (the retention sweep skips
+        in-flight statuses) without an ``ai_job_failed`` line naming it.
+        """
+        job_kind = await _db_call(
+            _ai_job_mark_failed, db, job_id, type(exc).__name__, role, attempt
+        )
+        json_log(
+            logger,
+            logging.WARNING,
+            "ai_job_failed",
+            job_id=job_id,
+            kind=job_kind,
+            attempts=attempt,
+            error_type=type(exc).__name__,
+        )
+
+    async def _attempt(
+        job: AiJob, actor: User, attempt: int, max_attempts: int, backoff: tuple[float, ...]
+    ) -> bool:
+        """One runner execution. True = settled (ready or failed); False = a
+        transient failure asked for another attempt (caller sleeps first).
+
+        REL-001: the persistence hop is INSIDE this failure handling. It runs
+        after the provider spend, and a DB failure there (lock, connection
+        loss, a rejected write) used to propagate out of the task: the row
+        stayed `validating`, the retention sweep skips in-flight statuses,
+        and the teacher's UI polled a job that could not resolve until the
+        next boot -- with no `ai_job_failed` line either.
+        """
+        try:
+            gen_in = _doc_in_for(job.kind, dict(job.payload or {}))
+            await _db_call(_ai_job_mark_validating, db, job_id)
+            doc_payload, _sources, chapter = await _generate_document(
+                app_ctx, db, actor, job.kind, gen_in
+            )
+        except Exception as exc:
+            if job_policy.is_transient_failure(exc) and attempt < max_attempts:
+                await _db_call(_ai_job_record_attempt, db, job_id, attempt)
                 json_log(
                     logger,
                     logging.WARNING,
-                    "ai_job_failed",
+                    "ai_job_retry",
                     job_id=job_id,
                     kind=job.kind,
-                    attempts=attempt,
+                    attempt=attempt,
+                    max_attempts=max_attempts,
                     error_type=type(exc).__name__,
                 )
-                return
+                await asyncio.sleep(backoff[attempt - 1])
+                return False
+            await _fail(exc, actor.role, attempt)
+            return True
+        try:
             await _db_call(_persist_ready, job, actor, gen_in, chapter, doc_payload, attempt)
-            json_log(
-                logger,
-                logging.INFO,
-                "ai_job_ready",
-                job_id=job_id,
-                kind=job.kind,
-                attempts=attempt,
-            )
+        except Exception as exc:
+            await _fail(exc, actor.role, attempt)
+            return True
+        json_log(
+            logger,
+            logging.INFO,
+            "ai_job_ready",
+            job_id=job_id,
+            kind=job.kind,
+            attempts=attempt,
+        )
+        return True
+
+    role: str | None = None
+    attempt = 0
+    try:
+        loaded = await _db_call(_ai_job_load, db, job_id)
+        if loaded is None:
             return
+        job, actor = loaded
+        role = actor.role
+        max_attempts, backoff = job_policy.ai_job_retry_plan(app_ctx.settings)
+        while True:
+            attempt += 1
+            if await _attempt(job, actor, attempt, max_attempts, backoff):
+                return
+    except Exception as exc:
+        # REL-001: last-resort handler for the sections outside `_attempt` --
+        # a ``_ai_job_load`` whose commit failed (the row may still read
+        # `queued`) or a failure raised by the failure handling itself.
+        # ``_ai_job_mark_failed`` re-reads the row, so the job is failed even
+        # when nothing was loaded; anything that escapes even this handler
+        # reaches the task's done-callback, which logs it.
+        await _fail(exc, role, max(1, attempt))
     finally:
         # Cancelled while a section was in flight: a cancelled task raises at
         # the next await, so wait it out (bounded) before touching the session.
@@ -451,8 +539,21 @@ async def teacher_job_create(
             db.rollback()
             if key is None:
                 raise
+            # REL-002: this recovery read must NOT be windowed. The failed
+            # INSERT just proved (user, kind, key) is taken, so the winner
+            # exists by definition -- for a key reused between
+            # AI_JOB_IDEMPOTENCY_WINDOW_MINUTES and the retention sweep, the
+            # windowed read the fast path used a moment ago found nothing and
+            # the client got a 500 with no job, contradicting the replay
+            # contract documented in jobs.find_idempotent_job. The window
+            # still governs the fast path above and keys that never collided:
+            # an aged key whose row the sweep removed inserts a fresh job.
             winner = job_policy.find_idempotent_job(
-                db, user_id=teacher.id, kind=kind, key=key, window_minutes=window
+                db,
+                user_id=teacher.id,
+                kind=kind,
+                key=key,
+                window_minutes=_IDEMPOTENCY_RECOVERY_WINDOW_MINUTES,
             )
             if winner is None:
                 raise
@@ -473,7 +574,33 @@ async def teacher_job_create(
         return _job_out(job)
     task = asyncio.create_task(_execute_ai_job(app_ctx, job.id))
     app_ctx.ai_job_tasks.add(task)
-    task.add_done_callback(app_ctx.ai_job_tasks.discard)
+
+    def _job_task_done(done: asyncio.Task) -> None:
+        """Release the strong reference and surface whatever escaped.
+
+        REL-001: the old callback was ``ai_job_tasks.discard`` alone, which
+        never retrieved the task's exception: a runner crash was silent
+        (asyncio only reports an unretrieved exception at GC time, if at
+        all), so the job row's non-terminal state had no matching log line.
+        The exception TYPE is logged, never its message -- the message can
+        carry DB/URL fragments or payload contents (same rule as the row's
+        ``error`` column).
+        """
+        app_ctx.ai_job_tasks.discard(done)
+        if done.cancelled():
+            return
+        exc = done.exception()
+        if exc is not None:
+            json_log(
+                logger,
+                logging.ERROR,
+                "ai_job_task_crashed",
+                job_id=job.id,
+                kind=job.kind,
+                error_type=type(exc).__name__,
+            )
+
+    task.add_done_callback(_job_task_done)
     json_log(
         logger, logging.INFO, "ai_job_queued", job_id=job.id, kind=job.kind, user_id=teacher.id
     )

@@ -81,6 +81,7 @@ from .common import (
     _attempt_percents,
     _default_school,
     _hash_invite,
+    _id_chunks,
     _record_analytics,
 )
 from .deps import (
@@ -792,7 +793,14 @@ def _school_students_by_room(
     ids = sorted(room_of)
     if not ids:
         return [], room_of
-    rows = {s.id: s for s in db.execute(select(Student).where(Student.id.in_(ids))).scalars().all()}
+    rows: dict[int, Student] = {}
+    # REL-003: batched (a school-wide roster used to bind every id into one
+    # IN (...) and 500 above the engine's bind limit); id order is restored
+    # below, so the returned list is unchanged.
+    for chunk in _id_chunks(ids):
+        rows.update(
+            {s.id: s for s in db.execute(select(Student).where(Student.id.in_(chunk))).scalars()}
+        )
     return [rows[i] for i in ids if i in rows], room_of
 
 
@@ -979,19 +987,22 @@ def school_classes(
     counts: dict[int, list[float]] = defaultdict(lambda: [0, 0, 0, 0.0])
     for s in students:
         counts[room_of[s.id]][0] += 1
-    # one grouped count + one grouped average instead of 2 queries/student
+    # one grouped count + one grouped average instead of 2 queries/student.
+    # REL-003: both id lists are batched at _ID_CHUNK_SIZE -- a whole-school
+    # roster used to bind every id into a single IN (...) and 500 above the
+    # engine's bind limit. Counts are additive, so the result is unchanged.
     ids = [s.id for s in students]
-    if ids:
+    for chunk in _id_chunks(ids):
         for sid, n in db.execute(
             select(QuizAttempt.student_id, func.count())
-            .where(QuizAttempt.student_id.in_(ids))
+            .where(QuizAttempt.student_id.in_(chunk))
             .group_by(QuizAttempt.student_id)
         ).all():
             counts[room_of[int(sid)]][1] += int(n)
-        for sid, pcts in percents.items():
-            room_id = room_of[sid]
-            counts[room_id][2] += len(pcts)
-            counts[room_id][3] += sum(pcts)
+    for sid, pcts in percents.items():
+        room_id = room_of[sid]
+        counts[room_id][2] += len(pcts)
+        counts[room_id][3] += sum(pcts)
     rows: list[SchoolClassRow] = []
     for r in rooms:
         students_n, att, graded, total_pct = counts[r.id]

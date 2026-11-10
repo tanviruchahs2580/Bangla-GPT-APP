@@ -126,6 +126,7 @@ def enforce_production_safety(settings: Settings) -> None:
         _validate_ai_budget,
         _validate_llm_budget,
         _validate_llm_data_use,
+        _validate_rag_grounding,
     ):
         try:
             problems.extend(validator(settings))
@@ -350,6 +351,28 @@ def _mock_allowed(settings: Settings) -> bool:
     )
 
 
+#: The documented grounding invariant (services/tutor.py `_coverage_details`):
+#: a retrieved chunk must cover at least half the question's weighted content
+#: terms, and context assembly reads exactly this many chunks. Both are the
+#: measured values the golden eval gated; the config comment allows overrides
+#: for OFFLINE benchmark sweeps, not for a live deployment.
+RAG_MIN_COVERAGE_FLOOR = 0.5
+RAG_TOP_K_CEILING = 3
+
+
+def _weak_grounding_allowed(settings: Settings) -> bool:
+    """The named escape hatch for a deliberate non-standard retrieval sweep.
+
+    Mirrors ``_mock_allowed``: an explicit environment opt-in, never a
+    default.
+    """
+    return os.environ.get("ALLOW_WEAK_GROUNDING_IN_PRODUCTION", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+
+
 def _validate_corpus(settings: Settings) -> list[str]:
     """A billable production tutor must not answer from the bundled sample (F-016).
 
@@ -453,6 +476,41 @@ def _validate_llm_data_use(settings: Settings) -> list[str]:
         "LLM_DATA_USE_ACKNOWLEDGED=true -- or run a paid-tier key with "
         "LLM_DATA_USE_TIER=paid."
     ]
+
+
+def _validate_rag_grounding(settings: Settings) -> list[str]:
+    """Production must not weaken the grounding gate by configuration.
+
+    ``RAG_MIN_COVERAGE`` and ``RAG_TOP_K`` default to the values the golden
+    eval was measured with, but neither had a boot guard: RAG_MIN_COVERAGE=0
+    makes the coverage comparison always true (``services/tutor.py``), so the
+    grounding refusal -- a correct outcome (AGENTS.md Sec.7) -- can be switched
+    off by one environment variable, and a larger RAG_TOP_K widens context
+    assembly past the measured shape. Both config keys exist for offline
+    benchmark sweeps, so the refusal names the documented override instead of
+    banning the sweep: ALLOW_WEAK_GROUNDING_IN_PRODUCTION=true.
+    """
+    if _weak_grounding_allowed(settings):
+        return []
+    problems: list[str] = []
+    if settings.rag_min_coverage < RAG_MIN_COVERAGE_FLOOR:
+        problems.append(
+            f"RAG_MIN_COVERAGE={settings.rag_min_coverage} is below the "
+            f"documented grounding floor {RAG_MIN_COVERAGE_FLOOR}: the "
+            "coverage comparison would accept evidence the eval measured as "
+            "insufficient, and 0 makes it always true. Restore the default, "
+            "or set ALLOW_WEAK_GROUNDING_IN_PRODUCTION=true for a deliberate "
+            "offline benchmark sweep."
+        )
+    if settings.rag_top_k > RAG_TOP_K_CEILING:
+        problems.append(
+            f"RAG_TOP_K={settings.rag_top_k} exceeds the measured "
+            f"context-assembly size {RAG_TOP_K_CEILING}: the tutor would cite "
+            "a wider evidence pool than the golden eval gated. Restore the "
+            "default, or set ALLOW_WEAK_GROUNDING_IN_PRODUCTION=true for a "
+            "deliberate offline benchmark sweep."
+        )
+    return problems
 
 
 # ---------------------------------------------------------------------------
