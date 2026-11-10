@@ -24,6 +24,14 @@ const BUDGET = 500;
  * is a required fix whose commit justifies it (the same rule the complexity
  * ratchet in ci.yml applies to its budget), so every increase is deliberate
  * and reviewed rather than drift.
+ *
+ * The UX-001..UX-009 pass (2026-11-10) grew the pages whose behaviour it
+ * changed — a missing empty state, `role="alert"` on seven error lines, the
+ * revision tab's loading/error branches, the workload card's request-state
+ * branch, a single streaming bubble, one send/stop element and Bangla
+ * numerals at the sites docs/glossary-bn.md names. Each ceiling below is that
+ * file's measured count after the fix; AssessmentsPage shrank (the tablist
+ * became the shared Segmented control) and its ceiling drops with it.
  */
 const CEILING: Record<string, number> = {
   "AdminDashboard.tsx": 337,
@@ -38,31 +46,35 @@ const CEILING: Record<string, number> = {
   "StatusPage.tsx": 100,
   "WelcomePage.tsx": 128,
   "student/AITutorPage.tsx": 625,
-  "student/HomePage.tsx": 319,
-  "student/LearnPage.tsx": 306,
+  "student/HomePage.tsx": 327,
+  "student/LearnPage.tsx": 351,
   "student/MePage.tsx": 793,
-  "student/QuizPage.tsx": 488,
-  "student/learn/ChapterAsk.tsx": 90,
-  "student/learn/ChapterPractice.tsx": 174,
+  "student/QuizPage.tsx": 506,
+  "student/learn/ChapterAsk.tsx": 94,
+  "student/learn/ChapterPractice.tsx": 182,
   "student/learn/LearnChapterPage.tsx": 481,
   "student/quiz/AssignedPanel.tsx": 119,
-  "student/quiz/QuizResultScreen.tsx": 105,
-  "student/quiz/QuizRunner.tsx": 132,
+  "student/quiz/QuizResultScreen.tsx": 107,
+  "student/quiz/QuizRunner.tsx": 133,
   "student/quiz/ReteachCards.tsx": 28,
-  "student/quiz/RevisionPanel.tsx": 50,
-  "student/quiz/StartQuizCard.tsx": 89,
+  "student/quiz/RevisionPanel.tsx": 77,
+  "student/quiz/StartQuizCard.tsx": 93,
   "student/tutor/AssistantContent.tsx": 40,
   "student/tutor/EvidenceModal.tsx": 33,
   // 189: 8f80e93 added the CodeQL mime allowlist to the preview data URL
   // (5 lines), e7e5268 formatted the file (2 lines) - the security fix and its
   // formatting are the recorded raise.
-  "student/tutor/TutorComposer.tsx": 189,
+  // 192: UX-002's role="alert" and UX-007's single send/stop element, whose
+  // why-comments are part of the fix.
+  "student/tutor/TutorComposer.tsx": 192,
   "student/tutor/TutorHistory.tsx": 126,
   // 269: eec2f6a namespaced the streaming-placeholder React keys with the
   // why-comment the fix requires.
-  "student/tutor/TutorThread.tsx": 269,
-  "teacher/AnalyticsPage.tsx": 384,
-  "teacher/AssessmentsPage.tsx": 624,
+  // 289: UX-006 moved the typing dots into the streaming bubble and gave the
+  // placeholder its own condition, so only one assistant bubble is on screen.
+  "student/tutor/TutorThread.tsx": 289,
+  "teacher/AnalyticsPage.tsx": 395,
+  "teacher/AssessmentsPage.tsx": 618,
   "teacher/ClassesPage.tsx": 688,
   "teacher/CreatePage.tsx": 706,
   "teacher/TeacherHomePage.tsx": 174,

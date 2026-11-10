@@ -15,7 +15,7 @@ import type { ChapterSummaryOut, SubjectOut } from "../../types";
 import { useAuth } from "../../AuthContext";
 import { Card, LoadError } from "../../components/ui";
 import { OfflineLibrary } from "../../components/OfflineLibrary";
-import { t, tSubject } from "../../i18n";
+import { formatNumber, t, tSubject } from "../../i18n";
 import { cn } from "../../lib/cn";
 import { chapterBadge } from "../../lib/progress";
 
@@ -37,6 +37,25 @@ export function LearnPage() {
     queryKey: ["subjects", selected],
     queryFn: () => getSubjects(selected),
   });
+  // UX-001: which classes the corpus actually has content for. The same
+  // endpoint with no class filter returns every subject's `class_levels`
+  // union, so the chips can say which classes are empty instead of offering
+  // all twelve and dead-ending the student in a blank grid. `null` until the
+  // catalogue answers (or when it fails): without evidence the page claims
+  // nothing and every chip stays selectable.
+  const catalogueQuery = useQuery({
+    queryKey: ["learnCatalogue"],
+    queryFn: () => getSubjects(),
+  });
+  const classesWithContent = catalogueQuery.data
+    ? new Set(catalogueQuery.data.flatMap((s) => s.class_levels))
+    : null;
+  const contentClasses = classesWithContent
+    ? [...classesWithContent]
+        .sort((a, b) => a - b)
+        .map((c) => formatNumber(c))
+        .join(", ")
+    : "";
   const [activeSubject, setActiveSubject] = useState<string | null>(null);
   const chaptersQuery = useQuery({
     queryKey: ["chapters", activeSubject, selected],
@@ -107,18 +126,31 @@ export function LearnPage() {
         role="group"
         aria-label={t("selectClass")}
       >
-        {classes.map((c) => (
-          <button
-            key={c}
-            className={cn("chip", selected === c && "active")}
-            onClick={() => {
-              setSelected(c);
-              setActiveSubject(null);
-            }}
-          >
-            {t("classLabel")} {c}
-          </button>
-        ))}
+        {classes.map((c) => {
+          const hasContent =
+            classesWithContent === null || classesWithContent.has(c);
+          return (
+            <button
+              key={c}
+              className={cn("chip", selected === c && "active")}
+              disabled={!hasContent}
+              onClick={() => {
+                setSelected(c);
+                setActiveSubject(null);
+              }}
+            >
+              {t("classLabel")} {formatNumber(c)}
+              {!hasContent && (
+                // The chip is disabled, so the reason has to be reachable
+                // somewhere: it rides the accessible name.
+                <span className="visually-hidden">
+                  {" "}
+                  — {t("classNoContent")}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {subjectsQuery.isLoading ? (
@@ -132,6 +164,19 @@ export function LearnPage() {
            nothing in it rather than a request that did not answer. */
         <Card>
           <LoadError onRetry={() => void subjectsQuery.refetch()} />
+        </Card>
+      ) : subjects.length === 0 ? (
+        /* UX-001: `[]` is not an error — classes with no corpus content
+           answer exactly that (services/learn.py), and falling through to
+           the grid left a Class-1 student on a blank screen under a heading
+           that said বিষয়. Say which classes are empty, and where content is. */
+        <Card>
+          <div className="center muted">{t("noSubjects")}</div>
+          {contentClasses && (
+            <div className="center muted muted-sm section-gap-top">
+              {t("noSubjectsHint", { classes: contentClasses })}
+            </div>
+          )}
         </Card>
       ) : (
         <div className="subject-grid">

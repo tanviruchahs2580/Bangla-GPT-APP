@@ -1,7 +1,7 @@
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { Badge, Button, Card, ProgressRing } from "../../../components/ui";
 import { QuizOptionGroup } from "../../../components/QuizOptionGroup";
-import { t } from "../../../i18n";
+import { formatNumber, t } from "../../../i18n";
 import type { QuizStarted } from "../../../types";
 import { ReteachCards } from "./ReteachCards";
 
@@ -49,7 +49,7 @@ export function QuizRunner({
       <section className="section-head">
         <h1>{t("practiceTitle")}</h1>
         <Badge>
-          {current + 1}/{started.questions.length}
+          {formatNumber(current + 1)}/{formatNumber(started.questions.length)}
         </Badge>
       </section>
       {started.reteach && started.reteach.length > 0 && current === 0 && (
@@ -64,7 +64,8 @@ export function QuizRunner({
             size={64}
             label={
               <strong>
-                {answeredCount}/{started.questions.length}
+                {formatNumber(answeredCount)}/
+                {formatNumber(started.questions.length)}
               </strong>
             }
           />

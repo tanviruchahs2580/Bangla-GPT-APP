@@ -53,6 +53,9 @@ export function TutorThread({
   onRate: (messageId: number, rating: 1 | -1) => void;
   onSaveNote: (message: ChatMessage) => void;
 }) {
+  // UX-006: the typing dots belong to the trailing assistant bubble once it
+  // exists; before the first token there is no bubble to attach them to.
+  const lastRole = messages[messages.length - 1]?.role;
   return (
     <div ref={viewportRef} className="chat-thread chat-viewport">
       {messages.length === 0 && !streaming && (
@@ -124,7 +127,19 @@ export function TutorThread({
                 m.content
               )}
               {streaming && i === messages.length - 1 && (
-                <span className="stream-cursor" aria-hidden />
+                <>
+                  {/* UX-006: the wait indicator is the SUFFIX of the bubble
+                      that is growing. It used to be a second, empty "AI"
+                      bubble below it, so the whole stream showed two
+                      assistant turns — one filling in, one still blinking —
+                      and a student reading the thread saw a duplicate. */}
+                  {m.role === "assistant" && (
+                    <span className="typing-dots" aria-hidden>
+                      <span /> <span /> <span />
+                    </span>
+                  )}
+                  <span className="stream-cursor" aria-hidden />
+                </>
               )}
             </div>
             {!streaming &&
@@ -252,7 +267,12 @@ export function TutorThread({
           </div>
         );
       })}
-      {streaming && (
+      {streaming && lastRole !== "assistant" && (
+        // The placeholder exists only until the assistant bubble lands (the
+        // first token of the turn): while the turn is in flight with nothing
+        // to grow yet, the dots are the only thing on screen. Once the
+        // bubble is there they move inside it (above), so exactly one
+        // assistant bubble is ever on screen.
         <div className="bubble assistant">
           <span className="bubble-id" aria-hidden>
             <AiSparkle size={14} /> AI

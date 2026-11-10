@@ -226,6 +226,10 @@ const bn = {
   conversations: "চ্যাট",
   askPlaceholder: "পাঠ্যবই থেকে যেকোনো প্রশ্ন লিখুন…",
   thinking: "ভাবছি…",
+  // UX-002: the status a screen reader hears when a tutor answer *starts*
+  // streaming. The transcript itself stays silent per token, and the finished
+  // answer is announced once by the tutor announcer.
+  generatingAnswer: "উত্তর তৈরি হচ্ছে…",
   supportedBadge: "পাঠ্যবই-সমর্থিত",
   unsupportedBadge: "পাঠ্যবই-সমর্থিত নয়",
   quizTitle: "কুইজ",
@@ -452,6 +456,12 @@ const bn = {
   conceptRead: "পাঠ",
   readConcept: "পাঠ শুরু করুন",
   noChapters: "এই বিষয়ে কোনো অধ্যায় পাওয়া যায়নি।",
+  // UX-001: a class with no corpus content is not an empty catalogue. The
+  // API answers [] (not an error) for those classes, so the grid had nothing
+  // to render and the student saw a blank screen.
+  noSubjects: "এই শ্রেণির জন্য এখনো পাঠ্যবইয়ের কনটেন্ট যোগ করা হয়নি।",
+  noSubjectsHint: "কনটেন্ট আছে এমন শ্রেণি: {classes}।",
+  classNoContent: "এই শ্রেণিতে এখনো কনটেন্ট নেই",
   preview: "ঝলক",
   settings: "সেটিংস",
   language: "ভাষা",
@@ -946,6 +956,8 @@ const en: Dict = {
   conversations: "Chats",
   askPlaceholder: "Ask anything from your textbook…",
   thinking: "Thinking…",
+  // UX-002: mirrors the Bangla entry -- the stream-start status.
+  generatingAnswer: "Writing the answer…",
   supportedBadge: "Textbook-backed",
   unsupportedBadge: "Not textbook-backed",
   quizTitle: "Quiz",
@@ -1171,6 +1183,10 @@ const en: Dict = {
   conceptRead: "Reading",
   readConcept: "Start reading",
   noChapters: "No chapters found for this subject.",
+  // UX-001: mirrors the Bangla block -- a class with no corpus content.
+  noSubjects: "No textbook content for this class yet.",
+  noSubjectsHint: "Classes with content: {classes}.",
+  classNoContent: "no content for this class yet",
   preview: "Preview",
   settings: "Settings",
   language: "Language",

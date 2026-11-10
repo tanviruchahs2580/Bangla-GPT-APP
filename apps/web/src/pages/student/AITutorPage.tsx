@@ -555,6 +555,22 @@ export default function AITutorPage() {
         >
           {announcement}
         </div>
+        {/* UX-002: a stream that has started is acknowledged once, politely.
+            This is a SEPARATE region on purpose: the announcer above is
+            asserted to stay empty until the answer completes (F-016/F-064,
+            tutorAnnounce.test.tsx), so the start status must not overwrite
+            it. The region only exists while a turn is streaming — no token
+            ever touches it — so there is no per-token chatter. */}
+        {streaming && (
+          <div
+            className="visually-hidden"
+            role="status"
+            aria-live="polite"
+            data-testid="tutor-stream-status"
+          >
+            {t("generatingAnswer")}
+          </div>
+        )}
         <TutorThread
           viewportRef={viewportRef}
           messages={messages}

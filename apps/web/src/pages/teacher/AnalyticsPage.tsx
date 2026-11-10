@@ -366,7 +366,18 @@ export default function AnalyticsPage() {
 
       <Card title={t("anaCapacity")}>
         <p className="muted muted-sm">{t("anaCapacityHint")}</p>
-        {workload ? (
+        {/* UX-004: `workloadQuery.data ?? null` made a failed or in-flight
+            fetch fall into the empty copy below, so an outage was reported
+            to the teacher as "এখন পর্যন্ত কোনো ডকুমেন্ট নেই" — a claim about
+            their work rather than about the request. Branch on the request
+            state first, like the AI-insight and weak-matrix cards above. */}
+        {workloadQuery.isError ? (
+          <LoadError onRetry={() => void workloadQuery.refetch()} />
+        ) : workloadQuery.isPending ? (
+          <p className="muted" role="status">
+            {t("loading")}
+          </p>
+        ) : workload ? (
           <div className="stat-row mt-2" title={workload.methodology}>
             <div>
               <div className="num">{workload.total_minutes_saved}</div>

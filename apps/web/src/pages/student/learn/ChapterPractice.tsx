@@ -151,7 +151,11 @@ export function ChapterPractice({
             </button>
           )}
         </div>
-        {error && <p className="error">{error}</p>}
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
       </div>
     );
   }
@@ -168,7 +172,11 @@ export function ChapterPractice({
       >
         {t("startQuiz")}
       </button>
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

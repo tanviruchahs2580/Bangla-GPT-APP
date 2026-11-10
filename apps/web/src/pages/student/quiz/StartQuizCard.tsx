@@ -72,7 +72,11 @@ export function StartQuizCard({
           <Stat value={progress.attempts_graded} label={t("gradedQuizzes")} />
         </div>
       )}
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
       <Button
         variant="primary"
         block
