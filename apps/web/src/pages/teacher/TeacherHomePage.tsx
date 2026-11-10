@@ -64,10 +64,16 @@ export default function TeacherHomePage() {
     retry: false, // the insight is best-effort: an empty matrix is normal
   });
 
-  const loadError = roomsQuery.isError || workloadQuery.isError;
+  // FE-FIX-007: `draftsQuery` was missing from both the banner and the retry,
+  // so a failed draft count degraded to an unexplained "—" in the stat row —
+  // the teacher could not tell a zero-draft backlog from a request that never
+  // answered — and pressing the banner's retry left that query stale forever.
+  const loadError =
+    roomsQuery.isError || workloadQuery.isError || draftsQuery.isError;
   const retry = () => {
     void roomsQuery.refetch();
     void workloadQuery.refetch();
+    void draftsQuery.refetch();
   };
 
   const students = useMemo(

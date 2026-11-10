@@ -1,15 +1,9 @@
 import { Button, Card, Stat } from "../../../components/ui";
-import { t } from "../../../i18n";
+import { formatNumber, t } from "../../../i18n";
+import { subjectOptions } from "../../../lib/subjectOptions";
 import type { StudentProgress } from "../../../types";
 
 /** F-094 split: the quiz-tab start card, extracted from QuizPage. */
-
-// labels from i18n, evaluated per render (lang switch remounts).
-export const subjectOptions = () => [
-  { value: "science", label: t("subjectScience") },
-  { value: "mathematics", label: t("subjectMath") },
-  { value: "bangla", label: t("subjectBangla") },
-];
 
 export function StartQuizCard({
   number,
@@ -46,7 +40,7 @@ export function StartQuizCard({
         >
           {[3, 5, 10, 15].map((n) => (
             <option key={n} value={n}>
-              {n}
+              {formatNumber(n)}
             </option>
           ))}
         </select>
@@ -68,8 +62,21 @@ export function StartQuizCard({
       </div>
       {progress && progress.attempts_graded > 0 && (
         <div className="stat-grid section-gap-top">
-          <Stat value={Math.round(avg ?? 0) + "%"} label={t("avgScore")} />
-          <Stat value={progress.attempts_graded} label={t("gradedQuizzes")} />
+          {/* A graded quiz with no average is not an average of 0: the API
+              returns null for "nothing measured yet" (the same rule the school
+              table and the student report follow). */}
+          <Stat
+            value={
+              avg == null
+                ? t("notAvailable")
+                : `${formatNumber(Math.round(avg))}%`
+            }
+            label={t("avgScore")}
+          />
+          <Stat
+            value={formatNumber(progress.attempts_graded)}
+            label={t("gradedQuizzes")}
+          />
         </div>
       )}
       {error && (

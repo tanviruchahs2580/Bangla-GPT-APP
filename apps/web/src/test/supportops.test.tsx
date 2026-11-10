@@ -130,8 +130,19 @@ describe("public status page", () => {
       </MemoryRouter>,
     );
     expect(await screen.findByText(t("statusAllOk"))).toBeInTheDocument();
-    expect(screen.getByText("queries responding")).toBeInTheDocument();
-    expect(screen.getByText("shared cache reachable")).toBeInTheDocument();
+    // FE-FIX-017: the API's English component names and details are mapped to
+    // Bangla rather than printed verbatim — this page is linked from every
+    // footer and was the only English left in the product. The server
+    // contract is unchanged, so the test still drives it with the real
+    // strings and asserts both halves: the Bangla is shown, the raw English
+    // is not.
+    expect(screen.getByText(t("statusCompDatabase"))).toBeInTheDocument();
+    expect(screen.getByText(t("statusCompCache"))).toBeInTheDocument();
+    expect(screen.getByText(t("statusDetailQueriesOk"))).toBeInTheDocument();
+    expect(screen.getByText(t("statusDetailCacheShared"))).toBeInTheDocument();
+    expect(screen.queryByText("queries responding")).not.toBeInTheDocument();
+    expect(screen.queryByText("shared cache reachable")).not.toBeInTheDocument();
+    expect(screen.queryByText("database")).not.toBeInTheDocument();
   });
 
   it("shows the degraded headline when any component fails", async () => {
@@ -146,6 +157,10 @@ describe("public status page", () => {
       </MemoryRouter>,
     );
     expect(await screen.findByText(t("statusDegraded"))).toBeInTheDocument();
-    expect(screen.getByText("cache unreachable")).toBeInTheDocument();
+    // FE-FIX-017: same contract as the all-ok case — the degraded detail is
+    // mapped to Bangla, and the raw English the API sent is not rendered.
+    expect(screen.getByText(t("statusCompCache"))).toBeInTheDocument();
+    expect(screen.getByText(t("statusDetailCacheDown"))).toBeInTheDocument();
+    expect(screen.queryByText("cache unreachable")).not.toBeInTheDocument();
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Check, ClipboardCheck, RefreshCcw } from "lucide-react";
 import { Button, Card, ProgressRing } from "../../../components/ui";
 import { formatNumber, t } from "../../../i18n";
@@ -25,10 +25,13 @@ type ReviewRow = QuizResult["review"][number];
 
 export function QuizResultScreen({
   result,
+  notice,
   onExplain,
   onRestart,
 }: {
   result: QuizResult;
+  /** FE-FIX-019: the consent notice, rendered inside this <main>. */
+  notice?: ReactNode;
   onExplain: (row: ReviewRow) => void;
   onRestart: () => void;
 }) {
@@ -37,6 +40,7 @@ export function QuizResultScreen({
       <section className="section-head">
         <h1>{t("yourQuizResult")}</h1>
       </section>
+      {notice}
       <QuizCelebration score={result.score_pct} />
       <Card className="card-featured">
         <div className="row-flex quiz-result-hero">

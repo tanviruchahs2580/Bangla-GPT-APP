@@ -166,6 +166,21 @@ export interface StudentProgress {
   weak_chapters: string[];
 }
 
+/**
+ * FE-FIX-019: the consent re-confirm read (GET /students/{id}/consent) and the
+ * accept write (POST /students/{id}/consent/reconfirm) both answer this
+ * component. Field names follow the served schema: `current_version` is the
+ * text in force, `accepted_version` what the guardian accepted (null when the
+ * record predates the trail). Mirrored field-for-field by apiContract.test.ts.
+ */
+export interface ConsentStatusOut {
+  student_id: number;
+  current_version: string;
+  accepted_version: string | null;
+  accepted_at: string | null;
+  needs_reconfirm: boolean;
+}
+
 export interface StudentBrief {
   student_id: number;
   name: string;

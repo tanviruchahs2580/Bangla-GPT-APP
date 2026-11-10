@@ -2,9 +2,11 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { get, getParentReport, post } from "../api";
 import { friendlyError } from "../errors";
-import { t } from "../i18n";
+import { formatNumber, t } from "../i18n";
 import { track } from "../lib/analytics";
 import { suggestionSentence } from "../lib/text";
+import { Segmented } from "../components/ui";
+import { ActivityHeatmap } from "../components/ActivityHeatmap";
 import type { ActivitySummary, StudentBrief, StudentProgress } from "../types";
 
 /**
@@ -180,11 +182,16 @@ export default function ParentDashboard() {
               <tbody>
                 {children.map((c) => (
                   <tr key={c.student_id}>
+                    {/* The student id is an identifier, not a quantity, so it
+                        stays in Latin digits (the numeral policy keeps ids
+                        opaque); the class level is a quantity and does not. */}
                     <td>{c.student_id}</td>
                     <td>{c.name}</td>
-                    <td>{c.class_level}</td>
+                    <td>{formatNumber(c.class_level)}</td>
                     <td>
-                      {c.avg_score_pct === null ? "—" : `${c.avg_score_pct}%`}
+                      {c.avg_score_pct === null
+                        ? "—"
+                        : `${formatNumber(c.avg_score_pct)}%`}
                     </td>
                     <td>
                       <button
@@ -217,11 +224,19 @@ export default function ParentDashboard() {
           </h2>
           <div className="stat-row">
             <div className="stat">
-              <div className="num">{progress.attempts_graded}</div>
+              <div className="num">{formatNumber(progress.attempts_graded)}</div>
               <div className="lbl">{t("gradedQuizzes")}</div>
             </div>
             <div className="stat">
-              <div className="num">{progress.avg_score_pct ?? "—"}%</div>
+              {/* FE-FIX (numeral + honest-null): a null average printed
+                  "—%" — a dash with a percent sign, which reads as a
+                  measurement that failed rather than one that does not
+                  exist. The API returns null deliberately. */}
+              <div className="num">
+                {progress.avg_score_pct == null
+                  ? "—"
+                  : `${formatNumber(progress.avg_score_pct)}%`}
+              </div>
               <div className="lbl">{t("avgScore")}</div>
             </div>
           </div>
@@ -240,10 +255,10 @@ export default function ParentDashboard() {
                   {progress.by_chapter.map((c) => (
                     <tr key={c.chapter}>
                       <td>{c.chapter}</td>
-                      <td>{c.asked}</td>
-                      <td>{c.correct}</td>
+                      <td>{formatNumber(c.asked)}</td>
+                      <td>{formatNumber(c.correct)}</td>
                       <td>
-                        {c.accuracy}%
+                        {formatNumber(c.accuracy)}%
                         {c.accuracy < 60 && (
                           <span className="badge weak"> {t("weak")}</span>
                         )}
@@ -270,53 +285,10 @@ export default function ParentDashboard() {
           <p className="muted m-0">
             {t("streakLabel", { days: activity.streak })} · {t("activityHint")}
           </p>
-          {(() => {
-            // FE-11: same contract as the student heatmap — the per-day
-            // counts leave the title-only channel for a labelled image
-            // equivalent a screen reader can actually announce.
-            const totals = activity.days.reduce(
-              (acc, d) => {
-                acc.questions += d.questions;
-                acc.quizzes += d.quizzes;
-                if (d.questions + d.quizzes > 0) acc.active += 1;
-                return acc;
-              },
-              { questions: 0, quizzes: 0, active: 0 },
-            );
-            const gridLabel = t("heatmapSummary", {
-              questions: totals.questions,
-              active: totals.active,
-              days: activity.days.length,
-            });
-            return (
-              <div className="heatmap" role="img" aria-label={gridLabel}>
-                <span className="sr-only">{gridLabel}</span>
-                {activity.days.map((d) => {
-                  const total = d.questions + d.quizzes;
-                  const lvl =
-                    total === 0 ? 0 : total <= 2 ? 1 : total <= 5 ? 2 : 3;
-                  const title = [
-                    d.date,
-                    t(
-                      d.questions === 1
-                        ? "activityQuestion"
-                        : "activityQuestions",
-                      { n: d.questions },
-                    ),
-                    t("activityQuizzes", { n: d.quizzes }),
-                    t("activityMinutes", { n: d.minutes }),
-                  ].join(" · ");
-                  return (
-                    <span
-                      key={d.date}
-                      className={`heat-cell lvl-${lvl}`}
-                      title={title}
-                    />
-                  );
-                })}
-              </div>
-            );
-          })()}
+          {/* FE-FIX (duplication): the same grid the student sees, from one
+              component — FE-11's labelled image equivalent included, so the
+              parent's copy cannot drift from the child's. */}
+          <ActivityHeatmap days={activity.days} />
         </div>
       )}
       {selected !== null && (
@@ -332,43 +304,40 @@ export default function ParentDashboard() {
           <h2>
             {report.name} · {t("progressTitle")}
           </h2>
-          <div
-            className="chips mb-2"
-            role="group"
-            aria-label={t("progressTitle")}
-          >
-            <button
-              className={`chip${period === "weekly" ? " active" : ""}`}
-              onClick={() => setPeriod("weekly")}
-            >
-              {t("periodWeekly")}
-            </button>
-            <button
-              className={`chip${period === "monthly" ? " active" : ""}`}
-              onClick={() => setPeriod("monthly")}
-            >
-              {t("periodMonthly")}
-            </button>
-          </div>
+          {/* FE-FIX (a11y): these two buttons carried neither role="group" nor
+              aria-pressed, so a screen reader read two unrelated buttons and
+              never said which period was showing. The shared Segmented
+              primitive is the control the student's report already uses; the
+              hand-rolled copy was the fourth chip row in the app. */}
+          <Segmented
+            className="mb-2"
+            ariaLabel={t("progressTitle")}
+            value={period}
+            onChange={setPeriod}
+            options={[
+              { value: "weekly", label: t("periodWeekly") },
+              { value: "monthly", label: t("periodMonthly") },
+            ]}
+          />
           <div className="stat-row">
             <div className="stat">
-              <div className="num">{report.quizzes_taken}</div>
+              <div className="num">{formatNumber(report.quizzes_taken)}</div>
               <div className="lbl">{t("reportQuizzesGraded")}</div>
             </div>
             <div className="stat">
               <div className="num">
                 {report.avg_score_pct == null
                   ? "—"
-                  : `${Math.round(report.avg_score_pct)}%`}
+                  : `${formatNumber(Math.round(report.avg_score_pct))}%`}
               </div>
               <div className="lbl">{t("reportAvg")}</div>
             </div>
             <div className="stat">
-              <div className="num">{report.chapters_read}</div>
+              <div className="num">{formatNumber(report.chapters_read)}</div>
               <div className="lbl">{t("reportChaptersRead")}</div>
             </div>
             <div className="stat">
-              <div className="num">{report.questions_asked}</div>
+              <div className="num">{formatNumber(report.questions_asked)}</div>
               <div className="lbl">{t("reportQuestions")}</div>
             </div>
           </div>

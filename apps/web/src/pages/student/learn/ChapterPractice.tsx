@@ -5,7 +5,7 @@ import { post } from "../../../api";
 import type { QuizResult, QuizStarted } from "../../../types";
 import { useAuth } from "../../../AuthContext";
 import { Card } from "../../../components/ui";
-import { t } from "../../../i18n";
+import { formatNumber, t } from "../../../i18n";
 import { friendlyError } from "../../../errors";
 import { QuizOptionGroup } from "../../../components/QuizOptionGroup";
 
@@ -75,7 +75,9 @@ export function ChapterPractice({
     return (
       <div className="stack">
         <div className="center">
-          <div className="stat-value">{Math.round(result.score_pct)}%</div>
+          <div className="stat-value">
+            {formatNumber(Math.round(result.score_pct))}%
+          </div>
           <div className="muted">
             {t("correctOutOf", {
               correct: result.correct,
@@ -112,7 +114,7 @@ export function ChapterPractice({
       <div className="stack">
         <div className="row-flex">
           <span className="badge">
-            {current + 1}/{started.questions.length}
+            {formatNumber(current + 1)}/{formatNumber(started.questions.length)}
           </span>
           <span className="muted muted-sm">{chapter}</span>
         </div>

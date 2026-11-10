@@ -5,13 +5,14 @@ import {
   useId,
   useRef,
   type ButtonHTMLAttributes,
+  type HTMLAttributes,
   type ReactElement,
   type ReactNode,
 } from "react";
 import { TrendingDown, TrendingUp, X } from "lucide-react";
 import { createPortal } from "react-dom";
 import { cn } from "../lib/cn";
-import { t } from "../i18n";
+import { formatNumber, t } from "../i18n";
 
 type Variant = "primary" | "teal" | "ghost" | "soft" | "danger" | "default";
 type Size = "sm" | "md" | "lg";
@@ -64,14 +65,21 @@ export function Card({
   className,
   title,
   action,
+  ...rest
 }: {
   children: ReactNode;
   className?: string;
   title?: ReactNode;
   action?: ReactNode;
-}) {
+} & HTMLAttributes<HTMLElement>) {
+  // FE-FIX (a11y): `role`/`aria-*` now reach the DOM, the same way Button has
+  // always spread its rest props. Without this a caller could pass
+  // `role="status"` and have it silently dropped — which is worse than not
+  // supporting it, because the code reads as though it works. The chapter-ask
+  // answer is the first caller that needs it: the live semantics belong on the
+  // answer node itself rather than on a second hidden copy of its text.
   return (
-    <section className={cn("card", className)}>
+    <section className={cn("card", className)} {...rest}>
       {(title || action) && (
         <div className="row-flex card-head-row">
           <div className="card-title card-title-flush">{title}</div>
@@ -126,6 +134,11 @@ export function ProgressRing({
 }) {
   const clamped = Math.max(0, Math.min(100, value));
   const inner = size - 14;
+  // The ring's own name is a measured percentage, so it follows the numeral
+  // policy at the same boundary as every other quantity (Bangla digits under
+  // bn). A Latin "45%" inside a Bangla screen was the same defect the chapter
+  // bar carried (FE-FIX, numerals).
+  const pct = `${formatNumber(Math.round(clamped))}%`;
   return (
     <div
       className="ring ring-draw"
@@ -136,10 +149,10 @@ export function ProgressRing({
         flexShrink: 0,
       }}
       role="img"
-      aria-label={`${Math.round(clamped)}%`}
+      aria-label={pct}
     >
       <div className="ring-inner" style={{ width: inner, height: inner }}>
-        {label ?? `${Math.round(clamped)}%`}
+        {label ?? pct}
       </div>
     </div>
   );
@@ -213,6 +226,16 @@ export function Modal({
   // the title was an element rather than a string, leaving those dialogs
   // unnamed; the heading is the name in every case.
   const titleId = useId();
+  // FE-FIX-018: the effect below depends on `open` alone. It used to depend on
+  // `onClose` too, and the only production caller passes an inline arrow
+  // (AITutorPage's evidence modal) — a fresh function identity on every parent
+  // render re-ran the whole effect (§ scroll lock, § focus the first control,
+  // § re-register the key handler), so anything that re-rendered the page while
+  // the dialog was open STOLE FOCUS BACK into the dialog, repeatedly, mid-typing.
+  // The callback is read through a ref instead: the effect still always calls
+  // the current handler, and it runs exactly once per open.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
@@ -232,7 +255,7 @@ export function Modal({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (e.key !== "Tab" || !boxRef.current) return;
@@ -256,7 +279,7 @@ export function Modal({
       document.body.style.overflow = prevOverflow;
       restoreRef.current?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   return createPortal(

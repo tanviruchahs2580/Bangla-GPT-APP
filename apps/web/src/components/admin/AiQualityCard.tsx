@@ -45,8 +45,36 @@ export function AiQualityCard() {
     return (
       <LoadError message={error} onRetry={() => setAttempt((n) => n + 1)} />
     );
-  if (loading) return null;
-  if (!q || typeof q.answers_total !== "number") return null;
+  // FE-FIX-010: `return null` while loading and on an unexpected payload made
+  // this card indistinguishable from a panel with nothing to say — on the
+  // surface whose whole purpose is auditing answer quality. Both states are
+  // named now: one says it is loading, the other says the response could not
+  // be read (which is a contract problem, not "there is no data").
+  if (loading)
+    return (
+      <section className="card">
+        <h2>{t("aiqTitle")}</h2>
+        <p className="muted m-0" role="status">
+          {t("loading")}
+        </p>
+      </section>
+    );
+  if (!q || typeof q.answers_total !== "number")
+    return (
+      <section className="card">
+        <h2>{t("aiqTitle")}</h2>
+        <p className="error m-0" role="alert">
+          {t("aiqUnreadable")}
+        </p>
+        <button
+          type="button"
+          className="btn btn-sm btn-ghost mt-2"
+          onClick={() => setAttempt((n) => n + 1)}
+        >
+          {t("retry")}
+        </button>
+      </section>
+    );
   const reasons = Object.entries(q.refusals_by_reason ?? {});
   const models = Object.entries(q.by_model ?? {});
   return (

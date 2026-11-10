@@ -20,6 +20,7 @@ import { AssistantContent } from "./AssistantContent";
  */
 export function TutorThread({
   viewportRef,
+  onViewportScroll,
   messages,
   streaming,
   subject,
@@ -37,6 +38,9 @@ export function TutorThread({
   onSaveNote,
 }: {
   viewportRef: React.RefObject<HTMLDivElement>;
+  /** FE-FIX-014: reports whether the reader is still pinned to the newest
+   *  message, so the page can stop following the stream once they scroll up. */
+  onViewportScroll?: () => void;
   messages: ChatMessage[];
   streaming: boolean;
   subject: string;
@@ -57,7 +61,11 @@ export function TutorThread({
   // exists; before the first token there is no bubble to attach them to.
   const lastRole = messages[messages.length - 1]?.role;
   return (
-    <div ref={viewportRef} className="chat-thread chat-viewport">
+    <div
+      ref={viewportRef}
+      className="chat-thread chat-viewport"
+      onScroll={onViewportScroll}
+    >
       {messages.length === 0 && !streaming && (
         <div className="center empty-state">
           <div className="empty-mark" aria-hidden>

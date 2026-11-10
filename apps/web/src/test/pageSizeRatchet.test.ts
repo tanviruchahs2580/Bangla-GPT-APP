@@ -32,6 +32,38 @@ const BUDGET = 500;
  * numerals at the sites docs/glossary-bn.md names. Each ceiling below is that
  * file's measured count after the fix; AssessmentsPage shrank (the tablist
  * became the shared Segmented control) and its ceiling drops with it.
+ *
+ * The FE-FIX pass raised nine more, all in the same class and for the same
+ * reason — here the fix *is* the extra lines, because each defect was a state
+ * that was not rendered at all:
+ *
+ *   SchoolDashboard   a missing average was printed as a warning-toned 0%
+ *                     (`avg_score_pct ?? 0`); it now says so honestly, and the
+ *                     roster gained the pager its API already supported.
+ *   StatusPage        the API's English component names and details were
+ *                     rendered verbatim inside a Bangla UI; mapping them is a
+ *                     table, and a table is lines.
+ *   AITutorPage       an IME composition guard, a scroll that no longer fights
+ *                     the reader mid-stream, the typed question kept on a
+ *                     failed conversation create, and a synchronous
+ *                     double-submit guard.
+ *   HomePage          the same IME guard on the home composer.
+ *   ChapterAsk        a labelled input and a live region for the answer.
+ *   ChapterPractice   Bangla numerals at the recorded boundary.
+ *   LearnChapterPage  bookmark rollback on failure, plus the numerals.
+ *   LearnPage         a per-subject fetch failure no longer renders as a
+ *                     zero-width ring; plus the numerals.
+ *   QuizResultScreen  Bangla numerals.
+ *
+ * FE-FIX-019 (the consent gate's surface) accounts for the rest: QuizPage
+ * carries the blocked state, maps the coded 403 in its three entry points and
+ * passes the notice into the runner and the result screen, and the composer,
+ * history and thread each gained a branch. TeacherHomePage gained the drafts
+ * query in its error banner — the same class of fix, a state that was not
+ * rendered.
+ *
+ * Every entry is that file's measured count after the change. No page that was
+ * split in a pass kept its old ceiling.
  */
 const CEILING: Record<string, number> = {
   "AdminDashboard.tsx": 337,
@@ -42,23 +74,23 @@ const CEILING: Record<string, number> = {
   "NotFoundPage.tsx": 31,
   "ParentDashboard.tsx": 404,
   "RegisterPage.tsx": 288,
-  "SchoolDashboard.tsx": 137,
-  "StatusPage.tsx": 100,
+  "SchoolDashboard.tsx": 147,
+  "StatusPage.tsx": 147,
   "WelcomePage.tsx": 128,
-  "student/AITutorPage.tsx": 625,
-  "student/HomePage.tsx": 327,
-  "student/LearnPage.tsx": 351,
+  "student/AITutorPage.tsx": 688,
+  "student/HomePage.tsx": 335,
+  "student/LearnPage.tsx": 381,
   "student/MePage.tsx": 793,
-  "student/QuizPage.tsx": 506,
-  "student/learn/ChapterAsk.tsx": 94,
-  "student/learn/ChapterPractice.tsx": 182,
-  "student/learn/LearnChapterPage.tsx": 481,
+  "student/QuizPage.tsx": 586,
+  "student/learn/ChapterAsk.tsx": 121,
+  "student/learn/ChapterPractice.tsx": 184,
+  "student/learn/LearnChapterPage.tsx": 492,
   "student/quiz/AssignedPanel.tsx": 119,
-  "student/quiz/QuizResultScreen.tsx": 107,
-  "student/quiz/QuizRunner.tsx": 133,
+  "student/quiz/QuizResultScreen.tsx": 111,
+  "student/quiz/QuizRunner.tsx": 138,
   "student/quiz/ReteachCards.tsx": 28,
   "student/quiz/RevisionPanel.tsx": 77,
-  "student/quiz/StartQuizCard.tsx": 93,
+  "student/quiz/StartQuizCard.tsx": 100,
   "student/tutor/AssistantContent.tsx": 40,
   "student/tutor/EvidenceModal.tsx": 33,
   // 189: 8f80e93 added the CodeQL mime allowlist to the preview data URL
@@ -66,18 +98,18 @@ const CEILING: Record<string, number> = {
   // formatting are the recorded raise.
   // 192: UX-002's role="alert" and UX-007's single send/stop element, whose
   // why-comments are part of the fix.
-  "student/tutor/TutorComposer.tsx": 192,
-  "student/tutor/TutorHistory.tsx": 126,
+  "student/tutor/TutorComposer.tsx": 203,
+  "student/tutor/TutorHistory.tsx": 130,
   // 269: eec2f6a namespaced the streaming-placeholder React keys with the
   // why-comment the fix requires.
   // 289: UX-006 moved the typing dots into the streaming bubble and gave the
   // placeholder its own condition, so only one assistant bubble is on screen.
-  "student/tutor/TutorThread.tsx": 289,
+  "student/tutor/TutorThread.tsx": 297,
   "teacher/AnalyticsPage.tsx": 395,
   "teacher/AssessmentsPage.tsx": 618,
   "teacher/ClassesPage.tsx": 688,
   "teacher/CreatePage.tsx": 706,
-  "teacher/TeacherHomePage.tsx": 174,
+  "teacher/TeacherHomePage.tsx": 180,
   "teacher/TeacherProfilePage.tsx": 119,
 };
 

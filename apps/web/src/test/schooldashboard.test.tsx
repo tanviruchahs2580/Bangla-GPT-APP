@@ -96,3 +96,27 @@ describe("school dashboard", () => {
     expect(screen.queryByText("Rahim")).not.toBeInTheDocument();
   });
 });
+
+// FE-FIX-006: `avg_score_pct` is `number | null` on purpose — null means
+// "nothing graded yet", not "scored zero". The table coerced it with `?? 0`,
+// so a warning-toned 0% claimed a measurement the API never took.
+it("shows an explicit 'not available' instead of a fabricated 0% average", async () => {
+  apiMock.get.mockResolvedValue({
+    ...structuredClone(HEALTH),
+    at_risk: [
+      {
+        student_id: 13,
+        name: "Nusrat",
+        class_level: 8,
+        section: "GEN",
+        attempts_graded: 0,
+        avg_score_pct: null,
+        trend: "flat",
+      },
+    ],
+  });
+  renderPage();
+  await screen.findByText("Anondo High School");
+  expect(screen.getByText(t("notAvailable"))).toBeInTheDocument();
+  expect(screen.queryByText("0%")).not.toBeInTheDocument();
+});

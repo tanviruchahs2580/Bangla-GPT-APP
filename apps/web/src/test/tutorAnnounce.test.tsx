@@ -114,7 +114,7 @@ describe("tutor stream announcements (F-016)", () => {
     const box = await screen.findByRole("textbox", {
       name: t("askPlaceholder"),
     });
-    submit(box, "Q1");
+    submit(box, "Q1?");
     await waitFor(() => expect(onToken).toBeDefined());
     await act(async () => {
       onToken?.("আংশিক উত্তর");

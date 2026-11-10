@@ -138,7 +138,7 @@ describe("tutor send guard (F-012)", () => {
     const box = await screen.findByRole("textbox", {
       name: t("askPlaceholder"),
     });
-    submit(box, "Q1");
+    submit(box, "Q1?");
 
     // Stop must be available while the POST is in flight, not only once the
     // stream is running.
@@ -179,7 +179,7 @@ describe("tutor send guard (F-012)", () => {
     const box = await screen.findByRole("textbox", {
       name: t("askPlaceholder"),
     });
-    submit(box, "Q1");
+    submit(box, "Q1?");
 
     await waitFor(() => expect(apiMock.postStream).toHaveBeenCalledTimes(1));
     const stop = screen.getByRole("button", { name: t("stopGenerating") });

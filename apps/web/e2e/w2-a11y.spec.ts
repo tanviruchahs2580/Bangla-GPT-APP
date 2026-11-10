@@ -123,3 +123,51 @@ test('axe: zero serious/critical violations on the reader and tutor routes', asy
   await sweep('/student/tutor')
   expectCleanConsole(findings)
 })
+
+/**
+ * FE-FIX (a11y gap): the chapter reader's জিজ্ঞাসা tab was invisible to every
+ * sweep — no spec ever opened it (`grep -rn "tabAsk|জিজ্ঞাসা" e2e/*.ts` had zero
+ * hits), so the placeholder-only input and the silent answer never appeared in
+ * an axe run. This spec opens the tab, checks the contract the fix establishes,
+ * and runs the same WCAG bar on the state.
+ */
+test('the chapter ask tab is labelled, announces its answer, and passes axe', async ({ page }) => {
+  const findings = watchConsole(page)
+  await useVariant(page, { theme: 'light', lang: 'bn' })
+  await signIn(page, 'student1@e2e.test')
+  await openRoute(page, '/student/learn/science/%E0%A6%95%E0%A7%8B%E0%A6%B7')
+
+  await page.getByRole('tab', { name: /জিজ্ঞাসা|Ask/ }).click()
+
+  // The field is reachable by its label, not only by its placeholder.
+  const box = page.getByRole('textbox', { name: /এই অধ্যায় নিয়ে প্রশ্ন করুন|Ask a question about this chapter/ })
+  await expect(box).toBeVisible({ timeout: 30_000 })
+
+  // The answer's announcement region exists and is polite (never assertive).
+  const announcer = page.getByTestId('chapter-ask-announcer')
+  await expect(announcer).toHaveAttribute('aria-live', 'polite')
+
+  // A real question round-trips through the tab and lands in the live region.
+  await box.fill('কোষ কী?')
+  await page.getByRole('button', { name: /পাঠান|Send/ }).click()
+  await expect(page.getByRole('button', { name: /পাঠান|Send/ })).toBeEnabled({ timeout: 60_000 })
+  await expect(announcer).not.toHaveText('', { timeout: 60_000 })
+
+  const results = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze()
+  const blocking = results.violations.filter(
+    (violation) => violation.impact === 'serious' || violation.impact === 'critical',
+  )
+  const detail = blocking
+    .map(
+      (violation) =>
+        `ask tab: ${violation.id} (${violation.impact}) on ${violation.nodes
+          .slice(0, 3)
+          .map((node) => node.target.join(' '))
+          .join(' | ')}`,
+    )
+    .join('\n')
+  expect(blocking, `serious/critical axe violations:\n${detail}`).toEqual([])
+  expectCleanConsole(findings)
+})

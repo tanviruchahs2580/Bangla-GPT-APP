@@ -43,6 +43,8 @@ import { formatNumber, getLang, setLang, t, tSubject } from "../../i18n";
 import { roleLabel } from "../../lib/roles";
 import { getLowData, toggleLowData } from "../../lib/lowData";
 import { currentTheme, toggleTheme } from "../../lib/theme";
+import { toast } from "../../lib/toast";
+import { ActivityHeatmap } from "../../components/ActivityHeatmap";
 
 // The memory panel shows what the tutor has stored — raw backend keys and
 // null values are noise for students, so map known keys to labels, localize
@@ -88,7 +90,16 @@ export default function MePage() {
 
   // learning preferences + tutor memory + own progress report.
   const isStudent = me?.role === "student";
-  const { data: prefs, refetch: refetchPrefs } = useQuery({
+  // FE-FIX-003: the failure state is part of the contract. Without it the
+  // inputs below rendered the module defaults as if they were the student's
+  // stored preferences, and pressing Save wrote those defaults over the real
+  // ones — a data-loss path dressed as a settings screen.
+  const {
+    data: prefs,
+    isPending: prefsPending,
+    isError: prefsError,
+    refetch: refetchPrefs,
+  } = useQuery({
     queryKey: ["my-prefs"],
     queryFn: getMyPrefs,
     enabled: isStudent,
@@ -122,7 +133,10 @@ export default function MePage() {
       await refetchNotes();
       track("note_deleted");
     } catch {
-      /* the list refetch is the source of truth; a failed delete stays visible */
+      // FE-FIX-009: a silently dropped delete left the row on screen with no
+      // explanation — indistinguishable from a slow network. The list refetch
+      // stays the source of truth; the toast says the delete did not land.
+      toast(t("errorGeneric"));
     }
   };
   const {
@@ -197,7 +211,11 @@ export default function MePage() {
       await refetchMem();
       await refetchPrefs();
     } catch {
-      /* keep the facts visible on failure */
+      // FE-FIX-009: this is the consent control for "what the tutor
+      // remembers". A wipe that failed while looking like it succeeded tells a
+      // child their data is gone when it is still stored — the opposite of
+      // what the switch promises. The facts stay visible and the toast says so.
+      toast(t("errorGeneric"));
     }
   };
 
@@ -269,7 +287,7 @@ export default function MePage() {
               <Badge>{me ? roleLabel(me.role) : "—"}</Badge>
               {me?.class_level ? (
                 <Badge tone="teal">
-                  {t("classLabel")} {me.class_level}
+                  {t("classLabel")} {formatNumber(me.class_level)}
                 </Badge>
               ) : null}
             </div>
@@ -315,59 +333,15 @@ export default function MePage() {
                   <div className="row-sub">{t("activityHint")}</div>
                 </div>
               </div>
-              {(() => {
-                // FE-11: the per-day data lived only in title tooltips —
-                // invisible to keyboards and screen readers. The grid is now
-                // a labelled image equivalent: one summary name carries the
-                // counts a glance would take from the colors.
-                const totals = activity.days.reduce(
-                  (acc, d) => {
-                    acc.questions += d.questions;
-                    acc.quizzes += d.quizzes;
-                    if (d.questions + d.quizzes > 0) acc.active += 1;
-                    return acc;
-                  },
-                  { questions: 0, quizzes: 0, active: 0 },
-                );
-                const gridLabel = t("heatmapSummary", {
-                  questions: totals.questions,
-                  active: totals.active,
-                  days: activity.days.length,
-                });
-                return (
-                  <div
-                    className="heatmap"
-                    data-testid="activity-heatmap"
-                    role="img"
-                    aria-label={gridLabel}
-                  >
-                    <span className="sr-only">{gridLabel}</span>
-                    {activity.days.map((d) => {
-                      const total = d.questions + d.quizzes;
-                      const lvl =
-                        total === 0 ? 0 : total <= 2 ? 1 : total <= 5 ? 2 : 3;
-                      const title = [
-                        d.date,
-                        t(
-                          d.questions === 1
-                            ? "activityQuestion"
-                            : "activityQuestions",
-                          { n: d.questions },
-                        ),
-                        t("activityQuizzes", { n: d.quizzes }),
-                        t("activityMinutes", { n: d.minutes }),
-                      ].join(" · ");
-                      return (
-                        <span
-                          key={d.date}
-                          className={`heat-cell lvl-${lvl}`}
-                          title={title}
-                        />
-                      );
-                    })}
-                  </div>
-                );
-              })()}
+              {/* FE-11: the per-day data lived only in title tooltips —
+                  invisible to keyboards and screen readers. The grid is a
+                  labelled image equivalent whose name carries the counts a
+                  glance would take from the colours; the component is shared
+                  with the parent's copy of this grid (FE-FIX, duplication). */}
+              <ActivityHeatmap
+                days={activity.days}
+                testId="activity-heatmap"
+              />
             </>
           ) : (
             <LoadError onRetry={() => void refetchActivity()} />
@@ -416,50 +390,67 @@ export default function MePage() {
       {me?.role === "student" && (
         <Card>
           <div className="card-title">{t("learningStyleTitle")}</div>
-          <div className="grid-2">
-            <div className="field">
-              <label htmlFor="expstyle">{t("explanationStyle")}</label>
-              <select
-                id="expstyle"
-                className="select"
-                value={style}
-                onChange={(e) => setStyle(e.target.value)}
-              >
-                <option value="simple">{t("styleSimple")}</option>
-                <option value="standard">{t("styleStandard")}</option>
-                <option value="detailed">{t("styleDetailed")}</option>
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="subjfocus">{t("subjectFocus")}</label>
-              <input
-                id="subjfocus"
-                className="input"
-                value={focus}
-                maxLength={60}
-                onChange={(e) => setFocus(e.target.value)}
-              />
-            </div>
-          </div>
-          {prefsMsg &&
-            (prefsOk ? (
-              <p className="ok text-sm mt-2">{prefsMsg}</p>
-            ) : (
-              <p className="error text-sm mt-2" role="alert">
-                {prefsMsg}
-              </p>
-            ))}
-          <div className="row-flex gap-2 mt-3">
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => void savePrefs()}
-              disabled={prefsBusy}
-            >
-              {prefsBusy ? <span className="spinner" aria-hidden /> : null}
-              {t("save")}
-            </Button>
-          </div>
+          {/* FE-FIX-003: the form renders only over preferences that were
+              actually read. While the request is open the card says so, and on
+              failure it says that instead — because a Save over the module
+              defaults silently overwrote the student's stored choices. */}
+          {prefsError ? (
+            <LoadError
+              message={t("prefsLoadFailed")}
+              onRetry={() => void refetchPrefs()}
+            />
+          ) : prefsPending || !prefs ? (
+            <p className="muted" role="status">
+              {t("loading")}
+            </p>
+          ) : (
+            <>
+              <div className="grid-2">
+                <div className="field">
+                  <label htmlFor="expstyle">{t("explanationStyle")}</label>
+                  <select
+                    id="expstyle"
+                    className="select"
+                    value={style}
+                    onChange={(e) => setStyle(e.target.value)}
+                  >
+                    <option value="simple">{t("styleSimple")}</option>
+                    <option value="standard">{t("styleStandard")}</option>
+                    <option value="detailed">{t("styleDetailed")}</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label htmlFor="subjfocus">{t("subjectFocus")}</label>
+                  <input
+                    id="subjfocus"
+                    className="input"
+                    value={focus}
+                    maxLength={60}
+                    onChange={(e) => setFocus(e.target.value)}
+                  />
+                </div>
+              </div>
+              {prefsMsg &&
+                (prefsOk ? (
+                  <p className="ok text-sm mt-2">{prefsMsg}</p>
+                ) : (
+                  <p className="error text-sm mt-2" role="alert">
+                    {prefsMsg}
+                  </p>
+                ))}
+              <div className="row-flex gap-2 mt-3">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => void savePrefs()}
+                  disabled={prefsBusy}
+                >
+                  {prefsBusy ? <span className="spinner" aria-hidden /> : null}
+                  {t("save")}
+                </Button>
+              </div>
+            </>
+          )}
         </Card>
       )}
 

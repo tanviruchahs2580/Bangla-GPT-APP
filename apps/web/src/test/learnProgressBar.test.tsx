@@ -11,7 +11,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { LearnPage } from "../pages/student/LearnPage";
-import { setLang, tSubject } from "../i18n";
+import { formatNumber, setLang, tSubject } from "../i18n";
 
 const apiMock = vi.hoisted(() => ({
   getSubjects: vi.fn(),
@@ -86,11 +86,13 @@ describe("chapter progress bar reports the recorded progress", () => {
     // here would make this gate flaky, which is worse than no gate.
     const bar = await screen.findByRole(
       "img",
-      { name: "20%" },
+      // FE-FIX numeral policy: the bar's accessible name is formatted for the
+      // reader (Bangla digits); the CSS width below is not.
+      { name: `${formatNumber(20)}%` },
       { timeout: 8000 },
     );
     expect(bar.querySelector("span")).toHaveStyle({ width: "20%" });
-    expect(screen.queryByRole("img", { name: "45%" })).toBeNull();
+    expect(screen.queryByRole("img", { name: `${formatNumber(45)}%` })).toBeNull();
   });
 
   it("renders no bar for a chapter that was never opened", async () => {
