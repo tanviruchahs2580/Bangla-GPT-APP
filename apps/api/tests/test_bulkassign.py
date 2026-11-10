@@ -103,6 +103,35 @@ def _student_login(client: TestClient, email: str, code: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {res.json()['access_token']}"}
 
 
+def _reconfirm_consent(client: TestClient, headers: dict[str, str]) -> None:
+    """BE-FIX-004/005: re-confirmation is required before a student's first write.
+
+    ``/teacher/classrooms/{id}/import`` no longer asserts consent on the
+    child's behalf — it used to write a hard-coded ``consent_version``
+    (``"CSV-IMPORT-1"``, not ``CONSENT_VERSION``) with no ``consent_ip``,
+    which is fabricated evidence about a minor. The imported student therefore
+    arrives with a stale consent version and every write is refused with a
+    coded 403 ``consent_reconfirmation_required`` until the re-confirmation the
+    product now asks for has happened.
+
+    Kept as an explicit step rather than folded into ``_student_login`` so the
+    test says out loud that the write path is unreachable without it — which is
+    the property the fix exists to establish.
+    """
+    me = client.get("/users/me", headers=headers)
+    assert me.status_code == 200, me.text
+    # MeResponse exposes the domain-profile id as ``profile_id`` (there is no
+    # bare ``id``); for a student that is the ``students`` row the consent
+    # endpoint is scoped to.
+    res = client.post(
+        f"/students/{me.json()['profile_id']}/consent/reconfirm",
+        json={"accepted": True},
+        headers=headers,
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["needs_reconfirm"] is False
+
+
 def _assign(
     client: TestClient,
     headers: dict,
@@ -163,6 +192,7 @@ def test_completion_list_correct(client: TestClient, teacher_headers, db_path):
 
     # student #0 sees the assignment and submits
     stu0 = _student_login(client, "stu0@school.edu", codes[0])
+    _reconfirm_consent(client, stu0)
     mine = client.get("/assignments/mine", headers=stu0).json()
     assert len(mine) == 1 and mine[0]["attempt_id"] == next(
         a["attempt_id"] for a in res.json()["attempts"] if a["student_id"] == ids[0]
@@ -192,6 +222,7 @@ def test_overdue_flag_only_for_unfinished(client: TestClient, teacher_headers, d
     aid = res.json()["id"]
 
     stu0 = _student_login(client, "stu0@school.edu", codes[0])
+    _reconfirm_consent(client, stu0)
     mine = client.get("/assignments/mine", headers=stu0).json()
     assert mine[0]["overdue"] is True  # advisory flag for the student too
     client.post(

@@ -163,7 +163,12 @@ def parent_link(
 # ------------------------------------------------------------------
 
 
-@router.post("/students/me/invite-code", status_code=201, response_model=ParentInviteOut)
+@router.post(
+    "/students/me/invite-code",
+    status_code=201,
+    response_model=ParentInviteOut,
+    responses=coded(403, 404),
+)
 def create_parent_invite(
     app_ctx: Ctx, request: Request, db: DbSession, user: CurrentUser
 ) -> ParentInviteOut:
@@ -224,7 +229,11 @@ def create_parent_invite(
     )
 
 
-@router.get("/students/me/invite-code", response_model=list[ParentInviteStatusOut])
+@router.get(
+    "/students/me/invite-code",
+    response_model=list[ParentInviteStatusOut],
+    responses=coded(403, 404),
+)
 def list_parent_invites(db: DbSession, user: CurrentUser) -> list[ParentInviteStatusOut]:
     """Live guardian invites of the signed-in student (F-IV2-3).
 
@@ -259,7 +268,7 @@ def list_parent_invites(db: DbSession, user: CurrentUser) -> list[ParentInviteSt
     ]
 
 
-@router.delete("/students/me/invite-code/{invite_id}", status_code=204)
+@router.delete("/students/me/invite-code/{invite_id}", status_code=204, responses=coded(403, 404))
 def revoke_parent_invite(
     invite_id: int, request: Request, db: DbSession, user: CurrentUser
 ) -> Response:
@@ -313,7 +322,7 @@ def revoke_parent_invite(
 # never a data-destroying surprise for the account owner.
 
 
-@router.get("/students/me/prefs", response_model=StudentPrefsOut)
+@router.get("/students/me/prefs", response_model=StudentPrefsOut, responses=coded(403, 404))
 def get_my_prefs(db: DbSession, user: CurrentUser) -> StudentPrefsOut:
     if user.role != "student":
         raise HTTPException(
@@ -324,7 +333,16 @@ def get_my_prefs(db: DbSession, user: CurrentUser) -> StudentPrefsOut:
     return StudentPrefsOut(memory_enabled=bool(student.memory_enabled), learning_prefs=prefs)
 
 
-@router.patch("/students/me/prefs", response_model=StudentPrefsOut)
+@router.patch(
+    "/students/me/prefs",
+    response_model=StudentPrefsOut,
+    # 403 non-students; 422 the learning_prefs whitelist (coded), sharing the
+    # status with FastAPI's request-model validation array.
+    responses={
+        **coded(403, 404),
+        **coded(422, description="Unknown learning_prefs key (coded) or request-model validation"),
+    },
+)
 def patch_my_prefs(payload: StudentPrefsPatch, db: DbSession, user: CurrentUser) -> StudentPrefsOut:
     if user.role != "student":
         raise HTTPException(
@@ -379,7 +397,7 @@ def patch_my_prefs(payload: StudentPrefsPatch, db: DbSession, user: CurrentUser)
     return StudentPrefsOut(memory_enabled=bool(student.memory_enabled), learning_prefs=prefs)
 
 
-@router.get("/students/me/memory", response_model=MemoryFactsOut)
+@router.get("/students/me/memory", response_model=MemoryFactsOut, responses=coded(403, 404))
 def get_my_memory(db: DbSession, user: CurrentUser) -> MemoryFactsOut:
     """The facts the tutor is allowed to personalize with -- all derived
     live from real rows (identity, graded quiz accuracy, prefs). Nothing
@@ -421,7 +439,7 @@ def get_my_memory(db: DbSession, user: CurrentUser) -> MemoryFactsOut:
     )
 
 
-@router.delete("/students/me/memory", response_model=MemoryFactsOut)
+@router.delete("/students/me/memory", response_model=MemoryFactsOut, responses=coded(403, 404))
 def disable_my_memory(db: DbSession, user: CurrentUser) -> MemoryFactsOut:
     """Opt out: memory_enabled=false AND the stored learning preferences
     are cleared. Derived facts are never stored, so clearing the prefs is
@@ -554,7 +572,11 @@ def parent_children(db: DbSession, parent: ParentUser) -> list[StudentBrief]:
     return _student_briefs(db, list(students))
 
 
-@router.get("/parents/me/children/{student_id}/progress", response_model=StudentProgress)
+@router.get(
+    "/parents/me/children/{student_id}/progress",
+    response_model=StudentProgress,
+    responses=coded(404),
+)
 def parent_child_progress(student_id: int, db: DbSession, parent: ParentUser) -> StudentProgress:
     parent_profile = db.execute(
         select(Parent).where(Parent.user_id == parent.id)
@@ -628,7 +650,11 @@ def _linked_child(db: Session, parent: User, student_id: int) -> Student:
     )
 
 
-@router.get("/parents/me/children/{student_id}/activity", response_model=ActivitySummary)
+@router.get(
+    "/parents/me/children/{student_id}/activity",
+    response_model=ActivitySummary,
+    responses=coded(404),
+)
 def parent_child_activity(
     student_id: int,
     db: DbSession,
@@ -740,7 +766,11 @@ def _window_report(db: Session, student: Student, period: str) -> ParentReportOu
     )
 
 
-@router.get("/parents/me/children/{student_id}/report", response_model=ParentReportOut)
+@router.get(
+    "/parents/me/children/{student_id}/report",
+    response_model=ParentReportOut,
+    responses=coded(404),
+)
 def parent_child_report(
     student_id: int,
     db: DbSession,
@@ -761,7 +791,7 @@ def parent_child_report(
     return report
 
 
-@router.get("/students/me/report", response_model=ParentReportOut)
+@router.get("/students/me/report", response_model=ParentReportOut, responses=coded(403, 404))
 def student_self_report(
     db: DbSession,
     user: CurrentUser,

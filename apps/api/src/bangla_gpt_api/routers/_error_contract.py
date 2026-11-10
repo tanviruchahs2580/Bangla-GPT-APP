@@ -16,6 +16,21 @@ recorded 199 such undocumented responses (AUD-0055).
 ``APIRouter(responses=...)`` into every operation of that router) and covers
 only what *every* authenticated route can return. Business-rule statuses a
 specific operation raises are added per route with :func:`coded`.
+
+Two statuses legitimately carry two body shapes, and a per-route declaration
+can only name one; the rule for honest docs is to say so in the description:
+
+* ``422`` is FastAPI's request-model validation status, whose body is the
+  error ARRAY. A business rejection that shares the status (a blank search
+  query, a blank-free-but-invalid learning_prefs key, an unknown document
+  kind) is declared ``coded(422, description=...)`` with the description
+  naming both shapes — the coded model documents the rejection a caller can
+  actually branch on, and the alternative shape stays visible.
+* ``503`` is declared app-wide by the rate-limit guard with a plain message
+  body (``main.py``, ``MessageDetail``). A route raising its own coded 503
+  (``index_unavailable``, ``tutor_unavailable``, ``provider_unconfigured``)
+  re-declares it as coded, so the status is documented either way and the
+  description says which guard answers.
 """
 
 from __future__ import annotations

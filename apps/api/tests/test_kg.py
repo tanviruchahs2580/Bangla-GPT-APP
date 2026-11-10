@@ -291,18 +291,34 @@ def test_kg_gaps_surfaces_gap_after_all_wrong_quizzes(client: TestClient) -> Non
 
 
 def test_kg_rebuild_is_admin_only_and_counts_graph(client: TestClient) -> None:
+    """BE-FIX-007: the destructive rebuild now needs confirmation and an audit row.
+
+    It used to run on a bare call, unlike every sibling maintenance route:
+    ``POST /admin/maintenance/purge`` requires ``?confirm=true`` and
+    ``POST /admin/reindex`` writes an audit row. One call deleted every
+    student's ``concept_mastery``, ``concept_prerequisite`` and ``concept``
+    rows with no confirmation and no entry in the append-only log. This test
+    now pins both halves — the bare call is refused with a code an operator
+    can act on, and the confirmed call still rebuilds the graph.
+    """
     student_id, headers = _make_student(client, "kgrb@example.com")
     assert client.post("/kg/rebuild", headers=headers).status_code == 403
 
     admin = _login(client, "root@example.com")
-    res = client.post("/kg/rebuild", headers=admin)
+
+    # Unconfirmed: refused, coded, and nothing rebuilt.
+    unconfirmed = client.post("/kg/rebuild", headers=admin)
+    assert unconfirmed.status_code == 400
+    assert unconfirmed.json()["detail"]["code"] == "kg_rebuild_confirmation_required"
+
+    res = client.post("/kg/rebuild?confirm=true", headers=admin)
     assert res.status_code == 200
     body = res.json()
     assert set(body) == {"concepts", "llm_concepts", "edges"}
     assert body["concepts"] >= 30 and body["edges"] >= 17 and body["llm_concepts"] == 0
 
     # Mock provider cannot produce corpus-verified names -> still roots only.
-    res_llm = client.post("/kg/rebuild?llm=true", headers=admin)
+    res_llm = client.post("/kg/rebuild?confirm=true&llm=true", headers=admin)
     assert res_llm.status_code == 200
     assert res_llm.json()["llm_concepts"] == 0
 

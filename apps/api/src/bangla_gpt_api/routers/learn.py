@@ -5,6 +5,8 @@ Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 """
 
 import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from typing import Annotated, Any, cast
 from urllib.parse import quote
@@ -27,8 +29,9 @@ from bangla_gpt_api.db.models import (
     Teacher,
     User,
 )
+from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.retrieval.normalize import normalize_nfkc
-from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded, message
+from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded
 from bangla_gpt_api.schemas import (
     SMALL_PAGE_DEFAULT_LIMIT,
     SMALL_PAGE_MAX_LIMIT,
@@ -95,6 +98,12 @@ from .deps import (
     authorize_student_access,
 )
 
+# BE-FIX-004: the student-consent gate. Shared with the tutor/chat routes;
+# its proper home is ``routers/deps.py`` next to CONSENT_VERSION as a
+# dependency alias, which is outside this change's write scope -- see the
+# docstring of ``require_current_consent`` for the follow-up.
+from .tutor import require_current_consent
+
 router = APIRouter(responses=AUTH_GUARD_RESPONSES)
 
 logger = logging.getLogger(__name__)
@@ -115,6 +124,56 @@ def _staff_classroom_assigned(db: Session, user: User, student_id: int) -> bool:
         .exists()
     )
     return db.scalar(select(probe)) is True
+
+
+@contextmanager
+def _atomic_commit_boundary(db: Session) -> Iterator[None]:
+    """BE-FIX-001: give a multi-service write ONE commit boundary.
+
+    Grading a quiz writes four learning-state services, each of which commits
+    internally (``activity.record_activity``, ``revision.record_quiz_result``,
+    ``knowledge.record_quiz_result``, ``adaptive.apply_review``). The graded
+    status and the answer log were committed *before* the first of them, so a
+    failure in the middle left the score durable while the SM-2 queue, the
+    concept mastery and the Elo rating stayed stale -- and the retry was then
+    refused with ``attempt_already_graded`` against a status the student had
+    never finished. The child's learning state was unrecoverable through the
+    API (only a manual database repair could fix it).
+
+    For the duration of the block every ``Session.commit`` on THIS request's
+    session becomes a ``flush``: the services keep their own bookkeeping (the
+    ``get_or_create`` savepoints, and the flush that makes their rows visible
+    to later reads inside the same transaction), while exactly one real COMMIT
+    exists -- at the end of the handler. Either the whole grading lands (claim,
+    answer log, activity counters, revision schedule, concept mastery, Elo) or
+    none of it does, and a failed submission leaves the attempt ``open`` so it
+    can be submitted again.
+
+    Deliberately route-local: it wraps only the per-request Session that
+    ``deps.get_db`` hands to one handler (never shared between requests or
+    threads), so no service module -- shared with callers that keep their own
+    transaction boundaries -- has to change. A service calling ``rollback()``
+    would still roll the whole unit back, which is the intended meaning here;
+    all four of these services only ever end with ``commit()`` and use
+    savepoints for their insert races.
+    """
+    real_commit = db.commit
+    db.commit = db.flush  # type: ignore[method-assign]  # BE-FIX-001: the swap is the mechanism
+    try:
+        yield
+    except BaseException:
+        db.commit = real_commit  # type: ignore[method-assign]  # BE-FIX-001: restore the boundary
+        db.rollback()
+        raise
+    else:
+        db.commit = real_commit  # type: ignore[method-assign]  # BE-FIX-001: restore the boundary
+        try:
+            real_commit()
+        except BaseException:
+            # A failed COMMIT still leaves the session needing a rollback
+            # before it can be reused; the unit is gone either way.
+            db.rollback()
+            raise
 
 
 def _authorize_quiz_submission(db: Session, attempt: QuizAttempt, user: User) -> None:
@@ -169,7 +228,11 @@ def learn_subjects(
     return list_subjects(class_level, chunks=_index_chunks(app_ctx))
 
 
-@router.get("/learn/subjects/{subject}/chapters", response_model=list[ChapterSummaryOut])
+@router.get(
+    "/learn/subjects/{subject}/chapters",
+    response_model=list[ChapterSummaryOut],
+    responses=coded(404),
+)
 def learn_subject_chapters(
     app_ctx: Ctx,
     subject: str,
@@ -184,7 +247,11 @@ def learn_subject_chapters(
     return chapters
 
 
-@router.get("/learn/subjects/{subject}/chapters/{chapter}", response_model=ChapterContentOut)
+@router.get(
+    "/learn/subjects/{subject}/chapters/{chapter}",
+    response_model=ChapterContentOut,
+    responses=coded(404),
+)
 def learn_chapter_content(
     app_ctx: Ctx,
     subject: str,
@@ -212,7 +279,19 @@ def _index_chunks(app_ctx: Ctx) -> list[Chunk] | None:
 # standalone-teacher flow stays byte-compatible; once a teacher is attached
 # to a school, students and classrooms of OTHER schools become invisible
 # (403 other_school, same code the /school/* routes use).
-@router.post("/quizzes", response_model=QuizStarted)
+@router.post(
+    "/quizzes",
+    response_model=QuizStarted,
+    # Same dual shape as /search: the coded business 422 (no quiz for this
+    # filter) shares the status with FastAPI's request-model validation array.
+    responses={
+        **coded(
+            422,
+            description="No quiz for this filter (coded) or request-model validation (array)",
+        ),
+        **coded(503),
+    },
+)
 def start_quiz(
     app_ctx: Ctx, payload: QuizStartRequest, db: DbSession, user: CurrentUser
 ) -> QuizStarted:
@@ -221,6 +300,10 @@ def start_quiz(
             status_code=503,
             detail={"code": "index_unavailable", "message": "Curriculum index unavailable"},
         )
+    # BE-FIX-004: starting an attempt creates a record about the child, so a
+    # stale consent version refuses here (before authorize_student_access,
+    # because this is the caller's own act, not a staff proxy read).
+    require_current_consent(db, user)
     student = authorize_student_access(db, payload.student_id, user)
     class_level = payload.class_level if payload.class_level is not None else student.class_level
 
@@ -281,7 +364,7 @@ def start_quiz(
     )
 
 
-@router.post("/quizzes/{attempt_id}/submit", response_model=QuizResult, responses=message(404))
+@router.post("/quizzes/{attempt_id}/submit", response_model=QuizResult, responses=coded(400, 404))
 def submit_quiz(
     app_ctx: Ctx, attempt_id: int, payload: QuizSubmitRequest, db: DbSession, user: CurrentUser
 ) -> QuizResult:
@@ -291,103 +374,118 @@ def submit_quiz(
             status_code=404, detail={"code": "attempt_not_found", "message": "Attempt not found"}
         )
     _authorize_quiz_submission(db, attempt, user)
+    # BE-FIX-004: the answer log is the child's academic record; a stale
+    # consent version refuses the write. Staff proxy submissions for the
+    # proctored roster are the staff member's act and are not gated here
+    # (the gate only looks at ``student`` callers; the teacher flow is
+    # audited as quiz_proxy_submit in _authorize_quiz_submission).
+    require_current_consent(db, user)
 
-    # Atomic claim: exactly one concurrent submission may transition
-    # open -> graded. Losers get a clean 400 instead of corrupting state.
-    claim_stmt = (
-        update(QuizAttempt)
-        .where(QuizAttempt.id == attempt.id, QuizAttempt.status == "open")
-        .values(status="graded")
-    )
-    claimed = cast(CursorResult[Any], db.execute(claim_stmt))
-    if claimed.rowcount != 1:
-        db.rollback()
-        raise HTTPException(
-            status_code=400,
-            detail={"code": "attempt_already_graded", "message": "Attempt already graded"},
+    # BE-FIX-001: everything from the status claim to the Elo update below is
+    # ONE transaction (see _atomic_commit_boundary). The four services commit
+    # internally; inside this block those commits are flushes, so a failure
+    # anywhere -- the claim, the answer-count check, a learning-state service
+    # raising -- rolls the whole grading back and leaves the attempt `open`
+    # for a retry instead of half-graded and permanently unsubmittable.
+    with _atomic_commit_boundary(db):
+        # Atomic claim: exactly one concurrent submission may transition
+        # open -> graded. Losers get a clean 400 instead of corrupting state.
+        claim_stmt = (
+            update(QuizAttempt)
+            .where(QuizAttempt.id == attempt.id, QuizAttempt.status == "open")
+            .values(status="graded")
         )
-
-    questions = list(attempt.quiz_json)
-    if len(payload.answers) != len(questions):
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "code": "answer_count_mismatch",
-                "message": "Answer count does not match question count",
-                "expected": len(questions),
-                "received": len(payload.answers),
-            },
-        )
-
-    correct = 0
-    review: list[ReviewItem] = []
-    for seq, (question, chosen) in enumerate(zip(questions, payload.answers, strict=True)):
-        is_correct = chosen == question["answer_index"]
-        correct += is_correct
-        db.add(
-            AnswerLog(
-                attempt_id=attempt.id,
-                seq=seq,
-                question_text=question["question_text"],
-                chosen=chosen,
-                correct_index=question["answer_index"],
-                is_correct=is_correct,
-                chapter=question["chapter"],
-                book=question["book"],
+        claimed = cast(CursorResult[Any], db.execute(claim_stmt))
+        if claimed.rowcount != 1:
+            db.rollback()
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "attempt_already_graded", "message": "Attempt already graded"},
             )
-        )
-        review.append(
-            ReviewItem(
-                question_text=question["question_text"],
-                options=list(question["options"]),
-                chosen=chosen,
-                correct_index=question["answer_index"],
-                is_correct=is_correct,
-                chapter=question["chapter"],
-            )
-        )
 
-    total = len(questions)
-    attempt.status = "graded"
-    attempt.total = total
-    attempt.correct = correct
-    attempt.score_pct = round(100.0 * correct / total, 2)
-    db.commit()
-    record_activity(db, attempt.student_id, quizzes=1, minutes=1)
-    # quiz outcomes seed/refresh the spaced-revision queue.
-    revision.record_quiz_result(
-        db, attempt.student_id, review, attempt.subject, attempt.class_level
-    )
-    # the same graded answers update per-concept mastery in the
-    # knowledge graph (chapter roots seeded lazily from the curriculum).
-    reteach_cards: list[ReteachCardOut] = []
-    if app_ctx.index is not None:
-        knowledge.ensure_concepts(db, app_ctx.index.chunks)
-        knowledge.record_quiz_result(db, attempt.student_id, review, attempt.class_level)
-        # Elo ratings follow the graded answers; every wrong answer
-        # runs the KG gap check, and surfaced gaps become re-teach cards.
-        adaptive.apply_review(
-            db,
-            student_id=attempt.student_id,
-            class_level=attempt.class_level,
-            graded=[
-                (str(question["id"]), question["chapter"], item.is_correct)
-                for question, item in zip(questions, review, strict=True)
-            ],
+        questions = list(attempt.quiz_json)
+        if len(payload.answers) != len(questions):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "answer_count_mismatch",
+                    "message": "Answer count does not match question count",
+                    "expected": len(questions),
+                    "received": len(payload.answers),
+                },
+            )
+
+        correct = 0
+        review: list[ReviewItem] = []
+        for seq, (question, chosen) in enumerate(zip(questions, payload.answers, strict=True)):
+            is_correct = chosen == question["answer_index"]
+            correct += is_correct
+            db.add(
+                AnswerLog(
+                    attempt_id=attempt.id,
+                    seq=seq,
+                    question_text=question["question_text"],
+                    chosen=chosen,
+                    correct_index=question["answer_index"],
+                    is_correct=is_correct,
+                    chapter=question["chapter"],
+                    book=question["book"],
+                )
+            )
+            review.append(
+                ReviewItem(
+                    question_text=question["question_text"],
+                    options=list(question["options"]),
+                    chosen=chosen,
+                    correct_index=question["answer_index"],
+                    is_correct=is_correct,
+                    chapter=question["chapter"],
+                )
+            )
+
+        total = len(questions)
+        attempt.status = "graded"
+        attempt.total = total
+        attempt.correct = correct
+        attempt.score_pct = round(100.0 * correct / total, 2)
+        # Inside the boundary these three calls only flush; the single commit
+        # that makes the grade durable happens when the block exits, after the
+        # mastery/Elo writes below have succeeded too.
+        record_activity(db, attempt.student_id, quizzes=1, minutes=1)
+        # quiz outcomes seed/refresh the spaced-revision queue.
+        revision.record_quiz_result(
+            db, attempt.student_id, review, attempt.subject, attempt.class_level
         )
-        reteach_cards = [
-            ReteachCardOut(**card)
-            for card in adaptive.wrong_answer_reteach_cards(
+        # the same graded answers update per-concept mastery in the
+        # knowledge graph (chapter roots seeded lazily from the curriculum).
+        reteach_cards: list[ReteachCardOut] = []
+        if app_ctx.index is not None:
+            knowledge.ensure_concepts(db, app_ctx.index.chunks)
+            knowledge.record_quiz_result(db, attempt.student_id, review, attempt.class_level)
+            # Elo ratings follow the graded answers; every wrong answer
+            # runs the KG gap check, and surfaced gaps become re-teach cards.
+            adaptive.apply_review(
                 db,
-                app_ctx.index.chunks,
-                attempt.student_id,
-                [
-                    question["chapter"]
+                student_id=attempt.student_id,
+                class_level=attempt.class_level,
+                graded=[
+                    (str(question["id"]), question["chapter"], item.is_correct)
                     for question, item in zip(questions, review, strict=True)
-                    if not item.is_correct
                 ],
             )
-        ]
+            reteach_cards = [
+                ReteachCardOut(**card)
+                for card in adaptive.wrong_answer_reteach_cards(
+                    db,
+                    app_ctx.index.chunks,
+                    attempt.student_id,
+                    [
+                        question["chapter"]
+                        for question, item in zip(questions, review, strict=True)
+                        if not item.is_correct
+                    ],
+                )
+            ]
 
     return QuizResult(
         attempt_id=attempt.id,
@@ -399,7 +497,7 @@ def submit_quiz(
     )
 
 
-@router.get("/students/{student_id}/progress", response_model=StudentProgress)
+@router.get("/students/{student_id}/progress", response_model=StudentProgress, responses=coded(404))
 def get_progress(student_id: int, db: DbSession, user: CurrentUser) -> StudentProgress:
     student = authorize_student_access(db, student_id, user)
 
@@ -441,7 +539,7 @@ def get_progress(student_id: int, db: DbSession, user: CurrentUser) -> StudentPr
     )
 
 
-@router.get("/students/{student_id}/activity", response_model=ActivitySummary)
+@router.get("/students/{student_id}/activity", response_model=ActivitySummary, responses=coded(404))
 def get_activity(
     student_id: int,
     db: DbSession,
@@ -488,11 +586,14 @@ def get_revision_due(
     )
 
 
-@router.post("/revision/{item_id}/review", response_model=RevisionItemOut)
+@router.post("/revision/{item_id}/review", response_model=RevisionItemOut, responses=coded(404))
 def review_revision_item(
     item_id: int, payload: RevisionReviewIn, db: DbSession, user: CurrentUser
 ) -> RevisionItemOut:
     student = _student_profile(db, user)
+    # BE-FIX-004: a revision review writes the child's schedule state; a stale
+    # consent version refuses the write (reads stay open).
+    require_current_consent(db, user)
     row = db.get(RevisionItem, item_id)
     if row is None or row.student_id != student.id:
         raise HTTPException(
@@ -540,12 +641,14 @@ def kg_gaps(app_ctx: Ctx, db: DbSession, user: CurrentUser) -> KgGapsOut:
     )
 
 
-@router.post("/kg/rebuild", response_model=KgRebuildOut)
+@router.post("/kg/rebuild", response_model=KgRebuildOut, responses=coded(400, 503))
 async def kg_rebuild(
     app_ctx: Ctx,
+    request: Request,
     db: DbSession,
     user: AdminUser,
     llm: Annotated[bool, Query()] = False,
+    confirm: Annotated[bool, Query()] = False,
 ) -> KgRebuildOut:
     """Admin: rebuild chapter-root concepts + curated prerequisite edges.
     With llm=true, also attempt corpus-verified LLM concept extraction."""
@@ -554,6 +657,34 @@ async def kg_rebuild(
             status_code=503,
             detail={"code": "index_unavailable", "message": "Curriculum index unavailable"},
         )
+    # BE-FIX-007: rebuild_concepts DELETEs every ConceptMastery (each student's
+    # per-concept mastery), every ConceptPrerequisite and every Concept, then
+    # re-seeds the chapter roots -- i.e. it destroys the whole knowledge graph
+    # and every child's mastery history with no trail. It was the one
+    # destructive admin maintenance action that needed neither confirmation
+    # nor an audit row, unlike POST /admin/maintenance/purge (?confirm=true)
+    # and POST /admin/reindex (write_audit). Same convention as the purge: a
+    # bare call is refused and logged, and only a confirmed one runs and
+    # records its outcome counts (ids/counts only -- never child data).
+    if not confirm:
+        json_log(
+            logger,
+            logging.WARNING,
+            "kg_rebuild_refused_unconfirmed",
+            actor_user_id=user.id,
+            actor_role=user.role,
+            path=request.url.path,
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "kg_rebuild_confirmation_required",
+                "message": (
+                    "POST /kg/rebuild deletes every concept, prerequisite edge and "
+                    "per-student mastery before re-seeding; pass confirm=true to run it"
+                ),
+            },
+        )
     active_provider = app_ctx.provider
     if llm and active_provider is None:
         raise HTTPException(
@@ -561,6 +692,24 @@ async def kg_rebuild(
             detail={"code": "provider_unavailable", "message": "LLM provider not configured"},
         )
     stats = await knowledge.rebuild_concepts(db, app_ctx.index.chunks, active_provider, llm=llm)
+    # The rebuild's own service commits stay where they are (they are shared
+    # with the lazy seeding path); the audit row lands right after and is
+    # committed here, so the destructive run always has a trail naming who
+    # asked for it and what the graph looked like afterwards.
+    write_audit(
+        db,
+        action="kg_rebuild",
+        actor_user_id=user.id,
+        actor_role=user.role,
+        target="knowledge_graph",
+        detail={
+            "concepts": stats["concepts"],
+            "llm_concepts": stats["llm_concepts"],
+            "edges": stats["edges"],
+            "llm_requested": llm,
+        },
+    )
+    db.commit()
     return KgRebuildOut(**stats)
 
 
@@ -680,7 +829,20 @@ def _dedupe_and_floor(hits: list, *, relative_floor: float = 0.35) -> list:
     return kept
 
 
-@router.get("/search", response_model=SearchResponse)
+@router.get(
+    "/search",
+    response_model=SearchResponse,
+    # 422 is FastAPI's request-model validation status (an array body); a blank
+    # query (min_length=1 passes a whitespace-only string) is the coded
+    # business rejection sharing that status, so both shapes are named here.
+    responses={
+        **coded(
+            422,
+            description="Blank query (coded body) or FastAPI request-model validation (array)",
+        ),
+        **coded(503),
+    },
+)
 def global_search(
     app_ctx: Ctx,
     user: CurrentUser,
@@ -888,7 +1050,7 @@ def get_learn_progress(
     ]
 
 
-@router.post("/learn/progress", response_model=ChapterProgressOut)
+@router.post("/learn/progress", response_model=ChapterProgressOut, responses=coded(404))
 def upsert_learn_progress(
     payload: ChapterProgressIn, db: DbSession, user: CurrentUser
 ) -> ChapterProgressOut:
@@ -897,6 +1059,8 @@ def upsert_learn_progress(
         raise HTTPException(
             status_code=403, detail={"code": "students_only", "message": "Only students"}
         )
+    # BE-FIX-004: chapter progress is a stored record about the child.
+    require_current_consent(db, user)
     student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one_or_none()
     if student is None:
         raise HTTPException(

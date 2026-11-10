@@ -17,6 +17,7 @@ from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.models import AiUsage
 from bangla_gpt_api.db.session import make_engine, make_session_factory
 from bangla_gpt_api.main import create_app
+from bangla_gpt_api.retrieval.context import EVIDENCE_TOKEN_BUDGET
 from bangla_gpt_api.services.costs import (
     check_ai_budget,
     estimate_cost_usd,
@@ -24,6 +25,7 @@ from bangla_gpt_api.services.costs import (
     month_cost_usd,
     record_ai_usage,
 )
+from bangla_gpt_api.services.tutor import SYSTEM_PROMPT
 from conftest import engine_url
 
 SECRET = "test-secret-0123456789abcdef0123456789"
@@ -72,7 +74,19 @@ def test_ask_writes_ledger_row(tmp_path) -> None:
         row = rows[0]
         assert row.route == "tutor.ask"
         assert row.model == "mock"
-        assert row.prompt_tokens == estimate_tokens(question) > 0
+        # BE-FIX-008: the ledger books the *composed* prompt — the system
+        # template plus the evidence token budget plus this question — not the
+        # bare question. The assertion here used to be
+        # `row.prompt_tokens == estimate_tokens(question)`, which pinned the
+        # defect: measured, `/tutor/ask` recorded 8 prompt tokens for a
+        # question whose real prompt carries ~1,150, so the ledger captured
+        # 58-74% of the true cost and a monthly budget could not bind.
+        # The composed text is not reachable from the route layer, so the
+        # route passes the measured decomposition; the property worth pinning
+        # is that the booked count is strictly larger than the question alone
+        # and covers at least the fixed template + evidence budget.
+        assert row.prompt_tokens > estimate_tokens(question) > 0
+        assert row.prompt_tokens >= estimate_tokens(SYSTEM_PROMPT) + EVIDENCE_TOKEN_BUDGET
         assert row.completion_tokens > 0
         assert row.estimated_cost_usd == 0.0
 

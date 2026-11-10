@@ -31,7 +31,7 @@ from bangla_gpt_api.db.models import (
 )
 from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.metrics import RAG_INDEX_REBUILDS_TOTAL
-from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES
+from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded
 from bangla_gpt_api.schemas import (
     AdminAiQualityOut,
     AdminAuditPage,
@@ -101,7 +101,11 @@ def admin_list_users(
     )
 
 
-@router.patch("/admin/users/{user_id}/role", response_model=UserPublic)
+@router.patch(
+    "/admin/users/{user_id}/role",
+    response_model=UserPublic,
+    responses=coded(404, 409),
+)
 def admin_update_role(
     user_id: int, payload: RoleUpdateRequest, db: DbSession, admin: AdminUser
 ) -> UserPublic:
@@ -145,7 +149,12 @@ def admin_update_role(
 # the shared cache, so a session no longer rides out its 15-minute ceiling.
 
 
-@router.post("/admin/users/{user_id}/impersonate", response_model=ImpersonateOut)
+@router.post(
+    "/admin/users/{user_id}/impersonate",
+    response_model=ImpersonateOut,
+    # 404 unknown target, 503 the revocation store is unreachable (fail closed)
+    responses=coded(404, 503),
+)
 def admin_impersonate(
     app_ctx: Ctx,
     request: Request,
@@ -231,7 +240,7 @@ def admin_impersonate(
     )
 
 
-@router.delete("/admin/users/{user_id}/impersonate", status_code=204)
+@router.delete("/admin/users/{user_id}/impersonate", status_code=204, responses=coded(404, 503))
 def admin_impersonate_end(app_ctx: Ctx, user_id: int, db: DbSession, admin: AdminUser) -> None:
     target = db.get(User, user_id)
     if target is None:
@@ -265,7 +274,7 @@ def admin_impersonate_end(app_ctx: Ctx, user_id: int, db: DbSession, admin: Admi
     db.commit()
 
 
-@router.post("/auth/impersonate/exit", status_code=204)
+@router.post("/auth/impersonate/exit", status_code=204, responses=coded(403, 503))
 def impersonate_exit(app_ctx: Ctx, request: Request, db: DbSession, user: CurrentUser) -> None:
     """the holder of an impersonation token ends the session NOW.
 
@@ -476,7 +485,7 @@ def admin_ai_quality(
     )
 
 
-@router.post("/admin/maintenance/purge", response_model=dict)
+@router.post("/admin/maintenance/purge", response_model=dict, responses=coded(400))
 def admin_purge_expired(
     app_ctx: Ctx,
     request: Request,
@@ -539,7 +548,7 @@ def admin_purge_expired(
     return report
 
 
-@router.post("/admin/reindex", response_model=ReindexOut)
+@router.post("/admin/reindex", response_model=ReindexOut, responses=coded(503))
 def admin_reindex(app_ctx: Ctx, admin: AdminUser, db: DbSession) -> ReindexOut:
     """Hot rebuild of the retrieval index from the configured corpus (F-18).
 

@@ -11,7 +11,7 @@ from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -31,7 +31,7 @@ from bangla_gpt_api.db.models import (
     Teacher,
     User,
 )
-from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES
+from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded
 from bangla_gpt_api.schemas import (
     ClassAnalytics,
     ClassImportIn,
@@ -171,7 +171,12 @@ def teacher_list_classrooms(db: DbSession, teacher: TeacherOrAdminUser) -> list[
     ]
 
 
-@router.post("/teacher/classrooms", response_model=ClassRoomOut, status_code=201)
+@router.post(
+    "/teacher/classrooms",
+    response_model=ClassRoomOut,
+    status_code=201,
+    responses=coded(409),
+)
 def teacher_create_classroom(
     payload: ClassRoomCreateIn, db: DbSession, teacher: TeacherOrAdminUser
 ) -> ClassRoomOut:
@@ -208,7 +213,11 @@ def teacher_create_classroom(
     )
 
 
-@router.get("/teacher/classrooms/{room_id}/roster", response_model=list[RosterEntryOut])
+@router.get(
+    "/teacher/classrooms/{room_id}/roster",
+    response_model=list[RosterEntryOut],
+    responses=coded(404),
+)
 def classroom_roster(
     room_id: int, db: DbSession, teacher: TeacherOrAdminUser
 ) -> list[RosterEntryOut]:
@@ -260,18 +269,33 @@ def classroom_roster(
     return out
 
 
-@router.post("/teacher/classrooms/{room_id}/import", response_model=ClassImportOut)
+@router.post(
+    "/teacher/classrooms/{room_id}/import",
+    response_model=ClassImportOut,
+    # 404 unknown/foreign classroom; 422 the CSV business rejections
+    # (import_empty / import_too_large), which share the status with
+    # FastAPI's request-model validation array.
+    responses={
+        **coded(404),
+        **coded(422, description="Empty or oversized import (coded) or request-model validation"),
+    },
+)
 def classroom_import(
-    room_id: int, payload: ClassImportIn, db: DbSession, teacher: TeacherOrAdminUser
+    room_id: int,
+    payload: ClassImportIn,
+    response: Response,
+    db: DbSession,
+    teacher: TeacherOrAdminUser,
 ) -> ClassImportOut:
     """Bulk-enroll students from pasted 'name,email' CSV text.
 
     Each new account gets a random invite code as its initial password;
     must_change_password=True forces setting a personal password on first
     login (existing /auth change-password flow). The plaintext code is
-    returned exactly once -- only its SHA-256 hash is stored. The school
-    supplies guardian consent on behalf of imported minors: consent
-    is recorded with version 'CSV-IMPORT-1'.
+    returned exactly once -- only its SHA-256 hash is stored. The import
+    records NO guardian consent (see the Student construction below): the
+    imported child sits behind the consent gate until the current text is
+    accepted.
     """
     room = _assert_room_in_school(db, teacher, _classroom_or_404(db, room_id))
     reader = csv.reader(payload.csv_text.splitlines())
@@ -331,8 +355,23 @@ def classroom_import(
             user_id=user.id,
             name=name,
             class_level=room.class_level,
-            consent_version="CSV-IMPORT-1",
-            consent_at=now,
+            # BE-FIX-005: an import is NOT consent. This used to write a
+            # hard-coded consent_version="CSV-IMPORT-1" plus a server timestamp
+            # and no consent_ip -- a version string that never existed as
+            # consent text, asserting on the child's behalf that a guardian had
+            # accepted something no guardian was ever shown. A teacher pasting
+            # a roster is not the guardian and cannot supply consent evidence.
+            # The honest representation is NO consent on record: all three
+            # evidence columns stay NULL. That also makes the row
+            # needs_reconfirm (students.consent_version != deps.CONSENT_VERSION)
+            # so the BE-FIX-004 gate applies -- no tutor/chat generation and no
+            # new learning-record writes until the student or a linked guardian
+            # accepts the CURRENT text at POST /students/{id}/consent/reconfirm.
+            # The StudentInvite row added below is the record that this account
+            # came from a classroom import; nothing here fabricates consent.
+            consent_version=None,
+            consent_at=None,
+            consent_ip=None,
         )
         db.add(student)
         db.flush()
@@ -351,6 +390,11 @@ def classroom_import(
             ClassImportRowOut(name=name, email=email, status="created", invite_code=code)
         )
     db.commit()
+    # BE-FIX-005: this body carries each imported student's one-time password
+    # (the plaintext invite code, returned exactly once). A shared or browser
+    # cache holding it would leave live credentials on disk; no-store forbids
+    # storing the response at all.
+    response.headers["Cache-Control"] = "no-store"
     return ClassImportOut(created=created, failed=len(rows_out) - created, rows=rows_out)
 
 

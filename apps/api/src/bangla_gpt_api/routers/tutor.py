@@ -31,6 +31,7 @@ from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.providers import (
     ProviderError,
 )
+from bangla_gpt_api.retrieval.context import EVIDENCE_TOKEN_BUDGET
 from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded
 from bangla_gpt_api.schemas import (
     AnalyticsEvent,
@@ -56,6 +57,7 @@ from bangla_gpt_api.services.activity import (
 from bangla_gpt_api.services.context import RequestContext
 from bangla_gpt_api.services.costs import (
     check_ai_budget,
+    estimate_tokens,
     finalize_ai_usage,
     reserve_ai_usage,
 )
@@ -63,6 +65,7 @@ from bangla_gpt_api.services.quiz_explain import quiz_explain_instruction
 from bangla_gpt_api.services.tutor import (
     GENERATION_DISABLED_ANSWER,
     RETRIEVAL_ONLY_REFUSED_REASON,
+    SYSTEM_PROMPT,
     VISION_UNSUPPORTED_ANSWER,
     StreamEvent,
     TutorService,
@@ -79,6 +82,7 @@ from .common import (
     source_scores,
 )
 from .deps import (
+    CONSENT_VERSION,
     AdminUser,
     Ctx,
     CurrentUser,
@@ -102,6 +106,88 @@ def _effective_model(tutor: TutorService | None) -> str:
     if tutor is None:
         return "ai-disabled"
     return getattr(tutor.provider, "model", None) or tutor.provider.name
+
+
+#: The prompt parts the route layer knows verbatim on every turn: the system
+#: template every call sends (``services.tutor.SYSTEM_PROMPT``) and the
+#: evidence budget the retrieved blocks are assembled within. See
+#: :func:`_measured_prompt_tokens` (BE-FIX-008).
+_MEASURED_PROMPT_FIXED_TOKENS = estimate_tokens(SYSTEM_PROMPT) + EVIDENCE_TOKEN_BUDGET
+
+
+def _measured_prompt_tokens(question: str, history: list[dict[str, str]] | None = None) -> int:
+    """BE-FIX-008: the prompt-side token estimate for the ledger.
+
+    The route used to hand the cost estimator the bare question, so
+    ``/tutor/ask`` booked ``estimate_tokens(question)`` -- 8 tokens for a
+    question whose real composed prompt is ~1150: the system template (~377)
+    plus the evidence blocks (assembled within ``EVIDENCE_TOKEN_BUDGET`` = 768)
+    plus the question (and, on the chat routes, the replayed history). The
+    ledger, the monthly budget and ``/admin/ai/quality`` are all built on these
+    numbers, so the accounting under-counted every generation by ~100x.
+
+    The composed prompt itself is not reachable from the route layer (it is
+    built inside ``TutorService`` around the retrieval the route has not run
+    yet), so the estimate is measured from what IS available here: the system
+    template + the budget the evidence is assembled within + the student's own
+    text (question and history, both bounded upstream). Residual, documented
+    gap: the assembled evidence set may use LESS than its budget (a corpus with
+    small chunks) -- the estimate is an upper bound by at most the unused
+    budget, never the ~100x under-count the bare question produced.
+    """
+    history_tokens = sum(estimate_tokens(turn.get("content") or "") for turn in (history or []))
+    return _MEASURED_PROMPT_FIXED_TOKENS + history_tokens + estimate_tokens(question)
+
+
+def require_current_consent(db: Session, user: User) -> None:
+    """BE-FIX-004: enforce the consent-version flag on the surfaces that matter.
+
+    ``deps.CONSENT_VERSION`` documents that bumping the version makes every
+    previously-consented student ``needs_reconfirm`` until they accept, but the
+    flag was only ever COMPUTED into responses (``GET /students/{id}/consent``,
+    ``users._consent_status``) -- no route read it, so a version bump changed
+    a display field and nothing else: a child whose guardian had not accepted
+    the current text kept generating answers and kept writing learning records.
+    This is the gate that makes the flag a control.
+
+    Scope, deliberately narrow and deny-by-default: the tutor/chat generation
+    surfaces and the student writes that create durable records about the child
+    (quiz start/submit, chapter progress, revision reviews, feedback, product
+    events). Reads stay open -- a child must be able to look at their own
+    history while a re-confirmation is pending -- and the refusal names the one
+    endpoint that clears it, so the gate is not a dead end.
+
+    Non-student callers (teacher/school/admin staff, guardians) are not gated
+    here: they act under their own authorization rules, and a proxy submission
+    for a proctored paper is the staff member's act, not the child's.
+
+    NOTE (follow-up for the owner of ``routers/deps.py``): this belongs next to
+    the ``CONSENT_VERSION`` definition as a dependency alias
+    (``ConsentConfirmedStudent``) so it cannot be forgotten on a new route; it
+    lives here because deps.py is outside this change's write scope.
+    """
+    if user.role != "student":
+        return
+    student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one_or_none()
+    if student is None:
+        # A staff/admin account has no student profile; a student account
+        # without one has nothing recorded, so there is no consent state to
+        # compare -- other guards already answer that shape.
+        return
+    if student.consent_version == CONSENT_VERSION:
+        return
+    raise HTTPException(
+        status_code=403,
+        detail={
+            "code": "consent_reconfirmation_required",
+            "message": (
+                "Guardian consent on record is not the current version. "
+                f"Re-confirm at POST /students/{student.id}/consent/reconfirm"
+            ),
+            "student_id": student.id,
+            "required_version": CONSENT_VERSION,
+        },
+    )
 
 
 def _ask_prepare(
@@ -148,6 +234,8 @@ def _ask_prepare(
         route="tutor.ask",
         model=model,
         prompt_text=question,
+        # BE-FIX-008: book the composed prompt, not the bare question.
+        prompt_tokens=_measured_prompt_tokens(question),
     )
     db.commit()
     return explain_instruction, question, search_query, ctx, pending
@@ -177,8 +265,12 @@ def _ask_ledger(
     db.commit()
 
 
-@router.post("/tutor/ask", response_model=AskResponse)
+@router.post("/tutor/ask", response_model=AskResponse, responses=coded(429, 502, 503))
 async def ask(app_ctx: Ctx, payload: AskRequest, db: DbSession, user: CurrentUser) -> AskResponse:
+    # BE-FIX-004: a student whose recorded consent is not the current version
+    # is refused before anything -- generation, ledger, or a stored message.
+    # Off the event loop like every other DB touch in this handler.
+    await asyncio.to_thread(require_current_consent, db, user)
     if not app_ctx.settings.ai_generation_enabled:
         # F-031 kill switch: refuse before the budget gate, the ledger
         # reserve and the provider -- a paused generation books no spend.
@@ -284,6 +376,8 @@ def _own_conversation(db: Session, conversation_id: int, user: User) -> Conversa
     responses=coded(404),
 )
 def create_conversation(payload: ConversationCreate, db: DbSession, user: CurrentUser):
+    # BE-FIX-004: a chat thread is a stored record about the child.
+    require_current_consent(db, user)
     student = _student_profile(db, user)
     conv = Conversation(student_id=student.id, title=payload.title)
     db.add(conv)
@@ -333,7 +427,11 @@ def list_conversations(db: DbSession, user: CurrentUser) -> list[ConversationOut
     return out
 
 
-@router.get("/tutor/conversations/{conversation_id}/messages", response_model=list[ChatMessageOut])
+@router.get(
+    "/tutor/conversations/{conversation_id}/messages",
+    response_model=list[ChatMessageOut],
+    responses=coded(404),
+)
 def conversation_messages(
     conversation_id: int,
     db: DbSession,
@@ -387,7 +485,11 @@ def conversation_messages(
 # ------------------------------------------------------------------
 
 
-@router.patch("/tutor/conversations/{conversation_id}", response_model=ConversationOut)
+@router.patch(
+    "/tutor/conversations/{conversation_id}",
+    response_model=ConversationOut,
+    responses=coded(404),
+)
 def rename_conversation(
     conversation_id: int,
     payload: ConversationUpdate,
@@ -395,6 +497,8 @@ def rename_conversation(
     user: CurrentUser,
 ) -> ConversationOut:
     conv = _own_conversation(db, conversation_id, user)
+    # BE-FIX-004: a renamed title is child-authored text stored in the record.
+    require_current_consent(db, user)
     new_title = payload.title.strip()
     if new_title:
         conv.title = new_title
@@ -411,7 +515,7 @@ def rename_conversation(
     )
 
 
-@router.delete("/tutor/conversations/{conversation_id}", status_code=204)
+@router.delete("/tutor/conversations/{conversation_id}", status_code=204, responses=coded(404))
 def delete_conversation(conversation_id: int, db: DbSession, user: CurrentUser) -> None:
     conv = _own_conversation(db, conversation_id, user)
     db.execute(delete(ChatMessage).where(ChatMessage.conversation_id == conv.id))
@@ -419,7 +523,7 @@ def delete_conversation(conversation_id: int, db: DbSession, user: CurrentUser) 
     db.commit()
 
 
-@router.get("/tutor/messages/search", response_model=list[MessageSearchHit])
+@router.get("/tutor/messages/search", response_model=list[MessageSearchHit], responses=coded(404))
 def search_messages(
     q: Annotated[str, Query(min_length=2, max_length=100)],
     db: DbSession,
@@ -508,6 +612,26 @@ def _prepare_chat_turn(
     sync, and these reads/writes must not stall the event loop that is
     concurrently streaming other users' tokens.
     """
+    # BE-FIX-002: AUTHORIZE FIRST. The budget gate + ledger reserve used to run
+    # before ``_own_conversation`` below, so any authenticated user could POST
+    # to a conversation id they did not own, have ``reserve_ai_usage`` write a
+    # permanent ``ai_usage`` row and ``db.commit()`` it, and only then be told
+    # 403/404 by the ownership check -- burning their own budget and leaving a
+    # row no path would ever finalize. Nothing is reserved, committed or
+    # persisted before the caller is known to own this conversation.
+    conv = _own_conversation(db, conversation_id, user)
+    # BE-FIX-004: same gate as /tutor/ask -- no chat turn (and no stored
+    # message) for a student whose recorded consent is not the current version.
+    require_current_consent(db, user)
+    student = _student_profile(db, user)
+    class_level = payload.class_level or student.class_level or 6
+    history = _chat_history(app_ctx, db, conv.id)
+    # vision contract: validated BEFORE anything is persisted -- and, since
+    # BE-FIX-002 moved the reserve behind the ownership check, deliberately
+    # before the ledger reserve too: an invalid image is a 422/503 raised
+    # before any row exists, so the refusal cannot leak a reserve the caller
+    # has to finalize (the same class of leak BE-FIX-003 fixes in _documents).
+    image_payload = _validate_chat_image(payload.image)
     # AI-002 budget gate + BE-01 reserve, both skipped while the kill switch
     # is off (F-031): the route answers with the localized refusal envelope
     # instead of a provider call, so no phantom prompt-side spend may land on
@@ -531,14 +655,12 @@ def _prepare_chat_turn(
             route="tutor.chat",
             model=getattr(tutor.provider, "model", None) or tutor.provider.name,
             prompt_text=payload.message,
+            # BE-FIX-008: system template + evidence budget + replayed history
+            # + this turn's question -- the composed chat prompt, not the bare
+            # message. History was already loaded above for the same turn.
+            prompt_tokens=_measured_prompt_tokens(payload.message, history),
         )
         db.commit()
-    conv = _own_conversation(db, conversation_id, user)
-    student = _student_profile(db, user)
-    class_level = payload.class_level or student.class_level or 6
-    history = _chat_history(app_ctx, db, conv.id)
-    # vision contract: validated BEFORE anything is persisted.
-    image_payload = _validate_chat_image(payload.image)
 
     # 'আমি বুঝিন': swap to the next explanation strategy and remember it.
     # an explicit strategy request OVERRIDES the rotation and is
@@ -634,7 +756,17 @@ def _persist_chat_reply(
     return assistant_msg
 
 
-@router.post("/tutor/conversations/{conversation_id}/messages", response_model=ChatMessageOut)
+@router.post(
+    "/tutor/conversations/{conversation_id}/messages",
+    response_model=ChatMessageOut,
+    # 404 ownership, 422 the image contract (coded; FastAPI's validation array
+    # shares the status on the JSON body), 429 budget, 502 provider, 503 no tutor.
+    responses={
+        **coded(404),
+        **coded(422, description="Image contract (coded) or request-model validation (array)"),
+        **coded(429, 502, 503),
+    },
+)
 async def send_chat_message(
     app_ctx: Ctx, conversation_id: int, payload: ChatSendRequest, db: DbSession, user: CurrentUser
 ) -> ChatMessageOut:
@@ -758,7 +890,14 @@ def _discard_failed_user_turn(db: Session, prepared: _PreparedTurn) -> None:
     db.commit()
 
 
-@router.post("/tutor/conversations/{conversation_id}/messages/stream")
+@router.post(
+    "/tutor/conversations/{conversation_id}/messages/stream",
+    responses={
+        **coded(404),
+        **coded(422, description="Image contract (coded) or request-model validation (array)"),
+        **coded(429, 502, 503),
+    },
+)
 async def stream_chat_message(
     app_ctx: Ctx, conversation_id: int, payload: ChatSendRequest, db: DbSession, user: CurrentUser
 ) -> StreamingResponse:
@@ -946,6 +1085,8 @@ async def stream_chat_message(
     responses=coded(400, 403, 404),
 )
 def submit_feedback(payload: FeedbackRequest, db: DbSession, user: CurrentUser) -> FeedbackOut:
+    # BE-FIX-004: a feedback row stores the child's own comment.
+    require_current_consent(db, user)
     # The "no target" case is a business rule, not a validation failure, so it
     # is a 400: 422 is reserved by FastAPI for request-model validation and its
     # documented body is an array of errors (AUD-0053 / API-02).
@@ -1054,7 +1195,11 @@ def admin_feedback_queue(
     )
 
 
-@router.patch("/admin/feedback/{feedback_id}", response_model=FeedbackAdminRow)
+@router.patch(
+    "/admin/feedback/{feedback_id}",
+    response_model=FeedbackAdminRow,
+    responses=coded(404),
+)
 def admin_feedback_triage(
     feedback_id: int, payload: TriageUpdate, db: DbSession, admin: AdminUser
 ) -> FeedbackAdminRow:
@@ -1091,6 +1236,9 @@ def admin_feedback_triage(
 def record_event(
     payload: AnalyticsEvent, request: Request, db: DbSession, user: CurrentUser
 ) -> dict:
+    # BE-FIX-004: the event row (user_id + role + sanitized props) is a stored
+    # record about the child's activity.
+    require_current_consent(db, user)
     # Privacy: log only which prop keys were sent, never their values —
     # props are arbitrary client input and may contain personal data.
     json_log(

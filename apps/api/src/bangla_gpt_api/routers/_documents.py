@@ -10,13 +10,15 @@ the split.
 
 import asyncio
 import json
+import logging
 from collections.abc import Iterable, Iterator
 from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from bangla_gpt_api.db.models import QuestionPaper, TeacherDocument, User
+from bangla_gpt_api.db.models import AiUsage, QuestionPaper, TeacherDocument, User
+from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.providers import ProviderError
 from bangla_gpt_api.schemas import (
     AnswerKeyIn,
@@ -28,6 +30,7 @@ from bangla_gpt_api.schemas import (
 )
 from bangla_gpt_api.services.context import RequestContext
 from bangla_gpt_api.services.costs import (
+    abandon_ai_usage,
     check_ai_budget,
     finalize_ai_usage,
     reserve_ai_usage,
@@ -42,6 +45,8 @@ from bangla_gpt_api.services.generators import (
 
 from ._context import _request_context
 from .deps import Ctx
+
+logger = logging.getLogger(__name__)
 
 _DOC_IN_MODELS: dict[str, Any] = {
     "worksheet": WorksheetIn,
@@ -88,6 +93,23 @@ def _doc_in_for(kind: str, body: dict) -> Any:
     return model.model_validate(body)
 
 
+def _load_answer_key_paper(db: Session, actor: User, gen: Any) -> QuestionPaper:
+    """The answer-key source paper: existence AND ownership, or a coded 404.
+
+    BE-FIX-002 (same ordering class as the tutor routes, document path): this
+    check is AUTHORIZATION, and it used to run only inside
+    :func:`_generate_document_prepare` -- i.e. after the ledger reserve had
+    been committed -- so a teacher posting somebody else's ``paper_id`` made
+    the platform pay for, and ledger, a request the API then refused with 404.
+    One helper now serves both call sites so the pre-reserve gate and the
+    question load cannot disagree about who may read a paper.
+    """
+    qp = db.get(QuestionPaper, gen.paper_id)
+    if qp is None or (qp.teacher_id != actor.id and actor.role != "admin"):
+        raise DocumentInputError(404, "not_found", "question paper not found")
+    return qp
+
+
 def _generate_document_prepare(
     app_ctx: Ctx,
     db: Session,
@@ -108,9 +130,9 @@ def _generate_document_prepare(
     if kind == "answer_key":
         questions = [q.strip() for q in (gen.questions or []) if q.strip()]
         if gen.paper_id is not None:
-            qp = db.get(QuestionPaper, gen.paper_id)
-            if qp is None or (qp.teacher_id != actor.id and actor.role != "admin"):
-                raise DocumentInputError(404, "not_found", "question paper not found")
+            # Ownership was already enforced before the reserve (BE-FIX-002);
+            # re-running the same helper keeps the load and the gate identical.
+            qp = _load_answer_key_paper(db, actor, gen)
             questions = [
                 str(q.get("text", "")).strip()
                 for q in qp.questions
@@ -190,6 +212,35 @@ def _screen_free_text(texts: Iterable[str], *, where: str) -> None:
             )
 
 
+def _abandon_document_usage(db: Session, row: AiUsage | None, model: str | None) -> None:
+    """BE-FIX-003: close a reserved ledger row whose generation did not happen.
+
+    Runs in a worker thread from the ``finally`` of :func:`_generate_document`.
+    The reserve was committed in its own transaction (BE-01) precisely so the
+    prompt-side spend stays on the books; that means a failure path must ALSO
+    write to it, and the ledger contract in ``services/costs`` names every
+    one of them: "must finalize in every path: success, refusal, provider
+    failure, and stream disconnect". Before this, an unknown kind, the
+    post-provider safety screen and a provider exception left the row an
+    unfinalized estimate forever -- and the callers swallow the failure without
+    ever coming back to it (``teacher_content``'s route handlers, the AiJob
+    runner's ``_fail``).
+
+    The rollback first is deliberate: the failing attempt may have left a
+    half-written transaction (a rejected flush, a partially applied context
+    write) that would otherwise make this write fail too. The reserve row
+    itself is already committed, so it survives the rollback and is what gets
+    finalized. Best-effort by design: a ledger failure must never replace the
+    real error the caller is about to see.
+    """
+    try:
+        db.rollback()
+        abandon_ai_usage(db, row, model=model, reason="failed")
+        db.commit()
+    except Exception:  # pragma: no cover - ledger must not mask the real failure
+        json_log(logger, logging.WARNING, "ledger_finalize_failed", error="document_path")
+
+
 async def _generate_document(
     app_ctx: Ctx, db: Session, actor: User, kind: str, gen: Any
 ) -> tuple[dict, list[SourceRef], str | None]:
@@ -221,108 +272,127 @@ async def _generate_document(
         [subject, chapter or "", *[str(q) for q in gen_inline_questions]],
         where=f"teacher/{kind} input",
     )
+    # BE-FIX-002: the answer-key paper is the one generation input that names
+    # another row this caller may not be entitled to. Authorize it BEFORE the
+    # reserve below, so a foreign paper id costs nothing and leaves no ledger
+    # row (the pre-fix order reserved, committed, and only then answered 404).
+    if kind == "answer_key" and getattr(gen, "paper_id", None) is not None:
+        _load_answer_key_paper(db, actor, gen)
     # BE-01: reserve the ledger row before retrieval or provider spend and
     # commit it -- a concurrent generation's budget gate must count this
     # in-flight teacher spend, and a provider failure keeps the honest
     # prompt-side line instead of a row that never was.
+    model = getattr(app_ctx.tutor.provider, "model", None) or app_ctx.tutor.provider.name
     pending_usage = reserve_ai_usage(
         db,
         user_id=actor.id,
         route=f"teacher/{kind}",
-        model=getattr(app_ctx.tutor.provider, "model", None) or app_ctx.tutor.provider.name,
+        model=model,
         prompt_text=f"{subject} {chapter or ''} class {class_level}",
     )
     await asyncio.to_thread(db.commit)
-    questions, chapter, ctx = await asyncio.to_thread(
-        _generate_document_prepare,
-        app_ctx,
-        db,
-        actor,
-        kind,
-        gen,
-        class_level=class_level,
-        subject=subject,
-        chapter=chapter,
-    )
-    doc_payload: dict
-    sources: list[SourceRef]
-    if kind == "worksheet":
-        doc_payload, sources = await generate_worksheet(
-            app_ctx.tutor.index,
-            app_ctx.tutor.provider,
-            class_level=class_level,
-            subject=subject,
-            chapter=str(chapter),
-            context=ctx,
-        )
-    elif kind == "homework":
-        doc_payload, sources = await generate_homework(
-            app_ctx.tutor.index,
-            app_ctx.tutor.provider,
-            class_level=class_level,
-            subject=subject,
-            chapter=str(chapter),
-            context=ctx,
-        )
-    elif kind == "rubric":
-        doc_payload, sources = await generate_rubric(
-            app_ctx.tutor.index,
-            app_ctx.tutor.provider,
-            class_level=class_level,
-            subject=subject,
-            chapter=str(chapter),
-            context=ctx,
-        )
-    elif kind == "answer_key":
-        doc_payload, sources = await generate_answer_key(
-            app_ctx.tutor.index,
-            app_ctx.tutor.provider,
+    # BE-FIX-003: from here on the reserve EXISTS in its own committed
+    # transaction, so every exit -- the prepare/validation error, the
+    # post-provider safety screen, the generators raising ProviderError or
+    # anything else -- must finalize it. The `finally` runs the one finalize
+    # shape for a generation that produced nothing; the ledger contract in
+    # services/costs allows no path that leaves a reserved row unfinished.
+    finalized = False
+    try:
+        questions, chapter, ctx = await asyncio.to_thread(
+            _generate_document_prepare,
+            app_ctx,
+            db,
+            actor,
+            kind,
+            gen,
             class_level=class_level,
             subject=subject,
             chapter=chapter,
-            questions=questions,
-            context=ctx,
         )
-        chapter = doc_payload.get("chapter") or chapter
-    elif kind == "lesson_plan":
-        sections, sources = await generate_lesson_plan(
-            app_ctx.tutor.index,
-            app_ctx.tutor.provider,
-            class_level=class_level,
-            subject=subject,
-            chapter=str(chapter),
-            minutes=int(gen.minutes),
-            level=str(gen.level),
-            context=ctx,
+        doc_payload: dict
+        sources: list[SourceRef]
+        if kind == "worksheet":
+            doc_payload, sources = await generate_worksheet(
+                app_ctx.tutor.index,
+                app_ctx.tutor.provider,
+                class_level=class_level,
+                subject=subject,
+                chapter=str(chapter),
+                context=ctx,
+            )
+        elif kind == "homework":
+            doc_payload, sources = await generate_homework(
+                app_ctx.tutor.index,
+                app_ctx.tutor.provider,
+                class_level=class_level,
+                subject=subject,
+                chapter=str(chapter),
+                context=ctx,
+            )
+        elif kind == "rubric":
+            doc_payload, sources = await generate_rubric(
+                app_ctx.tutor.index,
+                app_ctx.tutor.provider,
+                class_level=class_level,
+                subject=subject,
+                chapter=str(chapter),
+                context=ctx,
+            )
+        elif kind == "answer_key":
+            doc_payload, sources = await generate_answer_key(
+                app_ctx.tutor.index,
+                app_ctx.tutor.provider,
+                class_level=class_level,
+                subject=subject,
+                chapter=chapter,
+                questions=questions,
+                context=ctx,
+            )
+            chapter = doc_payload.get("chapter") or chapter
+        elif kind == "lesson_plan":
+            sections, sources = await generate_lesson_plan(
+                app_ctx.tutor.index,
+                app_ctx.tutor.provider,
+                class_level=class_level,
+                subject=subject,
+                chapter=str(chapter),
+                minutes=int(gen.minutes),
+                level=str(gen.level),
+                context=ctx,
+            )
+            doc_payload = {
+                "sections": dict(sections),
+                "minutes": int(gen.minutes),
+                "level": str(gen.level),
+            }
+        else:
+            raise DocumentInputError(404, "unknown_kind", "unknown generator kind")
+        # B-08 output side: screen the generated QUESTION texts before the
+        # document is persisted or ledgered. The provider is prompted for
+        # curriculum content, but a jailbreak mirrored through the retrieval
+        # context or a plain model slip must not reach a classroom printout.
+        # Only structured question fields are screened -- lesson-plan prose
+        # (deliberately open-ended teaching text) goes to the teacher hub, not
+        # to a quiz paper handed to students.
+        _screen_free_text(_iter_question_texts(doc_payload), where=f"teacher/{kind} output")
+        # Ledger the spend: finalize the reserve -- one row per generation.
+        # The prompt side is the retrieval context actually sent; the answer
+        # side is the serialised document, which is what the tokens were spent
+        # producing. Caller persists the document (or marks the AiJob ready)
+        # and commits this row with it.
+        await asyncio.to_thread(
+            finalize_ai_usage,
+            db,
+            pending_usage,
+            model=model,
+            answer_text=json.dumps(doc_payload, ensure_ascii=False, default=str),
         )
-        doc_payload = {
-            "sections": dict(sections),
-            "minutes": int(gen.minutes),
-            "level": str(gen.level),
-        }
-    else:
-        raise DocumentInputError(404, "unknown_kind", "unknown generator kind")
-    # B-08 output side: screen the generated QUESTION texts before the
-    # document is persisted or ledgered. The provider is prompted for
-    # curriculum content, but a jailbreak mirrored through the retrieval
-    # context or a plain model slip must not reach a classroom printout.
-    # Only structured question fields are screened -- lesson-plan prose
-    # (deliberately open-ended teaching text) goes to the teacher hub, not
-    # to a quiz paper handed to students.
-    _screen_free_text(_iter_question_texts(doc_payload), where=f"teacher/{kind} output")
-    # Ledger the spend: finalize the reserve -- one row per generation.
-    # The prompt side is the retrieval context actually sent; the answer
-    # side is the serialised document, which is what the tokens were spent
-    # producing. Caller persists the document (or marks the AiJob ready)
-    # and commits this row with it.
-    await asyncio.to_thread(
-        finalize_ai_usage,
-        db,
-        pending_usage,
-        model=getattr(app_ctx.tutor.provider, "model", None) or app_ctx.tutor.provider.name,
-        answer_text=json.dumps(doc_payload, ensure_ascii=False, default=str),
-    )
-    return doc_payload, sources, chapter
+        finalized = True
+        return doc_payload, sources, chapter
+    finally:
+        if not finalized:
+            await asyncio.to_thread(_abandon_document_usage, db, pending_usage, model)
 
 
 def _document_title(kind: str, subject: str, chapter: str | None, class_level: int) -> str:
