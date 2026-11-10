@@ -10,7 +10,7 @@ from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -67,6 +67,7 @@ from .deps import (
     CurrentUser,
     DbSession,
     ParentUser,
+    forbid_impersonation,
 )
 
 router = APIRouter(responses=AUTH_GUARD_RESPONSES)
@@ -76,7 +77,11 @@ logger = logging.getLogger(__name__)
 
 @router.post("/parents/link", status_code=201, responses={**message(404, 409), **coded(410)})
 def parent_link(
-    app_ctx: Ctx, payload: ParentLinkRequest, db: DbSession, parent: ParentUser
+    app_ctx: Ctx,
+    request: Request,
+    payload: ParentLinkRequest,
+    db: DbSession,
+    parent: ParentUser,
 ) -> dict:
     """Legacy direct-ID linking — disabled by default (V2 hardening).
 
@@ -84,6 +89,13 @@ def parent_link(
     their progress. The invite-code flow (`/parents/link/invite`) is the
     consented path; enable ALLOW_DIRECT_PARENT_LINK only for migrations.
     """
+    # SEC-001, defence in depth: the guard runs before the feature flag (and
+    # before the student lookup), so an impersonated parent is refused with a
+    # support-session 403 rather than a 410 that implies the route is merely
+    # switched off. (Kept as a comment, not docstring prose: a handler
+    # docstring is published as the OpenAPI operation description, and the
+    # committed apps/web contract fixture is regenerated from it.)
+    forbid_impersonation(request)
     if not app_ctx.settings.allow_direct_parent_link:
         raise HTTPException(
             status_code=410,
@@ -152,7 +164,13 @@ def parent_link(
 
 
 @router.post("/students/me/invite-code", status_code=201, response_model=ParentInviteOut)
-def create_parent_invite(app_ctx: Ctx, db: DbSession, user: CurrentUser) -> ParentInviteOut:
+def create_parent_invite(
+    app_ctx: Ctx, request: Request, db: DbSession, user: CurrentUser
+) -> ParentInviteOut:
+    # SEC-001: issuing a code is how an adult gets attached to a child's
+    # record, and the link it produces has no unlink endpoint -- a durable
+    # grant must not be created by a 15-minute support session.
+    forbid_impersonation(request)
     if user.role != "student":
         raise HTTPException(
             status_code=403, detail={"code": "students_only", "message": "Students only"}
@@ -242,7 +260,9 @@ def list_parent_invites(db: DbSession, user: CurrentUser) -> list[ParentInviteSt
 
 
 @router.delete("/students/me/invite-code/{invite_id}", status_code=204)
-def revoke_parent_invite(invite_id: int, db: DbSession, user: CurrentUser) -> Response:
+def revoke_parent_invite(
+    invite_id: int, request: Request, db: DbSession, user: CurrentUser
+) -> Response:
     """Revoke a live guardian invite code (F-145).
 
     A leaked code used to stay redeemable for its full ``invite_ttl_minutes``
@@ -257,6 +277,10 @@ def revoke_parent_invite(invite_id: int, db: DbSession, user: CurrentUser) -> Re
     endpoint cannot be used to probe invite ids. Idempotent: revoking an
     already-dead code is a 204 (the desired end state already holds).
     """
+    # SEC-001: this is the child's only way to kill a code, so refusing it
+    # from a support session keeps the revocation path in the owner's hands
+    # (an impersonated caller must not be able to destroy it).
+    forbid_impersonation(request)
     if user.role != "student":
         raise HTTPException(
             status_code=403, detail={"code": "students_only", "message": "Students only"}
@@ -419,7 +443,14 @@ def disable_my_memory(db: DbSession, user: CurrentUser) -> MemoryFactsOut:
 
 
 @router.post("/parents/link/invite", status_code=201, responses={**coded(400), **message(404, 409)})
-def link_via_invite(payload: ParentInviteLinkRequest, db: DbSession, parent: ParentUser) -> dict:
+def link_via_invite(
+    request: Request, payload: ParentInviteLinkRequest, db: DbSession, parent: ParentUser
+) -> dict:
+    # SEC-001: redemption creates a ParentStudentLink, and no endpoint
+    # anywhere unlinks one -- this is the durable end of the guardian grant,
+    # so a support session must not reach it. The guard also runs before
+    # ``claim_single_use``, so a refused redemption never burns the code.
+    forbid_impersonation(request)
     now = datetime.now(UTC).replace(tzinfo=None)
     # One code, one link: claim atomically so two parents racing the same code
     # cannot both attach themselves to the student. AUD-0034.
@@ -547,10 +578,20 @@ def parent_child_progress(student_id: int, db: DbSession, parent: ParentUser) ->
         raise HTTPException(
             status_code=404, detail={"code": "student_not_found", "message": "Student not found"}
         )
-    attempts = (
-        db.execute(select(QuizAttempt).where(QuizAttempt.student_id == student_id)).scalars().all()
+    # REL-004: this view runs on every guardian visit over quiz_attempts, a
+    # table with no retention window, and each row carries the full question
+    # set in quiz_json. The aggregate reads only the id (answer-log join) and
+    # score_pct (average), so nothing else is selected and the JSON payload
+    # is never loaded; the status filter moves into SQL and returns exactly
+    # the rows the Python filter selected.
+    graded = list(
+        db.execute(
+            select(QuizAttempt.id, QuizAttempt.score_pct).where(
+                QuizAttempt.student_id == student_id,
+                QuizAttempt.status == "graded",
+            )
+        ).all()
     )
-    graded = [a for a in attempts if a.status == "graded"]
     by_chapter, avg_score = graded_attempt_stats(db, graded)
     weak_chapters = weakness.weak_names(db, student.id)
     return StudentProgress(

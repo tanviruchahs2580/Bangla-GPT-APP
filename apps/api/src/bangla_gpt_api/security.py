@@ -90,6 +90,17 @@ def write_audit(
     """Append one audit row. The caller commits -- audit rows land in the
     same transaction as the action they describe, so a rolled-back action
     leaves no trail and a committed one always has one.
+
+    SEC-002: when the request is a support (impersonation) session, the
+    actor stays the impersonated account -- the trail must keep naming
+    whose data was touched -- and the fact that an admin was driving is
+    merged in as ``impersonated: true`` / ``imp_by``. The marker is put on
+    the request's Session by ``routers/deps.py::get_current_user``
+    (``Session.info``), which is the same object every request-scoped
+    caller passes here; a ContextVar would not survive the sync-handler
+    threadpool boundary. Non-impersonated requests never carry the key, so
+    their rows are exactly what they were. Ids and outcome metadata only --
+    never message content, never PII.
     """
     db.add(
         AuditLog(
@@ -97,6 +108,6 @@ def write_audit(
             actor_role=actor_role or "anonymous",
             action=action,
             target=target,
-            detail=detail or {},
+            detail={**(detail or {}), **db.info.get("_impersonation", {})},
         )
     )

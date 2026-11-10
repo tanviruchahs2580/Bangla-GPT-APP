@@ -223,6 +223,11 @@ def post_consent_reconfirm(
 ) -> ConsentStatusOut:
     """re-confirm flow: student or linked guardian accepts the
     CURRENT consent text; evidence trail (at/ip/version) is refreshed."""
+    # SEC-001: ``consent_at``/``consent_ip`` ARE the evidence that a guardian
+    # accepted a given version, so rewriting them from a support session
+    # falsifies the record it exists to prove. Staff keep their ordinary
+    # routes (and their own audit attribution) -- impersonation does not.
+    forbid_impersonation(request)
     if not payload.accepted:
         raise HTTPException(
             status_code=400,
