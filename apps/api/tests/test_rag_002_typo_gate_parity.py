@@ -1,6 +1,6 @@
 """RAG-002 regression: a repaired Bangla typo must reach the grounding gate.
 
-Retrieval already repairs one-character Bangla misspellings --
+Retrieval repairs one-character Bangla misspellings --
 ``BM25Index._query_side_expansions`` routes an unknown Bangla token through
 ``CorpusVocabulary.match_spelling`` -- so a misspelled query retrieves the same
 top chunk as the correctly spelled one. The coverage gate, however, ran its
@@ -13,11 +13,26 @@ chunk (score 12.295 vs 7.395 for the correct spelling) and refused at
 coverage 0.0; ``"স্বরসন্ধি কী?"`` grounded at coverage 1.0. Golden-v3 stratum
 ``bn_typo`` sat at 6/37.
 
-The fix resolves query tokens through the same spelling lane before the
-absence/coverage computation, exactly as ``_resolve_query_groups`` already
-does for ASCII/romanised tokens. No threshold moved. The negative controls
-pin that a genuinely absent term -- repairable or not -- still refuses, so
-``OUT_OF_CORPUS_ABSENT_BUDGET`` keeps its meaning.
+The resolution of query tokens through the spelling lane is kept — it is what
+gives a typo retrieval parity. What changed afterwards (audit RAG-003) is the
+**verdict authority** of a repair: a group the vocabulary knows only through a
+repair may sit in the evidence and may widen retrieval, but it may not be the
+thing that turns a refusal into an answer. The lane's admission rule is
+similarity >= 0.6, and at that boundary a misspelling and a different word are
+indistinguishable — ``কোশ``/``কোষ`` and ``বিরিয়ানি``/``বিষয়াদি`` both score
+0.667, while the fabricating ``ট্রেন``/``ট্রেড`` scores 0.800, higher than the
+legitimate ``পাইথাগোরাস``/``পিথাগোরাসের`` at 0.636. Before the change the gate
+answered ``"বিরিয়ানি"`` with three citations from a mathematics textbook at
+coverage 1.0 and confidence 0.9086.
+
+The negative controls pin that a genuinely absent term -- repairable or not --
+still refuses, so ``OUT_OF_CORPUS_ABSENT_BUDGET`` keeps its meaning.
+
+**Follow-up that would restore the convenience safely:** a curated Bangla
+orthographic-variant lexicon (the শ/ষ/স and ি/ী families) can admit a *known*
+misspelling as a first-class query term, which is a claim the project can
+verify, unlike a fuzzy match. Until such a lexicon exists, a single-term query
+whose only surface is a guess is refused.
 """
 
 from __future__ import annotations
@@ -63,30 +78,66 @@ def _tutor() -> tuple[TutorService, BM25Index]:
 
 
 @pytest.mark.parametrize("typo", ["স্বরন্ধি", "স্বরসন্ধী"])
-def test_misspelled_question_passes_when_the_spelling_lane_repairs_it(typo: str) -> None:
+def test_spelling_lane_still_retrieves_a_typo_but_cannot_certify_it_alone(typo: str) -> None:
+    """Retrieval parity is kept; verdict authority is not (audit RAG-003).
+
+    The repair lane earns its place: a one-character misspelling still
+    retrieves the same top chunk as the correct spelling, so the right passage
+    reaches the model and the citation.
+
+    What it may no longer do is *be the reason the gate passes*. The lane's
+    premise is "this token could have meant that corpus word", and the same
+    edit distance admits pairs that are simply different words — measured on
+    the real vocabulary:
+
+        স্বরন্ধি    -> স্বরসন্ধি    sim 0.889   a misspelling (must retrieve)
+        কোশ       -> কোষ        sim 0.667   a misspelling (documented case)
+        বিরিয়ানি  -> বিষয়াদি    sim 0.667   a different word
+        টাকা      -> টীকা       sim 0.750   a different word
+        ট্রেন      -> ট্রেড       sim 0.800   a different word
+
+    ``কোশ``/``কোষ`` and ``বিরিয়ানি``/``বিষয়াদি`` score *identically*, and
+    ``ট্রেন``/``ট্রেড`` scores *higher* than the documented legitimate
+    ``পাইথাগোরাস``/``পিথাগোরাসের`` (0.636). No similarity threshold separates
+    them, so no threshold fix exists; before this contract the gate answered
+    "বিরিয়ানি" with three citations from a mathematics textbook at coverage
+    1.0 and confidence 0.9086, because the one repaired term covered itself.
+
+    A refusal on an out-of-corpus word is a correct outcome. A confident
+    citation for a question the corpus does not answer is not, so the repair
+    keeps its retrieval power and loses its vote.
+    """
     tutor, index = _tutor()
-    # The repair belongs to the retrieval lane that already runs in production.
     assert "স্বরসন্ধি" in index.vocabulary.match_spelling(typo)
     question = f"{typo} কী?"
     hits = tutor._retrieve(question, class_level=6, subject=None)
     assert hits, "the spelling lane must still retrieve a one-character typo"
     assert hits[0].chunk.id == "c1"
     coverage, passed = tutor._coverage_details(question, hits)
-    assert passed is True, (
-        f"repaired term must count as in-corpus, got coverage={coverage} for {question!r}"
+    assert passed is False, (
+        f"a repair alone must not certify an answer, got coverage={coverage} for {question!r}"
     )
-    assert coverage == 1.0
+    assert coverage == 0.0
 
 
-def test_typo_verdict_has_parity_with_the_correct_spelling() -> None:
+def test_typo_retrieval_has_parity_with_the_correct_spelling() -> None:
+    """Retrieval parity — the half of RAG-002 that is sound and is kept.
+
+    Only the *verdict* differs now: the correct spelling is in the corpus and
+    certifies itself, the typo's only surface arrives through a repair and
+    therefore does not. Both retrieve the same chunk, which is what the
+    student-visible citation depends on.
+    """
     tutor, _index = _tutor()
     typo_hits = tutor._retrieve("স্বরন্ধি কী?", class_level=6, subject=None)
     spelled_hits = tutor._retrieve("স্বরসন্ধি কী?", class_level=6, subject=None)
     assert typo_hits and spelled_hits
     assert typo_hits[0].chunk.id == spelled_hits[0].chunk.id
-    assert tutor._coverage_details("স্বরন্ধি কী?", typo_hits) == tutor._coverage_details(
-        "স্বরসন্ধি কী?", spelled_hits
-    )
+
+    typo_coverage, typo_passed = tutor._coverage_details("স্বরন্ধি কী?", typo_hits)
+    spelled_coverage, spelled_passed = tutor._coverage_details("স্বরসন্ধি কী?", spelled_hits)
+    assert (spelled_coverage, spelled_passed) == (1.0, True)
+    assert (typo_coverage, typo_passed) == (0.0, False)
 
 
 def test_genuinely_absent_term_with_no_repair_still_refuses() -> None:
