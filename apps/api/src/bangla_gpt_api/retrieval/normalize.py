@@ -22,15 +22,37 @@ from __future__ import annotations
 import unicodedata
 from dataclasses import dataclass
 
-#: ZWSP, ZWNJ, ZWJ, BOM. Invisible characters would otherwise defeat the
-#: plain-substring safety, injection and citation regexes.
-ZERO_WIDTH_CHARS = frozenset("\u200b\u200c\u200d\ufeff")
+#: Characters a renderer paints as nothing. They would otherwise defeat the
+#: plain-substring safety, injection and citation regexes -- or split a
+#: Bangla word in the middle of its own letters.
+#:
+#: SAFE-001 (2026-11-10 audit): the set held only ZWSP/ZWNJ/ZWJ/BOM, and the
+#: audit verified that a WORD JOINER, SOFT HYPHEN, LEFT-TO-RIGHT MARK and
+#: friends rode through the safety screen to the provider ("আত্ম" + U+2060 +
+#: "হত্যা"). It now covers the invisible FORMAT characters: the soft hyphen,
+#: the bidi marks and embedding/override controls, the zero-width run and the
+#: invisible-operator block. Ranges are spelled out by codepoint so the next
+#: addition is a one-line edit.
+ZERO_WIDTH_CHARS = frozenset(
+    "\u00ad"  # SOFT HYPHEN
+    + "\u061c"  # ARABIC LETTER MARK
+    + "\u180e"  # MONGOLIAN VOWEL SEPARATOR
+    + "".join(chr(cp) for cp in range(0x200B, 0x2010))  # ZWSP..RLM (U+200B-U+200F)
+    + "".join(chr(cp) for cp in range(0x202A, 0x202F))  # bidi embeddings/overrides
+    + "".join(chr(cp) for cp in range(0x2060, 0x2065))  # WORD JOINER..INVISIBLE PLUS
+    + "\ufeff"  # BOM / ZERO WIDTH NO-BREAK SPACE
+)
 
 BENGALI_DIGITS = str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789")
 
 
 def strip_zero_width(text: str) -> str:
-    """Drop ZWSP/ZWJ/ZWNJ/BOM without touching anything else."""
+    """Drop the invisible characters in :data:`ZERO_WIDTH_CHARS` only.
+
+    The offset contract is unchanged by widening the set: a skipped
+    character simply produces no output, so every produced character still
+    maps back to the cluster that made it.
+    """
     return "".join(char for char in text if char not in ZERO_WIDTH_CHARS)
 
 
