@@ -11,17 +11,17 @@
     "usable_pages": 91,
     "usable_ratio": 0.9785,
     "bangla_char_ratio_on_usable": 1.0,
-    "total_chars_on_usable": 174524,
+    "total_chars_on_usable": 174479,
     "page_encodings": {
       "unusable": 2,
       "bijoy-converted": 91
     },
-    "chunks": 131,
+    "chunks": 132,
     "duplicates_removed": 0,
     "chunks_with_chapter": 0,
     "chapter_coverage": 0.0,
     "content_version": "v1:ca0bb834d1b2",
-    "built_at": "2026-11-03T09:01:59+00:00",
+    "built_at": "2026-11-10T16:35:11+00:00",
     "shared_text_chunks_with_other_sources": 49
   },
   "nctb-secondary-afda21d8556d": {
@@ -36,7 +36,7 @@
     "usable_pages": 91,
     "usable_ratio": 0.9785,
     "bangla_char_ratio_on_usable": 0.0376,
-    "total_chars_on_usable": 155378,
+    "total_chars_on_usable": 155377,
     "page_encodings": {
       "unusable": 89,
       "bijoy-converted": 4
@@ -46,7 +46,7 @@
     "chunks_with_chapter": 0,
     "chapter_coverage": 0.0,
     "content_version": "v1:537d2fbf64e9",
-    "built_at": "2026-11-03T09:02:04+00:00",
+    "built_at": "2026-11-10T16:35:19+00:00",
     "shared_text_chunks_with_other_sources": 1
   },
   "nctb-secondary-be50d8aff8d5": {
@@ -61,7 +61,7 @@
     "usable_pages": 143,
     "usable_ratio": 0.9795,
     "bangla_char_ratio_on_usable": 0.9984,
-    "total_chars_on_usable": 237382,
+    "total_chars_on_usable": 237270,
     "page_encodings": {
       "unusable": 3,
       "bijoy-converted": 143
@@ -71,7 +71,7 @@
     "chunks_with_chapter": 16,
     "chapter_coverage": 0.1798,
     "content_version": "v1:d35787da9b1d",
-    "built_at": "2026-11-03T09:02:12+00:00",
+    "built_at": "2026-11-10T16:35:32+00:00",
     "shared_text_chunks_with_other_sources": 46
   },
   "nctb-secondary-e39c58d35764": {
@@ -86,7 +86,7 @@
     "usable_pages": 239,
     "usable_ratio": 0.9917,
     "bangla_char_ratio_on_usable": 1.0,
-    "total_chars_on_usable": 408918,
+    "total_chars_on_usable": 408595,
     "page_encodings": {
       "unusable": 2,
       "bijoy-converted": 239
@@ -96,7 +96,7 @@
     "chunks_with_chapter": 22,
     "chapter_coverage": 0.2683,
     "content_version": "v1:7e5160d72a38",
-    "built_at": "2026-11-03T09:02:27+00:00",
+    "built_at": "2026-11-10T16:35:55+00:00",
     "shared_text_chunks_with_other_sources": 50
   },
   "nctb-secondary-ca0d6bd886b7": {
@@ -111,7 +111,7 @@
     "usable_pages": 109,
     "usable_ratio": 0.982,
     "bangla_char_ratio_on_usable": 1.0,
-    "total_chars_on_usable": 214331,
+    "total_chars_on_usable": 214197,
     "page_encodings": {
       "unusable": 2,
       "bijoy-converted": 109
@@ -121,7 +121,7 @@
     "chunks_with_chapter": 24,
     "chapter_coverage": 0.2791,
     "content_version": "v1:17c22d7e89d8",
-    "built_at": "2026-11-03T09:02:35+00:00",
+    "built_at": "2026-11-10T16:36:06+00:00",
     "shared_text_chunks_with_other_sources": 50
   },
   "nctb-hsc-28d03c592c2c": {
@@ -136,7 +136,7 @@
     "usable_pages": 52,
     "usable_ratio": 1.0,
     "bangla_char_ratio_on_usable": 0.8446,
-    "total_chars_on_usable": 108822,
+    "total_chars_on_usable": 108786,
     "page_encodings": {
       "bijoy-converted": 40,
       "unusable": 12
@@ -146,7 +146,7 @@
     "chunks_with_chapter": 34,
     "chapter_coverage": 0.382,
     "content_version": "v1:4bab4adf0487",
-    "built_at": "2026-11-03T09:05:14+00:00",
+    "built_at": "2026-11-10T16:38:58+00:00",
     "shared_text_chunks_with_other_sources": 49
   },
   "nctb-hsc-a513203336f6": {
@@ -160,18 +160,18 @@
     "garbage_pages": 0,
     "usable_pages": 45,
     "usable_ratio": 1.0,
-    "bangla_char_ratio_on_usable": 0.9007,
-    "total_chars_on_usable": 113358,
+    "bangla_char_ratio_on_usable": 0.9316,
+    "total_chars_on_usable": 113583,
     "page_encodings": {
-      "bijoy-converted": 38,
-      "unusable": 7
+      "bijoy-converted": 39,
+      "unusable": 6
     },
-    "chunks": 74,
+    "chunks": 69,
     "duplicates_removed": 0,
-    "chunks_with_chapter": 15,
-    "chapter_coverage": 0.2027,
+    "chunks_with_chapter": 10,
+    "chapter_coverage": 0.1449,
     "content_version": "v1:cd17f741e26c",
-    "built_at": "2026-11-03T09:06:03+00:00",
+    "built_at": "2026-11-10T16:40:11+00:00",
     "shared_text_chunks_with_other_sources": 50
   },
   "nctb-hsc-ca39e5957513": {
@@ -185,18 +185,18 @@
     "garbage_pages": 0,
     "usable_pages": 46,
     "usable_ratio": 1.0,
-    "bangla_char_ratio_on_usable": 0.8268,
-    "total_chars_on_usable": 106943,
+    "bangla_char_ratio_on_usable": 0.8501,
+    "total_chars_on_usable": 107178,
     "page_encodings": {
-      "bijoy-converted": 37,
-      "unusable": 9
+      "bijoy-converted": 38,
+      "unusable": 8
     },
-    "chunks": 81,
+    "chunks": 80,
     "duplicates_removed": 0,
-    "chunks_with_chapter": 25,
-    "chapter_coverage": 0.3086,
+    "chunks_with_chapter": 24,
+    "chapter_coverage": 0.3,
     "content_version": "v1:6d856b59b212",
-    "built_at": "2026-11-03T09:07:50+00:00",
+    "built_at": "2026-11-10T16:43:29+00:00",
     "shared_text_chunks_with_other_sources": 49
   },
   "nctb-hsc-9c44bb8ff649": {
@@ -211,7 +211,7 @@
     "usable_pages": 52,
     "usable_ratio": 1.0,
     "bangla_char_ratio_on_usable": 0.734,
-    "total_chars_on_usable": 108389,
+    "total_chars_on_usable": 108366,
     "page_encodings": {
       "bijoy-converted": 33,
       "unusable": 19
@@ -221,13 +221,13 @@
     "chunks_with_chapter": 33,
     "chapter_coverage": 0.3402,
     "content_version": "v1:ea30a7a6eacd",
-    "built_at": "2026-11-03T09:09:25+00:00",
+    "built_at": "2026-11-10T16:46:46+00:00",
     "shared_text_chunks_with_other_sources": 48
   },
   "_cross_source": {
     "sources": 9,
-    "total_chunks": 852,
-    "unique_texts": 560,
+    "total_chunks": 847,
+    "unique_texts": 555,
     "duplicate_chunks": 292,
     "duplicate_texts": 100,
     "cross_source_texts": 100,
@@ -255,17 +255,17 @@
         "shared_chunks": 48
       },
       "nctb-hsc-a513203336f6": {
-        "chunks": 74,
+        "chunks": 69,
         "shared_texts": 50,
         "shared_chunks": 50
       },
       "nctb-hsc-ca39e5957513": {
-        "chunks": 81,
+        "chunks": 80,
         "shared_texts": 49,
         "shared_chunks": 49
       },
       "nctb-secondary-3ce5065b7a32": {
-        "chunks": 131,
+        "chunks": 132,
         "shared_texts": 49,
         "shared_chunks": 49
       },

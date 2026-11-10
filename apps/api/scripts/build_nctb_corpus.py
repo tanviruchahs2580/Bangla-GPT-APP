@@ -72,6 +72,60 @@ def _force_utf8_stdout() -> None:
             stream.reconfigure(encoding="utf-8", errors="replace")
 
 
+def _run_content_gate(normalized_dir: Path, *, allow_fail: bool) -> bool:
+    """Run ``content_qa`` over every source and report a pass/fail verdict.
+
+    Returns True when every source is inside its flagged-chunk budget. Also
+    reports the NBT-001 reph invariant, which no gate used to state: a Bangla
+    word cannot close with ``র`` + halant, so any count above zero means the
+    converter regressed.
+    """
+    from bangla_gpt_api.nctb.content_qa import DEFAULT_FLAGGED_THRESHOLD, qa_chunks
+    from bangla_gpt_api.nctb.corpus import load_chunks_jsonl
+    from bangla_gpt_api.nctb.reph import word_final_reph_count
+
+    print(f"\nContent gate (threshold {DEFAULT_FLAGGED_THRESHOLD} flagged ratio):")
+    files = sorted(normalized_dir.glob("nctb-*.chunks.jsonl"))
+    if not files:
+        print("  ERROR no chunk files found — nothing was built", file=sys.stderr)
+        return False
+
+    failures: list[str] = []
+    reph_total = 0
+    for path in files:
+        chunks = load_chunks_jsonl(path)
+        rows = [{"chunk_id": c.chunk_id, "chapter": c.chapter, "text": c.text} for c in chunks]
+        report = qa_chunks(rows, threshold=DEFAULT_FLAGGED_THRESHOLD)
+        reph_total += sum(word_final_reph_count(c.text) for c in chunks)
+        status = "pass" if report.passed else "FAIL"
+        print(
+            f"  {status}  {path.stem}: flagged {report.flagged_chunks}/{report.total_chunks} "
+            f"({report.flagged_ratio:.4f})"
+        )
+        for code, count in sorted((report.issues or {}).items()):
+            print(f"          {code}: {count}")
+        if not report.passed:
+            failures.append(path.stem)
+
+    print(f"  reph invariant: word-final reph occurrences = {reph_total} (must be 0)")
+    if reph_total:
+        failures.append(f"reph-invariant({reph_total})")
+
+    if not failures:
+        print("  content gate: PASS")
+        return True
+
+    print(f"  content gate: FAIL — {', '.join(failures)}", file=sys.stderr)
+    if allow_fail:
+        print(
+            "  --allow-failing-content-gate was passed: continuing anyway, and the "
+            "manifest will record that the content gate failed.",
+            file=sys.stderr,
+        )
+        return True
+    return False
+
+
 def main() -> int:
     _force_utf8_stdout()
     parser = argparse.ArgumentParser(description=__doc__)
@@ -81,6 +135,14 @@ def main() -> int:
     parser.add_argument("--skip-acquire", action="store_true")
     parser.add_argument(
         "--max-pages", type=int, default=None, help="limit extraction to first N pages (debug)"
+    )
+    parser.add_argument(
+        "--allow-failing-content-gate",
+        action="store_true",
+        help=(
+            "debug only: produce artifacts and a manifest even though content_qa "
+            "failed. The failure is still printed and is not waived for CI."
+        ),
     )
     args = parser.parse_args()
 
@@ -156,6 +218,32 @@ def main() -> int:
             + ", ".join(sorted(empty_chapter))
             + " — chapter filters are unavailable for those documents"
         )
+
+    # Content gate BEFORE the manifest is written (audit finding NBT-004).
+    #
+    # `content_qa.py` has always existed and has always exited 3 with the
+    # message "do NOT index this corpus" — but the build never called it, no
+    # workflow called it, no Make target called it, and pre-commit did not
+    # call it. Measured on the corpus that shipped: 301 of 852 chunks
+    # (35.33%) were flagged, 17.7x over the 2% budget, with `pua_char` on
+    # every one of the nine sources. A gate nothing runs is a comment.
+    #
+    # It sits here, not after, on purpose: a manifest is provenance evidence
+    # that a corpus was built by this code, and provenance for a corpus that
+    # must not be indexed is not worth writing. `--allow-failing-content-gate`
+    # exists so an operator can still produce the artifacts they need to see
+    # *why* it failed; it prints the bypass loudly and the manifest records it.
+    gate_ok = _run_content_gate(out_normalized, allow_fail=args.allow_failing_content_gate)
+    if not gate_ok:
+        print(
+            "\nBUILD STOPPED: the content gate failed, so no manifest was written.\n"
+            "  Inspect:  python scripts/content_qa.py report <chunks.jsonl>\n"
+            "  Sample:   python scripts/content_qa.py sample <chunks.jsonl> "
+            "--seed 20260906 --out review_sheet.jsonl\n"
+            "  This corpus must not be indexed until the flagged sources pass.",
+            file=sys.stderr,
+        )
+        return 3
 
     manifest = build_corpus_manifest(
         args.data_dir,

@@ -129,6 +129,12 @@ _FINGERPRINTED_MODULES = (
     "nctb/corpus.py",
     "nctb/extract.py",
     "nctb/normalize.py",
+    # NBT-001: the reph relocation pass decides the characters a chunk
+    # contains, so it is a producer, not plumbing. Leaving it out would let a
+    # change to the one module that repairs 2,103 corrupted words ship
+    # without invalidating a single committed manifest — the exact drift this
+    # list exists to surface.
+    "nctb/reph.py",
     "data/nctb_loader.py",
 )
 
