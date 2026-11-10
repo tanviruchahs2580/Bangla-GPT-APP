@@ -15,11 +15,27 @@ a WAL burst and lock window that grew with the whole table, plus a
 SQLite variable-count ceiling. The chunk size bounds both the lock
 window and the transaction, so a mid-sweep crash leaves smaller
 per-chunk transactions behind instead of one unbounded one.
+
+Chat aging (DAT-001): every row is aged by its OWN timestamp. The first
+shape aged a conversation by ``Conversation.created_at`` — written once at
+creation and never refreshed — and then deleted every message of that
+conversation with no timestamp filter, while the client reuses one
+conversation per student until "New chat". The first sweep after a thread
+passed the window therefore deleted turns sent that same day. Messages now
+expire on ``chat_messages.created_at``, and a conversation row goes only
+once it has nothing inside the window left.
+
+Id-list paging (DAT-002): no statement may bind an unbounded number of
+variables. The first shape loaded every expired conversation id into one
+Python list and re-bound the whole list on each chunk; above the engine
+ceiling (32766 on SQLite, 65535 on Postgres) the first chunk raised
+``too many SQL variables`` and the identical retry meant the sweep never
+drained. Ids are now consumed one chunk at a time.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -50,6 +66,38 @@ TOKEN_GRACE_DAYS = 30
 DELETE_CHUNK = 5_000
 
 
+def _expired_message_where(cutoff: datetime) -> Any:
+    """A chat turn expires on its OWN ``created_at`` (DAT-001)."""
+    return ChatMessage.created_at < cutoff
+
+
+def _message_inside_window_exists(cutoff: datetime) -> Any:
+    """Correlated EXISTS: this conversation holds a message inside the window."""
+    return (
+        select(ChatMessage.id)
+        .where(
+            ChatMessage.conversation_id == Conversation.id,
+            ChatMessage.created_at >= cutoff,
+        )
+        .exists()
+    )
+
+
+def _expired_conversation_where(cutoff: datetime) -> Any:
+    """A conversation expires when nothing of it is left inside the window.
+
+    That is: no message younger than the cutoff (the message sweep above has
+    emptied it, or it never had one) AND its own ``created_at`` outside the
+    window. The second half is what spares an empty conversation the UI has
+    just created but not yet posted to — a brand-new "New chat" row must
+    survive a nightly sweep that runs between the two requests.
+
+    Both the dry-run report and the sweep use this one predicate, so the
+    compliance report cannot drift from what the sweep actually deletes.
+    """
+    return (Conversation.created_at < cutoff) & ~_message_inside_window_exists(cutoff)
+
+
 def retention_report(
     db: Session,
     *,
@@ -74,12 +122,15 @@ def retention_report(
     jobs_days = 30 if ai_jobs_retention_days is None else (ai_jobs_retention_days)
     jobs_cutoff = now - timedelta(days=jobs_days)
 
+    # DAT-001: chat rows age on their own timestamps. A conversation created
+    # long ago but still in use is not expired and its current turns are not
+    # collateral -- only a conversation with nothing left inside the window is
+    # counted (and then deleted) as gone.
     conversations = db.execute(
-        select(func.count(Conversation.id)).where(Conversation.created_at < chat_cutoff)
+        select(func.count(Conversation.id)).where(_expired_conversation_where(chat_cutoff))
     ).scalar_one()
-    old_conv_ids = select(Conversation.id).where(Conversation.created_at < chat_cutoff)
     messages = db.execute(
-        select(func.count(ChatMessage.id)).where(ChatMessage.conversation_id.in_(old_conv_ids))
+        select(func.count(ChatMessage.id)).where(_expired_message_where(chat_cutoff))
     ).scalar_one()
     resets = db.execute(
         select(func.count(PasswordReset.id)).where(PasswordReset.expires_at < token_cutoff)
@@ -167,28 +218,7 @@ def run_retention_sweep(
     usage_cutoff = now - timedelta(days=365 if usage_days is None else usage_days)
     jobs_cutoff = now - timedelta(days=30 if jobs_days is None else jobs_days)
 
-    old_convs = (
-        db.execute(select(Conversation.id).where(Conversation.created_at < chat_cutoff))
-        .scalars()
-        .all()
-    )
-    if old_convs:
-        # Clear feedback pointers first: feedback.message_id is a nullable FK
-        # into chat_messages, so deleting the messages directly is the same
-        # ForeignKeyViolation that broke account erasure (F-093).
-        _detach_feedback_from_messages(db, old_convs)
-        _delete_ranked(
-            db,
-            ChatMessage,
-            ChatMessage.id,
-            ChatMessage.conversation_id.in_(old_convs),
-        )
-        _delete_ranked(
-            db,
-            Conversation,
-            Conversation.id,
-            Conversation.id.in_(old_convs),
-        )
+    _sweep_chat(db, cutoff=chat_cutoff)
     _delete_ranked(db, PasswordReset, PasswordReset.id, PasswordReset.expires_at < token_cutoff)
     _delete_ranked(
         db,
@@ -233,6 +263,42 @@ def run_retention_sweep(
     return {"dry_run": False, **report}
 
 
+def _sweep_chat(db: Session, *, cutoff: datetime, chunk_size: int = DELETE_CHUNK) -> None:
+    """Age chat rows by their own timestamps, then drop the emptied threads.
+
+    DAT-001: messages go first and on ``chat_messages.created_at``; the
+    conversation row follows only once it has nothing inside the window left
+    (``_expired_conversation_where``), so no row whose own timestamp is inside
+    the window is ever deleted and no emptied conversation is left orphaned.
+
+    DAT-002: both deletes walk ids one chunk at a time -- ``_delete_ranked``'s
+    keyset cursor for the ids, and a per-chunk feedback detach -- so no single
+    statement binds more than ``chunk_size`` variables and neither the SQLite
+    (32766) nor the Postgres (65535) ceiling can wedge a run that is retried
+    identically.
+    """
+    _delete_ranked(
+        db,
+        ChatMessage,
+        ChatMessage.id,
+        _expired_message_where(cutoff),
+        chunk_size=chunk_size,
+        # Clear feedback pointers inside the same chunk, BEFORE the delete:
+        # feedback.message_id is a nullable FK into chat_messages, so deleting
+        # the rows directly is the same ForeignKeyViolation that broke account
+        # erasure (F-093). Per chunk, the pointer never outlives its message
+        # even if the sweep dies between chunks.
+        before_delete=lambda batch: _detach_feedback_from_messages(db, batch),
+    )
+    _delete_ranked(
+        db,
+        Conversation,
+        Conversation.id,
+        _expired_conversation_where(cutoff),
+        chunk_size=chunk_size,
+    )
+
+
 def _delete_ranked(
     db: Session,
     model: type,
@@ -240,6 +306,7 @@ def _delete_ranked(
     where: Any,
     *,
     chunk_size: int = DELETE_CHUNK,
+    before_delete: Callable[[list[int]], None] | None = None,
 ) -> None:
     """Delete matching rows in bounded chunks, one commit per chunk (DB-03).
 
@@ -249,6 +316,10 @@ def _delete_ranked(
     transaction is committed as part of each chunk: a mid-sweep crash
     leaves only completed chunks behind, which a pure-DELETE sweep treats
     exactly the same on the next run (expired-only, idempotent).
+
+    ``before_delete`` runs on the batch read for this chunk, before its
+    DELETE and its commit (DAT-001: the feedback detach must be part of the
+    same unit, so no committed state has a pointer at a row that is gone).
     """
     last_id = 0
     while True:
@@ -262,6 +333,8 @@ def _delete_ranked(
         if not ids:
             break
         last_id = int(ids[-1])
+        if before_delete is not None:
+            before_delete(list(ids))
         db.execute(delete(model).where(id_col.in_(ids)))
         db.commit()
 
@@ -291,29 +364,26 @@ def _delete_by_id_batches(
         db.commit()
 
 
-def _detach_feedback_from_messages(db: Session, conversation_ids: Sequence[int]) -> None:
+def _detach_feedback_from_messages(db: Session, message_ids: Sequence[int]) -> None:
     """Null the nullable feedback FKs pointing at soon-to-be-deleted messages.
 
     The feedback row itself is product history and is kept; only the pointer
     into the erased conversation is dropped, which is the same policy the
     account-erasure path uses for AuditLog.actor_user_id and
     ChapterContent.created_by.
+
+    Called once per message chunk (DAT-002), with the batch ``_delete_ranked``
+    has just read: the UPDATE binds the same bounded set as the DELETE that
+    follows it, instead of every id of every expired conversation. The batch is
+    never empty -- the caller breaks out of its loop on an empty read before
+    invoking this.
     """
     # Imported here rather than at module scope: retention.py must stay
     # importable without dragging the whole model graph into a count-only path.
     from sqlalchemy import update
 
-    from bangla_gpt_api.db.models import ChatMessage as _ChatMessage
     from bangla_gpt_api.db.models import Feedback as _Feedback
 
-    message_ids = (
-        db.execute(
-            select(_ChatMessage.id).where(_ChatMessage.conversation_id.in_(conversation_ids))
-        )
-        .scalars()
-        .all()
+    db.execute(
+        update(_Feedback).where(_Feedback.message_id.in_(message_ids)).values(message_id=None)
     )
-    if message_ids:
-        db.execute(
-            update(_Feedback).where(_Feedback.message_id.in_(message_ids)).values(message_id=None)
-        )
