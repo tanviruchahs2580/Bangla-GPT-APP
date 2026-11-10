@@ -103,6 +103,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(db): re-assert the drifted CHECK, add the hot-path indexes, exact money
 - fix(deploy): align the web build context and worker healthchecks
 - fix(deploy): mirror the Permissions-Policy into the self-hosted hosts
+- fix(docs): stop citing the untracked coverage report as a repo path
 - fix(docs,test): point every QA-record link at the new report and make the inline-script guard case-insensitive
 - fix(e2e): refuse to seed the shared e2e accounts outside test lanes
 - fix(eval,api): satisfy the full-tree type check on the new modules
