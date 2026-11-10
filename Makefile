@@ -30,7 +30,7 @@ endif
 PY := $(if $(wildcard $(VENV_PY)),$(VENV_PY),$(PYTHON))
 
 .PHONY: help setup dev dev-web lint format format-check typecheck test test-web \
-        e2e build migrate seed corpus docker-up docker-down docs-check ci
+        e2e build migrate seed corpus corpus-check docker-up docker-down docs-check ci
 
 help:
 	@echo "make setup       venv + hash-locked API install + npm ci"
@@ -47,6 +47,7 @@ help:
 	@echo "make migrate     alembic upgrade head (honours DATABASE_URL)"
 	@echo "make seed        seed the Playwright accounts (honours DATABASE_URL)"
 	@echo "make corpus      build the NCTB corpus for the optional ssc-science subset"
+	@echo "make corpus-check  corpus manifest + content QA (skips the real-corpus legs with a notice when absent)"
 	@echo "make docker-up   ENV=test docker compose --profile core up -d --wait"
 	@echo "make docker-down stop that stack"
 	@echo "make docs-check  repository documentation/contract checks (CI guardrails subset)"
@@ -109,6 +110,34 @@ seed:
 corpus:
 	cd apps/api && "$(PY)" scripts/build_nctb_corpus.py --data-dir ../../data/nctb --subset ssc-science
 
+# CI-FIX-001: the two corpus gates AGENTS.md §12 declared and no job ran. The
+# tracked-artifact legs of check_corpus_manifest.py always run (the manifest,
+# acquisition ledger, quality report and retrieval-eval digest are committed);
+# the legs that need the copyrighted corpus skip with an explicit notice when
+# data/nctb/normalized is absent, so a fresh clone never fails spuriously --
+# and the skip says plainly that the real-corpus gate did not run.
+corpus-check:
+	@cd apps/api; \
+	args=(--data-dir ../../data/nctb); \
+	if [ -d ../../data/nctb/normalized ]; then args+=(--corpus-dir ../../data/nctb); \
+	else echo "::notice::data/nctb/normalized is absent (the copyrighted corpus is not distributed with the repo), so the served-corpus leg of check_corpus_manifest.py did NOT run."; fi; \
+	PYTHONPATH=src "$(PY)" scripts/check_corpus_manifest.py "$${args[@]}"
+	@shopt -s nullglob; \
+	files=(data/nctb/normalized/nctb-*.chunks.jsonl); \
+	if [ $${#files[@]} -eq 0 ]; then \
+	  echo "::notice::no data/nctb/normalized/nctb-*.chunks.jsonl: the real-corpus content_qa gate did NOT run."; \
+	else \
+	  failed=0; \
+	  for f in "$${files[@]}"; do \
+	    if PYTHONPATH=apps/api/src "$(PY)" apps/api/scripts/content_qa.py report "$$f" > "/tmp/content_qa_$$(basename "$$f").json"; then \
+	      echo "content_qa OK: $$f"; \
+	    else \
+	      status=$$?; echo "content_qa FAILED (exit $$status) for $$f"; tail -40 "/tmp/content_qa_$$(basename "$$f").json"; failed=1; \
+	    fi; \
+	  done; \
+	  exit $$failed; \
+	fi
+
 docker-up:
 	ENV=test docker compose --profile core up -d --wait
 
@@ -129,11 +158,12 @@ docs-check:
 	"$(PY)" scripts/check_i18n.py
 
 # The blocking gate as far as one machine can run it: the api, web and
-# guardrails job commands. NOT included, with the reason: the postgres job
+# guardrails job commands (including the two corpus gates, CI-FIX-001). NOT
+# included, with the reason: the postgres job
 # needs a PostgreSQL service; e2e needs the Playwright browsers; the docker job
 # needs Docker and builds the image; eval-gate and the sbom job have their own
 # CI jobs. Run those where their infrastructure exists.
-ci: format-check
+ci: format-check corpus-check
 	"$(PY)" -m pre_commit run --all-files --show-diff-on-failure
 	cd apps/api && "$(PY)" -m ruff check .
 	cd apps/api && "$(PY)" -m mypy src

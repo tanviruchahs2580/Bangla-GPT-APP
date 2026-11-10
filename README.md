@@ -110,7 +110,7 @@ cd apps/web
 npm ci
 npm run dev      # http://localhost:5173 (proxies /api to :8000)
 npm run build    # type-checked production build → dist/
-npx vitest run   # frontend test suite
+npm test         # frontend test suite (scripts/check_vitest_ran.mjs: an incomplete run fails, CI-FIX-002)
 ```
 
 ### Linux / macOS
@@ -134,7 +134,7 @@ cd apps/web
 npm ci
 npm run dev      # http://localhost:5173 (proxies /api to :8000)
 npm run build    # type-checked production build -> dist/
-npm test         # frontend test suite
+npm test         # frontend test suite (an incomplete vitest run fails, CI-FIX-002)
 ```
 
 `constraints.txt` pins exact versions with hashes, so a commit always installs
@@ -198,14 +198,14 @@ Environment variables are documented in `.env.example`. Default
 
 ## CI/CD
 
-All nine workflows under `.github/workflows/`, with the job ids each one runs:
+All ten workflows under `.github/workflows/`, with the job ids each one runs:
 
 | Workflow | What it does (job ids) | Trigger |
 |---|---|---|
-| `ci.yml` | `api` — ruff check → ruff format → mypy → pytest on 3.11 and 3.12 (coverage gate) → pip-audit → alembic up/down/up → import smoke → OpenAPI-fixture diff; `quickstart-windows` — the README's PowerShell quick start (venv → hash-locked install → dev server `/health` → `npm ci` + build) on `windows-latest`, then the Windows-rasterised visual regression matrix; `postgres` — migration cycle + `alembic check` drift + journey/race tests + the **full domain suite on Postgres**; `sbom` — CycloneDX manifests for python and web; `web` — npm audit → vitest coverage → eslint → prettier → tsc+vite build; `guardrails` — the repo-contract checks below, including the readme/workflow-table guard; `e2e` — Playwright chromium against the real app plus the offline shell; `e2e-engines` — the Bangla shaping/`Intl` specs on firefox and webkit as well (pull requests only); `docker` — image build → Trivy gate → `/health`+`/ready` probes → k6 smoke | push to `main`, pull_request to `main`, workflow_dispatch |
-| `eval-gate.yml` | `eval-gate` — golden v2 suite vs the committed baseline (>2pp regression fails), the 24-question golden retrieval gate (`apps/api/scripts/evaluate_golden.py`) and the red-team moderation gate (`evaluation.cli --redteam`); optional non-blocking real-model probe on manual dispatch | push/pull_request to `main`, workflow_dispatch |
+| `ci.yml` | `api` — ruff check → ruff format → mypy → pytest on 3.11 and 3.12 (coverage gate) → pip-audit → alembic up/down/up → import smoke → OpenAPI-fixture diff; `quickstart-windows` — the README's PowerShell quick start (venv → hash-locked install → dev server `/health` → `npm ci` + build) on `windows-latest`, then the Windows-rasterised visual regression matrix; `postgres` — migration cycle + `alembic check` drift + journey/race tests + the **full domain suite on Postgres**; `sbom` — CycloneDX manifests for python and web; `eval` — the eval-gate workflow called as a reusable workflow (golden v3 suite, 24-question retrieval gate, red-team), so a red eval blocks the required `web` job; `web` — npm audit → vitest coverage → eslint → prettier → tsc+vite build (waits on `eval`); `guardrails` — the repo-contract checks below, including the readme/workflow-table guard; `e2e` — Playwright chromium against the real app plus the offline shell; `e2e-engines` — the Bangla shaping/`Intl` specs on firefox and webkit as well (pull requests only); `docker` — image build → Trivy gate → `/health`+`/ready` probes → k6 smoke | push to `main`, pull_request to `main`, workflow_dispatch |
+| `eval-gate.yml` | `eval-gate` — golden v3 suite (427 items, `eval/golden_v3.json` vs the committed `eval/baseline_v3.json`, >2pp regression fails — the CLI defaults; `eval/golden_v2.json` is the superseded 634-item generation), the 24-question golden retrieval gate (`apps/api/scripts/evaluate_golden.py`) and the red-team moderation gate (`evaluation.cli --redteam`); optional non-blocking real-model probe on manual dispatch; also callable via `workflow_call` (the `eval` job in `ci.yml`) | push/pull_request to `main`, workflow_dispatch, workflow_call |
 | `codeql.yml` | `analyze` — CodeQL SAST (security-extended) over python and javascript-typescript; SARIF lands in the Security tab | push/pull_request to `main`, schedule weekly |
-| `retrieval-eval.yml` | `retrieval-regression` — nightly real-corpus regression: regenerates `data/nctb/retrieval_eval.json` and checks it against the committed baseline via `apps/api/scripts/check_retrieval_baseline.py`; skips with a notice on runners without the copyrighted corpus (uploads the fresh report as an artifact otherwise) | schedule nightly, workflow_dispatch |
+| `retrieval-eval.yml` | `retrieval-regression` — nightly real-corpus regression: regenerates `data/nctb/retrieval_eval.json` and checks it against the committed baseline via `apps/api/scripts/check_retrieval_baseline.py`; skips with a notice on runners without the copyrighted corpus (uploads the fresh report as an artifact otherwise); manual dispatch accepts `corpus_archive_url`/`corpus_path` (corpus the operator provides) and `require_corpus` to fail instead of skip | schedule nightly, workflow_dispatch |
 | `release.yml` | `ci-gate` — fails when green CI for the commit is missing and when the tag != the package version; `build-push` — GHCR images tagged with both the release tag and the commit sha, with SBOM + provenance; `scan-images` — Trivy + attestation verification of the pushed digests; `deploy` — SSH deploy with health-gated rollback (only when `DEPLOY_ENABLED=true`) | push tags `v*.*.*`, workflow_dispatch |
 | `vercel-deploy.yml` | `deploy` — production web deploy after a green `API CI` on the same sha, with a post-deploy `/api/health` smoke | workflow_run on a completed `API CI` for `main`, workflow_dispatch |
 | `android-release.yml` | `bundle` — release-signed AAB + APK artifacts (never uploads to Play by itself); `debug-assemble` — proves the Android shell assembles from the current web bundle | workflow_dispatch, push tags `v*`, pull_request touching `apps/web/**` |
@@ -219,7 +219,8 @@ have a row here, the row must name every job id in the file, and the trigger
 cell must name exactly the event keys in that workflow's own `on:` block. The
 guard exists because the previous table was wrong in all three ways — it
 invented a `golden-eval` job inside `ci.yml`, dropped the `sbom` and
-`guardrails` jobs, and four of the nine workflows were absent entirely.
+`guardrails` jobs, and four of the workflows that existed then were absent
+entirely.
 
 ## Documentation conventions
 

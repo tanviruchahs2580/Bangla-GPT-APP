@@ -6,16 +6,51 @@ name: retrieval-eval (nightly real-corpus regression)
 # corpus is copyrighted and deliberately NOT distributed with the repo
 # (data/nctb is gitignored). A hosted runner therefore has nothing to
 # measure; the job skips honestly with a notice in that case. On a runner
-# that DOES carry the corpus (operator-supplied artifact cache or
-# self-hosted), a nightly deviation from the committed baseline fails the
-# job and uploads the fresh report — the same "never re-baseline to go
-# green" discipline as the PR eval-gate (R12), except this one is allowed to
-# fail loudly overnight instead of during merges.
+# that DOES carry the corpus (operator-supplied artifact or self-hosted), a
+# nightly deviation from the committed baseline fails the job and uploads the
+# fresh report — the same "never re-baseline to go green" discipline as the PR
+# eval-gate (R12), except this one is allowed to fail loudly overnight
+# instead of during merges.
+#
+# CI-FIX-004: this skip was silent in every practical sense — the schedule
+# ran nightly on a hosted runner and therefore skipped every single time, so
+# the "nightly real-corpus regression" had run nowhere and nothing recorded
+# that. The skip now (a) writes a job-summary line stating the gate did NOT
+# run and why, (b) names the owner action that makes it runnable, and
+# (c) offers two dispatch inputs so an operator who has the corpus can
+# actually run it: `corpus_archive_url` (a tar.gz fetched on the runner) or
+# `corpus_path` (a directory that already exists, e.g. a self-hosted runner).
+# `require_corpus: true` turns a missing corpus into a failure instead of a
+# skip, so a dispatch that was meant to run the gate cannot end green having
+# run nothing.
+#
+# Residual gap, stated plainly: no workflow can manufacture the corpus, and
+# none should. Until an operator uploads a corpus artifact (or provides a
+# self-hosted runner with data/nctb), the real-corpus retrieval regression
+# runs nowhere on GitHub-hosted runners, and this workflow says so in its
+# run summary every night. Do NOT wire a fabricated/sample corpus in here —
+# a substring eval against sample text measures the sample, not retrieval.
 
 on:
   schedule:
     - cron: "31 22 * * *" # nightly; GitHub may throttle schedules
   workflow_dispatch:
+    inputs:
+      corpus_archive_url:
+        description: "URL of a tar.gz holding the corpus tree (must contain normalized/ and quality_report.json). Empty = use corpus_path or the checkout."
+        type: string
+        required: false
+        default: ""
+      corpus_path:
+        description: "Absolute or repo-relative path to an existing corpus dir (self-hosted runners). Empty = use the checkout's data/nctb when present."
+        type: string
+        required: false
+        default: ""
+      require_corpus:
+        description: "Fail instead of skipping when no corpus is available"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -46,14 +81,45 @@ jobs:
           python -m pip install --require-hashes -r constraints.txt
           python -m pip install --no-deps -e ".[dev]"
 
-      - name: Check corpus availability
+      - name: Resolve the corpus location (dispatch inputs, then the checkout)
         id: corpus
+        env:
+          INPUT_ARCHIVE_URL: ${{ inputs.corpus_archive_url }}
+          INPUT_CORPUS_PATH: ${{ inputs.corpus_path }}
+          INPUT_REQUIRE_CORPUS: ${{ inputs.require_corpus }}
         run: |
-          if [ -f ../../data/nctb/quality_report.json ] && compgen -G "../../data/nctb/normalized/*.chunks.jsonl" > /dev/null; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
+          set -euo pipefail
+          target=""
+          if [ -n "$INPUT_ARCHIVE_URL" ]; then
+            # The operator points at a tarball they control; extract it into a
+            # fresh directory OUTSIDE the checkout and locate the tree that
+            # carries normalized/ (the archive may wrap it in a parent dir).
+            dl="$RUNNER_TEMP/retrieval-eval-corpus"
+            rm -rf "$dl"
+            mkdir -p "$dl"
+            curl -fsSL "$INPUT_ARCHIVE_URL" -o "$dl/corpus.tgz"
+            tar -xzf "$dl/corpus.tgz" -C "$dl" --no-same-owner --no-same-permissions
+            target=$(find "$dl" -type d -name normalized -print -quit | sed 's|/normalized$||')
+          elif [ -n "$INPUT_CORPUS_PATH" ]; then
+            target="$INPUT_CORPUS_PATH"
+          elif [ -d ../../data/nctb/normalized ]; then
+            target="../../data/nctb"
+          fi
+          if [ -z "$target" ] || [ ! -d "$target/normalized" ]; then
+            if [ "$INPUT_REQUIRE_CORPUS" = "true" ]; then
+              echo "::error::require_corpus=true but no corpus with normalized/ was found (archive URL: '$INPUT_ARCHIVE_URL', path: '$INPUT_CORPUS_PATH', checkout: ../../data/nctb). The gate did NOT run."
+              exit 1
+            fi
             echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::data/nctb corpus is not distributed with the repo; the nightly real-corpus regression ran nowhere."
+            echo "::notice::data/nctb corpus is not distributed with the repo; the real-corpus retrieval regression did NOT run."
+          else
+            # Absolute, so downstream steps and upload-artifact (which resolves
+            # relative to the workspace, not the job's working-directory) agree
+            # on one path.
+            target=$(cd "$target" && pwd -P)
+            echo "present=true" >> "$GITHUB_OUTPUT"
+            echo "corpus_dir=$target" >> "$GITHUB_OUTPUT"
+            echo "Using corpus at $target"
           fi
 
       - name: Snapshot committed baseline
@@ -62,16 +128,36 @@ jobs:
 
       - name: Run real-corpus retrieval eval
         if: steps.corpus.outputs.present == 'true'
-        run: python scripts/evaluate_nctb_retrieval.py
+        run: python scripts/evaluate_nctb_retrieval.py "${{ steps.corpus.outputs.corpus_dir }}"
 
       - name: Fail on regression vs the committed baseline (R12)
         if: steps.corpus.outputs.present == 'true'
-        run: python scripts/check_retrieval_baseline.py --baseline baseline_committed.json --current ../../data/nctb/retrieval_eval.json
+        run: >-
+          python scripts/check_retrieval_baseline.py
+          --baseline baseline_committed.json
+          --current "${{ steps.corpus.outputs.corpus_dir }}/retrieval_eval.json"
 
       - name: Upload fresh retrieval report
         if: steps.corpus.outputs.present == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: retrieval-eval-report
-          path: data/nctb/retrieval_eval.json
+          path: ${{ steps.corpus.outputs.corpus_dir }}/retrieval_eval.json
           if-no-files-found: ignore
+
+      # CI-FIX-004: whatever happened, the run summary says so. A skipped
+      # nightly gate must never look like a green one.
+      - name: Record the outcome in the run summary
+        if: always()
+        run: |
+          {
+            echo "## retrieval-eval: real-corpus retrieval regression"
+            echo ""
+            if [ "${{ steps.corpus.outputs.present }}" = "true" ]; then
+              echo "- **RAN** against \`${{ steps.corpus.outputs.corpus_dir }}\` against the committed baseline (\`git show HEAD:data/nctb/retrieval_eval.json\`)."
+            else
+              echo "- **DID NOT RUN** — no corpus with \`normalized/\` was available on this runner."
+              echo "- The real corpus is copyrighted and is not distributed with the repo (\`data/nctb\` is gitignored), so a GitHub-hosted runner has nothing to measure. A green run of this job does NOT mean the regression gate ran."
+              echo "- **Owner action to make it runnable:** dispatch this workflow with \`corpus_archive_url\` pointing at a tar.gz of the corpus tree (must contain \`normalized/\` and \`quality_report.json\`), or dispatch with \`corpus_path\` on a self-hosted runner that already carries \`data/nctb\`. Pass \`require_corpus: true\` to make a missing corpus fail instead of skip."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

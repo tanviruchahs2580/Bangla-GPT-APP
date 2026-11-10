@@ -13,6 +13,17 @@ uncovered line and never fails on day one. The 90 target the audit set is met
 by every module without a "gap" note; the rest record the gap explicitly and
 the floor may only rise.
 
+CI-FIX-010 added the serving-path modules that had no floor at all while the
+global ``fail_under = 80`` left enough slack (1,605 statements) to lose every
+test of any single module and stay green. Those floors were set from the
+full-suite report at ``.audit/wave-v2/coverage.json`` (measured 2026-11-10,
+global 89.51%, 13,779 statements) — each note carries that module's measured
+value, rounded down. Deliberately NOT floored: the offline evaluation helpers
+(``evaluation/fairness_probes.py`` and ``evaluation/latency_report.py`` measure
+0% because nothing runs them) and ``nctb/acquisition.py`` — none is on the
+serving path, and the corpus ones are guarded by check_corpus_manifest.py and
+content_qa.py instead. Re-measure before raising a floor; never lower one.
+
 Usage:
     python -m coverage json -o coverage.json     # or pytest --cov-report=json
     python scripts/check_coverage_floors.py coverage.json
@@ -57,6 +68,36 @@ FLOORS: dict[str, tuple[float, str]] = {
     "services/tutor.py": (91.0, ""),
     "ratelimit.py": (89.0, "gap to 90: Redis backend error branches"),
     "middleware.py": (94.0, ""),
+    # --- CI-FIX-010: previously unfloored serving-path modules (measured on
+    # the full suite 2026-11-10, .audit/wave-v2/coverage.json; floor = rounded
+    # down). Before this, the global fail_under=80 gave each of them enough
+    # slack to lose every test without failing CI.
+    "providers/gemini.py": (68.0, "measured 68.47% on 2026-11-10; gap to 90: error/timeout paths"),
+    "caching.py": (
+        68.0,
+        "measured 68.97% on 2026-11-10; gap to 90: cache-miss/redis-fallback paths",
+    ),
+    "nctb/corpus.py": (72.0, "measured 72.91% on 2026-11-10; gap to 90: extraction failure paths"),
+    "evaluation/cli.py": (
+        47.0,
+        "measured 47.97% on 2026-11-10; the blocking eval-gate entry point",
+    ),
+    "initialize/schedulers.py": (
+        48.0,
+        "measured 48.39% on 2026-11-10; gap to 90: scheduler loop failure paths",
+    ),
+    "services/generators/worksheet.py": (
+        77.0,
+        "measured 77.98% on 2026-11-10; gap to 90: render/format branches",
+    ),
+    "services/generators/answer_key.py": (
+        79.0,
+        "measured 79.01% on 2026-11-10; gap to 90: render/format branches",
+    ),
+    "services/generators/rubric.py": (
+        79.0,
+        "measured 79.76% on 2026-11-10; gap to 90: render/format branches",
+    ),
 }
 
 

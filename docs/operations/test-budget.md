@@ -10,10 +10,10 @@ targets; the CI job timeouts are the hard stop.
 |---|---|---|---|
 | API unit suite (`pytest` in `apps/api`) | 15 min | 30 min (`.github/workflows/ci.yml`, api job) | ~8 min per full run on GitHub runners per the job comment; the 15 min local ceiling leaves room for a laptop working while the suite runs |
 | API with coverage (`--cov-branch`) | 20 min | same 30 min | a second full run in the same job |
-| Web unit suite (`npm run test:coverage`) | 5 min | 20 min (web job) | 73 files, `--no-file-parallelism` in CI |
+| Web unit suite (`npm run test:coverage`) | 5 min | 20 min (web job) | 112 test files on 2026-11-10 (`find apps/web/src -name '*.test.ts*' -o -name '*.spec.ts*' \| wc -l`), `--no-file-parallelism` in CI; the wrapper `apps/web/scripts/check_vitest_ran.mjs` adds one file walk, not a second run (CI-FIX-002) |
 | E2E smoke (`npm run test:e2e`, chromium) | 20 min | 40 min (e2e job) | server bring-up + seeded journeys |
 | Postgres parity job | 30 min | 45 min (postgres job step timeout) | migrations + smoke + race/tenancy batches |
-| Guardrails (ruff/mypy/radon/vulture/import-linter/semgrep/hadolint) | 3 min | 15 min (guardrails job) | tool installs dominate |
+| Guardrails (ruff/mypy/radon/vulture/import-linter/semgrep/hadolint + the corpus manifest/content-QA gates, CI-FIX-001) | 3 min | 15 min (guardrails job) | tool installs dominate; the corpus gates run only against tracked artifacts on a fresh clone |
 
 Measured reference points (this host, 2026-10-30): the SSE contract file 16 s,
 four provider/health files 53 s, env parity suite 6 s, a full API run minutes

@@ -307,6 +307,62 @@ Quarterly rotation procedure:
 
 ## 7. Rollback
 
+**Which procedure applies depends on how the API is deployed.** Two topologies
+exist in this repository and they are not interchangeable: the live API today
+is a hand-run container on SQLite (§7.1), while §7.2 is the compose path that
+`release.yml` drives. CI-FIX-011 added §7.1 and §7.3 because this section used
+to describe only the compose path — a responder following it on the live host
+would have looked for a stack that is not there.
+
+### 7.1 Live topology — hand-run container (the actual procedure today)
+
+Facts, read from the running host on 2026-11-10 (`docker ps`, `docker inspect
+api-live`; no secret values inspected):
+
+| Item | Value |
+|---|---|
+| Live API container | `api-live` — image `bangla-gpt-api:0.9.3-5c29d46` (commit `5c29d46`), healthy, published on `0.0.0.0:8000->8000/tcp` |
+| `DATABASE_URL` | `sqlite:////data/app.db` — **SQLite**, not Postgres |
+| Kept rollback container | `api-live-preauditv2` (the previous release, image `bangla-gpt-api:audit-final`), stopped, retained on the host |
+| State volumes | `api-live-data` (the SQLite file) and `bgpt-live-backups` (snapshots, §4) |
+| Web | `web-preview` (static build, port 8081) behind the Cloudflare tunnel `api-tunnel` |
+
+Rollback is a container swap: discard the new container and start the previous
+one.
+
+```bash
+docker rm -f api-live
+docker rename api-live-preauditv2 api-live
+docker start api-live
+
+# verify the swap (the same two probes the deploy receipt used):
+curl -fsS http://127.0.0.1:8000/ready
+curl -fsS https://bangla-gpt-app.vercel.app/api/health   # 200 {"status":"ok"}
+```
+
+- **What it does to schema and data: nothing.** The SQLite file lives in the
+  `api-live-data` volume and is untouched by a container swap. If the release
+  shipped migrations, the schema stays migrated; only the code moves back.
+  Roll schema separately (alembic) and take a backup first (§4) — see §7.3.
+- **Time:** about a minute (container start + the `/ready` probe).
+- **Who:** anyone with Docker access on the host; the commands are the exact
+  inverse of the swap performed during the 2026-11-10 deploy.
+- **Rehearsal status, stated plainly:** the forward swap (start the new
+  container, keep the old one stopped under a new name) is what was exercised
+  on 2026-11-10. The rollback direction above has **not** been exercised
+  end-to-end — the deploy receipt records it as "manual and untested". Treat
+  it as the documented procedure, not a proven one, until the first rehearsal.
+- **Caveat when recreating rather than renaming:** the live container carries
+  documented network memberships; a replacement must be created with
+  `--network bgpt-live -p 8000:8000` (a re-run without the network was
+  measured to break the published port on 2026-11-10). Renaming + starting the
+  kept container, as above, avoids that failure mode entirely.
+- **Do not** run the compose commands in §7.2 on this host: no compose project
+  runs the live API, and `API_TAG=local` / `WEB_TAG=local` cannot be pulled
+  from a registry.
+
+### 7.2 Compose deployment (only when the API is deployed with `docker compose`)
+
 - **Release rollback:** redeploy the previous tag. The image tags are what
   select the release — `api` and `web` resolve to `${API_TAG:-local}` and
   `${WEB_TAG:-local}`, so both must be exported or `docker compose pull` goes
@@ -333,8 +389,29 @@ Quarterly rotation procedure:
   sequence — checkout the previous tag, `compose pull`, `compose up --wait` —
   against a staging project and asserts the previous release comes up healthy.
   It is the drill for the rollback path release.yml performs automatically.
+  It has **not** been run against the live topology of §7.1.
 - **Bad release prevention:** CI gates (lint/format/type/tests/pip-audit/
   migrations incl. Postgres/golden-eval/container smoke) must pass before merge.
+
+### 7.3 The live data store does not match the DR document
+
+`docs/backup_dr.md` headlines a **Postgres 16 + pgBackRest** design (WAL
+archiving, nightly fulls, restore drills). That is the design for the compose
+`--profile postgres` path — it is **not** what the live API runs. The live API
+container's engine is SQLite at `DATABASE_URL=sqlite:////data/app.db`
+(verified above), so during an incident:
+
+- the pgBackRest commands in `docs/backup_dr.md` have no stanza to operate on
+  against the live service; do not run them expecting the live data;
+- the backups that exist for the live service are the SQLite snapshots made by
+  `scripts/backup_loop.py` into `bgpt-live-backups`, restored and verified with
+  `scripts/restore_test.py` — the procedure in §4 of this runbook;
+- a restore replaces the SQLite file; it does **not** replay WAL from
+  pgBackRest, and encrypted PII columns are useless without `PII_ENC_KEY`
+  (§4, "Key loss").
+
+If the live service is migrated to Postgres, this section and §7.1 must be
+updated in the same change.
 
 ## 8. Known operational limits
 

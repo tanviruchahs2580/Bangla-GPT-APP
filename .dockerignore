@@ -31,5 +31,50 @@ apps/web
 apps/api/.venv
 .venv
 apps/api/tests
-*.db
 docs
+
+# CI-FIX-005: the old `*.db` rule matched only root-level files, and nothing
+# excluded the corpus at all, so every `docker build .` uploaded the
+# copyrighted NCTB content and any SQLite artefact sitting beside it to the
+# daemon. The Dockerfile COPYs nothing from data/ (its COPY lines cover
+# apps/api/{constraints.txt,pyproject.toml,worker.py,src,alembic,alembic.ini}),
+# so the whole corpus tree is dead weight in this context -- and a textbook
+# PDF or a schema-complete local database in a build context is both a
+# licensing and a PII-exposure problem (AGENTS.md §8/§15).
+data/nctb/raw/
+data/nctb/extracted/
+data/nctb/normalized/
+
+# SQLite artefacts, all spellings: `*.db` never matched a nested file, and
+# SQLite writes -wal/-shm/-journal sidecars plus `.bak-` copies that end in
+# neither `.db` nor `.sqlite`. None of these may be uploaded to a build daemon
+# (they are PII artefacts per AGENTS.md §15), and no COPY target contains one.
+**/*.db
+**/*.db-*
+**/*.db.*
+**/*.sqlite
+**/*.sqlite3
+**/*.sqlite-*
+**/*.sqlite3-*
+
+# Local QA/audit scratch trees: schema-complete databases, screenshots and
+# extracted archives that no build step reads. They are git-ignored but the
+# Docker context does not read .gitignore.
+.audit/
+.audit-work/
+.qa-work/
+.qa-deploy/
+**/.hypothesis/
+**/.ruff_cache/
+**/.pytest_cache/
+**/.mypy_cache/
+.import_linter_cache/
+apps/api/eval/tmp/
+**/coverage.json
+# The same class of local-only material at the repo root: Android build
+# output, live-QA screenshots, agent tooling state and run logs. Measured
+# 2026-11-10: .apk-latest alone is 12 MB of AAB/APK output.
+.apk-latest/
+live_evidence/
+.playwright-mcp/
+**/*.log

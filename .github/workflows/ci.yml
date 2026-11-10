@@ -474,8 +474,28 @@ jobs:
           name: sbom-python
           path: apps/api/sbom-python.json
 
+  eval:
+    name: Eval gate (golden v3 + retrieval + red-team, via eval-gate.yml)
+    # CI-FIX-003: the eval gates could not block a merge. Branch protection's
+    # required contexts are only the ci.yml jobs, and `Golden-set regression
+    # gate` (eval-gate.yml) is not among them, so a change that degraded
+    # grounded accuracy or refusal behaviour merged with every required check
+    # green. There is no cross-workflow `needs:` in GitHub Actions, so the
+    # gate is called here as a reusable workflow and the required `web` job
+    # below waits on it: a red eval leaves `Web build & test` unstarted
+    # (blocked), not green. The eval-gate.yml standalone triggers stay, so
+    # the documented `Golden-set regression gate` check name keeps appearing
+    # on PRs (docs/ci.md, "owner action required").
+    #
+    # Graph check: ci.yml -> eval-gate.yml is a one-way edge; eval-gate.yml
+    # references no workflow in this repository, so no cycle can form.
+    uses: ./.github/workflows/eval-gate.yml
+
   web:
     name: Web build & test (apps/web)
+    # CI-FIX-003: depends on `eval` (see the job above) so the eval gates sit
+    # on this required context's critical path.
+    needs: eval
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -963,6 +983,56 @@ jobs:
               sys.exit(1)
           print(f"vulture clean at 100% confidence ({len(findings)} allowlisted finding(s))")
           PY
+
+      # CI-FIX-001: AGENTS.md §12 declared `check_corpus_manifest.py` and
+      # `content_qa.py` as gates and nothing ran either (0 hits across
+      # .github/, .pre-commit-config.yaml and the Makefile). The
+      # tracked-artifact legs of the manifest check always run: the manifest,
+      # the acquisition ledger, quality_report.json and the retrieval-eval
+      # digest are committed, so a fresh clone can verify them. The legs that
+      # need the copyrighted corpus (--corpus-dir, content_qa) cannot run
+      # without it; that skip is a ::notice:: that says plainly the real-corpus
+      # gate did NOT run, so a green job never implies it did.
+      #
+      # PYTHONPATH=src: this job installs nothing from the lock on purpose, and
+      # the tracked legs only reach stdlib-only modules (nctb.manifest), so the
+      # package needs to be importable, not installed.
+      - name: NCTB corpus manifest vs the tracked artifacts (CI-FIX-001)
+        working-directory: apps/api
+        env:
+          PYTHONPATH: src
+        run: |
+          extra=()
+          if [ -d ../../data/nctb/normalized ]; then
+            extra+=(--corpus-dir ../../data/nctb)
+          else
+            echo "::notice::data/nctb/normalized is absent (the copyrighted corpus is not distributed with the repo), so the served-corpus leg of check_corpus_manifest.py did NOT run."
+          fi
+          python3 scripts/check_corpus_manifest.py --data-dir ../../data/nctb "${extra[@]}"
+
+      - name: NCTB content QA on the built corpus (CI-FIX-001)
+        working-directory: apps/api
+        env:
+          PYTHONPATH: src
+        run: |
+          shopt -s nullglob
+          files=(../../data/nctb/normalized/nctb-*.chunks.jsonl)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::notice::no data/nctb/normalized/nctb-*.chunks.jsonl: the copyrighted corpus is not distributed with the repo, so the real-corpus content_qa gate did NOT run."
+            exit 0
+          fi
+          failed=0
+          for f in "${files[@]}"; do
+            if python3 scripts/content_qa.py report "$f" > "/tmp/content_qa_$(basename "$f").json"; then
+              echo "content_qa OK: $(basename "$f")"
+            else
+              status=$?
+              echo "::error::content_qa report failed (exit $status) for $f"
+              tail -40 "/tmp/content_qa_$(basename "$f").json"
+              failed=1
+            fi
+          done
+          exit "$failed"
 
   e2e:
     name: E2E (playwright, chromium)
