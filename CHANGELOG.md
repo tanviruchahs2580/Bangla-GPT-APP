@@ -62,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): give every foreign key an explicit ON DELETE policy
 - fix(api): ground on evidence mass, screen answers and declare image text as data
 - fix(api): jitter provider retries, share the stream tail, report real provider health
+- fix(api): keep AI jobs terminal, replay idempotent keys, bound analytics reads, guard grounding
 - fix(api): label the served confidence figure as a retrieval heuristic
 - fix(api): let the mailer reach a local sink that speaks plain SMTP
 - fix(api): log failed logins and armed account lockouts
@@ -97,6 +98,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): write the openapi fixture with platform-independent bytes
 - fix(ci): stop splicing contexts into the deploy script and land the SEC-18 triage
 - fix(compose): forward the production boot-guard keys from .env
+- fix(data): age chat rows by their own timestamps and keep the sweep drainable
 - fix(deploy): align the web build context and worker healthchecks
 - fix(deploy): mirror the Permissions-Policy into the self-hosted hosts
 - fix(docs,test): point every QA-record link at the new report and make the inline-script guard case-insensitive
@@ -108,9 +110,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(rag): out-of-corpus weight floor gated on corpus scale; kg gap test made deterministic
 - fix(rag): satisfy the CI ratchets on the audit port
 - fix(rag): state the pragma reason the slop guard demands (embedding retry tail)
+- fix(rag): treat client-owned prompt fields as untrusted and stop refusing repaired Bangla terms
 - fix(scripts): make the smoke, backup and rolling-deploy scripts honest
 - fix(scripts): stop piping curl output into the interpreter
+- fix(security): refuse guardian grants under impersonation and mark support-session audits
 - fix(tests): audit-p2 fixtures use the canonical engine_url (Linux CI sqlite path)
+- fix(web): add the missing states, a keyboard contract and readable control boundaries
 - fix(web): close the two CodeQL alerts on the wave-2 code
 - fix(web): delete the account with one navigation
 - fix(web): format and sort with the app language, not the device
@@ -244,6 +249,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs: name the real paths in the glossary and the RAG architecture notes
 - docs: never name the derived image tag VERSION
 - docs: record the browser storage inventory and the applicable-law flags
+- docs: record the retention semantics, the corrected threat model and the audit report
 - docs: refresh the native-review sheet and changelog for the hardening wave
 - docs: regenerate the changelog for the CI-repair commits
 - docs: regenerate the changelog for the CI-repair round 2
@@ -348,6 +354,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Other
 
+- Merge pull request #101 from tanviruchahs2580/fix/rag-audit-enterprise
 - Merge pull request #93 from tanviruchahs2580/fix/pwa-install-offline-200
 - Merge pull request #94 from tanviruchahs2580/qa/enterprise-v2-hardening
 - ci,style: point lint-imports at the root contract; format the composer; refresh the review sheet
