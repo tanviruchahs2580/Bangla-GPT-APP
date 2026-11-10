@@ -881,13 +881,17 @@ jobs:
               # _user_activity_tables/_profile_content_tables (37 -> 10) and
               # ask_stream -> _retrieve_and_gate/_stream_events (26 -> 18) --
               # so all three now sit at grade C or better and their entries
-              # are gone rather than raised. The blocks below stay recorded
-              # at their measured scores until their own streams split them.
+              # are gone rather than raised. The same rule removed
+              # tutor.py::TutorService._coverage_details (34): the RAG-002
+              # wave split it into _gate_groups (24) plus the small term
+              # helpers, so the gate function itself no longer needs an
+              # exemption and its entry is deleted, not re-measured. The
+              # blocks below stay recorded at their measured scores until
+              # their own streams split them.
               "src/bangla_gpt_api/data/nctb_loader.py::load_nctb_corpus": 33,  # corpus build
               "src/bangla_gpt_api/evaluation/fairness_probes.py::validate_fixture": 32,  # eval tooling
               "src/bangla_gpt_api/evaluation/golden_v3.py::check_golden": 24,  # eval tooling
               "src/bangla_gpt_api/evaluation/metrics.py::run_suite": 36,  # eval tooling
-              "src/bangla_gpt_api/services/tutor.py::TutorService._coverage_details": 34,  # tutor stream
           }
           raw = subprocess.run(
               [sys.executable, "-m", "radon", "cc", "src", "-s", "-j"],

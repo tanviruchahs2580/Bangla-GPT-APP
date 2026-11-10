@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Check, ClipboardCheck, RefreshCcw } from "lucide-react";
 import { Button, Card, ProgressRing } from "../../../components/ui";
-import { t } from "../../../i18n";
+import { formatNumber, t } from "../../../i18n";
 import { cn } from "../../../lib/cn";
 import { celebrate } from "../../../lib/confetti";
 import type { QuizResult } from "../../../types";
@@ -43,7 +43,9 @@ export function QuizResultScreen({
           <ProgressRing
             value={result.score_pct}
             size={120}
-            label={<strong>{Math.round(result.score_pct)}%</strong>}
+            label={
+              <strong>{formatNumber(Math.round(result.score_pct))}%</strong>
+            }
           />
           <div className="stat-value quiz-result-score">
             {t("correctOutOf", {

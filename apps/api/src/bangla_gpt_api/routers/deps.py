@@ -151,10 +151,22 @@ def forbid_impersonation(request: Request) -> None:
     concerned (`imp` only changes which revocation namespace is consulted),
     so every route an impersonated admin can reach is a route where the
     target's account can be changed by someone who is not them. Support
-    sessions exist to READ a user's situation; the token is 15 minutes and
-    the audit trail attributes it to the admin, but a state change survives
-    the session. Security-state changes (TOTP secret, account erasure) and
-    irreversible destruction are refused here.
+    sessions exist to READ a user's situation; the token is 15 minutes, but
+    a state change survives the session. Refused here: credential and
+    security-state changes (password, TOTP enroll/verify/disable, session
+    revoke, account erasure), irreversible destruction, and the guardian
+    grants a child cannot take back (SEC-001: invite create, invite revoke,
+    invite redeem and the legacy direct link, plus consent-evidence
+    rewrites -- the link a redemption creates has no unlink endpoint).
+
+    Attribution is NOT a substitute for this refusal. An audited action
+    taken inside a support session records the IMPERSONATED account as the
+    actor -- the trail must keep naming whose data was touched -- and marks
+    the row ``impersonated: true`` with the driving admin's id in ``detail``
+    (SEC-002, ``security.write_audit``), so an incident review can tell it
+    from a genuine self-service action. That makes the change explicable
+    after the fact; it does not make it reversible, which is why the
+    refusal above is the control.
 
     Used as a plain call at the top of a handler (the handler needs the
     ``Request`` anyway) rather than as a dependency, because a dependency
@@ -237,6 +249,18 @@ def get_current_user(
     if payload.get("mfa") is True:
         raise _unauthorized("MFA verification required", code="mfa_required")
     request.state.jwt_claims = payload
+    # SEC-002: a privileged audit row written inside a support session is
+    # attributed to the IMPERSONATED account (that is whose data moved), so
+    # the row must carry the fact that an admin was driving. The marker
+    # rides on ``Session.info``: the request's session is a per-request
+    # singleton (``get_db`` is dependency-cached, and every ``write_audit``
+    # caller passes that same session) and it is visible to the endpoint.
+    # A ContextVar set here is NOT -- every handler is sync, so FastAPI runs
+    # the dependency and the endpoint in threadpool calls with a context
+    # copied before this function's set. Set only for real impersonation
+    # tokens, so ordinary requests stay byte-identical.
+    if payload.get("imp") is True:
+        db.info["_impersonation"] = {"impersonated": True, "imp_by": payload.get("imp_by")}
     user = db.get(User, user_id)
     if user is None:
         raise _unauthorized("Invalid or expired token", code="invalid_token")

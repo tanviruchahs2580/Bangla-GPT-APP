@@ -39,7 +39,7 @@ import {
   Segmented,
 } from "../../components/ui";
 import { friendlyError } from "../../errors";
-import { getLang, setLang, t, tSubject } from "../../i18n";
+import { formatNumber, getLang, setLang, t, tSubject } from "../../i18n";
 import { roleLabel } from "../../lib/roles";
 import { getLowData, toggleLowData } from "../../lib/lowData";
 import { currentTheme, toggleTheme } from "../../lib/theme";
@@ -579,23 +579,23 @@ export default function MePage() {
           </div>
           <div className="stat-row mt-3">
             <div>
-              <div className="num">{report.quizzes_taken}</div>
+              <div className="num">{formatNumber(report.quizzes_taken)}</div>
               <div className="lbl">{t("reportQuizzesGraded")}</div>
             </div>
             <div>
               <div className="num">
                 {report.avg_score_pct == null
                   ? "—"
-                  : `${Math.round(report.avg_score_pct)}%`}
+                  : `${formatNumber(Math.round(report.avg_score_pct))}%`}
               </div>
               <div className="lbl">{t("reportAvg")}</div>
             </div>
             <div>
-              <div className="num">{report.chapters_read}</div>
+              <div className="num">{formatNumber(report.chapters_read)}</div>
               <div className="lbl">{t("reportChaptersRead")}</div>
             </div>
             <div>
-              <div className="num">{report.questions_asked}</div>
+              <div className="num">{formatNumber(report.questions_asked)}</div>
               <div className="lbl">{t("reportQuestions")}</div>
             </div>
           </div>

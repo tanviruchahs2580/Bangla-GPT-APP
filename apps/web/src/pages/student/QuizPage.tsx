@@ -118,7 +118,14 @@ export default function QuizPage() {
 
   // spaced-revision tab (SM-2-lite queue) with due badge.
   const [tab, setTab] = useState<"quiz" | "revision" | "assigned">("quiz");
-  const { data: due, refetch: refetchDue } = useQuery({
+  // UX-003: `isPending`/`isError` are surfaced by the panel; without them the
+  // tab was blank while loading and blank again after a failure.
+  const {
+    data: due,
+    isPending: duePending,
+    isError: dueFailed,
+    refetch: refetchDue,
+  } = useQuery({
     queryKey: ["revision-due"],
     queryFn: () => get<RevisionDue>("/revision/due"),
     enabled: me?.role === "student",
@@ -396,7 +403,11 @@ export default function QuizPage() {
             <Target size={18} aria-hidden /> {t("weakPracticeStart")}
           </Button>
         )}
-        {error && <p className="error section-gap-top">{error}</p>}
+        {error && (
+          <p className="error section-gap-top" role="alert">
+            {error}
+          </p>
+        )}
       </Card>
 
       <div
@@ -451,6 +462,13 @@ export default function QuizPage() {
       {tab === "revision" ? (
         <RevisionPanel
           due={due}
+          // `isStudent` guards the disabled query: react-query reports
+          // isPending while a query is disabled too, so without it a
+          // non-student render would wait on a loading that never resolves
+          // (the same guard AssignedPanel documents).
+          pending={isStudent && duePending}
+          failed={dueFailed}
+          onRetry={() => void refetchDue()}
           busy={revisionBusy}
           error={error}
           onAnswer={(item, oi) => void answerRevision(item, oi)}

@@ -100,7 +100,16 @@
   --ink: #1f291c;
   --muted: #5d6b57;
   --line: #e5e0d2;
-  --line-strong: #d1cbb8;
+  /* UX-008: the resting boundary of .input/.select/.textarea, .chip,
+     .quiz-option, .suggest-chip and button.secondary — all filled with
+     --card (#ffffff here) and only 1.13:1 against --bg, so this border is
+     the control's sole edge. #d1cbb8 measured 1.62:1 against --card and
+     1.44:1 against --bg, below the 3:1 WCAG 1.4.11 floor for non-text UI.
+     #8f8873 is 3.54:1 on --card and 3.14:1 on --bg (WCAG relative-luminance
+     formula, pinned by formControlBoundary.test.ts). No text colour moved:
+     --muted is 5.67:1 on the same fill, so labels keep the stronger
+     contrast and the boundary stays the lighter of the two. */
+  --line-strong: #8f8873;
 
   /* Typography — fluid scale (WP-01/WP-03: clamp, Bangla-safe) */
   --font:
@@ -212,7 +221,13 @@
   --ink: #f0efe4;
   --muted: #a8ab9a;
   --line: #2c2f22;
-  --line-strong: #3d4130;
+  /* UX-008: dark twin of the light change above. #3d4130 measured 1.61:1
+     against --card (#1b1e14) and 1.76:1 against --bg — the same sub-3:1
+     boundary. #6d7459 is 3.46:1 on --card and 3.79:1 on --bg, and clears
+     3:1 on every other dark surface a control can sit on (#21251a 3.19:1,
+     #1a1c14 3.52:1). --muted stays far above it at 7.21:1, so text keeps
+     the stronger contrast in this theme too. */
+  --line-strong: #6d7459;
 
   /* RENO: only the canonical --elev-* trio needs dark values; the
      legacy --shadow-* aliases from :root resolve through them. */

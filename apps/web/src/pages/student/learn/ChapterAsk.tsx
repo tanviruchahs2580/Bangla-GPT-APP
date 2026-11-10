@@ -69,7 +69,11 @@ export function ChapterAsk({
         </button>
       </div>
       {busy && <p className="muted">{t("thinking")}</p>}
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
       {answer && (
         <Card className="chapter-card">
           <div className="chips-gap">

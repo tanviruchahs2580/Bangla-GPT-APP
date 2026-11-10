@@ -17,7 +17,7 @@ import type {
 } from "../../types";
 import { useAuth } from "../../AuthContext";
 import { Card, LoadError, ProgressRing, Stat } from "../../components/ui";
-import { t, tSubject } from "../../i18n";
+import { formatNumber, t, tSubject } from "../../i18n";
 
 function useProgress(me: MeResponse | null) {
   return useQuery({
@@ -154,8 +154,16 @@ export default function HomePage() {
             {t("continueLearning")}: {showCont.chapter}
           </div>
           <p className="muted">
-            {tSubject(showCont.subject)} · {t("classLabel")}{" "}
-            {showCont.class_level}
+            {tSubject(showCont.subject)}
+            {/* The class level is nullable on this payload: the fragment is
+                dropped rather than printing a label with no value (or, worse,
+                a default class the record does not claim). */}
+            {showCont.class_level != null && (
+              <>
+                {" · "}
+                {t("classLabel")} {formatNumber(showCont.class_level)}
+              </>
+            )}
             {showCont.excerpt ? ` — ${showCont.excerpt.slice(0, 80)}…` : ""}
           </p>
           <button
@@ -276,7 +284,7 @@ export default function HomePage() {
                     a failed request that their streak was gone. */}
                 {activity && (
                   <Stat
-                    value={activity.streak}
+                    value={formatNumber(activity.streak)}
                     label={t("streakLabel", { days: activity.streak })}
                   />
                 )}

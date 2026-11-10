@@ -69,7 +69,11 @@ export function TutorComposer({
 }) {
   return (
     <>
-      {error && <p className="error error-flush">{error}</p>}
+      {error && (
+        <p className="error error-flush" role="alert">
+          {error}
+        </p>
+      )}
 
       <div
         className="chips strategy-row"
@@ -162,24 +166,23 @@ export function TutorComposer({
           <Paperclip size={16} aria-hidden />
         </button>
         <VoiceButton onTranscript={onTranscript} />
-        {sending ? (
-          <Button
-            variant="soft"
-            onClick={onStop}
-            aria-label={t("stopGenerating")}
-          >
+        {/* UX-007: ONE element for send/stop. Swapping two <Button>s mid-turn
+            replaced the DOM node, so a keyboard or switch user's focus fell to
+            <body> the moment their Send press started the turn and Stop — the
+            only way to cancel it — became unreachable. Same element, toggled
+            label, icon, variant and action keeps the focus where it was. */}
+        <Button
+          variant={sending ? "soft" : "primary"}
+          onClick={sending ? onStop : onSend}
+          disabled={!sending && !input.trim()}
+          aria-label={sending ? t("stopGenerating") : t("send")}
+        >
+          {sending ? (
             <Square size={18} aria-hidden />
-          </Button>
-        ) : (
-          <Button
-            variant="primary"
-            onClick={onSend}
-            disabled={!input.trim()}
-            aria-label={t("send")}
-          >
+          ) : (
             <Send size={18} aria-hidden />
-          </Button>
-        )}
+          )}
+        </Button>
       </div>
       {showFootNote && (
         <span className="muted chat-foot-note">{t("continueTutor")}</span>

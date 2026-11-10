@@ -1,25 +1,48 @@
-import { Card } from "../../../components/ui";
+import { Card, LoadError } from "../../../components/ui";
 import { t } from "../../../i18n";
 import type { RevisionDue, RevisionItemOut } from "../../../types";
 
 /** F-094 split: the spaced-revision tab body, extracted from QuizPage. */
 export function RevisionPanel({
   due,
+  pending,
+  failed,
+  onRetry,
   busy,
   error,
   onAnswer,
 }: {
   due: RevisionDue | undefined;
+  pending: boolean;
+  failed: boolean;
+  onRetry: () => void;
   busy: boolean;
   error: string | null;
   onAnswer: (item: RevisionItemOut, chosen: number) => void;
 }) {
   return (
     <div className="stack">
-      {due && due.items.length === 0 && (
+      {/* UX-003: the tab rendered nothing at all while the queue was in
+          flight and after it failed — a slow or broken request looked
+          exactly like a broken app. Same treatment as AssignedPanel: a
+          status line while loading, a retryable alert when it failed. */}
+      {failed ? (
         <Card>
-          <p className="muted flush">{t("revisionEmpty")}</p>
+          <LoadError onRetry={onRetry} />
         </Card>
+      ) : pending ? (
+        <Card>
+          <p className="muted flush" role="status">
+            {t("loading")}
+          </p>
+        </Card>
+      ) : (
+        due &&
+        due.items.length === 0 && (
+          <Card>
+            <p className="muted flush">{t("revisionEmpty")}</p>
+          </Card>
+        )
       )}
       {due?.items.map((item) => (
         <Card key={item.id} className="row quiz-review-row">
@@ -44,7 +67,11 @@ export function RevisionPanel({
           </div>
         </Card>
       ))}
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

@@ -522,8 +522,10 @@ recorded in `docs/hosting_decision.md`.
 
 ### Data retention (D20)
 
-- Conversations older than `CHAT_RETENTION_DAYS` (default 180) are purged by
-  `POST /admin/maintenance/purge` (admin-only). Schedule it daily:
+- Chat turns older than `CHAT_RETENTION_DAYS` (default 180) are purged by
+  `POST /admin/maintenance/purge` (admin-only); a conversation row is removed
+  once all of its turns have aged out, so a thread still in use is never aged
+  out of its live history. Schedule it daily:
   `0 3 * * * curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" http://api:8000/admin/maintenance/purge`
   or trigger from the admin dashboard button weekly until automated.
 

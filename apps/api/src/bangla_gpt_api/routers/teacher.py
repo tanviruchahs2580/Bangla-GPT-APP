@@ -49,6 +49,7 @@ from .common import (
     _classroom_or_404,
     _default_school,
     _hash_invite,
+    _id_chunks,
     _load_class_students,
     _student_briefs,
 )
@@ -90,21 +91,26 @@ def teacher_analytics(
     briefs = _student_briefs(db, students)
 
     stats: dict[str, list[int]] = defaultdict(lambda: [0, 0])
-    if students:
-        attempt_ids = [
-            a.id
-            for a in db.execute(
-                select(QuizAttempt).where(
-                    QuizAttempt.student_id.in_([s.id for s in students]),
+    # REL-003: a class-wide roster used to bind every student id into one
+    # IN (...) and then every attempt id into a second one -- 500s above the
+    # engine's bind limit (SQLite here, 65535 on PostgreSQL). Both lists are
+    # batched at _ID_CHUNK_SIZE; the counts are additive, so the result is
+    # unchanged. Only attempt ids are selected: the rows' quiz_json payload
+    # is not needed to join the answer log.
+    for chunk in _id_chunks([s.id for s in students]):
+        attempt_ids = list(
+            db.execute(
+                select(QuizAttempt.id).where(
+                    QuizAttempt.student_id.in_(chunk),
                     QuizAttempt.status == "graded",
                 )
             )
             .scalars()
             .all()
-        ]
-        if attempt_ids:
+        )
+        for attempt_chunk in _id_chunks(attempt_ids):
             rows = (
-                db.execute(select(AnswerLog).where(AnswerLog.attempt_id.in_(attempt_ids)))
+                db.execute(select(AnswerLog).where(AnswerLog.attempt_id.in_(attempt_chunk)))
                 .scalars()
                 .all()
             )

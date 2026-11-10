@@ -488,8 +488,10 @@ def admin_purge_expired(
 ) -> dict:
     """Retention sweep (D20, ): expired tokens, stale invites, old chats.
 
-    Child-data minimization: conversations older than
-    ``chat_retention_days`` are deleted with their messages. With
+    Child-data minimization: chat messages older than
+    ``chat_retention_days`` are deleted by their own timestamps, and a
+    conversation row is removed once none of its messages is left inside
+    the window (a thread still in use keeps its history). With
     ``dry_run=true`` the SAME count report is returned without deleting
     anything (compliance evidence); real runs also write the audit row.
 

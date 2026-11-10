@@ -2,12 +2,12 @@ import asyncio
 import hashlib
 import logging
 import math
-import re
 import time
 import unicodedata
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from functools import partial
 from typing import Any
 
 from bangla_gpt_api.evaluation.metrics import script_violations
@@ -57,7 +57,11 @@ from bangla_gpt_api.services.circuit_breaker import (
     CircuitOpenError,
     ProviderFallbackRouter,
 )
-from bangla_gpt_api.services.context import RequestContext, set_current_context
+from bangla_gpt_api.services.context import (
+    RequestContext,
+    sanitize_prompt_text,
+    set_current_context,
+)
 from bangla_gpt_api.services.pii import redact_pii
 from bangla_gpt_api.services.router import (
     Route,
@@ -248,11 +252,6 @@ def prompt_sha256(system: str = SYSTEM_PROMPT) -> str:
 
 PROMPT_SHA256 = prompt_sha256()
 
-_EVIDENCE_CLOSE_RE = re.compile(r"</\s*evidence\s*>", re.IGNORECASE)
-_EVIDENCE_OPEN_RE = re.compile(r"<\s*evidence\s*>", re.IGNORECASE)
-_USER_QUESTION_RE = re.compile(r"<\s*/?\s*user_question\s*>", re.IGNORECASE)
-_IMAGE_TAG_RE = re.compile(r"<\s*/?\s*attached_image\s*>", re.IGNORECASE)
-
 # Same set the corpus pipeline strips (nctb/normalize.py): ZWSP, ZWJ, ZWNJ, BOM.
 _ZERO_WIDTH_TABLE = str.maketrans("", "", "\u200b\u200c\u200d\ufeff")
 
@@ -264,13 +263,13 @@ def sanitize_evidence(text: str) -> str:
     just as attacker-controlled as a chunk, and history is rendered into
     the prompt after the evidence blocks — unsanitized, it could re-open or
     fake an ``<evidence>`` section or break out of ``<user_question>``.
+    Client-owned quiz-explain fields (question, options, chapter) and the
+    education-context header values go through the same rewriting (RAG-001),
+    so the trusted region has one escape rule, not two. The implementation
+    lives in services.context (imported here; the reverse import would be a
+    cycle) and is shared with that module's own field interpolation.
     """
-    text = _EVIDENCE_CLOSE_RE.sub("<&#47;evidence>", text)
-    text = _EVIDENCE_OPEN_RE.sub("<&#91;evidence>", text)
-    # Same escape for the vision tag pair: untrusted text (a chunk or a prior
-    # turn) must not be able to fake the image declaration either.
-    text = _IMAGE_TAG_RE.sub("<&#91;attached_image&#93;>", text)
-    return _USER_QUESTION_RE.sub("<&#91;user_question&#93;", text)
+    return sanitize_prompt_text(text)
 
 
 def normalize_query(text: str) -> str:
@@ -381,10 +380,61 @@ class _StreamRun:
     busy: bool = False
 
 
+def _absent_content_terms(groups: list[tuple[str, tuple[str, ...]]], df) -> list[str]:
+    """Raw terms whose every candidate surface is absent from the vocabulary.
+
+    The out-of-corpus budget counts *raw* terms, not surfaces: one query word
+    that happens to have three spellings is still one unknown subject term.
+    """
+    return [raw for raw, candidates in groups if not any(df(c) > 0 for c in candidates)]
+
+
+def _in_corpus_groups(
+    groups: list[tuple[str, tuple[str, ...]]], df
+) -> list[tuple[str, tuple[str, ...]]]:
+    """The groups with at least one surface the corpus vocabulary knows (df > 0)."""
+    return [(raw, candidates) for raw, candidates in groups if any(df(c) > 0 for c in candidates)]
+
+
+def _rarest_surface_df(groups: list[tuple[str, tuple[str, ...]]], df) -> dict[str, int]:
+    """Per group, the document frequency of its rarest in-corpus surface.
+
+    The rarest spelling is what makes a term hard to satisfy; a wrong
+    alternative must not deflate the group's weight.
+    """
+    return {raw: min(df(c) for c in candidates if df(c) > 0) for raw, candidates in groups}
+
+
+def _repair_resolved_terms(groups: list[tuple[str, tuple[str, ...]]], df) -> set[str]:
+    """Raw terms the vocabulary knows only through an admitted spelling repair.
+
+    RAG-002: ``df(raw) == 0`` with an in-corpus candidate means the group exists
+    because ``_supported_spellings`` admitted a repair. Such a group is
+    *optional* -- it may satisfy a hit that carries the repaired word, but it
+    must not dilute a hit that does not.
+    """
+    return {
+        raw
+        for raw, candidates in groups
+        if not raw.isascii() and df(raw) == 0 and any(df(c) > 0 for c in candidates)
+    }
+
+
+def _hit_term_sets(hits: list) -> list[set[str]]:
+    """Stemmed indexed terms per hit, tokenized once (RAG-002 reads them too).
+
+    Both the spelling-repair filter and the per-chunk coverage loop compare
+    against the text the lexical lane indexes, so the tokenisation happens
+    here rather than twice inside the gate.
+    """
+    return [{light_stem(t) for t in tokenize(indexable_text(hit.chunk))} for hit in hits]
+
+
 def _resolve_query_groups(
     query_terms: tuple[str, ...],
     *,
-    roman_matcher,
+    roman_matcher: Callable[[str], Sequence[str]] | None = None,
+    spelling_matcher: Callable[[str], Sequence[str]] | None = None,
 ) -> list[tuple[str, tuple[str, ...]]]:
     """Group each raw query term with its candidate corpus surfaces.
 
@@ -396,16 +446,27 @@ def _resolve_query_groups(
     token may stand for — not separate requirements. Graceful degradation:
     statistics without the matching surfaces resolve nothing, and the gate
     proceeds on the raw terms.
+
+    The Bangla spelling lane (RAG-002) joins the same resolution list: an
+    unknown Bangla token that ``match_spelling`` repairs (স্বরন্ধি ->
+    স্বরসন্ধি) is a surface the token stands for, exactly like the roman lane,
+    and retrieval already counted it so. The lane only returns terms that ARE
+    corpus vocabulary, and ``_coverage_details`` additionally admits a repair
+    only when the top-ranked evidence carries it, so a group can never become
+    in-corpus through a repair the evidence does not actually support.
     """
     groups: list[tuple[str, tuple[str, ...]]] = []
     for term in query_terms:
         candidates: tuple[str, ...] = (term,)
+        substitutes: tuple[str, ...] = ()
         if term.isascii():
             substitutes = english_gloss_terms(term)
             if not substitutes and roman_matcher is not None:
                 substitutes = tuple(roman_matcher(term))
-            if substitutes:
-                candidates = tuple(dict.fromkeys((term, *substitutes)))
+        elif spelling_matcher is not None:
+            substitutes = tuple(spelling_matcher(term))
+        if substitutes:
+            candidates = tuple(dict.fromkeys((term, *substitutes)))
         groups.append((term, candidates))
     return groups
 
@@ -580,6 +641,132 @@ class TutorService:
                 return True
         return False
 
+    def _supported_spellings(
+        self,
+        term: str,
+        *,
+        matcher: Callable[[str], Sequence[str]] | None,
+        top_evidence: set[str],
+    ) -> list[str]:
+        """Repair candidates the top-ranked evidence actually supports (RAG-002).
+
+        ``match_spelling`` is a *retrieval* aid: it answers "what corpus word
+        could this token have meant?". For the gate that question is only
+        settled when the evidence the turn will actually answer from carries
+        the repaired surface; a repair the top chunk does not carry is a
+        different word, not this question's term. Measured: union-scoped
+        admission refused two answerable bn comparison items because the
+        spurious অধ্যায়ে -> অনুযায়ী repair (carried only by a lower-ranked
+        chunk) weighed down every hit's coverage (0.679 -> 0.477), while
+        admitting repairs without any weighting flipped an out-of-corpus
+        negative ("ঢাকার সেরা বিরিয়ানির দোকান কোথায়?") into a grounded answer.
+        The acceptance rule is the one the coverage check already applies to a
+        candidate (exact stem match, else trigram >= 0.6), so a repair can
+        never count further than it can be covered.
+
+        Extracted from ``_coverage_details`` so that method stays inside its
+        recorded complexity budget (CI ratchet, grade D and worse); a resolver
+        is always installed, and an absent matcher yields no candidates, which
+        is exactly what passing ``None`` did.
+        """
+        if matcher is None:
+            return []
+        return [
+            candidate for candidate in matcher(term) if self._term_covered(candidate, top_evidence)
+        ]
+
+    def _gate_groups(
+        self, groups: list[tuple[str, tuple[str, ...]]]
+    ) -> tuple[list[tuple[str, tuple[str, ...]]], dict[str, float], set[str]] | None:
+        """Apply the documented out-of-corpus rules to the resolved groups.
+
+        Coverage is measured over the question's terms the corpus KNOWS about
+        (df >= 1), weighted by ln(1 + N/df): missing a one-of-a-kind curriculum
+        term dominates the verdict, while missing a term the whole book repeats
+        costs little -- which is how "ভগ্নাংশ কী? explain করো" grounds on
+        ভগ্নাংশ alone instead of being vetoed by the instruction word. The
+        documented out-of-corpus budget is applied first: >= 2 absent content
+        terms means the question's subject world is not in the corpus, and the
+        terms the corpus happens to share with it must not manufacture
+        coverage.
+
+        Out-of-corpus weight floor (audit F-11/D2): even when the absent-count
+        budget admits a question, one unbounded IDF term naming the world
+        outside the textbook ("ডলারের দাম কত?", where দাম/সপ্তাহ are mere
+        passengers) must not be carried by the corpus vocabulary it happens to
+        touch. The in-corpus share of the question's TOTAL IDF weight must
+        reach OUT_OF_DOMAIN_WEIGHT_FRACTION, where absent terms weigh the
+        ln(1+N) ceiling. The comparison is only meaningful where IDF
+        concentration is: at corpus scale the unknown weight ln(1+N) dwarfs a
+        ubiquitous term's ln(2); on a fixture corpus of a dozen chunks the
+        fractions degenerate (caught by the full suite), so below
+        OUT_OF_DOMAIN_MIN_DOCUMENTS documents the absent-count budget above is
+        the only out-of-corpus rule.
+
+        Returns ``(in_corpus_groups, weights, repair_resolved)``, or ``None``
+        when the gate must refuse. Extracted from ``_coverage_details`` with
+        the same branches, log lines and order, so that method stays inside its
+        recorded complexity budget (CI ratchet, grade D and worse).
+        """
+        if self.term_stats is None or self.term_stats.total_documents <= 0:
+            return groups, {raw: 1.0 for raw, _ in groups}, set()
+        document_frequency = self.term_stats.document_frequency
+        absent = _absent_content_terms(groups, document_frequency)
+        if len(absent) >= self.OUT_OF_CORPUS_ABSENT_BUDGET:
+            json_log(
+                logger,
+                logging.INFO,
+                "tutor_retrieval",
+                gate="out_of_domain",
+                out_of_corpus_terms=len(absent),
+                budget=self.OUT_OF_CORPUS_ABSENT_BUDGET,
+            )
+            return None
+        if absent and self.term_stats.total_documents >= (self.OUT_OF_DOMAIN_MIN_DOCUMENTS):
+            fraction = _in_corpus_weight_fraction(
+                groups,
+                absent_names=frozenset(absent),
+                document_frequency=document_frequency,
+                total_documents=self.term_stats.total_documents,
+            )
+            if fraction < self.OUT_OF_DOMAIN_WEIGHT_FRACTION:
+                json_log(
+                    logger,
+                    logging.INFO,
+                    "tutor_retrieval",
+                    gate="out_of_domain",
+                    in_corpus_weight_fraction=round(fraction, 4),
+                    out_of_corpus_terms=len(absent),
+                )
+                return None
+        in_corpus = _in_corpus_groups(groups, document_frequency)
+        if not in_corpus:
+            json_log(
+                logger,
+                logging.INFO,
+                "tutor_retrieval",
+                gate="out_of_domain",
+                out_of_corpus_terms=len(groups),
+            )
+            return None
+        # The group's weight is its rarest in-corpus surface: the most
+        # informative spelling is what makes the term hard to satisfy, and a
+        # wrong alternative must not deflate that weight.
+        weights = coverage_weights(
+            (raw for raw, _ in in_corpus),
+            _rarest_surface_df(in_corpus, document_frequency),
+            self.term_stats.total_documents,
+        )
+        # RAG-002: a group the vocabulary knows only through an admitted
+        # spelling repair (raw df == 0, repair df > 0) is an *optional*
+        # surface. It satisfies a hit that carries the repaired word, but it
+        # must not dilute a hit that does not: the spurious অধ্যায়ে -> অনুযায়ী
+        # repair (df=1, hence maximum weight) refused "'সন্ধি' অধ্যায়ে কী কী
+        # পার্থক্য আছে?" at coverage 0.5037 -> 0.305 although the answerable
+        # hit never contained অনুযায়ী. A guessed repair is not a requirement
+        # the student stated.
+        return in_corpus, weights, _repair_resolved_terms(in_corpus, document_frequency)
+
     def _coverage_details(self, question: str, hits: list) -> tuple[float, bool]:
         """Weighted content-term coverage of the best chunk, plus the verdict.
 
@@ -618,6 +805,27 @@ class TutorService:
         (the out-of-corpus budget keeps its meaning per raw term), and it
         counts as covered when ANY candidate matches the evidence.
 
+        Bangla spelling lane (RAG-002): the same resolution now includes the
+        spelling repair retrieval already uses (BM25Index ->
+        CorpusVocabulary.match_spelling, trigram >= 0.6). Measured on the
+        served corpus: "স্বরন্ধি কী?" retrieved the identical top chunk as
+        "স্বরসন্ধি কী?" (score 12.295 vs 7.395) yet refused at coverage 0.0,
+        because the absence check was an exact df lookup while the retrieval
+        lane had repaired the typo; golden-v3's bn_typo stratum sat at 6/37.
+        A repaired surface counts only when three measured conditions hold:
+        it genuinely exists in the vocabulary (the lane returns corpus terms,
+        df>0 filter unchanged); the top-ranked evidence carries it by the same
+        rule ``_term_covered`` applies (exact stem match, else trigram >= 0.6);
+        and a group resolved only by such a repair is an *optional* surface --
+        it satisfies the hits that carry the repaired word but never dilutes a
+        hit that does not. Each scope was measured necessary: union-scoped
+        admission refused the answerable "'সন্ধি' অধ্যায়ে কী কী পার্থক্য
+        আছে?" through the spurious অধ্যায়ে -> অনুযায়ী repair (coverage 0.5037
+        -> 0.305), while optionality without top-hit admission answered the
+        out-of-corpus negative "ঢাকার সেরা বিরিয়ানির দোকান কোথায়?"
+        (coverage 0.5522). Nothing else moved -- no threshold, top_k or
+        budget.
+
         Out-of-corpus budget (F-002/RAG-15): the documented rule is *>= 2
         content terms absent from the corpus -> refuse*
         (docs/RAG_ARCHITECTURE.md, "out-of-domain budget"). The code used to
@@ -641,108 +849,51 @@ class TutorService:
             query_terms = tuple(
                 dict.fromkeys(light_stem(t) for t in tokenize(question) if len(t) >= 2)
             )
+        if not hits:
+            return 0.0, False
+        # Tokenize each hit's indexed text once: the RAG-002 spelling-repair
+        # filter and the per-chunk coverage loop read the same terms.
+        hit_terms = _hit_term_sets(hits)
         groups = _resolve_query_groups(
-            query_terms, roman_matcher=getattr(self.term_stats, "match_roman", None)
+            query_terms,
+            roman_matcher=getattr(self.term_stats, "match_roman", None),
+            spelling_matcher=partial(
+                self._supported_spellings,
+                matcher=getattr(self.term_stats, "match_spelling", None),
+                top_evidence=hit_terms[0],
+            ),
         )
-        if not groups or not hits:
+        if not groups:
             return 0.0, False
 
-        # Coverage is measured over the question's terms the corpus KNOWS
-        # about (df >= 1), weighted by ln(1 + N/df): missing a one-of-a-kind
-        # curriculum term dominates the verdict, while missing a term the
-        # whole book repeats costs little -- which is how "ভগ্নাংশ কী?
-        # explain করো" grounds on ভগ্নাংশ alone instead of being vetoed by
-        # the instruction word. The documented out-of-corpus budget is
-        # applied first (see the docstring): >= 2 absent content terms means
-        # the question's subject world is not in the corpus, and the terms
-        # the corpus happens to share with it must not manufacture coverage.
-        if self.term_stats is not None and self.term_stats.total_documents > 0:
-            document_frequency = self.term_stats.document_frequency
-            absent = [
-                raw
-                for raw, candidates in groups
-                if not any(document_frequency(c) > 0 for c in candidates)
-            ]
-            if len(absent) >= self.OUT_OF_CORPUS_ABSENT_BUDGET:
-                json_log(
-                    logger,
-                    logging.INFO,
-                    "tutor_retrieval",
-                    gate="out_of_domain",
-                    out_of_corpus_terms=len(absent),
-                    budget=self.OUT_OF_CORPUS_ABSENT_BUDGET,
-                )
-                return 0.0, False
-            # Out-of-corpus weight floor (audit F-11/D2): even when the
-            # absent-count budget admits a question, one unbounded IDF term
-            # naming the world outside the textbook ("ডলারের দাম কত?", where
-            # দাম/সপ্তাহ are mere passengers) must not be carried by the
-            # corpus vocabulary it happens to touch. The in-corpus share of
-            # the question's TOTAL IDF weight must reach
-            # OUT_OF_DOMAIN_WEIGHT_FRACTION, where absent terms weigh the
-            # ln(1+N) ceiling. The comparison is only meaningful where IDF
-            # concentration is: at corpus scale the unknown weight ln(1+N)
-            # dwarfs a ubiquitous term's ln(2); on a fixture corpus of a
-            # dozen chunks the fractions degenerate (caught by the full
-            # suite), so below OUT_OF_DOMAIN_MIN_DOCUMENTS documents the
-            # absent-count budget above is the only out-of-corpus rule.
-            if absent and self.term_stats.total_documents >= (self.OUT_OF_DOMAIN_MIN_DOCUMENTS):
-                fraction = _in_corpus_weight_fraction(
-                    groups,
-                    absent_names=frozenset(absent),
-                    document_frequency=document_frequency,
-                    total_documents=self.term_stats.total_documents,
-                )
-                if fraction < self.OUT_OF_DOMAIN_WEIGHT_FRACTION:
-                    json_log(
-                        logger,
-                        logging.INFO,
-                        "tutor_retrieval",
-                        gate="out_of_domain",
-                        in_corpus_weight_fraction=round(fraction, 4),
-                        out_of_corpus_terms=len(absent),
-                    )
-                    return 0.0, False
-            in_corpus = [
-                (raw, candidates)
-                for raw, candidates in groups
-                if any(document_frequency(c) > 0 for c in candidates)
-            ]
-            if not in_corpus:
-                json_log(
-                    logger,
-                    logging.INFO,
-                    "tutor_retrieval",
-                    gate="out_of_domain",
-                    out_of_corpus_terms=len(groups),
-                )
-                return 0.0, False
-            groups = in_corpus
-            # The group's weight is its rarest in-corpus surface: the most
-            # informative spelling is what makes the term hard to satisfy, and
-            # a wrong alternative must not deflate that weight.
-            weights = coverage_weights(
-                (raw for raw, _ in groups),
-                {
-                    raw: min(document_frequency(c) for c in candidates if document_frequency(c) > 0)
-                    for raw, candidates in groups
-                },
-                self.term_stats.total_documents,
-            )
-        else:
-            weights = {raw: 1.0 for raw, _ in groups}
+        # The out-of-corpus rules (absent-term budget, in-corpus weight floor,
+        # the optional-repair set) and the group weights are applied in
+        # ``_gate_groups``; ``None`` there means the question's subject world
+        # is not in the corpus and the gate refuses. The rules are documented
+        # on that method.
+        gated = self._gate_groups(groups)
+        if gated is None:
+            return 0.0, False
+        groups, weights, repair_resolved = gated
 
         weighted_terms = tuple(raw for raw, _ in groups)
         best_coverage = 0.0
         passed = False
-        for hit in hits:
-            evidence_terms = {light_stem(t) for t in tokenize(indexable_text(hit.chunk))}
+        for hit, evidence_terms in zip(hits, hit_terms, strict=True):
             covered = [
                 raw
                 for raw, candidates in groups
                 if any(self._term_covered(candidate, evidence_terms) for candidate in candidates)
             ]
-            coverage = weighted_coverage(weighted_terms, covered, weights)
+            covered_set = set(covered)
+            # Optional (repair-resolved) terms enter this hit's denominator
+            # only when the hit carries the repaired surface; otherwise the
+            # term behaves as absent-within-budget, the pre-RAG-002 state.
+            # A repair can lift a hit's coverage but never lower it.
+            hit_terms_weighted = tuple(
+                raw for raw in weighted_terms if raw not in repair_resolved or raw in covered_set
+            )
+            coverage = weighted_coverage(hit_terms_weighted, covered, weights)
             best_coverage = max(best_coverage, coverage)
             if coverage >= self.min_coverage and hit.score > self.min_score:
                 passed = True
@@ -977,8 +1128,15 @@ class TutorService:
                 else SHORT_ANSWER_INSTRUCTION
             )
         if extra_instruction:
-            # app-level teaching instruction (re-teach strategy swap) —
-            # trusted app text, prepended ahead of the untrusted evidence block.
+            # app-level teaching instruction (re-teach strategy swap, or the
+            # quiz-explain block composed from client question/options/chapter).
+            # The quiz-explain variant carries client-owned text, so the whole
+            # block is delimiter-escaped exactly like the evidence (RAG-001):
+            # a client string must not be able to close </evidence> or
+            # [/education-context] from inside the region the model trusts.
+            # The escape is a no-op on ordinary Bangla, so the app-authored
+            # instruction renders byte-identically for legitimate requests.
+            extra_instruction = sanitize_evidence(extra_instruction)
             blocks = f"{extra_instruction}\n\n{blocks}"
         if context is not None:
             # education context (trusted app text, same placement rule).

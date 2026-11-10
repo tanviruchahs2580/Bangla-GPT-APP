@@ -637,6 +637,13 @@ def build_data_export(db: Session, user: User) -> _DataExportV2:
             "memory_enabled": student.memory_enabled,
             "consent_version": student.consent_version,
             "consent_at": student.consent_at.isoformat() if student.consent_at else None,
+            # DAT-003: the consent evidence trail is three stored fields
+            # (version/at/ip, see docs/data_minimization.md); the export served
+            # two of them, so a subject access request answered "what do you
+            # hold about me" without the address recorded at consent. Additive
+            # field in the existing student section -- the subject is reading
+            # their own record, and consent_ip is never sent anywhere else.
+            "consent_ip": student.consent_ip,
         }
         attempt_rows = list(
             db.execute(select(QuizAttempt).where(QuizAttempt.student_id == student.id)).scalars()

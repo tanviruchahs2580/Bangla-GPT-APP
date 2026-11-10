@@ -12,12 +12,18 @@ import type {
   ShortTest,
 } from "../../types";
 import { Check, ChevronLeft, Pencil } from "lucide-react";
-import { Badge, Button, Card, LoadError, Stat } from "../../components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  LoadError,
+  Segmented,
+  Stat,
+} from "../../components/ui";
 import { QPaperReviewPanel } from "../../components/teacher/QPaperReviewPanel";
 import { ShortTestRow } from "../../components/teacher/ShortTestRow";
 import { friendlyError } from "../../errors";
 import { formatNumber, t } from "../../i18n";
-import { cn } from "../../lib/cn";
 import { formatServerDateTime } from "../../lib/datetime";
 import { byClassLevelThenSection } from "../../lib/localeSort";
 
@@ -203,23 +209,19 @@ export default function AssessmentsPage() {
         <h1 className="page-title">{t("asmTitle")}</h1>
       </section>
 
-      <div
-        className="chips chips-gap"
-        role="tablist"
-        aria-label={t("asmTitle")}
-      >
-        {TABS.map(({ id, label }) => (
-          <button
-            key={id}
-            role="tab"
-            aria-selected={tab === id}
-            className={cn("chip", tab === id && "active")}
-            onClick={() => setParams({ tab: id })}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* UX-005: these are filters over the URL's ?tab=, not a tab widget.
+          As role="tablist"/role="tab" they promised a keyboard contract
+          (roving tabIndex, arrow keys, aria-controls to a tabpanel) that
+          was never implemented, and no call site here names a panel. The
+          shared Segmented control is the documented alternative
+          (components/ui.tsx) and keeps every stop a native button. */}
+      <Segmented
+        className="chips-gap"
+        ariaLabel={t("asmTitle")}
+        value={tab}
+        onChange={(id) => setParams({ tab: id })}
+        options={TABS.map(({ id, label }) => ({ value: id, label }))}
+      />
 
       {error && (
         <p className="error" role="alert">

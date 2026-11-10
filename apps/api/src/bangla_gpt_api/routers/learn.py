@@ -12,7 +12,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, HTTPException, Query, Request
 from sqlalchemy import func, select, update
 from sqlalchemy.engine import CursorResult
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 
 from bangla_gpt_api import caching
 from bangla_gpt_api.curriculum.models import Chunk
@@ -808,8 +808,31 @@ def _build_dashboard_summary(app_ctx: Ctx, db: Session, user: User, today: str) 
             recommendation=None,
             progress=None,
         )
+    # REL-004: this select runs on EVERY dashboard visit over quiz_attempts,
+    # a table with no retention window, and each row carries the full
+    # question set in quiz_json. Only the columns the summary actually reads
+    # are loaded (status to filter, score_pct/created_at/subject/class_level
+    # for the aggregates); quiz_json stays deferred and is lazy-loaded for
+    # the couple of rows the two outputs below genuinely inspect -- the last
+    # graded attempt's chapter/excerpt and, when weak chapters exist, the
+    # first attempt naming one. Returned numbers are unchanged.
     attempts = (
-        db.execute(select(QuizAttempt).where(QuizAttempt.student_id == student.id)).scalars().all()
+        db.execute(
+            select(QuizAttempt)
+            .options(
+                load_only(
+                    QuizAttempt.id,
+                    QuizAttempt.status,
+                    QuizAttempt.score_pct,
+                    QuizAttempt.created_at,
+                    QuizAttempt.subject,
+                    QuizAttempt.class_level,
+                )
+            )
+            .where(QuizAttempt.student_id == student.id)
+        )
+        .scalars()
+        .all()
     )
     graded = [a for a in attempts if a.status == "graded"]
     by_chapter, avg_score = graded_attempt_stats(db, graded)
