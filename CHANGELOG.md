@@ -111,6 +111,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(pwa): the offline-shell spec discovers the cache by prefix; changelog regen
 - fix(rag): P0 audit fixes — calibrated confidence, refusal parity, search hygiene
 - fix(rag): a spelling repair may widen retrieval but can no longer certify
+- fix(rag): name the Assamese codepoints instead of writing them
 - fix(rag): out-of-corpus weight floor gated on corpus scale; kg gap test made deterministic
 - fix(rag): rebuild the corpus text pipeline and make its gate blocking
 - fix(rag): satisfy the CI ratchets on the audit port
