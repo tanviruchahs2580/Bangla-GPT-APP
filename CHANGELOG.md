@@ -366,6 +366,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Style
 
 - style(api): format the auth race-path tests
+- style(e2e): normalise the endings the hooks require
 - style(scripts): restore the blank line after the bn_scan docstring
 - style(scripts): state why the boto3 import carries a type ignore
 - style(tests,docs): satisfy the end-of-file and line-ending hooks
