@@ -97,6 +97,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): stop the second redaction pass from destroying structured log lines
 - fix(api): validate and canonicalise the guardian phone, share Bangla name fixtures
 - fix(api): write the openapi fixture with platform-independent bytes
+- fix(ci): make the native-review sheet platform-independent
 - fix(ci): stop splicing contexts into the deploy script and land the SEC-18 triage
 - fix(compose): forward the production boot-guard keys from .env
 - fix(data): age chat rows by their own timestamps and keep the sweep drainable
