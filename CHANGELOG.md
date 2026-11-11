@@ -349,6 +349,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(rag): rebuild the corpus so the manifest fingerprint matches the tree
 - chore(web): add the dead-code and import-cycle gates to the dev toolchain
 - chore(web): gate knip in CI and wire it into make
+- chore(web): refresh the 360px tutor baselines against the consented seed
 - chore(web): refresh the four 360px tutor baselines the wave moved
 - chore(web,scripts): drop the three unrendered locale keys and gate new ones
 - chore: add the pre-push and commit-msg hooks the note listed
