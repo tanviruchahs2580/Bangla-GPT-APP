@@ -107,6 +107,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(docs): stop citing the untracked coverage report as a repo path
 - fix(docs,test): point every QA-record link at the new report and make the inline-script guard case-insensitive
 - fix(e2e): refuse to seed the shared e2e accounts outside test lanes
+- fix(e2e): seed a consented student, not a placeholder version
+- fix(e2e): take the consent step the gate now requires
+- fix(e2e): wait for the answer, not for a control that is correctly disabled
 - fix(eval,api): satisfy the full-tree type check on the new modules
 - fix(pwa): offline navigations answer 200 — restore the install prompt
 - fix(pwa): the offline-shell spec discovers the cache by prefix; changelog regen
@@ -348,6 +351,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(rag): rebuild the corpus so the manifest fingerprint matches the tree
 - chore(web): add the dead-code and import-cycle gates to the dev toolchain
 - chore(web): gate knip in CI and wire it into make
+- chore(web): refresh the 360px tutor baselines against the consented seed
+- chore(web): refresh the four 360px tutor baselines the wave moved
 - chore(web,scripts): drop the three unrendered locale keys and gate new ones
 - chore: add the pre-push and commit-msg hooks the note listed
 - chore: ignore the Android build output at the repo root
@@ -362,6 +367,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Style
 
 - style(api): format the auth race-path tests
+- style(e2e): normalise the endings the hooks require
 - style(scripts): restore the blank line after the bn_scan docstring
 - style(scripts): state why the boto3 import carries a type ignore
 - style(tests,docs): satisfy the end-of-file and line-ending hooks
@@ -378,6 +384,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Merge pull request #101 from tanviruchahs2580/fix/rag-audit-enterprise
 - Merge pull request #104 from tanviruchahs2580/fix/enterprise-audit-v2
+- Merge pull request #105 from tanviruchahs2580/fix/audit-remediation-wave3
 - Merge pull request #93 from tanviruchahs2580/fix/pwa-install-offline-200
 - Merge pull request #94 from tanviruchahs2580/qa/enterprise-v2-hardening
 - ci,style: point lint-imports at the root contract; format the composer; refresh the review sheet

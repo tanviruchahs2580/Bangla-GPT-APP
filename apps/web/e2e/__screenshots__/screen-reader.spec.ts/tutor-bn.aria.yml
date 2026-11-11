@@ -12,9 +12,10 @@
 - main:
   - heading "AI টিউটর" [level=1]
   - button "নতুন চ্যাট"
-  - button "বিজ্ঞান"
-  - button "গণিত"
-  - button "বাংলা"
+  - group "বিষয়":
+    - button "বিজ্ঞান" [pressed]
+    - button "গণিত"
+    - button "বাংলা"
   - textbox "ইতিহাস খুঁজুন…"
   - button "ইতিহাস খুঁজুন…"
   - status
