@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="bn">
+  <head>
+    <meta charset="utf-8" />
+    <title>invalid-selector-list repro</title>
+    <style>
+      /* This is the EXACT structure esbuild emitted into
+         apps/web/dist/assets/index-tiPJ-8Yg.css before the fix:
+         one selector list whose FIRST member is invalid trailing
+         text from a prematurely-closed comment. */
+      .stat-*/.table-wrap names above. ---------- */ .page-title {
+        font-size: 2rem;
+        font-weight: 700;
+        margin: 0 0 24px;
+      }
+      /* Control: the same declarations behind a valid selector. */
+      .control-title {
+        font-size: 2rem;
+        font-weight: 700;
+        margin: 0 0 24px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1 class="page-title" id="probe">visible-label</h1>
+    <h1 class="control-title" id="control">visible-label</h1>
+  </body>
+</html>

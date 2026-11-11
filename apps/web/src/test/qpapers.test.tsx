@@ -179,14 +179,40 @@ describe("question paper builder", () => {
       screen.getByLabelText(`${t("qpTitle")} 2`),
       "MY NEW QUESTION",
     );
+    // The per-question accept button has its own label since the mislabel fix
+    // (R-11). Selecting by t("qpReviewAll") here would now resolve to the
+    // footer BULK button, which accepts every question and so fails the
+    // single-decision assertion below.
     await user.click(
-      screen.getAllByRole("button", { name: t("qpReviewAll") })[0],
+      screen.getAllByRole("button", { name: t("qpAcceptOne") })[0],
     );
     await waitFor(() =>
       expect(apiMock.post).toHaveBeenCalledWith(
         "/teacher/qpapers/1/review",
         expect.objectContaining({
           decisions: [{ ref: "q1", action: "accept" }],
+        }),
+      ),
+    );
+  });
+
+  it("keeps the bulk accept distinct from the single-question accept", async () => {
+    // Guard for the same fix: the two actions must stay separately addressable,
+    // so a future relabel cannot silently re-point either one.
+    const user = userEvent.setup();
+    await openQpCard(user);
+    apiMock.post.mockClear();
+
+    await user.click(screen.getByRole("button", { name: t("qpReviewAll") }));
+    await waitFor(() =>
+      expect(apiMock.post).toHaveBeenCalledWith(
+        "/teacher/qpapers/1/review",
+        expect.objectContaining({
+          decisions: [
+            { ref: "q1", action: "accept" },
+            { ref: "q2", action: "accept" },
+            { ref: "q3", action: "accept" },
+          ],
         }),
       ),
     );

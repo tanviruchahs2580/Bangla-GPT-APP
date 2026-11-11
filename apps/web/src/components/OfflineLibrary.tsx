@@ -3,6 +3,7 @@ import { Trash2 } from "lucide-react";
 import { Card } from "./ui";
 import { formatNumber, t, tSubject } from "../i18n";
 import { formatBytes } from "../lib/fileSize";
+import { toast } from "../lib/toast";
 import {
   deleteChapter,
   downloadedChapters,
@@ -51,7 +52,11 @@ export function OfflineLibrary({
     try {
       await deleteChapter(rec.userId, rec.subject, rec.chapter, rec.classLevel);
     } catch {
-      /* the row stays; the student can retry */
+      // FE-FIX (silent failure): the row staying put was the ONLY signal that
+      // the delete failed, and it is indistinguishable from a tap that never
+      // registered -- the student taps again, nothing happens, and the space is
+      // never freed. Say what happened; the row still stays, so a retry works.
+      toast(t("offlineDeleteFailed"));
     }
     await refresh();
   };

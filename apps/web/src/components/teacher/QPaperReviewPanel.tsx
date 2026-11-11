@@ -255,7 +255,11 @@ export function QPaperReviewPanel({
                 {idx + 1}
               </span>
               {q.text} <span className="muted">[{q.difficulty}]</span>
-              {q.reviewed && <Badge tone="ok"> {t("qpReviewAll")}</Badge>}
+              {/* FE-FIX (mislabel, second site): the reviewed badge also reused
+                  qpReviewAll, so a single question was badged "Accept all".
+                  With the button relabelled to qpAcceptOne the row would have
+                  read "Accept all" beside "Accept this one". */}
+              {q.reviewed && <Badge tone="ok"> {t("qpReviewed")}</Badge>}
             </div>
             <ul className="qp-options">
               {q.options.map((o, oi) => (
@@ -286,7 +290,11 @@ export function QPaperReviewPanel({
                   disabled={busy}
                   onClick={() => void review([q.ref])}
                 >
-                  {t("qpReviewAll")}
+                  {/* FE-FIX (mislabel): this per-question button reuses the
+                      qpReviewAll copy ("Accept all"), so a single-row action
+                      read as the bulk one -- a teacher could reasonably expect
+                      it to accept the whole paper. Same handler, honest label. */}
+                  {t("qpAcceptOne")}
                 </Button>
                 {/* Bank-first single-question replace: never regenerate the
                     whole paper for a one-question fix. */}

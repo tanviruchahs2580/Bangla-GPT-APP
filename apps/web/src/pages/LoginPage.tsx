@@ -251,6 +251,18 @@ export default function LoginPage() {
     );
   }
 
+  /** FE-FIX (false affordance): was an `<a href="/forgot">` with an intercepted
+   *  click, so middle-click/"open in new tab" reached the reset page and it
+   *  announced as a link, not an action. RegisterPage already used a button. */
+  function resendVerify() {
+    void import("../api").then(({ resendVerification }) =>
+      resendVerification(email.trim() || undefined).then(
+        () => setError({ text: t("verifySent") }),
+        () => setError({ text: t("errGeneric") }),
+      ),
+    );
+  }
+
   return (
     <main
       id="main-content"
@@ -316,26 +328,11 @@ export default function LoginPage() {
           </div>
           {error && (
             <p className="error" role="alert">
-              {error.text}
+              {error.text}{" "}
               {error.action === "resend-verification" && (
-                <>
-                  {" "}
-                  <a
-                    href="/forgot"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      const typedEmail = email.trim() || undefined;
-                      void import("../api").then(({ resendVerification }) =>
-                        resendVerification(typedEmail).then(
-                          () => setError({ text: t("verifySent") }),
-                          () => setError({ text: t("errGeneric") }),
-                        ),
-                      );
-                    }}
-                  >
-                    {t("resendVerification")}
-                  </a>
-                </>
+                <Button variant="ghost" size="sm" onClick={resendVerify}>
+                  {t("resendVerification")}
+                </Button>
               )}
             </p>
           )}
