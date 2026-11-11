@@ -349,6 +349,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(rag): audit follow-through — refreshed eval baseline, red-team 36, nightly real-corpus workflow
 - chore(rag): rebase polish — transport typing, v3 corpus artifacts regenerated
 - chore(rag): rebuild the corpus so the manifest fingerprint matches the tree
+- chore(release): 0.10.0
 - chore(web): add the dead-code and import-cycle gates to the dev toolchain
 - chore(web): gate knip in CI and wire it into make
 - chore(web): refresh the 360px tutor baselines against the consented seed
@@ -385,6 +386,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #101 from tanviruchahs2580/fix/rag-audit-enterprise
 - Merge pull request #104 from tanviruchahs2580/fix/enterprise-audit-v2
 - Merge pull request #105 from tanviruchahs2580/fix/audit-remediation-wave3
+- Merge pull request #107 from tanviruchahs2580/chore/refresh-visual-baselines
 - Merge pull request #93 from tanviruchahs2580/fix/pwa-install-offline-200
 - Merge pull request #94 from tanviruchahs2580/qa/enterprise-v2-hardening
 - ci,style: point lint-imports at the root contract; format the composer; refresh the review sheet

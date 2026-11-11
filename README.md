@@ -8,7 +8,7 @@ review flows, curriculum coverage and weakness analytics, classroom management,
 school tenancy isolation, child-safety moderation, PWA + Android (Capacitor),
 and bn/en i18n with dark mode.
 
-**Current version: 0.9.3.** The single source of truth is
+**Current version: 0.10.0.** The single source of truth is
 `apps/api/pyproject.toml` (`[project] version`), mirrored by
 `apps/web/package.json`; release tags, the GHCR image tags and this line follow
 it. Nothing else may carry a version number.
