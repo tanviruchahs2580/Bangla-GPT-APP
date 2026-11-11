@@ -179,9 +179,10 @@ test("the chapter ask tab is labelled, announces its answer, and passes axe", as
   // A real question round-trips through the tab and lands in that live region.
   await box.fill("কোষ কী?");
   await page.getByRole("button", { name: /পাঠান|Send/ }).click();
-  await expect(page.getByRole("button", { name: /পাঠান|Send/ })).toBeEnabled({
-    timeout: 60_000,
-  });
+  // Not `toBeEnabled` on the send control: the composer disables it on an
+  // empty input (FE-FIX-016's three-character minimum) and sending clears the
+  // field, so the control is correctly disabled again the moment the turn
+  // leaves. The answer reaching the live region is the round-trip's signal.
   const answerRegion = page.getByRole("status");
   await expect(answerRegion).toHaveAttribute("aria-live", "polite", {
     timeout: 60_000,
