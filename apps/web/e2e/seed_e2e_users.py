@@ -25,6 +25,10 @@ import os
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "api" / "src"))
+
+from bangla_gpt_api.routers.deps import CONSENT_VERSION
+
 # Run from a checkout without the package installed (`python apps/web/e2e/...`)
 #: src/ is the layout the API itself uses.
 _SRC = Path(__file__).resolve().parents[2] / "api" / "src"
@@ -130,7 +134,13 @@ def seed() -> None:
                     name="E2E Student",
                     class_level=6,
                     consent_ip="127.0.0.1",
-                    consent_version="e2e",
+                    # The seeded student stands for a fully-consented one, and the
+                    # consent gate (BE-FIX-004) refuses writes for any student whose
+                    # recorded version is not the current one. `"e2e"` was a placeholder
+                    # that the gate now correctly rejects, which silently turned every
+                    # tutor and quiz e2e flow into a 403. Taking the value from the app
+                    # means a version bump cannot break the harness again.
+                    consent_version=CONSENT_VERSION,
                 )
             )
 
@@ -145,7 +155,9 @@ def seed() -> None:
 
         parent_user = _upsert_user(db, ACCOUNTS["parent"], "parent")
         if (
-            db.execute(select(Parent).where(Parent.user_id == parent_user.id)).scalar_one_or_none()
+            db.execute(
+                select(Parent).where(Parent.user_id == parent_user.id)
+            ).scalar_one_or_none()
             is None
         ):
             # F-115: a matra-heavy BD-convention name, so the real parent
@@ -165,7 +177,9 @@ def seed() -> None:
 
         # school_admin needs a school; the dashboard 404s a provisioned admin
         # without one (routers/school.py: "No school linked to this account").
-        school = db.execute(select(School).where(School.code == SCHOOL_CODE)).scalar_one_or_none()
+        school = db.execute(
+            select(School).where(School.code == SCHOOL_CODE)
+        ).scalar_one_or_none()
         if school is None:
             school = School(name="E2E School", code=SCHOOL_CODE)
             db.add(school)
@@ -188,11 +202,16 @@ def seed() -> None:
                             name="E2E Visual Student",
                             class_level=6,
                             consent_ip="127.0.0.1",
-                            consent_version="e2e",
+                            # A fully-consented student: the consent gate (BE-FIX-004)
+                            # refuses writes whose recorded version is not current, so the
+                            # value comes from the app rather than a placeholder.
+                            consent_version=CONSENT_VERSION,
                         )
                     )
             elif (
-                db.execute(select(Teacher).where(Teacher.user_id == user.id)).scalar_one_or_none()
+                db.execute(
+                    select(Teacher).where(Teacher.user_id == user.id)
+                ).scalar_one_or_none()
                 is None
             ):
                 db.add(Teacher(user_id=user.id, name="E2E Visual Teacher"))
@@ -203,7 +222,10 @@ def seed() -> None:
         engine.dispose()
     print(
         "seeded roles "
-        + ", ".join(f"{role}={email}" for role, email in {**ACCOUNTS, **READONLY_ACCOUNTS}.items())
+        + ", ".join(
+            f"{role}={email}"
+            for role, email in {**ACCOUNTS, **READONLY_ACCOUNTS}.items()
+        )
         + f" (school={SCHOOL_CODE})"
         + f" (DATABASE_URL={os.environ.get('DATABASE_URL', settings.database_url)})"
     )
