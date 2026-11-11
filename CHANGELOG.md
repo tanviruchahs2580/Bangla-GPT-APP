@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Documentation
 
 - docs(rag): RAG V2/V3 phase-0 baselines, audit and elevation plan
+- docs(rag): fix two path defects the doc-paths guardrail caught
+
+### Maintenance
+
+- chore: regenerate the CHANGELOG
 
 ## v0.10.0 - 2026-11-11
 
