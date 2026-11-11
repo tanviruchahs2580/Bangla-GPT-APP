@@ -60,9 +60,13 @@ REPH = "\u09b0\u09cd"
 _VIRAMA = "\u09cd"
 
 #: Bangla consonant block, plus the letters outside it that carry a consonant
-#: value: ড়/ঢ়/য় (nukta forms), ৎ (khanda-ta) and ৰ/ৱ (Assamese ra/wa, which
-#: appear in the shared script range and must not be treated as a syllable base
-#: by mistake — they are included only so the backward walk stops correctly).
+#: value: the nukta forms (U+09DC / U+09DD / U+09DF), khanda-ta (U+09CE) and
+#: the two Assamese letters ra/wa (U+09F0 / U+09F1), which sit in the shared
+#: script range and must not be treated as a syllable base by mistake — they
+#: are included only so the backward walk stops correctly.
+#: The characters are named by codepoint rather than written out because the
+#: Appendix C scanner (bn_scan.py) counts an Assamese letter in a tracked
+#: Bangla file as a wrong-script code point, correctly.
 _CONSONANT_RANGES = (
     (0x0995, 0x09B9),
     (0x09DC, 0x09DF),
