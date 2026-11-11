@@ -55,7 +55,9 @@ test.beforeEach(async ({ page }) => {
   page.on("console", (msg) => {
     if (msg.type() === "error") consoleErrors.push(msg.text());
   });
-  page.on("pageerror", (err) => consoleErrors.push(`pageerror: ${err.message}`));
+  page.on("pageerror", (err) =>
+    consoleErrors.push(`pageerror: ${err.message}`),
+  );
 });
 
 test.afterEach(() => {
@@ -192,7 +194,10 @@ async function ask(page: Page, question: string) {
     name: /পাঠ্যবই থেকে যেকোনো প্রশ্ন লিখুন|Ask anything from your textbook/,
   });
   await box.fill(question);
-  await page.getByRole("button", { name: /পাঠান|Send/ }).first().click();
+  await page
+    .getByRole("button", { name: /পাঠান|Send/ })
+    .first()
+    .click();
   return page.locator(".bubble.assistant").last();
 }
 
@@ -213,6 +218,24 @@ async function settledAnswer(page: Page, question: string) {
 }
 
 /* ------------------------------------------------------------------- TCH */
+
+/**
+ * A student created through the classroom CSV import arrives without consent
+ * on record: the import deliberately no longer asserts it on the child's
+ * behalf (BE-FIX-005), and the gate refuses every write until a guardian
+ * re-confirms (BE-FIX-004). This is that step, which a real student takes.
+ */
+async function reconfirmConsent(
+  page: Page,
+  headers: Record<string, string>,
+  studentId: number,
+): Promise<void> {
+  const res = await page.request.post(
+    `/api/students/${studentId}/consent/reconfirm`,
+    { headers, data: { accepted: true } },
+  );
+  expect(res.status(), await res.text()).toBe(200);
+}
 
 test("TCH-01 teacher dashboard numbers equal the API and the workload metric is recomputed from real rows", async ({
   page,
@@ -324,9 +347,10 @@ test("TCH-02 classroom create, roster, and the CSV import matrix", async ({
   await expect
     .poll(
       async () => {
-        const rows = await apiGet<
-          { class_level: number; section: string }[]
-        >(page, "/teacher/classrooms");
+        const rows = await apiGet<{ class_level: number; section: string }[]>(
+          page,
+          "/teacher/classrooms",
+        );
         return rows.some((r) => r.class_level === 6 && r.section === "W2");
       },
       { message: "the created classroom never appeared", timeout: 30_000 },
@@ -487,7 +511,9 @@ test("TCH-03 assign a take-home quiz; the student sees it with the correct deadl
   await page.locator("#basubj").selectOption("science");
   await page.locator("#bacount").fill("3");
   await page.locator("#badue").fill(dueLocal);
-  const bulkForm = page.locator("form").filter({ has: page.locator("#bachap") });
+  const bulkForm = page
+    .locator("form")
+    .filter({ has: page.locator("#bachap") });
   await bulkForm.getByRole("button", { name: /Assign/ }).click();
   // The outcome line lives on the bulk-assign card next to the form, not
   // inside it; it reports the created attempts as "N selected".
@@ -500,7 +526,9 @@ test("TCH-03 assign a take-home quiz; the student sees it with the correct deadl
 
   // Per-student quiz: the roster row action starts an open attempt for them.
   await rosterRow.getByRole("button", { name: "Assign quiz" }).click();
-  const assignForm = page.locator("form").filter({ has: page.locator("#asubj") });
+  const assignForm = page
+    .locator("form")
+    .filter({ has: page.locator("#asubj") });
   await assignForm.locator("#asubj").selectOption("science");
   await assignForm.getByRole("button", { name: "Assign quiz" }).click();
   await expect(assignForm.locator('[role="status"]')).toContainText("#", {
@@ -517,7 +545,10 @@ test("TCH-03 assign a take-home quiz; the student sees it with the correct deadl
     }[]
   >(page, "/teacher/assignments");
   const created = assignments.find((a) => a.chapter === chapter);
-  expect(created, "the assignment did not reach /teacher/assignments").toBeTruthy();
+  expect(
+    created,
+    "the assignment did not reach /teacher/assignments",
+  ).toBeTruthy();
   expect(created!.attempts.length).toBe(1);
   const progress = await apiGet<{ student_id: number; done: boolean }[]>(
     page,
@@ -725,7 +756,9 @@ test("TCH-05 create hub: synchronous generation, the queued job outcome, and the
     .first();
   await expect(docRow).toBeVisible({ timeout: 30_000 });
   await docRow.locator(".gen-doc-open").click();
-  await expect(page.locator(".gen-json, ol.gen-questions").first()).toBeVisible();
+  await expect(
+    page.locator(".gen-json, ol.gen-questions").first(),
+  ).toBeVisible();
 });
 
 test("TCH-06 lesson plans persist and stay editable; short tests and support plans work", async ({
@@ -767,9 +800,11 @@ test("TCH-06 lesson plans persist and stay editable; short tests and support pla
     .getAttribute("value");
   await roomSelect.selectOption(roomValue!);
   await page.getByRole("button", { name: "Assign", exact: true }).click();
-  await expect(page.locator("p.muted", { hasText: "Assigned to" })).toBeVisible({
-    timeout: 60_000,
-  });
+  await expect(page.locator("p.muted", { hasText: "Assigned to" })).toBeVisible(
+    {
+      timeout: 60_000,
+    },
+  );
   const shortTests = await apiGet<{ chapter: string; attempts: unknown[] }[]>(
     page,
     "/teacher/shorttests",
@@ -813,6 +848,7 @@ test("TCH-06 lesson plans persist and stay editable; short tests and support pla
     Authorization: `Bearer ${((await rahimLogin.json()) as { access_token: string }).access_token}`,
     "Content-Type": "application/json",
   };
+  await reconfirmConsent(page, rahimHeaders, rahim!.student_id);
   const rahimQuiz = await page.request.post("/api/quizzes", {
     headers: rahimHeaders,
     data: {
@@ -837,12 +873,15 @@ test("TCH-06 lesson plans persist and stay editable; short tests and support pla
   expect(rahimSubmit.status(), await rahimSubmit.text()).toBe(200);
 
   await row.getByRole("button", { name: "Open" }).click();
-  await expect(page.getByText("Student details")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Student details")).toBeVisible({
+    timeout: 30_000,
+  });
   const plansBefore = await apiGet<unknown[]>(page, "/teacher/support-plans");
   await page.getByRole("button", { name: "Create support plan" }).click();
   await expect
     .poll(
-      async () => (await apiGet<unknown[]>(page, "/teacher/support-plans")).length,
+      async () =>
+        (await apiGet<unknown[]>(page, "/teacher/support-plans")).length,
       { message: "the support plan was not stored", timeout: 30_000 },
     )
     .toBe(plansBefore.length + 1);
@@ -870,7 +909,9 @@ test("TCH-07 document library: list, open, filter, persist across sessions and d
     .first();
   await expect(row).toBeVisible({ timeout: 30_000 });
   await row.locator(".gen-doc-open").click();
-  await expect(page.locator(".gen-json, ol.gen-questions").first()).toBeVisible();
+  await expect(
+    page.locator(".gen-json, ol.gen-questions").first(),
+  ).toBeVisible();
 
   // Kind filter (the library has no free-text search; kind chips only).
   await page.getByRole("button", { name: "Lesson plan", exact: true }).click();
@@ -949,6 +990,7 @@ test("TCH-08 weak matrix and coverage equal independently queried values", async
     Authorization: `Bearer ${((await rahimLogin.json()) as { access_token: string }).access_token}`,
     "Content-Type": "application/json",
   };
+  await reconfirmConsent(page, rahimHeaders, target!.student_id);
   const rahimQuiz = await page.request.post("/api/quizzes", {
     headers: rahimHeaders,
     data: {
@@ -1060,7 +1102,9 @@ test("TCH-08 weak matrix and coverage equal independently queried values", async
     uncovered: "Not started",
   };
   const statuses = new Set(coverage.cells.map((c) => statusLabel[c.status]));
-  const renderedBadges = await coverageTable.locator(".badge").allTextContents();
+  const renderedBadges = await coverageTable
+    .locator(".badge")
+    .allTextContents();
   expect(renderedBadges.length).toBeGreaterThan(0);
   for (const badge of renderedBadges) {
     expect(statuses.has(badge.trim())).toBe(true);
@@ -1079,8 +1123,7 @@ test("TCH-08 weak matrix and coverage equal independently queried values", async
   await expect(statCells.first()).toBeVisible({ timeout: 30_000 });
   await expect
     .poll(
-      async () =>
-        (await statCells.allTextContents()).map((n) => n.trim())[1],
+      async () => (await statCells.allTextContents()).map((n) => n.trim())[1],
       { timeout: 30_000 },
     )
     .toBe(String(analytics.chapters.length));
@@ -1521,7 +1564,9 @@ test("ADM-01 users search, role filter, pagination, a role change with its audit
   await page.locator("#q").fill(email);
   const row = page.locator("table.data tbody tr", { hasText: email });
   await expect(row).toHaveCount(1, { timeout: 30_000 });
-  const userId = Number((await row.locator("td").first().textContent())?.trim());
+  const userId = Number(
+    (await row.locator("td").first().textContent())?.trim(),
+  );
 
   // Role filter: only teachers are listed. Scope the column read to the
   // users table: /admin renders several tables (schools, invites, triage)
@@ -1752,7 +1797,9 @@ test("ADM-05 impersonation: restrictions, the 15-minute bound, admin revoke, aud
   // Exit through the banner restores the admin session.
   await page.getByRole("button", { name: "End support session" }).click();
   await expect(page).toHaveURL(/\/admin$/, { timeout: 30_000 });
-  expect((await apiGet<{ email: string }>(page, "/users/me")).email).toBe(ADMIN);
+  expect((await apiGet<{ email: string }>(page, "/users/me")).email).toBe(
+    ADMIN,
+  );
 
   // Start/exit audit rows exist for this target.
   const audit = await apiGet<{

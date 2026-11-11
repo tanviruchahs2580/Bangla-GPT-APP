@@ -1,6 +1,6 @@
-import { expect, test, type Page } from '@playwright/test'
-import AxeBuilder from '@axe-core/playwright'
-import { COMPOSER_LABEL, openRoute, signIn, useVariant } from './a11y'
+import { expect, test, type Page } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
+import { COMPOSER_LABEL, openRoute, signIn, useVariant } from "./a11y";
 
 /**
  * Wave-2 accessibility execution (A11Y-07's executable parts) and the FE-15
@@ -20,109 +20,133 @@ import { COMPOSER_LABEL, openRoute, signIn, useVariant } from './a11y'
  * the full sweep's report rather than here.
  */
 
-type ConsoleFinding = { where: string; what: string }
+type ConsoleFinding = { where: string; what: string };
 
 function watchConsole(page: Page): ConsoleFinding[] {
-  const findings: ConsoleFinding[] = []
-  page.on('pageerror', (error) => findings.push({ where: 'pageerror', what: error.message }))
-  page.on('console', (message) => {
-    if (message.type() !== 'error') return
-    const text = message.text()
-    if (/Failed to load resource|net::ERR_INTERNET_DISCONNECTED|net::ERR_ABORTED/.test(text)) return
-    findings.push({ where: 'console.error', what: text.slice(0, 300) })
-  })
-  return findings
+  const findings: ConsoleFinding[] = [];
+  page.on("pageerror", (error) =>
+    findings.push({ where: "pageerror", what: error.message }),
+  );
+  page.on("console", (message) => {
+    if (message.type() !== "error") return;
+    const text = message.text();
+    if (
+      /Failed to load resource|net::ERR_INTERNET_DISCONNECTED|net::ERR_ABORTED/.test(
+        text,
+      )
+    )
+      return;
+    findings.push({ where: "console.error", what: text.slice(0, 300) });
+  });
+  return findings;
 }
 
 function expectCleanConsole(findings: ConsoleFinding[]): void {
   expect(
     findings,
-    `console errors:\n${findings.map((f) => `${f.where}: ${f.what}`).join('\n')}`,
-  ).toEqual([])
+    `console errors:\n${findings.map((f) => `${f.where}: ${f.what}`).join("\n")}`,
+  ).toEqual([]);
 }
 
-test.describe.configure({ timeout: 5 * 60_000 })
+test.describe.configure({ timeout: 5 * 60_000 });
 
-test('reader TTS control is named and exposes its pressed state', async ({ page }) => {
-  const findings = watchConsole(page)
-  await useVariant(page, { theme: 'light', lang: 'bn' })
-  await signIn(page, 'student1@e2e.test')
-  await openRoute(page, '/student/learn/science/%E0%A6%95%E0%A7%8B%E0%A6%B7')
+test("reader TTS control is named and exposes its pressed state", async ({
+  page,
+}) => {
+  const findings = watchConsole(page);
+  await useVariant(page, { theme: "light", lang: "bn" });
+  await signIn(page, "student1@e2e.test");
+  await openRoute(page, "/student/learn/science/%E0%A6%95%E0%A7%8B%E0%A6%B7");
 
-  const listen = page.getByRole('button', { name: /শুনুন|Listen/ }).first()
-  await expect(listen).toBeVisible({ timeout: 30_000 })
-  await expect(listen).toHaveAttribute('aria-pressed', 'false')
+  const listen = page.getByRole("button", { name: /শুনুন|Listen/ }).first();
+  await expect(listen).toBeVisible({ timeout: 30_000 });
+  await expect(listen).toHaveAttribute("aria-pressed", "false");
   // The control a screen reader announces carries a name in the active
   // language, not an icon-only button.
-  const name = await listen.evaluate((element) => element.getAttribute('aria-label'))
-  expect(name && name.trim().length > 0, 'TTS control has no accessible name').toBeTruthy()
+  const name = await listen.evaluate((element) =>
+    element.getAttribute("aria-label"),
+  );
+  expect(
+    name && name.trim().length > 0,
+    "TTS control has no accessible name",
+  ).toBeTruthy();
 
   // The same contract for the other reader controls this page exposes.
   for (const label of [/বুকমার্ক|Bookmark/, /ডাউনলোড করুন|Download chapter/]) {
-    const control = page.getByRole('button', { name: label }).first()
-    await expect(control).toBeVisible()
-    await expect(control).toHaveAttribute('aria-pressed', /true|false/)
+    const control = page.getByRole("button", { name: label }).first();
+    await expect(control).toBeVisible();
+    await expect(control).toHaveAttribute("aria-pressed", /true|false/);
   }
-  expectCleanConsole(findings)
-})
+  expectCleanConsole(findings);
+});
 
-test('every rendered image carries an alt attribute on the key routes', async ({ page }) => {
-  const findings = watchConsole(page)
-  await useVariant(page, { theme: 'light', lang: 'bn' })
+test("every rendered image carries an alt attribute on the key routes", async ({
+  page,
+}) => {
+  const findings = watchConsole(page);
+  await useVariant(page, { theme: "light", lang: "bn" });
 
   const check = async (route: string): Promise<void> => {
-    await openRoute(page, route)
+    await openRoute(page, route);
     const missing = await page.evaluate(() =>
-      Array.from(document.querySelectorAll('img'))
-        .filter((img) => img.getAttribute('alt') === null)
-        .map((img) => img.getAttribute('src') ?? '(inline)'),
-    )
-    expect(missing, `${route}: image(s) without alt: ${missing.join(', ')}`).toEqual([])
-  }
+      Array.from(document.querySelectorAll("img"))
+        .filter((img) => img.getAttribute("alt") === null)
+        .map((img) => img.getAttribute("src") ?? "(inline)"),
+    );
+    expect(
+      missing,
+      `${route}: image(s) without alt: ${missing.join(", ")}`,
+    ).toEqual([]);
+  };
 
-  await check('/')
-  await check('/login')
-  await signIn(page, 'student1@e2e.test')
-  await check('/student/home')
-  await check('/student/learn')
-  await check('/student/tutor')
-  expectCleanConsole(findings)
-})
+  await check("/");
+  await check("/login");
+  await signIn(page, "student1@e2e.test");
+  await check("/student/home");
+  await check("/student/learn");
+  await check("/student/tutor");
+  expectCleanConsole(findings);
+});
 
-test('axe: zero serious/critical violations on the reader and tutor routes', async ({ page }) => {
-  const findings = watchConsole(page)
-  await useVariant(page, { theme: 'light', lang: 'bn' })
-  await signIn(page, 'student1@e2e.test')
+test("axe: zero serious/critical violations on the reader and tutor routes", async ({
+  page,
+}) => {
+  const findings = watchConsole(page);
+  await useVariant(page, { theme: "light", lang: "bn" });
+  await signIn(page, "student1@e2e.test");
 
   const sweep = async (route: string): Promise<void> => {
-    await openRoute(page, route)
+    await openRoute(page, route);
     // The tutor route keeps an SSE stream open while nothing is asked, so
     // settle on the composer instead of networkidle.
-    if (route.includes('tutor')) {
-      await expect(page.getByLabel(COMPOSER_LABEL)).toBeVisible({ timeout: 30_000 })
+    if (route.includes("tutor")) {
+      await expect(page.getByLabel(COMPOSER_LABEL)).toBeVisible({
+        timeout: 30_000,
+      });
     }
     const results = await new AxeBuilder({ page })
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-      .analyze()
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+      .analyze();
     const blocking = results.violations.filter(
-      (violation) => violation.impact === 'serious' || violation.impact === 'critical',
-    )
+      (violation) =>
+        violation.impact === "serious" || violation.impact === "critical",
+    );
     const detail = blocking
       .map(
         (violation) =>
           `${route}: ${violation.id} (${violation.impact}) on ${violation.nodes
             .slice(0, 3)
-            .map((node) => node.target.join(' '))
-            .join(' | ')}`,
+            .map((node) => node.target.join(" "))
+            .join(" | ")}`,
       )
-      .join('\n')
-    expect(blocking, `serious/critical axe violations:\n${detail}`).toEqual([])
-  }
+      .join("\n");
+    expect(blocking, `serious/critical axe violations:\n${detail}`).toEqual([]);
+  };
 
-  await sweep('/student/learn/science/%E0%A6%95%E0%A7%8B%E0%A6%B7')
-  await sweep('/student/tutor')
-  expectCleanConsole(findings)
-})
+  await sweep("/student/learn/science/%E0%A6%95%E0%A7%8B%E0%A6%B7");
+  await sweep("/student/tutor");
+  expectCleanConsole(findings);
+});
 
 /**
  * FE-FIX (a11y gap): the chapter reader's জিজ্ঞাসা tab was invisible to every
@@ -131,43 +155,55 @@ test('axe: zero serious/critical violations on the reader and tutor routes', asy
  * an axe run. This spec opens the tab, checks the contract the fix establishes,
  * and runs the same WCAG bar on the state.
  */
-test('the chapter ask tab is labelled, announces its answer, and passes axe', async ({ page }) => {
-  const findings = watchConsole(page)
-  await useVariant(page, { theme: 'light', lang: 'bn' })
-  await signIn(page, 'student1@e2e.test')
-  await openRoute(page, '/student/learn/science/%E0%A6%95%E0%A7%8B%E0%A6%B7')
+test("the chapter ask tab is labelled, announces its answer, and passes axe", async ({
+  page,
+}) => {
+  const findings = watchConsole(page);
+  await useVariant(page, { theme: "light", lang: "bn" });
+  await signIn(page, "student1@e2e.test");
+  await openRoute(page, "/student/learn/science/%E0%A6%95%E0%A7%8B%E0%A6%B7");
 
-  await page.getByRole('tab', { name: /জিজ্ঞাসা|Ask/ }).click()
+  await page.getByRole("tab", { name: /জিজ্ঞাসা|Ask/ }).click();
 
   // The field is reachable by its label, not only by its placeholder.
-  const box = page.getByRole('textbox', { name: /এই অধ্যায় নিয়ে প্রশ্ন করুন|Ask a question about this chapter/ })
-  await expect(box).toBeVisible({ timeout: 30_000 })
+  const box = page.getByRole("textbox", {
+    name: /এই অধ্যায় নিয়ে প্রশ্ন করুন|Ask a question about this chapter/,
+  });
+  await expect(box).toBeVisible({ timeout: 30_000 });
 
-  // The answer's announcement region exists and is polite (never assertive).
-  const announcer = page.getByTestId('chapter-ask-announcer')
-  await expect(announcer).toHaveAttribute('aria-live', 'polite')
+  // The live semantics sit on the answer itself (one node, announced once);
+  // an earlier shape put them on a second hidden copy of the same sentence.
+  // Nothing is announced before there is an answer.
+  await expect(page.getByRole("status")).toHaveCount(0);
 
-  // A real question round-trips through the tab and lands in the live region.
-  await box.fill('কোষ কী?')
-  await page.getByRole('button', { name: /পাঠান|Send/ }).click()
-  await expect(page.getByRole('button', { name: /পাঠান|Send/ })).toBeEnabled({ timeout: 60_000 })
-  await expect(announcer).not.toHaveText('', { timeout: 60_000 })
+  // A real question round-trips through the tab and lands in that live region.
+  await box.fill("কোষ কী?");
+  await page.getByRole("button", { name: /পাঠান|Send/ }).click();
+  await expect(page.getByRole("button", { name: /পাঠান|Send/ })).toBeEnabled({
+    timeout: 60_000,
+  });
+  const answerRegion = page.getByRole("status");
+  await expect(answerRegion).toHaveAttribute("aria-live", "polite", {
+    timeout: 60_000,
+  });
+  await expect(answerRegion).not.toHaveText("", { timeout: 60_000 });
 
   const results = await new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-    .analyze()
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+    .analyze();
   const blocking = results.violations.filter(
-    (violation) => violation.impact === 'serious' || violation.impact === 'critical',
-  )
+    (violation) =>
+      violation.impact === "serious" || violation.impact === "critical",
+  );
   const detail = blocking
     .map(
       (violation) =>
         `ask tab: ${violation.id} (${violation.impact}) on ${violation.nodes
           .slice(0, 3)
-          .map((node) => node.target.join(' '))
-          .join(' | ')}`,
+          .map((node) => node.target.join(" "))
+          .join(" | ")}`,
     )
-    .join('\n')
-  expect(blocking, `serious/critical axe violations:\n${detail}`).toEqual([])
-  expectCleanConsole(findings)
-})
+    .join("\n");
+  expect(blocking, `serious/critical axe violations:\n${detail}`).toEqual([]);
+  expectCleanConsole(findings);
+});
