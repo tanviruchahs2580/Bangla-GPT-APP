@@ -108,6 +108,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(docs,test): point every QA-record link at the new report and make the inline-script guard case-insensitive
 - fix(e2e): refuse to seed the shared e2e accounts outside test lanes
 - fix(e2e): seed a consented student, not a placeholder version
+- fix(e2e): take the consent step the gate now requires
 - fix(eval,api): satisfy the full-tree type check on the new modules
 - fix(pwa): offline navigations answer 200 — restore the install prompt
 - fix(pwa): the offline-shell spec discovers the cache by prefix; changelog regen
