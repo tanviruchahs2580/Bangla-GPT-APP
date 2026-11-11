@@ -343,6 +343,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(openapi): regenerate the served-schema fixture for POST /admin/reindex and document the operator-only gap in the web contract test
 - chore(rag): audit follow-through — refreshed eval baseline, red-team 36, nightly real-corpus workflow
 - chore(rag): rebase polish — transport typing, v3 corpus artifacts regenerated
+- chore(rag): rebuild the corpus so the manifest fingerprint matches the tree
 - chore(web): add the dead-code and import-cycle gates to the dev toolchain
 - chore(web): gate knip in CI and wire it into make
 - chore(web,scripts): drop the three unrendered locale keys and gate new ones
