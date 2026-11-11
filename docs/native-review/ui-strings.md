@@ -728,11 +728,11 @@ translation that changes the meaning of the English original.
 | 704 | apps/web/src/i18n.ts:837 | statTotal | মোট | |
 | 705 | apps/web/src/i18n.ts:838 | statQuizzes | কুইজ | |
 | 706 | apps/web/src/AppShell.tsx:190 | (literal) | ডার্ক মোড | |
-| 707 | apps/web/src/components/admin/RefusalAuditCard.tsx:13 | (literal) | লোড হচ্ছে… | |
-| 708 | apps/web/src/components/NotificationBell.tsx:46 | (literal) | এখন কোনো নোটিফিকেশন নেই | |
-| 709 | apps/web/src/components/SearchBox.tsx:26 | (literal) | কোনো ফলাফল নেই | |
-| 710 | apps/web/src/components/UpdateBanner.tsx:13 | (literal) | নতুন সংস্করণ প্রস্তুত — আপডেট করলে সর্বশেষ সংস্করণ পাবেন। | |
-| 711 | apps/web/src/components/UpdateBanner.tsx:14 | (literal) | এখনই আপডেট করুন | |
+| 707 | apps/web/src/components/NotificationBell.tsx:46 | (literal) | এখন কোনো নোটিফিকেশন নেই | |
+| 708 | apps/web/src/components/SearchBox.tsx:26 | (literal) | কোনো ফলাফল নেই | |
+| 709 | apps/web/src/components/UpdateBanner.tsx:13 | (literal) | নতুন সংস্করণ প্রস্তুত — আপডেট করলে সর্বশেষ সংস্করণ পাবেন। | |
+| 710 | apps/web/src/components/UpdateBanner.tsx:14 | (literal) | এখনই আপডেট করুন | |
+| 711 | apps/web/src/components/admin/RefusalAuditCard.tsx:13 | (literal) | লোড হচ্ছে… | |
 | 712 | apps/web/src/errors.ts:215 | (literal) | ইমেইল বা পাসওয়ার্ড সঠিক নয়। | |
 | 713 | apps/web/src/errors.ts:216 | (literal) | এই ইমেইল দিয়ে আগেই অ্যাকাউন্ট খোলা আছে। | |
 | 714 | apps/web/src/errors.ts:217 | (literal) | আগে ইমেইল যাচাই করুন — কোড পাঠানো হয়েছে। | |
