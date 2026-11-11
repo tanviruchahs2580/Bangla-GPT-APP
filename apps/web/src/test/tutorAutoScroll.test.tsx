@@ -102,6 +102,9 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  // The reduced-motion stub is a global, not a mock: without unstubbing it the
+  // leaked preference outlives the test that installed it.
+  vi.unstubAllGlobals();
 });
 
 describe("tutor viewport autoscroll", () => {
@@ -146,10 +149,15 @@ describe("tutor viewport autoscroll", () => {
 
   it("scrolls instantly when the reader asked for reduced motion", async () => {
     // jsdom has no matchMedia at all, so the preference is stubbed rather
-    // than spied: the component reads it through lib/motion.
-    Object.defineProperty(window, "matchMedia", {
-      configurable: true,
-      value: () => ({
+    // than spied: the component reads it through lib/motion. Stubbed through
+    // vi.stubGlobal rather than Object.defineProperty because this suite runs
+    // with sequence.shuffle in CI — a defineProperty here would leak into
+    // whichever test ran after it and silently turn that test's smooth
+    // scrolls into instant ones, which is how the file went red on CI while
+    // staying green locally.
+    vi.stubGlobal(
+      "matchMedia",
+      () => ({
         matches: true,
         media: "(prefers-reduced-motion: reduce)",
         addEventListener: () => {},
@@ -159,7 +167,7 @@ describe("tutor viewport autoscroll", () => {
         onchange: null,
         dispatchEvent: () => false,
       }),
-    });
+    );
     const scrollTo = vi.spyOn(Element.prototype, "scrollTo");
 
     renderPage();
