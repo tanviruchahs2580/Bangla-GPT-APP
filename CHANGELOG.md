@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Documentation
 
+- docs(native-review): regenerate the UI-strings sheet for three new keys
 - docs(rag): RAG V2/V3 phase-0 baselines, audit and elevation plan
 - docs(rag): fix two path defects the doc-paths guardrail caught
 
