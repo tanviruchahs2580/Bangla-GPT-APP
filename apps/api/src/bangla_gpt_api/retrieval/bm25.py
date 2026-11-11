@@ -72,6 +72,18 @@ class BM25Index:
         self.k1 = k1
         self.b = b
         indexed = [indexable_text(chunk) for chunk in chunks]
+        # Audit NBT-005: the loader expands one source across every class level
+        # it covers, so the same passage is indexed once per level. Measured on
+        # the served corpus: **1,605 indexed chunks but only 438 distinct
+        # texts**, max duplication factor 5. Two consequences, both measured:
+        #   * ``top_k=3`` returned the *same* text three times, so the model
+        #     received one piece of evidence instead of three;
+        #   * ``doc_freq`` counted each copy, inflating df for a term the whole
+        #     book repeats and so depressing its IDF weight — which the
+        #     grounding gate reads as "missing this costs nearly nothing".
+        # Keeping the indexed text lets ``search`` collapse a duplicate set to
+        # its best-placed representative without re-normalising per query.
+        self._indexed_texts = indexed
         self.term_freqs = [Counter(tokenize(text)) for text in indexed]
         self.doc_lengths = [sum(tf.values()) for tf in self.term_freqs]
         self.avgdl = (sum(self.doc_lengths) / len(self.doc_lengths)) if self.doc_lengths else 0.0
@@ -148,7 +160,7 @@ class BM25Index:
             union = len(query_grams) + self._gram_totals[doc] - shared
             return shared / union
 
-        hits: list[Hit] = []
+        hits: list[tuple[int, Hit]] = []
         for doc in sorted(candidates):
             chunk = self.chunks[doc]
             if class_level is not None and chunk.meta.class_level != class_level:
@@ -170,9 +182,32 @@ class BM25Index:
             # by construction, which the floors gate would otherwise read
             # as a missing arc.
             if score > 0:  # pragma: no branch - score>0 holds on every candidate path
-                hits.append(Hit(chunk=chunk, score=round(score, 4)))
-        hits.sort(key=lambda hit: hit.score, reverse=True)
-        return hits[:top_k]
+                hits.append((doc, Hit(chunk=chunk, score=round(score, 4))))
+        # Audit NBT-005: collapse passages that are byte-identical after
+        # indexing, keeping the best-scoring one — and, at equal score, the
+        # earliest in ascending document order, which the candidate walk above
+        # already produces and ``sort`` preserves here because it is stable.
+        #
+        # Distinct passages are untouched, so a corpus with no class-level
+        # expansion answers exactly as before; on the served corpus this is
+        # what turns ``top_k=3`` from one repeated text into three (measured:
+        # 1,605 indexed chunks, 438 distinct texts, max duplication 5).
+        #
+        # The class_level/subject/chapter filter runs *before* this collapse,
+        # so a level-scoped query keeps the copy that belongs to the level
+        # asked for and the citation still names the right book.
+        hits.sort(key=lambda pair: pair[1].score, reverse=True)
+        seen_texts: set[str] = set()
+        distinct: list[Hit] = []
+        for doc, hit in hits:
+            text = self._indexed_texts[doc]
+            if text in seen_texts:
+                continue
+            seen_texts.add(text)
+            distinct.append(hit)
+            if len(distinct) >= top_k:
+                break
+        return distinct
 
     def _query_side_expansions(self, raw_terms: list[str]) -> list[str]:
         """Corpus-vocabulary expansions for code-switched and misspelled tokens.

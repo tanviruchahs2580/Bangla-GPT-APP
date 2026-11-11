@@ -15,11 +15,14 @@ interface Props {
 export function SafeMarkdownLazy({ content, className }: Props) {
   return (
     <Suspense
-      fallback={
-        <div className={className} aria-live="polite">
-          {content}
-        </div>
-      }
+      // FE-FIX (live-region contract): the fallback was `aria-live="polite"`
+      // wrapping the RAW partial markdown, and the tutor's stream flushes it
+      // every 80 ms — so a screen reader re-announced the half-rendered answer
+      // up to a dozen times per turn, which is exactly what the deliberate
+      // single-announcement contract (AITutorPage's announcer, asserted by
+      // tutorAnnounce.test.tsx) exists to prevent. The fallback is static
+      // content that is about to be replaced: it is not a live region.
+      fallback={<div className={className}>{content}</div>}
     >
       <LazyMarkdown content={content} className={className} />
     </Suspense>

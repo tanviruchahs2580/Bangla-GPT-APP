@@ -16,7 +16,7 @@ from bangla_gpt_api.metrics import (
     REGISTRY,
 )
 from bangla_gpt_api.providers.base import provider_health
-from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES
+from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded
 from bangla_gpt_api.schemas import (
     StatusComponent,
     StatusOut,
@@ -45,7 +45,7 @@ async def live() -> dict:
     return {"status": "alive"}
 
 
-@router.get("/ready")
+@router.get("/ready", responses=coded(503))
 async def ready(app_ctx: Ctx, db: DbSession) -> dict:
     if app_ctx.provider is None:
         detail = (

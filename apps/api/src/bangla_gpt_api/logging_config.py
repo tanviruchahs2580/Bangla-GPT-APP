@@ -56,13 +56,36 @@ _CREDENTIAL_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\bBearer\s+[A-Za-z0-9._~+/-]{12,}=*"),  # Authorization header
 )
 
+# The phone shape `services/pii.py` strips before the prompt leaves the
+# process (PRIV-001), needed here too so the sink and Sentry drop the same
+# spellings (PRIV-002). Duplicated, NOT imported: this module sits below the
+# services layer -- `providers.base` imports it, and the
+# retrieval-does-not-reach-up contract forbids retrieval reaching services, so
+# `logging_config -> services.pii` closes the path
+# `retrieval.embedding -> providers.base -> logging_config -> services`
+# (`lint-imports` reports it). The two copies are pinned equal by
+# `tests/test_privacy_egress_hardening.py::test_log_phone_pattern_matches_the_prompt_recogniser`,
+# so a pattern change in one place fails the suite until both agree.
+_PII_PHONE_RE = re.compile(
+    r"(?<!\d)"
+    r"(?:(?:\+|00)?[8\u09ee]{2}[ \-./]?)?"
+    r"\(?[0\u09e6]?[ \-./]?"
+    r"[1\u09e7][3-9\u09e9-\u09ef]\)?"
+    r"(?:[ \-./]?\d){8}"
+    r"(?!\d)"
+)
+
 # Values that are PII but not credentials. These are checked for every field
 # EXCEPT one whose key says "opaque identifier" (F-188): a hex id such as
 # `9c12968924894e25` contains an 11-digit run that the phone pattern matched,
 # so 3 of 273 logged request_ids arrived as "[redacted]" - the id was lost in
 # the very sink used to correlate the client's report with the server's trace.
 _PII_VALUE_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"\+?[0-9]{10,15}"),  # phone numbers (guardian PII)
+    re.compile(r"\+?[0-9]{10,15}"),  # digit runs: phone numbers, NID-like ids
+    # Without this the sink kept every separated spelling the prompt redactor
+    # already knew about: `01712-345678` was reproduced surviving verbatim into
+    # stdout and into Sentry (PRIV-002).
+    _PII_PHONE_RE,
 )
 
 # Email addresses (guardian PII). Kept out of the tuple above because it is
@@ -100,6 +123,54 @@ def _value_looks_secret(value: str, *, identifier: bool = False) -> bool:
     return "@" in value and _EMAIL_VALUE_PATTERN.search(value) is not None
 
 
+# SQLAlchemy renders every bound parameter into ``str(exception)``, and a DB
+# error is logged by ``logger.exception`` (middleware.py) and shipped to Sentry
+# by ``scrub_sentry_event`` -- so a guardian phone pasted into a question left
+# the process inside ``[parameters: ('আমার ফোন 01712-345678',)]``. Redacting by
+# value shape alone cannot be the only defence, because the shape may be one
+# the patterns miss (the hyphenated spelling was the reproduced case, measured
+# 2026-11-10). The section is therefore removed by construction, before any
+# shape check, in ``redact_value`` so one hook covers RedactionFilter,
+# RedactingFormatter, json_log and Sentry's before_send.
+_PARAMETERS_MARKER = "[parameters: "
+_PARAMETERS_REDACTED = "[parameters redacted]"
+
+
+def _strip_bound_parameters(text: str) -> str:
+    """Remove SQLAlchemy ``[parameters: ...]`` sections from an error string.
+
+    PRIV-002. Deliberately a two-index ``str.find`` scan and not a regex: the
+    text is attacker-influenced (the student's own message is inside the
+    parameter list) and can itself contain the literal ``[parameters: ``, and a
+    backtracking pattern over repeated markers was measured at 414 ms on a
+    48 000-marker field where this scan stays in single-digit milliseconds --
+    the ReDoS discipline the other patterns in this module follow (F-076).
+
+    The section ends at the LAST ``]`` on its line, because SQLAlchemy renders
+    parameters as a Python literal and a list value carries inner brackets. A
+    section with no closing bracket on its line is stripped to end of line: the
+    missing bracket means parameter data continues, and keeping it would be
+    the leak this exists to stop. ``[SQL: ...]`` and the
+    ``(Background on this error ...)`` line carry no data and are kept.
+    """
+    if _PARAMETERS_MARKER not in text:
+        return text
+    out: list[str] = []
+    pos = 0
+    while True:
+        start = text.find(_PARAMETERS_MARKER, pos)
+        if start < 0:
+            out.append(text[pos:])
+            return "".join(out)
+        out.append(text[pos:start])
+        out.append(_PARAMETERS_REDACTED)
+        line_end = text.find("\n", start)
+        if line_end < 0:
+            line_end = len(text)
+        close = text.rfind("]", start, line_end)
+        pos = line_end if close < 0 else close + 1
+
+
 def redact_value(value: Any, *, _depth: int = 0, _is_identifier: bool = False) -> Any:
     """Recursively redact a value destined for the log sink.
 
@@ -127,6 +198,13 @@ def redact_value(value: Any, *, _depth: int = 0, _is_identifier: bool = False) -
     if value is None or isinstance(value, bool):
         return value
     if isinstance(value, str):
+        # SQLAlchemy bound parameters are raw field values -- a guardian phone
+        # among them (PRIV-002). Stripped here, before the shape checks, so
+        # every path through this one function is covered: RedactionFilter,
+        # RedactingFormatter, json_log's fields and Sentry's before_send
+        # (scrub_sentry_event calls this same hook). Doing it only in
+        # RedactingFormatter would leave Sentry leaking -- verified 2026-11-10.
+        value = _strip_bound_parameters(value)
         # An identifier field skips the PII patterns, never the credential
         # ones: an id is not a phone number, but a token logged under an
         # id-shaped key is still a token (F-188).

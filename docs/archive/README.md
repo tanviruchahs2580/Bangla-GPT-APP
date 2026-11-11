@@ -5,11 +5,14 @@ contradict each other and the current tree (e.g. some predate the circuit
 breaker, the router split, MFA and the usage ledger). They are kept for
 history only — **do not quote them as current status**.
 
-**Every file carries its own banner.** All 57 report files under
-`docs/archive/` open with a "historical, not current" or "archived —
-superseded" line: nothing here describes current state, and no file here may
-be cited as a source of truth. `scripts/check_archive_banners.py` re-checks
-that property on every run, so a file cannot lose its banner silently.
+**Every file carries its own banner.** All 60 report files under
+`docs/archive/` (measured 2026-11-10; the checker counts every `*.md` below
+this directory, recursively) open with a "historical, not current" or
+"archived — superseded" line: nothing here describes current state, and no
+file here may be cited as a source of truth.
+`scripts/check_archive_banners.py` re-checks that property on every run, so
+a file cannot lose its banner silently — its printed count is the number to
+trust rather than this one.
 
 **Ratings and gate claims are self-assessed.** The "x/10" tables and
 "CI green" lines in some reports were written by the session that produced

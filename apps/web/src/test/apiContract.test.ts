@@ -199,7 +199,6 @@ describe("the committed OpenAPI fixture against the client", () => {
     "get /schools/mine": NOT_WIRED,
     "get /students/{param}":
       "roster rows arrive via /teacher/classrooms/{param}/roster",
-    "get /students/{param}/consent": NOT_WIRED,
     "get /teacher/content": OPS_ONLY,
     "get /teacher/content/history": OPS_ONLY,
     "get /teacher/documents/{param}":
@@ -223,7 +222,6 @@ describe("the committed OpenAPI fixture against the client", () => {
       "the UI redeems the student's code via /parents/link/invite",
     "post /schools/{param}/classes":
       "classrooms are created via POST /teacher/classrooms",
-    "post /students/{param}/consent/reconfirm": NOT_WIRED,
     "post /teacher/content/generate": OPS_ONLY,
     "post /tutor/conversations/{param}/messages":
       "the tutor UI streams (/messages/stream)",

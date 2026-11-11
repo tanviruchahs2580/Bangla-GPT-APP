@@ -12,11 +12,15 @@ import type {
   SourceRef,
 } from "../../types";
 import { useAuth } from "../../AuthContext";
-import { Button, Card } from "../../components/ui";
-import { friendlyError } from "../../errors";
+import { Button, Card, Segmented } from "../../components/ui";
+import { ConsentReconfirmNotice } from "../../components/ConsentReconfirmNotice";
+import { friendlyError, isConsentReconfirmationRequired } from "../../errors";
 import { t } from "../../i18n";
 import { getLowData } from "../../lib/lowData";
+import { prefersReducedMotion } from "../../lib/motion";
+import { subjectOptions } from "../../lib/subjectOptions";
 import { toast } from "../../lib/toast";
+import { questionLengthError } from "../../lib/tutorQuestion";
 import { track } from "../../lib/analytics";
 import { EvidenceModal } from "./tutor/EvidenceModal";
 import { useTutorHandoff } from "./tutor/useTutorHandoff";
@@ -24,17 +28,15 @@ import { TutorComposer } from "./tutor/TutorComposer";
 import { TutorHistory } from "./tutor/TutorHistory";
 import { TutorThread } from "./tutor/TutorThread";
 
-// labels from i18n, evaluated per render (lang switch remounts).
-const subjectOptions = () => [
-  { value: "science", label: t("subjectScience") },
-  { value: "mathematics", label: t("subjectMath") },
-  { value: "bangla", label: t("subjectBangla") },
-];
-
 // Attachment contract. The API re-validates both server-side (422
 // image_invalid); these bounds must stay in step with docs/API.md.
 const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const MAX_IMAGE_BYTES = 1_500_000;
+
+/** How close to the bottom still counts as "following the newest message".
+ *  A couple of lines of slack, so the answer arriving at the bottom of the
+ *  viewport does not detach the reader. */
+const NEAR_BOTTOM_PX = 48;
 
 export default function AITutorPage() {
   const { me } = useAuth();
@@ -49,6 +51,10 @@ export default function AITutorPage() {
   // cover the POST too, so Stop can abort the whole turn (F-012).
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // FE-FIX-019: the consent gate's 403 (BE-FIX-004 gates every tutor write —
+  // opening a thread, sending a turn, renaming, rating) sets this so the
+  // notice and its action replace the generic sentence.
+  const [consentBlocked, setConsentBlocked] = useState(false);
   // Screen readers get ONE polite announcement per completed answer instead
   // of a per-token stream from the transcript (F-016/F-064).
   const [announcement, setAnnouncement] = useState("");
@@ -151,10 +157,27 @@ export default function AITutorPage() {
     [],
   );
 
+  // FE-FIX-014: the viewport was force-scrolled to the bottom on EVERY state
+  // change, and the stream flushes every 80 ms — so a student who scrolled up
+  // to re-read the question, or to look at the evidence behind a claim, was
+  // dragged back to the bottom of the answer four times a second. It now
+  // follows the stream only while the reader is already at the bottom; the
+  // scroll is also instant under prefers-reduced-motion, which this project
+  // already honours elsewhere (lib/confetti.ts:17) and which the repeated
+  // smooth slide ignored.
+  const pinnedRef = useRef(true);
+  const onViewportScroll = useCallback(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    pinnedRef.current =
+      el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX;
+  }, []);
   useEffect(() => {
-    viewportRef.current?.scrollTo({
-      top: viewportRef.current.scrollHeight,
-      behavior: "smooth",
+    const el = viewportRef.current;
+    if (!el || !pinnedRef.current) return;
+    el.scrollTo({
+      top: el.scrollHeight,
+      behavior: prefersReducedMotion() ? "auto" : "smooth",
     });
   }, [messages, streaming]);
 
@@ -177,8 +200,11 @@ export default function AITutorPage() {
       const res = await post<ConversationOut>("/tutor/conversations", {});
       await refetchConvs();
       await loadConversation(res.id);
-    } catch {
-      setError(t("newChatFailed"));
+    } catch (e) {
+      // FE-FIX-019: opening a thread is a gated write; the notice explains
+      // and clears it instead of "নতুন চ্যাট শুরু করা যায়নি" with no way out.
+      if (isConsentReconfirmationRequired(e)) setConsentBlocked(true);
+      else setError(t("newChatFailed"));
     }
   }, [loadConversation, refetchConvs]);
 
@@ -194,6 +220,14 @@ export default function AITutorPage() {
       // Enter + chip) during that round-trip opened a second conversation and
       // started a second stream, and Stop could only kill the newer one.
       if (!text || sendingRef.current) return;
+      // FE-FIX-016: the API's own bound, checked before the request leaves the
+      // client. The input is left untouched so the student can fix the
+      // sentence they wrote instead of retyping it.
+      const lengthError = questionLengthError(text);
+      if (lengthError) {
+        setError(lengthError);
+        return;
+      }
       sendingRef.current = true;
       setSending(true);
       setAnnouncement("");
@@ -222,7 +256,17 @@ export default function AITutorPage() {
           } catch (e) {
             // Stop pressed while the conversation POST was in flight.
             if ((e as { name?: string })?.name === "AbortError") return;
-            setError(t("newChatFailed"));
+            // FE-FIX-019: the conversation create is gated too — same notice,
+            // and the typed question is still restored below either way.
+            if (isConsentReconfirmationRequired(e)) setConsentBlocked(true);
+            else setError(t("newChatFailed"));
+            // FE-FIX-015: `setInput("")` runs before the POST, so a failed
+            // conversation create used to destroy the typed question — the
+            // student's own words — while the page deliberately KEEPS the
+            // attached image on failure (below). The text is put back now, but
+            // only if the box is still empty: anything typed since is newer
+            // and must not be clobbered.
+            setInput((cur) => (cur ? cur : text));
             return;
           }
         }
@@ -307,10 +351,14 @@ export default function AITutorPage() {
           // answer; flush it so the bubble shows it.
           flushTokens();
           if ((e as { name?: string })?.name === "AbortError") return;
-          setError(
-            friendlyError((e as { rawDetail?: unknown }).rawDetail)?.text ??
-              t("errorGeneric"),
-          );
+          // FE-FIX-019: the chat turn is the write the consent gate exists
+          // for; route its 403 to the notice + action, not the generic copy.
+          if (isConsentReconfirmationRequired(e)) setConsentBlocked(true);
+          else
+            setError(
+              friendlyError((e as { rawDetail?: unknown }).rawDetail)?.text ??
+                t("errorGeneric"),
+            );
         }
       } finally {
         sendingRef.current = false;
@@ -381,10 +429,15 @@ export default function AITutorPage() {
       setThanks(messageId);
       track("tutor_feedback", { rating });
       setTimeout(() => setThanks(null), 2000);
-    } catch {
-      // FE-07: a silently dropped thumbs rating reads as "registered" —
-      // the student never learns their feedback went nowhere.
-      toast(t("errorGeneric"));
+    } catch (e) {
+      // FE-FIX-019: a feedback row stores the child's own comment, so it is
+      // gated too — the notice replaces the generic toast.
+      if (isConsentReconfirmationRequired(e)) setConsentBlocked(true);
+      else {
+        // FE-07: a silently dropped thumbs rating reads as "registered" —
+        // the student never learns their feedback went nowhere.
+        toast(t("errorGeneric"));
+      }
     }
   };
 
@@ -461,9 +514,12 @@ export default function AITutorPage() {
     try {
       await patch<ConversationOut>(`/tutor/conversations/${id}`, { title });
       await refetchConvs();
-    } catch {
+    } catch (e) {
+      // FE-FIX-019: a renamed title is child-authored text stored in the
+      // record, so the rename is gated too — notice, not a generic toast.
+      if (isConsentReconfirmationRequired(e)) setConsentBlocked(true);
       // FE-07: the label snapped back to the old title with no feedback.
-      toast(t("errorGeneric"));
+      else toast(t("errorGeneric"));
     }
   };
 
@@ -492,6 +548,16 @@ export default function AITutorPage() {
         </Button>
       </section>
 
+      {/* FE-FIX-019: the tutor's writes (thread, turn, rename, rating) are the
+          surfaces BE-FIX-004 gates; the notice states it and clears it in
+          place, so the typed question is never thrown at a dead end. */}
+      <ConsentReconfirmNotice
+        studentId={me?.profile_id}
+        blocked={consentBlocked}
+        onReconfirmed={() => setConsentBlocked(false)}
+        className="section-gap-top"
+      />
+
       {backToResult && (
         // back-link to the quiz result this explain loop came from.
         <Button
@@ -504,17 +570,19 @@ export default function AITutorPage() {
         </Button>
       )}
 
-      <div className="chips chips-gap">
-        {subjectOptions().map((s) => (
-          <button
-            key={s.value}
-            className={subject === s.value ? "chip active" : "chip"}
-            onClick={() => setSubject(s.value)}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
+      {/* FE-FIX (a11y gap): this row announced nothing — a bare row of buttons
+          with no group and no pressed state, so a screen reader read three
+          unrelated "Science / Math / Bangla" buttons and never said which one
+          the turn would use. It is the shared Segmented primitive now, the
+          same control the student's report period uses (role="group" +
+          aria-pressed), which also deletes a fourth hand-rolled chip row. */}
+      <Segmented
+        className="chips-gap"
+        ariaLabel={t("subject")}
+        value={subject}
+        onChange={setSubject}
+        options={subjectOptions()}
+      />
 
       <TutorHistory
         query={query}
@@ -573,6 +641,7 @@ export default function AITutorPage() {
         )}
         <TutorThread
           viewportRef={viewportRef}
+          onViewportScroll={onViewportScroll}
           messages={messages}
           streaming={streaming}
           subject={subject}

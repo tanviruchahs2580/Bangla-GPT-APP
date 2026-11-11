@@ -56,7 +56,7 @@ function renderPage() {
 async function askOneQuestion(user: ReturnType<typeof userEvent.setup>) {
   // added a history-search textbox — target the chat input by name.
   const box = await screen.findByRole("textbox", { name: t("askPlaceholder") });
-  await user.type(box, "k");
+  await user.type(box, "কোষ");
   await user.keyboard("{Enter}");
   await waitFor(() => expect(apiMock.postStream).toHaveBeenCalled());
 }

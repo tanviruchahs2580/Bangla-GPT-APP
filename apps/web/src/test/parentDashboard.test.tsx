@@ -5,7 +5,7 @@
  * the child and fall back to explicit loading/error states.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ParentDashboard from "../pages/ParentDashboard";
@@ -166,5 +166,100 @@ describe("parent dashboard child switching (F-024)", () => {
     expect(
       screen.getAllByRole("button", { name: t("retry") }).length,
     ).toBeGreaterThan(0);
+  });
+});
+
+// FE-FIX (numerals, a11y, duplication): the child table printed the class
+// level and every score in Latin digits inside Bangla copy; a null average
+// rendered as "–%" (a dash wearing a percent sign); the period control was a
+// hand-rolled chip row with no aria-pressed where the shared Segmented
+// primitive exists; and the heatmap was a second, drifting copy of the
+// student's grid.
+describe("parent dashboard numerals and controls", () => {
+  it("renders quantities in the language's digits and never a bare dash with a unit", async () => {
+    const user = userEvent.setup();
+    apiMock.get.mockImplementation((path: string) => {
+      if (path === "/parents/me/children")
+        return Promise.resolve([
+          { ...CHILDREN[0], avg_score_pct: null },
+          CHILDREN[1],
+        ]);
+      if (path.endsWith("/progress"))
+        return Promise.resolve({
+          ...progressFor(1, "Child A"),
+          avg_score_pct: null,
+          by_chapter: [
+            {
+              chapter: "কোষ",
+              asked: 4,
+              correct: 3,
+              accuracy: 75,
+            },
+          ],
+        });
+      if (path.endsWith("/activity"))
+        return Promise.resolve({
+          ...ACTIVITY,
+          days: [{ date: "2026-11-10", questions: 2, quizzes: 1, minutes: 5 }],
+        });
+      return Promise.resolve(null);
+    });
+
+    renderPage();
+    await screen.findByText("Child A");
+
+    // Class levels are quantities: ৬ and ৭, not 6 and 7.
+    expect(screen.getByText("৬")).toBeInTheDocument();
+    expect(screen.getByText("৭")).toBeInTheDocument();
+
+    // A null average is "—" and nothing more: no invented unit.
+    await user.click(
+      (await screen.findAllByRole("button", { name: t("progressTitle") }))[0],
+    );
+    await screen.findByText(`${t("progressTitle")} — Child A`);
+    expect(screen.queryByText("—%")).toBeNull();
+
+    // The per-chapter table and the report tiles follow the same policy.
+    expect(await screen.findByText("৭৫%")).toBeInTheDocument();
+    expect(
+      await screen.findByText(t("reportQuizzesGraded")),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("২").length).toBeGreaterThan(0);
+  });
+
+  it("uses the labelled period group with a pressed state", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("Child A");
+    await user.click(
+      (await screen.findAllByRole("button", { name: t("progressTitle") }))[0],
+    );
+    await screen.findByText(`${t("progressTitle")} — Child A`);
+
+    const weekly = await screen.findByRole("button", {
+      name: t("periodWeekly"),
+    });
+    expect(weekly).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.getByRole("button", { name: t("periodMonthly") }),
+    ).toHaveAttribute("aria-pressed", "false");
+
+    await user.click(screen.getByRole("button", { name: t("periodMonthly") }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: t("periodMonthly") }),
+      ).toHaveAttribute("aria-pressed", "true"),
+    );
+    // Same grid component as the student's own page, with its labelled image
+    // equivalent intact (the fixture has an empty day list).
+    expect(
+      screen.getByRole("img", {
+        name: t("heatmapSummary", {
+          questions: 0,
+          active: 0,
+          days: ACTIVITY.days.length,
+        }),
+      }),
+    ).toBeTruthy();
   });
 });

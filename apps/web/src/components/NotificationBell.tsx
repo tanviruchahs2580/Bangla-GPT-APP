@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { Bell } from "lucide-react";
 import { getNotifications, markNotificationRead } from "../api";
 import type { NotificationItem } from "../api";
-import { t } from "../i18n";
+import { formatNumber, t } from "../i18n";
+import { uiPathOf } from "../lib/safeHref";
 
 /** Backend links are API-shaped; map to the real UI routes. */
 const KIND_ROUTE: Record<string, string> = {
@@ -12,12 +13,12 @@ const KIND_ROUTE: Record<string, string> = {
   support_plan: "/student/quiz",
   parent_link: "/parent",
 };
-const UI_PREFIXES = ["/student", "/parent", "/teacher", "/admin", "/school"];
 
+/** FE-FIX (trust rule): the shared `lib/safeHref` allowlist now also owns the
+ *  prefix list this component used to keep privately, so the search dropdown
+ *  validates server hrefs the same way. */
 function targetOf(n: NotificationItem): string | null {
-  const link = n.link;
-  if (link && UI_PREFIXES.some((p) => link.startsWith(p))) return link;
-  return KIND_ROUTE[n.kind] ?? null;
+  return uiPathOf(n.link) ?? KIND_ROUTE[n.kind] ?? null;
 }
 
 /** Backend sends snake_case wire codes (notif_parent_linked); dict keys are
@@ -37,6 +38,17 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [unread, setUnread] = useState(0);
+  // FE-FIX (numerals): the capped count is still a quantity, so its digit
+  // follows the active language like every other number — "৯+" under bn, not a
+  // Latin "9+" inside Bangla copy.
+  const countText = unread > 9 ? `${formatNumber(9)}+` : formatNumber(unread);
+  // FE-FIX-004: a failed fetch was swallowed by an empty catch, so the panel
+  // rendered "এখন কোনো নোটিফিকেশন নেই" — a claim about the student's account
+  // produced by a request that never answered — and the unread badge vanished,
+  // hiding a freshly assigned quiz. `loaded` distinguishes "we read the answer
+  // and it said zero" from "we never read an answer".
+  const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -47,8 +59,12 @@ export function NotificationBell() {
       const res = await getNotifications();
       setItems(res.items);
       setUnread(res.unread_count);
+      setLoaded(true);
+      setError(null);
     } catch {
-      /* silent: the bell is best-effort chrome */
+      // The last known list is kept on screen (stale but true when it was
+      // read); only the count is withheld while it is unverified.
+      setError(t("notifLoadFailed"));
     }
   }, []);
 
@@ -170,9 +186,11 @@ export function NotificationBell() {
         // before comparing, so "Notifications (2)" against a visible "2"
         // badge fails WCAG 2.5.3's label-in-name check.
         aria-label={
-          unread > 0
-            ? `${t("notifications")}: ${unread > 9 ? "9+" : unread}`
-            : t("notifications")
+          error && !loaded
+            ? `${t("notifications")} — ${t("notifLoadFailed")}`
+            : unread > 0
+              ? `${t("notifications")}: ${countText}`
+              : t("notifications")
         }
         aria-expanded={open}
         aria-haspopup="menu"
@@ -182,33 +200,57 @@ export function NotificationBell() {
         }}
       >
         <Bell size={18} aria-hidden />
-        {unread > 0 && (
-          <span className="notif-badge" aria-hidden>
-            {unread > 9 ? "9+" : unread}
+        {error && !loaded ? (
+          /* FE-FIX-004: the count is unknown, not zero. An error mark keeps the
+             bell from looking like "nothing waiting" until the retry answers. */
+          <span className="notif-badge notif-badge-error" aria-hidden>
+            !
           </span>
-        )}
+        ) : unread > 0 ? (
+          <span className="notif-badge" aria-hidden>
+            {countText}
+          </span>
+        ) : null}
       </button>
       {open && (
-        <div
-          ref={panelRef}
-          className="notif-panel"
-          role="menu"
-          aria-label={t("notifications")}
-        >
+        /* FE-FIX-004: the head, the honest empty/error line and the retry sit
+           OUTSIDE the role="menu" element — a menu may only own menu items, and
+           an alert inside it is an ARIA contract violation the sweeps flag.
+           The keyboard contract is unchanged: the same ref is queried for
+           menuitems, and the items are still the menu's only children. */
+        <div ref={panelRef} className="notif-panel">
           <div className="notif-head">{t("notifications")}</div>
-          {items.length === 0 && (
+          {error && (
+            <div className="notif-error" role="alert">
+              <span>{error}</span>
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost"
+                onClick={() => void refresh()}
+              >
+                {t("retry")}
+              </button>
+            </div>
+          )}
+          {items.length === 0 && !error && (
             <div className="notif-empty muted">{t("notifEmpty")}</div>
           )}
-          {items.map((n) => (
-            <button
-              key={n.id}
-              role="menuitem"
-              className={n.read_at ? "notif-item" : "notif-item unread"}
-              onClick={() => void openItem(n)}
-            >
-              <span>{textOf(n)}</span>
-            </button>
-          ))}
+          <div
+            className="notif-menu"
+            role="menu"
+            aria-label={t("notifications")}
+          >
+            {items.map((n) => (
+              <button
+                key={n.id}
+                role="menuitem"
+                className={n.read_at ? "notif-item" : "notif-item unread"}
+                onClick={() => void openItem(n)}
+              >
+                <span>{textOf(n)}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>

@@ -204,10 +204,35 @@ const bn = {
   searchKindSubject: "বিষয়",
   searchKindChapter: "অধ্যায়",
   searchKindQuestion: "প্রশ্ন",
+  // FE-FIX-001: the dropdown used to answer a failed request with "কোনো ফলাফল
+  // নেই" — a confident claim about the content when in fact nothing was read.
+  searchFailed: "সার্চ করা যায়নি — সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।",
   voiceMic: "মাইকে বলুন",
   downloadChapter: "ডাউনলোড করুন",
   downloaded: "সংরক্ষিত",
   offlineBadge: "অফলাইন কপি",
+  // FE-FIX (raw machine copy): the offline library printed `MiB`/`KiB` inside
+  // Bangla sentences. The units stay binary; only their names are localized,
+  // and the number takes the language's digits through {n}.
+  sizeBytes: "{n} বাইট",
+  sizeKiB: "{n} কিবিবাইট",
+  sizeMiB: "{n} মেবিবাইট",
+  // FE-FIX-004: an unanswered notifications request is not "no notifications".
+  notifLoadFailed: "নোটিফিকেশন লোড করা যায়নি",
+  // FE-FIX-003: the learning-preference form is only honest once the stored
+  // preferences have been read; until then Saving would write defaults over them.
+  prefsLoadFailed: "আপনার সংরক্ষিত পছন্দগুলো লোড করা যায়নি",
+  // FE-FIX-002/FE-FIX-008: a failed progress/totals read must not read as
+  // "no weak chapters" or as a progress ring at zero.
+  progressLoadFailed: "অগ্রগতির তথ্য লোড করা যায়নি",
+  recommendationLoadFailed: "আজকের সুপারিশ লোড করা যায়নি",
+  // FE-FIX-010: the AI-quality payload answered in a shape this build cannot
+  // read (or not at all) — say that, instead of rendering nothing.
+  aiqUnreadable:
+    "AI উত্তরের মানের তথ্য পড়া যায়নি — সার্ভারের উত্তর প্রত্যাশিত ধরনের নয়।",
+  // A value the API deliberately returns as null. Rendered as a sentence
+  // rather than a bare 0, which was a fabricated measurement (FE-FIX-006).
+  notAvailable: "তথ্য নেই",
   lowDataTitle: "কম ডেটা মোড",
   lowDataHint: "ছবি বাদ — উত্তর সংক্ষিপ্ত রাখুন",
   installApp: "অ্যাপ ইনস্টল করুন",
@@ -230,6 +255,13 @@ const bn = {
   // streaming. The transcript itself stays silent per token, and the finished
   // answer is announced once by the tutor announcer.
   generatingAnswer: "উত্তর তৈরি হচ্ছে…",
+  // FE-FIX-016: the API's ChatSendRequest is 3–1000 characters
+  // (schemas.py:235). Without a client-side check a short Banglish question
+  // like "ki" was accepted by the composer, rejected with a 422, and reported
+  // as the generic "কিছু একটা সমস্যা হয়েছে" — which names neither the field nor
+  // the rule. The bounds here and the API's must move together.
+  questionTooShort: "প্রশ্নটি একটু বড় করে লিখুন — অন্তত ৩ অক্ষর।",
+  questionTooLong: "প্রশ্নটি অনেক বড় — ১০০০ অক্ষরের কম রাখুন।",
   supportedBadge: "পাঠ্যবই-সমর্থিত",
   unsupportedBadge: "পাঠ্যবই-সমর্থিত নয়",
   quizTitle: "কুইজ",
@@ -419,6 +451,14 @@ const bn = {
   consentPrefix: "আমি অভিভাবক হিসেবে বা অভিভাবকের সম্মতিতে নিবন্ধন করছি এবং",
   consentSuffix: "পড়ে সম্মত হচ্ছি।",
   consentRequired: "অনুগ্রহ করে অভিভাবকের সম্মতি নিশ্চিত করে নিবন্ধন করুন।",
+  // FE-FIX-019: the re-confirm notice where a consent-gated action happens
+  // (quiz start/submit, tutor turn). Names what is blocked and what is not;
+  // it does not invent consent wording the API does not send.
+  consentReconfirmTitle: "অভিভাবকের সম্মতি আবার নিশ্চিত করুন",
+  consentReconfirmBody:
+    "আপনার অভিভাবকের সম্মতির তথ্য হালনাগাদ করা দরকার। এটা নিশ্চিত করা পর্যন্ত টিউটরের উত্তর তৈরি এবং কুইজ জমা দেওয়া বন্ধ থাকে — পড়া ও আগের ফলাফল দেখা যাবে।",
+  consentReconfirmAction: "সম্মতি নিশ্চিত করুন",
+  consentReconfirmed: "সম্মতি নিশ্চিত হয়েছে — এখন আবার চেষ্টা করুন।",
   privacy: "গোপনীয়তা",
   terms: "শর্তাবলি",
   haveAccount: "অ্যাকাউন্ট আছে?",
@@ -497,6 +537,28 @@ const bn = {
   admRefusalClass: "শ্রেণি",
   admLastRefusal: "শেষ অস্বীকার",
   admNoRefusals: "কোনো অস্বীকৃত প্রশ্ন নেই",
+  // FE-FIX (raw machine copy): /admin/safety/refusals groups by two families
+  // of machine codes — the tutor's `refused_reason` values and the safety
+  // screen's category names (services/safety.py). The `lib/roles.ts` rule
+  // applies: map server enums, never print them. An unmapped code falls back
+  // to a named generic, not to the raw snake_case identifier.
+  admRefReasonSelfHarm: "নিজের ক্ষতির বিষয়",
+  admRefReasonWeaponSynthesis: "অস্ত্র তৈরির বিষয়",
+  admRefReasonDrugSynthesis: "মাদক তৈরির বিষয়",
+  admRefReasonSexualContent: "যৌন বিষয়বস্তু",
+  admRefReasonViolence: "সহিংসতার বিষয়",
+  admRefReasonPersonalData: "ব্যক্তিগত তথ্য",
+  admRefReasonHateSpeech: "ঘৃণামূলক বক্তব্য",
+  admRefReasonBullyingHarassment: "গালাগালি বা হয়রানি",
+  admRefReasonPromptInjection: "নির্দেশনা ভাঙানোর চেষ্টা",
+  admRefReasonInsufficientEvidence: "পাঠ্যবইয়ে পর্যাপ্ত প্রমাণ নেই",
+  admRefReasonAiBusy: "AI তখন ব্যস্ত ছিল",
+  admRefReasonAiGenerationDisabled: "AI উত্তর তৈরি বন্ধ ছিল",
+  admRefReasonModelRefused: "মডেল উত্তর দিতে অস্বীকৃতি জানিয়েছে",
+  admRefReasonOutputScreen: "উত্তর আউটপুট স্ক্রিনিংয়ে আটকেছে",
+  admRefReasonVisionUnsupported: "ছবি পড়া সমর্থিত নয়",
+  admRefReasonProviderUnavailable: "LLM সরবরাহকারী অনুপলব্ধ",
+  admRefReasonUnknown: "কারণ নথিভুক্ত নেই",
   // support-ops status + impersonation strings. The impersonation banner is
   // shown to admins acting on another account, so its Bangla copy is formal
   // and explicit. These were the last AUD-0047 keys; a native reviewer should
@@ -505,6 +567,32 @@ const bn = {
   statusAllOk: "সব সিস্টেম স্বাভাবিকভাবে চলছে",
   statusDegraded: "কিছু সেবা সীমিতভাবে চলছে",
   statusChecked: "সর্বশেষ যাচাই: {when}",
+  // FE-FIX-017: /system/status answers with English component names and detail
+  // sentences (`name="cache"`, `detail="shared cache reachable"`); the page
+  // printed them verbatim, which made the status page — linked from every
+  // footer — the only English left in the Bangla product. The server keeps
+  // its machine-readable contract; the client maps it (lib/roles.ts pattern).
+  statusCompDatabase: "ডেটাবেস",
+  statusCompCache: "ক্যাশ",
+  statusCompAssistant: "AI সহকারী",
+  statusCompCurriculum: "পাঠ্যক্রম",
+  statusCompUnknown: "অন্যান্য সেবা",
+  statusDetailQueriesOk: "কোয়েরি সাড়া দিচ্ছে",
+  statusDetailUnreachable: "সংযোগ করা যাচ্ছে না",
+  statusDetailCacheShared: "শেয়ার করা ক্যাশ সচল",
+  statusDetailCacheLocal: "অ্যাপের নিজস্ব ক্যাশ সচল",
+  statusDetailCacheDown: "ক্যাশ সাড়া দিচ্ছে না",
+  statusDetailNoProvider: "কোনো LLM সরবরাহকারী কনফিগার করা নেই",
+  statusDetailCircuitOpen: "বারবার ব্যর্থতার পর সরবরাহকারী বন্ধ রাখা হয়েছে",
+  statusDetailProviderOk: "সরবরাহকারীর সর্বশেষ কল সফল",
+  statusDetailProviderSet: "সরবরাহকারী কনফিগার করা আছে",
+  statusDetailProviderFailed: "{n}টি ধারাবাহিক সরবরাহকারী কল ব্যর্থ হয়েছে",
+  statusDetailIndexOk: "রিট্রিভাল ইনডেক্স লোড হয়েছে",
+  statusDetailIndexDown: "রিট্রিভাল ইনডেক্স পাওয়া যাচ্ছে না",
+  // A detail this build has no copy for (the provider lane sends counted
+  // sentences built at runtime). Named, not raw: no English reaches the screen,
+  // and the component's own ok/degraded mark still carries the verdict.
+  statusDetailUnknown: "বিস্তারিত দেখানো যাচ্ছে না",
   actingAs: "আপনি একটি সহায়তা সেশনে {name} হিসেবে কাজ করছেন",
   exitImpersonation: "সহায়তা সেশন শেষ করুন",
   impersonate: "সহায়তা সেশনে প্রবেশ করুন",
@@ -717,6 +805,10 @@ const bn = {
   errConsentRequired: "চালিয়ে যেতে নীতিমালায় সম্মতি দিন।",
   errGuardianConsentRequired:
     "শিক্ষার্থী হিসেবে নথিভুক্ত হতে অভিভাবকের সম্মতি প্রয়োজন।",
+  errConsentReconfirmRequired:
+    "অভিভাবকের সম্মতি আবার নিশ্চিত করা দরকার — ততক্ষণ এই কাজটি বন্ধ থাকবে।",
+  errKgRebuildConfirm:
+    "এই কাজটি প্রত্যেক শিক্ষার্থীর দক্ষতার তথ্য মুছে ফেলে — নিশ্চিত হয়ে চালাতে confirm দিন।",
   errClassLevelRequired: "আগে শ্রেণি বেছে নিন।",
   errPasswordTooCommon: "এই পাসওয়ার্ডটি অনেক সহজ — অন্য একটি বেছে নিন।",
   errPasswordTooShort: "পাসওয়ার্ডটি কমপক্ষে ৮ অক্ষরের দিন।",
@@ -934,10 +1026,29 @@ const en: Dict = {
   searchKindSubject: "Subject",
   searchKindChapter: "Chapter",
   searchKindQuestion: "Question",
+  // FE-FIX-001: the dropdown used to answer a failed request with "No results".
+  searchFailed: "Search couldn’t complete — check your connection and retry.",
   voiceMic: "Speak with microphone",
   downloadChapter: "Download chapter",
   downloaded: "Saved",
   offlineBadge: "Offline copy",
+  // FE-FIX (raw machine copy): the offline library printed `MiB`/`KiB` inside
+  // Bangla sentences. The units stay binary; only their names are localized.
+  sizeBytes: "{n} bytes",
+  sizeKiB: "{n} KiB",
+  sizeMiB: "{n} MiB",
+  // FE-FIX-004
+  notifLoadFailed: "Couldn’t load notifications",
+  // FE-FIX-003
+  prefsLoadFailed: "Couldn’t load your saved preferences",
+  // FE-FIX-002/FE-FIX-008
+  progressLoadFailed: "Couldn’t load progress",
+  recommendationLoadFailed: "Couldn’t load today’s recommendation",
+  // FE-FIX-010
+  aiqUnreadable:
+    "Could not read the AI-quality response — the server answered in an unexpected shape.",
+  // FE-FIX-006
+  notAvailable: "Not available",
   lowDataTitle: "Low-data mode",
   lowDataHint: "Skip images; keep answers short",
   installApp: "Install app",
@@ -958,6 +1069,9 @@ const en: Dict = {
   thinking: "Thinking…",
   // UX-002: mirrors the Bangla entry -- the stream-start status.
   generatingAnswer: "Writing the answer…",
+  // FE-FIX-016: mirrors the API's 3–1000 character bound.
+  questionTooShort: "Write a slightly longer question — at least 3 characters.",
+  questionTooLong: "That question is too long — keep it under 1000 characters.",
   supportedBadge: "Textbook-backed",
   unsupportedBadge: "Not textbook-backed",
   quizTitle: "Quiz",
@@ -1145,6 +1259,11 @@ const en: Dict = {
     "I am the guardian or register with guardian consent, and I agree to the",
   consentSuffix: ".",
   consentRequired: "Please confirm guardian consent to register.",
+  consentReconfirmTitle: "Guardian consent needs re-confirming",
+  consentReconfirmBody:
+    "Your guardian's consent record needs updating. Until it is confirmed, tutor answers and quiz submission stay blocked — reading and past results still work.",
+  consentReconfirmAction: "Confirm consent",
+  consentReconfirmed: "Consent confirmed — try again now.",
   privacy: "Privacy",
   terms: "Terms",
   haveAccount: "Have an account?",
@@ -1216,12 +1335,50 @@ const en: Dict = {
   admRefusalClass: "Class",
   admLastRefusal: "Last refusal",
   admNoRefusals: "No refusals in the window.",
+  // FE-FIX (raw machine copy): the safety-screen categories and the tutor's
+  // refused_reason codes, mapped to copy (lib/roles.ts pattern).
+  admRefReasonSelfHarm: "Self-harm",
+  admRefReasonWeaponSynthesis: "Weapon synthesis",
+  admRefReasonDrugSynthesis: "Drug synthesis",
+  admRefReasonSexualContent: "Sexual content",
+  admRefReasonViolence: "Violence",
+  admRefReasonPersonalData: "Personal data",
+  admRefReasonHateSpeech: "Hate speech",
+  admRefReasonBullyingHarassment: "Bullying or harassment",
+  admRefReasonPromptInjection: "Prompt-injection attempt",
+  admRefReasonInsufficientEvidence: "Not enough evidence in the textbook",
+  admRefReasonAiBusy: "The AI was busy at the time",
+  admRefReasonAiGenerationDisabled: "AI generation was switched off",
+  admRefReasonModelRefused: "The model declined to answer",
+  admRefReasonOutputScreen: "The answer was blocked by output screening",
+  admRefReasonVisionUnsupported: "Reading images is not supported",
+  admRefReasonProviderUnavailable: "The LLM provider was unavailable",
+  admRefReasonUnknown: "Reason not recorded",
   // support-ops status + impersonation strings. The Bangla copy lives in
   // the bn block alongside its English twin here.
   statusPage: "System status",
   statusAllOk: "All systems operational",
   statusDegraded: "Some systems are degraded",
   statusChecked: "Last checked: {when}",
+  // FE-FIX-017: English twins of the server's machine-readable status detail.
+  statusCompDatabase: "Database",
+  statusCompCache: "Cache",
+  statusCompAssistant: "Assistant",
+  statusCompCurriculum: "Curriculum",
+  statusCompUnknown: "Other service",
+  statusDetailQueriesOk: "queries responding",
+  statusDetailUnreachable: "unreachable",
+  statusDetailCacheShared: "shared cache reachable",
+  statusDetailCacheLocal: "in-process cache active",
+  statusDetailCacheDown: "cache unreachable",
+  statusDetailNoProvider: "no LLM provider configured",
+  statusDetailCircuitOpen: "provider circuit open after repeated failures",
+  statusDetailProviderOk: "last provider call succeeded",
+  statusDetailProviderSet: "provider configured",
+  statusDetailProviderFailed: "{n} consecutive provider calls failed",
+  statusDetailIndexOk: "retrieval index loaded",
+  statusDetailIndexDown: "retrieval index unavailable",
+  statusDetailUnknown: "detail unavailable",
   actingAs: "You are acting as {name} in a support session",
   exitImpersonation: "End support session",
   impersonate: "Start support session",
@@ -1434,6 +1591,10 @@ const en: Dict = {
   errConsentRequired: "Accept the policy to continue.",
   errGuardianConsentRequired:
     "Guardian consent is required to register as a student.",
+  errConsentReconfirmRequired:
+    "Guardian consent must be re-confirmed — this action stays blocked until then.",
+  errKgRebuildConfirm:
+    "This wipes every student's mastery data — pass confirm to run it deliberately.",
   errClassLevelRequired: "Choose a class level first.",
   errPasswordTooCommon: "That password is too common — choose a different one.",
   errPasswordTooShort: "Use a password of at least 8 characters.",

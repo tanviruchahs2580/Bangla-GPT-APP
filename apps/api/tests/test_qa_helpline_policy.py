@@ -23,7 +23,9 @@ from bangla_gpt_api.services.safety import (
     SELF_HARM_ANSWER,
     UNSAFE_ANSWER_REFUSAL,
     refusal_for,
+    screen_question,
 )
+from bangla_gpt_api.services.tutor import normalize_query
 
 # Bangla and Latin digits in phone-number-shaped runs of 3+ digits with
 # optional separators, which is what every national helpline looks like in
@@ -72,3 +74,27 @@ def test_other_refusal_copy_stays_number_free() -> None:
     assert not _numbers_in(UNSAFE_ANSWER_REFUSAL)
     assert not _numbers_in(refusal_for("prompt_injection"))
     assert not _numbers_in(refusal_for("sexual_content"))
+
+
+def test_legacy_bijoy_crisis_question_reaches_the_same_verified_copy() -> None:
+    """SAFE-003: a legacy-encoded child gets the helpline copy, not silence.
+
+    The audit measured that a legacy-Bijoy self-harm question screened as
+    safe, so the child saw neither an answer nor a helpline. The evasion fix
+    lives in ``services/safety.py`` and is pinned in
+    ``test_safety_evasion_hardening.py``; what this file adds is the policy
+    half -- the copy that legacy path ends at is the SAME copy as the
+    Unicode path, carrying only the verified numbers. A separate copy could
+    carry an unverified one, which is the defect this file exists for.
+    """
+    # "AvZ¥nZ¨v K‡i †dv" -> "আত্মহত্যা করে ফো" (Bijoy: ¥ U+00A5, ¨ U+00A8,
+    # ‡ U+2021, † U+2020).
+    bijoy = "AvZ\u00a5nZ\u00a8v K\u2021i \u2020dv"
+    verdict = screen_question(normalize_query(bijoy))
+    assert verdict.safe is False and verdict.reason == "self_harm"
+    copy = refusal_for(verdict.reason)
+    assert copy == SELF_HARM_ANSWER
+    assert HELPLINE_HEALTH_CALL_CENTRE in copy
+    assert HELPLINE_EMERGENCY in copy
+    allowed_digits = {re.sub(r"[^০-৯0-9]", "", n) for n in SAFE_HELPLINES}
+    assert _numbers_in(copy) == allowed_digits

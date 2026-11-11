@@ -1,5 +1,5 @@
 /** জিজ্ঞাসা tab: tutor scoped to this chapter via the chapter context chip. */
-import { useState } from "react";
+import { useId, useState } from "react";
 import { post } from "../../../api";
 import type { AskResponse } from "../../../types";
 import { Card } from "../../../components/ui";
@@ -20,6 +20,9 @@ export function ChapterAsk({
   const [answer, setAnswer] = useState<AskResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // FE-FIX (a11y): the input was placeholder-only, so the field had no label
+  // for a screen reader (a placeholder is a hint, and it disappears on typing).
+  const inputId = useId();
 
   const ask = async () => {
     const q = question.trim();
@@ -50,14 +53,20 @@ export function ChapterAsk({
           {t("contextChip")}: {chapter}
         </span>
       </div>
+      <label className="visually-hidden" htmlFor={inputId}>
+        {t("askAboutChapter")}
+      </label>
       <div className="row-flex ask-row">
         <input
+          id={inputId}
           className="input ask-input"
           value={question}
           placeholder={t("askAboutChapter")}
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") void ask();
+            // FE-FIX-013: an Android IME uses Enter to confirm a Bangla
+            // composition; without this the half-composed question is asked.
+            if (e.key === "Enter" && !e.nativeEvent.isComposing) void ask();
           }}
         />
         <button
@@ -68,14 +77,25 @@ export function ChapterAsk({
           {t("send")}
         </button>
       </div>
-      {busy && <p className="muted">{t("thinking")}</p>}
+      {busy && (
+        <p className="muted" role="status">
+          {t("thinking")}
+        </p>
+      )}
       {error && (
         <p className="error" role="alert">
           {error}
         </p>
       )}
       {answer && (
-        <Card className="chapter-card">
+        // FE-FIX (a11y): the answer used to appear silently. The live
+        // semantics sit on the answer itself rather than on a second,
+        // visually-hidden copy of its text: one node, announced once, and the
+        // DOM does not carry the same sentence twice — which also keeps
+        // `getByText` unambiguous for every consumer (tests, e2e specs and any
+        // future reader of this tree). A duplicate hidden node would announce
+        // the same sentence the visible one already contains.
+        <Card className="chapter-card" role="status" aria-live="polite">
           <div className="chips-gap">
             <span className={answer.grounded ? "badge badge-teal" : "badge"}>
               {answer.grounded ? t("supportedBadge") : t("unsupportedBadge")}

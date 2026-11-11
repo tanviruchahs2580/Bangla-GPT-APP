@@ -9,7 +9,6 @@ Content-Disposition) and delegate.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
@@ -61,6 +60,12 @@ from bangla_gpt_api.security import write_audit
 
 #: export payload marker; consumers can branch on it (v2 adds the extended sections)
 EXPORT_SCHEMA_VERSION = "2"
+
+#: Rows read per keyset batch by the DB-01 attempts-JSON prune (BE-FIX-009).
+#: Erasure holds a write transaction open while it runs, so the two tables it
+#: scans (assignments, short_tests) are read and flushed in bounded pages
+#: instead of being loaded whole.
+_ERASURE_PRUNE_BATCH = 200
 
 
 class _DataExportV2(DataExportResponse):
@@ -774,25 +779,55 @@ def _strip_student_from_attempts_json(db: Session, student_id: int) -> None:
     from bangla_gpt_api.db.models import Assignment as _Assignment
     from bangla_gpt_api.db.models import ShortTest as _ShortTest
 
-    def _prune(rows: Sequence[Any]) -> None:
-        # The payload entries are untyped JSON (Any by contract here), so the
-        # attribute access goes through getattr -- mypy cannot follow the
-        # two-model union, and the shape really is checked at runtime below.
-        for row in rows:
-            entries = getattr(row, "attempts", None) or []
-            kept = [
-                entry
-                for entry in entries
-                if not (
-                    isinstance(entry, dict) and str(entry.get("student_id", "")) == str(student_id)
-                )
-            ]
-            if len(kept) != len(entries):
-                row.attempts = kept
-                db.add(row)
+    # BE-FIX-009: rows are read in primary-key batches, not one unbounded
+    # ``select(...).scalars().all()`` per model. Erasure is a data-subject
+    # request that holds a write transaction open, and both tables grow with
+    # normal teaching use -- loading every Assignment/ShortTest (each carrying
+    # a potentially large untyped ``attempts`` JSON) into memory before pruning
+    # any of them made the request's memory and transaction tail scale with
+    # the whole school's history. Keyset paging on ``id`` (which the prune
+    # never changes) keeps memory and the un-flushed change set bounded, and
+    # the pruned rows are flushed batch by batch so one huge table only ever
+    # holds a batch of dirty objects.
+    batch_size = _ERASURE_PRUNE_BATCH
 
-    _prune(db.execute(select(_Assignment).where(_Assignment.attempts.isnot(None))).scalars().all())
-    _prune(db.execute(select(_ShortTest).where(_ShortTest.attempts.isnot(None))).scalars().all())
+    def _prune_model(model: Any) -> None:
+        last_id = 0
+        while True:
+            rows = (
+                db.execute(
+                    select(model)
+                    .where(model.attempts.isnot(None), model.id > last_id)
+                    .order_by(model.id)
+                    .limit(batch_size)
+                )
+                .scalars()
+                .all()
+            )
+            if not rows:
+                return
+            for row in rows:
+                # The payload entries are untyped JSON (Any by contract here),
+                # so the attribute access goes through getattr -- mypy cannot
+                # follow the two-model union, and the shape really is checked
+                # at runtime below.
+                entries = getattr(row, "attempts", None) or []
+                kept = [
+                    entry
+                    for entry in entries
+                    if not (
+                        isinstance(entry, dict)
+                        and str(entry.get("student_id", "")) == str(student_id)
+                    )
+                ]
+                if len(kept) != len(entries):
+                    row.attempts = kept
+                    db.add(row)
+                last_id = int(row.id)
+            db.flush()
+
+    _prune_model(_Assignment)
+    _prune_model(_ShortTest)
 
 
 def erase_account_everything(db: Session, user: User) -> None:

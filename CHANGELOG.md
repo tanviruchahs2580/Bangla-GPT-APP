@@ -71,6 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): make the parked deploy contract runnable and green
 - fix(api): make the pyproject version reader and Sentry hook type-check
 - fix(api): make the suppression reasons valid mypy comments and type the jitter
+- fix(api): make the write paths honest about consent, cost and confirmation
 - fix(api): mark the SSE stream no-cache and unbuffered
 - fix(api): name the production Sentry environment and the Grafana login user
 - fix(api): narrow the identity block list to NUL and bidi controls
@@ -96,18 +97,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(api): stop the second redaction pass from destroying structured log lines
 - fix(api): validate and canonicalise the guardian phone, share Bangla name fixtures
 - fix(api): write the openapi fixture with platform-independent bytes
+- fix(ci): make the native-review sheet platform-independent
 - fix(ci): stop splicing contexts into the deploy script and land the SEC-18 triage
 - fix(compose): forward the production boot-guard keys from .env
 - fix(data): age chat rows by their own timestamps and keep the sweep drainable
+- fix(db): re-assert the drifted CHECK, add the hot-path indexes, exact money
 - fix(deploy): align the web build context and worker healthchecks
 - fix(deploy): mirror the Permissions-Policy into the self-hosted hosts
+- fix(docs): stop citing the untracked coverage report as a repo path
 - fix(docs,test): point every QA-record link at the new report and make the inline-script guard case-insensitive
 - fix(e2e): refuse to seed the shared e2e accounts outside test lanes
 - fix(eval,api): satisfy the full-tree type check on the new modules
 - fix(pwa): offline navigations answer 200 — restore the install prompt
 - fix(pwa): the offline-shell spec discovers the cache by prefix; changelog regen
 - fix(rag): P0 audit fixes — calibrated confidence, refusal parity, search hygiene
+- fix(rag): a spelling repair may widen retrieval but can no longer certify
+- fix(rag): name the Assamese codepoints instead of writing them
 - fix(rag): out-of-corpus weight floor gated on corpus scale; kg gap test made deterministic
+- fix(rag): rebuild the corpus text pipeline and make its gate blocking
 - fix(rag): satisfy the CI ratchets on the audit port
 - fix(rag): state the pragma reason the slop guard demands (embedding retry tail)
 - fix(rag): treat client-owned prompt fields as untrusted and stop refusing repaired Bangla terms
@@ -139,6 +146,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): read the machine code out of the FastAPI detail envelope
 - fix(web): refresh the dependency register and clear the undici alert
 - fix(web): regenerate the lockfile root version to 0.9.3
+- fix(web): render every failed state honestly and wire the consent gate
 - fix(web): render teacher and offline counts through the numeral policy
 - fix(web): replace the last text-glyph icons with lucide marks
 - fix(web): require a chapter for evidence-backed generators
@@ -151,9 +159,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): show localized copy when a chapter quiz fails to start
 - fix(web): state Argon2id and the real data flows in the privacy page
 - fix(web): state the reason on every suppression and pin the saved state
+- fix(web): stop the reduced-motion stub leaking across shuffled tests
 - fix(web): stop the streaming placeholders from colliding on React keys
 - fix(web): stream SSE unbuffered from nginx and honour the deploy contract
 - fix(web): tie a field's error and hint to the control it wraps
+
+### Security
+
+- security: close the child-safety screen evasions and the PII egress leaks
 
 ### Performance
 
@@ -324,12 +337,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(api): regenerate the hash-locked constraints against the current index
 - chore(api): remove the dead arguments and gate the tree with vulture
 - chore(api): state a reason on every suppression and name the repeated limits
+- chore(ci): wire the unwired gates and correct the instruction file
+- chore(contract): regenerate the recorded OpenAPI fixture
 - chore(corpus): regenerate the tracked artifacts from one build
 - chore(dx): close the cheap pre-commit parity gaps
 - chore(git): map the historic personal address in a mailmap
 - chore(openapi): regenerate the served-schema fixture for POST /admin/reindex and document the operator-only gap in the web contract test
 - chore(rag): audit follow-through — refreshed eval baseline, red-team 36, nightly real-corpus workflow
 - chore(rag): rebase polish — transport typing, v3 corpus artifacts regenerated
+- chore(rag): rebuild the corpus so the manifest fingerprint matches the tree
 - chore(web): add the dead-code and import-cycle gates to the dev toolchain
 - chore(web): gate knip in CI and wire it into make
 - chore(web,scripts): drop the three unrendered locale keys and gate new ones
@@ -340,6 +356,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore: regenerate the CHANGELOG and the native-review sheet
 - chore: regenerate the native-review sheet
 - chore: regenerate the native-review sheet for the audit string changes
+- chore: regenerate the native-review sheet for the new strings
 - chore: regenerate the native-review sheet for the refactor's line shifts
 
 ### Style
@@ -348,6 +365,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - style(scripts): restore the blank line after the bn_scan docstring
 - style(scripts): state why the boto3 import carries a type ignore
 - style(tests,docs): satisfy the end-of-file and line-ending hooks
+- style(web): apply prettier to the wave's sources and re-measure two ceilings
 - style(web): format the wave-2 files and use a string-built glyph regex
 - style(web): prettier the invite type imports
 - style(web): wrap the attachment test's file list at the formatter's width
@@ -359,6 +377,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Other
 
 - Merge pull request #101 from tanviruchahs2580/fix/rag-audit-enterprise
+- Merge pull request #104 from tanviruchahs2580/fix/enterprise-audit-v2
 - Merge pull request #93 from tanviruchahs2580/fix/pwa-install-offline-200
 - Merge pull request #94 from tanviruchahs2580/qa/enterprise-v2-hardening
 - ci,style: point lint-imports at the root contract; format the composer; refresh the review sheet

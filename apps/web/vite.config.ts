@@ -107,6 +107,12 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // Fail loudly instead of silently drifting to 5174 when 5173 is taken.
+    // ALLOWED_ORIGINS and the e2e harness both assume this exact port, so a
+    // silent fallback surfaces as a confusing CORS/login failure rather than a
+    // clear error. To run the sibling project alongside this one, override
+    // explicitly: `npm run dev -- --port 5273` (and E2E_WEB_PORT=5273 for e2e).
+    strictPort: true,
     proxy: {
       '/api': {
         target: API_PROXY_TARGET,

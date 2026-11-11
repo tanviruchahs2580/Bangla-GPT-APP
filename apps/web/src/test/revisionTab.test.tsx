@@ -94,7 +94,7 @@ describe("revision tab UI", () => {
     const tab = await screen.findByRole("tab", {
       name: new RegExp(t("revisionTab")),
     });
-    await waitFor(() => expect(tab).toHaveTextContent("1"));
+    await waitFor(() => expect(tab).toHaveTextContent("১")); // numeral policy: Bangla digits at the t() boundary;
 
     await user.click(tab);
     expect(await screen.findByText("Koshe ki prosno?")).toBeInTheDocument();

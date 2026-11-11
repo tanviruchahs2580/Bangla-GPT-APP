@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { Card } from "./ui";
-import { formatNumber, t } from "../i18n";
+import { formatNumber, t, tSubject } from "../i18n";
+import { formatBytes } from "../lib/fileSize";
 import {
   deleteChapter,
   downloadedChapters,
@@ -68,8 +69,11 @@ export function OfflineLibrary({
             <div className="row-main">
               <div className="row-title">{rec.chapter}</div>
               <div className="row-sub">
-                {rec.subject} · {t("classLabel")} {formatNumber(rec.classLevel)}{" "}
-                · {formatBytes(rec.bytes)}
+                {/* FE-FIX (raw machine copy): the subject is an API enum
+                    ("science"), so it goes through tSubject like every other
+                    subject label in the product. */}
+                {tSubject(rec.subject)} · {t("classLabel")}{" "}
+                {formatNumber(rec.classLevel)} · {formatBytes(rec.bytes)}
               </div>
             </div>
             <button
@@ -91,11 +95,4 @@ export function OfflineLibrary({
       </div>
     </Card>
   );
-}
-
-/** Binary units: a device-storage figure must not read as network speed. */
-function formatBytes(bytes: number): string {
-  if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(1)} MiB`;
-  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KiB`;
-  return `${bytes} B`;
 }

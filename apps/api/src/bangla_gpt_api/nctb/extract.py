@@ -12,7 +12,31 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from bangla_gpt_api.nctb.bijoy import convert_bijoy_text, is_likely_legacy_bijoy
-from bangla_gpt_api.nctb.normalize import bangla_char_ratio, looks_like_garbage
+from bangla_gpt_api.nctb.normalize import bangla_char_ratio, de_pua, looks_like_garbage
+from bangla_gpt_api.nctb.reph import reattach_detached_reph, relocate_reph
+
+
+def _clean_page_text(text: str) -> str:
+    """Resolve symbol-font glyphs and reph artifacts on one page (NBT-001/002).
+
+    The single choke point every extraction path passes through, so a page
+    produced by the Bijoy lane and a page already in Unicode cannot drift
+    apart in the ways the audit measured:
+
+    * :func:`de_pua` — 2,048 private-use glyphs reached the shipped corpus
+      because NCTB prints list markers with a symbol font.
+    * :func:`reattach_detached_reph` — the text layer sometimes breaks a
+      syllable across a space, leaving ``চতুথ র্ পর্যায়ে`` for ``চতুর্থ
+      পর্যায়ে``; a word-level pass cannot see it because there is no word to
+      repair. Runs first, so the reph is back inside its word before the
+      positional pass reasons about where it belongs.
+    * :func:`relocate_reph` — the safety net behind the pre-conversion reph
+      fix in :mod:`bangla_gpt_api.nctb.bijoy`. It is a no-op on text whose
+      rephs are already logical (it only moves a reph that is *not* followed
+      by a consonant), so running it here as well costs nothing and catches
+      the case where the converter's own rearrangement step mangled one.
+    """
+    return relocate_reph(reattach_detached_reph(de_pua(text)))
 
 
 @dataclass
@@ -66,6 +90,7 @@ def extract_pdf(path: Path, *, max_pages: int | None = None) -> ExtractionResult
                         encoding = "unusable"
                 elif bangla_char_ratio(raw) > 0.2:
                     encoding = "unicode"
+                raw = _clean_page_text(raw)
             result.pages.append(PageText(page_number=index + 1, text=raw, encoding=encoding))
     except Exception as exc:  # corrupt PDF must not crash the pipeline
         result.error = f"{type(exc).__name__}: {exc}"

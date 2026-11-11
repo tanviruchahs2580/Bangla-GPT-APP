@@ -843,12 +843,18 @@ class TutorService:
         """
         query_terms = content_terms(question)
         if not query_terms:
-            # a question made only of function words/punctuation: fall back to
-            # every stemmed token, the pre-stop-word behaviour, rather than
-            # scoring an empty term set as instant groundability.
-            query_terms = tuple(
-                dict.fromkeys(light_stem(t) for t in tokenize(question) if len(t) >= 2)
-            )
+            # A question made only of function words and punctuation has no
+            # content to verify (RAG-003). This used to fall back to *every*
+            # stemmed token "rather than scoring an empty term set as instant
+            # groundability" — but that is precisely what the fallback caused:
+            # the full token set is covered by any textbook sentence, so "কি?",
+            # "কেন?", "কোথায়?" and the committed golden negative "এটা কী?"
+            # all passed the gate and were answered with citations
+            # (measured: ask("কি?") -> grounded, 3 sources, conf 0.9265).
+            # No content term means nothing to stand on, so the honest verdict
+            # is a refusal.
+            json_log(logger, logging.INFO, "tutor_retrieval", gate="no_content_terms")
+            return 0.0, False
         if not hits:
             return 0.0, False
         # Tokenize each hit's indexed text once: the RAG-002 spelling-repair
@@ -877,7 +883,26 @@ class TutorService:
         groups, weights, repair_resolved = gated
 
         weighted_terms = tuple(raw for raw, _ in groups)
+        # RAG-003: the verdict is computed over the terms the *student wrote*
+        # and the corpus *actually contains*. A group the vocabulary knows
+        # only through an admitted spelling repair may sit in the evidence and
+        # may widen retrieval, but it must never be the thing that turns a
+        # refusal into an answer — the repair lane's whole premise is "this
+        # token could have meant that corpus word", and when the premise is
+        # wrong the gate would otherwise certify a different question.
+        #
+        # Measured before this rule: ask("বিরিয়ানি") returned `grounded=True`
+        # with three citations from a mathematics textbook at confidence
+        # 0.9086, because বিরিয়ানি (df 0) repaired to বিষয়াদি (edit similarity
+        # 0.667) and the one repaired term then covered itself. পিৎজা -> পিঠা
+        # (0.600), বিশ্বকাপ -> বিশ্বজিৎ (0.625), টাকা -> টীকা (0.750) and
+        # ট্রেন -> ট্রেড (0.800) all fabricated the same way — and the two
+        # high-scoring pairs are why tightening the similarity threshold is
+        # not the fix: string distance cannot tell a misspelling from a
+        # different word.
+        verdict_terms = tuple(raw for raw in weighted_terms if raw not in repair_resolved)
         best_coverage = 0.0
+        best_verdict_coverage = 0.0
         passed = False
         for hit, evidence_terms in zip(hits, hit_terms, strict=True):
             covered = [
@@ -895,8 +920,21 @@ class TutorService:
             )
             coverage = weighted_coverage(hit_terms_weighted, covered, weights)
             best_coverage = max(best_coverage, coverage)
-            if coverage >= self.min_coverage and hit.score > self.min_score:
+            if not verdict_terms:
+                # Every content term was repair-resolved, so nothing the
+                # student stated is independently in the corpus. Refuse.
+                continue
+            verdict_coverage = weighted_coverage(verdict_terms, covered, weights)
+            best_verdict_coverage = max(best_verdict_coverage, verdict_coverage)
+            if verdict_coverage >= self.min_coverage and hit.score > self.min_score:
                 passed = True
+        # Report the number the *verdict* was taken on, not the repair-widened
+        # one. A refused turn that nevertheless printed coverage 1.0 would be a
+        # misleading figure in the trace and in any confidence the caller
+        # derives from it — and the honest reading of "how much of the
+        # student's question does this evidence support" is the verdict basis.
+        if repair_resolved:
+            return round(best_verdict_coverage, 4), passed
         return round(best_coverage, 4), passed
 
     def _gate(self, question: str, hits: list) -> bool:

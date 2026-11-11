@@ -218,7 +218,11 @@ def _content_generate_persist(
 @router.post(
     "/teacher/content/generate",
     response_model=TeacherContentOut,
-    responses=coded(403),
+    responses={
+        **coded(403),
+        **coded(429),
+        **coded(502, 503),
+    },
 )
 async def teacher_content_generate(
     app_ctx: Ctx, payload: ChapterContentKey, db: DbSession, teacher: AIGenerationUser
@@ -248,7 +252,11 @@ async def teacher_content_generate(
     return _content_out(row, sources)
 
 
-@router.get("/teacher/content/history", response_model=list[ChapterContentVersionOut])
+@router.get(
+    "/teacher/content/history",
+    response_model=list[ChapterContentVersionOut],
+    responses=coded(404),
+)
 def teacher_content_history(
     db: DbSession,
     teacher: TeacherOrAdminUser,
@@ -283,7 +291,7 @@ def teacher_content_history(
     ]
 
 
-@router.get("/teacher/content", response_model=TeacherContentOut)
+@router.get("/teacher/content", response_model=TeacherContentOut, responses=coded(404))
 def teacher_content_get(
     db: DbSession,
     teacher: TeacherOrAdminUser,
@@ -299,7 +307,11 @@ def teacher_content_get(
     return _content_out(row)
 
 
-@router.put("/teacher/content", response_model=TeacherContentOut, responses=coded(403))
+@router.put(
+    "/teacher/content",
+    response_model=TeacherContentOut,
+    responses={**coded(403), **coded(404)},
+)
 def teacher_content_edit(
     payload: ChapterContentEditIn, db: DbSession, teacher: TeacherOrAdminUser
 ) -> TeacherContentOut:
@@ -462,7 +474,12 @@ def _qp_persist_draft(
     return qp
 
 
-@router.post("/teacher/qpapers", response_model=QPOut, status_code=201)
+@router.post(
+    "/teacher/qpapers",
+    response_model=QPOut,
+    status_code=201,
+    responses={**coded(429), **coded(502, 503)},
+)
 async def teacher_qp_create(
     app_ctx: Ctx, payload: QPDraftIn, db: DbSession, teacher: AIGenerationUser
 ) -> QPOut:
@@ -519,7 +536,7 @@ def teacher_qp_list(
     return [_qp_out(row) for row in rows]
 
 
-@router.get("/teacher/qpapers/{qp_id}", response_model=QPOut)
+@router.get("/teacher/qpapers/{qp_id}", response_model=QPOut, responses=coded(404))
 def teacher_qp_get(qp_id: int, db: DbSession, teacher: TeacherOrAdminUser) -> QPOut:
     return _qp_out(_qp_or_404(db, qp_id, teacher))
 
@@ -532,7 +549,11 @@ def _qp_editable(qp: QuestionPaper) -> None:
         )
 
 
-@router.post("/teacher/qpapers/{qp_id}/regenerate", response_model=QPOut)
+@router.post(
+    "/teacher/qpapers/{qp_id}/regenerate",
+    response_model=QPOut,
+    responses={**coded(404, 409), **coded(429), **coded(502, 503)},
+)
 async def teacher_qp_regenerate(
     app_ctx: Ctx, qp_id: int, db: DbSession, teacher: AIGenerationUser
 ) -> QPOut:
@@ -582,7 +603,11 @@ async def teacher_qp_regenerate(
     return _qp_out(qp)
 
 
-@router.post("/teacher/qpapers/{qp_id}/shuffle", response_model=QPOut)
+@router.post(
+    "/teacher/qpapers/{qp_id}/shuffle",
+    response_model=QPOut,
+    responses=coded(404, 409),
+)
 def teacher_qp_shuffle(qp_id: int, db: DbSession, teacher: TeacherOrAdminUser) -> QPOut:
     """Reorder questions; review flags reset because positions changed."""
     qp = _qp_or_404(db, qp_id, teacher)
@@ -604,7 +629,11 @@ def teacher_qp_shuffle(qp_id: int, db: DbSession, teacher: TeacherOrAdminUser) -
     return _qp_out(qp)
 
 
-@router.post("/teacher/qpapers/{qp_id}/review", response_model=QPOut)
+@router.post(
+    "/teacher/qpapers/{qp_id}/review",
+    response_model=QPOut,
+    responses=coded(400, 404, 409),
+)
 def teacher_qp_review(
     qp_id: int, payload: QPReviewIn, db: DbSession, teacher: TeacherOrAdminUser
 ) -> QPOut:
@@ -766,7 +795,11 @@ def _persist_replacement(
     )
 
 
-@router.post("/teacher/qpapers/{qp_id}/replace", response_model=QPOut)
+@router.post(
+    "/teacher/qpapers/{qp_id}/replace",
+    response_model=QPOut,
+    responses={**coded(400, 404, 409), **coded(429), **coded(502, 503)},
+)
 async def teacher_qp_replace(
     app_ctx: Ctx, qp_id: int, payload: QPReplaceIn, db: DbSession, teacher: AIGenerationUser
 ) -> QPOut:
@@ -823,7 +856,11 @@ async def teacher_qp_replace(
     return _qp_out(qp)
 
 
-@router.post("/teacher/qpapers/{qp_id}/finalize", response_model=QPOut)
+@router.post(
+    "/teacher/qpapers/{qp_id}/finalize",
+    response_model=QPOut,
+    responses=coded(404, 409),
+)
 def teacher_qp_finalize(qp_id: int, db: DbSession, teacher: TeacherOrAdminUser) -> QPOut:
     """FINAL is an explicit teacher action, blocked until every question reviewed."""
     qp = _qp_or_404(db, qp_id, teacher)
@@ -854,7 +891,7 @@ def teacher_qp_finalize(qp_id: int, db: DbSession, teacher: TeacherOrAdminUser) 
     return _qp_out(qp)
 
 
-@router.get("/teacher/qpapers/{qp_id}/pdf")
+@router.get("/teacher/qpapers/{qp_id}/pdf", responses=coded(400, 404))
 def teacher_qp_pdf(
     qp_id: int, db: DbSession, teacher: TeacherOrAdminUser, kind: str = "paper"
 ) -> Response:
@@ -887,7 +924,7 @@ def teacher_qp_pdf(
 # --- lesson plan copilot (8 sections, editable + printable) ---------
 
 
-@router.post("/teacher/lesson-plans", response_model=LessonPlanOut)
+@router.post("/teacher/lesson-plans", response_model=LessonPlanOut, responses=coded(502, 503))
 async def teacher_lesson_plan(
     app_ctx: Ctx, payload: LessonPlanIn, db: DbSession, teacher: AIGenerationUser
 ) -> LessonPlanOut:
@@ -970,7 +1007,18 @@ def _document_out(doc: TeacherDocument) -> TeacherDocumentOut:
     )
 
 
-@router.post("/teacher/generate/{kind}", response_model=GenerateDocumentOut, status_code=201)
+@router.post(
+    "/teacher/generate/{kind}",
+    response_model=GenerateDocumentOut,
+    status_code=201,
+    responses={
+        **coded(404, 429),
+        # 422: the coded per-kind payload rejection shares the status with
+        # FastAPI's request-model validation array (the body is a raw dict).
+        **coded(422, description="Invalid generator payload (coded) or request-model validation"),
+        **coded(502, 503),
+    },
+)
 async def teacher_generate_document(
     app_ctx: Ctx, kind: str, body: dict, db: DbSession, teacher: AIGenerationUser
 ) -> GenerateDocumentOut:
@@ -1062,7 +1110,13 @@ async def teacher_generate_document(
     )
 
 
-@router.get("/teacher/documents", response_model=list[TeacherDocumentOut])
+@router.get(
+    "/teacher/documents",
+    response_model=list[TeacherDocumentOut],
+    responses={
+        **coded(422, description="Unknown document kind (coded) or request-model validation"),
+    },
+)
 def teacher_documents_list(
     db: DbSession,
     teacher: TeacherOrAdminUser,
@@ -1089,14 +1143,18 @@ def teacher_documents_list(
     return [_document_out(r) for r in rows]
 
 
-@router.get("/teacher/documents/{document_id}", response_model=TeacherDocumentOut)
+@router.get(
+    "/teacher/documents/{document_id}",
+    response_model=TeacherDocumentOut,
+    responses=coded(404),
+)
 def teacher_document_get(
     document_id: int, db: DbSession, teacher: TeacherOrAdminUser
 ) -> TeacherDocumentOut:
     return _document_out(_document_or_404(db, document_id, teacher))
 
 
-@router.delete("/teacher/documents/{document_id}", status_code=204)
+@router.delete("/teacher/documents/{document_id}", status_code=204, responses=coded(404))
 def teacher_document_delete(
     document_id: int, db: DbSession, teacher: TeacherOrAdminUser
 ) -> Response:
@@ -1111,7 +1169,7 @@ def teacher_document_delete(
     return Response(status_code=204)
 
 
-@router.get("/teacher/documents/{document_id}/pdf")
+@router.get("/teacher/documents/{document_id}/pdf", responses=coded(400, 404))
 def teacher_document_pdf(document_id: int, db: DbSession, teacher: TeacherOrAdminUser) -> Response:
     doc = _document_or_404(db, document_id, teacher)
     if doc.kind not in TEACHER_DOCUMENT_PDF_KINDS:

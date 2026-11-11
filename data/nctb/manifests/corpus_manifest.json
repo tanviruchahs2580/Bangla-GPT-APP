@@ -1,6 +1,6 @@
 {
   "manifest_version": 1,
-  "built_at": "2026-11-03T09:09:28+00:00",
+  "built_at": "2026-11-11T00:30:34+00:00",
   "edition": {
     "secondary": "প্রকাশকাল ২০১২",
     "hsc": "UNKNOWN",
@@ -13,7 +13,7 @@
   },
   "pipeline": {
     "processing_version": "v1",
-    "code_fingerprint": "sha256:62bc3611efd88475d5d678f01da4a5a3c493c69dc32d5a7f67d9db9b033a74b4",
+    "code_fingerprint": "sha256:225f106c50af82596e78313caa1935fc960716281ad46bc657d4dc6936d6e413",
     "extractor": "pypdf-6.21.2",
     "python": "3.12.10-CPython",
     "chunker": {
@@ -49,8 +49,8 @@
       "chunks_with_chapter": 34,
       "chapter_coverage": 0.382,
       "extractor": "pypdf-6.21.2",
-      "extracted_sha256": "c47c8a17e172154d8dda074250142eba731f8c8568a01142b962785b54cc50de",
-      "normalized_sha256": "f11d3a8af83d243c3edea28197316cb45ec278cf78d58e099e1c90fe3c778b11"
+      "extracted_sha256": "349cd8d3cbba9dfa946d9aecffa4b5f01708dfd26da331f25adce1d3f9ad7c02",
+      "normalized_sha256": "0b47b794d991d52afc25f2a1bf6701c3ae7a69703b91b08cc6ec1083e7c69b8e"
     },
     {
       "source_id": "nctb-hsc-9c44bb8ff649",
@@ -72,8 +72,8 @@
       "chunks_with_chapter": 33,
       "chapter_coverage": 0.3402,
       "extractor": "pypdf-6.21.2",
-      "extracted_sha256": "b7d7b871044588d71d379f60583e2611dba6ee0a19bbb38e981e889b986d54ca",
-      "normalized_sha256": "e005fd7e75537d0aaa38a2d855eec71b9eb75e1af543db8c7ceb3b788afc3ac8"
+      "extracted_sha256": "2fae4cb8374bc844c7b06b887599c99ae2100ae40106f957efb8e7a7d26eee72",
+      "normalized_sha256": "03dd5c790342663664aa58f0a4d98e72369fbb72ed14f8bb0c7949e15afa0e63"
     },
     {
       "source_id": "nctb-hsc-a513203336f6",
@@ -89,14 +89,14 @@
       "retrieved_at": "2026-08-25T14:34:13+00:00",
       "total_pages": 45,
       "usable_pages": 45,
-      "bangla_char_ratio_on_usable": 0.9007,
-      "chunks": 74,
+      "bangla_char_ratio_on_usable": 0.9316,
+      "chunks": 69,
       "duplicates_removed": 0,
-      "chunks_with_chapter": 15,
-      "chapter_coverage": 0.2027,
+      "chunks_with_chapter": 10,
+      "chapter_coverage": 0.1449,
       "extractor": "pypdf-6.21.2",
-      "extracted_sha256": "be130afac1ad6104fa7728dd80fb5e2f6c3c2a84c1450e9f9199b0937dd8c1fa",
-      "normalized_sha256": "2ea2a421ab05a5b9ff52d59e45c391acfec25adfed39cbad5de78727bbb2ddc2"
+      "extracted_sha256": "fb588f4719292794fa63d3ac836c7c5b9d0993d63c14c33f547ce53b9c1e6a97",
+      "normalized_sha256": "f370b976002c27bc8198eb5d7bbedc7ff42871305621470f00f42a1809013ae5"
     },
     {
       "source_id": "nctb-hsc-ca39e5957513",
@@ -112,14 +112,14 @@
       "retrieved_at": "2026-08-25T14:34:15+00:00",
       "total_pages": 46,
       "usable_pages": 46,
-      "bangla_char_ratio_on_usable": 0.8268,
-      "chunks": 81,
+      "bangla_char_ratio_on_usable": 0.8501,
+      "chunks": 80,
       "duplicates_removed": 0,
-      "chunks_with_chapter": 25,
-      "chapter_coverage": 0.3086,
+      "chunks_with_chapter": 24,
+      "chapter_coverage": 0.3,
       "extractor": "pypdf-6.21.2",
-      "extracted_sha256": "4b06bf7b2eb21cdc86bd802eaaf2229f9eb6ac324fc5f92f09bb5f2140cdc965",
-      "normalized_sha256": "0d0e39a78e6317188e503f256f3b12efad44aafb9cbd661da336a0611d498400"
+      "extracted_sha256": "8d4c293781ca858b7ff889e373262bf4cfae7de64ebdf7eb9f8f18c923c40a02",
+      "normalized_sha256": "d894ed96d9f51cc1d88e211c978d15fa006d9dba58c03bbe34cb9d9b3a0642c3"
     },
     {
       "source_id": "nctb-secondary-3ce5065b7a32",
@@ -136,13 +136,13 @@
       "total_pages": 93,
       "usable_pages": 91,
       "bangla_char_ratio_on_usable": 1.0,
-      "chunks": 131,
+      "chunks": 132,
       "duplicates_removed": 0,
       "chunks_with_chapter": 0,
       "chapter_coverage": 0.0,
       "extractor": "pypdf-6.21.2",
-      "extracted_sha256": "16dab860c67436ab94701cad95f336c321a2103fb9fae582ad01e988dbfd31c7",
-      "normalized_sha256": "979465ee934a14447a2f2cb62c96ca72348d004b142e92bc26f88a8cb302be85"
+      "extracted_sha256": "e0f7f1509764940ef521c46581246409886992fa5d86d83e9f36b40df869f1ab",
+      "normalized_sha256": "e904b45592f377959557f5c877f32878c27bbc4a6c7a3b96863879140271f267"
     },
     {
       "source_id": "nctb-secondary-afda21d8556d",
@@ -164,8 +164,8 @@
       "chunks_with_chapter": 0,
       "chapter_coverage": 0.0,
       "extractor": "pypdf-6.21.2",
-      "extracted_sha256": "6a2dd7f87ae4167307d7da486f98c7a36f087775ecb8319664dae919f6a74fd8",
-      "normalized_sha256": "4a4d1ecb1fb28c47703d6c45729ff6c0e9b5a0ed49f4af982d2cb9a300f850f4"
+      "extracted_sha256": "e40f06696e9872c57fdd55cd579e6a65c6a19e1aab91254110c7b6cc12d60802",
+      "normalized_sha256": "72224326b113d29fc3224b549ead5e8b366cc5bb4dd6be7adab05583151a4f43"
     },
     {
       "source_id": "nctb-secondary-be50d8aff8d5",
@@ -187,8 +187,8 @@
       "chunks_with_chapter": 16,
       "chapter_coverage": 0.1798,
       "extractor": "pypdf-6.21.2",
-      "extracted_sha256": "8ee6afd7146527a1c2ec5c1b97b0777e2917e6aea294f08a628675ec365f0279",
-      "normalized_sha256": "91b7e82076f778497dcaa6e656801750a0e0e06377f3969b0de615506227c980"
+      "extracted_sha256": "6b651bce51fbc17cfa800d055773a5384e085459280a0dc25cbee8be47dd515b",
+      "normalized_sha256": "eb9851a72a78cea800f5703a1727c2a650cf5954500c0a88a772751e5a0da4d7"
     },
     {
       "source_id": "nctb-secondary-ca0d6bd886b7",
@@ -210,8 +210,8 @@
       "chunks_with_chapter": 24,
       "chapter_coverage": 0.2791,
       "extractor": "pypdf-6.21.2",
-      "extracted_sha256": "46f300c0580248daa4f24780b83f437807d50597fdab840bcfa10e41bb989d7b",
-      "normalized_sha256": "5691d16811d7e7990634df75bdcb408a557a725d43039bdf1da273f10d4e8857"
+      "extracted_sha256": "95fde0635a774c036dd52cb4f3b9133bee0d621fb3148caa4863a53fbb573a85",
+      "normalized_sha256": "4d7b1772f41137c37ef683c674fe81bfbf3890a0453c40ef7bb09b59022fd43b"
     },
     {
       "source_id": "nctb-secondary-e39c58d35764",
@@ -233,21 +233,21 @@
       "chunks_with_chapter": 22,
       "chapter_coverage": 0.2683,
       "extractor": "pypdf-6.21.2",
-      "extracted_sha256": "ec9ad318b47be9604ca370622c153f0ff2a48aca8482ae93d3eb5995485d1ca4",
-      "normalized_sha256": "0ac9cd3fdb41aca649bffe1187fd7e1aebe50ef9a08c047c61d0a0c1c720ef10"
+      "extracted_sha256": "da13ecf0f54e1c910c64f62c4d9d849edacc8eb67814cad2450f0e0eab46026d",
+      "normalized_sha256": "413f97779883c4fc47615274cc53ee38e8e095022dfd216ef8810347014ab5d1"
     }
   ],
   "totals": {
     "sources": 9,
     "processed_sources": 9,
-    "chunks": 852,
-    "chunks_with_chapter": 169,
-    "characters_on_usable": 1628045
+    "chunks": 847,
+    "chunks_with_chapter": 163,
+    "characters_on_usable": 1627831
   },
   "cross_source": {
     "sources": 9,
-    "total_chunks": 852,
-    "unique_texts": 560,
+    "total_chunks": 847,
+    "unique_texts": 555,
     "duplicate_chunks": 292,
     "duplicate_texts": 100,
     "cross_source_texts": 100,
@@ -275,17 +275,17 @@
         "shared_chunks": 48
       },
       "nctb-hsc-a513203336f6": {
-        "chunks": 74,
+        "chunks": 69,
         "shared_texts": 50,
         "shared_chunks": 50
       },
       "nctb-hsc-ca39e5957513": {
-        "chunks": 81,
+        "chunks": 80,
         "shared_texts": 49,
         "shared_chunks": 49
       },
       "nctb-secondary-3ce5065b7a32": {
-        "chunks": 131,
+        "chunks": 132,
         "shared_texts": 49,
         "shared_chunks": 49
       },
@@ -312,7 +312,7 @@
     }
   },
   "derived": {
-    "quality_report_sha256": "19ce0334f300b9149b16c5cdee13b357afbce2704a3fc2534248f1083bfe544e",
+    "quality_report_sha256": "ca741bcedba1d3de5b51a29113dee3ba206894c27bcd690b1b6e6a158b1293a7",
     "retrieval_eval_sha256": "45a70163275f5692fb3550f803524754dae5ad5a2206c872464a2f4ac9cde211",
     "index_chunks": 1605,
     "index_id_hash": "af2a0a21813324d3ba2de218f8fddaf3fb8dc53f88d329a14a9c0524480a3bd7",

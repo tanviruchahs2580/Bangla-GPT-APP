@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Search } from "lucide-react";
 import { get } from "../api";
 import { t } from "../i18n";
+import { uiPathOf } from "../lib/safeHref";
 import type { SearchResponse } from "../types";
 
 // global search box in the top bar. Debounced GET /search, dropdown
@@ -21,6 +22,12 @@ export function SearchBox() {
   const [debounced, setDebounced] = useState("");
   const [data, setData] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  // FE-FIX-001: a failed request was caught into `setData({hits: []})`, so the
+  // dropdown said "কোনো ফলাফল নেই" — a confident, wrong statement about the
+  // content — with no error and no way to retry. The failure now has its own
+  // state, and `attempt` is what the retry button moves.
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -34,17 +41,21 @@ export function SearchBox() {
   useEffect(() => {
     if (debounced.length < 2) {
       setData(null);
+      setError(null);
       return;
     }
     let cancelled = false;
     setLoading(true);
+    setError(null);
     get<SearchResponse>(`/search?q=${encodeURIComponent(debounced)}`)
       .then((r) => {
         if (!cancelled) setData(r);
       })
       .catch(() => {
-        if (!cancelled)
-          setData({ query: debounced, ask_action: false, hits: [] });
+        if (!cancelled) {
+          setData(null);
+          setError(t("searchFailed"));
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -52,7 +63,7 @@ export function SearchBox() {
     return () => {
       cancelled = true;
     };
-  }, [debounced]);
+  }, [debounced, attempt]);
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
@@ -64,7 +75,22 @@ export function SearchBox() {
   }, []);
 
   const showDropdown =
-    open && debounced.length >= 2 && !loading && data !== null;
+    open &&
+    debounced.length >= 2 &&
+    !loading &&
+    (data !== null || error !== null);
+
+  // FE-FIX (trust rule): `hit.href` is server-supplied, so it is validated
+  // against the same in-app allowlist NotificationBell uses before it is
+  // rendered or navigated to. A hit whose href is not an app route is dropped
+  // from the list — an option that cannot go anywhere is worse than an absent
+  // one — and if that empties a non-empty response the dropdown says the
+  // results could not be opened instead of claiming there were none.
+  const hits = (data?.hits ?? []).flatMap((h) => {
+    const to = uiPathOf(h.href);
+    return to ? [{ hit: h, to }] : [];
+  });
+  const unroutable = (data?.hits.length ?? 0) > 0 && hits.length === 0;
 
   // Flatten the rendered options once so the keyboard handler, the
   // aria-activedescendant wiring and the click handlers all agree on the
@@ -80,12 +106,12 @@ export function SearchBox() {
         },
       });
     }
-    data.hits.forEach((h, i) => {
+    hits.forEach(({ to }, i) => {
       options.push({
         id: `search-option-${i}`,
         run: () => {
           setOpen(false);
-          void navigate(h.href);
+          void navigate(to);
         },
       });
     });
@@ -109,7 +135,12 @@ export function SearchBox() {
         // highlighted option.
         role="combobox"
         aria-expanded={showDropdown}
-        aria-controls="search-listbox"
+        // Ids the popup only while the listbox is what is open: the error row
+        // below is not a listbox, and `aria-controls` naming a missing id is
+        // an ARIA contract violation axe reports.
+        aria-controls={
+          showDropdown && !error && !unroutable ? "search-listbox" : undefined
+        }
         aria-autocomplete="list"
         aria-activedescendant={activeId}
         onChange={(e) => {
@@ -144,53 +175,77 @@ export function SearchBox() {
         }}
       />
       {showDropdown && (
-        <div
-          id="search-listbox"
-          className="search-dropdown"
-          role="listbox"
-          aria-label={t("searchPlaceholder")}
-        >
-          {data.ask_action && (
-            <button
-              id="search-option-ask"
-              type="button"
-              role="option"
-              aria-selected={
-                active ===
-                options.findIndex((o) => o.id === "search-option-ask")
-              }
-              className="search-item search-ask"
-              onClick={() => {
-                setOpen(false);
-                void navigate("/student/tutor", { state: { ask: debounced } });
-              }}
+        <div className="search-dropdown">
+          {error || unroutable || !data ? (
+            /* FE-FIX-001: the honest answer to "we could not read the
+               results" — said out loud, with the retry that makes it
+               actionable. Outside the listbox on purpose: a listbox may only
+               contain options, and this is not one. */
+            <div className="search-error" role="alert">
+              <span>{error ?? t("searchFailed")}</span>
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost"
+                onClick={() => setAttempt((n) => n + 1)}
+              >
+                {t("retry")}
+              </button>
+            </div>
+          ) : (
+            <div
+              id="search-listbox"
+              className="search-listbox"
+              role="listbox"
+              aria-label={t("searchPlaceholder")}
             >
-              <span className="search-kind">{t("searchAskTutor")}</span>
-              <span className="search-title">{debounced}</span>
-            </button>
-          )}
-          {data.hits.map((h, i) => (
-            <button
-              key={`${h.href}-${i}`}
-              id={`search-option-${i}`}
-              type="button"
-              role="option"
-              aria-selected={options[active]?.id === `search-option-${i}`}
-              className="search-item"
-              onClick={() => {
-                setOpen(false);
-                void navigate(h.href);
-              }}
-            >
-              <span className="search-kind">
-                {t(KIND_LABEL[h.kind] ?? "searchKindChapter")}
-              </span>
-              <span className="search-title">{h.title}</span>
-              {h.subtitle && <span className="search-sub">{h.subtitle}</span>}
-            </button>
-          ))}
-          {data.hits.length === 0 && !data.ask_action && (
-            <div className="search-empty">{t("searchNoResults")}</div>
+              {data.ask_action && (
+                <button
+                  id="search-option-ask"
+                  type="button"
+                  role="option"
+                  aria-selected={
+                    active ===
+                    options.findIndex((o) => o.id === "search-option-ask")
+                  }
+                  className="search-item search-ask"
+                  onClick={() => {
+                    setOpen(false);
+                    void navigate("/student/tutor", {
+                      state: { ask: debounced },
+                    });
+                  }}
+                >
+                  <span className="search-kind">{t("searchAskTutor")}</span>
+                  <span className="search-title">{debounced}</span>
+                </button>
+              )}
+              {hits.map(({ hit: h }, i) => (
+                <button
+                  key={`${h.href}-${i}`}
+                  id={`search-option-${i}`}
+                  type="button"
+                  role="option"
+                  aria-selected={options[active]?.id === `search-option-${i}`}
+                  className="search-item"
+                  onClick={() => {
+                    setOpen(false);
+                    const to = uiPathOf(h.href);
+                    if (to) void navigate(to);
+                  }}
+                >
+                  <span className="search-kind">
+                    {t(KIND_LABEL[h.kind] ?? "searchKindChapter")}
+                  </span>
+                  <span className="search-title">{h.title}</span>
+                  {h.subtitle && (
+                    <span className="search-sub">{h.subtitle}</span>
+                  )}
+                </button>
+              ))}
+              {hits.length === 0 && !data.ask_action && (
+                <div className="search-empty">{t("searchNoResults")}</div>
+              )}
+            </div>
           )}
         </div>
       )}

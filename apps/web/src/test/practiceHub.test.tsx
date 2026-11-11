@@ -161,7 +161,7 @@ describe("practice hub", () => {
     const tab = await screen.findByRole("tab", {
       name: new RegExp(t("teacherAssignedTab")),
     });
-    await waitFor(() => expect(tab).toHaveTextContent("2"));
+    await waitFor(() => expect(tab).toHaveTextContent("২")); // numeral policy: Bangla digits at the t() boundary;
     await user.click(tab);
 
     // the chapter name also shows as a weak chip above, so match all

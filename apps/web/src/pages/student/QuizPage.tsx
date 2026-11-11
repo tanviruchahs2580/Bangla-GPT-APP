@@ -17,10 +17,12 @@ import type {
 import { invalidateStudyCaches } from "../../lib/invalidate";
 import { buildExplainPayload, LAST_RESULT_KEY } from "../../lib/quizExplain";
 import { useAuth } from "../../AuthContext";
-import { Badge, Button, Card } from "../../components/ui";
-import { friendlyError } from "../../errors";
-import { t } from "../../i18n";
+import { Badge, Button, Card, LoadError } from "../../components/ui";
+import { ConsentReconfirmNotice } from "../../components/ConsentReconfirmNotice";
+import { friendlyError, isConsentReconfirmationRequired } from "../../errors";
+import { formatNumber, t } from "../../i18n";
 import { cn } from "../../lib/cn";
+import { subjectOptions } from "../../lib/subjectOptions";
 import {
   clearQuizDraft,
   readQuizDraft,
@@ -30,7 +32,7 @@ import { AssignedPanel, type AssignedEntry } from "./quiz/AssignedPanel";
 import { QuizResultScreen } from "./quiz/QuizResultScreen";
 import { QuizRunner } from "./quiz/QuizRunner";
 import { RevisionPanel } from "./quiz/RevisionPanel";
-import { StartQuizCard, subjectOptions } from "./quiz/StartQuizCard";
+import { StartQuizCard } from "./quiz/StartQuizCard";
 
 /**
  * F-094 split: the screens and tab panels live under ./quiz/ now. This file
@@ -64,10 +66,17 @@ export default function QuizPage() {
   const [result, setResult] = useState<QuizResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // FE-FIX-019: the consent gate's 403 (BE-FIX-004) sets this instead of the
+  // generic sentence; the notice below owns both the explanation and the
+  // action that clears it, so the student is never left at a dead end.
+  const [consentBlocked, setConsentBlocked] = useState(false);
   // B-03: "Finish" with unanswered questions used to submit them all as
   // wrong with no warning — a child tapping Finish on question 1 of 10 saw
   // a confident 0%. Confirm first, announce via role="alert".
   const [confirmSubmit, setConfirmSubmit] = useState(false);
+  // FE-FIX-012: set synchronously before the first await, so it gates a second
+  // submit fired in the same tick — `busy` cannot, it only lands after a render.
+  const submitRef = useRef(false);
 
   // B-03: write-through draft — every answered question is durable within
   // the tab before the next render matters, and a successful submit (or a
@@ -102,7 +111,15 @@ export default function QuizPage() {
   };
 
   const queryClient = useQueryClient();
-  const { data: progress } = useQuery({
+  // FE-FIX-002: both of these were read without their failure state, so an
+  // outage rendered as "এখনো কোনো দুর্বল অধ্যায় নেই" (a claim about the
+  // student's work) and silently removed the personalised practice button —
+  // the one action the page is built around. Both are surfaced now.
+  const {
+    data: progress,
+    isError: progressFailed,
+    refetch: refetchProgress,
+  } = useQuery({
     queryKey: ["progress", me?.profile_id],
     queryFn: () => {
       if (!me?.profile_id) throw new Error("student profile is not loaded");
@@ -110,7 +127,11 @@ export default function QuizPage() {
     },
     enabled: !!me?.profile_id && me.role === "student",
   });
-  const { data: dashboard } = useQuery({
+  const {
+    data: dashboard,
+    isError: dashboardFailed,
+    refetch: refetchDashboard,
+  } = useQuery({
     queryKey: ["dashboard"],
     queryFn: () => get<DashboardSummary>("/dashboard/summary"),
     enabled: me?.role === "student",
@@ -203,10 +224,14 @@ export default function QuizPage() {
       await post(`/revision/${item.id}/review`, { chosen });
       await refetchDue();
     } catch (e) {
-      setError(
-        friendlyError((e as { rawDetail?: unknown }).rawDetail)?.text ??
-          t("errorGeneric"),
-      );
+      // FE-FIX-019: review writes are gated too; the gate's 403 belongs to the
+      // notice, not to the panel's inline sentence.
+      if (isConsentReconfirmationRequired(e)) setConsentBlocked(true);
+      else
+        setError(
+          friendlyError((e as { rawDetail?: unknown }).rawDetail)?.text ??
+            t("errorGeneric"),
+        );
     } finally {
       setRevisionBusy(false);
     }
@@ -248,10 +273,15 @@ export default function QuizPage() {
       setResult(null);
       track("quiz_started", { subject: useSubject, n: res.questions.length });
     } catch (e) {
-      setError(
-        friendlyError((e as { rawDetail?: unknown }).rawDetail)?.text ??
-          t("errorGeneric"),
-      );
+      // FE-FIX-019: BE-FIX-004 refuses starting an attempt for a stale consent
+      // version — the notice explains why and clears it, so this branch must
+      // not collapse into "কিছু ভুল হয়েছে" with no way forward.
+      if (isConsentReconfirmationRequired(e)) setConsentBlocked(true);
+      else
+        setError(
+          friendlyError((e as { rawDetail?: unknown }).rawDetail)?.text ??
+            t("errorGeneric"),
+        );
     } finally {
       setBusy(false);
     }
@@ -262,6 +292,13 @@ export default function QuizPage() {
     // awaits below, and a non-null assertion would hide a real null.
     const attempt = started;
     if (!attempt) return;
+    // FE-FIX-012: the same synchronous double-submit guard login and the tutor
+    // use. `busy` is only true after a render, so "Finish" pressed twice in one
+    // tick — or Enter plus click — posted the attempt twice; the second POST
+    // hits an already-graded attempt and the student sees a failure on a quiz
+    // that was in fact submitted.
+    if (submitRef.current) return;
+    submitRef.current = true;
     setBusy(true);
     try {
       const res = await post<QuizResult>(
@@ -289,19 +326,38 @@ export default function QuizPage() {
         /* storage may be unavailable in low-data/incognito mode */
       }
     } catch (e) {
-      setError(
-        friendlyError((e as { rawDetail?: unknown }).rawDetail)?.text ??
-          t("errorGeneric"),
-      );
+      // FE-FIX-019: submitting is the write a stale consent version blocks
+      // (CSV-imported classes hit exactly this); route the gate to the notice
+      // and its action instead of the generic failure sentence.
+      if (isConsentReconfirmationRequired(e)) setConsentBlocked(true);
+      else
+        setError(
+          friendlyError((e as { rawDetail?: unknown }).rawDetail)?.text ??
+            t("errorGeneric"),
+        );
     } finally {
+      submitRef.current = false;
       setBusy(false);
     }
   };
+
+  // FE-FIX-019: one notice element for every branch of this page (hub, runner,
+  // result), so the gate's explanation and action sit inside whichever <main>
+  // is mounted — the quiz surface is where the blocked writes happen.
+  const consentNotice = (
+    <ConsentReconfirmNotice
+      studentId={me?.profile_id}
+      blocked={consentBlocked}
+      onReconfirmed={() => setConsentBlocked(false)}
+      className="section-gap-top"
+    />
+  );
 
   // ----- result screen -----
   if (result) {
     return (
       <QuizResultScreen
+        notice={consentNotice}
         result={result}
         onExplain={(row) =>
           navigate("/student/tutor", {
@@ -321,6 +377,7 @@ export default function QuizPage() {
     return (
       <QuizRunner
         started={started}
+        notice={consentNotice}
         current={current}
         answers={answers}
         busy={busy}
@@ -366,6 +423,8 @@ export default function QuizPage() {
         <h1>{t("practiceTitle")}</h1>
       </section>
 
+      {consentNotice}
+
       {/* আমার দুর্বলতা — the most prominent entry, from the weakness rollup */}
       <Card className="practice-weak-card card-featured">
         <div className="row-flex">
@@ -376,14 +435,23 @@ export default function QuizPage() {
             <div className="row-title">{t("weakPracticeTitle")}</div>
             <div className="row-sub">{t("weakPracticeHint")}</div>
             <div className="chips section-gap-top">
-              {weakChapters.length === 0 && (
+              {progressFailed ? (
+                /* FE-FIX-002: this branch used to be the same "no weak
+                   chapters" sentence — a confident statement about the
+                   student's work produced by a request that never answered. */
+                <LoadError
+                  message={t("progressLoadFailed")}
+                  onRetry={() => void refetchProgress()}
+                />
+              ) : weakChapters.length === 0 ? (
                 <span className="muted muted-sm">{t("noWeakChapters")}</span>
+              ) : (
+                weakChapters.slice(0, 4).map((w) => (
+                  <span key={w} className="badge badge-warn">
+                    {w}
+                  </span>
+                ))
               )}
-              {weakChapters.slice(0, 4).map((w) => (
-                <span key={w} className="badge badge-warn">
-                  {w}
-                </span>
-              ))}
             </div>
           </div>
         </div>
@@ -402,6 +470,16 @@ export default function QuizPage() {
           >
             <Target size={18} aria-hidden /> {t("weakPracticeStart")}
           </Button>
+        )}
+        {dashboardFailed && !rec && (
+          /* FE-FIX-002: the personalised button is derived from this query, so
+             its absence after a failure must be explained and retryable — the
+             student otherwise loses the tailored practice silently. */
+          <LoadError
+            className="section-gap-top"
+            message={t("recommendationLoadFailed")}
+            onRetry={() => void refetchDashboard()}
+          />
         )}
         {error && (
           <p className="error section-gap-top" role="alert">
@@ -441,7 +519,7 @@ export default function QuizPage() {
         >
           <Repeat2 size={14} aria-hidden /> {t("revisionTab")}
           {due && due.due_count > 0 && (
-            <Badge tone="teal">{due.due_count}</Badge>
+            <Badge tone="teal">{formatNumber(due.due_count)}</Badge>
           )}
         </button>
         <button
@@ -455,7 +533,9 @@ export default function QuizPage() {
           onClick={() => setTab("assigned")}
         >
           <ClipboardCheck size={14} aria-hidden /> {t("teacherAssignedTab")}
-          {assigned.length > 0 && <Badge tone="teal">{assigned.length}</Badge>}
+          {assigned.length > 0 && (
+            <Badge tone="teal">{formatNumber(assigned.length)}</Badge>
+          )}
         </button>
       </div>
 

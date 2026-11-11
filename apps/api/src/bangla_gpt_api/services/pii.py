@@ -10,8 +10,31 @@ abuse from the safety layer.
 
 import re
 
-# Bangladesh mobile: 01[3-9] + 8 digits (covers 013-019 ranges).
-_MOBILE_RE = re.compile(r"(?<!\d)01[3-9]\d{8}(?!\d)")
+# Bangladesh mobile (PRIV-001): the operator prefix 01[3-9] plus 8 digits,
+# accepting the country code and the separators a guardian actually types --
+# `+880 1712-345678`, `(017) 12345678`, `00880 171 234 5678` -- in ASCII or
+# Bangla digits. The previous ASCII-only `01[3-9]\d{8}` matched none of the
+# separated spellings, so those digits reached the upstream model verbatim;
+# `+8801712345678` and `০১৭১২৩৪৫৬৭৮` fell through to the NID rule, which
+# redacted them under the wrong metering kind.
+#
+# ReDoS discipline (F-076): every optional group is bounded and unnested and
+# the only repetition is a fixed {8}, so the scan is linear. Do NOT rewrite
+# the separator class as a repeated alternation such as `(\s|-|\.)*` -- nesting
+# a quantifier inside a repetition is what made the email pattern quadratic.
+#
+# Known residual: in the doubly-zeroed `+880 017 ...` spelling the match starts
+# at the local number, leaving the `+880 ` prefix outside the placeholder. All
+# digits are still redacted. Widening the prefix group was traded away to keep
+# this the exact shape validated against the positive/negative corpora.
+_MOBILE_RE = re.compile(
+    r"(?<!\d)"
+    r"(?:(?:\+|00)?[8\u09ee]{2}[ \-./]?)?"
+    r"\(?[0\u09e6]?[ \-./]?"
+    r"[1\u09e7][3-9\u09e9-\u09ef]\)?"
+    r"(?:[ \-./]?\d){8}"
+    r"(?!\d)"
+)
 # Email addresses (ASCII local/domain; IDN is out of scope for pasted PII).
 _EMAIL_RE = re.compile(r"(?<![\w.+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?![\w.-])")
 # NID / birth-registration-like runs: 10-17 consecutive digits. Deliberately

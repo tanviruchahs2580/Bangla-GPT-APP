@@ -7033,6 +7033,16 @@
             },
             "description": "Authenticated but not permitted"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -7129,6 +7139,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "401": {
             "content": {
@@ -7241,11 +7261,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageDetail"
+                  "$ref": "#/components/schemas/CodedDetail"
                 }
               }
             },
-            "description": "Rate limiter backend unavailable"
+            "description": "Business-rule rejection"
           }
         },
         "security": [
@@ -8127,6 +8147,16 @@
             },
             "description": "Authenticated but not permitted"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -8151,11 +8181,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageDetail"
+                  "$ref": "#/components/schemas/CodedDetail"
                 }
               }
             },
-            "description": "Rate limiter backend unavailable"
+            "description": "Business-rule rejection"
           }
         },
         "security": [
@@ -8222,6 +8252,16 @@
             },
             "description": "Authenticated but not permitted"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -8246,11 +8286,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageDetail"
+                  "$ref": "#/components/schemas/CodedDetail"
                 }
               }
             },
-            "description": "Rate limiter backend unavailable"
+            "description": "Business-rule rejection"
           }
         },
         "security": [
@@ -8318,6 +8358,26 @@
               }
             },
             "description": "Authenticated but not permitted"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "422": {
             "content": {
@@ -8653,7 +8713,7 @@
                 }
               }
             },
-            "description": "Authenticated but not permitted"
+            "description": "Business-rule rejection"
           },
           "429": {
             "content": {
@@ -8669,11 +8729,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageDetail"
+                  "$ref": "#/components/schemas/CodedDetail"
                 }
               }
             },
-            "description": "Rate limiter backend unavailable"
+            "description": "Business-rule rejection"
           }
         },
         "security": [
@@ -9961,6 +10021,16 @@
               "title": "Llm",
               "type": "boolean"
             }
+          },
+          {
+            "in": "query",
+            "name": "confirm",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Confirm",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -9973,6 +10043,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "401": {
             "content": {
@@ -10018,11 +10098,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageDetail"
+                  "$ref": "#/components/schemas/CodedDetail"
                 }
               }
             },
-            "description": "Rate limiter backend unavailable"
+            "description": "Business-rule rejection"
           }
         },
         "security": [
@@ -10193,6 +10273,16 @@
               }
             },
             "description": "Authenticated but not permitted"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "422": {
             "content": {
@@ -10399,6 +10489,16 @@
             },
             "description": "Authenticated but not permitted"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -10510,6 +10610,16 @@
               }
             },
             "description": "Authenticated but not permitted"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "422": {
             "content": {
@@ -11374,6 +11484,16 @@
             },
             "description": "Authenticated but not permitted"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -11460,6 +11580,16 @@
               }
             },
             "description": "Authenticated but not permitted"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "422": {
             "content": {
@@ -11560,6 +11690,16 @@
             },
             "description": "Authenticated but not permitted"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -11650,11 +11790,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/CodedDetail"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "No quiz for this filter (coded) or request-model validation (array)"
           },
           "429": {
             "content": {
@@ -11670,11 +11810,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageDetail"
+                  "$ref": "#/components/schemas/CodedDetail"
                 }
               }
             },
-            "description": "Rate limiter backend unavailable"
+            "description": "Business-rule rejection"
           }
         },
         "security": [
@@ -11723,6 +11863,16 @@
             },
             "description": "Successful Response"
           },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
           "401": {
             "content": {
               "application/json": {
@@ -11747,11 +11897,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageDetail"
+                  "$ref": "#/components/schemas/CodedDetail"
                 }
               }
             },
-            "description": "Rejected"
+            "description": "Business-rule rejection"
           },
           "422": {
             "content": {
@@ -11825,11 +11975,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageDetail"
+                  "$ref": "#/components/schemas/CodedDetail"
                 }
               }
             },
-            "description": "Rate limiter backend unavailable"
+            "description": "Business-rule rejection"
           }
         },
         "security": [],
@@ -11993,6 +12143,16 @@
               }
             },
             "description": "Authenticated but not permitted"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "422": {
             "content": {
@@ -12981,11 +13141,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/CodedDetail"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Blank query (coded body) or FastAPI request-model validation (array)"
           },
           "429": {
             "content": {
@@ -13001,11 +13161,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageDetail"
+                  "$ref": "#/components/schemas/CodedDetail"
                 }
               }
             },
-            "description": "Rate limiter backend unavailable"
+            "description": "Business-rule rejection"
           }
         },
         "security": [
@@ -13194,7 +13354,17 @@
                 }
               }
             },
-            "description": "Authenticated but not permitted"
+            "description": "Business-rule rejection"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "429": {
             "content": {
@@ -13258,7 +13428,17 @@
                 }
               }
             },
-            "description": "Authenticated but not permitted"
+            "description": "Business-rule rejection"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "429": {
             "content": {
@@ -13329,7 +13509,17 @@
                 }
               }
             },
-            "description": "Authenticated but not permitted"
+            "description": "Business-rule rejection"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "422": {
             "content": {
@@ -13406,7 +13596,17 @@
                 }
               }
             },
-            "description": "Authenticated but not permitted"
+            "description": "Business-rule rejection"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "429": {
             "content": {
@@ -13471,7 +13671,17 @@
                 }
               }
             },
-            "description": "Authenticated but not permitted"
+            "description": "Business-rule rejection"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "429": {
             "content": {
@@ -13537,7 +13747,17 @@
                 }
               }
             },
-            "description": "Authenticated but not permitted"
+            "description": "Business-rule rejection"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "429": {
             "content": {
@@ -13611,17 +13831,27 @@
                 }
               }
             },
-            "description": "Authenticated but not permitted"
+            "description": "Business-rule rejection"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/CodedDetail"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Unknown learning_prefs key (coded) or request-model validation"
           },
           "429": {
             "content": {
@@ -13701,7 +13931,17 @@
                 }
               }
             },
-            "description": "Authenticated but not permitted"
+            "description": "Business-rule rejection"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "422": {
             "content": {
@@ -13889,6 +14129,16 @@
               }
             },
             "description": "Authenticated but not permitted"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "422": {
             "content": {
@@ -14182,6 +14432,16 @@
               }
             },
             "description": "Authenticated but not permitted"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "422": {
             "content": {
@@ -14706,6 +14966,16 @@
             },
             "description": "Authenticated but not permitted"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -14750,7 +15020,7 @@
     },
     "/teacher/classrooms/{room_id}/import": {
       "post": {
-        "description": "Bulk-enroll students from pasted 'name,email' CSV text.\n\nEach new account gets a random invite code as its initial password;\nmust_change_password=True forces setting a personal password on first\nlogin (existing /auth change-password flow). The plaintext code is\nreturned exactly once -- only its SHA-256 hash is stored. The school\nsupplies guardian consent on behalf of imported minors: consent\nis recorded with version 'CSV-IMPORT-1'.",
+        "description": "Bulk-enroll students from pasted 'name,email' CSV text.\n\nEach new account gets a random invite code as its initial password;\nmust_change_password=True forces setting a personal password on first\nlogin (existing /auth change-password flow). The plaintext code is\nreturned exactly once -- only its SHA-256 hash is stored. The import\nrecords NO guardian consent (see the Student construction below): the\nimported child sits behind the consent gate until the current text is\naccepted.",
         "operationId": "classroom_import_teacher_classrooms__room_id__import_post",
         "parameters": [
           {
@@ -14804,15 +15074,25 @@
             },
             "description": "Authenticated but not permitted"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/CodedDetail"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Empty or oversized import (coded) or request-model validation"
           },
           "429": {
             "content": {
@@ -14894,6 +15174,16 @@
               }
             },
             "description": "Authenticated but not permitted"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "422": {
             "content": {
@@ -15000,6 +15290,16 @@
             },
             "description": "Authenticated but not permitted"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -15076,6 +15376,16 @@
             "description": "Missing or invalid credentials"
           },
           "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
+          "404": {
             "content": {
               "application/json": {
                 "schema": {
@@ -15190,17 +15500,27 @@
                 }
               }
             },
-            "description": "Rate limit exceeded"
+            "description": "Business-rule rejection"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "503": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageDetail"
+                  "$ref": "#/components/schemas/CodedDetail"
                 }
               }
             },
-            "description": "Rate limiter backend unavailable"
+            "description": "Business-rule rejection"
           }
         },
         "security": [
@@ -15280,6 +15600,16 @@
               }
             },
             "description": "Authenticated but not permitted"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "422": {
             "content": {
@@ -15463,11 +15793,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/CodedDetail"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Unknown document kind (coded) or request-model validation"
           },
           "429": {
             "content": {
@@ -15538,6 +15868,16 @@
               }
             },
             "description": "Authenticated but not permitted"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "422": {
             "content": {
@@ -15624,6 +15964,16 @@
             },
             "description": "Authenticated but not permitted"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -15689,6 +16039,16 @@
             },
             "description": "Successful Response"
           },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
           "401": {
             "content": {
               "application/json": {
@@ -15708,6 +16068,16 @@
               }
             },
             "description": "Authenticated but not permitted"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "422": {
             "content": {
@@ -15809,15 +16179,25 @@
             },
             "description": "Authenticated but not permitted"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/CodedDetail"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Invalid generator payload (coded) or request-model validation"
           },
           "429": {
             "content": {
@@ -15827,17 +16207,27 @@
                 }
               }
             },
-            "description": "Rate limit exceeded"
+            "description": "Business-rule rejection"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "503": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageDetail"
+                  "$ref": "#/components/schemas/CodedDetail"
                 }
               }
             },
-            "description": "Rate limiter backend unavailable"
+            "description": "Business-rule rejection"
           }
         },
         "security": [
@@ -16176,15 +16566,25 @@
             },
             "description": "Rate limit exceeded"
           },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
           "503": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageDetail"
+                  "$ref": "#/components/schemas/CodedDetail"
                 }
               }
             },
-            "description": "Rate limiter backend unavailable"
+            "description": "Business-rule rejection"
           }
         },
         "security": [
@@ -16364,17 +16764,27 @@
                 }
               }
             },
-            "description": "Rate limit exceeded"
+            "description": "Business-rule rejection"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "503": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageDetail"
+                  "$ref": "#/components/schemas/CodedDetail"
                 }
               }
             },
-            "description": "Rate limiter backend unavailable"
+            "description": "Business-rule rejection"
           }
         },
         "security": [
@@ -16432,6 +16842,16 @@
               }
             },
             "description": "Authenticated but not permitted"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "422": {
             "content": {
@@ -16521,6 +16941,26 @@
             },
             "description": "Authenticated but not permitted"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -16596,6 +17036,16 @@
             },
             "description": "Successful Response"
           },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
           "401": {
             "content": {
               "application/json": {
@@ -16615,6 +17065,16 @@
               }
             },
             "description": "Authenticated but not permitted"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "422": {
             "content": {
@@ -16704,6 +17164,26 @@
             },
             "description": "Authenticated but not permitted"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -16722,17 +17202,27 @@
                 }
               }
             },
-            "description": "Rate limit exceeded"
+            "description": "Business-rule rejection"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "503": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageDetail"
+                  "$ref": "#/components/schemas/CodedDetail"
                 }
               }
             },
-            "description": "Rate limiter backend unavailable"
+            "description": "Business-rule rejection"
           }
         },
         "security": [
@@ -16782,6 +17272,16 @@
             },
             "description": "Successful Response"
           },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
           "401": {
             "content": {
               "application/json": {
@@ -16802,6 +17302,26 @@
             },
             "description": "Authenticated but not permitted"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -16820,17 +17340,27 @@
                 }
               }
             },
-            "description": "Rate limit exceeded"
+            "description": "Business-rule rejection"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "503": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageDetail"
+                  "$ref": "#/components/schemas/CodedDetail"
                 }
               }
             },
-            "description": "Rate limiter backend unavailable"
+            "description": "Business-rule rejection"
           }
         },
         "security": [
@@ -16880,6 +17410,16 @@
             },
             "description": "Successful Response"
           },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
           "401": {
             "content": {
               "application/json": {
@@ -16899,6 +17439,26 @@
               }
             },
             "description": "Authenticated but not permitted"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "422": {
             "content": {
@@ -16987,6 +17547,26 @@
               }
             },
             "description": "Authenticated but not permitted"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "422": {
             "content": {
@@ -17762,17 +18342,27 @@
                 }
               }
             },
-            "description": "Rate limit exceeded"
+            "description": "Business-rule rejection"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "503": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageDetail"
+                  "$ref": "#/components/schemas/CodedDetail"
                 }
               }
             },
-            "description": "Rate limiter backend unavailable"
+            "description": "Business-rule rejection"
           }
         },
         "security": [
@@ -17998,6 +18588,16 @@
             },
             "description": "Authenticated but not permitted"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -18092,6 +18692,16 @@
               }
             },
             "description": "Authenticated but not permitted"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "422": {
             "content": {
@@ -18196,6 +18806,16 @@
             },
             "description": "Authenticated but not permitted"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -18292,15 +18912,25 @@
             },
             "description": "Authenticated but not permitted"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/CodedDetail"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Image contract (coded) or request-model validation (array)"
           },
           "429": {
             "content": {
@@ -18310,17 +18940,27 @@
                 }
               }
             },
-            "description": "Rate limit exceeded"
+            "description": "Business-rule rejection"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "503": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageDetail"
+                  "$ref": "#/components/schemas/CodedDetail"
                 }
               }
             },
-            "description": "Rate limiter backend unavailable"
+            "description": "Business-rule rejection"
           }
         },
         "security": [
@@ -18388,15 +19028,25 @@
             },
             "description": "Authenticated but not permitted"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/CodedDetail"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "Image contract (coded) or request-model validation (array)"
           },
           "429": {
             "content": {
@@ -18406,17 +19056,27 @@
                 }
               }
             },
-            "description": "Rate limit exceeded"
+            "description": "Business-rule rejection"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "503": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageDetail"
+                  "$ref": "#/components/schemas/CodedDetail"
                 }
               }
             },
-            "description": "Rate limiter backend unavailable"
+            "description": "Business-rule rejection"
           }
         },
         "security": [
@@ -18480,6 +19140,16 @@
               }
             },
             "description": "Authenticated but not permitted"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
           },
           "422": {
             "content": {

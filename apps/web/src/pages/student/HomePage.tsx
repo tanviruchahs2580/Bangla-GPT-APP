@@ -139,7 +139,12 @@ export default function HomePage() {
             placeholder={t("homePromptPlaceholder")}
             aria-label={t("homePromptPlaceholder")}
             onChange={(e) => setPrompt(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && askTutor()}
+            // FE-FIX-013: on an Android IME, Enter also confirms a Bangla
+            // composition — without this guard the half-composed question is
+            // the one that goes to the tutor.
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) askTutor();
+            }}
           />
           <button className="btn btn-primary" onClick={askTutor}>
             <Zap size={18} aria-hidden /> {t("homeAskBtn")}
@@ -274,11 +279,14 @@ export default function HomePage() {
             <ProgressRing
               value={avg}
               size={72}
-              label={<strong>{Math.round(avg)}%</strong>}
+              label={<strong>{formatNumber(Math.round(avg))}%</strong>}
             />
             <div className="row-main">
               <div className="stat-grid">
-                <Stat value={Math.round(avg) + "%"} label={t("avgScore")} />
+                <Stat
+                  value={`${formatNumber(Math.round(avg))}%`}
+                  label={t("avgScore")}
+                />
                 {/* The streak is only claimed when the activity query
                     answered: `activity?.streak ?? 0` told every student with
                     a failed request that their streak was gone. */}

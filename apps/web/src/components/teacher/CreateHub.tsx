@@ -11,18 +11,13 @@ import { Badge, Button, Card, Segmented } from "../ui";
 import { friendlyError } from "../../errors";
 import { t } from "../../i18n";
 import { track } from "../../lib/analytics";
+// FE-FIX (duplication): this subject list and its comment were copy-pasted in
+// the tutor and quiz pickers too; one helper owns the values now.
+import { subjectOptions } from "../../lib/subjectOptions";
 
 const KINDS = ["worksheet", "answer_key", "homework", "rubric"] as const;
 type Kind = (typeof KINDS)[number];
 const PDF_KINDS = new Set(["worksheet", "answer_key", "lesson_plan"]);
-
-// subject labels come from i18n (were hardcoded Bengali). Evaluated
-// at render time so a language switch (in-place remount) is reflected.
-const subjectOptions = () => [
-  { value: "science", label: t("subjectScience") },
-  { value: "mathematics", label: t("subjectMath") },
-  { value: "bangla", label: t("subjectBangla") },
-];
 
 const KIND_LABEL: Record<
   string,

@@ -78,25 +78,42 @@ export function LearnPage() {
   // Chapter totals per subject (for the ring denominator), from the same
   // existing chapters endpoint the list view already uses.
   const [totals, setTotals] = useState<Record<string, number>>({});
+  // FE-FIX-008: a per-subject count that failed was coerced to 0, which made
+  // the ring disappear — the page stated "no chapters" for a subject whose
+  // count it never received, and for a whole class on an outage. The failure
+  // is tracked (and retryable) instead of being written as a measurement, and
+  // the failed subject is omitted from the ring data rather than given a
+  // fabricated denominator.
+  const [totalsFailed, setTotalsFailed] = useState(false);
+  const [totalsAttempt, setTotalsAttempt] = useState(0);
   useEffect(() => {
     if (subjects.length === 0) return;
     let alive = true;
+    setTotalsFailed(false);
     void Promise.all(
-      subjects.map(async (s: SubjectOut) => {
+      subjects.map(async (s: SubjectOut): Promise<[string, number | null]> => {
         try {
           const rows = await getSubjectChapters(s.subject, selected);
-          return [s.subject, rows.length] as const;
+          return [s.subject, rows.length];
         } catch {
-          return [s.subject, 0] as const;
+          return [s.subject, null];
         }
       }),
     ).then((entries) => {
-      if (alive) setTotals(Object.fromEntries(entries));
+      if (!alive) return;
+      setTotals(
+        Object.fromEntries(
+          entries.flatMap(([subject, n]) =>
+            n === null ? [] : [[subject, n] as const],
+          ),
+        ),
+      );
+      setTotalsFailed(entries.some(([, n]) => n === null));
     });
     return () => {
       alive = false;
     };
-  }, [subjects, selected]);
+  }, [subjects, selected, totalsAttempt]);
 
   const progressMap = new Map(
     (allProgressQuery.data ?? []).map((p) => [p.chapter, p]),
@@ -179,58 +196,71 @@ export function LearnPage() {
           )}
         </Card>
       ) : (
-        <div className="subject-grid">
-          {subjects.map((s: SubjectOut) => {
-            const stat = subjectStats(s.subject);
-            return (
-              <button
-                key={s.subject}
-                className={cn(
-                  "subject-card",
-                  activeSubject === s.subject && "active",
-                )}
-                aria-pressed={activeSubject === s.subject}
-                onClick={() =>
-                  setActiveSubject((cur) =>
-                    cur === s.subject ? null : s.subject,
-                  )
-                }
-              >
-                <span
-                  className={cn("quick-icon", SUBJECT_TONE[s.subject] ?? "")}
-                  aria-hidden
+        <>
+          {totalsFailed && (
+            /* FE-FIX-008: which subjects could not be counted, said out loud,
+               with the retry that re-asks. */
+            <Card>
+              <LoadError
+                message={t("progressLoadFailed")}
+                onRetry={() => setTotalsAttempt((n) => n + 1)}
+              />
+            </Card>
+          )}
+          <div className="subject-grid">
+            {subjects.map((s: SubjectOut) => {
+              const stat = subjectStats(s.subject);
+              return (
+                <button
+                  key={s.subject}
+                  className={cn(
+                    "subject-card",
+                    activeSubject === s.subject && "active",
+                  )}
+                  aria-pressed={activeSubject === s.subject}
+                  onClick={() =>
+                    setActiveSubject((cur) =>
+                      cur === s.subject ? null : s.subject,
+                    )
+                  }
                 >
-                  <BookOpen size={22} />
-                </span>
-                <div className="subject-name">{tSubject(s.subject)}</div>
-                <div className="subject-meta">
-                  {t("classLabel")} {s.class_levels.join(", ")}
-                </div>
-                {stat.total > 0 && (
-                  <>
-                    <span
-                      className="subject-ring"
-                      role="img"
-                      aria-label={t("chaptersDone", {
-                        done: stat.done,
-                        total: stat.total,
-                      })}
-                      style={{ ["--p" as string]: stat.pct }}
-                    >
-                      <span className="subject-ring-inner">
-                        {stat.done}/{stat.total}
+                  <span
+                    className={cn("quick-icon", SUBJECT_TONE[s.subject] ?? "")}
+                    aria-hidden
+                  >
+                    <BookOpen size={22} />
+                  </span>
+                  <div className="subject-name">{tSubject(s.subject)}</div>
+                  <div className="subject-meta">
+                    {t("classLabel")}{" "}
+                    {s.class_levels.map((c) => formatNumber(c)).join(", ")}
+                  </div>
+                  {stat.total > 0 && (
+                    <>
+                      <span
+                        className="subject-ring"
+                        role="img"
+                        aria-label={t("chaptersDone", {
+                          done: stat.done,
+                          total: stat.total,
+                        })}
+                        style={{ ["--p" as string]: stat.pct }}
+                      >
+                        <span className="subject-ring-inner">
+                          {formatNumber(stat.done)}/{formatNumber(stat.total)}
+                        </span>
                       </span>
-                    </span>
+                      <span className="subject-progress" aria-hidden />
+                    </>
+                  )}
+                  {stat.total === 0 && (
                     <span className="subject-progress" aria-hidden />
-                  </>
-                )}
-                {stat.total === 0 && (
-                  <span className="subject-progress" aria-hidden />
-                )}
-              </button>
-            );
-          })}
-        </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {me && (
@@ -317,7 +347,7 @@ export function LearnPage() {
                         <div
                           className="chapter-progress"
                           role="img"
-                          aria-label={`${pct}%`}
+                          aria-label={`${formatNumber(pct)}%`}
                         >
                           <span style={{ width: `${pct}%` }} />
                         </div>

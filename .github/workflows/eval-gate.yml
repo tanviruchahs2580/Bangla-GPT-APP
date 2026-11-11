@@ -1,9 +1,12 @@
 name: Eval gate (S4.7 golden-set regression)
 
-# Spec 4.7: "CI gate fails build on >2% regression". Runs the golden v2
-# suite (eval/golden_v2.json, 634 items) against the hermetic mock provider
-# and compares every metric against eval/baseline_v2.json; any metric that
-# drops by more than 2 percentage points fails this job.
+# Spec 4.7: "CI gate fails build on >2% regression". Runs the golden v3
+# suite (eval/golden_v3.json, 427 items — the CLI default since the v3
+# hardened baseline; eval/golden_v2.json has 634 items and is the superseded
+# generation) against the hermetic mock provider and compares every metric
+# against eval/baseline_v3.json (evaluation/cli.py sets both defaults at
+# `golden_path` / `baseline_path`); any metric that drops by more than 2
+# percentage points fails this job.
 #
 # Two more gates run here, both blocking (F-050/F-059): the 24-question
 # golden retrieval set (apps/api/scripts/evaluate_golden.py; it reports
@@ -12,6 +15,16 @@ name: Eval gate (S4.7 golden-set regression)
 # refused and no response may leak control-plane text). Both were documented
 # as CI steps and ran in no workflow, so a hit@3 or safety regression merged
 # silently.
+#
+# CI-FIX-003: this workflow is ALSO called as a reusable workflow from the
+# `eval` job in ci.yml, and ci.yml's required `Web build & test` job has
+# `needs: eval`. GitHub cannot express `needs:` across workflow files, so a
+# call is the only structural way to put the eval gates on the critical path
+# of a context branch protection already requires: if the golden-set gate
+# drops >2pp, `web` never starts and the PR cannot merge green. The
+# standalone push/pull_request triggers are kept deliberately -- the
+# `Golden-set regression gate` check name (the one an owner would add to the
+# required contexts, docs/ci.md) must keep appearing on PRs unchanged.
 #
 
 on:
@@ -26,6 +39,12 @@ on:
         type: boolean
         required: false
         default: false
+  workflow_call:
+    # Declared so a caller may pass it; the real-model probe below is
+    # dispatch-only, so a plain call leaves it empty and the step is skipped.
+    secrets:
+      GEMINI_API_KEY:
+        required: false
 
 permissions:
   contents: read
@@ -61,7 +80,7 @@ jobs:
 
       # --write-baseline is deliberately NOT used here: the baseline is a
       # reviewed, committed artifact (R12: never re-baseline to go green).
-      - name: Run eval v2 suite vs recorded baseline (exit 1 on >2pp drop)
+      - name: Run eval v3 suite vs recorded baseline (exit 1 on >2pp drop)
         run: python -m bangla_gpt_api.evaluation.cli
 
       # F-050: the 24-question golden set was documented as a CI gate and ran

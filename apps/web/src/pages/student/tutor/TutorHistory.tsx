@@ -55,7 +55,11 @@ export function TutorHistory({
           placeholder={t("searchHistory")}
           aria-label={t("searchHistory")}
           onChange={(e) => onQuery(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && onSearch()}
+          onKeyDown={(e) => {
+            // FE-FIX-013: Enter confirms a Bangla IME composition on Android;
+            // running the search on that keystroke searched half a word.
+            if (e.key === "Enter" && !e.nativeEvent.isComposing) onSearch();
+          }}
         />
         <Button
           variant="ghost"

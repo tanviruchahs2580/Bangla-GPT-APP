@@ -111,13 +111,29 @@ def _literal_rows(path: Path, pattern: re.Pattern[str]) -> list[tuple[str, str, 
     return rows
 
 
+def _sorted_posix(root: Path, pattern: str) -> list[Path]:
+    """``rglob`` results in a platform-independent order.
+
+    Sorting the Path objects themselves sorts on the OS separator, and the two
+    separators do not collate the same way: backslash 0x5C sorts *after* the
+    letters, solidus 0x2F *before* them. So ``components/admin/X.tsx`` landed
+    after ``components/N.tsx`` on Windows and before it on Linux, and the
+    review sheet — a generated, committed artefact — came out in whichever
+    order the machine that ran the generator produced, which is what made the
+    ``--check`` gate disagree between platforms. Sorting on the POSIX form of
+    each path removes the dependence: the sheet is byte-identical whichever
+    platform writes it.
+    """
+    return sorted(root.rglob(pattern), key=lambda p: p.relative_to(REPO).as_posix())
+
+
 def code_rows() -> list[tuple[str, str, str]]:
     rows: list[tuple[str, str, str]] = []
-    for path in sorted(WEB.rglob("*.ts*")):
+    for path in _sorted_posix(WEB, "*.ts*"):
         if "test" in path.parts or path.name == "i18n.ts":
             continue
         rows.extend(_literal_rows(path, TS_STRING))
-    for path in sorted(API.rglob("*.py")):
+    for path in _sorted_posix(API, "*.py"):
         rows.extend(_literal_rows(path, PY_STRING))
     return rows
 

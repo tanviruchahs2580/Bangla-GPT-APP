@@ -3,6 +3,17 @@
 Goal: **RPO 24h / RTO 4h** for all persistent state. Current design beats
 both targets comfortably; the numbers below are measured, not aspirated.
 
+> **What production actually runs today (read this first).** This document
+> headlines a **Postgres 16 + pgBackRest** design. That is the compose
+> `--profile postgres` path. The **live API service does not run it**: the
+> hand-run `api-live` container uses SQLite at
+> `DATABASE_URL=sqlite:////data/app.db` (verified 2026-11-10; see
+> `docs/runbook.md` §7.1/§7.3). For the live service the backups that exist
+> are the SQLite snapshots from `scripts/backup_loop.py`, held in the
+> `bgpt-live-backups` volume and rehearsed with `scripts/restore_test.py`
+> (runbook §4). Do not run the pgBackRest commands below expecting the live
+> data — there is no stanza on that host.
+
 ## What there is to back up
 
 | Asset | Where | Protection |
@@ -87,11 +98,13 @@ blindly. Store both in the same secret store with the same backup story.
 
 ## SQLite dev fallback
 
-Dev installs on `sqlite:////data/app.db` keep the path:
+Installations on `sqlite:////data/app.db` keep the path:
 `scripts/backup_loop.py` (online snapshots, `BACKUP_KEEP_DAYS` pruning,
 optional `OFFSITE_SYNC_CMD`) + `scripts/restore_test.py` (monthly restore
-rehearsal with `PRAGMA integrity_check`). Postgres + pgBackRest above is the
-production path.
+rehearsal with `PRAGMA integrity_check`). Despite the heading, this is not
+dev-only today: the live deployment runs SQLite (see the note at the top), so
+this is the path that protects the live data while the pgBackRest design
+above covers the compose `--profile postgres` topology.
 
 **WAL and raw file copies.** Since the engine now runs SQLite in WAL mode
 (`db/session.py`: `journal_mode=WAL`, `busy_timeout=15000` ms,

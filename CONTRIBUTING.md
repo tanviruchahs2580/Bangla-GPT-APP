@@ -172,24 +172,33 @@ unexplained `# noqa` or `# type: ignore` will be asked about in review.
 
 A `_v2` suffix marks the second generation of a suite or dataset
 (`test_cache_v2.py`, `eval/golden_v2.json`, `eval/redteam_v2.json`,
-`eval/baseline_v2.json` and their siblings). The base name is intentionally
-absent: the first generation was replaced rather than kept side by side, and
-the QA reports and the eval-gate job refer to these names, so rename only with
-every reference updated in the same change.
+`eval/baseline_v2.json` and their siblings). CI-FIX-011: the earlier claim
+here that "the base name is intentionally absent" was wrong — both
+generations coexist where the new one did not supersede the old
+(`tests/test_security.py` and `tests/test_security_v2.py` are both live;
+`eval/golden_v3.json`/`baseline_v3.json` are the current generation while
+`golden_v2.json`/`baseline_v2.json` are kept as the superseded one). Treat a
+`_v2` name as "second generation", not as "the only generation": the QA
+reports and the eval-gate job refer to these names, so rename only with every
+reference updated in the same change.
 
 ## Repository size
 
-Fourteen tracked files exceed 500 KB (8.4 MB total, measured 2026-10-30): nine
-Playwright visual-regression baselines under
-`apps/web/e2e/__screenshots__/visual.spec.ts/` and five renovation-evidence
-screenshots under `docs/uiux_renovation_evidence/wave4/after/`. Decision
-(2026-10-29): keep them in git — the baselines make visual regressions
-reviewable and refreshable, and the evidence set is the durable record of that
-UI pass. Re-run the inventory (`git ls-files` + file sizes) when the baselines
-are regenerated; the count moves with them. The `check-added-large-files`
-pre-commit hook caps **newly added** files at 512 KB (it inspects added files
-per commit), so a new large file needs an explicit decision recorded here, not
-a silent `--no-verify`.
+Sixteen tracked files exceed 500 KB (9.54 MB total, measured 2026-11-10 with
+`git ls-files` + `wc -c`): ten Playwright visual-regression baselines under
+`apps/web/e2e/__screenshots__/visual.spec.ts/` and six renovation-evidence
+screenshots under `docs/uiux_renovation_evidence/wave4/after/`. The previous
+count in this file (fourteen files, 8.4 MB, measured 2026-10-30) was stale and
+included the generated coverage report from `apps/api`, which was untracked in
+the same change
+(CI-FIX-009: a generated 1.31 MB artifact from a partial run). Decision
+(2026-10-29): keep the remaining images in git — the baselines make visual
+regressions reviewable and refreshable, and the evidence set is the durable
+record of that UI pass. Re-run the inventory (`git ls-files` + file sizes)
+when the baselines are regenerated; the count moves with them. The
+`check-added-large-files` pre-commit hook caps **newly added** files at 512 KB
+(it inspects added files per commit), so a new large file needs an explicit
+decision recorded here, not a silent `--no-verify`.
 
 ## Security issues
 

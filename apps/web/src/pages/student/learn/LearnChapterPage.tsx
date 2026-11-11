@@ -19,7 +19,7 @@ import { track } from "../../../lib/analytics";
 import { useAuth } from "../../../AuthContext";
 import { Card } from "../../../components/ui";
 import { invalidateStudyCaches } from "../../../lib/invalidate";
-import { t } from "../../../i18n";
+import { formatNumber, t, tSubject } from "../../../i18n";
 import { cn } from "../../../lib/cn";
 import {
   hasBanglaTtsVoice,
@@ -127,7 +127,10 @@ export function LearnChapterPage() {
   // Mark read progress on view
   useEffect(() => {
     if (!query.data || !subject || !chapter || !classLevel) return;
-    const t = setTimeout(() => {
+    // FE-FIX (shadowed binding): this was `const t = setTimeout(...)`, which
+    // shadowed the i18n `t` for the whole effect — a trap for the next edit
+    // that needs a translated string in here, and it compiled silently.
+    const timer = setTimeout(() => {
       upsertLearnProgress({
         subject,
         chapter,
@@ -169,7 +172,7 @@ export function LearnChapterPage() {
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => {
-      clearTimeout(t);
+      clearTimeout(timer);
       window.removeEventListener("scroll", onScroll);
     };
   }, [query.data, subject, chapter, classLevel, queryClient]);
@@ -177,6 +180,10 @@ export function LearnChapterPage() {
   const toggleBookmark = async () => {
     if (!subject || !chapter || !classLevel) return;
     const next = !bookmarked;
+    // The optimistic flip is only a preview: it is undone on failure, because
+    // a bookmark that is not stored tells the student their note is kept when
+    // it is not (FE-FIX-011). The write failing must not drop them out of the
+    // chapter — it just must not lie.
     setBookmarked(next);
     try {
       await upsertLearnProgress({
@@ -187,8 +194,8 @@ export function LearnChapterPage() {
       });
       invalidateStudyCaches(queryClient);
     } catch {
-      /* Bookmarking is best-effort: a failed write must not drop the reader
-         out of the chapter they are reading. */
+      setBookmarked(!next);
+      toast(t("errorGeneric"));
     }
   };
 
@@ -287,9 +294,15 @@ export function LearnChapterPage() {
       ) : (
         <Card>
           <div className="reader-controls">
-            <span className="badge badge-teal">{content.subject}</span>
+            {/* FE-FIX (raw machine copy): `content.subject` is the API enum
+                ("science"), which put English inside an otherwise Bangla
+                reader header. tSubject is the same mapping the chapter list,
+                the assigned list and the report already use. */}
+            <span className="badge badge-teal">
+              {tSubject(content.subject)}
+            </span>
             <span className="badge">
-              {t("classLabel")} {content.class_level}
+              {t("classLabel")} {formatNumber(content.class_level)}
             </span>
             <button
               key={String(bookmarked)}

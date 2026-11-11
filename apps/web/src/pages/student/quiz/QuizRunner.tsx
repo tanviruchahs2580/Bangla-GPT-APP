@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { Badge, Button, Card, ProgressRing } from "../../../components/ui";
 import { QuizOptionGroup } from "../../../components/QuizOptionGroup";
@@ -12,6 +13,7 @@ import { ReteachCards } from "./ReteachCards";
  */
 export function QuizRunner({
   started,
+  notice,
   current,
   answers,
   busy,
@@ -26,6 +28,8 @@ export function QuizRunner({
   onKeepAnswering,
 }: {
   started: QuizStarted;
+  /** FE-FIX-019: the consent notice, rendered inside this <main>. */
+  notice?: ReactNode;
   current: number;
   answers: Record<number, number>;
   busy: boolean;
@@ -52,6 +56,7 @@ export function QuizRunner({
           {formatNumber(current + 1)}/{formatNumber(started.questions.length)}
         </Badge>
       </section>
+      {notice}
       {started.reteach && started.reteach.length > 0 && current === 0 && (
         <div className="stack chips-gap">
           <ReteachCards cards={started.reteach} />

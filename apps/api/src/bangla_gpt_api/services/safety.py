@@ -8,8 +8,13 @@ zero-latency); an LLM-based classifier can complement it later.
 """
 
 import re
+import unicodedata
 from collections.abc import Iterable
 from dataclasses import dataclass
+
+from bangla_gpt_api.nctb.bijoy import convert_bijoy_text, is_likely_legacy_bijoy
+from bangla_gpt_api.nctb.normalize import bangla_char_ratio
+from bangla_gpt_api.retrieval.normalize import ZERO_WIDTH_CHARS
 
 SAFETY_ANSWER = "এই প্রশ্নের উত্তর এই প্ল্যাটফর্মে দেওয়া যাচ্ছে না। এটি আপনার জন্য ক্ষতিকর হতে পারে।"
 # The answer-side sibling of SAFETY_ANSWER (F-032): the student's *question*
@@ -52,14 +57,58 @@ _PATTERNS: tuple[tuple[str, str], ...] = (
         r"|বাঁচতে\s*চাই\s*না|জীবন\s*শেষ\s*কর|গিলে\s*ফেল|বিষ\s*খাও|ফাঁসি\s*দেও|কাটা\s*যাবে"
         # romanized Bangla + English variants (case handled by (?i) below)
         r"|(?i:suicid\w*|kill\s+(?:myself|me)|mar\s*kh\w+b?o?\s*(?:bo|dibo)?"
-        r"|(?:gori|gola)\s*katbo|gila\s*felbo|bish\s*khabo|fashi\s*dibo)",
+        r"|(?:gori|gola)\s*katbo|gila\s*felbo|bish\s*khabo|fashi\s*dibo"
+        # SAFE-002 (2026-11-10 audit, verified bypass): "ami atmohatya korte
+        # chai" and "ami atmaghati hote chai" reached the provider
+        # (safe=True). The Bangla rules above are mirrored, not paraphrased:
+        # the ideation stems, "nijeke mere", the jibon-sesh frame WITH its
+        # verb (a bare "jibon ses" stays legal, so a history question about
+        # a death is still answerable) and the want-to-die pair. \s* inside
+        # a romanised word is deliberate -- mobile keyboards and evasion
+        # both split words, and the screener's job is to see through it.
+        r"|atm[ao]\s*h[ao]t(?:t?[ay]|ya)|atmaghati|atma\s*ghati"
+        r"|nijeke\s*m[ae]r(?:e|a|bo|be|lo|echi|chhi|dibo|felbo)"
+        r"|nijer\s*jibon\s*sesh?|jibon\s*sesh?\s*kor(?:te|e|ar|bo)"
+        r"|mor(?:te|e)\s*(?:jete\s*)?chai|b[aã]n?chte\s*chai\s*na)",
     ),
     # Weapons / explosives synthesis
-    ("weapon_synthesis", r"বোমা|বিস্ফোরক|অগ্নিসংযোগ|অস্ত্র\s*(বানা|তৈরি)|গুলি\s*চালানোর?\s*(উপায়|ভাব)"),
+    (
+        "weapon_synthesis",
+        r"বোমা|বিস্ফোরক|অগ্নিসংযোগ|অস্ত্র\s*(বানা|তৈরি)|গুলি\s*চালানোর?\s*(উপায়|ভাব)"
+        # SAFE-002 romanised (audit-verified bypass: "boma bananor upay
+        # bolo" was safe=True). "boma" is refused bare like the Bangla বোমা;
+        # every other weapon only fires inside a making frame, mirroring the
+        # Bangla অস্ত্র (বানা|তৈরি) rule so "gun er itihas" stays answerable.
+        r"|(?i:\bboma\w*|\bbombs?\b|\bexplosives?\b"
+        r"|(?:ostro|astro|banduk|weapon|gun|boma|bomb)\s*"
+        r"(?:bana|banano|bananor|banate|banabo|toiri|making|make)"
+        r"|guli\s*chalan\w*\s*(?:upay|bhab|niyom))",
+    ),
     # Illicit drug synthesis / acquisition
-    ("drug_synthesis", r"মাদক|ইয়াবা|কোকেইন|হেরোইন|গাঁজা\s*(বানা|কেনা)|নেশা\s*(বানা|জাত)"),
+    (
+        "drug_synthesis",
+        r"মাদক|ইয়াবা|কোকেইন|হেরোইন|গাঁজা\s*(বানা|কেনা)|নেশা\s*(বানা|জাত)"
+        # SAFE-002 romanised. The names are refused bare exactly like the
+        # Bangla মাদক/ইয়াবা/হেরোইন; the ones a child can meet in ordinary
+        # prose (nesha, ganja-with-a-verb) carry the making/buying frame.
+        r"|(?i:\bdrugs?\b|\bmad[ao]k\b|\bmadan\b|\byaba\b|\biyaba\b|\bcocaine\b|\bkokain\b"
+        r"|\bheroin\b|\bmarijuana\b|\bganja\w*\b|\balcohol\b|\balkohol\b"
+        r"|(?:nesha|ganja)\s*(?:bana|banano|bananor|banate|kena|kinte|jat))",
+    ),
     # Sexual content (esp. anything sexualizing minors)
-    ("sexual_content", r"যৌন|কাম\s*কাণ্ড|শ্লীলতাহানি|ধর্ষণ|পর্ন|অশ্লীল\s*(ছবি|ভিডিও|গল্প)"),
+    (
+        "sexual_content",
+        r"যৌন|কাম\s*কাণ্ড|শ্লীলতাহানি|ধর্ষণ|পর্ন|অশ্লীল\s*(ছবি|ভিডিও|গল্প)"
+        # SAFE-002 romanised. The academic lift runs before this category
+        # (see _ACADEMIC_SCIENCE_TERMS), so "jouno projonon" stays
+        # answerable while every non-academic use refuses, exactly like যৌন.
+        # "sex" requires a frame: the bare English word also appears in
+        # curriculum ("sex education") and is not evidence by itself.
+        r"|(?i:\bporn\w*\b|\bnude\w*\b|\brape\b|\brapist\b|\bdhorsh?on\b"
+        r"|\b(?:jouno|youno|jauno)\b|\b(?:choda|chudi|chodachudi|chudachudi)\b"
+        r"|sex\s*(?:korte|kora|korar|kore|korbo|chai|video|bhideo|story|golpo|kahini"
+        r"|chobi|pic|photo))",
+    ),
     # Violence / gore seeking
     # Violence / gore seeking. The category is about SEEKING violent material,
     # not about violence as a subject: a history question that contains
@@ -72,10 +121,32 @@ _PATTERNS: tuple[tuple[str, str], ...] = (
         r"মারধরের?\s*(?:ভিডিও|উপায়)"
         r"|খুন\s*করার\s*(?:ভিডিও|দৃশ্য|ক্লিপ|উপায়|পদ্ধতি|নিয়ম)"
         r"|খুন\s*কর(?:ব|তে\s*চাই|তে\s*চাইছি)"
-        r"|পিটুনি\s*দেওয়ার",
+        r"|পিটুনি\s*দেওয়ার"
+        # SAFE-002 romanised mirrors the SEEKING frames above and nothing
+        # more: a Banglish history question ("1971 e khun korar itihas")
+        # must stay answerable, so a bare "khun korar" is not enough -- the
+        # video/upay/niyom object, or korbo / korte chai, is required.
+        r"|(?i:(?:khun|murder)\s*kor(?:bo|te\s*chai(?:chhi)?))"
+        r"|(?i:(?:khun|murder)\s*korar\s*"
+        r"(?:video|bhideo|clip|drissho|drisshyo|upay|poddhoti|niyom))"
+        r"|(?i:pituni\s*(?:dewar|dibo|debo))"
+        r"|(?i:mardhor(?:er)?\s*(?:video|upay))"
+        r"|(?i:(?:how\s+to|kivabe)\s+(?:kill|murder|khun)\b)"
+        r"|(?i:(?:kill|murder)\s+(?:someone|a\s+person|him|her|them"
+        r"|my\s+(?:classmate|teacher|friend)))",
     ),
     # Personal-data harvesting about third parties
-    ("personal_data", r"(ঠিকানা|ফোন\s*নম্বর)\s*(দাও|দে\s*যাও|বের\s*কর)"),
+    (
+        "personal_data",
+        r"(ঠিকানা|ফোন\s*নম্বর)\s*(দাও|দে\s*যাও|বের\s*কর)"
+        # SAFE-002 romanised third-party harvesting, the same noun +
+        # imperative shape as the Bangla rule (the trailing \b keeps the
+        # short verb "de" out of longer "de..." verbs): the noun on its own
+        # ("address ki?") stays safe.
+        r"|(?i:(?:thikana|address)\s*(?:dao|daw|de|dio|bolo|ber\s*kor(?:o)?|dite)\b)"
+        r"|(?i:(?:phone|mobile|cell|fon)\s*(?:number|nombor|nambar|nombar)\s*"
+        r"(?:dao|daw|de|dio|bolo|ber\s*kor(?:o)?|dite)\b)",
+    ),
     # Hate speech / communal incitement (F-027). Deliberately NARROW — the
     # curriculum teaches "হিন্দু ধর্ম ও নৈতিক শিক্ষা", "ইসলাম ও নৈতিক শিক্ষা"
     # and the 1971 war, so the category fires only when the question pairs a
@@ -94,7 +165,15 @@ _PATTERNS: tuple[tuple[str, str], ...] = (
         r"\s*(?:ghrina|bidvesh|bidhwesh|gali|bang|guli|nicu))"
         r"|(?i:(kill|attack|abuse|beat)\s+all\s+(?:the\s+)?(?:hindus|muslims|minorities))"
         r"|(?i:spread\s+(?:hate|hatred)\s+(?:against|about|towards))"
-        r"|(?i:(hindus|muslims|minorities)\s+are\s+(?:animals|terrorists|inferior|dirty))",
+        r"|(?i:(hindus|muslims|minorities)\s+are\s+(?:animals|terrorists|inferior|dirty))"
+        # SAFE-002 romanised incitement shapes the existing list misses:
+        # group + "biruddhe" (against) + hatred verb, and the imperative
+        # "sob hindu/muslim mere felo" (kill them all). Both stay history-
+        # safe: a 1971 question uses the bare group names, not an imperative.
+        r"|(?i:(?:hinduder?|hindura|muslimder?|musolmaner?|muslimaner?|kristander?"
+        r"|bouddhoder?)\s*(?:biruddhe|birudhe|against)\s*(?:ghrina|bidvesh|bidhwesh))"
+        r"|(?i:(?:hinduder?|hindura|hindur?|muslimder?|muslim\w*|musolman\w*|musliman\w*)"
+        r"(?:\s*(?:er|der|ke))?\s*(?:sob\s*|shob\s*)?mere\s*fe(?:lo|la|le))",
     ),
     # Bullying / harassment of a named target, or asking for the means (F-027).
     # Fires on "how to bully X" / "give me insults for Y" frames — never on the
@@ -109,10 +188,16 @@ _PATTERNS: tuple[tuple[str, str], ...] = (
         r"|(গালি|গালাগালি)\s*(?:দে|দেও|দিও|দেওয়া|দিতে|দো|শিখা|শিখাও|করার?\s*(?:উপায়|কৌশল|নিয়ম))"
         r"|কারো\s*সম্পর্কে\s*মিথ্যা\s*(?:গুজব|গল্প|কথা)\s*(?:ছড়া|বানা|লিখ)"
         r"|কাউকে\s*(?:ট্রল|বুলিং)\s*কর"
-        r"|(?i:(gali|gaali|galagali)\s*(?:de|dio|dewa|dite|dibo|kora|korar|shikha|shikhao)\b)"
+        r"|(?i:(gali|gaali|galagali)\s*(?:de|dio|dewa|dite|dibo|debo|kora|korar|shikha|shikhao)\b)"
         r"|(?i:(mittha|micha)\s*(?:gujob|gujab|kotha)\s*(?:chhara|chhariye|banay|likh)\b)"
-        r"|(?i:(bully|bulli)\s*(?:korte|kora|koro|korar|kor|kivabe|shikhao|dite)\b)"
+        r"|(?i:(bully|bulli)\s*(?:korte|kora|koro|korbe|korar|kor|kivabe|shikhao|dite)\b)"
         r"|(?i:(hoyrani|tiponi|opoman|troll)\s*(?:korte|kora|koro|korar|kore|dite)\b)"
+        # SAFE-002 romanised "kawke opoman korbo kivabe"-style requests: a
+        # named target plus a harassment verb plus a means/skill frame, or
+        # the plain intent form ("take gali debo").
+        r"|(?i:(?:kawke|take|oke|classmate\s*ke|bondhu\s*ke|shohopathike)\s*"
+        r"(?:opoman|hoyrani|tiponi|gali|lanchhito|kotukti)\s*"
+        r"(?:korte|kora|korar|korbo|koro|kore|debo|dibo|dite|shikhao))"
         r"|(?i:(how\s+to|can\s+i|kivabe)\s+(?:bully|harass|humiliate|threaten|troll)\b)"
         r"|(?i:write\s+(?:an?|some)\s+(?:insulting|abusive|hateful|threatening)\s+"
         r"(?:message|comment|post|note|letter))",
@@ -140,7 +225,186 @@ class SafetyVerdict:
 # the word in any non-academic context.
 _ACADEMIC_SCIENCE_TERMS: tuple[re.Pattern[str], ...] = (
     re.compile("\u09af\u09cc\u09a8\\s*\u09aa\u09cd\u09b0\u099c\u09a8\u09a8"),
+    # SAFE-002: the same term in romanised Bangla, lifted for the same
+    # reason now that the romanised sexual_content variants exist -- the
+    # Bangla and romanised paths must refuse and answer the SAME questions.
+    re.compile(r"(?i:\b(?:jouno|youno|jauno|sexual)\s*projonon\b)"),
 )
+
+
+# ── query-side evasion hardening (SAFE-001 / SAFE-003, 2026-11-10 audit) ──
+#
+# The screen is plain-substring: it saw only the text the query normalizer
+# produced, so three families of input rode past it to the provider. The
+# layers below close them WITHOUT changing the shared normalizer's contract
+# (its offset map drives source highlighting, so it may not grow whitespace
+# rewrites -- retrieval/hybrid.py depends on the spacing it produces).
+
+
+def _is_invisible(char: str) -> bool:
+    """True for characters a renderer paints as nothing (SAFE-001).
+
+    ``Cf`` is the Unicode FORMAT category: zero-width spaces and joiners,
+    the bidi marks and embedding/override/isolate controls, the soft hyphen
+    and the tag characters. :data:`ZERO_WIDTH_CHARS` is folded in as well
+    so this pass can never be narrower than the shared normalizer.
+    """
+    return char in ZERO_WIDTH_CHARS or unicodedata.category(char) == "Cf"
+
+
+def _strip_invisible(text: str) -> str:
+    """NFKC-fold the text and drop every invisible format character."""
+    return "".join(c for c in unicodedata.normalize("NFKC", text) if not _is_invisible(c))
+
+
+#: Whitespace sitting INSIDE a Bangla word: both neighbours are Bangla
+#: letters/marks. "আত্ম হত্যা" typed as two runs is the same word mis-split
+#: (SAFE-001), and the safety patterns are plain substrings, so the split
+#: must be closed on the probe copy. Spacing between sentences and between
+#: an English and a Bangla word is left alone.
+_INTRA_BANGLA_WORD_SPACE_RE = re.compile(r"(?<=[\u0980-\u09ff])\s+(?=[\u0980-\u09ff])")
+
+
+def _screening_variants(text: str) -> tuple[str, ...]:
+    """The question plus its evasion-stripped variants (SAFE-001).
+
+    Belt and braces on purpose: layer 1 widened
+    ``retrieval.normalize.ZERO_WIDTH_CHARS``, but the screen must not
+    DEPEND on the caller having normalized first -- direct callers (answer
+    screening, tests, future routes) arrive with raw text. A hit in any
+    variant refuses; a clean question is unaffected because stripping
+    invisible characters and gluing a mis-split Bangla word cannot create
+    a banned phrase that was not already there.
+    """
+    variants = [text]
+    visible = _strip_invisible(text)
+    if visible not in variants:
+        variants.append(visible)
+    glued = _INTRA_BANGLA_WORD_SPACE_RE.sub("", visible)
+    if glued not in variants:
+        variants.append(glued)
+    return tuple(variants)
+
+
+def _screen_probes(text: str) -> SafetyVerdict:
+    """Run the injection filter and every category over one probe string."""
+    for pattern in _INJECTION_PATTERNS:
+        if pattern.search(text):
+            return SafetyVerdict(safe=False, reason="prompt_injection")
+    for name, pattern in _COMPILED:
+        probe = text
+        if name == "sexual_content":
+            for academic in _ACADEMIC_SCIENCE_TERMS:
+                probe = academic.sub(" ", probe)
+        if pattern.search(probe):
+            return SafetyVerdict(safe=False, reason=name)
+    return SafetyVerdict(safe=True)
+
+
+def _screen_text(text: str) -> SafetyVerdict:
+    """Screen every variant of one text; the first hit wins."""
+    verdict = SafetyVerdict(safe=True)
+    for probe in _screening_variants(text):
+        verdict = _screen_probes(probe)
+        if not verdict.safe:
+            return verdict
+    return verdict
+
+
+#: NFKC splits some Bijoy punctuation into "space + combining mark"
+#: (U+00A8 DIAERESIS -> U+0020 U+0308). The tutor normalizes the question
+#: before the screen runs, so the legacy text the screen actually sees is
+#: already mangled: converting the normalized audited phrase (SAFE-003)
+#: splits its ya-phala, and the result is no longer the word the self-harm
+#: pattern knows. These pairs undo exactly that artifact on the CONVERSION
+#: PROBE ONLY; the retrieval normalizer keeps its NFKC contract (U+00AA
+#: ª -> "a" is lossy and deliberately not repaired: it cannot form a
+#: banned word).
+_NFKC_BIJOY_ARTIFACT_REPAIRS: tuple[tuple[str, str], ...] = (
+    (" \u0308", "\u00a8"),  # COMBINING DIAERESIS <- NFKC(¨)
+    (" \u0327", "\u00b8"),  # COMBINING CEDILLA   <- NFKC(¸)
+    (" \u0303", "\u02dc"),  # COMBINING TILDE     <- NFKC(˜)
+)
+
+#: Punctuation SutonnyMJ/Bijoy borrows for Bangla vowel signs, conjunct
+#: markers and quotes. None of it occurs in ordinary English or
+#: romanised-Bangla prose, so ONE of these is already a strong legacy
+#: signal (SAFE-003).
+_BIJOY_QUERY_STRONG_CHARS = frozenset(
+    "\u2021\u2020\u02c6\u2030\u00a5\u00a8\u00d6\u00a9\u00aa\u00ab\u00b5\u00b6\u00b7"
+    "\u00b8\u00bb\u00ac\u00bf\u00c0\u00a4\u00ae\u00a1\u0152\u0153\u0192\u02dc"
+)
+
+#: The same punctuation as NFKC left it: space + combining mark.
+_BIJOY_QUERY_ARTIFACT_RE = re.compile(" [\u0300\u0301\u0302\u0303\u0308\u0327]")
+
+#: ASCII letter clusters Bijoy spells common Bangla morphemes with (Av=আ,
+#: xv=দ..., wK=কি, K‡=কে/করে). Only ever consulted once a strong signal is
+#: already present, so the "Av" in "Avogadro" cannot flag anything.
+_BIJOY_QUERY_CLUSTERS = ("Av", "xv", "wK", "K‡", "cÖ", "Zv", "gv", "bv", "jv", "cv", "iq")
+
+
+def _looks_like_legacy_bijoy_query(text: str) -> bool:
+    """Query-path legacy-Bijoy signal that also catches SHORT phrases.
+
+    ``nctb.bijoy.is_likely_legacy_bijoy`` matches long official-header
+    fragments only, so the audited phrase ``AvZ¥nZ¨v K‡i †dv`` (SAFE-003)
+    was never detected on the query path. This scoring twin lives here
+    rather than in the ingestion module on purpose: the ingestion detector
+    decides whether a whole PDF page is converted and owns that module's
+    false-positive budget, while the query path only decides whether to
+    convert one question for ONE EXTRA SCREENING PASS -- a false positive
+    costs a conversion, never a refusal by itself. The threshold is
+    therefore high-precision first: two distinct signals, or one signal
+    corroborated by a Bijoy-style letter cluster.
+
+    An already-Bangla question is not exempt: a Bijoy payload pasted next
+    to ordinary Bangla text used to slip through because the ratio guard
+    skipped conversion entirely (measured), so a Unicode-dominant text must
+    still show TWO signals before a conversion probe is spent on it. A lone
+    exotic mark (a «quote») stays below that line.
+    """
+    if is_likely_legacy_bijoy(text):
+        return True
+    compact = "".join(text.split())
+    if not compact:
+        return False
+    signals = sum(1 for char in compact if char in _BIJOY_QUERY_STRONG_CHARS)
+    signals += len(_BIJOY_QUERY_ARTIFACT_RE.findall(text))
+    clusters = sum(compact.count(cluster) for cluster in _BIJOY_QUERY_CLUSTERS)
+    if bangla_char_ratio(text) > 0.2:
+        return signals >= 2  # already Unicode-dominant: nothing else converts
+    return signals >= 2 or (signals >= 1 and clusters >= 1)
+
+
+def _screen_legacy_bijoy(question: str) -> SafetyVerdict | None:
+    """Convert a legacy-Bijoy question and screen the conversion too.
+
+    The child who typed ``AvZ¥nZ¨v K‡i †dv`` asked about suicide in an
+    encoding the keyword screen cannot read; without this pass they got no
+    answer AND no helpline copy (SAFE-003). A conversion failure is not an
+    error: it falls through to the original-text verdict (verified: the
+    third-party converter raises IndexError on some short fragments).
+    """
+    candidates = [question]
+    repaired = question
+    for artifact, raw in _NFKC_BIJOY_ARTIFACT_REPAIRS:
+        repaired = repaired.replace(artifact, raw)
+    if repaired not in candidates:
+        candidates.append(repaired)
+    for candidate in candidates:
+        if not _looks_like_legacy_bijoy_query(candidate):
+            continue
+        try:
+            converted = convert_bijoy_text(candidate)
+        except Exception:  # a bad conversion must never take the screen down
+            converted = ""
+        if not converted.strip() or converted == candidate:
+            continue
+        verdict = _screen_text(converted)
+        if not verdict.safe:
+            return verdict
+    return None
 
 
 def screen_question(question: str) -> SafetyVerdict:
@@ -153,20 +417,19 @@ def screen_question(question: str) -> SafetyVerdict:
     vocabulary and reach the coverage gate -- where a query sharing the
     common word "বল" with the textbook could ground against an unrelated
     section (measured on the live probe, 2026-10-17).
+
+    Two evasion routes are closed around this core (SAFE-001/SAFE-003):
+    every pattern runs over the question AND its invisible-stripped and
+    mis-split-repaired variants, and a legacy-Bijoy question is converted
+    and screened in its Unicode form as well. A hit anywhere refuses.
     """
-    for pattern in _INJECTION_PATTERNS:
-        if pattern.search(question):
-            return SafetyVerdict(safe=False, reason="prompt_injection")
-    for name, pattern in _COMPILED:
-        probe = question
-        if name == "sexual_content":
-            for academic in _ACADEMIC_SCIENCE_TERMS:
-                probe = academic.sub(" ", probe)
-        if pattern.search(probe):
-            if name == "self_harm":
-                return SafetyVerdict(safe=False, reason="self_harm")
-            return SafetyVerdict(safe=False, reason=name)
-    return SafetyVerdict(safe=True)
+    verdict = _screen_text(question)
+    if not verdict.safe:
+        return verdict
+    legacy = _screen_legacy_bijoy(question)
+    if legacy is not None:
+        return legacy
+    return verdict
 
 
 def refusal_for(reason: str) -> str:

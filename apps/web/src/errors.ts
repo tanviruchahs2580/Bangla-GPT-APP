@@ -19,6 +19,11 @@ const KEY: Record<string, Parameters<typeof t>[0]> = {
   no_quiz_for_filter: "errNoQuiz",
   answer_count_mismatch: "errAnswerCount",
   attempt_already_graded: "errAlreadyGraded",
+  // BE-FIX-007: the graph rebuild wipes every student's mastery, so the API now
+  // refuses a bare call the way `/admin/maintenance/purge` always has. Only an
+  // operator meets it, but the table is the contract — an unmapped code falls
+  // through to the generic sentence, and this one has to say what to do.
+  kg_rebuild_confirmation_required: "errKgRebuildConfirm",
   invalid_invite: "errInvalidInvite",
   invalid_token: "errInvalidToken",
   llm_unavailable: "errLlmUnavailable",
@@ -100,6 +105,12 @@ const KEY: Record<string, Parameters<typeof t>[0]> = {
   unsafe_content: "errUnsafeContent",
   consent_not_accepted: "errConsentRequired",
   guardian_consent_required: "errGuardianConsentRequired",
+  // FE-FIX-019: BE-FIX-004's consent-version gate (403 on tutor generation and
+  // the student's durable writes). Mapped so any surface showing raw copy gets
+  // the real reason; the quiz and tutor surfaces route it to the reconfirm
+  // notice instead (isConsentReconfirmationRequired), which carries the action
+  // that clears it.
+  consent_reconfirmation_required: "errConsentReconfirmRequired",
   class_level_required: "errClassLevelRequired",
   password_too_common: "errPasswordTooCommon",
   password_too_short: "errPasswordTooShort",
@@ -257,4 +268,23 @@ export function friendlyError(detail: unknown): ErrorCopy {
     return { text: t(KEY[code]), action: ACTION[code] };
   }
   return { text: t("errGeneric"), action: "retry" };
+}
+
+/**
+ * FE-FIX-019: is this failure the consent-version gate?
+ *
+ * The quiz and tutor surfaces must answer BE-FIX-004's 403 with the reconfirm
+ * notice and its action — the mapped sentence alone names the problem but not
+ * the way out, and the generic sentence names nothing. Call sites hold either
+ * an `ApiError` (`.code` is already extracted) or a raw detail body, so both
+ * shapes are accepted; this one predicate keeps the two surfaces from
+ * drifting apart on the code string.
+ */
+export function isConsentReconfirmationRequired(error: unknown): boolean {
+  const rec = error as
+    { code?: unknown; rawDetail?: unknown } | null | undefined;
+  if (typeof rec?.code === "string") {
+    return rec.code === "consent_reconfirmation_required";
+  }
+  return codeOf(rec?.rawDetail) === "consent_reconfirmation_required";
 }

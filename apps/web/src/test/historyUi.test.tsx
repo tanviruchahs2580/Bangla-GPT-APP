@@ -94,6 +94,10 @@ describe("history UI", () => {
     let listCalls = 0;
     apiMock.get.mockImplementation((path: string) => {
       if (path.startsWith("/tutor/messages/search")) return Promise.resolve([]);
+      // FE-FIX-019: the tutor page also reads the consent status; that read is
+      // not the conversations list and must not consume the first list fetch,
+      // or the post-delete refetch looks like the initial one.
+      if (path.startsWith("/students/")) return Promise.resolve(null);
       listCalls += 1;
       return Promise.resolve(listCalls <= 1 ? [...CONVS] : []);
     });

@@ -2,6 +2,7 @@ import { Paperclip, Send, Square, X } from "lucide-react";
 import { Button } from "../../../components/ui";
 import { VoiceButton } from "../../../components/VoiceButton";
 import { t } from "../../../i18n";
+import { MAX_QUESTION_CHARS } from "../../../lib/tutorQuestion";
 
 /** explicit teaching strategies accepted by ChatSendRequest.strategy. */
 const STRATEGIES = [
@@ -144,8 +145,18 @@ export function TutorComposer({
           className="input"
           value={input}
           placeholder={t("askPlaceholder")}
+          // Same bound the API declares (FE-FIX-016): the client stops an
+          // over-long paste here rather than spending a round-trip to be told.
+          maxLength={MAX_QUESTION_CHARS}
           onChange={(e) => onInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && onSend()}
+          // FE-FIX-013: on an Android IME, Enter is also how a Bangla
+          // composition is confirmed — without this guard the half-composed
+          // question is sent on the keystroke that was meant to finish typing
+          // it. `isComposing` is the platform's own signal for exactly that;
+          // it is false for a real Enter, so nothing else changes.
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.nativeEvent.isComposing) onSend();
+          }}
           aria-label={t("askPlaceholder")}
         />
         <input

@@ -120,7 +120,17 @@ export default function SchoolDashboard() {
                       {r.class_level} · {r.section}
                     </td>
                     <td>
-                      <Badge tone="warn">{r.avg_score_pct ?? 0}%</Badge>
+                      {/* FE-FIX-006: `avg_score_pct` is `number | null` on
+                          purpose (api.ts SchoolAtRiskRow) — null means "nothing
+                          graded yet", not "scored zero". Coercing it to 0 made
+                          a warning badge claim a measurement the API never
+                          took, which is exactly the kind of number a school
+                          admin would act on. */}
+                      {r.avg_score_pct == null ? (
+                        <Badge>{t("notAvailable")}</Badge>
+                      ) : (
+                        <Badge tone="warn">{`${r.avg_score_pct}%`}</Badge>
+                      )}
                     </td>
                     <td>{r.trend}</td>
                   </tr>

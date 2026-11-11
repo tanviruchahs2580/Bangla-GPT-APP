@@ -6,6 +6,8 @@ safety screening still sees the RAW question first, so abuse detection is
 unaffected. Curriculum numerals (years, class levels, chapters) must survive.
 """
 
+import pytest
+
 from bangla_gpt_api.metrics import PII_REDACTED_TOTAL
 from bangla_gpt_api.services.pii import redact_pii, redacted_total
 from bangla_gpt_api.services.tutor import build_evidence_prompt
@@ -112,3 +114,94 @@ def test_pattern_order_keeps_an_adjacent_address_intact() -> None:
     text, counts = redact_pii("যোগাযোগ 01712345678@example.com")
     assert counts == {"phone": 1, "email": 0, "nid": 0}, text
     assert "01712345678" not in text
+
+
+# ---------------------------------------------------------------------------
+# PRIV-001: the spellings a guardian actually types. Every one of these was
+# reproduced reaching the upstream model verbatim before the pattern was
+# widened -- the ASCII-only ``01[3-9]\d{8}`` matched none of the separated
+# forms. Each case below fails if the pattern narrows again.
+# ---------------------------------------------------------------------------
+
+#: One number (01712-345678) in every spelling seen in pasted contact text:
+#: local and E.164, ASCII and Bangla digits, each separator the keypad emits.
+PHONE_SPELLINGS = [
+    "01712345678",
+    "01712-345678",
+    "017 12345678",
+    "017 1234 5678",
+    "(017) 12345678",
+    "(017)-1234-5678",
+    "017-1234-5678",
+    "017.1234.5678",
+    "00880 1712 345678",
+    "008801712345678",
+    "880-1712-345678",
+    "+8801712345678",
+    "+880 1712-345678",
+    "০১৭১২৩৪৫৬৭৮",
+    "০১৭-১২৩৪-৫৬৭৮",
+]
+
+
+@pytest.mark.parametrize("spelling", PHONE_SPELLINGS)
+def test_every_phone_spelling_redacts_as_phone(spelling: str) -> None:
+    text, counts = redact_pii(spelling)
+    assert text == "[phone redacted]", spelling
+    assert counts == {"phone": 1, "email": 0, "nid": 0}, spelling
+
+
+@pytest.mark.parametrize("spelling", PHONE_SPELLINGS)
+def test_every_phone_spelling_is_idempotent(spelling: str) -> None:
+    once, _ = redact_pii(spelling)
+    twice, counts2 = redact_pii(once)
+    assert twice == once, spelling
+    assert redacted_total(counts2) == 0, spelling
+
+
+def test_e164_and_bangla_digit_phones_are_metered_as_phone_not_nid() -> None:
+    """PRIV-001's metering half: these fell through to the Unicode-aware NID rule.
+
+    ``_NID_RE`` uses ``\\d``, which matches Bangla digits, so the number was
+    redacted -- but counted under ``kind="nid"``. The metering kind decides
+    which disclosure a dashboard reports, so the classification matters.
+    """
+    for spelling in ("+8801712345678", "০১৭১২৩৪৫৬৭৮"):
+        _, counts = redact_pii(spelling)
+        assert counts == {"phone": 1, "email": 0, "nid": 0}, spelling
+
+
+def test_phone_shaped_runs_that_are_not_mobiles_stay_out_of_the_phone_kind() -> None:
+    """Boundaries: a digit glued to either side is a longer run, not a mobile.
+
+    Nine-digit runs, eighteen-digit runs and the curricula numerals must never
+    be counted as a phone disclosure.
+    """
+    cases = {
+        "id 123456789 ok": {"phone": 0, "email": 0, "nid": 0},
+        "id 123456789012345678 ok": {"phone": 0, "email": 0, "nid": 0},
+        "ref 017123456789 end": {"phone": 0, "email": 0, "nid": 1},
+        "১৯৪৭ সালে কি হয়েছিল?": {"phone": 0, "email": 0, "nid": 0},
+        "৬ষ্ঠ শ্রেণির অধ্যায় ৩": {"phone": 0, "email": 0, "nid": 0},
+    }
+    for text, expected in cases.items():
+        redacted, counts = redact_pii(text)
+        assert counts == expected, redacted
+        assert "[phone redacted]" not in redacted, redacted
+
+
+def test_separated_phone_inside_a_question_leaves_the_question_intact() -> None:
+    text, counts = redact_pii("আমার ফোন 01712-345678, ভগ্নাংশ কী?")
+    assert counts == {"phone": 1, "email": 0, "nid": 0}, text
+    assert "01712-345678" not in text
+    assert "ভগ্নাংশ কী?" in text
+    assert text == "আমার ফোন [phone redacted], ভগ্নাংশ কী?"
+
+
+def test_evidence_prompt_meters_a_separated_phone_as_phone_kind() -> None:
+    before = PII_REDACTED_TOTAL.labels(kind="phone")._value.get()
+    prompt = build_evidence_prompt([], "আমার ফোন 01712-345678, ভগ্নাংশ কী?", history=None)
+    assert "01712-345678" not in prompt
+    assert "[phone redacted]" in prompt
+    after = PII_REDACTED_TOTAL.labels(kind="phone")._value.get()
+    assert after - before == 1

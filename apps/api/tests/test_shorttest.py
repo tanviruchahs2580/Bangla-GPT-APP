@@ -69,6 +69,31 @@ def _import_students(client: TestClient, headers: dict, room_id: int, n: int) ->
     return [r["invite_code"] for r in res.json()["rows"]]
 
 
+def _reconfirm_consent(client: TestClient, headers: dict[str, str]) -> None:
+    """BE-FIX-004/005: re-confirmation is required before a student's first write.
+
+    ``/teacher/classrooms/{id}/import`` no longer asserts consent on the
+    child's behalf — it used to write a hard-coded ``consent_version``
+    (``"CSV-IMPORT-1"``, not ``CONSENT_VERSION``) with no ``consent_ip``,
+    which is fabricated evidence about a minor. The imported student therefore
+    arrives with a stale consent version and every write is refused with a
+    coded 403 ``consent_reconfirmation_required`` until the re-confirmation the
+    product now asks for has happened.
+    """
+    me = client.get("/users/me", headers=headers)
+    assert me.status_code == 200, me.text
+    # MeResponse exposes the domain-profile id as ``profile_id`` (there is no
+    # bare ``id``); for a student that is the ``students`` row the consent
+    # endpoint is scoped to.
+    res = client.post(
+        f"/students/{me.json()['profile_id']}/consent/reconfirm",
+        json={"accepted": True},
+        headers=headers,
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["needs_reconfirm"] is False
+
+
 def _assign(
     client: TestClient,
     headers: dict,
@@ -170,6 +195,7 @@ def test_student_sees_assigned_test_and_can_submit(client: TestClient, teacher_h
     assert change.status_code == 200, change.text
     res = client.post("/auth/login", json={"email": "stu0@school.edu", "password": "studentpw1"})
     student_hdr = {"Authorization": f"Bearer {res.json()['access_token']}"}
+    _reconfirm_consent(client, student_hdr)
 
     mine = client.get("/shorttests/mine", headers=student_hdr).json()
     assert len(mine) == 1
@@ -205,6 +231,7 @@ def test_mine_flags_expired_after_duration(client: TestClient, teacher_headers, 
     )
     res = client.post("/auth/login", json={"email": "stu0@school.edu", "password": "studentpw1"})
     student_hdr = {"Authorization": f"Bearer {res.json()['access_token']}"}
+    _reconfirm_consent(client, student_hdr)
 
     # roll the assignment back 3 hours at the storage layer (soft deadline)
     conn = sqlite3.connect(db_path)
