@@ -352,6 +352,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore: regenerate the CHANGELOG and the native-review sheet
 - chore: regenerate the native-review sheet
 - chore: regenerate the native-review sheet for the audit string changes
+- chore: regenerate the native-review sheet for the new strings
 - chore: regenerate the native-review sheet for the refactor's line shifts
 
 ### Style
