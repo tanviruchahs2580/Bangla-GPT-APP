@@ -348,6 +348,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(rag): rebuild the corpus so the manifest fingerprint matches the tree
 - chore(web): add the dead-code and import-cycle gates to the dev toolchain
 - chore(web): gate knip in CI and wire it into make
+- chore(web): refresh the four 360px tutor baselines the wave moved
 - chore(web,scripts): drop the three unrendered locale keys and gate new ones
 - chore: add the pre-push and commit-msg hooks the note listed
 - chore: ignore the Android build output at the repo root
@@ -378,6 +379,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Merge pull request #101 from tanviruchahs2580/fix/rag-audit-enterprise
 - Merge pull request #104 from tanviruchahs2580/fix/enterprise-audit-v2
+- Merge pull request #105 from tanviruchahs2580/fix/audit-remediation-wave3
 - Merge pull request #93 from tanviruchahs2580/fix/pwa-install-offline-200
 - Merge pull request #94 from tanviruchahs2580/qa/enterprise-v2-hardening
 - ci,style: point lint-imports at the root contract; format the composer; refresh the review sheet
