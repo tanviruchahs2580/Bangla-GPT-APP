@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Fixed
+
+- fix(web): close the contrast-guard blind spot and repair two AA failures
+
+### Documentation
+
+- docs(rag): RAG V2/V3 phase-0 baselines, audit and elevation plan
+
+## v0.10.0 - 2026-11-11
+
 ### Added
 
 - feat(api): add a paired-prompt fairness probe harness
@@ -387,9 +397,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #104 from tanviruchahs2580/fix/enterprise-audit-v2
 - Merge pull request #105 from tanviruchahs2580/fix/audit-remediation-wave3
 - Merge pull request #107 from tanviruchahs2580/chore/refresh-visual-baselines
+- Merge pull request #108 from tanviruchahs2580/chore/release-0.10.0
 - Merge pull request #93 from tanviruchahs2580/fix/pwa-install-offline-200
 - Merge pull request #94 from tanviruchahs2580/qa/enterprise-v2-hardening
 - ci,style: point lint-imports at the root contract; format the composer; refresh the review sheet
+
 
 ## v0.9.3 - 2026-10-27
 
