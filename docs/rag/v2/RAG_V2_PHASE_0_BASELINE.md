@@ -133,7 +133,7 @@ additive, needs no corpus, and is listed with its target:
 |---|---|---|
 | **A1** Corpus identity in every eval report (`corpus_digest`, embedder, prompt version, dataset version) | Phase 4 acceptance; `EVAL-02` | `evaluation/cli.py` report payload |
 | **A2** Fix the manifest self-reference that can never verify (hash captured before `_update_manifest` rewrites it, `scripts/evaluate_nctb_retrieval.py:405` vs `:494`) | Phase 3 acceptance | same script, plus `check_corpus_manifest.py` |
-| **A3** Eval-binding gate that fails on a corpus-fingerprint mismatch | Phase 4 | new `scripts/check_eval_binding.py` + `eval-gate.yml` |
+| **A3** Eval-binding gate that fails on a corpus-fingerprint mismatch | Phase 4 | new a new eval-binding gate (**not yet written**) under `apps/api/scripts/` + `eval-gate.yml` |
 | **A4** Stop fabricating the acquisition year **2026** for an `UNKNOWN` edition year in served metadata | Phase 1 task 7; Phase 3 task 4 | `nctb/data/nctb_loader.py:163-173` |
 | **A5** Canonical `answer_status` / `grounding_status` / `citation_status` / `validation_status`, additive | §7.1 (`V2-A14`) | `schemas.py` + client-compat tests |
 

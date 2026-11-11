@@ -125,7 +125,7 @@ This is V3 Phase 9's pilot-critical subset, and it is **absent**, not partial.
 | `markdownlint` — config exists, **wired nowhere** | 0 hits across `.github/workflows/`, `Makefile`, `.pre-commit-config.yaml` |
 | `deptry` — configured, **not in CI**; its own comment says "if deptry is ever wired into CI" | `pyproject.toml:301-322` |
 | `check_archive_banners.py` — in `make docs-check` only, **not in CI** | `Makefile:151` |
-| `scripts/gate_g3_local.py` — **orphan**, no references in CI/Makefile/docs | grep |
+| `apps/api/scripts/gate_g3_local.py` — **orphan**, no references in CI/Makefile/docs | grep |
 | `content_qa.py` resets `seen_texts` **per file**, so the manifest's **292 cross-source duplicate chunks are invisible** to it | script read + 9 runs, all exit 0 |
 | No quarantine list anywhere | `find . -iname "*quarantine*"` → nothing |
 | No offset map from normalized text back to PDF text | offset map exists only inside `retrieval/normalize.py:106-164` for a single call, not persisted with chunks |

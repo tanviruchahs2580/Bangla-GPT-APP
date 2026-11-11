@@ -454,7 +454,7 @@ CodeQL, Trivy, Scorecard), Lighthouse CI, Playwright across three engines, `eval
 **Critique 31 — four declared gates are wired nowhere** (independently verified, not taken from
 docs): `markdownlint` (config current, zero CI hits), `deptry` (configured; its own comment says
 "if deptry is ever wired into CI"), `check_archive_banners.py` (Makefile `docs-check` only), and
-`scripts/gate_g3_local.py` (orphan). Plus `content_qa.py`'s per-file `seen_texts` blind spot.
+`apps/api/scripts/gate_g3_local.py` (orphan). Plus `content_qa.py`'s per-file `seen_texts` blind spot.
 
 **Critique 32 — the API suite takes 12.5 minutes** (2127 tests). That is a workable but
 attention-worthy figure for a 42-table app, and it is the reason `web` is gated behind
@@ -539,7 +539,7 @@ nothing that matters.
    `split`, `model_provider_id`, `generated_at`.
 2. `scripts/evaluate_nctb_retrieval.py:284-329` — hash the manifest **after**
    `_update_manifest` rewrites `derived`, so the back-reference can verify.
-3. New gate `scripts/check_eval_binding.py` — fail when a report's `corpus_digest` ≠ the corpus
+3. New gate a new eval-binding gate (**not yet written**) under `apps/api/scripts/` — fail when a report's `corpus_digest` ≠ the corpus
    in use, or when `embedder_name`/`dimension` ≠ the built index.
 4. Wire it into `eval-gate.yml` as a blocking step, and into `retrieval-eval.yml`.
 5. Unit tests: a report with a wrong digest fails; a correct one passes; a missing field fails
@@ -547,7 +547,7 @@ nothing that matters.
 6. Record in `docs/rag/architecture.md` what is now bound and what is deliberately not.
 
 **Acceptance.** Running the eval emits a report carrying a corpus digest that
-`check_eval_binding.py` accepts, and the checker exits 1 when the digest is perturbed. Exit codes
+that gate accepts, and the checker exits 1 when the digest is perturbed. Exit codes
 recorded on the final diff.
 
 **Evidence required.** Command + exit code for both the pass and the perturbed-fail case;

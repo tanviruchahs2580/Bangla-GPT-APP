@@ -196,7 +196,7 @@ of the index means redeploying the previous container tag.
 
 All applicable jobs pass at HEAD. Non-blocking or conditional by design, independently
 verified: `markdownlint` (config exists, wired **nowhere**), `deptry` (configured, not in CI),
-`check_archive_banners.py` (Makefile only), `scripts/gate_g3_local.py` (orphan), the nightly
+`check_archive_banners.py` (Makefile only), `apps/api/scripts/gate_g3_local.py` (orphan), the nightly
 `retrieval-regression` job (**has never run — the corpus is gitignored, so it skips**), and the
 `real_model` quality probe (`continue-on-error: true`).
 
