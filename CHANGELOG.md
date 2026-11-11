@@ -364,6 +364,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - style(scripts): restore the blank line after the bn_scan docstring
 - style(scripts): state why the boto3 import carries a type ignore
 - style(tests,docs): satisfy the end-of-file and line-ending hooks
+- style(web): apply prettier to the wave's sources and re-measure two ceilings
 - style(web): format the wave-2 files and use a string-built glyph regex
 - style(web): prettier the invite type imports
 - style(web): wrap the attachment test's file list at the formatter's width
