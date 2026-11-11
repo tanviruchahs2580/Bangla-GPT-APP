@@ -338,10 +338,7 @@ export default function MePage() {
                   labelled image equivalent whose name carries the counts a
                   glance would take from the colours; the component is shared
                   with the parent's copy of this grid (FE-FIX, duplication). */}
-              <ActivityHeatmap
-                days={activity.days}
-                testId="activity-heatmap"
-              />
+              <ActivityHeatmap days={activity.days} testId="activity-heatmap" />
             </>
           ) : (
             <LoadError onRetry={() => void refetchActivity()} />

@@ -76,7 +76,11 @@ describe("status page localization", () => {
     apiMock.getStatus.mockResolvedValue({
       ...STATUS,
       components: [
-        { name: "cache", ok: false, detail: "3 consecutive provider calls failed" },
+        {
+          name: "cache",
+          ok: false,
+          detail: "3 consecutive provider calls failed",
+        },
         { name: "brand-new-lane", ok: true, detail: "something unforeseen" },
       ],
     });

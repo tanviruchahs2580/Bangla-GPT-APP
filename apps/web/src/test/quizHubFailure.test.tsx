@@ -14,7 +14,13 @@
  * submitted quiz failed.
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import QuizPage from "../pages/student/QuizPage";
@@ -108,9 +114,7 @@ describe("practice hub failure states", () => {
     });
     renderHub();
 
-    expect(
-      await screen.findByText(t("recommendationLoadFailed")),
-    ).toBeTruthy();
+    expect(await screen.findByText(t("recommendationLoadFailed"))).toBeTruthy();
     // The button is absent because its data is, and the retry says so.
     expect(
       screen.queryByRole("button", { name: t("weakPracticeStart") }),

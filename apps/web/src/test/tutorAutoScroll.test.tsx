@@ -155,19 +155,16 @@ describe("tutor viewport autoscroll", () => {
     // whichever test ran after it and silently turn that test's smooth
     // scrolls into instant ones, which is how the file went red on CI while
     // staying green locally.
-    vi.stubGlobal(
-      "matchMedia",
-      () => ({
-        matches: true,
-        media: "(prefers-reduced-motion: reduce)",
-        addEventListener: () => {},
-        removeEventListener: () => {},
-        addListener: () => {},
-        removeListener: () => {},
-        onchange: null,
-        dispatchEvent: () => false,
-      }),
-    );
+    vi.stubGlobal("matchMedia", () => ({
+      matches: true,
+      media: "(prefers-reduced-motion: reduce)",
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      onchange: null,
+      dispatchEvent: () => false,
+    }));
     const scrollTo = vi.spyOn(Element.prototype, "scrollTo");
 
     renderPage();

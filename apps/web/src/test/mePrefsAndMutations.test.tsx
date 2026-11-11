@@ -119,7 +119,9 @@ describe("learning preferences", () => {
     await waitFor(() =>
       expect(screen.getByLabelText(t("explanationStyle"))).toBeTruthy(),
     );
-    expect(screen.getByLabelText(t("explanationStyle"))).toHaveValue("detailed");
+    expect(screen.getByLabelText(t("explanationStyle"))).toHaveValue(
+      "detailed",
+    );
     expect(screen.getByLabelText(t("subjectFocus"))).toHaveValue("গণিত");
   });
 });

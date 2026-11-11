@@ -63,7 +63,9 @@ const BUDGET = 500;
  * rendered.
  *
  * Every entry is that file's measured count after the change. No page that was
- * split in a pass kept its old ceiling.
+ * split in a pass kept its old ceiling. The two that moved by one or two lines
+ * when prettier reformatted them are re-measured, not re-justified: the
+ * formatting is the change.
  */
 const CEILING: Record<string, number> = {
   "AdminDashboard.tsx": 337,
@@ -75,7 +77,7 @@ const CEILING: Record<string, number> = {
   "ParentDashboard.tsx": 404,
   "RegisterPage.tsx": 288,
   "SchoolDashboard.tsx": 147,
-  "StatusPage.tsx": 147,
+  "StatusPage.tsx": 148,
   "WelcomePage.tsx": 128,
   "student/AITutorPage.tsx": 688,
   "student/HomePage.tsx": 335,
@@ -84,7 +86,7 @@ const CEILING: Record<string, number> = {
   "student/QuizPage.tsx": 586,
   "student/learn/ChapterAsk.tsx": 121,
   "student/learn/ChapterPractice.tsx": 184,
-  "student/learn/LearnChapterPage.tsx": 492,
+  "student/learn/LearnChapterPage.tsx": 494,
   "student/quiz/AssignedPanel.tsx": 119,
   "student/quiz/QuizResultScreen.tsx": 111,
   "student/quiz/QuizRunner.tsx": 138,

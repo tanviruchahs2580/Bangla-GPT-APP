@@ -66,7 +66,11 @@ describe("modal focus stability", () => {
       const [open, setOpen] = useState(false);
       return (
         <>
-          <button type="button" data-testid="opener" onClick={() => setOpen(true)}>
+          <button
+            type="button"
+            data-testid="opener"
+            onClick={() => setOpen(true)}
+          >
             open
           </button>
           <Modal open={open} onClose={() => setOpen(false)} title="Evidence">

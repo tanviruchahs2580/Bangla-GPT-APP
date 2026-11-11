@@ -298,7 +298,9 @@ export function LearnChapterPage() {
                 ("science"), which put English inside an otherwise Bangla
                 reader header. tSubject is the same mapping the chapter list,
                 the assigned list and the report already use. */}
-            <span className="badge badge-teal">{tSubject(content.subject)}</span>
+            <span className="badge badge-teal">
+              {tSubject(content.subject)}
+            </span>
             <span className="badge">
               {t("classLabel")} {formatNumber(content.class_level)}
             </span>

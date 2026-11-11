@@ -54,7 +54,8 @@ function detailLabel(detail: string): string {
   const key = DETAIL_LABEL[detail];
   if (key) return t(key);
   const counted = PROVIDER_FAILURES.exec(detail);
-  if (counted) return t("statusDetailProviderFailed", { n: Number(counted[1]) });
+  if (counted)
+    return t("statusDetailProviderFailed", { n: Number(counted[1]) });
   return t("statusDetailUnknown");
 }
 

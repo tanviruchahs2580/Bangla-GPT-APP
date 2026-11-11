@@ -141,7 +141,9 @@ describe("public status page", () => {
     expect(screen.getByText(t("statusDetailQueriesOk"))).toBeInTheDocument();
     expect(screen.getByText(t("statusDetailCacheShared"))).toBeInTheDocument();
     expect(screen.queryByText("queries responding")).not.toBeInTheDocument();
-    expect(screen.queryByText("shared cache reachable")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("shared cache reachable"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("database")).not.toBeInTheDocument();
   });
 

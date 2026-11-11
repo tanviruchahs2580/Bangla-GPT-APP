@@ -102,7 +102,9 @@ describe("question length validation", () => {
   it("asks a valid question", async () => {
     renderPage();
     const box = await screen.findByPlaceholderText(t("askPlaceholder"));
-    fireEvent.change(box, { target: { value: "সালোকসংশ্লেষণ কীভাবে কাজ করে?" } });
+    fireEvent.change(box, {
+      target: { value: "সালোকসংশ্লেষণ কীভাবে কাজ করে?" },
+    });
     fireEvent.keyDown(box, { key: "Enter" });
 
     await waitFor(() => expect(apiMock.post).toHaveBeenCalled());

@@ -92,7 +92,9 @@ describe("chapter progress bar reports the recorded progress", () => {
       { timeout: 8000 },
     );
     expect(bar.querySelector("span")).toHaveStyle({ width: "20%" });
-    expect(screen.queryByRole("img", { name: `${formatNumber(45)}%` })).toBeNull();
+    expect(
+      screen.queryByRole("img", { name: `${formatNumber(45)}%` }),
+    ).toBeNull();
   });
 
   it("renders no bar for a chapter that was never opened", async () => {

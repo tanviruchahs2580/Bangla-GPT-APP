@@ -143,9 +143,7 @@ it("shows a retryable error instead of loading forever when the audit fails", as
   });
   renderAdmin();
 
-  await waitFor(() =>
-    expect(screen.getByText(t("errorGeneric"))).toBeTruthy(),
-  );
+  await waitFor(() => expect(screen.getByText(t("errorGeneric"))).toBeTruthy());
   expect(screen.queryByText(t("loading"))).toBeNull();
   expect(
     screen.getAllByRole("button", { name: t("retry") }).length,

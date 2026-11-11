@@ -54,7 +54,8 @@ describe("teacher home draft-count failures", () => {
   it("includes the drafts query in the banner and re-runs it on retry", async () => {
     const user = userEvent.setup();
     apiMock.get.mockImplementation((url: string) => {
-      if (url.includes("/teacher/qpapers")) return Promise.reject(new Error("500"));
+      if (url.includes("/teacher/qpapers"))
+        return Promise.reject(new Error("500"));
       return Promise.resolve([]);
     });
     renderPage();
@@ -71,7 +72,9 @@ describe("teacher home draft-count failures", () => {
     );
     // The retry really re-asked the drafts endpoint.
     expect(
-      apiMock.get.mock.calls.some(([url]) => String(url).includes("/teacher/qpapers")),
+      apiMock.get.mock.calls.some(([url]) =>
+        String(url).includes("/teacher/qpapers"),
+      ),
     ).toBe(true);
     await waitFor(() =>
       expect(screen.queryByText(new RegExp(t("thLoadError")))).toBeNull(),

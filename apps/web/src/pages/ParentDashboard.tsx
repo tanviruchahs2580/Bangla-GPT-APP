@@ -224,7 +224,9 @@ export default function ParentDashboard() {
           </h2>
           <div className="stat-row">
             <div className="stat">
-              <div className="num">{formatNumber(progress.attempts_graded)}</div>
+              <div className="num">
+                {formatNumber(progress.attempts_graded)}
+              </div>
               <div className="lbl">{t("gradedQuizzes")}</div>
             </div>
             <div className="stat">

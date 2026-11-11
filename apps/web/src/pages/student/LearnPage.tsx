@@ -208,58 +208,58 @@ export function LearnPage() {
             </Card>
           )}
           <div className="subject-grid">
-          {subjects.map((s: SubjectOut) => {
-            const stat = subjectStats(s.subject);
-            return (
-              <button
-                key={s.subject}
-                className={cn(
-                  "subject-card",
-                  activeSubject === s.subject && "active",
-                )}
-                aria-pressed={activeSubject === s.subject}
-                onClick={() =>
-                  setActiveSubject((cur) =>
-                    cur === s.subject ? null : s.subject,
-                  )
-                }
-              >
-                <span
-                  className={cn("quick-icon", SUBJECT_TONE[s.subject] ?? "")}
-                  aria-hidden
+            {subjects.map((s: SubjectOut) => {
+              const stat = subjectStats(s.subject);
+              return (
+                <button
+                  key={s.subject}
+                  className={cn(
+                    "subject-card",
+                    activeSubject === s.subject && "active",
+                  )}
+                  aria-pressed={activeSubject === s.subject}
+                  onClick={() =>
+                    setActiveSubject((cur) =>
+                      cur === s.subject ? null : s.subject,
+                    )
+                  }
                 >
-                  <BookOpen size={22} />
-                </span>
-                <div className="subject-name">{tSubject(s.subject)}</div>
-                <div className="subject-meta">
-                  {t("classLabel")}{" "}
-                  {s.class_levels.map((c) => formatNumber(c)).join(", ")}
-                </div>
-                {stat.total > 0 && (
-                  <>
-                    <span
-                      className="subject-ring"
-                      role="img"
-                      aria-label={t("chaptersDone", {
-                        done: stat.done,
-                        total: stat.total,
-                      })}
-                      style={{ ["--p" as string]: stat.pct }}
-                    >
-                      <span className="subject-ring-inner">
-                        {formatNumber(stat.done)}/{formatNumber(stat.total)}
+                  <span
+                    className={cn("quick-icon", SUBJECT_TONE[s.subject] ?? "")}
+                    aria-hidden
+                  >
+                    <BookOpen size={22} />
+                  </span>
+                  <div className="subject-name">{tSubject(s.subject)}</div>
+                  <div className="subject-meta">
+                    {t("classLabel")}{" "}
+                    {s.class_levels.map((c) => formatNumber(c)).join(", ")}
+                  </div>
+                  {stat.total > 0 && (
+                    <>
+                      <span
+                        className="subject-ring"
+                        role="img"
+                        aria-label={t("chaptersDone", {
+                          done: stat.done,
+                          total: stat.total,
+                        })}
+                        style={{ ["--p" as string]: stat.pct }}
+                      >
+                        <span className="subject-ring-inner">
+                          {formatNumber(stat.done)}/{formatNumber(stat.total)}
+                        </span>
                       </span>
-                    </span>
+                      <span className="subject-progress" aria-hidden />
+                    </>
+                  )}
+                  {stat.total === 0 && (
                     <span className="subject-progress" aria-hidden />
-                  </>
-                )}
-                {stat.total === 0 && (
-                  <span className="subject-progress" aria-hidden />
-                )}
-              </button>
-            );
-          })}
-        </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </>
       )}
 

@@ -75,7 +75,10 @@ export function SearchBox() {
   }, []);
 
   const showDropdown =
-    open && debounced.length >= 2 && !loading && (data !== null || error !== null);
+    open &&
+    debounced.length >= 2 &&
+    !loading &&
+    (data !== null || error !== null);
 
   // FE-FIX (trust rule): `hit.href` is server-supplied, so it is validated
   // against the same in-app allowlist NotificationBell uses before it is
@@ -135,7 +138,9 @@ export function SearchBox() {
         // Ids the popup only while the listbox is what is open: the error row
         // below is not a listbox, and `aria-controls` naming a missing id is
         // an ARIA contract violation axe reports.
-        aria-controls={showDropdown && !error && !unroutable ? "search-listbox" : undefined}
+        aria-controls={
+          showDropdown && !error && !unroutable ? "search-listbox" : undefined
+        }
         aria-autocomplete="list"
         aria-activedescendant={activeId}
         onChange={(e) => {
