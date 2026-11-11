@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(rag): RAG V2/V3 phase-0 baselines, audit and elevation plan
 - docs(rag): fix two path defects the doc-paths guardrail caught
 
+### Tests
+
+- test(e2e): point the question-paper row locator at the renamed button
+
 ### Maintenance
 
 - chore: regenerate the CHANGELOG
