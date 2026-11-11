@@ -159,6 +159,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): show localized copy when a chapter quiz fails to start
 - fix(web): state Argon2id and the real data flows in the privacy page
 - fix(web): state the reason on every suppression and pin the saved state
+- fix(web): stop the reduced-motion stub leaking across shuffled tests
 - fix(web): stop the streaming placeholders from colliding on React keys
 - fix(web): stream SSE unbuffered from nginx and honour the deploy contract
 - fix(web): tie a field's error and hint to the control it wraps
