@@ -338,6 +338,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(api): remove the dead arguments and gate the tree with vulture
 - chore(api): state a reason on every suppression and name the repeated limits
 - chore(ci): wire the unwired gates and correct the instruction file
+- chore(contract): regenerate the recorded OpenAPI fixture
 - chore(corpus): regenerate the tracked artifacts from one build
 - chore(dx): close the cheap pre-commit parity gaps
 - chore(git): map the historic personal address in a mailmap
