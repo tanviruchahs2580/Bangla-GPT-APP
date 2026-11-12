@@ -200,6 +200,23 @@ def test_force_change_blocks_other_endpoints_until_rotated(tmp_path) -> None:
     assert client.get("/admin/users", headers=new_headers).status_code == 200
 
 
+def test_force_change_does_not_exempt_destructive_me_routes(tmp_path) -> None:
+    """The /users/me exemption was method-blind, so a forced-rotation
+    session could DELETE the account before rotating the password. The
+    exemption exists for the read the change-password screen needs — not
+    for the destructive verbs that share the path."""
+    client = make_client(tmp_path)
+    login = client.post("/auth/login", json={"email": "root@example.com", "password": PASSWORD})
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    assert login.json()["must_change_password"] is True
+
+    assert client.get("/users/me", headers=headers).status_code == 200
+
+    refused = client.request("DELETE", "/users/me", headers=headers, json={"password": PASSWORD})
+    assert refused.status_code == 403
+    assert refused.json()["detail"]["code"] == "password_change_required"
+
+
 def test_force_change_flag_follows_setting(tmp_path) -> None:
     # Secure-by-default: bootstrap admin gets a forced rotation even in dev.
     settings = Settings(

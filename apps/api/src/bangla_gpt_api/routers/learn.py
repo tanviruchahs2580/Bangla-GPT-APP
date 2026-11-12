@@ -97,13 +97,8 @@ from .deps import (
     DbSession,
     _build_me_response,
     authorize_student_access,
+    require_current_consent,
 )
-
-# BE-FIX-004: the student-consent gate. Shared with the tutor/chat routes;
-# its proper home is ``routers/deps.py`` next to CONSENT_VERSION as a
-# dependency alias, which is outside this change's write scope -- see the
-# docstring of ``require_current_consent`` for the follow-up.
-from .tutor import require_current_consent
 
 router = APIRouter(responses=AUTH_GUARD_RESPONSES)
 

@@ -408,3 +408,26 @@ def test_impersonation_claims_bind_the_session(pair) -> None:
         issuer="bangla-gpt-api",
     )
     assert claims["imp_session"] == admin_claims["jti"]
+
+
+def test_tenant_helpers_deny_roles_outside_staff() -> None:
+    """_tenant_school_id answered None — behave as "no wall" — for any role
+    it did not know, so a future call site reaching it with a parent or
+    student account silently bypassed the school wall (admins keep the
+    platform-wide None by design). Unknown roles are now a default-deny."""
+    from fastapi import HTTPException
+
+    from bangla_gpt_api.db.models import Student, User
+    from bangla_gpt_api.routers import deps as deps_mod
+
+    learner = Student(id=21, user_id=99, class_level=6)
+    parent = User(id=11, email="p@example.test", role="parent", school_id=None)
+    with pytest.raises(HTTPException) as parent_exc:
+        deps_mod._assert_student_in_school(None, parent, learner)  # type: ignore[arg-type]
+    assert parent_exc.value.status_code == 403
+    assert parent_exc.value.detail["code"] == "insufficient_role"
+
+    student_user = User(id=12, email="s@example.test", role="student", school_id=None)
+    with pytest.raises(HTTPException) as student_exc:
+        deps_mod._assert_student_in_school(None, student_user, learner)  # type: ignore[arg-type]
+    assert student_exc.value.status_code == 403

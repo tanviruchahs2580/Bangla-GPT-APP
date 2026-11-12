@@ -82,12 +82,12 @@ from .common import (
     source_scores,
 )
 from .deps import (
-    CONSENT_VERSION,
     AdminUser,
     Ctx,
     CurrentUser,
     DbSession,
     _provider_lacks_vision,
+    require_current_consent,
 )
 
 router = APIRouter(responses=AUTH_GUARD_RESPONSES)
@@ -137,57 +137,6 @@ def _measured_prompt_tokens(question: str, history: list[dict[str, str]] | None 
     """
     history_tokens = sum(estimate_tokens(turn.get("content") or "") for turn in (history or []))
     return _MEASURED_PROMPT_FIXED_TOKENS + history_tokens + estimate_tokens(question)
-
-
-def require_current_consent(db: Session, user: User) -> None:
-    """BE-FIX-004: enforce the consent-version flag on the surfaces that matter.
-
-    ``deps.CONSENT_VERSION`` documents that bumping the version makes every
-    previously-consented student ``needs_reconfirm`` until they accept, but the
-    flag was only ever COMPUTED into responses (``GET /students/{id}/consent``,
-    ``users._consent_status``) -- no route read it, so a version bump changed
-    a display field and nothing else: a child whose guardian had not accepted
-    the current text kept generating answers and kept writing learning records.
-    This is the gate that makes the flag a control.
-
-    Scope, deliberately narrow and deny-by-default: the tutor/chat generation
-    surfaces and the student writes that create durable records about the child
-    (quiz start/submit, chapter progress, revision reviews, feedback, product
-    events). Reads stay open -- a child must be able to look at their own
-    history while a re-confirmation is pending -- and the refusal names the one
-    endpoint that clears it, so the gate is not a dead end.
-
-    Non-student callers (teacher/school/admin staff, guardians) are not gated
-    here: they act under their own authorization rules, and a proxy submission
-    for a proctored paper is the staff member's act, not the child's.
-
-    NOTE (follow-up for the owner of ``routers/deps.py``): this belongs next to
-    the ``CONSENT_VERSION`` definition as a dependency alias
-    (``ConsentConfirmedStudent``) so it cannot be forgotten on a new route; it
-    lives here because deps.py is outside this change's write scope.
-    """
-    if user.role != "student":
-        return
-    student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one_or_none()
-    if student is None:
-        # A staff/admin account has no student profile; a student account
-        # without one has nothing recorded, so there is no consent state to
-        # compare -- other guards already answer that shape.
-        return
-    if student.consent_version == CONSENT_VERSION:
-        return
-    raise HTTPException(
-        status_code=403,
-        detail={
-            "code": "consent_reconfirmation_required",
-            "message": (
-                "Guardian consent on record is not the current version. "
-                f"Re-confirm at POST /students/{student.id}/consent/reconfirm"
-            ),
-            "student_id": student.id,
-            "required_version": CONSENT_VERSION,
-        },
-    )
 
 
 def _ask_prepare(
