@@ -214,6 +214,7 @@ def _force_change_allowed(request: Request) -> bool:
         or (path, request.method) in _FORCE_CHANGE_EXEMPT_REQUESTS
     )
 
+
 # Shared sandbox school for standalone (school-less) staff accounts.
 _DEFAULT_SCHOOL_CODE = "BGPT-DEFAULT"
 
@@ -368,8 +369,6 @@ def require_current_consent(db: Session, user: User) -> None:
             "required_version": CONSENT_VERSION,
         },
     )
-
-
 
 
 def require_ai_budget(request: Request, db: DbSession, user: TeacherOrAdminUser) -> User:

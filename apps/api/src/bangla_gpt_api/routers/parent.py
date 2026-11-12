@@ -804,12 +804,3 @@ def student_self_report(
         )
     student = _student_profile(db, user)
     return _window_report(db, student, period)
-
-
-# in-process weekly digest scheduler. Once per ISO week, Sunday
-# ~22:00 Dhaka (digest_due owns the rule). The job reads ONLY aggregates
-# (services.parent_digest); conversation content is never queried.
-# the once-per-week guard moved from a per-process dict into the
-# job_runs ledger (jobs.claim_period), so N gunicorn workers can no
-# longer double-send; with JOBS_BACKEND=arq the ARQ worker owns the
-# schedule instead and these loops stay off.

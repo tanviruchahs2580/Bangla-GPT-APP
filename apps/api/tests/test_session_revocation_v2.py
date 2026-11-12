@@ -119,9 +119,7 @@ def test_sessions_revoke_kills_every_token(
     assert _me(client, fresh) == 200
 
 
-def test_sessions_revoke_stamps_a_naive_utc(
-    client: TestClient, tmp_path: object
-) -> None:
+def test_sessions_revoke_stamps_a_naive_utc(client: TestClient, tmp_path: object) -> None:
     """users.sessions_invalidated_at is naive UTC (models.py): one tz-aware
     write makes the epoch comparison depend on the Postgres session TimeZone,
     which can stamp the comparison hours into the future and refuse every
@@ -130,7 +128,7 @@ def test_sessions_revoke_stamps_a_naive_utc(
     assert observes the PENDING value at flush, not the stored round-trip.
     The change-password path already writes naive UTC; this pins the revoke
     path to the same contract."""
-    from sqlalchemy import create_engine, event
+    from sqlalchemy import event
     from sqlalchemy import inspect as sa_inspect
     from sqlalchemy.orm import Session
 
@@ -148,7 +146,8 @@ def test_sessions_revoke_stamps_a_naive_utc(
                 if history.has_changes():
                     pending.extend(value for value in history.added if value is not None)
 
-    engine = create_engine(engine_url(tmp_path, "sessions"))  # type: ignore[arg-type]
+    # The listener is class-global; no engine of our own is needed because
+    # the pending VALUE at flush is what we assert on, not stored rows.
     event.listen(Session, "before_flush", _capture)
     try:
         res = client.post("/users/me/sessions/revoke", headers=headers)

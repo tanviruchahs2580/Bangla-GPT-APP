@@ -154,9 +154,7 @@ def test_every_403_code_raised_by_routers_is_declared_exactly() -> None:
                 and node.exc.func.id == "HTTPException"
             ):
                 continue
-            status = next(
-                (kw for kw in node.exc.keywords if kw.arg == "status_code"), None
-            )
+            status = next((kw for kw in node.exc.keywords if kw.arg == "status_code"), None)
             if (
                 status is None
                 or not isinstance(status.value, ast.Constant)
@@ -166,7 +164,7 @@ def test_every_403_code_raised_by_routers_is_declared_exactly() -> None:
             detail = next((kw for kw in node.exc.keywords if kw.arg == "detail"), None)
             if detail is None or not isinstance(detail.value, ast.Dict):
                 continue
-            for key, value in zip(detail.value.keys, detail.value.values):
+            for key, value in zip(detail.value.keys, detail.value.values, strict=True):
                 if (
                     isinstance(key, ast.Constant)
                     and key.value == "code"

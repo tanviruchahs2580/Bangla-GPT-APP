@@ -679,6 +679,3 @@ def teacher_workload(db: DbSession, teacher: TeacherOrAdminUser) -> WorkloadOut:
             "not a measured time saving."
         ),
     )
-
-
-# --- short tests (class+chapter ultra-fast, whole classroom) ------

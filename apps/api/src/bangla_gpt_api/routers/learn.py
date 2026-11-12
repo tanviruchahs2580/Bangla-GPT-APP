@@ -269,12 +269,12 @@ def _index_chunks(app_ctx: Ctx) -> list[Chunk] | None:
 
 
 # --- school tenancy helpers -----------------------------------------
-# Tenancy anchor is User.school_id. A student belongs to a school EXACTLY
-# when one of their ClassRoom memberships carries that school_id. A teacher
-# WITHOUT a school keeps the pre-Wave-2 behavior (no tenancy wall) so every
-# standalone-teacher flow stays byte-compatible; once a teacher is attached
-# to a school, students and classrooms of OTHER schools become invisible
-# (403 other_school, same code the /school/* routes use).
+# Tenancy wall lives in routers/deps.py (_tenant_school_id /
+# _assert_student_in_school): tenancy anchors to User.school_id, students
+# belong to a school EXACTLY when a ClassRoom membership carries that
+# school_id, and school-less staff anchor to the shared default school
+# (deps F-04) — there is no "no wall" caller anymore; do not re-derive
+# the rule here.
 @router.post(
     "/quizzes",
     response_model=QuizStarted,

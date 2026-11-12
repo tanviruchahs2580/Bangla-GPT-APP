@@ -108,7 +108,6 @@ class Settings(BaseSettings):
                 del data[key]
         return data
 
-
     app_name: str = "Bangla GPT API"
     version: str = _get_version()
     env: str = "development"

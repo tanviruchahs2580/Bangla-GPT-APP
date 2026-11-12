@@ -93,15 +93,17 @@ def test_join_school_refuses_a_common_password(env):
     invite = _create_invite(client)
     res = client.post(
         "/auth/join-school",
-        json={"invite_code": invite["code"], "email": "weak@expiry.test",
-              "password": "password", "name": "Staff"},
+        json={
+            "invite_code": invite["code"],
+            "email": "weak@expiry.test",
+            "password": "password",
+            "name": "Staff",
+        },
     )
     assert res.status_code == 400, res.text
     assert res.json()["detail"]["code"] == "password_too_common"
     conn = env[1]
-    rows = conn.execute(
-        "SELECT id FROM users WHERE email = 'weak@expiry.test'"
-    ).fetchall()
+    rows = conn.execute("SELECT id FROM users WHERE email = 'weak@expiry.test'").fetchall()
     assert rows == [], "a refused password must not leave a user row behind"
 
 
@@ -121,8 +123,12 @@ def test_join_school_honours_the_operator_password_floor(tmp_path):
     invite = _create_invite(client)
     res = client.post(
         "/auth/join-school",
-        json={"invite_code": invite["code"], "email": "shorty@expiry.test",
-              "password": "joinsecret9", "name": "Staff"},
+        json={
+            "invite_code": invite["code"],
+            "email": "shorty@expiry.test",
+            "password": "joinsecret9",
+            "name": "Staff",
+        },
     )
     assert res.status_code == 400, res.text
     assert res.json()["detail"]["code"] == "password_too_short"

@@ -565,7 +565,7 @@ def _prepare_chat_turn(
     conversation_id: int,
     payload: ChatSendRequest,
     *,
-    persist: Literal["flush", "commit"],
+    persist: Literal["commit"],
 ) -> _PreparedTurn:
     """DB prelude shared by the JSON and SSE chat turns.
 
@@ -639,17 +639,13 @@ def _prepare_chat_turn(
 
     user_msg = ChatMessage(conversation_id=conv.id, role="user", content=payload.message)
     db.add(user_msg)
-    if persist == "flush":
-        # Flush (not commit): the user turn must not survive a failed LLM
-        # call, otherwise the provider error leaves an orphan message behind.
-        db.flush()
-    else:
-        # commit before streaming to release DB session/connection during
-        # LLM stream (was flush-only, holding transaction for up to 30s).
-        # User turn is persisted alone; assistant turn will be persisted in
-        # a short second transaction after the stream.
-        db.commit()
-        db.refresh(user_msg)
+    # commit before streaming to release the DB session/connection during
+    # the LLM stream (a flush holds the pooled connection and its write lock
+    # across a 30s provider budget — audit B-05). The all-or-nothing turn
+    # contract is kept by explicitly deleting the committed user turn when
+    # the provider fails (see _discard_failed_user_turn).
+    db.commit()
+    db.refresh(user_msg)
     # build the context before streaming so the log line lands once.
     ctx = _request_context(
         db,

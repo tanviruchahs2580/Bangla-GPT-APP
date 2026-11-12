@@ -1847,7 +1847,7 @@ class TutorService:
         search_query: str | None = None,
         image: dict | None = None,
     ) -> AsyncIterator["StreamEvent"]:
-        """Streaming variant of:meth:`ask` (same ``search_query`` override and
+        """Streaming variant of :meth:`ask` (same ``search_query`` override and
         ``image`` forwarding rules).
 
         Yields ``StreamEvent`` items: zero or more ``token`` events followed by
