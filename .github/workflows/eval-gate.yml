@@ -80,6 +80,13 @@ jobs:
 
       # --write-baseline is deliberately NOT used here: the baseline is a
       # reviewed, committed artifact (R12: never re-baseline to go green).
+      # Runs BEFORE the comparison: if the committed baseline no longer
+      # describes this code, comparing against it is meaningless. Also makes
+      # legible that this suite measures the bundled sample corpus, not the
+      # NCTB corpus the product serves.
+      - name: Baseline identity matches this code (no silent drift)
+        run: python scripts/check_eval_binding.py
+
       - name: Run eval v3 suite vs recorded baseline (exit 1 on >2pp drop)
         run: python -m bangla_gpt_api.evaluation.cli
 
