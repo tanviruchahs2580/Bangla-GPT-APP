@@ -142,6 +142,16 @@ It is dispatch-only on purpose: a scheduled echo of a secret value into a log
 adds no information after the first verification, and the log is retained
 either way.
 
+
+## Automatic merging
+
+`automerge.yml` arms GitHub's native auto-merge on every non-draft PR aimed at
+`main` (re-armed idempotently on every push to the PR). The merge itself stays
+with branch protection: it lands only when all eight protected status checks
+pass and is held while any of them is red, so the automation adds convenience
+without owning a merge decision of its own. Fork PRs are excluded by the
+same-repo guard, and the required-check list -- not this workflow -- is what a
+change must satisfy to reach `main`.
 ## What is deliberately not automated
 
 - Play Store uploads — the Android release workflow builds and signs the
