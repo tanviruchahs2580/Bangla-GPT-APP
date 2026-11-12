@@ -45,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### CI/CD
 
 - ci(automerge): arm GitHub auto-merge on every PR aimed at main
+- ci(automerge): contents write is required for the auto-merge mutation
 - ci(automerge): grant contents write alongside pull-requests write
 - ci(automerge): re-arm on synchronize so amended PRs never unhook
 - ci(automerge): the header must be YAML comments, not a docstring
@@ -64,6 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - test(api): align two stale pins with the deliberately flipped contracts
 - test(api): pin the pytest-asyncio fixture loop scope
 - test(e2e): point the question-paper row locator at the renamed button
+- test(e2e): poll STU-16 for the settled post-deletion state
 - test(e2e): poll X-02 for the settled fail-secure URL
 
 ### Maintenance
@@ -87,6 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #113 from tanviruchahs2580/fix/backend-audit-remediation
 - Merge pull request #114 from tanviruchahs2580/ci/automerge-and-e2e-determinism
 - Merge pull request #115 from tanviruchahs2580/docs/safety-over-refusal-register
+- Merge pull request #117 from tanviruchahs2580/fix/baseline-identity-binding
 
 ## v0.10.0 - 2026-11-11
 
