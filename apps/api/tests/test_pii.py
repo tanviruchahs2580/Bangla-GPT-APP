@@ -205,3 +205,34 @@ def test_evidence_prompt_meters_a_separated_phone_as_phone_kind() -> None:
     assert "[phone redacted]" in prompt
     after = PII_REDACTED_TOTAL.labels(kind="phone")._value.get()
     assert after - before == 1
+
+
+@pytest.mark.parametrize(
+    "phone",
+    [
+        "+880 2 9661234",
+        "02 9661234",
+        "02-9661234",
+        "+880 2 96612345",
+        "031 619619",
+        "০২-৯৬৬১২৩৪৫",
+    ],
+)
+def test_bd_landline_numbers_are_redacted(phone: str) -> None:
+    """A Dhaka/Chittagong-style landline is as much egress PII as a mobile:
+    the mobile rule requires the 01[3-9] prefix and NID needs 10+ contiguous
+    digits, so `+880 2 9661234` (9 separated digits) survived to egress."""
+    text, counts = redact_pii(f"অফিস {phone} এ কল করুন")
+    assert phone not in text, text
+    assert "[phone redacted]" in text
+    assert counts == {"phone": 1, "email": 0, "nid": 0}
+
+
+def test_landline_redaction_leaves_curriculum_numerals_alone() -> None:
+    for benign in [
+        "maatham score 29661234 নয়",  # contiguous 8 digits: not a landline shape
+        "৯৬৬১২৩৪ নম্বরটা কত",  # bare subscriber digits, no area code
+        "১৯৭১ সালে ২টা ঘটনা",
+    ]:
+        text, counts = redact_pii(benign)
+        assert redacted_total(counts) == 0, benign
