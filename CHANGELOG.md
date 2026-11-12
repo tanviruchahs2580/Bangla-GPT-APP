@@ -45,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### CI/CD
 
 - ci(automerge): arm GitHub auto-merge on every PR aimed at main
+- ci(automerge): grant contents write alongside pull-requests write
 - ci(automerge): re-arm on synchronize so amended PRs never unhook
 - ci(automerge): the header must be YAML comments, not a docstring
 
@@ -54,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(native-review): regenerate the UI-strings sheet for three new keys
 - docs(rag): RAG V2/V3 phase-0 baselines, audit and elevation plan
 - docs(rag): fix two path defects the doc-paths guardrail caught
+- docs(safety): record the deliberate over-refusal trade-off
 
 ### Tests
 
@@ -82,6 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #111 from tanviruchahs2580/feat/rag-v2-stage-a-evidence-binding
 - Merge pull request #112 from tanviruchahs2580/fix/eval-binding-coverage-floor
 - Merge pull request #113 from tanviruchahs2580/fix/backend-audit-remediation
+- Merge pull request #114 from tanviruchahs2580/ci/automerge-and-e2e-determinism
 
 ## v0.10.0 - 2026-11-11
 
