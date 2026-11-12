@@ -50,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - ci(automerge): grant contents write alongside pull-requests write
 - ci(automerge): re-arm on synchronize so amended PRs never unhook
 - ci(automerge): the header must be YAML comments, not a docstring
+- ci: re-fire the main pipeline (the #118 merge push dispatched nothing)
 - ci: re-trigger the main pipeline after the #116 merge
 
 ### Documentation
@@ -95,6 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #115 from tanviruchahs2580/docs/safety-over-refusal-register
 - Merge pull request #116 from tanviruchahs2580/test/stu16-delete-race
 - Merge pull request #117 from tanviruchahs2580/fix/baseline-identity-binding
+- Merge pull request #118 from tanviruchahs2580/fix/live-region-no-fade
 
 ## v0.10.0 - 2026-11-11
 
