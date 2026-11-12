@@ -53,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Documentation
 
 - docs(ci): document the automerge workflow
+- docs(ci): name the automerge dispatch trigger
 - docs(native-review): regenerate the UI-strings sheet for three new keys
 - docs(rag): RAG V2/V3 phase-0 baselines, audit and elevation plan
 - docs(rag): fix two path defects the doc-paths guardrail caught
@@ -61,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Tests
 
+- test(a11y): emulate reduced motion for the axe snapshot
 - test(api): add a boot-and-behave smoke for the audited surfaces
 - test(api): align two stale pins with the deliberately flipped contracts
 - test(api): pin the pytest-asyncio fixture loop scope
