@@ -56,6 +56,7 @@ const bn = {
   savedNotesEmpty:
     "এখনো কোনো নোট সংরক্ষণ করা হয়নি — টিউটরের উত্তরের পাশে বুকমার্ক আইকনে চাপ দিলে এখানে জমা হবে।",
   noteDelete: "নোট মুছুন",
+  offlineDeleteFailed: "ডাউনলোড করা অধ্যায়টি মুছা যায়নি — আবার চেষ্টা করুন।",
   createHubTitle: "টিচিং কনটেন্ট তৈরি করুন",
   genKind: "ধরন",
   genWorksheet: "ওয়ার্কশীট",
@@ -320,6 +321,8 @@ const bn = {
   qpRegenerate: "আবার তৈরি করুন",
   qpShuffle: "এলোমেলো করুন",
   qpReviewAll: "সব অনুমোদন করুন",
+  qpAcceptOne: "এটি অনুমোদন করুন",
+  qpReviewed: "অনুমোদিত",
   qpFinalize: "চূড়ান্ত করুন",
   qpReplace: "বদলান",
   qpNeedsReview: "অনুমোদন বাকি",
@@ -881,6 +884,8 @@ const en: Dict = {
   savedNotesEmpty:
     "Nothing saved yet — the bookmark button next to a tutor answer stores it here.",
   noteDelete: "Delete note",
+  offlineDeleteFailed:
+    "Could not delete the downloaded chapter — please try again.",
   createHubTitle: "Create teaching content",
   genKind: "Kind",
   genWorksheet: "Worksheet",
@@ -1130,6 +1135,8 @@ const en: Dict = {
   qpRegenerate: "Regenerate",
   qpShuffle: "Shuffle",
   qpReviewAll: "Accept all",
+  qpAcceptOne: "Accept this one",
+  qpReviewed: "Reviewed",
   qpFinalize: "Finalize",
   qpReplace: "Replace",
   qpNeedsReview: "Review pending",

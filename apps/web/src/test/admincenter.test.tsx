@@ -192,6 +192,44 @@ describe("admin center", () => {
     );
   });
 
+  it("reports a failed invite fetch instead of an empty invite list", async () => {
+    // Before this the loader was `.catch(() => setInvites([]))`, so a 500 on
+    // /admin/schools/:id/invites rendered the same thing as "this school has no
+    // invites" -- an admin could not tell a broken request from an empty queue,
+    // and would conclude there was nothing to revoke.
+    const original = apiMock.get.getMockImplementation() as
+      ((path: string) => Promise<unknown>) | undefined;
+    apiMock.get.mockImplementation((path: string) => {
+      if (path === "/admin/schools/1/invites") {
+        return Promise.reject(new Error("boom"));
+      }
+      return original!(path);
+    });
+
+    renderAdmin();
+    await screen.findByText("Adm School");
+    fireEvent.click(
+      screen.getByRole("button", { name: `Adm School ${t("admInvites")}` }),
+    );
+
+    // Scoped to the invite table: the admin page carries several other alerts
+    // (school-create, AI quality), so a bare role query is ambiguous.
+    const inviteTable = (await screen.findByText(t("admInvites"))).closest(
+      "table",
+    );
+    expect(inviteTable).not.toBeNull();
+    await waitFor(() =>
+      expect(within(inviteTable!).getByRole("alert")).toBeInTheDocument(),
+    );
+    expect(
+      within(inviteTable!).getByRole("button", { name: t("retry") }),
+    ).toBeInTheDocument();
+    // And the success rows are absent, so nothing implies an empty queue.
+    expect(
+      within(inviteTable!).queryByText(t("admActive")),
+    ).not.toBeInTheDocument();
+  });
+
   it("offers school_admin as a role and shows a school_admin row as itself", async () => {
     const original = apiMock.get.getMockImplementation() as
       ((path: string) => Promise<unknown>) | undefined;

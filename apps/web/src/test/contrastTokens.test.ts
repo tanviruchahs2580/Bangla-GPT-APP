@@ -8,55 +8,24 @@
  * *-solid tokens, and each gradient stop plus the .btn-primary/.btn-teal 14%
  * top highlight must keep the label at 4.5:1 in BOTH themes.
  */
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import {
+  blockCounts,
+  overWhite,
+  ratio,
+  readStyles,
+  resolveToken,
+  rulesForSelector,
+  tokenNamesByBlock,
+  themeTokens,
+} from "./cssTokens";
 
-const CSS = readFileSync(resolve(process.cwd(), "src", "styles.css"), "utf8");
+const CSS = readStyles();
 
-const LIGHT = parseBlock(CSS, ":root {");
-const DARK = { ...LIGHT, ...parseBlock(CSS, '[data-theme="dark"] {') };
-
-function parseBlock(css: string, marker: string): Record<string, string> {
-  const start = css.indexOf(marker);
-  const block = css.slice(start, css.indexOf("}", start));
-  const out: Record<string, string> = {};
-  for (const m of block.matchAll(/--([a-z0-9-]+):\s*([^;]+);/g)) {
-    out[m[1]] = m[2].trim();
-  }
-  return out;
-}
-
-function toRgb(hex: string): [number, number, number] {
-  const h = hex.trim().replace("#", "");
-  return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) as [
-    number,
-    number,
-    number,
-  ];
-}
-
-function channel(c: number): number {
-  const v = c / 255;
-  return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
-}
-
-function luminance(hex: string): number {
-  const [r, g, b] = toRgb(hex);
-  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
-}
-
-function ratio(fg: string, bg: string): number {
-  const [lo, hi] = [luminance(fg), luminance(bg)].sort((a, b) => a - b);
-  return (hi + 0.05) / (lo + 0.05);
-}
-
-/** rgba(255,255,255,alpha) composited over a fill — .btn-primary/.btn-teal
-    layer a 14% white highlight on their top edge. */
-function overWhite(hex: string, alpha: number): string {
-  const comp = toRgb(hex).map((c) => c * (1 - alpha) + 255 * alpha);
-  return comp.map((c) => Math.round(c).toString(16).padStart(2, "0")).join("");
-}
+// Both token pairs, merged across EVERY block. Before this the guard read only
+// the first `:root`/dark pair, so the v3-extended block further down the file
+// escaped all 30-odd assertions below -- see cssTokens.ts.
+const { light: LIGHT, dark: DARK } = themeTokens(CSS);
 
 /** Body of the last rule whose selector is exactly `selector`. */
 function lastRule(selector: string): string {
@@ -172,3 +141,216 @@ describe("no loose colour literals (F-199)", () => {
     expect(DARK["on-brand"]).toBeDefined();
   });
 });
+
+/**
+ * A11Y (guard-coverage): regression guard for the blind spot itself.
+ *
+ * styles.css declares `:root` and `[data-theme="dark"]` twice each. The old
+ * `indexOf` parser saw only the first of each, so 11 light tokens and 6 dark
+ * tokens were outside every ratio assertion in the repo. This test fails if a
+ * parser ever stops merging all of them again.
+ */
+describe("token-block coverage (guard regression)", () => {
+  it("merges every block of each theme, not just the first", () => {
+    const counts = blockCounts(CSS);
+    expect(counts.light, ":root blocks").toBeGreaterThanOrEqual(2);
+    expect(counts.dark, "dark blocks").toBeGreaterThanOrEqual(2);
+
+    // Tokens that exist ONLY in the later pair. If the parser regressed to
+    // `indexOf`, these would all be undefined.
+    for (const token of [
+      "ring-glow",
+      "quick-shadow",
+      "quick-shadow-hover",
+      "aurora-1",
+      "aurora-2",
+      "aurora-3",
+      "ease-bounce",
+      "ease-soft",
+      "m-xs",
+      "m-page",
+      "grad-shine",
+    ]) {
+      expect(
+        LIGHT[token],
+        `--${token} not merged from the later :root`,
+      ).toBeDefined();
+    }
+  });
+
+  it("keeps the later :root disjoint from the earlier dark block (cascade trap)", () => {
+    // themeTokens() merges every block, which is right for READING values. But
+    // CSS resolves a token by SOURCE POSITION, not by block kind: the later
+    // `:root` sits after the first `[data-theme="dark"]` block at equal
+    // specificity, so a name declared in both would resolve to the LATER one in
+    // dark mode -- the light block would win -- while the merged map reported
+    // the dark value. Nothing overlaps today; this keeps it that way.
+    const blocks = tokenNamesByBlock(CSS);
+    const lastRoot = blocks.map((b) => b.theme).lastIndexOf("light");
+    expect(lastRoot, "expected more than one :root block").toBeGreaterThan(0);
+
+    const declaredBefore = new Set(
+      blocks.slice(0, lastRoot).flatMap((b) => b.names),
+    );
+    const clash = [...new Set(blocks[lastRoot].names)].filter((n) =>
+      declaredBefore.has(n),
+    );
+    expect(
+      clash,
+      `token(s) declared in the later :root AND in an earlier block: ${clash.join(", ")}`,
+    ).toEqual([]);
+  });
+});
+
+/**
+ * A11Y (hero placeholder): the home hero's ask-input was the one input in the
+ * product whose placeholder was pinned by token -- and it failed. #6b7a66 on
+ * the fill measured 4.24:1 at the lightest gradient stop, under the 4.5:1
+ * text minimum, on the most prominent control a student touches.
+ *
+ * The fill is a LITERAL near-white in both themes, so the placeholder token
+ * must be theme-invariant. That assumption is asserted here rather than
+ * assumed, so theming the fill later fails loudly instead of silently
+ * inverting the ratio.
+ */
+describe("hero prompt placeholder contrast (A11Y)", () => {
+  const FILL = ".hero .home-prompt .input";
+  const PLACEHOLDER = ".hero .home-prompt .input::placeholder";
+
+  it("keeps the near-white hero fill literal, as the ratio depends on it", () => {
+    expect(lastRule(FILL)).toContain("rgba(255, 255, 255, 0.96)");
+  });
+
+  it("keeps the hero placeholder token theme-invariant", () => {
+    // Declared once in :root and never overridden in dark. DARK is the merged
+    // map (dark inherits light), so the invariant to assert is that the dark
+    // layer did not move it -- not that the key is absent, which it never is.
+    expect(LIGHT["hero-placeholder"]).toBeDefined();
+    expect(
+      DARK["hero-placeholder"],
+      "--hero-placeholder must resolve identically in both themes",
+    ).toBe(LIGHT["hero-placeholder"]);
+    expect(lastRule(PLACEHOLDER)).toContain("var(--hero-placeholder)");
+  });
+
+  it("clears 4.5:1 on the fill over every --grad-hero stop", () => {
+    const placeholder = resolveToken(LIGHT, "hero-placeholder");
+    for (const stop of ["brand-ink", "brand", "brand-strong"]) {
+      const fill = `#${overWhite(resolveToken(LIGHT, stop), 0.96)}`;
+      expect(
+        ratio(placeholder, fill),
+        `${placeholder} on the hero fill over --${stop}`,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});
+
+/**
+ * A11Y (placeholder coverage): the hero prompt was the ONLY rule in the whole
+ * stylesheet that styled a placeholder. Every other input fell through to the
+ * user agent's own colour, which no guard can measure and which was never
+ * chosen for our dark `--card: #1b1e14`. One token, one global rule.
+ */
+describe("global placeholder token (A11Y)", () => {
+  it("declares one bare ::placeholder rule driven by --placeholder", () => {
+    // Exact-selector match: `.hero .home-prompt .input::placeholder` also ends
+    // in `::placeholder` and would satisfy a substring search on its own.
+    const bodies = rulesForSelector(CSS, "::placeholder");
+    const global = bodies.find((b) => b.includes("var(--placeholder)"));
+    expect(
+      global,
+      "no `::placeholder` rule driving --placeholder",
+    ).toBeDefined();
+    // Firefox dims placeholders with its own opacity, which would multiply the
+    // ratio straight back below 4.5:1.
+    expect(global).toContain("opacity: 1");
+  });
+
+  it("clears 4.5:1 on every surface an input can be painted on", () => {
+    for (const [name, theme] of [
+      ["light", LIGHT],
+      ["dark", DARK],
+    ] as const) {
+      const placeholder = resolveToken(theme, "placeholder");
+      for (const surface of ["card", "card-2", "bg-elev", "bg"]) {
+        expect(
+          ratio(placeholder, resolveToken(theme, surface)),
+          `${name}: --placeholder on --${surface}`,
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+});
+
+/**
+ * A11Y (progress ring): the empty arc was painted with
+ * color-mix(--line 70%, transparent) over --card, i.e. 1.21:1 light / 1.16:1
+ * dark. A ring communicates a proportion through the arc-versus-track
+ * boundary, so an invisible track makes the graphic unreadable. --line-strong
+ * already carries a 3:1 contract on these surfaces (formControlBoundary), so
+ * reusing it puts the track under an enforced floor instead of a new token.
+ *
+ * KNOWN LIMIT, recorded rather than papered over: the arc-versus-track
+ * boundary is still below 3:1 (1.55:1 light / 2.81:1 dark) because the arc is
+ * read by hue. Lifting that needs a three-level gauge -- a design decision,
+ * tracked as R-15 in docs/frontend-renovation/RISK-REGISTER.md.
+ */
+describe("progress-ring track contrast (A11Y)", () => {
+  it("uses --line-strong, which owns the 3:1 boundary contract", () => {
+    expect(lastRule(".ring")).toContain("var(--line-strong)");
+  });
+
+  it("clears 3:1 against --card in both themes", () => {
+    for (const [name, theme] of [
+      ["light", LIGHT],
+      ["dark", DARK],
+    ] as const) {
+      expect(
+        ratio(resolveToken(theme, "line-strong"), resolveToken(theme, "card")),
+        `${name}: ring track on --card`,
+      ).toBeGreaterThanOrEqual(3);
+    }
+  });
+});
+
+/**
+ * A11Y (semantic pairs): these label-on-soft-tint pairs were rendered all over
+ * the product but were covered by no assertion, because the tokens they use
+ * sat in the second block pair. They pass today; the point is that a palette
+ * change can no longer move them quietly.
+ */
+describe("semantic label pairs (A11Y)", () => {
+  it.each([
+    ["ok", "ok-soft"],
+    ["warn", "warn-soft"],
+    ["danger", "danger-soft"],
+    ["teal-strong", "teal-soft"],
+    ["ai", "ai-soft"],
+    ["muted", "card"],
+    ["muted", "bg-elev"],
+    ["muted", "card-2"],
+    ["muted", "bg"],
+    ["ink", "card"],
+  ])("--%s on --%s clears 4.5:1 in both themes", (fg, bg) => {
+    for (const [name, theme] of [
+      ["light", LIGHT],
+      ["dark", DARK],
+    ] as const) {
+      expect(
+        ratio(resolveToken(theme, fg), resolveToken(theme, bg)),
+        `${name}: --${fg} on --${bg}`,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});
+
+/**
+ * NOT asserted here, deliberately: two mixed surfaces measure below the 3:1
+ * non-text floor and are recorded as owner decisions instead of being pinned
+ * as passing, because the fix would change a visual decision:
+ *
+ *   .ring arc vs its track   1.55:1 light / 2.81:1 dark   (R-15)
+ *   .card mixed border       1.22:1 light / 1.17:1 dark   (R-16)
+ *
+ * The ring TRACK itself is asserted above, because that one was unambiguous.
+ */

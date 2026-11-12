@@ -651,7 +651,13 @@ test("TCH-04 question paper: generate, edit, review, finalize and download the P
   expect(total).toBeGreaterThan(0);
   const edited = `সম্পাদিত প্রশ্ন ${total}`;
   await questions.first().getByRole("textbox").fill(edited);
-  await questions.first().getByRole("button", { name: "Accept all" }).click();
+  // The per-question accept button carries its own label, so a single-row action
+  // no longer reads as the bulk one. Locating it as "Accept all" inside a row
+  // matches nothing: the footer bulk button is the only control with that name.
+  await questions
+    .first()
+    .getByRole("button", { name: "Accept this one" })
+    .click();
   await expect(questions.first()).toContainText(edited, { timeout: 30_000 });
 
   // Accept the rest, then finalize (the gate opens only when all are reviewed).

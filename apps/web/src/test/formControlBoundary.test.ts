@@ -17,48 +17,16 @@
  * The white-label fills on the same controls have their own guard
  * (contrastTokens.test.ts); this file only covers the resting boundary.
  */
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { ratio, readStyles, themeTokens } from "./cssTokens";
 
-const CSS = readFileSync(resolve(process.cwd(), "src", "styles.css"), "utf8");
+const CSS = readStyles();
 
-const LIGHT = parseBlock(CSS, ":root {");
-const DARK = { ...LIGHT, ...parseBlock(CSS, '[data-theme="dark"] {') };
-
-function parseBlock(css: string, marker: string): Record<string, string> {
-  const start = css.indexOf(marker);
-  const block = css.slice(start, css.indexOf("}", start));
-  const out: Record<string, string> = {};
-  for (const m of block.matchAll(/--([a-z0-9-]+):\s*([^;]+);/g)) {
-    out[m[1]] = m[2].trim();
-  }
-  return out;
-}
-
-function toRgb(hex: string): [number, number, number] {
-  const h = hex.trim().replace("#", "");
-  return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) as [
-    number,
-    number,
-    number,
-  ];
-}
-
-function channel(c: number): number {
-  const v = c / 255;
-  return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
-}
-
-function luminance(hex: string): number {
-  const [r, g, b] = toRgb(hex);
-  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
-}
-
-function ratio(fg: string, bg: string): number {
-  const [lo, hi] = [luminance(fg), luminance(bg)].sort((a, b) => a - b);
-  return (hi + 0.05) / (lo + 0.05);
-}
+// Merged across EVERY token block, both themes. Reading only the first
+// `:root`/dark pair left 11 light and 6 dark tokens outside this guard --
+// the v3-extended set (--ease-*, --m-xs/--m-page, --grad-shine, --ring-glow,
+// --quick-shadow*, --aurora-*). See cssTokens.ts.
+const { light: LIGHT, dark: DARK } = themeTokens(CSS);
 
 /**
  * Every declaration block whose selector, whitespace-collapsed, is exactly

@@ -13,6 +13,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Fixed
+
+- fix(web): close the contrast-guard blind spot and repair two AA failures
+
+### Documentation
+
+- docs(native-review): regenerate the UI-strings sheet for three new keys
+- docs(rag): RAG V2/V3 phase-0 baselines, audit and elevation plan
+- docs(rag): fix two path defects the doc-paths guardrail caught
+
+### Tests
+
+- test(e2e): point the question-paper row locator at the renamed button
+
+### Maintenance
+
+- chore: regenerate the CHANGELOG
+
+## v0.10.0 - 2026-11-11
+
 ### Added
 
 - feat(eval): record and enforce the identity a benchmark measured

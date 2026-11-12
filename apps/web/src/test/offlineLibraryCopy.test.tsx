@@ -8,7 +8,7 @@
  * must not read as network speed). The number goes through the interpolation
  * boundary, so it carries the language's digits.
  */
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { OfflineLibrary } from "../components/OfflineLibrary";
 import { formatBytes } from "../lib/fileSize";
@@ -35,6 +35,9 @@ const REC = {
 beforeEach(() => {
   vi.clearAllMocks();
   setLang("bn");
+  // The toast helper appends a persistent region to <body>; without this a
+  // message from one test leaks into the next one's query.
+  document.querySelectorAll(".toast-region").forEach((n) => n.remove());
   storeMock.downloadedChapters.mockResolvedValue([REC]);
   storeMock.offlineUsage.mockResolvedValue({ bytes: 1_258_291, chapters: 1 });
   storeMock.deleteChapter.mockResolvedValue(undefined);
@@ -58,5 +61,42 @@ describe("offline library copy", () => {
     render(<OfflineLibrary userId={1} onOpen={() => {}} />);
     const row = await screen.findByText(/Science/);
     expect(row.textContent).toContain("1.2 MiB");
+  });
+
+  it("reports a failed delete instead of leaving the row with no message", async () => {
+    // Before this the catch block was empty, so a failed delete looked exactly
+    // like a tap that never registered -- the student retried blindly and the
+    // storage was never freed.
+    storeMock.deleteChapter.mockRejectedValue(new Error("quota"));
+    render(<OfflineLibrary userId={1} onOpen={() => {}} />);
+    await screen.findByText(/বিজ্ঞান/);
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: `${t("deleteGeneric")}: ${REC.chapter}`,
+      }),
+    );
+
+    await waitFor(() =>
+      expect(document.querySelector(".toast-region .toast")?.textContent).toBe(
+        t("offlineDeleteFailed"),
+      ),
+    );
+    // The row is still there, so the retry the message asks for is possible.
+    expect(screen.getByText(/বিজ্ঞান/)).toBeInTheDocument();
+  });
+
+  it("does not raise a toast when the delete succeeds", async () => {
+    render(<OfflineLibrary userId={1} onOpen={() => {}} />);
+    await screen.findByText(/বিজ্ঞান/);
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: `${t("deleteGeneric")}: ${REC.chapter}`,
+      }),
+    );
+
+    await waitFor(() => expect(storeMock.deleteChapter).toHaveBeenCalled());
+    expect(document.querySelector(".toast-region .toast")).toBeNull();
   });
 });

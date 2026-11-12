@@ -34,6 +34,7 @@ export function SchoolsCard({
   onError: (message: string | null) => void;
 }) {
   const [invites, setInvites] = useState<SchoolInviteAdmin[]>([]);
+  const [invitesFailed, setInvitesFailed] = useState(false);
   const [selSchool, setSelSchool] = useState<number | null>(null);
   const [schoolName, setSchoolName] = useState("");
   const [inviteRoles, setInviteRoles] = useState<Record<number, string>>({});
@@ -49,11 +50,23 @@ export function SchoolsCard({
   const loadInvites = useCallback(() => {
     if (selSchool === null) {
       setInvites([]);
+      setInvitesFailed(false);
       return;
     }
+    // F-2xx: this used to `.catch(() => setInvites([]))`, so a failed request
+    // rendered an empty invite table -- indistinguishable from "this school has
+    // no invites". An admin would conclude there was nothing to revoke while
+    // reading a lie. Every other loader in the product reports through
+    // LoadError; this one now does too.
     get<SchoolInviteAdmin[]>(`/admin/schools/${selSchool}/invites`)
-      .then((rows) => setInvites(rows))
-      .catch(() => setInvites([]));
+      .then((rows) => {
+        setInvites(rows);
+        setInvitesFailed(false);
+      })
+      .catch(() => {
+        setInvites([]);
+        setInvitesFailed(true);
+      });
   }, [selSchool]);
 
   useEffect(() => {
@@ -211,23 +224,31 @@ export function SchoolsCard({
               </tr>
             </thead>
             <tbody>
-              {invites.map((i) => (
-                <tr key={i.id}>
-                  <td>{roleLabel(i.role)}</td>
-                  <td>{i.used ? t("admUsed") : t("admActive")}</td>
-                  <td>{i.created_at.slice(0, 10)}</td>
-                  <td>
-                    {!i.used && (
-                      <button
-                        className="small secondary"
-                        onClick={() => revokeInvite(i.id)}
-                      >
-                        {t("admRevoke")}
-                      </button>
-                    )}
+              {invitesFailed ? (
+                <tr>
+                  <td colSpan={4}>
+                    <LoadError onRetry={loadInvites} />
                   </td>
                 </tr>
-              ))}
+              ) : (
+                invites.map((i) => (
+                  <tr key={i.id}>
+                    <td>{roleLabel(i.role)}</td>
+                    <td>{i.used ? t("admUsed") : t("admActive")}</td>
+                    <td>{i.created_at.slice(0, 10)}</td>
+                    <td>
+                      {!i.used && (
+                        <button
+                          className="small secondary"
+                          onClick={() => revokeInvite(i.id)}
+                        >
+                          {t("admRevoke")}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
