@@ -14,6 +14,7 @@ reranker replaces exactly one stage of this pipeline when one is benchmarked.
 
 import time
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from bangla_gpt_api.curriculum.models import Chunk
 from bangla_gpt_api.metrics import RAG_LANE_LATENCY_SECONDS
@@ -28,6 +29,9 @@ from bangla_gpt_api.retrieval.query_analysis import (
     weighted_coverage,
 )
 from bangla_gpt_api.retrieval.vector import VectorIndex, vector_text
+
+if TYPE_CHECKING:  # typing-only: the config rides the signature annotation
+    from bangla_gpt_api.retrieval.reranker import CrossEncoderConfig
 from bangla_gpt_api.retrieval.vocabulary import TermStats
 
 #: rerank(query, [(chunk, rrf_score, lexical_lane_base_score)]) -> final scores
@@ -213,6 +217,7 @@ class HybridIndex:
         proximity_window: int = _PROXIMITY_WINDOW,
         k1: float = 1.5,
         b: float = 0.75,
+        cross_encoder_config: "CrossEncoderConfig | None" = None,
     ) -> None:
         self.chunks = chunks
         self.bm25 = BM25Index(chunks, k1=k1, b=b)
@@ -227,6 +232,16 @@ class HybridIndex:
         self.reranker: Reranker = reranker or make_lexical_rerank(
             self.bm25.term_stats, proximity_window=self._proximity_window
         )
+        # Retrieval engine v2: when the operator configures the cross-encoder
+        # stage it DECORATES the lexical ranker (endpoint-driven ordering,
+        # lexical magnitude floor kept; any endpoint failure degrades to the
+        # lexical ordering for that turn — retrieval/reranker.py).
+        if cross_encoder_config is not None:
+            from bangla_gpt_api.retrieval.reranker import CrossEncoderReranker
+
+            self.reranker = CrossEncoderReranker(
+                self.reranker, config=cross_encoder_config
+            )
 
     @property
     def term_stats(self) -> TermStats:

@@ -147,3 +147,11 @@ RAG_INDEX_REBUILDS_TOTAL = Counter(
     "Hot index rebuilds performed via POST /admin/reindex.",
     registry=REGISTRY,
 )
+
+RAG_RERANKER_FALLBACK_TOTAL = Counter(
+    "bgpt_rag_reranker_fallback_total",
+    "Cross-encoder rerank calls degraded to the lexical ordering (timeout, "
+    "HTTP error, malformed body, open breaker), by reason.",
+    ["reason"],
+    registry=REGISTRY,
+)

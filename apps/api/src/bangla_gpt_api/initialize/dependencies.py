@@ -271,6 +271,7 @@ def build_retrieval_index(
 
     from bangla_gpt_api.caching import RAG_CACHE_TTL_SECONDS, CachedRankingIndex
     from bangla_gpt_api.retrieval.embedding import build_embedder
+    from bangla_gpt_api.retrieval.reranker import build_cross_encoder_config
 
     retrieval_mode = settings.retrieval_mode.strip().lower()
     index_build_started = time.perf_counter()
@@ -290,6 +291,10 @@ def build_retrieval_index(
                 "rrf_k": settings.rag_rrf_k,
                 "candidate_factor": settings.rag_candidate_factor,
                 "proximity_window": settings.rag_proximity_window,
+                # Retrieval engine v2, rerank stage: None keeps the lexical
+                # ranker; cross_encoder validates its own configuration
+                # (retrieval/reranker.py) and decorates the lexical ordering.
+                "cross_encoder_config": build_cross_encoder_config(settings),
             }.items()
             if name in inspect.signature(_hi_cls.__init__).parameters
         }
