@@ -10,7 +10,7 @@ import json
 import logging
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import Annotated, Any, Literal, NamedTuple
+from typing import Annotated, Any, NamedTuple
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -564,8 +564,6 @@ def _prepare_chat_turn(
     user: User,
     conversation_id: int,
     payload: ChatSendRequest,
-    *,
-    persist: Literal["commit"],
 ) -> _PreparedTurn:
     """DB prelude shared by the JSON and SSE chat turns.
 
@@ -748,7 +746,7 @@ async def send_chat_message(
     # (see _discard_failed_user_turn) -- the flush path got that behaviour
     # for free from its rollback.
     prepared = await asyncio.to_thread(
-        _prepare_chat_turn, app_ctx, db, user, conversation_id, payload, persist="commit"
+        _prepare_chat_turn, app_ctx, db, user, conversation_id, payload
     )
     if not app_ctx.settings.ai_generation_enabled:
         # F-031 kill switch: the user turn is already persisted above (with
@@ -870,7 +868,7 @@ async def stream_chat_message(
             detail={"code": "tutor_unavailable", "message": "Tutor service unavailable"},
         )
     prepared = await asyncio.to_thread(
-        _prepare_chat_turn, app_ctx, db, user, conversation_id, payload, persist="commit"
+        _prepare_chat_turn, app_ctx, db, user, conversation_id, payload
     )
     conv = prepared.conv
     user_msg = prepared.user_msg

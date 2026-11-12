@@ -139,7 +139,7 @@ def test_sessions_revoke_stamps_a_naive_utc(client: TestClient, tmp_path: object
 
     pending: list = []
 
-    def _capture(session, flush_context, instances) -> None:
+    def _capture(session, _flush_context, _instances) -> None:
         for obj in list(session.new) + list(session.dirty):
             if isinstance(obj, User):
                 history = sa_inspect(obj).attrs.sessions_invalidated_at.history
