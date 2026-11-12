@@ -80,9 +80,7 @@ async def shutdown(ctx: dict[str, Any]) -> None:
         await asyncio.to_thread(engine.dispose)
 
 
-async def _run_period_job(
-    ctx: dict[str, Any], runner: Any, job_name: str
-) -> dict[str, Any]:
+async def _run_period_job(ctx: dict[str, Any], runner: Any, job_name: str) -> dict[str, Any]:
     """Run one sync job body off the event loop, bounded and retryable."""
     try:
         return await asyncio.to_thread(runner, ctx["session_factory"], ctx["settings"])
