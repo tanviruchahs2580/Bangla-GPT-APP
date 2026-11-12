@@ -306,8 +306,10 @@ def test_change_password_rule_ships_by_default() -> None:
 def test_change_password_is_rate_limited_end_to_end(tmp_path) -> None:
     """The 11th wrong-current-password attempt in a minute is a 429.
 
-    The first ten must reach the handler and answer 400 (wrong current
-    password), otherwise this would pass because of some other rejection.
+    The first ten must reach the handler and answer 401 (wrong current
+    password — bad_current_password unified on 401 with the other
+    credential confirmations), otherwise this would pass because of some
+    other rejection.
     """
     client = _client(tmp_path, rate_limit_rules={"/auth/change-password": (10, "user")})
     client.post("/auth/register", json=_register_payload("chpw@example.com"))
@@ -321,6 +323,6 @@ def test_change_password_is_rate_limited_end_to_end(tmp_path) -> None:
         )
         for i in range(11)
     ]
-    assert all(s.status_code == 400 for s in statuses[:10]), [s.text for s in statuses[:10]]
+    assert all(s.status_code == 401 for s in statuses[:10]), [s.text for s in statuses[:10]]
     assert statuses[10].status_code == 429
     assert statuses[10].json()["detail"]["code"] == "rate_limited"
