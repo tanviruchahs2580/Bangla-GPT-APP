@@ -48,6 +48,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Tests
 
+- test(api): add a boot-and-behave smoke for the audited surfaces
+- test(api): align two stale pins with the deliberately flipped contracts
 - test(api): pin the pytest-asyncio fixture loop scope
 - test(e2e): point the question-paper row locator at the renamed button
 
