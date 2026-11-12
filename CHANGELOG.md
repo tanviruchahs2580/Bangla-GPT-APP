@@ -19,8 +19,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- fix(api): answer 401 for bad_current_password everywhere
+- fix(api): bound the teacher support-plan listing
+- fix(api): declare every 403 code the routers actually raise
+- fix(api): keep sync DB hops off the event loop
+- fix(auth): revocation stamps must be naive UTC like the other writers
+- fix(boot): validate the openai lane, unknown providers and the direct parent-link
+- fix(config): treat blank forwarded env values as unset
+- fix(deps): default-deny outside the staff tenant, scope the force-change exemption, home the consent gate
 - fix(eval): restore the coverage floor the identity writer dropped
+- fix(eval): the 24-question gate grades the served tutor wiring
+- fix(jobs): reclaim period slots orphaned by a kill
+- fix(ops): forward the documented operator knobs through compose
+- fix(pii): redact BD landline numbers before egress
+- fix(privacy): retention sweeps the unused expired invites
+- fix(security): enforce the password policy on join-school
+- fix(tutor): fold the query boundary through the shared normalizer
+- fix(tutor): honest metering and diagnostics for locally-produced refusals
+- fix(tutor): stream route honours the all-or-nothing turn contract
 - fix(web): close the contrast-guard blind spot and repair two AA failures
+- fix(worker): thread the job bodies, retry same-period, wire observability
 
 ### Documentation
 
@@ -30,11 +48,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Tests
 
+- test(api): pin the pytest-asyncio fixture loop scope
 - test(e2e): point the question-paper row locator at the renamed button
 
 ### Maintenance
 
+- chore(api): trace the dead flush branch, stale comments and doc drift
+- chore(web): regenerate the OpenAPI contract fixture
 - chore: regenerate the CHANGELOG
+
+### Style
+
+- style(worker): ruff format
 
 ### Other
 
@@ -42,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #109 from tanviruchahs2580/dependabot/pip/apps/api/python-dependencies-dc56fc3da1
 - Merge pull request #110 from tanviruchahs2580/feat/rag-v3-phase-0-baseline
 - Merge pull request #111 from tanviruchahs2580/feat/rag-v2-stage-a-evidence-binding
+- Merge pull request #112 from tanviruchahs2580/fix/eval-binding-coverage-floor
 
 ## v0.10.0 - 2026-11-11
 
