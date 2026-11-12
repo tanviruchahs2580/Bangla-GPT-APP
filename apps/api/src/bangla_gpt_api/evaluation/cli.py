@@ -327,6 +327,43 @@ def _run_all_gates(
     return 0 if ok else 1
 
 
+def _evidence_identity(settings: Settings) -> dict[str, Any]:
+    """Which corpus, embedder, prompt and dataset this report actually measured.
+
+    WHY THIS EXISTS. This suite is hermetic: every retrieval path in this module
+    calls ``load_sample_corpus()``, so the numbers describe the BUNDLED SAMPLE
+    corpus, not the NCTB corpus the product serves. Nothing in the committed
+    artefacts said so, so a reader -- or a future engineer comparing a regression
+    against ``baseline_v3.json`` -- had no way to tell which corpus a rate
+    described, and therefore no way to know that a real-corpus regression is
+    invisible to this gate.
+
+    Recording the identity does not fix that binding; it makes it addressable.
+    ``scripts/check_eval_binding.py`` enforces that a recorded identity cannot
+    drift silently from the identity the code actually has.
+
+    Deliberately NOT recorded: a served-corpus digest. This run never reads
+    ``NCTB_CORPUS_DIR``, so recording its digest would imply a measurement that
+    was never taken. ``corpus_source`` is the honest field.
+    """
+    from bangla_gpt_api.retrieval.embedding import build_embedder
+    from bangla_gpt_api.retrieval.index_manifest import served_chunks_digest
+    from bangla_gpt_api.services.tutor import PROMPT_SHA256, PROMPT_VERSION
+
+    chunks = load_sample_corpus()
+    embedder = build_embedder(settings)
+    return {
+        "corpus_source": "bundled_sample",
+        "corpus_path": "src/bangla_gpt_api/data/sample_nctb",
+        "corpus_chunk_count": len(chunks),
+        "served_chunks_digest": served_chunks_digest(chunks),
+        "embedder_name": getattr(embedder, "name", None),
+        "embedding_dimension": getattr(embedder, "dim", None),
+        "prompt_version": PROMPT_VERSION,
+        "prompt_sha256": PROMPT_SHA256,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="eval-v2")
     parser.add_argument("--golden", default=None)
@@ -434,6 +471,13 @@ def main() -> int:
     golden_path = Path(args.golden) if args.golden else root / "eval" / "golden_v3.json"
     baseline_path = Path(args.baseline) if args.baseline else root / "eval" / "baseline_v3.json"
 
+    # Every run states which corpus, embedder and prompt it measured. This suite
+    # is hermetic, so the answer is always the bundled sample -- said out loud
+    # here rather than left for a reader to infer from the call sites. A rate
+    # without an identity is unattributable.
+    identity = _evidence_identity(settings)
+    print(f"IDENTITY: {json.dumps(identity, ensure_ascii=True)}")
+
     if args.latency_report:
         from bangla_gpt_api.evaluation.latency_report import format_table, measure
 
@@ -495,6 +539,9 @@ def main() -> int:
             "n": len(items),
             "sampling": sampling,
             "bootstrap_seed": args.seed,
+            # Which corpus/embedder/prompt these numbers describe. Without it a
+            # rate is unattributable and a benchmark can be silently stale.
+            "identity": identity,
             "metrics": current,
             # Per-item 0/1 in run order: the paired bootstrap against this
             # baseline needs aligned scores, and a rate alone cannot say
