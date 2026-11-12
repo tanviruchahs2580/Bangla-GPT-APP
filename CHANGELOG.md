@@ -45,9 +45,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### CI/CD
 
 - ci(automerge): arm GitHub auto-merge on every PR aimed at main
+- ci(automerge): re-arm on synchronize so amended PRs never unhook
+- ci(automerge): the header must be YAML comments, not a docstring
 
 ### Documentation
 
+- docs(ci): document the automerge workflow
 - docs(native-review): regenerate the UI-strings sheet for three new keys
 - docs(rag): RAG V2/V3 phase-0 baselines, audit and elevation plan
 - docs(rag): fix two path defects the doc-paths guardrail caught
