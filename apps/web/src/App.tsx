@@ -23,6 +23,7 @@ import { AppShell } from "./AppShell";
 import { Skeleton } from "./components/ui";
 import { RouteErrorBoundary } from "./components/AppErrorBoundary";
 import { PublicLanguageToggle } from "./components/PublicLanguageToggle";
+import { PublicInstallButton } from "./components/PublicInstallButton";
 import { SkipLink } from "./components/SkipLink";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { onLangChange, t } from "./i18n";
@@ -191,6 +192,12 @@ function RoutesSwitch() {
           element on the public routes too. */}
       {!me && <SkipLink />}
       {!me && <PublicLanguageToggle />}
+      {/* The shell's install button is inside AppShell, which wraps only the
+          signed-in routes -- and `beforeinstallprompt` is deferred, which
+          suppresses the browser's own install UI. Without this a visitor on
+          /login had no way to install at all: the PWA could only be installed
+          by first creating an account. */}
+      {!me && <PublicInstallButton />}
       <Routes>
         <Route path="/" element={<Navigate to={home} replace />} />
         <Route

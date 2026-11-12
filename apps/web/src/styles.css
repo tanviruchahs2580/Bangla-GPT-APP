@@ -983,6 +983,18 @@ p {
   z-index: 40;
 }
 
+/* Install affordance for the anonymous routes (`PublicInstallButton`): the
+   shell's own install button is unreachable before signing in, and deferring
+   `beforeinstallprompt` suppresses the browser's. Offset by the toggle's 44px
+   width plus an 8px gap, so the two sit side by side with the language switch
+   keeping the corner. */
+.public-install-btn {
+  position: fixed;
+  top: calc(0.75rem + env(safe-area-inset-top, 0px));
+  right: calc(0.75rem + env(safe-area-inset-right, 0px) + 3.25rem);
+  z-index: 40;
+}
+
 /* Icon buttons. The "v2" block further down used to restate border-radius,
    transitions and both interaction states as layered overrides; the audit
    asked for a merge, so its values live here now and that block is gone. */
