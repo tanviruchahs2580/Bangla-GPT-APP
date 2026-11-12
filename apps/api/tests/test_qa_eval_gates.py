@@ -13,12 +13,15 @@ codes and the hit@k metric itself.
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import json
 import sys
 from dataclasses import asdict
 from pathlib import Path
 from types import ModuleType
+
+import pytest
 
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.data.loader import load_sample_corpus
@@ -177,13 +180,37 @@ def _tiny_golden(tmp_path: Path) -> Path:
     return path
 
 
+def _tiny_baseline(tmp_path: Path, settings: Settings) -> Path:
+    """Record a regression baseline from the tiny golden set itself — the
+    in-suite equivalent of `--write-baseline`, so the gate's regression leg
+    compares real numbers instead of gating on air (the no-baseline shape
+    is what test_gate_refuses_to_pass_on_a_missing_baseline now forbids)."""
+    golden = _tiny_golden(tmp_path)
+    items = json.loads(golden.read_text(encoding="utf-8"))["items"]
+    metrics = asyncio.run(eval_cli._run(items, settings))
+    path = tmp_path / "baseline.json"
+    path.write_text(
+        json.dumps(
+            {
+                "recorded_by": "test fixture",
+                "bootstrap_seed": 2026,
+                "metrics": metrics.as_dict(),
+                "per_item_scores": metrics.item_scores,
+            },
+            ensure_ascii=True,
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
 def test_gate_command_runs_every_gate(tmp_path, capsys) -> None:
-    """`evaluation.cli --gate`: golden + hit@k + red-team, hermetically."""
+    """`evaluation.cli --gate`: golden regression + hit@k + red-team, hermetically."""
     settings = Settings(env="test", llm_provider="mock")
     code = eval_cli._run_all_gates(
         settings,
         _tiny_golden(tmp_path),
-        tmp_path / "no-baseline.json",  # report-only golden leg
+        _tiny_baseline(tmp_path, settings),
         hit_floor=0.95,
     )
     out = capsys.readouterr().out
@@ -198,7 +225,7 @@ def test_gate_command_fails_when_the_hit_floor_is_unreachable(tmp_path, capsys) 
     code = eval_cli._run_all_gates(
         settings,
         _tiny_golden(tmp_path),
-        tmp_path / "no-baseline.json",
+        _tiny_baseline(tmp_path, settings),
         hit_floor=1.01,  # impossible floor: the gate must fail, not clamp
     )
     out = capsys.readouterr().out
@@ -212,3 +239,26 @@ def test_redteam_mode_is_reachable_as_its_own_command() -> None:
     import asyncio
 
     assert asyncio.run(eval_cli._redteam(settings)) == 0
+
+
+def test_gate_refuses_to_pass_on_a_missing_baseline(tmp_path, capsys) -> None:
+    """--gate's documented contract is "exit code 0 = green". The
+    report-only NO-BASELINE early-true leaked into gate mode: with the
+    baseline file absent, a direct `evaluation.cli --gate` PASSED while
+    measuring against nothing (CI was covered by check_eval_binding;
+    direct runs were the hole). Gating on air must fail loudly."""
+    ok = eval_cli._golden_gate(Settings(env="test"), [], tmp_path / "absent.json")
+    captured = capsys.readouterr()
+    assert ok is False
+    assert "NO BASELINE" in captured.out
+
+
+def test_seed_bad_with_gate_is_a_usage_error(monkeypatch, capsys) -> None:
+    """--seed-bad was parsed and then silently ignored under --gate (only
+    the non-gate path read it) — a demo flag pretending to poison a gate
+    it could not touch."""
+    monkeypatch.setattr(sys, "argv", ["eval-v2", "--gate", "--seed-bad", "3"])
+    with pytest.raises(SystemExit) as exc:
+        eval_cli.main()
+    assert exc.value.code == 2
+    assert "--seed-bad" in capsys.readouterr().err
