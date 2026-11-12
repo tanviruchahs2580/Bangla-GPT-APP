@@ -2,13 +2,14 @@
 #
 # The merge itself stays with GitHub's native auto-merge machinery: branch
 # protection requires the eight status checks, so the PR merges the moment
-# they pass and nothing merges while a required check is red. Fork PRs
+# they pass and nothing merges while a required check is red. synchronize
+# re-arms idempotently on every push, so amending a PR never unhooks it. Fork PRs
 # (head.repo.full_name != github.repository) are deliberately left out --
 # a token from a fork-triggered event must never be able to steer main.
 
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, synchronize]
 
 permissions:
   contents: read
