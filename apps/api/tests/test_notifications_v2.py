@@ -157,6 +157,48 @@ def test_support_plan_notifies_student_user(client: TestClient, tmp_path) -> Non
     assert "notif_support_plan" in _codes(client, headers)
 
 
+def test_support_plan_listing_is_bounded(client: TestClient, tmp_path) -> None:
+    """The one remaining unbounded list endpoint: every sibling list honours
+    the standard pagination query, and an operator-sized support-plan table
+    would otherwise be fully materialized per dashboard view."""
+    teach = _teacher(client)
+    student = _register(client, "bounded@example.com")
+    _enroll_in_default_school(str(tmp_path / "notif.db"), student["profile_id"])
+    headers = _login(client, "bounded@example.com")
+    # Plan generation refuses a student with no graded quiz data
+    # (no_graded_data), so create the graded attempt first — the same
+    # precondition test_support_plan_notifies_student_user establishes.
+    started = client.post(
+        "/quizzes", json={"student_id": student["profile_id"], "num_questions": 2}, headers=headers
+    )
+    assert started.status_code == 200, started.text
+    answers = started.json()["questions"]
+    submitted = client.post(
+        f"/quizzes/{started.json()['attempt_id']}/submit",
+        json={"answers": [0] * len(answers)},
+        headers=headers,
+    )
+    assert submitted.status_code == 200, submitted.text
+    plan_ids = set()
+    for _ in range(3):
+        res = client.post(
+            "/teacher/support-plans",
+            json={"student_id": student["profile_id"]},
+            headers=teach,
+        )
+        assert res.status_code == 201, res.text
+        plan_ids.add(res.json()["id"])
+
+    listed = client.get("/teacher/support-plans?limit=1", headers=teach)
+    assert listed.status_code == 200, listed.text
+    body = listed.json()
+    assert len(body) == 1
+    assert body[0]["id"] in plan_ids
+
+    rejected = client.get("/teacher/support-plans?limit=0", headers=teach)
+    assert rejected.status_code == 422
+
+
 def test_parent_link_notifies_both_sides(client: TestClient) -> None:
     student = _register(client, "kid@example.com")
     _register(client, "mum@example.com", role="parent")
