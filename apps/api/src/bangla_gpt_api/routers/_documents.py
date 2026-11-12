@@ -277,13 +277,14 @@ async def _generate_document(
     # reserve below, so a foreign paper id costs nothing and leaves no ledger
     # row (the pre-fix order reserved, committed, and only then answered 404).
     if kind == "answer_key" and getattr(gen, "paper_id", None) is not None:
-        _load_answer_key_paper(db, actor, gen)
+        await asyncio.to_thread(_load_answer_key_paper, db, actor, gen)
     # BE-01: reserve the ledger row before retrieval or provider spend and
     # commit it -- a concurrent generation's budget gate must count this
     # in-flight teacher spend, and a provider failure keeps the honest
     # prompt-side line instead of a row that never was.
     model = getattr(app_ctx.tutor.provider, "model", None) or app_ctx.tutor.provider.name
-    pending_usage = reserve_ai_usage(
+    pending_usage = await asyncio.to_thread(
+        reserve_ai_usage,
         db,
         user_id=actor.id,
         route=f"teacher/{kind}",

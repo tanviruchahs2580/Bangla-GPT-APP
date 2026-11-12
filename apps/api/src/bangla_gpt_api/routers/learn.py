@@ -4,6 +4,7 @@ Behavior-identical extraction: same paths, validation, status codes.
 Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 """
 
+import asyncio
 import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -692,24 +693,28 @@ async def kg_rebuild(
             detail={"code": "provider_unavailable", "message": "LLM provider not configured"},
         )
     stats = await knowledge.rebuild_concepts(db, app_ctx.index.chunks, active_provider, llm=llm)
+
     # The rebuild's own service commits stay where they are (they are shared
     # with the lazy seeding path); the audit row lands right after and is
     # committed here, so the destructive run always has a trail naming who
     # asked for it and what the graph looked like afterwards.
-    write_audit(
-        db,
-        action="kg_rebuild",
-        actor_user_id=user.id,
-        actor_role=user.role,
-        target="knowledge_graph",
-        detail={
-            "concepts": stats["concepts"],
-            "llm_concepts": stats["llm_concepts"],
-            "edges": stats["edges"],
-            "llm_requested": llm,
-        },
-    )
-    db.commit()
+    def _record_rebuild_audit() -> None:
+        write_audit(
+            db,
+            action="kg_rebuild",
+            actor_user_id=user.id,
+            actor_role=user.role,
+            target="knowledge_graph",
+            detail={
+                "concepts": stats["concepts"],
+                "llm_concepts": stats["llm_concepts"],
+                "edges": stats["edges"],
+                "llm_requested": llm,
+            },
+        )
+        db.commit()
+
+    await asyncio.to_thread(_record_rebuild_audit)
     return KgRebuildOut(**stats)
 
 

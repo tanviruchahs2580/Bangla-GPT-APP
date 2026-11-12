@@ -46,7 +46,11 @@ async def live() -> dict:
 
 
 @router.get("/ready", responses=coded(503))
-async def ready(app_ctx: Ctx, db: DbSession) -> dict:
+def ready(app_ctx: Ctx, db: DbSession) -> dict:
+    """Probe DB, provider and index. A plain `def`, not `async def`: the
+    handler runs a synchronous `db.execute` and sibling `/status` already
+    follows that rule — an async handler would run it on the event loop the
+    SSE streams share."""
     if app_ctx.provider is None:
         detail = (
             f"LLM_PROVIDER={app_ctx.settings.llm_provider!r} is not implemented yet. "

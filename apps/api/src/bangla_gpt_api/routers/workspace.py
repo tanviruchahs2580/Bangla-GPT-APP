@@ -507,8 +507,15 @@ async def teacher_job_create(
         ) from exc
     window = app_ctx.settings.ai_job_idempotency_window_minutes
     if key is not None:
-        existing = job_policy.find_idempotent_job(
-            db, user_id=teacher.id, kind=kind, key=key, window_minutes=window
+        # DB hop off the event loop like every sibling hop: a slow Postgres
+        # round-trip here stalls the loop the SSE streams share.
+        existing = await asyncio.to_thread(
+            job_policy.find_idempotent_job,
+            db,
+            user_id=teacher.id,
+            kind=kind,
+            key=key,
+            window_minutes=window,
         )
         if existing is not None:
             json_log(
