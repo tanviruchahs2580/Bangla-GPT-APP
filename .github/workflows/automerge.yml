@@ -3,13 +3,14 @@
 # The merge itself stays with GitHub's native auto-merge machinery: branch
 # protection requires the eight status checks, so the PR merges the moment
 # they pass and nothing merges while a required check is red. synchronize
-# re-arms idempotently on every push, so amending a PR never unhooks it. Fork PRs
-# (head.repo.full_name != github.repository) are deliberately left out --
+# re-arms idempotently on every push, so amending a PR never unhooks it. Fork
+# PRs (head.repo.full_name != github.repository) are deliberately left out --
 # a token from a fork-triggered event must never be able to steer main.
 
 on:
   pull_request:
     types: [opened, reopened, ready_for_review, synchronize]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -29,6 +30,21 @@ jobs:
       - name: Enable auto-merge (waits for the required checks)
         env:
           GH_TOKEN: ${{ github.token }}
+        # contents: write is REQUIRED alongside pull-requests: write — the
+        # enablePullRequestAutoMerge mutation answers "resource not
+        # accessible by integration" to a contents:read token (measured on
+        # #115 vs #116, 2026-11-12). The step retries because the very
+        # first arm attempt on a just-opened PR can be rejected while the
+        # token/permission state settles; a still-living rejection must
+        # stay visible, so the step fails after the last attempt.
         run: |
-          gh pr merge --auto --merge "${{ github.event.pull_request.html_url }}" \
-            --repo "${{ github.repository }}"
+          for attempt in 1 2 3; do
+            if gh pr merge --auto --merge "${{ github.event.pull_request.html_url }}" \
+              --repo "${{ github.repository }}"; then
+              exit 0
+            fi
+            echo "arm attempt $attempt rejected; retrying in 20s"
+            sleep 20
+          done
+          echo "::error::auto-merge could not be armed after 3 attempts"
+          exit 1
