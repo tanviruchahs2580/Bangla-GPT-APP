@@ -24,8 +24,16 @@ from bangla_gpt_api.retrieval.bm25 import Hit
 from bangla_gpt_api.retrieval.expansion import build_neighbor_expander
 
 
-def _chunk(cid: str, text: str, *, section: str, page: int, class_level: int = 6,
-           source: str = "book-a", chapter: str = "কোষ") -> Chunk:
+def _chunk(
+    cid: str,
+    text: str,
+    *,
+    section: str,
+    page: int,
+    class_level: int = 6,
+    source: str = "book-a",
+    chapter: str = "কোষ",
+) -> Chunk:
     return Chunk(
         id=cid,
         text=text,

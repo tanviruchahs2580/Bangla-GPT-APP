@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - feat(eval): record and enforce the identity a benchmark measured
+- feat(retrieval): book and year metadata filters through both lanes
+- feat(retrieval): candidate-pool dedup by content hash and source identity
+- feat(retrieval): neighbor expansion of the selected evidence (gated, default off)
+- feat(retrieval): the cross-encoder rerank stage (pluggable, degrades safely)
+- feat(retrieval): the v2 benchmark sweep — pool depths measured, not assumed
 
 ### Fixed
 
@@ -35,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(ops): forward the documented operator knobs through compose
 - fix(pii): redact BD landline numbers before egress
 - fix(privacy): retention sweeps the unused expired invites
+- fix(retrieval): verify the remote embedder dimension once it is known
 - fix(security): enforce the password policy on join-school
 - fix(tutor): fold the query boundary through the shared normalizer
 - fix(tutor): honest metering and diagnostics for locally-produced refusals
@@ -57,9 +63,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - docs(ci): document the automerge workflow
 - docs(ci): name the automerge dispatch trigger
+- docs(env): document the rerank-stage knobs
 - docs(native-review): regenerate the UI-strings sheet for three new keys
 - docs(rag): RAG V2/V3 phase-0 baselines, audit and elevation plan
 - docs(rag): fix two path defects the doc-paths guardrail caught
+- docs(rag): retrieval engine v2 design (stage-by-stage, defaults-preserving)
 - docs(safety): record the deliberate over-refusal trade-off
 - docs: regenerate the native-review sheet after the safety comment edit
 

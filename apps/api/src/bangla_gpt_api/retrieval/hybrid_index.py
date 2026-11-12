@@ -239,9 +239,7 @@ class HybridIndex:
         if cross_encoder_config is not None:
             from bangla_gpt_api.retrieval.reranker import CrossEncoderReranker
 
-            self.reranker = CrossEncoderReranker(
-                self.reranker, config=cross_encoder_config
-            )
+            self.reranker = CrossEncoderReranker(self.reranker, config=cross_encoder_config)
 
     @property
     def term_stats(self) -> TermStats:

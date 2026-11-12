@@ -93,7 +93,7 @@ def _measure_cell(
             hits_total += 1
             if any(expected_chapter in h.chunk.meta.chapter for h in hits):
                 hit3 += 1
-        coverage, gate_pass = tutor._coverage_details(item["question"], hits)
+        _coverage, gate_pass = tutor._coverage_details(item["question"], hits)
         grounded = gate_pass and bool(hits)
         verdict_total += 1
         verdict_ok += int(grounded == expect_grounded)

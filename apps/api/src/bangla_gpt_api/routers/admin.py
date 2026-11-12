@@ -573,7 +573,7 @@ def admin_reindex(app_ctx: Ctx, admin: AdminUser, db: DbSession) -> ReindexOut:
         )
     started = time.perf_counter()
     with app_ctx.reindex_lock:
-        new_index, term_stats, corpus_record = build_retrieval_index(
+        new_index, term_stats, corpus_record, _neighbor_expander = build_retrieval_index(
             app_ctx.settings, app_ctx.cache
         )
         retargeted = app_ctx.tutor.retarget_index(

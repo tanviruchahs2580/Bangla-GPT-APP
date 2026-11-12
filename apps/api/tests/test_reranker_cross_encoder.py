@@ -118,8 +118,15 @@ def test_cross_encoder_orders_and_keeps_the_lexical_floor() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         calls.append(request.read())
-        return httpx.Response(200, json={"results": [{"index": 1, "relevance_score": 0.93},
-                                                     {"index": 0, "relevance_score": 0.11}]})
+        return httpx.Response(
+            200,
+            json={
+                "results": [
+                    {"index": 1, "relevance_score": 0.93},
+                    {"index": 0, "relevance_score": 0.11},
+                ]
+            },
+        )
 
     inner = _lexical()
     reranker = CrossEncoderReranker(
@@ -159,8 +166,15 @@ def test_query_is_redacted_before_egress() -> None:
 
 def test_tie_scores_get_a_deterministic_mid_value() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"results": [{"index": 0, "relevance_score": 0.5},
-                                                     {"index": 1, "relevance_score": 0.5}]})
+        return httpx.Response(
+            200,
+            json={
+                "results": [
+                    {"index": 0, "relevance_score": 0.5},
+                    {"index": 1, "relevance_score": 0.5},
+                ]
+            },
+        )
 
     reranker = CrossEncoderReranker(
         _lexical(),
@@ -182,8 +196,9 @@ def test_timeout_falls_back_to_inner_scores_and_meters() -> None:
         raise httpx.ConnectTimeout("boom")
 
     config = build_cross_encoder_config(_settings(rag_reranker_timeout_seconds=0.05))
-    reranker = CrossEncoderReranker(_lexical(), config=config,
-                                    transport=httpx.MockTransport(handler))
+    reranker = CrossEncoderReranker(
+        _lexical(), config=config, transport=httpx.MockTransport(handler)
+    )
     candidates = _candidates()
     fallback = _counter("rag_reranker_fallback_total")
     scores = reranker("কোষ কী?", candidates)
@@ -195,9 +210,11 @@ def test_http_error_falls_back() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(503)
 
-    reranker = CrossEncoderReranker(_lexical(),
-                                    config=build_cross_encoder_config(_settings()),
-                                    transport=httpx.MockTransport(handler))
+    reranker = CrossEncoderReranker(
+        _lexical(),
+        config=build_cross_encoder_config(_settings()),
+        transport=httpx.MockTransport(handler),
+    )
     assert reranker("কোষ কী?", _candidates()) == _lexical()("কোষ কী?", _candidates())
 
 
@@ -217,9 +234,13 @@ def test_index_out_of_range_is_a_protocol_error() -> None:
     reranker = CrossEncoderReranker(
         _lexical(),
         config=build_cross_encoder_config(_settings()),
-        transport=httpx.MockTransport(lambda request: httpx.Response(200, json={"results": [{"index": 9, "relevance_score": 0.9}]})),
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200, json={"results": [{"index": 9, "relevance_score": 0.9}]}
+            )
+        ),
     )
-    with pytest.raises(Exception):
+    with pytest.raises(RerankerEndpointError, match="mismatched"):
         # protocol violations surface as the endpoint error type, caught and
         # converted to the fallback by the public callable
         reranker.rerank_remote("কোষ কী?", [c[0] for c in _candidates()])

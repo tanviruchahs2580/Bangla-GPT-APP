@@ -133,7 +133,9 @@ class CrossEncoderReranker:
                 headers=headers,
             )
         except Exception as exc:  # timeout, connect, TLS — one fallback class
-            raise RerankerEndpointError(f"rerank endpoint unreachable: {type(exc).__name__}") from exc
+            raise RerankerEndpointError(
+                f"rerank endpoint unreachable: {type(exc).__name__}"
+            ) from exc
         if response.status_code != 200:
             raise RerankerEndpointError(f"rerank endpoint status {response.status_code}")
         try:
@@ -142,7 +144,9 @@ class CrossEncoderReranker:
             pairs = ((int(r["index"]), float(r["relevance_score"])) for r in results)
             indexed = list(pairs)
         except Exception as exc:
-            raise RerankerEndpointError(f"rerank endpoint malformed body: {type(exc).__name__}") from exc
+            raise RerankerEndpointError(
+                f"rerank endpoint malformed body: {type(exc).__name__}"
+            ) from exc
         if len(indexed) != len(documents) or {i for i, _ in indexed} != set(range(len(documents))):
             raise RerankerEndpointError("rerank endpoint returned a mismatched result set")
         # results arrive in endpoint order; re-place them in DOCUMENT order
@@ -164,9 +168,7 @@ class CrossEncoderReranker:
             self._breaker.record_failure()
             _meter_fallback(reason=type(exc).__name__)
             return base
-        RAG_LANE_LATENCY_SECONDS.labels(lane="cross_encoder").observe(
-            time.perf_counter() - started
-        )
+        RAG_LANE_LATENCY_SECONDS.labels(lane="cross_encoder").observe(time.perf_counter() - started)
         self._breaker.record_success()
         return self._blend(base, raw)
 
@@ -174,11 +176,7 @@ class CrossEncoderReranker:
         """Cross-encoder drives the ordering; the lexical score is the floor."""
         high, low = max(raw), min(raw)
         span = high - low
-        normalized = (
-            [0.75] * len(raw)
-            if span <= 0
-            else [(value - low) / span for value in raw]
-        )
+        normalized = [0.75] * len(raw) if span <= 0 else [(value - low) / span for value in raw]
         return [
             self._config.base_weight * base_value + self._config.w_cross_encoder * norm
             for base_value, norm in zip(base, normalized, strict=True)

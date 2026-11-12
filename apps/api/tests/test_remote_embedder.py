@@ -234,8 +234,12 @@ def test_build_embedder_installs_the_late_dim_check(tmp_path) -> None:
     settings = type(
         "S",
         (),
-        {"embedding_model": "test-model", "embedding_api_base": "http://embed.test",
-         "embedding_api_key": "k", "nctb_corpus_dir": str(tmp_path)},
+        {
+            "embedding_model": "test-model",
+            "embedding_api_base": "http://embed.test",
+            "embedding_api_key": "k",
+            "nctb_corpus_dir": str(tmp_path),
+        },
     )()
     embedder = build_embedder(settings)
     assert isinstance(embedder, RemoteEmbedder)

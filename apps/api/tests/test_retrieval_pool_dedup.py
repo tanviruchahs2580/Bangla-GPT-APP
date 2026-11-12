@@ -59,15 +59,14 @@ def test_identical_text_same_source_collapses_in_the_pool() -> None:
     hits = index.search("কোষ জীবের গঠন", top_k=10)
     ids = [h.chunk.id for h in hits]
     # dup-a and dup-b are the same evidence from the same source: one slot
-    assert "dup-a" in ids and "dup-b" not in ids or "dup-b" in ids and "dup-a" not in ids
+    assert ("dup-a" in ids and "dup-b" not in ids) or ("dup-b" in ids and "dup-a" not in ids)
 
 
 def test_same_text_different_source_survives() -> None:
     index = _index()
     hits = index.search("কোষ জীবের গঠন", top_k=10)
-    ids = [h.chunk.id for h in hits]
     # source-aware identity: book-a's copy and book-b's copy are both kept
-    assert any(h.chunk.meta.source == "book-b" for h in hits)
+    assert {h.chunk.meta.source for h in hits} >= {"book-a", "book-b"}
 
 
 def test_distinct_text_is_never_dropped() -> None:
