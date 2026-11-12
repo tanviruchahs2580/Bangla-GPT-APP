@@ -22,7 +22,7 @@ from bangla_gpt_api.retrieval.bm25 import BM25Index, Hit, indexable_text, tokeni
 from bangla_gpt_api.retrieval.embedding import Embedder, bengali_bigrams
 from bangla_gpt_api.retrieval.fusion import reciprocal_rank_fusion
 from bangla_gpt_api.retrieval.hybrid import light_stem, trigram_similarity
-from bangla_gpt_api.retrieval.normalize import normalize_nfkc
+from bangla_gpt_api.retrieval.normalize import collapse_whitespace, normalize_nfkc
 from bangla_gpt_api.retrieval.query_analysis import (
     content_terms,
     coverage_weights,
@@ -311,10 +311,25 @@ class HybridIndex:
             [[h.chunk.id for h in bm25_hits], [h.chunk.id for h in vector_hits]],
             k=self.rrf_k,
         )
-        candidates = [
-            (by_id[chunk_id], rrf_score, lexical_base.get(chunk_id, 0.0))
-            for chunk_id, rrf_score in fused[:candidate_k]
-        ]
+        # Pool dedup (retrieval engine v2): identical text from the SAME
+        # source collapses onto the best fused rank — the reranker pays once
+        # per distinct text and RRF stops spreading rank mass across copies
+        # the real corpus produces. Cross-class copies stay distinct (class
+        # provenance is a product contract) because the identity is
+        # (normalized text, source); assembly-level dedupe still guards the
+        # student-facing evidence (context.py).
+        pool: list[tuple[Chunk, float, float]] = []
+        seen_pool: set[tuple[str, str]] = set()
+        for chunk_id, rrf_score in fused:
+            chunk = by_id[chunk_id]
+            key = (collapse_whitespace(indexable_text(chunk)), chunk.meta.source)
+            if key in seen_pool:
+                continue
+            seen_pool.add(key)
+            pool.append((chunk, rrf_score, lexical_base.get(chunk_id, 0.0)))
+            if len(pool) >= candidate_k:
+                break
+        candidates = pool
         if not candidates:
             return []
         scores = self.reranker(query, candidates)
