@@ -70,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - chore(api): trace the dead flush branch, stale comments and doc drift
 - chore(docs): regenerate the native-review sheet
+- chore(eval): record the baseline identity (regenerate at the current tree)
 - chore(web): regenerate the OpenAPI contract fixture
 - chore: regenerate the CHANGELOG
 
