@@ -240,8 +240,13 @@ def test_index_out_of_range_is_a_protocol_error() -> None:
             )
         ),
     )
+    from bangla_gpt_api.retrieval.bm25 import indexable_text
+
     with pytest.raises(RerankerEndpointError, match="mismatched"):
         # protocol violations surface as the endpoint error type, caught and
-        # converted to the fallback by the public callable
-        reranker.rerank_remote("কোষ কী?", [c[0] for c in _candidates()])
+        # converted to the fallback by the public callable; documents are
+        # TEXT (what __call__ sends via indexable_text), not Chunk objects
+        reranker.rerank_remote(
+            "কোষ কী?", [indexable_text(c[0]) for c in _candidates()]
+        )
     assert reranker("কোষ কী?", _candidates()) == _lexical()("কোষ কী?", _candidates())
