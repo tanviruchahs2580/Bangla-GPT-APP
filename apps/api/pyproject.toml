@@ -256,6 +256,12 @@ max-complexity = 20
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# pytest-asyncio >= 1.4.1 raises a PytestDeprecationWarning at configure time
+# when this is unset; the filterwarnings torture below turns it into an
+# INTERNALERROR before any test runs (it broke every pytest leg in CI after
+# the 2026-11-12 pytest bump). "function" is the scope asyncio fixtures mean
+# unless they say otherwise, so pin it rather than inherit the default.
+asyncio_default_fixture_loop_scope = "function"
 # A deprecation warning is a dated dependency or a dated call site; the audit
 # found the suite reporting one and shipping it silently (F-159/TEST-01), so
 # the whole suite treats them as failures. The single accepted exception is
