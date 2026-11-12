@@ -4,6 +4,7 @@ Behavior-identical extraction: same paths, validation, status codes.
 Shared context/auth via:mod:`.deps`, shared helpers via:mod:`.common`.
 """
 
+import asyncio
 import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -96,13 +97,8 @@ from .deps import (
     DbSession,
     _build_me_response,
     authorize_student_access,
+    require_current_consent,
 )
-
-# BE-FIX-004: the student-consent gate. Shared with the tutor/chat routes;
-# its proper home is ``routers/deps.py`` next to CONSENT_VERSION as a
-# dependency alias, which is outside this change's write scope -- see the
-# docstring of ``require_current_consent`` for the follow-up.
-from .tutor import require_current_consent
 
 router = APIRouter(responses=AUTH_GUARD_RESPONSES)
 
@@ -273,12 +269,12 @@ def _index_chunks(app_ctx: Ctx) -> list[Chunk] | None:
 
 
 # --- school tenancy helpers -----------------------------------------
-# Tenancy anchor is User.school_id. A student belongs to a school EXACTLY
-# when one of their ClassRoom memberships carries that school_id. A teacher
-# WITHOUT a school keeps the pre-Wave-2 behavior (no tenancy wall) so every
-# standalone-teacher flow stays byte-compatible; once a teacher is attached
-# to a school, students and classrooms of OTHER schools become invisible
-# (403 other_school, same code the /school/* routes use).
+# Tenancy wall lives in routers/deps.py (_tenant_school_id /
+# _assert_student_in_school): tenancy anchors to User.school_id, students
+# belong to a school EXACTLY when a ClassRoom membership carries that
+# school_id, and school-less staff anchor to the shared default school
+# (deps F-04) — there is no "no wall" caller anymore; do not re-derive
+# the rule here.
 @router.post(
     "/quizzes",
     response_model=QuizStarted,
@@ -692,24 +688,28 @@ async def kg_rebuild(
             detail={"code": "provider_unavailable", "message": "LLM provider not configured"},
         )
     stats = await knowledge.rebuild_concepts(db, app_ctx.index.chunks, active_provider, llm=llm)
+
     # The rebuild's own service commits stay where they are (they are shared
     # with the lazy seeding path); the audit row lands right after and is
     # committed here, so the destructive run always has a trail naming who
     # asked for it and what the graph looked like afterwards.
-    write_audit(
-        db,
-        action="kg_rebuild",
-        actor_user_id=user.id,
-        actor_role=user.role,
-        target="knowledge_graph",
-        detail={
-            "concepts": stats["concepts"],
-            "llm_concepts": stats["llm_concepts"],
-            "edges": stats["edges"],
-            "llm_requested": llm,
-        },
-    )
-    db.commit()
+    def _record_rebuild_audit() -> None:
+        write_audit(
+            db,
+            action="kg_rebuild",
+            actor_user_id=user.id,
+            actor_role=user.role,
+            target="knowledge_graph",
+            detail={
+                "concepts": stats["concepts"],
+                "llm_concepts": stats["llm_concepts"],
+                "edges": stats["edges"],
+                "llm_requested": llm,
+            },
+        )
+        db.commit()
+
+    await asyncio.to_thread(_record_rebuild_audit)
     return KgRebuildOut(**stats)
 
 

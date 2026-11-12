@@ -193,7 +193,7 @@ def register(
                     "message": "guardian_consent is required when role is 'student'",
                 },
             )
-    _enforce_password_policy(app_ctx.settings, payload.password)
+    enforce_password_policy(app_ctx.settings, payload.password)
     # F-143: under the generic policy the route never states whether the
     # address is new -- a taken address is acknowledged with the same 202
     # envelope the success path returns, and nothing is created or mailed.
@@ -739,7 +739,7 @@ def _reject_common_password(password: str) -> None:
         )
 
 
-def _enforce_password_policy(settings: Any, password: str) -> None:
+def enforce_password_policy(settings: Any, password: str) -> None:
     """The documented policy: length floor plus the blocklist (SEC-02).
 
     Named separately from ``_reject_common_password`` so a new credential
@@ -848,7 +848,7 @@ def reset_password(app_ctx: Ctx, payload: ResetPasswordRequest, db: DbSession) -
             status_code=400,
             detail={"code": "invalid_token", "message": "Invalid or expired reset token"},
         )
-    _enforce_password_policy(app_ctx.settings, payload.new_password)
+    enforce_password_policy(app_ctx.settings, payload.new_password)
     user.password_hash = hash_password(payload.new_password)
     user.must_change_password = False
     # F-05: rotate the token epoch — every access token issued in an
@@ -879,8 +879,10 @@ def change_password(
     # able to do either.
     forbid_impersonation(request)
     if not verify_password(payload.current_password, user.password_hash):
+        # 401, not 400: delete-me and both MFA routes answer 401 for the
+        # same bad_current_password code — one refusal, one client behavior.
         raise HTTPException(
-            status_code=400,
+            status_code=401,
             detail={"code": "bad_current_password", "message": "Current password is incorrect"},
         )
     if payload.current_password == payload.new_password:
@@ -891,7 +893,7 @@ def change_password(
                 "message": "New password must differ from the current one",
             },
         )
-    _enforce_password_policy(app_ctx.settings, payload.new_password)
+    enforce_password_policy(app_ctx.settings, payload.new_password)
     now = datetime.now(UTC).replace(tzinfo=None)
     user.password_hash = hash_password(payload.new_password)
     user.must_change_password = False

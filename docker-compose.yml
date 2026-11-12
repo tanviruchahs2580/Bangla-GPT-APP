@@ -39,6 +39,17 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      # PRIV-06 data-use tier + fallback lane: documented operator knobs that
+      # compose never forwarded, so setting them in .env silently changed
+      # nothing in the container (same class as F-020).
+      LLM_DATA_USE_TIER: ${LLM_DATA_USE_TIER:-unset}
+      LLM_DATA_USE_ACKNOWLEDGED: ${LLM_DATA_USE_ACKNOWLEDGED:-false}
+      RETRIEVAL_ONLY_FALLBACK_ENABLED: ${RETRIEVAL_ONLY_FALLBACK_ENABLED:-false}
+      # Deliberate boot-guard escape hatches (main.py validators). Defaults
+      # keep everything refused; an operator opts in explicitly per guard.
+      ALLOW_MOCK_LLM_IN_PRODUCTION: ${ALLOW_MOCK_LLM_IN_PRODUCTION:-false}
+      ALLOW_BUNDLED_SAMPLE_CORPUS_IN_PRODUCTION: ${ALLOW_BUNDLED_SAMPLE_CORPUS_IN_PRODUCTION:-false}
+      ALLOW_WEAK_GROUNDING_IN_PRODUCTION: ${ALLOW_WEAK_GROUNDING_IN_PRODUCTION:-false}
       DATABASE_URL: ${DATABASE_URL:-sqlite:////data/app.db}
       JWT_SECRET: ${JWT_SECRET:-}
       JWT_ISSUER: ${JWT_ISSUER:-bangla-gpt-api}
@@ -59,6 +70,11 @@ services:
       JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-60}
       PASSWORD_RESET_TOKEN_MINUTES: ${PASSWORD_RESET_TOKEN_MINUTES:-30}
       FORCE_ADMIN_PASSWORD_CHANGE: ${FORCE_ADMIN_PASSWORD_CHANGE:-true}
+      # Documented credential-policy knobs (SEC-02 registration floor, dup
+      # email registration disclosure posture) that compose never forwarded
+      # (F-020).
+      PASSWORD_MIN_LENGTH: ${PASSWORD_MIN_LENGTH:-8}
+      REGISTRATION_EMAIL_CONFLICT: ${REGISTRATION_EMAIL_CONFLICT:-disclose}
       RATE_LIMIT_LOGIN_PER_MINUTE: ${RATE_LIMIT_LOGIN_PER_MINUTE:-10}
       RATE_LIMIT_TUTOR_PER_MINUTE: ${RATE_LIMIT_TUTOR_PER_MINUTE:-30}
       RATE_LIMIT_TUTOR_IP_PER_MINUTE: ${RATE_LIMIT_TUTOR_IP_PER_MINUTE:-60}
@@ -87,6 +103,9 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
+      # ANON-06: production needs explicit STARTTLS; the boot guard owns the
+      # refusal, compose just has to let the operator set the flag at all.
+      SMTP_REQUIRE_STARTTLS: ${SMTP_REQUIRE_STARTTLS:-true}
       # S5.6 guardian-phone encryption. The production boot gate refuses to
       # start without a valid Fernet key, so the operator must be able to
       # supply one here without hand-editing compose (audit B-04: the
@@ -107,6 +126,19 @@ services:
       # AI_GENERATION_ENABLED but compose never forwarded it, so setting the
       # switch in .env would not reach the container.
       AI_GENERATION_ENABLED: ${AI_GENERATION_ENABLED:-true}
+      # Retention windows and job-family knobs that compose never forwarded:
+      # an operator tuning them in .env got the documented defaults instead
+      # (F-020 class). Defaults here mirror Settings exactly.
+      ANSWER_LOG_RETENTION_DAYS: ${ANSWER_LOG_RETENTION_DAYS:-730}
+      AI_USAGE_RETENTION_DAYS: ${AI_USAGE_RETENTION_DAYS:-365}
+      AI_JOBS_RETENTION_DAYS: ${AI_JOBS_RETENTION_DAYS:-30}
+      AI_JOB_MAX_ATTEMPTS: ${AI_JOB_MAX_ATTEMPTS:-3}
+      AI_JOB_RETRY_BACKOFF_SECONDS: ${AI_JOB_RETRY_BACKOFF_SECONDS:-0.5}
+      AI_JOB_IDEMPOTENCY_WINDOW_MINUTES: ${AI_JOB_IDEMPOTENCY_WINDOW_MINUTES:-1440}
+      PARENT_DIGEST_ENABLED: ${PARENT_DIGEST_ENABLED:-true}
+      PARENT_DIGEST_CHECK_MINUTES: ${PARENT_DIGEST_CHECK_MINUTES:-60}
+      WEAKNESS_REFRESH_ENABLED: ${WEAKNESS_REFRESH_ENABLED:-true}
+      WEAKNESS_REFRESH_CHECK_MINUTES: ${WEAKNESS_REFRESH_CHECK_MINUTES:-60}
       # JSON override of the served rate-limit table; an empty string is not
       # valid JSON for this Settings field, so the default is an empty object.
       RATE_LIMIT_RULES: ${RATE_LIMIT_RULES:-{}}

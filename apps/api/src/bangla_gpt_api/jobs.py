@@ -154,7 +154,18 @@ def ai_job_retry_plan(settings: Any) -> tuple[int, tuple[float, ...]]:
     return attempts, tuple(delays)
 
 
-def claim_period(db: Session, job: str, period_key: str) -> bool:
+#: A claimed row with a NULL outcome is a kill signature (SIGKILL/OOM:
+#: neither finish_period nor mark_period_failed ran). Inside the lease it is
+#: presumed in-flight and stays owned (the double-run guard); past the lease
+#: the slot belongs to a dead process and the next trigger reclaims it.
+#: 25h covers both a nightly and a weekly schedule with room to spare — no
+#: real job family runs for a day of SMTP sends or chunked deletes.
+ORPHAN_CLAIM_LEASE = timedelta(hours=25)
+
+
+def claim_period(
+    db: Session, job: str, period_key: str, *, orphan_lease: timedelta = ORPHAN_CLAIM_LEASE
+) -> bool:
     """True when THIS caller owns the period slot; False if already claimed.
 
     A row whose outcome starts with ``FAILED`` is a failed attempt (the
@@ -166,15 +177,34 @@ def claim_period(db: Session, job: str, period_key: str) -> bool:
     week, with nothing on the ledger but an unfinished row. The failed row
     STAYS (the audit trail of what failed when), and the retry overwrites
     it via the natural key.
+
+    An outcome-less row is a kill signature: inside :data:`ORPHAN_CLAIM_LEASE`
+    it is presumed in-flight and stays owned; past the lease the next
+    trigger reclaims the slot (their ``started_at`` refreshes) instead of
+    the period being skipped forever — under the arq backend a cron job
+    fires at most once per period, so nothing else would ever retry it.
     """
     existing = db.get(JobRun, (job, period_key))
     if existing is not None:
-        if not str(existing.outcome or "").startswith("failed"):
+        outcome = existing.outcome or ""
+        if outcome.startswith("failed"):
+            # failed attempt: clear the way for the retry (row re-inserted
+            # below would collide on the natural key, so delete the stale
+            # failure).
+            db.delete(existing)
+            db.commit()
+        elif outcome:
+            # a finished slot with a real outcome: owned
             return False
-        # failed attempt: clear the way for the retry (row re-inserted below
-        # would collide on the natural key, so delete the stale failure).
-        db.delete(existing)
-        db.commit()
+        elif _utc_naive_now() - (existing.started_at or _utc_naive_now()) <= orphan_lease:
+            # kill signature inside the lease: in-flight or recently dead;
+            # the double-run guard holds
+            return False
+        else:
+            # orphaned past the lease: reclaim in place (natural key)
+            existing.started_at = _utc_naive_now()
+            db.commit()
+            return True
     db.add(JobRun(job=job, period_key=period_key, started_at=_utc_naive_now()))
     try:
         db.commit()

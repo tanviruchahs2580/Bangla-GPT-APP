@@ -966,6 +966,8 @@ jobs:
               # The unreachable yield is what makes the stub an async
               # generator, which is the interface the tutor calls.
               "tests/test_scale_hardening.py:144: unreachable code after 'raise' (100% confidence)",
+              # Same async-generator stub shape, in the metering tests.
+              "tests/test_tutor_metering_honesty.py:160: unreachable code after 'raise' (100% confidence)",
           }
           out = subprocess.run(
               [sys.executable, "-m", "vulture", "src", "tests", "--min-confidence", "100"],

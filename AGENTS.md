@@ -182,9 +182,13 @@ is **SQLAlchemy 2 sync**, not async — do not introduce async sessions.
 `db/models.py` holds **42 tables** (`grep -c '__tablename__'
 apps/api/src/bangla_gpt_api/db/models.py`; the claims of 46 and of a
 "41-table schema" elsewhere in this file were both wrong — CI-FIX-007). Read
-the invariant comments: several constraints (including the role
-`CHECK`) exist in code comments only. Never edit an applied migration — add a new one, per
-`~/.zcode/skills/safe-db-migration`.
+the invariant comments. The users role `CHECK` is real now
+(`a3c5e7f9b1d3` created it; an earlier claim here that it was
+comment-only was stale — the migration-chain audit on 2026-11-12 found
+`ck_users_role` in the ORM and both migrations). Remaining comment-only
+invariants are vocabulary tables (quiz status, content sources, audit
+action) — flagged for a future schema-hardening migration. Never edit an
+applied migration — add a new one, per `~/.zcode/skills/safe-db-migration`.
 
 ## 11. Generated and serialized artifacts — one writer each
 
@@ -210,7 +214,7 @@ part of the command where the API tools need it).
 
 ```bash
 # API
-cd apps/api && python -m pytest -q            # 246 test files on 2026-11-10 (`find tests -name 'test_*.py' | wc -l`); pytest-randomly runs by default
+cd apps/api && python -m pytest -q            # 252 test files on 2026-11-12 (`find tests -name 'test_*.py' | wc -l`); pytest-randomly runs by default; pyproject pins asyncio_default_fixture_loop_scope after the pytest bump broke CI
 cd apps/api && ruff check . && ruff format --check .
 cd apps/api && mypy src                      # CI-FIX-007: bare `mypy` does not run at all ("Missing target module, package, files, or command"); CI and pre-commit both use `mypy src`
 lint-imports                                 # the five import-linter contracts (repo-root config)
@@ -334,7 +338,7 @@ still wins over anything in the studio skills.
 **Workflow for frontend tasks:** read-only audit (`/frontend-audit`) → spec
 (`/frontend-design-spec`) → plan (`/frontend-plan`) → **user-approved**
 implementation (`/frontend-implement`, refuses to start without an approved
-plan) → independent review (`frontend-visual-reviewer` agent, read-only) →
+plan) → independent review (`bangla-gpt-frontend-visual-reviewer` agent, read-only) →
 `/frontend-visual-qa` → `/frontend-release-check` before hand-off.
 
 **Design standards (summary; the plugin skills carry the detail):**

@@ -35,6 +35,21 @@ _MOBILE_RE = re.compile(
     r"(?:[ \-./]?\d){8}"
     r"(?!\d)"
 )
+# Bangladesh landline (PRIV-001 follow-up): a Dhaka-style `02` plus 7-8
+# subscriber digits, or a three-digit regional area code (e.g. `031`) plus 6-7
+# subscriber digits — optionally behind the +880/00880 country code, in ASCII
+# or Bangla digits. The mobile rule requires the 01[3-9] prefix and the NID
+# rule needs 10+ CONTIGUOUS digits, so `+880 2 9661234` (9 separated digits)
+# egressed verbatim. Same ReDoS discipline as the mobile rule: bounded,
+# unnested, fixed repetitions only. Redactions meter under the `phone` kind.
+_LANDLINE_RE = re.compile(
+    r"(?<!\d)"
+    r"(?:"
+    r"(?:(?:\+|00)?[8\u09ee]{2}[ \-./]?[0\u09e6]?[ \-./]?[2\u09e8][ \-./]?\d{7,8})"
+    r"|[0\u09e6][ \-./]?(?:[2\u09e8][ \-./]?\d{7,8}|[3-9\u09e9-\u09ef]\d[ \-./]?\d{6,7})"
+    r")"
+    r"(?!\d)"
+)
 # Email addresses (ASCII local/domain; IDN is out of scope for pasted PII).
 _EMAIL_RE = re.compile(r"(?<![\w.+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?![\w.-])")
 # NID / birth-registration-like runs: 10-17 consecutive digits. Deliberately
@@ -43,7 +58,12 @@ _EMAIL_RE = re.compile(r"(?<![\w.+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{
 _NID_RE = re.compile(r"(?<!\d)\d{10,17}(?!\d)")
 
 _PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    # Order is documented and pinned (test_pattern_order_keeps_an_adjacent_
+    # address_intact): phone before email, on purpose — a pasted
+    # "number@domain" is a phone glued to a domain and redacts its digits
+    # under the phone kind.
     ("phone", _MOBILE_RE),
+    ("phone", _LANDLINE_RE),
     ("email", _EMAIL_RE),
     ("nid", _NID_RE),
 )

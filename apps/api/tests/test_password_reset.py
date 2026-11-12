@@ -139,7 +139,11 @@ def test_change_password_requires_current_and_rotates(client: TestClient) -> Non
         json={"current_password": "wrong", "new_password": "rotated-pass-1"},
         headers=headers,
     )
-    assert wrong.status_code == 400
+    # One code, one status: delete-me and both MFA routes answer 401 for a
+    # bad current password; change-password used to answer 400, splitting a
+    # single refusal into two client behaviors.
+    assert wrong.status_code == 401
+    assert wrong.json()["detail"]["code"] == "bad_current_password"
 
     same = client.post(
         "/auth/change-password",
@@ -194,6 +198,23 @@ def test_force_change_blocks_other_endpoints_until_rotated(tmp_path) -> None:
     assert rotated.status_code == 200
     new_headers = {"Authorization": f"Bearer {rotated.json()['access_token']}"}
     assert client.get("/admin/users", headers=new_headers).status_code == 200
+
+
+def test_force_change_does_not_exempt_destructive_me_routes(tmp_path) -> None:
+    """The /users/me exemption was method-blind, so a forced-rotation
+    session could DELETE the account before rotating the password. The
+    exemption exists for the read the change-password screen needs — not
+    for the destructive verbs that share the path."""
+    client = make_client(tmp_path)
+    login = client.post("/auth/login", json={"email": "root@example.com", "password": PASSWORD})
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    assert login.json()["must_change_password"] is True
+
+    assert client.get("/users/me", headers=headers).status_code == 200
+
+    refused = client.request("DELETE", "/users/me", headers=headers, json={"password": PASSWORD})
+    assert refused.status_code == 403
+    assert refused.json()["detail"]["code"] == "password_change_required"
 
 
 def test_force_change_flag_follows_setting(tmp_path) -> None:

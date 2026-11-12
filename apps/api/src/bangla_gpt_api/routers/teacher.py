@@ -396,6 +396,3 @@ def classroom_import(
     # storing the response at all.
     response.headers["Cache-Control"] = "no-store"
     return ClassImportOut(created=created, failed=len(rows_out) - created, rows=rows_out)
-
-
-# ── school onboarding (admin -> school code -> staff invite) ────

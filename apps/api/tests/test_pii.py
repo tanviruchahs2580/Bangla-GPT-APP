@@ -205,3 +205,61 @@ def test_evidence_prompt_meters_a_separated_phone_as_phone_kind() -> None:
     assert "[phone redacted]" in prompt
     after = PII_REDACTED_TOTAL.labels(kind="phone")._value.get()
     assert after - before == 1
+
+
+@pytest.mark.parametrize(
+    "phone",
+    [
+        "+880 2 9661234",
+        "02 9661234",
+        "02-9661234",
+        "+880 2 96612345",
+        "031 619619",
+        "০২-৯৬৬১২৩৪৫",
+    ],
+)
+def test_bd_landline_numbers_are_redacted(phone: str) -> None:
+    """A Dhaka/Chittagong-style landline is as much egress PII as a mobile:
+    the mobile rule requires the 01[3-9] prefix and NID needs 10+ contiguous
+    digits, so `+880 2 9661234` (9 separated digits) survived to egress."""
+    text, counts = redact_pii(f"অফিস {phone} এ কল করুন")
+    assert phone not in text, text
+    assert "[phone redacted]" in text
+    assert counts == {"phone": 1, "email": 0, "nid": 0}
+
+
+def test_landline_redaction_leaves_curriculum_numerals_alone() -> None:
+    for benign in [
+        "maatham score 29661234 নয়",  # contiguous 8 digits: not a landline shape
+        "৯৬৬১২৩৪ নম্বরটা কত",  # bare subscriber digits, no area code
+        "১৯৭১ সালে ২টা ঘটনা",
+    ]:
+        text, counts = redact_pii(benign)
+        assert redacted_total(counts) == 0, benign
+
+
+def test_govt_report_scan_passes_iso_timestamps_in_every_year() -> None:
+    """Audit re-check (2026-11-12): the claimed 2025-2027 timestamp
+    allowlist time-bomb does not exist — an ISO `T`-separated token breaks
+    the phone-shape scan before the year whitelist is ever consulted, for
+    ANY year. Pin that: a future year must not start failing the export
+    scan, and the token-level mechanism must not be "fixed" into something
+    that also rescues phone-like digit runs."""
+
+    from bangla_gpt_api.services.govt_report import pii_violations
+
+    for year in (2026, 2028, 2031, 2040):
+        stamp = f"{year}-06-30T09:15:30+06:00"
+        assert pii_violations(stamp) == [], (year, stamp)
+
+
+def test_govt_report_scan_flags_whitespace_timestamps_in_every_year() -> None:
+    """The counter-shape: a whitespace-separated timestamp IS flagged (both
+    years — behavior is NOT year-dependent; the scan fails closed loudly).
+    Deliberately documented here as the operator-visible cost of treating
+    digit runs as phone-shaped."""
+
+    from bangla_gpt_api.services.govt_report import pii_violations
+
+    for year in (2026, 2031):
+        assert pii_violations(f"{year}-06-30 09:15:30") != [], year

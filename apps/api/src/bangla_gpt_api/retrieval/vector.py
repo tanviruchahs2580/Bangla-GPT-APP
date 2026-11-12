@@ -4,7 +4,7 @@ The public ``search`` signature mirrors:meth:`BM25Index.search` so the two
 lanes are interchangeable ranking sources for the fusion index. Corpus sizes
 here (sample NCTB: hundreds of chunks) make brute-force cosine exact and
 cheap; the pgvector backend for the real NCTB corpus is infrastructure
-(🖐 human input, ) and will implement the same contract server-side.
+and will implement the same contract server-side.
 """
 
 from bangla_gpt_api.curriculum.models import Chunk

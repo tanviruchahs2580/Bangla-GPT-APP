@@ -19,7 +19,7 @@ This module is the fix, split into the pieces that are independently true:
   fail for script reasons alone.
 * :func:`content_terms` — stemmed, stop-word-filtered query terms; the set
   every downstream signal is computed over.
-* :func:`coverage_weigths` — per-term weight from corpus document frequency
+* :func:`coverage_weights` — per-term weight from corpus document frequency
   (``ln(1 + N/df)``). A term that appears in every textbook chunk cannot
   carry the gate; a term that appears in one can. When no statistics are
   available the weight is 1 for content terms, so a caller without stats

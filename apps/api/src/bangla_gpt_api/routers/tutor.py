@@ -10,7 +10,7 @@ import json
 import logging
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import Annotated, Any, Literal, NamedTuple
+from typing import Annotated, Any, NamedTuple
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -56,6 +56,7 @@ from bangla_gpt_api.services.activity import (
 )
 from bangla_gpt_api.services.context import RequestContext
 from bangla_gpt_api.services.costs import (
+    abandon_ai_usage,
     check_ai_budget,
     estimate_tokens,
     finalize_ai_usage,
@@ -82,15 +83,29 @@ from .common import (
     source_scores,
 )
 from .deps import (
-    CONSENT_VERSION,
     AdminUser,
     Ctx,
     CurrentUser,
     DbSession,
     _provider_lacks_vision,
+    require_current_consent,
 )
 
 router = APIRouter(responses=AUTH_GUARD_RESPONSES)
+
+#: RAG-27: these refusals are produced LOCALLY — the provider never ran for
+#: the turn — so the refusal copy must never be appended to a ledger line as
+#: completion tokens (charging template bytes invents provider spend).
+#: ``model_refused`` and ``output_screen`` are excluded deliberately: they
+#: happen AFTER provider spend, which the ledger must keep showing.
+LOCAL_REFUSAL_REASONS = frozenset(
+    {
+        RETRIEVAL_ONLY_REFUSED_REASON,
+        "insufficient_evidence",
+        "ai_busy",
+        "ai_generation_disabled",
+    }
+)
 
 logger = logging.getLogger(__name__)
 
@@ -137,57 +152,6 @@ def _measured_prompt_tokens(question: str, history: list[dict[str, str]] | None 
     """
     history_tokens = sum(estimate_tokens(turn.get("content") or "") for turn in (history or []))
     return _MEASURED_PROMPT_FIXED_TOKENS + history_tokens + estimate_tokens(question)
-
-
-def require_current_consent(db: Session, user: User) -> None:
-    """BE-FIX-004: enforce the consent-version flag on the surfaces that matter.
-
-    ``deps.CONSENT_VERSION`` documents that bumping the version makes every
-    previously-consented student ``needs_reconfirm`` until they accept, but the
-    flag was only ever COMPUTED into responses (``GET /students/{id}/consent``,
-    ``users._consent_status``) -- no route read it, so a version bump changed
-    a display field and nothing else: a child whose guardian had not accepted
-    the current text kept generating answers and kept writing learning records.
-    This is the gate that makes the flag a control.
-
-    Scope, deliberately narrow and deny-by-default: the tutor/chat generation
-    surfaces and the student writes that create durable records about the child
-    (quiz start/submit, chapter progress, revision reviews, feedback, product
-    events). Reads stay open -- a child must be able to look at their own
-    history while a re-confirmation is pending -- and the refusal names the one
-    endpoint that clears it, so the gate is not a dead end.
-
-    Non-student callers (teacher/school/admin staff, guardians) are not gated
-    here: they act under their own authorization rules, and a proxy submission
-    for a proctored paper is the staff member's act, not the child's.
-
-    NOTE (follow-up for the owner of ``routers/deps.py``): this belongs next to
-    the ``CONSENT_VERSION`` definition as a dependency alias
-    (``ConsentConfirmedStudent``) so it cannot be forgotten on a new route; it
-    lives here because deps.py is outside this change's write scope.
-    """
-    if user.role != "student":
-        return
-    student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one_or_none()
-    if student is None:
-        # A staff/admin account has no student profile; a student account
-        # without one has nothing recorded, so there is no consent state to
-        # compare -- other guards already answer that shape.
-        return
-    if student.consent_version == CONSENT_VERSION:
-        return
-    raise HTTPException(
-        status_code=403,
-        detail={
-            "code": "consent_reconfirmation_required",
-            "message": (
-                "Guardian consent on record is not the current version. "
-                f"Re-confirm at POST /students/{student.id}/consent/reconfirm"
-            ),
-            "student_id": student.id,
-            "required_version": CONSENT_VERSION,
-        },
-    )
 
 
 def _ask_prepare(
@@ -303,14 +267,11 @@ async def ask(app_ctx: Ctx, payload: AskRequest, db: DbSession, user: CurrentUse
             db,
             user,
             question=question,
-            # RAG-27: a retrieval-only answer never reached the provider, so
-            # the reserve finalizes at zero completion tokens (the excerpt text
-            # is not a model completion and must not be charged as one).
-            answer=(
-                None
-                if response.refused_reason == RETRIEVAL_ONLY_REFUSED_REASON
-                else response.answer
-            ),
+            # RAG-27: locally-produced refusals (grounding, busy, disabled,
+            # retrieval-only) never reached the provider, so their reserve
+            # finalizes at zero completion tokens — the refusal copy is not
+            # a model completion and must not be charged as one.
+            answer=(None if response.refused_reason in LOCAL_REFUSAL_REASONS else response.answer),
             model=getattr(tutor.provider, "model", None) or tutor.provider.name,
             pending=pending,
         )
@@ -603,8 +564,6 @@ def _prepare_chat_turn(
     user: User,
     conversation_id: int,
     payload: ChatSendRequest,
-    *,
-    persist: Literal["flush", "commit"],
 ) -> _PreparedTurn:
     """DB prelude shared by the JSON and SSE chat turns.
 
@@ -678,17 +637,13 @@ def _prepare_chat_turn(
 
     user_msg = ChatMessage(conversation_id=conv.id, role="user", content=payload.message)
     db.add(user_msg)
-    if persist == "flush":
-        # Flush (not commit): the user turn must not survive a failed LLM
-        # call, otherwise the provider error leaves an orphan message behind.
-        db.flush()
-    else:
-        # commit before streaming to release DB session/connection during
-        # LLM stream (was flush-only, holding transaction for up to 30s).
-        # User turn is persisted alone; assistant turn will be persisted in
-        # a short second transaction after the stream.
-        db.commit()
-        db.refresh(user_msg)
+    # commit before streaming to release the DB session/connection during
+    # the LLM stream (a flush holds the pooled connection and its write lock
+    # across a 30s provider budget — audit B-05). The all-or-nothing turn
+    # contract is kept by explicitly deleting the committed user turn when
+    # the provider fails (see _discard_failed_user_turn).
+    db.commit()
+    db.refresh(user_msg)
     # build the context before streaming so the log line lands once.
     ctx = _request_context(
         db,
@@ -740,15 +695,19 @@ def _persist_chat_reply(
     if conv.title is None:
         conv.title = payload.message[:80]
     # AI-002/BE-01: finalize the reserve in place (one row per generation
-    # with the answer actually produced). Vision refusals never reach a
-    # provider: their reserve finalizes at zero completion tokens. The kill
-    # switch (F-031) reserves nothing at all, so there is no row to finalize.
-    if not no_vision and pending_usage is not None:
-        # RAG-27: as with vision refusals, a retrieval-only reply was never
-        # generated by the provider; finalize at zero completion tokens.
-        answer_text = (
-            None if result.refused_reason == RETRIEVAL_ONLY_REFUSED_REASON else result.answer
-        )
+    # with the answer actually produced). The kill switch (F-031) reserves
+    # nothing at all, so there is no row to finalize.
+    if pending_usage is None:
+        pass
+    elif no_vision:
+        # Vision refusals never reach a provider: the row must land in the
+        # one finalize shape a "produced nothing" generation has (BE-FIX-003)
+        # instead of looking in-flight forever.
+        abandon_ai_usage(db, pending_usage, model=model, reason="vision_unsupported")
+    else:
+        # RAG-27: a locally-produced refusal is not a model completion; the
+        # retrieval-only and other local refusals finalize at zero completions.
+        answer_text = None if result.refused_reason in LOCAL_REFUSAL_REASONS else result.answer
         finalize_ai_usage(db, pending_usage, model=model, answer_text=answer_text)
     db.commit()
     # one question ≈ one minute of study for the daily counters.
@@ -787,7 +746,7 @@ async def send_chat_message(
     # (see _discard_failed_user_turn) -- the flush path got that behaviour
     # for free from its rollback.
     prepared = await asyncio.to_thread(
-        _prepare_chat_turn, app_ctx, db, user, conversation_id, payload, persist="commit"
+        _prepare_chat_turn, app_ctx, db, user, conversation_id, payload
     )
     if not app_ctx.settings.ai_generation_enabled:
         # F-031 kill switch: the user turn is already persisted above (with
@@ -909,7 +868,7 @@ async def stream_chat_message(
             detail={"code": "tutor_unavailable", "message": "Tutor service unavailable"},
         )
     prepared = await asyncio.to_thread(
-        _prepare_chat_turn, app_ctx, db, user, conversation_id, payload, persist="commit"
+        _prepare_chat_turn, app_ctx, db, user, conversation_id, payload
     )
     conv = prepared.conv
     user_msg = prepared.user_msg
@@ -1050,9 +1009,14 @@ async def stream_chat_message(
             }
             yield ("event: done\ndata: " + json.dumps(done_payload, ensure_ascii=False) + "\n\n")
         except ProviderError:
-            # user turn already persisted; do not rollback
-            with contextlib.suppress(Exception):  # rollback is best-effort here
-                await asyncio.to_thread(db.rollback)
+            # Same all-or-nothing turn contract as the JSON route: a failed
+            # provider call deletes the committed user turn and restores the
+            # strategy rotation, so history keeps neither a reply nor a
+            # dangling question. Deltas already streamed to the client are
+            # its own rendering; the durable record is what stays coherent.
+            # (The prompt-side reserve finalizes in the finally below.)
+            with contextlib.suppress(Exception):
+                await asyncio.to_thread(_discard_failed_user_turn, db, prepared)
             yield (
                 "event: error\ndata: "
                 + json.dumps({"code": "llm_unavailable"}, ensure_ascii=False)

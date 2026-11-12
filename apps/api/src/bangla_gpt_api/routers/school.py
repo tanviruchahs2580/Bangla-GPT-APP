@@ -40,6 +40,7 @@ from bangla_gpt_api.db.models import (
 )
 from bangla_gpt_api.logging_config import json_log
 from bangla_gpt_api.routers._error_contract import AUTH_GUARD_RESPONSES, coded
+from bangla_gpt_api.routers.auth import enforce_password_policy
 from bangla_gpt_api.routers.common import request_language
 from bangla_gpt_api.schemas import (
     ROSTER_PAGE_DEFAULT_LIMIT,
@@ -410,7 +411,7 @@ def school_invite_create(
     "/auth/join-school",
     response_model=TokenResponse,
     status_code=201,
-    responses=coded(404, 409, 410),
+    responses=coded(400, 404, 409, 410),
 )
 def auth_join_school(
     app_ctx: Ctx, request: Request, payload: SchoolJoinIn, db: DbSession
@@ -420,6 +421,10 @@ def auth_join_school(
     Invite codes are single-use and time-limited; only their SHA-256 hash is
     stored, and redemption is atomic (AUD-0034).
     """
+    # A credential-creation point owes the full policy (SEC-02): the length
+    # floor and the blocklist both apply, checked before the invite code is
+    # claimed so a refused password burns nothing.
+    enforce_password_policy(app_ctx.settings, payload.password)
     key = _hash_invite(payload.invite_code)
     now = datetime.now(UTC).replace(tzinfo=None)
     # Claim the code before creating any user, so two racing redemptions

@@ -52,6 +52,8 @@ from bangla_gpt_api.db.models import (
     EmailVerification,
     ParentInvite,
     PasswordReset,
+    SchoolInvite,
+    StudentInvite,
 )
 from bangla_gpt_api.jobs import TERMINAL_STATUSES
 
@@ -144,6 +146,28 @@ def retention_report(
             ParentInvite.used_at.isnot(None),
         )
     ).scalar_one()
+    # Unused expired invites are stale claim codes past their grace window —
+    # student_invites additionally carries the invited person's PLAINTEXT
+    # email, so leaving them undrained was an unbounded PII accrual (until
+    # the account holder's own erasure ran, which never touches these).
+    student_invites = db.execute(
+        select(func.count(StudentInvite.id)).where(
+            StudentInvite.expires_at < token_cutoff,
+            StudentInvite.used_at.is_(None),
+        )
+    ).scalar_one()
+    school_invites = db.execute(
+        select(func.count(SchoolInvite.id)).where(
+            SchoolInvite.expires_at < token_cutoff,
+            SchoolInvite.used_at.is_(None),
+        )
+    ).scalar_one()
+    unused_invites = db.execute(
+        select(func.count(ParentInvite.id)).where(
+            ParentInvite.expires_at < token_cutoff,
+            ParentInvite.used_at.is_(None),
+        )
+    ).scalar_one()
     # F-058: the analytics trail was documented as swept but never was.
     analytics_events = db.execute(
         select(func.count(AnalyticsEventRow.id)).where(
@@ -176,6 +200,9 @@ def retention_report(
         "password_resets_deleted": int(resets),
         "email_verifications_deleted": int(verifications),
         "used_invites_deleted": int(invites),
+        "student_invites_deleted": int(student_invites),
+        "school_invites_deleted": int(school_invites),
+        "unused_invites_deleted": int(unused_invites),
         "analytics_events_deleted": int(analytics_events),
         "answer_log_deleted": int(answer_log),
         "ai_usage_deleted": int(ai_usage),
@@ -231,6 +258,24 @@ def run_retention_sweep(
         ParentInvite,
         ParentInvite.id,
         (ParentInvite.expires_at < token_cutoff) & (ParentInvite.used_at.isnot(None)),
+    )
+    _delete_ranked(
+        db,
+        StudentInvite,
+        StudentInvite.id,
+        (StudentInvite.expires_at < token_cutoff) & (StudentInvite.used_at.is_(None)),
+    )
+    _delete_ranked(
+        db,
+        SchoolInvite,
+        SchoolInvite.id,
+        (SchoolInvite.expires_at < token_cutoff) & (SchoolInvite.used_at.is_(None)),
+    )
+    _delete_ranked(
+        db,
+        ParentInvite,
+        ParentInvite.id,
+        (ParentInvite.expires_at < token_cutoff) & (ParentInvite.used_at.is_(None)),
     )
     _delete_ranked(
         db,

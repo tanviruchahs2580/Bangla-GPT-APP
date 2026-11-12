@@ -8772,6 +8772,16 @@
             },
             "description": "Successful Response"
           },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedDetail"
+                }
+              }
+            },
+            "description": "Business-rule rejection"
+          },
           "401": {
             "content": {
               "application/json": {
@@ -11947,6 +11957,7 @@
     },
     "/ready": {
       "get": {
+        "description": "Probe DB, provider and index. A plain `def`, not `async def`: the\nhandler runs a synchronous `db.execute` and sibling `/status` already\nfollows that rule — an async handler would run it on the event loop the\nSSE streams share.",
         "operationId": "ready_ready_get",
         "responses": {
           "200": {
@@ -17944,6 +17955,18 @@
                 }
               ],
               "title": "Student Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
             }
           }
         ],

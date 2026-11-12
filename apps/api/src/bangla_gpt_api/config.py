@@ -4,8 +4,9 @@ import logging
 import tomllib
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal, cast
+from typing import Any, Literal, cast, get_args, get_origin
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -70,6 +71,42 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _treat_blank_envs_as_unset(cls, data: Any) -> Any:
+        """Drop blank values for scalar-typed knobs so the default applies.
+
+        docker-compose forwards documented knobs as ``VAR: ${VAR:-}``; an
+        operator leaving the key out of ``.env`` hands the container the
+        EMPTY STRING, and pydantic rejects ``""`` for bool/int/float fields
+        with a raw ValidationError before any readable guard runs — the
+        container crash-loops with no hint which knob was blank. compose
+        semantics for ``${VAR:-}`` are "unset", so a blank (or
+        whitespace-only) value is deleted here; anything non-blank still
+        parses and still fails loudly on a real typo.
+        """
+        if not isinstance(data, dict):
+            return data
+        # Keys may arrive as env names ("PII_ALLOW_PLAINTEXT") or as field
+        # names, depending on the source; both are case-insensitive matches
+        # of the field name, so compare that way.
+        scalar_types: dict[str, tuple[type, ...]] = {}
+        for name, field in cls.model_fields.items():
+            annotation = field.annotation
+            if annotation is None:
+                continue
+            origin = get_origin(annotation)
+            candidates = get_args(annotation) if origin is not None else (annotation,)
+            scalars = tuple(t for t in candidates if t in (bool, int, float))
+            if scalars:
+                scalar_types[name.lower()] = scalars
+        for key, value in list(data.items()):
+            if not isinstance(value, str) or value.strip() != "":
+                continue
+            if str(key).lower() in scalar_types:
+                del data[key]
+        return data
 
     app_name: str = "Bangla GPT API"
     version: str = _get_version()

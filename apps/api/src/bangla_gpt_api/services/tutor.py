@@ -3,7 +3,6 @@ import hashlib
 import logging
 import math
 import time
-import unicodedata
 from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -36,6 +35,7 @@ from bangla_gpt_api.retrieval.base import RankingIndex
 from bangla_gpt_api.retrieval.bm25 import indexable_text, tokenize
 from bangla_gpt_api.retrieval.context import assemble_evidence
 from bangla_gpt_api.retrieval.hybrid import light_stem, trigram_similarity
+from bangla_gpt_api.retrieval.normalize import normalize_nfkc
 from bangla_gpt_api.retrieval.query_analysis import (
     content_terms,
     coverage_weights,
@@ -252,9 +252,6 @@ def prompt_sha256(system: str = SYSTEM_PROMPT) -> str:
 
 PROMPT_SHA256 = prompt_sha256()
 
-# Same set the corpus pipeline strips (nctb/normalize.py): ZWSP, ZWJ, ZWNJ, BOM.
-_ZERO_WIDTH_TABLE = str.maketrans("", "", "\u200b\u200c\u200d\ufeff")
-
 
 def sanitize_evidence(text: str) -> str:
     """Neutralize prompt-delimiter escapes inside untrusted text.
@@ -277,14 +274,15 @@ def normalize_query(text: str) -> str:
 
     Folds mobile-keyboard compatibility variants (precomposed vs decomposed
     Bangla) before safety screening, retrieval, gating and routing, and
-    strips zero-width characters (ZWSP/ZWJ/ZWNJ/BOM) — invisible inserts
-    inside e.g. ``আত্মহত্যা`` would otherwise defeat the safety and
-    injection regexes, which are plain substring patterns. Pure NFKC
-    otherwise — no casefold/whitespace rewrite, so the text sent to the LLM
-    keeps its original casing and spacing.
+    strips the audited invisible-character set (SAFE-001) — invisible
+    inserts inside e.g. ``আত্মহত্যা`` would otherwise defeat the safety and
+    injection regexes, which are plain substring patterns. Delegated to the
+    one shared normalizer (retrieval.normalize) so the boundary cannot
+    drift from the corpus pipeline again; it is pure NFKC — no
+    casefold/whitespace rewrite, so the text sent to the LLM keeps its
+    original casing and spacing.
     """
-    normalized = unicodedata.normalize("NFKC", text)
-    return normalized.translate(_ZERO_WIDTH_TABLE)
+    return normalize_nfkc(text)
 
 
 def build_evidence_prompt(
@@ -1640,6 +1638,20 @@ class TutorService:
         try:
             answer = await self._generate(context_blocks, image=image, provider=provider_for_call)
         except GenerationBusyError:
+            # RAG-29 parity (see the streaming path): a saturated lane still
+            # owns a trace, or every busy turn is a diagnostics blind spot.
+            self._record_trace(
+                question=question,
+                outcome="ai_busy",
+                grounded=False,
+                refused_reason="ai_busy",
+                hits=hits,
+                model=getattr(provider_for_call, "name", "unknown"),
+                parameters={"coverage": retrieval.coverage, "top_k": self.top_k},
+                latency_ms={**stage_ms, "total": sum(stage_ms.values())},
+                rewrite_applied=rewrite_applied,
+                rewrite_terms=rewrite_terms,
+            )
             return self._refusal(GENERATION_BUSY_ANSWER, "ai_busy")
         except ProviderError:
             if not self.retrieval_only_fallback:
@@ -1835,7 +1847,7 @@ class TutorService:
         search_query: str | None = None,
         image: dict | None = None,
     ) -> AsyncIterator["StreamEvent"]:
-        """Streaming variant of:meth:`ask` (same ``search_query`` override and
+        """Streaming variant of :meth:`ask` (same ``search_query`` override and
         ``image`` forwarding rules).
 
         Yields ``StreamEvent`` items: zero or more ``token`` events followed by
@@ -1935,6 +1947,25 @@ class TutorService:
         ):
             yield event
         if run.busy:
+            # RAG-29 parity: answered and refused turns both trace; a
+            # saturated lane must not be the one outcome diagnostics never
+            # see — without this, every busy stream turn is a blind spot in
+            # the per-answer store while the counters alone say how often.
+            self._record_trace(
+                question=question,
+                outcome="ai_busy",
+                grounded=False,
+                refused_reason="ai_busy",
+                hits=hits,
+                model=getattr(provider_for_stream, "name", "unknown"),
+                parameters={"coverage": retrieval.coverage, "top_k": self.top_k, "stream": True},
+                latency_ms={
+                    **stage_ms,
+                    "total": int((time.perf_counter() - turn_started) * 1000),
+                },
+                rewrite_applied=rewrite_applied,
+                rewrite_terms=rewrite_terms,
+            )
             return
 
         if run.output_blocked:

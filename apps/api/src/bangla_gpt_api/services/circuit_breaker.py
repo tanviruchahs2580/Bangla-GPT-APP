@@ -43,7 +43,7 @@ class CircuitBreaker:
     """Thread-safe circuit breaker with sliding failure window.
 
     Args:
-        failure_threshold: Number of consecutive failures before opening.
+        failure_threshold: Number of failures inside a sliding 60s window before opening.
         reset_timeout_seconds: Seconds to wait before transitioning to
             half-open and allowing a probe request.
     """

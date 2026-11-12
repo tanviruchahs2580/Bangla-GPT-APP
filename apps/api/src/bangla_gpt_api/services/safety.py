@@ -679,9 +679,7 @@ def strip_injections(text: str) -> tuple[str, int]:
     return " ".join(p.strip() for p in kept), removed
 
 
-# ── age-appropriateness clause shared BYTE-IDENTICAL by all four
-# system prompts (tutor + content/lesson/question-paper generators, ).
-# Age-appropriateness clause shared byte-identical by all four system
+# ── age-appropriateness clause shared byte-identical by all four system
 # prompts (tutor + content/lesson/question-paper generators).
 AGE_RULE_SENTENCE = (
     "শিক্ষার্থীরা কিশোর-কিশোরী: প্রতিটি উত্তর বয়স-উপযোগী, শালীন ও শুধুমাত্র "

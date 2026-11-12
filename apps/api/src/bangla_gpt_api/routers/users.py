@@ -79,7 +79,11 @@ def revoke_my_sessions(
     here.
     """
     forbid_impersonation(request)
-    user.sessions_invalidated_at = datetime.now(UTC)
+    # The epoch column is naive UTC (models.py) — handing it an aware value
+    # makes the Postgres comparison depend on the session TimeZone and can
+    # refuse every token minted during the offset. Match the change-password
+    # path in routers/auth.py.
+    user.sessions_invalidated_at = datetime.now(UTC).replace(tzinfo=None)
     write_audit(
         db,
         action="sessions_revoked",

@@ -21,11 +21,15 @@ from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.models import (
     AuditLog,
     ChatMessage,
+    ClassRoom,
     Conversation,
     EmailVerification,
     ParentInvite,
     PasswordReset,
+    School,
+    SchoolInvite,
     Student,
+    StudentInvite,
     User,
 )
 from bangla_gpt_api.db.session import make_engine, make_session_factory
@@ -332,3 +336,88 @@ def test_consent_endpoints_enforce_access(pair) -> None:
     parent_headers = _login(client, "s58parent@example.com")
     assert client.get(f"/students/{sid}/consent", headers=parent_headers).status_code == 403
     assert client.get(f"/students/{sid}/consent").status_code == 401
+
+
+def test_retention_sweeps_expired_unused_invites(pair) -> None:
+    """Expired invite rows lived forever: student_invites carries the invited
+    person's PLAINTEXT email, and neither it nor unused expired parent /
+    school invites were in the retention legs (which only removed USED
+    parent invites). Expired codes are already unredeemable, so past the
+    token grace window they are stale rows."""
+    client, factory, _ = pair
+    now = datetime.now(UTC).replace(tzinfo=None)
+    db = factory()
+    try:
+        school = School(name="Ret School", code="RET-SWEEP-1", created_at=now)
+        db.add(school)
+        db.flush()
+        root_user = db.execute(select(User).order_by(User.id)).scalars().first()
+        classroom = ClassRoom(school_id=school.id, class_level=6, created_at=now)
+        db.add(classroom)
+        db.flush()
+        student = Student(name="Ret Student", class_level=6)
+        db.add(student)
+        db.flush()
+        db.add_all(
+            [
+                StudentInvite(
+                    classroom_id=classroom.id,
+                    student_id=student.id,
+                    email="invited-parent@example.test",
+                    code_hash="e" * 64,
+                    expires_at=now - timedelta(days=45),
+                    created_at=now - timedelta(days=46),
+                ),
+                StudentInvite(
+                    classroom_id=classroom.id,
+                    student_id=student.id,
+                    email="fresh@example.test",
+                    code_hash="f" * 64,
+                    expires_at=now + timedelta(days=10),
+                    created_at=now,
+                ),
+                SchoolInvite(
+                    school_id=school.id,
+                    created_by=root_user.id,
+                    code_hash="7" * 64,
+                    expires_at=now - timedelta(days=45),
+                ),
+                SchoolInvite(
+                    school_id=school.id,
+                    created_by=root_user.id,
+                    code_hash="8" * 64,
+                    expires_at=None,
+                ),
+                ParentInvite(
+                    code_hash="9" * 64,
+                    student_id=student.id,
+                    expires_at=now - timedelta(days=45),
+                ),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    res = client.post("/admin/maintenance/purge?dry_run=true", headers=_admin_headers(client))
+    assert res.status_code == 200
+    body = res.json()
+    assert body["student_invites_deleted"] == 1
+    assert body["school_invites_deleted"] == 1  # the NULL-expiry row fails closed
+    assert body["unused_invites_deleted"] == 1
+
+    swept = client.post(
+        "/admin/maintenance/purge?dry_run=false&confirm=true", headers=_admin_headers(client)
+    )
+    assert swept.status_code == 200
+
+    db = factory()
+    try:
+        student_emails = db.execute(select(StudentInvite.email)).scalars().all()
+        assert student_emails == ["fresh@example.test"], student_emails
+        school_hashes = db.execute(select(SchoolInvite.code_hash)).scalars().all()
+        assert school_hashes == ["8" * 64], school_hashes
+        parent_hashes = db.execute(select(ParentInvite.code_hash)).scalars().all()
+        assert parent_hashes == [], parent_hashes  # unused + expired: swept
+    finally:
+        db.close()

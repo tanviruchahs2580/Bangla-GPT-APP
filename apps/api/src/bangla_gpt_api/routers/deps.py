@@ -198,9 +198,22 @@ _FORCE_CHANGE_EXEMPT_PATHS = frozenset(
         "/metrics",
         "/auth/change-password",
         "/auth/login",
-        "/users/me",
     }
 )
+# Path exemptions that must stay method-scoped: the GET is what the
+# change-password screen reads; destructive verbs on the same path
+# (DELETE /users/me) would otherwise be exercisable by a forced-rotation
+# takeover session before the password is rotated.
+_FORCE_CHANGE_EXEMPT_REQUESTS = frozenset({("/users/me", "GET")})
+
+
+def _force_change_allowed(request: Request) -> bool:
+    path = request.url.path
+    return (
+        path in _FORCE_CHANGE_EXEMPT_PATHS
+        or (path, request.method) in _FORCE_CHANGE_EXEMPT_REQUESTS
+    )
+
 
 # Shared sandbox school for standalone (school-less) staff accounts.
 _DEFAULT_SCHOOL_CODE = "BGPT-DEFAULT"
@@ -280,7 +293,7 @@ def get_current_user(
         iat = payload.get("iat")
         if not isinstance(iat, int) or iat < inv_ts:
             raise _unauthorized("Session expired; please log in again", code="session_expired")
-    if user.must_change_password and request.url.path not in _FORCE_CHANGE_EXEMPT_PATHS:
+    if user.must_change_password and not _force_change_allowed(request):
         raise HTTPException(
             status_code=403,
             detail={
@@ -310,6 +323,52 @@ TeacherOrAdminUser = Annotated[User, Depends(require_roles("teacher", "admin"))]
 ParentUser = Annotated[User, Depends(require_roles("parent"))]
 AdminUser = Annotated[User, Depends(require_roles("admin"))]
 SchoolStaffUser = Annotated[User, Depends(require_roles("school_admin", "admin"))]
+
+
+def require_current_consent(db: Session, user: User) -> None:
+    """BE-FIX-004: enforce the consent-version flag on the surfaces that matter.
+
+    ``CONSENT_VERSION`` documents that bumping the version makes every
+    previously-consented student ``needs_reconfirm`` until they accept, but the
+    flag was only ever COMPUTED into responses (``GET /students/{id}/consent``,
+    ``users._consent_status``) -- no route read it, so a version bump changed
+    a display field and nothing else: a child whose guardian had not accepted
+    the current text kept generating answers and kept writing learning records.
+    This is the gate that makes the flag a control.
+
+    Scope, deliberately narrow and deny-by-default: the tutor/chat generation
+    surfaces and the student writes that create durable records about the child
+    (quiz start/submit, chapter progress, revision reviews, feedback, product
+    events). Reads stay open -- a child must be able to look at their own
+    history while a re-confirmation is pending -- and the refusal names the one
+    endpoint that clears it, so the gate is not a dead end.
+
+    Non-student callers (teacher/school/admin staff, guardians) are not gated
+    here: they act under their own authorization rules, and a proxy submission
+    for a proctored paper is the staff member's act, not the child's.
+    """
+    if user.role != "student":
+        return
+    student = db.execute(select(Student).where(Student.user_id == user.id)).scalar_one_or_none()
+    if student is None:
+        # A staff/admin account has no student profile; a student account
+        # without one has nothing recorded, so there is no consent state to
+        # compare -- other guards already answer that shape.
+        return
+    if student.consent_version == CONSENT_VERSION:
+        return
+    raise HTTPException(
+        status_code=403,
+        detail={
+            "code": "consent_reconfirmation_required",
+            "message": (
+                "Guardian consent on record is not the current version. "
+                f"Re-confirm at POST /students/{student.id}/consent/reconfirm"
+            ),
+            "student_id": student.id,
+            "required_version": CONSENT_VERSION,
+        },
+    )
 
 
 def require_ai_budget(request: Request, db: DbSession, user: TeacherOrAdminUser) -> User:
@@ -379,6 +438,14 @@ def _default_school_id(db: Session) -> int:
 
 
 def _tenant_school_id(db: Session, user: User) -> int | None:
+    """The school id a caller's reads/writes are walled to, or None for the
+    platform-wide admin. Any role outside (admin, teacher, school_admin) is a
+    DEFAULT-DENY — the old fall-through returned None for students and
+    parents too, and this function feeds
+    :func:`_assert_student_in_school`/:func:`_assert_room_in_school`, where
+    None is read as "no wall": a future call site that reached here with such
+    an account silently bypassed tenancy.
+    """
     if user.role == "admin":
         return None
     if user.role in ("teacher", "school_admin"):
@@ -387,7 +454,10 @@ def _tenant_school_id(db: Session, user: User) -> int | None:
         # F-04: standalone staff anchor to the shared default school so
         # their reads can never cross into a real school again.
         return _default_school_id(db)
-    return None
+    raise HTTPException(
+        status_code=403,
+        detail={"code": "insufficient_role", "message": "Insufficient role"},
+    )
 
 
 def _student_in_school(db: Session, school_id: int, student_id: int) -> bool:

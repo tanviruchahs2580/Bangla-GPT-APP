@@ -67,7 +67,16 @@ def main() -> int:
     # Hermetic settings: the hash-ngram embedder needs no network or keys.
     settings = Settings(env="test")
     index = HybridIndex(chunks, build_embedder(settings))
-    tutor = TutorService(index=index, provider=MockLLMProvider())
+    # Wiring parity with evaluation.cli._build_tutor (and production's
+    # initialize/dependencies): without term_stats the 24-question gate
+    # graded a degraded tutor on uniform weights with no roman/glossary
+    # resolution — a configuration no deployment ever serves.
+    tutor = TutorService(
+        index=index,
+        provider=MockLLMProvider(),
+        fast_provider=None,
+        term_stats=getattr(index, "term_stats", None),
+    )
 
     golden = load_golden(GOLDEN_PATH)
     results = []

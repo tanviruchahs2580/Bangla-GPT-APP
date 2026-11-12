@@ -119,6 +119,46 @@ def test_sessions_revoke_kills_every_token(
     assert _me(client, fresh) == 200
 
 
+def test_sessions_revoke_stamps_a_naive_utc(client: TestClient, tmp_path: object) -> None:
+    """users.sessions_invalidated_at is naive UTC (models.py): one tz-aware
+    write makes the epoch comparison depend on the Postgres session TimeZone,
+    which can stamp the comparison hours into the future and refuse every
+    token minted during the offset — the self-lockout the naive invariant
+    prevents. SQLite silently coerces aware datetimes on storage, so the
+    assert observes the PENDING value at flush, not the stored round-trip.
+    The change-password path already writes naive UTC; this pins the revoke
+    path to the same contract."""
+    from sqlalchemy import event
+    from sqlalchemy import inspect as sa_inspect
+    from sqlalchemy.orm import Session
+
+    from bangla_gpt_api.db.models import User
+
+    _register(client, "naive-stamp@example.com")
+    headers = _login(client, "naive-stamp@example.com")
+
+    pending: list = []
+
+    def _capture(session, _flush_context, _instances) -> None:
+        for obj in list(session.new) + list(session.dirty):
+            if isinstance(obj, User):
+                history = sa_inspect(obj).attrs.sessions_invalidated_at.history
+                if history.has_changes():
+                    pending.extend(value for value in history.added if value is not None)
+
+    # The listener is class-global; no engine of our own is needed because
+    # the pending VALUE at flush is what we assert on, not stored rows.
+    event.listen(Session, "before_flush", _capture)
+    try:
+        res = client.post("/users/me/sessions/revoke", headers=headers)
+        assert res.status_code == 204, res.text
+    finally:
+        event.remove(Session, "before_flush", _capture)
+
+    assert len(pending) == 1, f"expected exactly one stamp write, saw {pending!r}"
+    assert pending[0].tzinfo is None, "sessions_invalidated_at must be naive UTC"
+
+
 def test_logout_requires_a_live_token(client: TestClient) -> None:
     _register(client, "anon-logout@example.com")
     assert client.post("/auth/logout").status_code == 401

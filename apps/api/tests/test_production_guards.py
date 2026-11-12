@@ -20,6 +20,7 @@ import pytest
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import (
     _validate_database,
+    _validate_direct_parent_link,
     _validate_llm_provider,
     _validate_rate_limit_redis,
 )
@@ -73,6 +74,35 @@ def test_mock_in_production_requires_an_explicit_opt_in(monkeypatch):
     assert _validate_llm_provider(prod(llm_provider="mock"))
     monkeypatch.setenv("ALLOW_MOCK_LLM_IN_PRODUCTION", "true")
     assert not _validate_llm_provider(prod(llm_provider="mock"))
+
+
+def test_openai_provider_requires_its_key():
+    """A provider the boot guard never heard of sailed through until /ready
+    answered 503; the openai lane must validate at boot like gemini."""
+    problems = _validate_llm_provider(prod(llm_provider="openai"))
+    assert problems, "production must refuse LLM_PROVIDER=openai without a key"
+    assert "OPENAI_API_KEY" in problems[0]
+    assert not _validate_llm_provider(prod(llm_provider="openai", openai_api_key="k"))
+
+
+def test_unknown_provider_name_is_refused_in_production():
+    """An unknown name fails at /ready with a 503, booting a container that
+    only crash-loops late; the guard owns provider reality."""
+    problems = _validate_llm_provider(prod(llm_provider="anthropic"))
+    assert problems, "production must refuse an unimplemented provider name"
+    assert "anthropic" in problems[0]
+
+
+# --- direct parent link ------------------------------------------------------
+
+
+def test_direct_parent_link_is_refused_by_default_in_production():
+    """POST /parents/link is 410-off by default; the boot guard must make an
+    operator's ALLOW_DIRECT_PARENT_LINK=true a refusal, not a silent
+    reopening of the documented platform-IDOR."""
+    assert not _validate_direct_parent_link(prod())
+    problems = _validate_direct_parent_link(prod(allow_direct_parent_link=True))
+    assert problems, "production must refuse ALLOW_DIRECT_PARENT_LINK=true"
 
 
 # --- AUD-0026: SQLite with workers -------------------------------------------

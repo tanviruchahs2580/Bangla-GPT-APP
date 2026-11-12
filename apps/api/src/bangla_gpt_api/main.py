@@ -122,6 +122,7 @@ def enforce_production_safety(settings: Settings) -> None:
         _validate_metrics,
         _validate_rate_limit_redis,
         _validate_llm_provider,
+        _validate_direct_parent_link,
         _validate_corpus,
         _validate_ai_budget,
         _validate_llm_budget,
@@ -326,10 +327,19 @@ def _validate_rate_limit_redis(settings: Settings) -> list[str]:
 
 
 def _validate_llm_provider(settings: Settings) -> list[str]:
-    """The mock provider must never serve production traffic."""
+    """The mock provider must never serve production traffic; every named
+    provider must prove its key, and only implemented names may boot."""
     provider = settings.llm_provider.strip().lower()
     if provider == "gemini" and not settings.gemini_api_key:
         return ["LLM_PROVIDER=gemini requires GEMINI_API_KEY in production"]
+    if provider == "openai" and not settings.openai_api_key:
+        return ["LLM_PROVIDER=openai requires OPENAI_API_KEY in production"]
+    if provider not in ("mock", "gemini", "openai"):
+        return [
+            f"LLM_PROVIDER={provider!r} is not an implemented provider "
+            "(mock, gemini, openai). It would otherwise boot here and only "
+            "fail later at /ready with a 503."
+        ]
     # compose defaults ENV=production and LLM_PROVIDER=mock, so the documented
     # stack booted in production mode serving fabricated tutor answers with no
     # error. LLM-01 requires the mock provider to be impossible in production.
@@ -339,6 +349,24 @@ def _validate_llm_provider(settings: Settings) -> list[str]:
             "fabricated answers with no error. Set LLM_PROVIDER=gemini with "
             "GEMINI_API_KEY, or set ALLOW_MOCK_LLM_IN_PRODUCTION=true for a "
             "deliberate offline demo."
+        ]
+    return []
+
+
+def _validate_direct_parent_link(settings: Settings) -> list[str]:
+    """The direct parent-student link endpoint stays off in production.
+
+    POST /parents/link is 410-off by default because the platform has no
+    verified relationship step behind it: enabled, any parent could link ANY
+    student id and read their progress. That invariant must not be
+    re-openable with one environment variable on a production boot.
+    """
+    if settings.allow_direct_parent_link:
+        return [
+            "ALLOW_DIRECT_PARENT_LINK=true reopens the unverified "
+            "parent↔student link in production: any parent could link any "
+            "student id and read their progress. Keep it disabled; use the "
+            "guardian-invite flow."
         ]
     return []
 

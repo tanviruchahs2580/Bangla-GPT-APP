@@ -591,14 +591,17 @@ def teacher_create_support_plan(
 
 @router.get("/teacher/support-plans", response_model=list[SupportPlanOut])
 def teacher_list_support_plans(
-    db: DbSession, teacher: TeacherOrAdminUser, student_id: int | None = None
+    db: DbSession,
+    teacher: TeacherOrAdminUser,
+    student_id: int | None = None,
+    limit: Annotated[int, Query(ge=1, le=STANDARD_PAGE_MAX_LIMIT)] = STANDARD_PAGE_DEFAULT_LIMIT,
 ) -> list[SupportPlanOut]:
     stmt = select(SupportPlan).order_by(SupportPlan.created_at.desc(), SupportPlan.id.desc())
     if teacher.role != "admin":
         stmt = stmt.where(SupportPlan.teacher_id == teacher.id)
     if student_id is not None:
         stmt = stmt.where(SupportPlan.student_id == student_id)
-    rows = db.execute(stmt).scalars().all()
+    rows = db.execute(stmt.limit(limit)).scalars().all()
     return [_support_plan_out(r) for r in rows]
 
 
