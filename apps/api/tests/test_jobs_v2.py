@@ -8,7 +8,7 @@ the same job_runs composite-PK ledger, proven here with real sqlite.
 
 import importlib.util
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -17,6 +17,7 @@ from sqlalchemy import text
 
 import bangla_gpt_api.jobs as jobs
 from bangla_gpt_api.config import Settings
+from bangla_gpt_api.db.models import JobRun
 from bangla_gpt_api.db.session import init_db, make_engine, make_session_factory
 from bangla_gpt_api.main import create_app
 
@@ -254,3 +255,43 @@ def test_worker_settings_shape(tmp_path, monkeypatch) -> None:
     assert by_name["job_weekly_digest"].hour >= 16
     assert by_name["job_retention_sweep"].hour == 20
     assert by_name["job_nightly_rollup"].hour == 21
+
+
+def test_fresh_null_outcome_claim_stays_owned(factory) -> None:
+    """A claimed slot with no outcome is either in-flight or a recent kill;
+    inside the lease it must NOT be stealable or two workers could run the
+    same period concurrently."""
+    session_factory, _ = factory
+    db = session_factory()
+    try:
+        db.add(
+            JobRun(
+                job="nightly_rollup",
+                period_key="2026-09-06",
+                started_at=jobs._utc_naive_now() - timedelta(hours=1),
+            )
+        )
+        db.commit()
+        assert jobs.claim_period(db, "nightly_rollup", "2026-09-06") is False
+    finally:
+        db.close()
+
+
+def test_stale_orphaned_claim_is_reclaimed(factory) -> None:
+    """BE-03 covered the in-process crash via mark_period_failed; a kill
+    mid-job (SIGKILL/OOM) leaves the claim row with a NULL outcome that no
+    retry path ever touches — under the arq backend the period was then
+    skipped forever. Past the orphan lease the slot belongs to a dead
+    process and is reclaimable."""
+    session_factory, _ = factory
+    db = session_factory()
+    try:
+        stale_then = jobs._utc_naive_now() - timedelta(hours=26)
+        db.add(JobRun(job="parent_digest", period_key="2026-W36", started_at=stale_then))
+        db.commit()
+
+        assert jobs.claim_period(db, "parent_digest", "2026-W36") is True
+        row = db.get(JobRun, ("parent_digest", "2026-W36"))
+        assert row.started_at > stale_then, "the lease must refresh on reclaim"
+    finally:
+        db.close()
