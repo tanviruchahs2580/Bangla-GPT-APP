@@ -55,6 +55,9 @@ test("reader TTS control is named and exposes its pressed state", async ({
 }) => {
   const findings = watchConsole(page);
   await useVariant(page, { theme: "light", lang: "bn" });
+  // Deterministic axe snapshot: see the reduced-motion rationale in the
+  // route-sweep test above.
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await signIn(page, "student1@e2e.test");
   await openRoute(page, "/student/learn/science/%E0%A6%95%E0%A7%8B%E0%A6%B7");
 
@@ -113,6 +116,14 @@ test("axe: zero serious/critical violations on the reader and tutor routes", asy
 }) => {
   const findings = watchConsole(page);
   await useVariant(page, { theme: "light", lang: "bn" });
+  // axe snapshots the DOM mid-entrance-transition otherwise: the teal chips
+  // pair is statically AA through the contrast guard (light 5.17 / dark 7.85),
+  // but a snapshot taken while an entrance transition is still interpolating
+  // reads a translucent backdrop and reports a bogus color-contrast
+  // violation (measured on loaded CI runners, 2026-11-12). The app honours
+  // prefers-reduced-motion, so emulating it here makes the axe snapshot
+  // deterministic without constraining the product.
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await signIn(page, "student1@e2e.test");
 
   const sweep = async (route: string): Promise<void> => {
