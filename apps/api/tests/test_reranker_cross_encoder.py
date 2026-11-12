@@ -188,6 +188,47 @@ def test_tie_scores_get_a_deterministic_mid_value() -> None:
     assert all(score > 0 for score in scores)
 
 
+# --- degenerate paths ---------------------------------------------------------
+
+
+def test_empty_candidates_pass_through_without_a_request() -> None:
+    calls: list[bytes] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.read())
+        return httpx.Response(200, json={"results": []})
+
+    reranker = CrossEncoderReranker(
+        _lexical(),
+        config=build_cross_encoder_config(_settings()),
+        transport=httpx.MockTransport(handler),
+    )
+    assert reranker("কোষ কী?", []) == []
+    assert calls == [], "an empty candidate pool must not spend an endpoint call"
+
+
+def test_open_breaker_falls_back_without_a_request() -> None:
+    from bangla_gpt_api.services.circuit_breaker import CircuitBreaker
+
+    calls: list[bytes] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.read())
+        return httpx.Response(200, json={"results": []})
+
+    breaker = CircuitBreaker(failure_threshold=1, reset_timeout_seconds=30)
+    breaker.record_failure()  # opens
+    reranker = CrossEncoderReranker(
+        _lexical(),
+        config=build_cross_encoder_config(_settings()),
+        transport=httpx.MockTransport(handler),
+        breaker=breaker,
+    )
+    candidates = _candidates()
+    assert reranker("কোষ কী?", candidates) == _lexical()("কোষ কী?", candidates)
+    assert calls == [], "an open breaker must not spend an endpoint call"
+
+
 # --- failure paths: degrade to the inner scores, meter the fallback ----------
 
 
