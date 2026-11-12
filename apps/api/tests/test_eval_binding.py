@@ -86,9 +86,7 @@ def test_identity_names_the_corpus_actually_measured():
 
 def test_checker_accepts_a_matching_identity(tmp_path: Path):
     baseline = tmp_path / "matching.json"
-    baseline.write_text(
-        json.dumps({**BASE, "identity": _current_identity()}), encoding="utf-8"
-    )
+    baseline.write_text(json.dumps({**BASE, "identity": _current_identity()}), encoding="utf-8")
     done = _run_checker(baseline)
     assert done.returncode == 0, done.stdout + done.stderr
     assert "eval binding OK" in done.stdout
