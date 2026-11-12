@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(tutor): honest metering and diagnostics for locally-produced refusals
 - fix(tutor): stream route honours the all-or-nothing turn contract
 - fix(web): close the contrast-guard blind spot and repair two AA failures
+- fix(web): present live-region answer content without a fade
 - fix(worker): thread the job bodies, retry same-period, wire observability
 
 ### CI/CD
@@ -49,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - ci(automerge): grant contents write alongside pull-requests write
 - ci(automerge): re-arm on synchronize so amended PRs never unhook
 - ci(automerge): the header must be YAML comments, not a docstring
+- ci: re-trigger the main pipeline after the #116 merge
 
 ### Documentation
 
@@ -91,6 +93,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #113 from tanviruchahs2580/fix/backend-audit-remediation
 - Merge pull request #114 from tanviruchahs2580/ci/automerge-and-e2e-determinism
 - Merge pull request #115 from tanviruchahs2580/docs/safety-over-refusal-register
+- Merge pull request #116 from tanviruchahs2580/test/stu16-delete-race
 - Merge pull request #117 from tanviruchahs2580/fix/baseline-identity-binding
 
 ## v0.10.0 - 2026-11-11
