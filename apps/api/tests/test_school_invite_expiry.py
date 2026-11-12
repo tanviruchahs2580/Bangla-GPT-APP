@@ -85,6 +85,49 @@ def test_valid_invite_redeems_inside_ttl(env):
     assert res.status_code == 201, res.text
 
 
+def test_join_school_refuses_a_common_password(env):
+    """The join-school route is a credential-creation point, so it owes the
+    same policy as registration/reset/change-password (SEC-02): a staff
+    account must not be born with "password"."""
+    client, _ = env
+    invite = _create_invite(client)
+    res = client.post(
+        "/auth/join-school",
+        json={"invite_code": invite["code"], "email": "weak@expiry.test",
+              "password": "password", "name": "Staff"},
+    )
+    assert res.status_code == 400, res.text
+    assert res.json()["detail"]["code"] == "password_too_common"
+    conn = env[1]
+    rows = conn.execute(
+        "SELECT id FROM users WHERE email = 'weak@expiry.test'"
+    ).fetchall()
+    assert rows == [], "a refused password must not leave a user row behind"
+
+
+def test_join_school_honours_the_operator_password_floor(tmp_path):
+    """An operator raising PASSWORD_MIN_LENGTH must not be silently ignored
+    on this route."""
+    settings = Settings(
+        env="test",
+        database_url=f"sqlite:///{tmp_path}/floor.db",
+        jwt_secret="test-secret-0123456789abcdef0123456789",
+        admin_email="root@example.com",
+        admin_password=PASSWORD,
+        force_admin_password_change=False,
+        password_min_length=15,
+    )
+    client = TestClient(create_app(settings))
+    invite = _create_invite(client)
+    res = client.post(
+        "/auth/join-school",
+        json={"invite_code": invite["code"], "email": "shorty@expiry.test",
+              "password": "joinsecret9", "name": "Staff"},
+    )
+    assert res.status_code == 400, res.text
+    assert res.json()["detail"]["code"] == "password_too_short"
+
+
 def test_expired_invite_refused_and_stays_unredeemable(env):
     client, conn = env
     invite = _create_invite(client)
