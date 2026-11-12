@@ -13,8 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Added
+
+- feat(eval): record and enforce the identity a benchmark measured
+
 ### Fixed
 
+- fix(eval): restore the coverage floor the identity writer dropped
 - fix(web): close the contrast-guard blind spot and repair two AA failures
 
 ### Documentation
@@ -31,11 +36,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - chore: regenerate the CHANGELOG
 
-## v0.10.0 - 2026-11-11
+### Other
 
-### Added
-
-- feat(eval): record and enforce the identity a benchmark measured
+- Merge pull request #106 from tanviruchahs2580/dependabot/npm_and_yarn/apps/web/web-dependencies-d295a55970
+- Merge pull request #109 from tanviruchahs2580/dependabot/pip/apps/api/python-dependencies-dc56fc3da1
+- Merge pull request #110 from tanviruchahs2580/feat/rag-v3-phase-0-baseline
+- Merge pull request #111 from tanviruchahs2580/feat/rag-v2-stage-a-evidence-binding
 
 ## v0.10.0 - 2026-11-11
 
