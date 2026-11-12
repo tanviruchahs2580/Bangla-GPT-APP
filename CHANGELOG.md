@@ -56,6 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(rag): RAG V2/V3 phase-0 baselines, audit and elevation plan
 - docs(rag): fix two path defects the doc-paths guardrail caught
 - docs(safety): record the deliberate over-refusal trade-off
+- docs: regenerate the native-review sheet after the safety comment edit
 
 ### Tests
 
