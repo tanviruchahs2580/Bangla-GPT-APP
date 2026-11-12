@@ -999,9 +999,14 @@ async def stream_chat_message(
             }
             yield ("event: done\ndata: " + json.dumps(done_payload, ensure_ascii=False) + "\n\n")
         except ProviderError:
-            # user turn already persisted; do not rollback
-            with contextlib.suppress(Exception):  # rollback is best-effort here
-                await asyncio.to_thread(db.rollback)
+            # Same all-or-nothing turn contract as the JSON route: a failed
+            # provider call deletes the committed user turn and restores the
+            # strategy rotation, so history keeps neither a reply nor a
+            # dangling question. Deltas already streamed to the client are
+            # its own rendering; the durable record is what stays coherent.
+            # (The prompt-side reserve finalizes in the finally below.)
+            with contextlib.suppress(Exception):
+                await asyncio.to_thread(_discard_failed_user_turn, db, prepared)
             yield (
                 "event: error\ndata: "
                 + json.dumps({"code": "llm_unavailable"}, ensure_ascii=False)

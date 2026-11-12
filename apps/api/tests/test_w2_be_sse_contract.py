@@ -103,9 +103,36 @@ def test_provider_failure_answers_one_error_event_and_no_done(
     error_data = next(data for kind, data in events if kind == "error")
     assert error_data["code"] == "llm_unavailable"
 
-    # The user turn survives; no assistant turn was persisted.
-    history = client.get(f"/tutor/conversations/{conv_id}/messages", headers=headers).json()
-    assert [m["role"] for m in history] == ["user"]
+
+def test_provider_failure_leaves_no_dangling_user_turn(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The JSON route's all-or-nothing turn contract applies to the stream
+    route too: a failed provider call deletes the committed user turn (with
+    the strategy rotation restored), so history has neither a reply nor a
+    dangling question. The streamed tokens a client already saw are its own
+    rendered text; the durable history is what stays empty."""
+    headers, conv_id = _student(client)
+
+    async def dying_stream(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+        yield StreamEvent(type="token", text="প্রথম অংশ")
+        raise ProviderError("provider dropped the connection")
+
+    monkeypatch.setattr(tutor_service.TutorService, "ask_stream", dying_stream)
+
+    with client.stream(
+        "POST",
+        f"/tutor/conversations/{conv_id}/messages/stream",
+        json={"message": "বল কাকে বলে?"},
+        headers=headers,
+    ) as response:
+        events = _events(response.iter_lines())
+
+    assert [k for k, _ in events].count("error") == 1, events
+
+    history = client.get(f"/tutor/conversations/{conv_id}/messages", headers=headers)
+    assert history.status_code == 200, history.text
+    assert history.json() == [], history.text
 
 
 def test_producer_that_yields_nothing_answers_the_coded_error(
