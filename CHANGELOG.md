@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - fix(api): answer 401 for bad_current_password everywhere
 - fix(api): bound the teacher support-plan listing
+- fix(api): clear the fresh vulture findings
 - fix(api): declare every 403 code the routers actually raise
 - fix(api): keep sync DB hops off the event loop
 - fix(auth): revocation stamps must be naive UTC like the other writers
@@ -56,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Maintenance
 
 - chore(api): trace the dead flush branch, stale comments and doc drift
+- chore(docs): regenerate the native-review sheet
 - chore(web): regenerate the OpenAPI contract fixture
 - chore: regenerate the CHANGELOG
 
