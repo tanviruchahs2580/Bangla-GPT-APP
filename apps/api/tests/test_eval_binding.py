@@ -68,6 +68,46 @@ def _run_checker(baseline: Path) -> subprocess.CompletedProcess:
     )
 
 
+def test_identity_is_measured_in_process_not_only_via_subprocess():
+    """Drive the writer in-process, because the module carries a coverage floor.
+
+    The subprocess tests below are the real contract -- they exercise the CLI the
+    way CI does -- but coverage cannot see into another process. Adding
+    `_evidence_identity` without an in-process call dropped
+    `evaluation/cli.py` below its per-module floor (47.0, and a ratchet may only
+    rise). That is how the gap was found: `Lint & test (Python 3.12)` failed at
+    the *Per-module coverage floors* step while lint, format, mypy and the global
+    coverage gate all passed.
+
+    So this test exists for a second reason beyond the assertion: it makes the
+    writer's statements countable. It also pins the exact key set, a stronger
+    contract than the subprocess tests can express.
+    """
+    from bangla_gpt_api.config import Settings
+    from bangla_gpt_api.evaluation.cli import _evidence_identity
+
+    identity = _evidence_identity(Settings(env="test", llm_provider="mock"))
+
+    assert set(identity) == {
+        "corpus_source",
+        "corpus_path",
+        "corpus_chunk_count",
+        "served_chunks_digest",
+        "embedder_name",
+        "embedding_dimension",
+        "prompt_version",
+        "prompt_sha256",
+    }
+    assert identity["corpus_source"] == "bundled_sample"
+    # 78 is the bundled sample; the served NCTB corpus is 847. If these ever
+    # match, the suite stopped being hermetic.
+    assert identity["corpus_chunk_count"] == 78
+    assert identity == _current_identity(), (
+        "the in-process identity must equal the one the CLI prints -- otherwise "
+        "the checker and the writer disagree about what was measured"
+    )
+
+
 def test_identity_names_the_corpus_actually_measured():
     """The identity must say `bundled_sample`, because that is the truth.
 
