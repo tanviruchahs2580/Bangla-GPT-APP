@@ -70,7 +70,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - chore(api): trace the dead flush branch, stale comments and doc drift
 - chore(docs): regenerate the native-review sheet
-- chore(eval): record the baseline identity (regenerate at the current tree)
 - chore(web): regenerate the OpenAPI contract fixture
 - chore: regenerate the CHANGELOG
 
@@ -87,6 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #112 from tanviruchahs2580/fix/eval-binding-coverage-floor
 - Merge pull request #113 from tanviruchahs2580/fix/backend-audit-remediation
 - Merge pull request #114 from tanviruchahs2580/ci/automerge-and-e2e-determinism
+- Merge pull request #115 from tanviruchahs2580/docs/safety-over-refusal-register
 
 ## v0.10.0 - 2026-11-11
 
