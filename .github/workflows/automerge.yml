@@ -1,11 +1,10 @@
-"""Arm native GitHub auto-merge on every non-draft PR aimed at main.
-
-The merge itself stays with GitHub's native auto-merge machinery: branch
-protection requires the eight status checks, so the PR merges the moment
-they pass and nothing merges while a required check is red. Fork PRs
-(`head.repo.full_name != github.repository`) are deliberately left out —
-a token from a fork-triggered event must never be able to steer main.
-"""
+# Arm native GitHub auto-merge on every non-draft PR aimed at main.
+#
+# The merge itself stays with GitHub's native auto-merge machinery: branch
+# protection requires the eight status checks, so the PR merges the moment
+# they pass and nothing merges while a required check is red. Fork PRs
+# (head.repo.full_name != github.repository) are deliberately left out --
+# a token from a fork-triggered event must never be able to steer main.
 
 on:
   pull_request:
