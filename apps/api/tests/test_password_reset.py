@@ -139,7 +139,11 @@ def test_change_password_requires_current_and_rotates(client: TestClient) -> Non
         json={"current_password": "wrong", "new_password": "rotated-pass-1"},
         headers=headers,
     )
-    assert wrong.status_code == 400
+    # One code, one status: delete-me and both MFA routes answer 401 for a
+    # bad current password; change-password used to answer 400, splitting a
+    # single refusal into two client behaviors.
+    assert wrong.status_code == 401
+    assert wrong.json()["detail"]["code"] == "bad_current_password"
 
     same = client.post(
         "/auth/change-password",

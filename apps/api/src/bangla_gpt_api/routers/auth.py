@@ -879,8 +879,10 @@ def change_password(
     # able to do either.
     forbid_impersonation(request)
     if not verify_password(payload.current_password, user.password_hash):
+        # 401, not 400: delete-me and both MFA routes answer 401 for the
+        # same bad_current_password code — one refusal, one client behavior.
         raise HTTPException(
-            status_code=400,
+            status_code=401,
             detail={"code": "bad_current_password", "message": "Current password is incorrect"},
         )
     if payload.current_password == payload.new_password:
