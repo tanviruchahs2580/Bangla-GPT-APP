@@ -88,9 +88,15 @@ _PATTERNS: tuple[tuple[str, str], ...] = (
     (
         "drug_synthesis",
         r"মাদক|ইয়াবা|কোকেইন|হেরোইন|গাঁজা\s*(বানা|কেনা)|নেশা\s*(বানা|জাত)"
-        # SAFE-002 romanised. The names are refused bare exactly like the
-        # Bangla মাদক/ইয়াবা/হেরোইন; the ones a child can meet in ordinary
-        # prose (nesha, ganja-with-a-verb) carry the making/buying frame.
+        # SAFE-002 romanised. The hard names are refused bare exactly like
+        # the Bangla forms in the Bangla arm above. Two over-refusals are
+        # DELIBERATE under the category's conservative rule and live in the
+        # register (docs/ai/risk-register.md, the FP row): bare 'ganja'
+        # (an earlier comment here claimed a frame, but this arm fires
+        # bare -- an awareness essay naming cannabis is refused along
+        # with the synthesis question) and bare 'drugs'. If either bites
+        # real curriculum traffic, delete the BARE arm; the
+        # making/buying/trying frame arm lower down stays regardless.
         r"|(?i:\bdrugs?\b|\bmad[ao]k\b|\bmadan\b|\byaba\b|\biyaba\b|\bcocaine\b|\bkokain\b"
         r"|\bheroin\b|\bmarijuana\b|\bganja\w*\b|\balcohol\b|\balkohol\b"
         r"|(?:nesha|ganja)\s*(?:bana|banano|bananor|banate|kena|kinte|jat))",
