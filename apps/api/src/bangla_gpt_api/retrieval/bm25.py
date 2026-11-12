@@ -126,6 +126,8 @@ class BM25Index:
         class_level: int | None = None,
         subject: str | None = None,
         chapter: str | None = None,
+        book: str | None = None,
+        year: int | None = None,
         top_k: int = 4,
         min_score: float = 0.0,
     ) -> list[Hit]:
@@ -168,6 +170,10 @@ class BM25Index:
             if subject is not None and chunk.meta.subject != subject:
                 continue
             if chapter is not None and chunk.meta.chapter != chapter:
+                continue
+            if book is not None and chunk.meta.book != book:
+                continue
+            if year is not None and chunk.meta.curriculum_year != year:
                 continue
             score = self._score(query_terms, doc)
             if score <= min_score:

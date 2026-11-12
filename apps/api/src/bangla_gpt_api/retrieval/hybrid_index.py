@@ -255,6 +255,8 @@ class HybridIndex:
         class_level: int | None = None,
         subject: str | None = None,
         chapter: str | None = None,
+        book: str | None = None,
+        year: int | None = None,
         top_k: int = 4,
         min_score: float = 0.0,
     ) -> list[Hit]:
@@ -269,6 +271,8 @@ class HybridIndex:
             class_level=class_level,
             subject=subject,
             chapter=chapter,
+            book=book,
+            year=year,
             top_k=candidate_k,
             min_score=0.0,
         )
@@ -279,6 +283,8 @@ class HybridIndex:
             class_level=class_level,
             subject=subject,
             chapter=chapter,
+            book=book,
+            year=year,
             top_k=candidate_k,
             min_score=0.0,
         )
