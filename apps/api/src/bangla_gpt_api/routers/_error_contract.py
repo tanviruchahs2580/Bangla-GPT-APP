@@ -55,10 +55,28 @@ class CodedDetail(BaseModel):
 
 
 #: 401/403 stable codes, one per refusal reason. Kept here so the SPA's error
-#: map and the tests share a single list.
+#: map and the tests share a single list. The 403 tuple is pinned by an AST
+#: scan over the routers (test_w2_be_envelope) which fails on BOTH a missing
+#: and a stale entry — it used to list 3 of the 15 codes routers raise.
 AUTH_CODES = {
     401: ("unauthenticated", "invalid_token", "session_ended", "session_expired", "mfa_required"),
-    403: ("insufficient_role", "password_change_required", "impersonation_forbidden"),
+    403: (
+        "consent_reconfirmation_required",
+        "content_read_only",
+        "email_unverified",
+        "impersonation_forbidden",
+        "insufficient_role",
+        "metrics_denied",
+        "not_allowed",
+        "not_impersonation",
+        "not_owner",
+        "other_school",
+        "password_change_required",
+        "renew_unavailable",
+        "session_not_bindable",
+        "staff_cannot_submit_student_quiz",
+        "students_only",
+    ),
 }
 
 # 401/403 are raised by the auth dependency on every authenticated route, so

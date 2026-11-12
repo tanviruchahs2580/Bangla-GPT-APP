@@ -137,6 +137,49 @@ def test_every_401_code_used_by_deps_is_declared() -> None:
     assert used <= set(AUTH_CODES[401]), sorted(used - set(AUTH_CODES[401]))
 
 
+def test_every_403_code_raised_by_routers_is_declared_exactly() -> None:
+    """The stable 403 list must EQUAL the codes routers actually raise with
+    status 403. The 401 pin above is deliberately a subset check (deps.py
+    composes its refusals through one helper); here a stale extra entry is a
+    lie the SPA's error map would inherit, and a missing one is an undeclared
+    refusal — the drift found on 2026-11-12 (the tuple listed 3 of 11)."""
+    used = set()
+    for path in sorted(ROUTERS_DIR.glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.Raise)
+                and isinstance(node.exc, ast.Call)
+                and isinstance(node.exc.func, ast.Name)
+                and node.exc.func.id == "HTTPException"
+            ):
+                continue
+            status = next(
+                (kw for kw in node.exc.keywords if kw.arg == "status_code"), None
+            )
+            if (
+                status is None
+                or not isinstance(status.value, ast.Constant)
+                or status.value.value != 403
+            ):
+                continue
+            detail = next((kw for kw in node.exc.keywords if kw.arg == "detail"), None)
+            if detail is None or not isinstance(detail.value, ast.Dict):
+                continue
+            for key, value in zip(detail.value.keys, detail.value.values):
+                if (
+                    isinstance(key, ast.Constant)
+                    and key.value == "code"
+                    and isinstance(value, ast.Constant)
+                ):
+                    used.add(value.value)
+    assert used, "no coded 403 sites found; the AST scan broke"
+    assert used == set(AUTH_CODES[403]), {
+        "undeclared": sorted(used - set(AUTH_CODES[403])),
+        "stale": sorted(set(AUTH_CODES[403]) - used),
+    }
+
+
 def test_unknown_generator_kind_is_a_coded_404(client: TestClient) -> None:
     _register(client, "kind@example.com")
     headers = _headers(client, "kind@example.com")
