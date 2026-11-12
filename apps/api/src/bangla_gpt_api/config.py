@@ -216,6 +216,13 @@ class Settings(BaseSettings):
     rag_reranker_timeout_seconds: float = 1.5
     rag_w_cross_encoder: float = 1.0
     rag_cross_encoder_base_weight: float = 0.15
+    # Retrieval engine v2, expansion stage (retrieval/expansion.py): OFF by
+    # default. When true, the selected top evidence gains its same-section,
+    # same-class neighbors (RAG_NEIGHBOR_PER_SIDE each side) before the
+    # grounding gate reads them — the evidence budget and the gate
+    # thresholds are unchanged, and the eval battery measures the effect.
+    rag_neighbor_expansion: bool = False
+    rag_neighbor_per_side: int = 1
 
     # --- persistence ---
     # File-based SQLite by default so local dev data survives restarts.

@@ -63,6 +63,7 @@ FLOORS: dict[str, tuple[float, str]] = {
     "retrieval/bm25.py": (100.0, ""),
     "retrieval/embedding.py": (98.0, ""),
     "retrieval/reranker.py": (95.0, ""),
+    "retrieval/expansion.py": (95.0, ""),
     # --- jobs and resilience
     "jobs.py": (89.0, "gap to 90: scheduler failure branches"),
     "services/circuit_breaker.py": (92.0, ""),
