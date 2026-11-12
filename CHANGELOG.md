@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(deps): default-deny outside the staff tenant, scope the force-change exemption, home the consent gate
 - fix(eval): restore the coverage floor the identity writer dropped
 - fix(eval): the 24-question gate grades the served tutor wiring
+- fix(eval): the gate refuses to pass on a missing baseline
 - fix(jobs): reclaim period slots orphaned by a kill
 - fix(ops): forward the documented operator knobs through compose
 - fix(pii): redact BD landline numbers before egress
@@ -41,8 +42,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): close the contrast-guard blind spot and repair two AA failures
 - fix(worker): thread the job bodies, retry same-period, wire observability
 
+### CI/CD
+
+- ci(automerge): arm GitHub auto-merge on every PR aimed at main
+- ci(automerge): re-arm on synchronize so amended PRs never unhook
+- ci(automerge): the header must be YAML comments, not a docstring
+
 ### Documentation
 
+- docs(ci): document the automerge workflow
 - docs(native-review): regenerate the UI-strings sheet for three new keys
 - docs(rag): RAG V2/V3 phase-0 baselines, audit and elevation plan
 - docs(rag): fix two path defects the doc-paths guardrail caught
@@ -53,6 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - test(api): align two stale pins with the deliberately flipped contracts
 - test(api): pin the pytest-asyncio fixture loop scope
 - test(e2e): point the question-paper row locator at the renamed button
+- test(e2e): poll X-02 for the settled fail-secure URL
 
 ### Maintenance
 
@@ -72,6 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #110 from tanviruchahs2580/feat/rag-v3-phase-0-baseline
 - Merge pull request #111 from tanviruchahs2580/feat/rag-v2-stage-a-evidence-binding
 - Merge pull request #112 from tanviruchahs2580/fix/eval-binding-coverage-floor
+- Merge pull request #113 from tanviruchahs2580/fix/backend-audit-remediation
 
 ## v0.10.0 - 2026-11-11
 

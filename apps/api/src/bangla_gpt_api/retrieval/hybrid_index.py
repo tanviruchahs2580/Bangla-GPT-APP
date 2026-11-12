@@ -181,7 +181,7 @@ def make_lexical_rerank(
 def lexical_rerank(query: str, candidates: list[tuple[Chunk, float, float]]) -> list[float]:
     """Deterministic rerank without corpus statistics.
 
-    The module-level default so direct callers (tests, ``/search``) keep the
+    The module-level default so direct callers (the test suite) keep the
     original contract: coverage is uniform-weighted over all query tokens and
     no proximity is scored. The production index builds its reranker through
     :func:`make_lexical_rerank` with corpus statistics.

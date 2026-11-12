@@ -736,11 +736,17 @@ test("X-02 session clock: near-expiry token renews, an expired one forces re-log
     }
   }, expired);
   await open(page, "/student/quiz");
+  // ONE poll on the settled URL, not a pathname-then-URL two-step: the
+  // bare /login (RequireAuth's mid-boot redirect while the fail-secure
+  // probe is still answering) is a TRANSIENT state on a fast runner, and
+  // the old two-step asserted in exactly that window — which is how
+  // loaded CI runs failed the /login?next= assertion at 759 on a boot
+  // that would have completed correctly a moment later. The app's
+  // fail-secure contract is that an expired boot token lands on
+  // /login?next=<deep link>; poll for exactly that settled state.
   await expect
     .poll(
       async () => {
-        const path = new URL(page.url()).pathname;
-        if (path === "/login") return path;
         // Deliberately no reload: re-entering the deep link after the token
         // was cleared hits RequireAuth's own bare /login redirect, which
         // would overwrite the ?next= bounce this test is asserting. The app's
@@ -751,12 +757,11 @@ test("X-02 session clock: near-expiry token renews, an expired one forces re-log
         if (await retry.isVisible().catch(() => false)) {
           await retry.click().catch(() => {});
         }
-        return new URL(page.url()).pathname;
+        return page.url();
       },
-      { message: "an expired token never forced a re-login", timeout: 90_000 },
+      { message: "an expired token never forced a ?next re-login", timeout: 90_000 },
     )
-    .toBe("/login");
-  await expect(page).toHaveURL(/\/login\?next=/, { timeout: 30_000 });
+    .toMatch(/\/login\?next=/);
   expect(page.url()).toContain(encodeURIComponent("/student/quiz"));
   await expect
     .poll(() => page.evaluate(() => window.localStorage.getItem("bgpt_token")))

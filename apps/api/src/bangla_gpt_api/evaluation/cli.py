@@ -2,7 +2,7 @@
 
     python -m bangla_gpt_api.evaluation.cli # run + compare gate
     python -m bangla_gpt_api.evaluation.cli --write-baseline
-    python -m bangla_gpt_api.evaluation.cli --seed-bad 10 # gate-FAIL demo
+    python -m bangla_gpt_api.evaluation.cli --hit-floor 1.01 # gate-FAIL demo
     python -m bangla_gpt_api.evaluation.cli --redteam # safety gate
     python -m bangla_gpt_api.evaluation.cli --check-golden # set integrity
     python -m bangla_gpt_api.evaluation.cli --gate # every gate, one command
@@ -292,11 +292,17 @@ def _hit_gate(settings: Settings, items: list[dict], hit_floor: float) -> bool:
 
 
 def _golden_gate(settings: Settings, items: list[dict], baseline_path: Path) -> bool:
-    """Golden-set metrics vs the committed baseline (>2pp drop fails)."""
+    """Golden-set metrics vs the committed baseline (>2pp drop fails).
+
+    A MISSING baseline fails the gate: the contract is "exit 0 = green",
+    and gating on air (report-only semantics were meant for non-gate runs)
+    would pass while measuring against nothing.
+    """
     metrics = asyncio.run(_run(items, settings))
-    baseline = (
-        json.loads(baseline_path.read_text(encoding="utf-8")) if baseline_path.exists() else None
-    )
+    if not baseline_path.exists():
+        print(f"NO BASELINE at {baseline_path} -- gate refuses to pass on air")
+        return False
+    baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
     return _report(metrics, baseline)
 
 
@@ -404,7 +410,10 @@ def main() -> int:
         "--seed",
         type=int,
         default=DEFAULT_SAMPLE_SEED,
-        help=f"seed for --sample and the bootstrap comparison (default {DEFAULT_SAMPLE_SEED})",
+        help=(
+            f"seed for --sample (default {DEFAULT_SAMPLE_SEED}); the paired"
+            " bootstrap comparison reads the baseline's recorded bootstrap_seed"
+        ),
     )
     parser.add_argument(
         "--redteam",
@@ -466,6 +475,12 @@ def main() -> int:
 
     if args.redteam and args.gate:
         parser.error("--redteam and --gate are mutually exclusive (--gate includes it)")
+
+    if args.gate and args.seed_bad:
+        # --seed-bad only feeds the non-gate report path; under --gate it
+        # used to be parsed and then silently ignored -- a demo flag that
+        # poisoned nothing.
+        parser.error("--seed-bad only applies to the report run, not --gate")
 
     root = Path(__file__).resolve().parents[3]  # apps/api
     golden_path = Path(args.golden) if args.golden else root / "eval" / "golden_v3.json"
