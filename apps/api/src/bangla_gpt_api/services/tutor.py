@@ -1640,6 +1640,20 @@ class TutorService:
         try:
             answer = await self._generate(context_blocks, image=image, provider=provider_for_call)
         except GenerationBusyError:
+            # RAG-29 parity (see the streaming path): a saturated lane still
+            # owns a trace, or every busy turn is a diagnostics blind spot.
+            self._record_trace(
+                question=question,
+                outcome="ai_busy",
+                grounded=False,
+                refused_reason="ai_busy",
+                hits=hits,
+                model=getattr(provider_for_call, "name", "unknown"),
+                parameters={"coverage": retrieval.coverage, "top_k": self.top_k},
+                latency_ms={**stage_ms, "total": sum(stage_ms.values())},
+                rewrite_applied=rewrite_applied,
+                rewrite_terms=rewrite_terms,
+            )
             return self._refusal(GENERATION_BUSY_ANSWER, "ai_busy")
         except ProviderError:
             if not self.retrieval_only_fallback:
@@ -1935,6 +1949,25 @@ class TutorService:
         ):
             yield event
         if run.busy:
+            # RAG-29 parity: answered and refused turns both trace; a
+            # saturated lane must not be the one outcome diagnostics never
+            # see — without this, every busy stream turn is a blind spot in
+            # the per-answer store while the counters alone say how often.
+            self._record_trace(
+                question=question,
+                outcome="ai_busy",
+                grounded=False,
+                refused_reason="ai_busy",
+                hits=hits,
+                model=getattr(provider_for_stream, "name", "unknown"),
+                parameters={"coverage": retrieval.coverage, "top_k": self.top_k, "stream": True},
+                latency_ms={
+                    **stage_ms,
+                    "total": int((time.perf_counter() - turn_started) * 1000),
+                },
+                rewrite_applied=rewrite_applied,
+                rewrite_terms=rewrite_terms,
+            )
             return
 
         if run.output_blocked:
