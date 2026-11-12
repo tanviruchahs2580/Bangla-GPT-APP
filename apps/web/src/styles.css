@@ -791,6 +791,18 @@ p {
   animation: card-rise var(--m-med) var(--ease-out);
 }
 
+/* A11Y (axe evidence 2026-11-12): the live-region answer card must not
+   animate. card-rise fades opacity 0->1, and axe's color-contrast audit
+   sampled the "textbook-supported" badge mid-fade — composited against the
+   page it read fg ~#d3e5ef at ratio 1.26 (intermittent on loaded CI
+   runners; the static teal pair itself is AA: 5.17 light / 7.85 dark).
+   Beyond the measurement, animated live-region content is an ARIA
+   anti-pattern: the region announces on mutation while the text is still
+   illegible for the duration of the fade. Live regions appear instantly. */
+.stack > .card[role="status"] {
+  animation: none;
+}
+
 .card-head-row {
   margin-bottom: 8px;
 }
