@@ -3,7 +3,6 @@ import hashlib
 import logging
 import math
 import time
-import unicodedata
 from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -36,6 +35,7 @@ from bangla_gpt_api.retrieval.base import RankingIndex
 from bangla_gpt_api.retrieval.bm25 import indexable_text, tokenize
 from bangla_gpt_api.retrieval.context import assemble_evidence
 from bangla_gpt_api.retrieval.hybrid import light_stem, trigram_similarity
+from bangla_gpt_api.retrieval.normalize import normalize_nfkc
 from bangla_gpt_api.retrieval.query_analysis import (
     content_terms,
     coverage_weights,
@@ -252,9 +252,6 @@ def prompt_sha256(system: str = SYSTEM_PROMPT) -> str:
 
 PROMPT_SHA256 = prompt_sha256()
 
-# Same set the corpus pipeline strips (nctb/normalize.py): ZWSP, ZWJ, ZWNJ, BOM.
-_ZERO_WIDTH_TABLE = str.maketrans("", "", "\u200b\u200c\u200d\ufeff")
-
 
 def sanitize_evidence(text: str) -> str:
     """Neutralize prompt-delimiter escapes inside untrusted text.
@@ -277,14 +274,15 @@ def normalize_query(text: str) -> str:
 
     Folds mobile-keyboard compatibility variants (precomposed vs decomposed
     Bangla) before safety screening, retrieval, gating and routing, and
-    strips zero-width characters (ZWSP/ZWJ/ZWNJ/BOM) — invisible inserts
-    inside e.g. ``আত্মহত্যা`` would otherwise defeat the safety and
-    injection regexes, which are plain substring patterns. Pure NFKC
-    otherwise — no casefold/whitespace rewrite, so the text sent to the LLM
-    keeps its original casing and spacing.
+    strips the audited invisible-character set (SAFE-001) — invisible
+    inserts inside e.g. ``আত্মহত্যা`` would otherwise defeat the safety and
+    injection regexes, which are plain substring patterns. Delegated to the
+    one shared normalizer (retrieval.normalize) so the boundary cannot
+    drift from the corpus pipeline again; it is pure NFKC — no
+    casefold/whitespace rewrite, so the text sent to the LLM keeps its
+    original casing and spacing.
     """
-    normalized = unicodedata.normalize("NFKC", text)
-    return normalized.translate(_ZERO_WIDTH_TABLE)
+    return normalize_nfkc(text)
 
 
 def build_evidence_prompt(

@@ -107,6 +107,19 @@ class TestSafe001InvisibleEvasion:
     @pytest.mark.parametrize(
         ("label", "char"), INVISIBLE_EVASIONS, ids=[row[0] for row in INVISIBLE_EVASIONS]
     )
+    def test_tutor_query_boundary_folds_through_the_shared_normalizer(
+        self, label: str, char: str
+    ) -> None:
+        """The tutor's normalize_query kept its own NARROW zero-width table
+        (ZWSP/ZWJ/ZWNJ/BOM only), so the SAFE-001 widening never reached the
+        question text that actually renders into the prompt — a WORD JOINER
+        or soft hyphen rode from the student's message to <user_question>.
+        The boundary must fold through the one shared normalizer."""
+        assert char not in normalize_query(f"{_ATMA}{char}{_HOTYA} {_KORTE_CHAI}"), label
+
+    @pytest.mark.parametrize(
+        ("label", "char"), INVISIBLE_EVASIONS, ids=[row[0] for row in INVISIBLE_EVASIONS]
+    )
     def test_screen_refuses_through_each_invisible_character(self, label: str, char: str) -> None:
         probe = f"{_ATMA}{char}{_HOTYA} {_KORTE_CHAI}"
         # The tutor path (normalized first) ...
