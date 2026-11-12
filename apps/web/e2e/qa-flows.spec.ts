@@ -925,10 +925,19 @@ test("STU-16 export returns the full sections and deletion removes the account",
   await page.getByRole("button", { name: "Delete my account" }).click();
   await page.locator("#del-password").fill(PASSWORD);
   await page.getByRole("button", { name: "Yes, delete" }).click();
-  await expect(page).toHaveURL(/\/login$/);
-  expect(
-    await page.evaluate(() => window.localStorage.getItem("bgpt_token")),
-  ).toBeNull();
+  // Delete ends the session and the app navigates to /login while clearing
+  // the stored token. Asserting the URL first raced that very navigation
+  // (the page.evaluate at line ~930 died with "Execution context was
+  // destroyed" on fast runners); poll for the SETTLED state instead, and
+  // let expect.poll's retry-absorbs-throw semantics cover the transition.
+  await expect
+    .poll(async () => page.url(), { timeout: 30_000 })
+    .toMatch(/\/login$/);
+  await expect
+    .poll(async () => page.evaluate(() => window.localStorage.getItem("bgpt_token")), {
+      timeout: 30_000,
+    })
+    .toBeNull();
 
   // The stolen copy of the token is dead...
   const after = await page.request.get("/api/users/me", {

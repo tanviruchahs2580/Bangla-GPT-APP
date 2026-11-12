@@ -212,7 +212,7 @@ All ten workflows under `.github/workflows/`, with the job ids each one runs:
 | `uptime.yml` | `probe` — public `/api/health` (plus the optional origin probe); `page` — files a deduplicated issue when the probe fails; `resolve` — closes it on the next green probe | schedule every 15 min, workflow_dispatch |
 | `scorecard.yml` | `analysis` — OpenSSF Scorecard; SARIF into the Security tab | branch_protection_rule, schedule weekly, push to `main`, workflow_dispatch |
 | `secret-masking.yml` | `echo-dummy` + `verify-masking` — echoes a throwaway secret and asserts the job log never contains it | workflow_dispatch only |
-| `automerge.yml` | `arm` — turns on GitHub's native auto-merge for the PR; the merge lands when the protected required checks pass and is held while any of them is red; fork PRs excluded | pull_request [opened, reopened, ready_for_review, synchronize] targeting `main` |
+| `automerge.yml` | `arm` — turns on GitHub's native auto-merge for the PR; the merge lands when the protected required checks pass and is held while any of them is red; fork PRs excluded | pull_request [opened, reopened, ready_for_review, synchronize] targeting `main`, workflow_dispatch |
 
 This table is checked by the `guardrails` job in `ci.yml`
 (`README and docs/ci.md agree with the workflows`): every workflow file must
