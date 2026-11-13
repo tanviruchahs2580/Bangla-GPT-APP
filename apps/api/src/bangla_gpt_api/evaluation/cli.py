@@ -74,17 +74,29 @@ def _build_tutor(settings: Settings) -> TutorService:
     from bangla_gpt_api.retrieval.embedding import build_embedder
     from bangla_gpt_api.retrieval.hybrid_index import HybridIndex
 
-    index = HybridIndex(load_sample_corpus(), build_embedder(settings))
+    chunks = load_sample_corpus()
+    index = HybridIndex(chunks, build_embedder(settings))
     provider = get_provider(settings)
     # term_stats mirrors the production wiring (initialize/dependencies.py):
     # without it the gate runs on uniform weights and skips roman/glossary
     # resolution, so the hermetic suite would grade a degraded gate that no
     # deployment serves.
+    # V4 Phase 3: the neighbor-expansion stage mirrors production too — the
+    # flag was previously unreadable here, so a "flag on vs off" eval measured
+    # the same stack twice. Same wiring as initialize/dependencies.py.
+    neighbor_expander = None
+    if settings.rag_neighbor_expansion:
+        from bangla_gpt_api.retrieval.expansion import build_neighbor_expander
+
+        neighbor_expander = build_neighbor_expander(
+            chunks, per_side=max(0, int(settings.rag_neighbor_per_side))
+        )
     return TutorService(
         index=index,
         provider=provider,
         fast_provider=None,
         term_stats=getattr(index, "term_stats", None),
+        neighbor_expander=neighbor_expander,
     )
 
 
