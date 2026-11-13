@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(auth): revocation stamps must be naive UTC like the other writers
 - fix(boot): validate the openai lane, unknown providers and the direct parent-link
 - fix(config): treat blank forwarded env values as unset
+- fix(corpus): rebuild manifest after pipeline edits; exempt ask rows from stagger
 - fix(deps): default-deny outside the staff tenant, scope the force-change exemption, home the consent gate
 - fix(eval): restore the coverage floor the identity writer dropped
 - fix(eval): the 24-question gate grades the served tutor wiring
