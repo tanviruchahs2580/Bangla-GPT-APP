@@ -4,7 +4,7 @@
     "level": "secondary",
     "content_hash": "ca0bb834d1b2afa71bf1a76ef5e8c6c499f318531ed9f16f54ca8c0b754c2da1",
     "status": "acquired",
-    "extractor": "pypdf-6.21.2",
+    "extractor": "pypdf-6.21.4",
     "total_pages": 93,
     "empty_pages": 2,
     "garbage_pages": 0,
@@ -16,12 +16,13 @@
       "unusable": 2,
       "bijoy-converted": 91
     },
+    "pages_truncated_to": null,
     "chunks": 132,
     "duplicates_removed": 0,
     "chunks_with_chapter": 0,
     "chapter_coverage": 0.0,
     "content_version": "v1:ca0bb834d1b2",
-    "built_at": "2026-11-11T00:23:17+00:00",
+    "built_at": "2026-11-13T14:02:20+00:00",
     "shared_text_chunks_with_other_sources": 49
   },
   "nctb-secondary-afda21d8556d": {
@@ -29,7 +30,7 @@
     "level": "secondary",
     "content_hash": "537d2fbf64e9e57aea77ecede3415acb2e8f16542124a1e435f448f3e0c0ec98",
     "status": "acquired",
-    "extractor": "pypdf-6.21.2",
+    "extractor": "pypdf-6.21.4",
     "total_pages": 93,
     "empty_pages": 2,
     "garbage_pages": 0,
@@ -41,12 +42,13 @@
       "unusable": 89,
       "bijoy-converted": 4
     },
+    "pages_truncated_to": null,
     "chunks": 123,
     "duplicates_removed": 0,
     "chunks_with_chapter": 0,
     "chapter_coverage": 0.0,
     "content_version": "v1:537d2fbf64e9",
-    "built_at": "2026-11-11T00:23:22+00:00",
+    "built_at": "2026-11-13T14:02:37+00:00",
     "shared_text_chunks_with_other_sources": 1
   },
   "nctb-secondary-be50d8aff8d5": {
@@ -54,7 +56,7 @@
     "level": "secondary",
     "content_hash": "d35787da9b1d615dca1b166d8f2b0ebd4b3a5290d39f6cdea0ac5eaedbc266ad",
     "status": "acquired",
-    "extractor": "pypdf-6.21.2",
+    "extractor": "pypdf-6.21.4",
     "total_pages": 146,
     "empty_pages": 3,
     "garbage_pages": 0,
@@ -66,12 +68,13 @@
       "unusable": 3,
       "bijoy-converted": 143
     },
+    "pages_truncated_to": null,
     "chunks": 89,
     "duplicates_removed": 0,
     "chunks_with_chapter": 16,
     "chapter_coverage": 0.1798,
     "content_version": "v1:d35787da9b1d",
-    "built_at": "2026-11-11T00:23:31+00:00",
+    "built_at": "2026-11-13T14:02:59+00:00",
     "shared_text_chunks_with_other_sources": 46
   },
   "nctb-secondary-e39c58d35764": {
@@ -79,7 +82,7 @@
     "level": "secondary",
     "content_hash": "7e5160d72a38c150272498c5f750d2b241444ae79874c67b4d921863c910d944",
     "status": "acquired",
-    "extractor": "pypdf-6.21.2",
+    "extractor": "pypdf-6.21.4",
     "total_pages": 241,
     "empty_pages": 2,
     "garbage_pages": 0,
@@ -91,12 +94,13 @@
       "unusable": 2,
       "bijoy-converted": 239
     },
+    "pages_truncated_to": null,
     "chunks": 82,
     "duplicates_removed": 0,
     "chunks_with_chapter": 22,
     "chapter_coverage": 0.2683,
     "content_version": "v1:7e5160d72a38",
-    "built_at": "2026-11-11T00:23:48+00:00",
+    "built_at": "2026-11-13T14:03:32+00:00",
     "shared_text_chunks_with_other_sources": 50
   },
   "nctb-secondary-ca0d6bd886b7": {
@@ -104,7 +108,7 @@
     "level": "secondary",
     "content_hash": "17c22d7e89d803db81a03fb392b7081ddd22e9ae9864e0bb3f629d0aa48eaeb4",
     "status": "acquired",
-    "extractor": "pypdf-6.21.2",
+    "extractor": "pypdf-6.21.4",
     "total_pages": 111,
     "empty_pages": 2,
     "garbage_pages": 0,
@@ -116,12 +120,13 @@
       "unusable": 2,
       "bijoy-converted": 109
     },
+    "pages_truncated_to": null,
     "chunks": 86,
     "duplicates_removed": 0,
     "chunks_with_chapter": 24,
     "chapter_coverage": 0.2791,
     "content_version": "v1:17c22d7e89d8",
-    "built_at": "2026-11-11T00:23:56+00:00",
+    "built_at": "2026-11-13T14:03:46+00:00",
     "shared_text_chunks_with_other_sources": 50
   },
   "nctb-hsc-28d03c592c2c": {
@@ -129,7 +134,7 @@
     "level": "hsc",
     "content_hash": "4bab4adf0487a84ee0c81b089ef26b7c977c025a927e1675727c73f71d94fa0d",
     "status": "acquired",
-    "extractor": "pypdf-6.21.2",
+    "extractor": "pypdf-6.21.4",
     "total_pages": 52,
     "empty_pages": 0,
     "garbage_pages": 0,
@@ -141,12 +146,13 @@
       "bijoy-converted": 40,
       "unusable": 12
     },
+    "pages_truncated_to": null,
     "chunks": 89,
     "duplicates_removed": 0,
     "chunks_with_chapter": 34,
     "chapter_coverage": 0.382,
     "content_version": "v1:4bab4adf0487",
-    "built_at": "2026-11-11T00:25:33+00:00",
+    "built_at": "2026-11-13T14:07:18+00:00",
     "shared_text_chunks_with_other_sources": 49
   },
   "nctb-hsc-a513203336f6": {
@@ -154,7 +160,7 @@
     "level": "hsc",
     "content_hash": "cd17f741e26c6d899281e8373fdcb2ba5059390852d4a2c7acc5bc9c291ba0a2",
     "status": "acquired",
-    "extractor": "pypdf-6.21.2",
+    "extractor": "pypdf-6.21.4",
     "total_pages": 45,
     "empty_pages": 0,
     "garbage_pages": 0,
@@ -166,12 +172,13 @@
       "bijoy-converted": 39,
       "unusable": 6
     },
+    "pages_truncated_to": null,
     "chunks": 69,
     "duplicates_removed": 0,
     "chunks_with_chapter": 10,
     "chapter_coverage": 0.1449,
     "content_version": "v1:cd17f741e26c",
-    "built_at": "2026-11-11T00:26:21+00:00",
+    "built_at": "2026-11-13T14:08:29+00:00",
     "shared_text_chunks_with_other_sources": 50
   },
   "nctb-hsc-ca39e5957513": {
@@ -179,7 +186,7 @@
     "level": "hsc",
     "content_hash": "6d856b59b212f200eac442cce5457e8f112560f5aaa08ee9c798b043e6b16806",
     "status": "acquired",
-    "extractor": "pypdf-6.21.2",
+    "extractor": "pypdf-6.21.4",
     "total_pages": 46,
     "empty_pages": 0,
     "garbage_pages": 0,
@@ -191,12 +198,13 @@
       "bijoy-converted": 38,
       "unusable": 8
     },
+    "pages_truncated_to": null,
     "chunks": 80,
     "duplicates_removed": 0,
     "chunks_with_chapter": 24,
     "chapter_coverage": 0.3,
     "content_version": "v1:6d856b59b212",
-    "built_at": "2026-11-11T00:28:58+00:00",
+    "built_at": "2026-11-13T14:11:42+00:00",
     "shared_text_chunks_with_other_sources": 49
   },
   "nctb-hsc-9c44bb8ff649": {
@@ -204,7 +212,7 @@
     "level": "hsc",
     "content_hash": "ea30a7a6eacd271157904dc46c876b1bdaa6480ec8f863de2b46b5359edaee49",
     "status": "acquired",
-    "extractor": "pypdf-6.21.2",
+    "extractor": "pypdf-6.21.4",
     "total_pages": 52,
     "empty_pages": 0,
     "garbage_pages": 0,
@@ -216,12 +224,13 @@
       "bijoy-converted": 33,
       "unusable": 19
     },
+    "pages_truncated_to": null,
     "chunks": 97,
     "duplicates_removed": 0,
     "chunks_with_chapter": 33,
     "chapter_coverage": 0.3402,
     "content_version": "v1:ea30a7a6eacd",
-    "built_at": "2026-11-11T00:30:31+00:00",
+    "built_at": "2026-11-13T14:14:53+00:00",
     "shared_text_chunks_with_other_sources": 48
   },
   "_cross_source": {

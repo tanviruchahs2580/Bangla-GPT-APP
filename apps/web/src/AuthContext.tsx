@@ -12,6 +12,7 @@ import {
   type MeResponse,
 } from "./api";
 import { syncOfflineOwner } from "./lib/offlineStore";
+import { loginReturnPath } from "./lib/loginReturn";
 
 interface AuthState {
   me: MeResponse | null;
@@ -72,12 +73,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // to where the session died instead of dumping the user at their role
       // home — a quiz finish or a saved note must survive the hour, not be
       // abandoned by the clock.
+      // X-02: the canonical return-path policy lives in lib/loginReturn —
+      // every producer of a /login bounce (this one and RequireAuth's two
+      // navigations) now preserves the deep link the same way. The target
+      // is captured BEFORE logout's async gap: RequireAuth's client-side
+      // Navigate can move the URL to /login?next=… while logout is in
+      // flight, and a re-read inside finally would then see a URL starting
+      // with /login and bounce to bare /login — the race that destroyed the
+      // preserved destination (CI's X-02 flake).
+      const returnTo = loginReturnPath();
       void logout().finally(() => {
-        const here = `${window.location.pathname}${window.location.search}`;
-        const target = here.startsWith("/login")
-          ? "/login"
-          : `/login?next=${encodeURIComponent(here)}`;
-        window.location.href = target;
+        // A second parked 401 can resolve its logout while the first bounce
+        // already landed on /login?next=…: re-navigating from there would
+        // drop the preserved destination, so a bounce that finds itself on
+        // /login already is a no-op.
+        if (!window.location.pathname.startsWith("/login")) {
+          window.location.href = returnTo;
+        }
       });
     });
     return () => {

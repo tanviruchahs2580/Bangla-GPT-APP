@@ -3992,6 +3992,19 @@ button.small {
   animation-delay: 340ms;
 }
 
+/* A11Y (axe evidence 2026-11-13, CI w2-a11y): the ask tab's context chip
+   (badge-teal) was sampled mid rise-in — fg read #1775a8 on #e2f3fe,
+   ratio 4.45. Same failure class as the 2026-11-12 live-region exemption
+   above: the .stack stagger re-runs every time the tab panel remounts,
+   and axe's color-contrast audit races the 60–540ms fade window (the
+   static token pair itself is AA: 5.17 light / 7.85 dark). The ask tab
+   mounts on a user action — its content appears instantly, which is also
+   the ARIA-correct behavior for controls the user just asked for. */
+.stack > .ask-context-row,
+.stack > .ask-row {
+  animation: none;
+}
+
 @keyframes rise-in {
   from {
     opacity: 0;

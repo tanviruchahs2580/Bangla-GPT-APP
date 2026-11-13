@@ -63,7 +63,9 @@ from bangla_gpt_api.retrieval.hybrid_index import HybridIndex  # noqa: F401 (re-
 from bangla_gpt_api.routers import register_routers
 from bangla_gpt_api.routers._error_contract import CodedDetail, MessageDetail
 from bangla_gpt_api.routers.deps import CONSENT_VERSION
-from bangla_gpt_api.services.circuit_breaker import CircuitBreaker  # noqa: F401 - re-exported for tests
+from bangla_gpt_api.services.circuit_breaker import (
+    CircuitBreaker,  # noqa: F401 - re-exported for tests
+)
 from bangla_gpt_api.services.tutor import TutorService  # noqa: F401 (re-exported for tests)
 
 __all__ = ["CONSENT_VERSION", "app", "create_app", "enforce_production_safety"]
@@ -128,6 +130,7 @@ def enforce_production_safety(settings: Settings) -> None:
         _validate_llm_budget,
         _validate_llm_data_use,
         _validate_rag_grounding,
+        _validate_reranker_endpoint,
     ):
         try:
             problems.extend(validator(settings))
@@ -539,6 +542,38 @@ def _validate_rag_grounding(settings: Settings) -> list[str]:
             "deliberate offline benchmark sweep."
         )
     return problems
+
+
+def _validate_reranker_endpoint(settings: Settings) -> list[str]:
+    """Production must not egress student queries to an insecure reranker.
+
+    The cross-encoder rerank stage (retrieval/reranker.py) sends the
+    PII-redacted query to RAG_RERANKER_ENDPOINT. Configuration-time
+    validation already refuses cleartext HTTP to the public internet in
+    every environment; this boot guard is the production backstop for the
+    private-network exception, naming the redeployment instead of letting a
+    typo'd endpoint silently ship child queries over the open internet.
+    """
+    if (settings.rag_reranker or "").strip().lower() != "cross_encoder":
+        return []
+    endpoint = (settings.rag_reranker_endpoint or "").strip()
+    if not endpoint:
+        return []  # the config bridge already refuses this shape
+    if endpoint.lower().startswith("https://"):
+        return []
+    try:
+        from bangla_gpt_api.retrieval.reranker import _endpoint_is_private_network
+
+        if _endpoint_is_private_network(endpoint):
+            return []
+    except Exception:
+        return [f"RAG_RERANKER_ENDPOINT={endpoint!r} could not be validated"]
+    return [
+        f"RAG_RERANKER_ENDPOINT={endpoint!r} is not https and is not a private-network "
+        "host: the cross-encoder rerank stage sends student queries to it. Use an "
+        "https endpoint, or a private-network host (localhost, RFC-1918 literal, "
+        "*.local) for a self-hosted reranker."
+    ]
 
 
 # ---------------------------------------------------------------------------

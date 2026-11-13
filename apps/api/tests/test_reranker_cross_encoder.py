@@ -61,7 +61,7 @@ def _settings(**over) -> Settings:
         env="test",
         jwt_secret=SECRET,
         rag_reranker="cross_encoder",
-        rag_reranker_endpoint="http://reranker.test",
+        rag_reranker_endpoint="https://reranker.test",
         rag_reranker_model="bge-reranker-v2-m3",
     )
     base.update(over)
@@ -114,6 +114,58 @@ def test_cross_encoder_without_model_is_a_configuration_error() -> None:
 def test_unknown_reranker_name_is_refused() -> None:
     with pytest.raises(ValueError, match="RAG_RERANKER"):
         build_cross_encoder_config(_settings(rag_reranker="magic"))
+
+
+# --- egress discipline (V4 S7) ------------------------------------------------
+
+
+def test_plaintext_http_endpoint_is_refused() -> None:
+    """Student queries egress to this endpoint; cleartext HTTP is a
+    misconfiguration in every environment, not just production."""
+    with pytest.raises(ValueError, match="https"):
+        build_cross_encoder_config(_settings(rag_reranker_endpoint="http://reranker.test"))
+
+
+def test_https_endpoint_is_accepted() -> None:
+    cfg = build_cross_encoder_config(_settings(rag_reranker_endpoint="https://reranker.test"))
+    assert cfg is not None and cfg.endpoint == "https://reranker.test"
+
+
+def test_private_network_http_is_allowed_for_self_hosted_tei() -> None:
+    """A self-hosted TEI box in the same trust zone talks plain HTTP — that
+    is the documented deployment for a school-lab reranker."""
+    for host in ("http://10.0.0.5:8080", "http://192.168.1.10:8080", "http://localhost:8080"):
+        cfg = build_cross_encoder_config(_settings(rag_reranker_endpoint=host))
+        assert cfg is not None
+
+
+def test_private_network_match_requires_an_ip_literal_not_a_prefix() -> None:
+    """V4 review P1: the RFC-1918 exception matched the hostname *string*
+    prefix, so a public domain like `10.0.0.5.evil.test` or `10.com`
+    classified as private and a misconfigured endpoint would ship student
+    queries over cleartext to the public internet. The exception is granted
+    only when the host IS a private IP literal (or an explicit loopback /
+    .local name)."""
+    from bangla_gpt_api.retrieval.reranker import _endpoint_is_private_network
+
+    for endpoint in (
+        "http://10.0.0.5.evil.test:8080",
+        "http://192.168.evil.test",
+        "http://172.16.evil.test",
+        "http://10.com",
+        "http://169.254.attacker.test",
+    ):
+        assert not _endpoint_is_private_network(endpoint), endpoint
+    # and the genuine literals/names the exception exists for still pass:
+    for endpoint in (
+        "http://10.0.0.5:8080",
+        "http://192.168.1.10",
+        "http://172.16.2.1",
+        "http://169.254.9.9",
+        "http://my-box.local:8080",
+        "http://localhost:8080",
+    ):
+        assert _endpoint_is_private_network(endpoint), endpoint
 
 
 # --- success path -------------------------------------------------------------

@@ -763,8 +763,21 @@ test("X-02 session clock: near-expiry token renews, an expired one forces re-log
     )
     .toMatch(/\/login\?next=/);
   expect(page.url()).toContain(encodeURIComponent("/student/quiz"));
+  // The ?next= URL can arrive while the 401 handler's own full-document
+  // boot navigation (AuthContext -> loginReturnPath) is still settling:
+  // a raw evaluate racing that document load dies with "execution context
+  // was destroyed". The poll retries through it — the assertion itself
+  // (token cleared) is unchanged.
   await expect
-    .poll(() => page.evaluate(() => window.localStorage.getItem("bgpt_token")))
+    .poll(async () => {
+      try {
+        return await page.evaluate(() =>
+          window.localStorage.getItem("bgpt_token"),
+        );
+      } catch {
+        return "pending-navigation";
+      }
+    })
     .toBeNull();
   // Re-login from the ?next= bounce lands back on the deep link.
   await page.locator("#email").fill(STUDENT);

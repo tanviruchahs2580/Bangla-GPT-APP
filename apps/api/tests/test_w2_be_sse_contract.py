@@ -102,6 +102,10 @@ def test_provider_failure_answers_one_error_event_and_no_done(
     assert ("token", {"text": "প্রথম অংশ"}) in events
     error_data = next(data for kind, data in events if kind == "error")
     assert error_data["code"] == "llm_unavailable"
+    # V4 S8: the error frame carries the same refusal envelope fields the
+    # JSON route uses, so a mid-stream outage and a JSON refusal are
+    # indistinguishable to the client's error handling.
+    assert error_data["refused_reason"] == "llm_unavailable"
 
 
 def test_provider_failure_leaves_no_dangling_user_turn(
@@ -161,6 +165,7 @@ def test_producer_that_yields_nothing_answers_the_coded_error(
 
     assert [kind for kind, _d in events] == ["error"]
     assert events[0][1]["code"] == "llm_unavailable"
+    assert events[0][1]["refused_reason"] == "llm_unavailable"  # V4 S8
 
 
 def test_stream_response_carries_the_cache_and_buffering_headers(
@@ -296,3 +301,17 @@ def test_done_event_carries_the_contract_fields(client: TestClient) -> None:
     assert isinstance(payload["sources"], list)
     # AskResponse fields survive the round trip (no renames on the wire).
     assert set(payload) >= set(AskResponse.model_fields)
+
+
+def test_vision_refusal_confidence_is_zero_not_none(
+    client: TestClient,
+) -> None:
+    """V4 S8: a vision_unsupported refusal is a REFUSAL — the done event must
+    carry confidence 0.0 (the refused_answer floor), never None. `answer_confidence`
+    computes it from refused_reason; this pins the wire result so a refactor
+    that drops the refused_reason argument cannot silently resurface."""
+    from bangla_gpt_api.services.safety import answer_confidence
+
+    assert answer_confidence(None, "vision_unsupported", []) == 0.0
+    # and the same floor for a mid-stream outage refusal:
+    assert answer_confidence(None, "llm_unavailable", []) == 0.0

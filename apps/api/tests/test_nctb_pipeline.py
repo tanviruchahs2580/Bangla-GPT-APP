@@ -270,6 +270,24 @@ class TestCorpusLoader:
         report.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         assert load_nctb_corpus(normalized, report) == []
 
+    def test_low_bangla_ratio_source_is_logged_loudly(self, tmp_path: Path, caplog) -> None:
+        """V4 G5 (S4): a non-Bangla source (English book, failed Bijoy
+        conversion) is gated out at nctb_loader — it must never vanish
+        silently, because the served corpus's scope would shrink without a
+        trace. Every other exclusion path already warns; this one must too."""
+        import logging
+
+        normalized, report = self._write_pipeline_outputs(tmp_path)
+        payload = json.loads(report.read_text(encoding="utf-8"))
+        payload["src1"]["bangla_char_ratio_on_usable"] = 0.05
+        report.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+        with caplog.at_level(logging.WARNING, logger="bangla_gpt_api.data.nctb_loader"):
+            assert load_nctb_corpus(normalized, report) == []
+        joined = " ".join(r.getMessage() for r in caplog.records)
+        assert "src1" in joined
+        assert "bangla" in joined.lower()
+
     def test_undetected_class_falls_back_to_level_range(self, tmp_path: Path) -> None:
         normalized, report = self._write_pipeline_outputs(tmp_path)
         # remove front-matter page so nothing is detected
@@ -338,6 +356,66 @@ class TestBijoyConversion:
             "unicode": 1,
             "unusable": 1,
         }
+
+
+class TestExtractionCaps:
+    """Resource caps on the untrusted-PDF parse path (V4 G7).
+
+    A hostile or simply enormous file must fail FAST and LOUD inside the
+    build: a size cap refuses the open before pypdf allocates, a page cap
+    bounds the per-book loop, and both record WHY instead of producing a
+    silently truncated book that later passes the QC gate.
+    """
+
+    def _reader_stub(self, page_count: int) -> "type":
+        from unittest.mock import patch
+
+        class FakePage:
+            def extract_text(self):
+                return "জাতীয় শিক্ষাক্রম সরাসরি ইউনিকোড"
+
+        class FakeReader:
+            pages: ClassVar[list] = [FakePage() for _ in range(page_count)]
+
+        return patch("pypdf.PdfReader", return_value=FakeReader())
+
+    def test_page_cap_limits_pages_and_is_recorded(self, tmp_path: Path) -> None:
+        from bangla_gpt_api.nctb.extract import extract_pdf
+
+        pdf = tmp_path / "book.pdf"
+        pdf.write_bytes(b"%PDF-1.4 stub")
+        with self._reader_stub(page_count=50):
+            result = extract_pdf(pdf, max_pages=10)
+        assert result.ok
+        assert len(result.pages) == 10
+        # The truncation is visible in the result, not silent.
+        assert result.truncated_to_pages == 10
+
+    def test_default_page_cap_applies_when_none(self, tmp_path: Path) -> None:
+        from bangla_gpt_api.nctb.extract import DEFAULT_MAX_PAGES, extract_pdf
+
+        assert DEFAULT_MAX_PAGES == 2000
+        pdf = tmp_path / "book.pdf"
+        pdf.write_bytes(b"%PDF-1.4 stub")
+        with self._reader_stub(page_count=DEFAULT_MAX_PAGES + 5):
+            result = extract_pdf(pdf)
+        assert len(result.pages) == DEFAULT_MAX_PAGES
+        assert result.truncated_to_pages == DEFAULT_MAX_PAGES
+
+    def test_size_cap_refuses_before_parsing(self, tmp_path: Path) -> None:
+        from bangla_gpt_api.nctb.extract import extract_pdf
+
+        pdf = tmp_path / "huge.pdf"
+        pdf.write_bytes(b"%PDF-1.4 " + b"\x00" * 64)
+        result = extract_pdf(pdf, max_input_bytes=10)
+        assert not result.ok
+        assert "size" in (result.error or "").lower()
+        # The reader was never constructed: nothing was parsed.
+
+    def test_default_size_cap_value(self) -> None:
+        from bangla_gpt_api.nctb.extract import MAX_INPUT_BYTES
+
+        assert MAX_INPUT_BYTES == 64 * 1024 * 1024
 
 
 class TestSourcesInventory:

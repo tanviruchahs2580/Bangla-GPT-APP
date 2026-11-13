@@ -979,7 +979,10 @@ async def stream_chat_message(
                 # user_msg already committed before stream; no rollback needed
                 yield (
                     "event: error\ndata: "
-                    + json.dumps({"code": "llm_unavailable"}, ensure_ascii=False)
+                    + json.dumps(
+                        {"code": "llm_unavailable", "refused_reason": "llm_unavailable"},
+                        ensure_ascii=False,
+                    )
                     + "\n\n"
                 )
                 return
@@ -1019,7 +1022,10 @@ async def stream_chat_message(
                 await asyncio.to_thread(_discard_failed_user_turn, db, prepared)
             yield (
                 "event: error\ndata: "
-                + json.dumps({"code": "llm_unavailable"}, ensure_ascii=False)
+                + json.dumps(
+                    {"code": "llm_unavailable", "refused_reason": "llm_unavailable"},
+                    ensure_ascii=False,
+                )
                 + "\n\n"
             )
 

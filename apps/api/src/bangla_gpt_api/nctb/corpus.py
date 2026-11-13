@@ -95,6 +95,7 @@ def process_source(
     )
 
     qc = qc_pages(result.pages)
+    qc["pages_truncated_to"] = result.truncated_to_pages
     chunks = chunk_pages(result.pages, source_id=source_id)
     # RAG-001: dedupe identical passages (reprints/overlapping pages) and
     # stamp version + build time so staleness is answerable per artifact.

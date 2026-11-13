@@ -75,6 +75,31 @@ class RerankerEndpointError(RuntimeError):
     """The rerank endpoint violated its contract (status, shape, indices)."""
 
 
+def _endpoint_is_private_network(endpoint: str) -> bool:
+    """True for the plain-HTTP deployments this stage permits (V4 S7).
+
+    A self-hosted TEI box inside the operator's own network talks cleartext
+    HTTP by design; the public internet must not. The RFC-1918 exception is
+    granted only when the host IS a private/loopback/link-local IP *literal*
+    (V4 review P1: matching the hostname string by prefix let public domains
+    like `10.0.0.5.evil.test` or `10.com` classify as private). Explicit
+    names (localhost, *.local) remain the only non-literal exceptions.
+    """
+    import ipaddress
+    from urllib.parse import urlparse
+
+    host = (urlparse(endpoint).hostname or "").lower()
+    if host in ("localhost", "127.0.0.1", "::1"):
+        return True
+    if host.endswith(".local"):
+        return True
+    try:
+        addr = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return addr.is_private or addr.is_loopback or addr.is_link_local
+
+
 def build_cross_encoder_config(settings: Any) -> CrossEncoderConfig | None:
     """The settings-to-stage bridge; None keeps the lexical default."""
     mode = (getattr(settings, "rag_reranker", "lexical") or "lexical").strip().lower()
@@ -93,6 +118,16 @@ def build_cross_encoder_config(settings: Any) -> CrossEncoderConfig | None:
         )
     if not model:
         raise ValueError("RAG_RERANKER=cross_encoder requires RAG_RERANKER_MODEL")
+    # Egress discipline (V4 S7): the student's query leaves the process for
+    # this endpoint, so cleartext HTTP to the public internet is refused at
+    # configuration time — not just in production. Plain HTTP stays legal
+    # for the private-network deployments the stage documents.
+    if not endpoint.lower().startswith("https://") and not _endpoint_is_private_network(endpoint):
+        raise ValueError(
+            f"RAG_RERANKER_ENDPOINT={endpoint!r} must use https — student queries "
+            "egress to it; plain HTTP is allowed only for private-network hosts "
+            "(localhost, RFC-1918 literals, *.local)"
+        )
     return CrossEncoderConfig(
         endpoint=endpoint.rstrip("/"),
         model=model,

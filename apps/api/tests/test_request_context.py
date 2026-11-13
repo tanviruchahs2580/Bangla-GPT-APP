@@ -17,6 +17,7 @@ from bangla_gpt_api.config import Settings
 from bangla_gpt_api.main import create_app
 from bangla_gpt_api.providers.mock import MockLLMProvider
 from bangla_gpt_api.services.context import (
+    MAX_CONTEXT_SUBJECT_CHARS,
     RequestContext,
     history_summary,
     snapshot_mastery,
@@ -143,6 +144,19 @@ def test_log_fields_are_counts_ids_only_and_json_safe() -> None:
     assert fields["ai_goal"] == "question"
     assert fields["ai_mastery_concepts"] == 2  # count, never concept names
     json.dumps(fields)  # must be JSON-serialisable for json_log
+
+
+def test_log_fields_ai_subject_is_redacted_and_capped() -> None:
+    """V4 S6: ai_subject is a client-owned value copied into observability
+    rows (ai_usage metering) verbatim — render_block caps+escapes it, but
+    log_fields did neither, so a phone number or a 500-char string typed
+    into the subject field would land in a metrics table raw."""
+    ctx = RequestContext(role="student", class_level=6, subject="01712345678 বিজ্ঞান")
+    fields = ctx.log_fields()
+    assert "01712345678" not in str(fields["ai_subject"])  # phone pattern redacted
+    assert "redacted" in str(fields["ai_subject"])
+    long = RequestContext(role="student", class_level=6, subject="x" * 500)
+    assert len(str(long.log_fields()["ai_subject"])) <= MAX_CONTEXT_SUBJECT_CHARS
 
 
 def test_history_summary_counts_and_strategy_only() -> None:

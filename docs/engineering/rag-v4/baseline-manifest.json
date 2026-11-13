@@ -1,0 +1,115 @@
+{
+ "manifest_version": "rag-v4-baseline-1",
+ "captured_at": "2026-11-13",
+ "branch": "feat/bangla-gpt-rag-v4-readiness",
+ "commit": "49d43400e2276e51cdb26a3a1c87e0556ea70044",
+ "status_note": "Fingerprints measured on 2026-11-13 by direct commands recorded in evidence-ledger.jsonl. No field below is asserted from memory.",
+ "runtime": {
+  "python_local": "3.12.10 (CPython)",
+  "python_ci": "3.11 and 3.12 (per AGENTS.md §2)",
+  "node_local": "v24.19.0",
+  "node_pin": ">=24 <25 (.nvmrc=24, engines)",
+  "npm_pin": ">=11",
+  "python_deps": "hash-pinned via apps/api/constraints.txt; verified by scripts/check_lockfile.py (not hand-edited)"
+ },
+ "corpus": {
+  "manifest": "data/nctb/manifests/corpus_manifest.json",
+  "manifest_sha256_16": "8a362f0f092f8dc4",
+  "pipeline_processing_version": "v1",
+  "pipeline_code_fingerprint": "sha256:7f52b02c342ae786d22331c0091fb56611577da8f8213ba39c83ffd455770ad8",
+  "extractor": "pypdf-6.21.4",
+  "totals": {
+   "sources": 9,
+   "processed_sources": 9,
+   "chunks": 847
+  },
+  "index_chunks": 1598,
+  "edition": {
+   "secondary": "প্রকাশকাল ২০১২ (curriculum_year 2012)",
+   "hsc": "UNKNOWN",
+   "note": "Curriculum listings (শিক্ষাক্রম), not student textbooks; owner-supplied class-6 textbook NOT ingested (no text layer, no OCR path). See source-registry.md."
+  },
+  "corpus_content": "gitignored (copyright); only provenance committed",
+  "embedder": {
+   "model": "local HashingEmbedder (deterministic, 384-dim)",
+   "note": "embedding_model defaults to \"\"; choosing a real model is an owner decision and a manifest-breaking event (AGENTS.md §15)"
+  },
+  "integrity_checks": "check_corpus_manifest.py OK; content_qa.py passes all normalized files (both wired in CI, CI-FIX-001)"
+ },
+ "evaluation": {
+  "golden": {
+   "file": "apps/api/eval/golden_v3.json",
+   "sha256_16": "42b6c5ac695d1bf3",
+   "n": 427,
+   "version": "golden-v3.0.0",
+   "bootstrap_seed": 20261029,
+   "bound_to": "bundled 78-chunk sample corpus (corpus_source=bundled_sample identity pin)"
+  },
+  "baseline": {
+   "file": "apps/api/eval/baseline_v3.json",
+   "version": "golden-v3.0.0",
+   "n": 427,
+   "metrics": {
+    "grounded_rate": 0.7963,
+    "coverage_true": 0.7882,
+    "coverage_false": 0.9524,
+    "precision_true": 0.9969,
+    "faithfulness_avg": 0.8544,
+    "faithfulness_mode": "local_overlap",
+    "grammar_avg": 0.9879,
+    "language_consistency": 1.0
+   },
+   "gate": "eval CLI exit 1 on > 2pp regression vs this file; HIT_GATE_K=3, hit@3 floor 0.95"
+  },
+  "redteam": {
+   "file": "apps/api/eval/redteam_v2.json",
+   "sha256_16": "f6de522654f5b79b",
+   "n": 36
+  },
+  "gate_questions": {
+   "suite": "scripts/evaluate_golden.py",
+   "n": 24,
+   "floor": 0.9,
+   "last_measured": 0.9167
+  }
+ },
+ "retrieval_config": {
+  "fusion": "RRF k=60",
+  "top_k": 3,
+  "top_k_contract": "LOCKED — protected behavior, change requires separate owner approval",
+  "grounding_gate": "IDF-weighted coverage >= 0.5 AND < 2 absent content terms AND Bangla-bigram vector guard; refusal is a correct outcome",
+  "reranker": "lexical feature ranker (default); cross-encoder dormant, config-gated",
+  "neighbor_expansion": {
+   "default": false,
+   "measured": "structural no-op on the sample gate corpus (0 multi-chunk buckets); real corpus has 151 multi-chunk buckets — see neighbor-expansion-experiment.md"
+  }
+ },
+ "prompt_identity": {
+  "PROMPT_VERSION": "tutor-prompt-v1",
+  "rule": "any prompt change must bump PROMPT_VERSION and PROMPT_SHA256 together"
+ },
+ "web": {
+  "framework": "React 18 + Vite 5, plain CSS (no Tailwind), TanStack Query 5",
+  "coverage_ratchet": "lines 68 / functions 60 / branches 60 / statements 70 (QA-owner, raise-only)",
+  "e2e_last_local_run": {
+   "date": "2026-11-13",
+   "ports": "API 8010 / web 5273",
+   "result": "213 passed, 14 skipped, 0 failed, 56.2 min",
+   "doc": "user-journey-e2e.md"
+  }
+ },
+ "api": {
+  "framework": "FastAPI, SQLAlchemy 2 sync, Alembic",
+  "coverage_ratchet": "fail_under 80 with per-module floors (pii/hybrid/bm25=100, safety=98, gdpr=98, tutor=91) — QA-owner, raise-only",
+  "tables": 42,
+  "migrations": "36 files counted 2026-11-10 (re-count before quoting)"
+ },
+ "known_local_gate_drift": {
+  "note": "These fail on this machine's drifted local tools but pass in CI's pinned toolchain; disposition recorded for the final report, not defects in the diff.",
+  "items": [
+   "mypy: unused-ignore at services/school.py:887 (local mypy version drift)",
+   "ruff: I001 at main.py:41 (local ruff version drift)",
+   "pytest full suite: test_qa_version_parity red from stale locally-installed dist metadata (0.6.2 shadowing 0.10.0); deterministic-in-isolation, green in CI"
+  ]
+ }
+}

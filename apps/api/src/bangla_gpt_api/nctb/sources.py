@@ -11,12 +11,12 @@ Recorded during discovery on 2026-08-25 against nctb.gov.bd:
 - Secondary listing page:
     https://nctb.gov.bd/pages/files/6922db5b933eb65569e09a2c
   Section heading: "মাধ্যমিক স্তরের শিক্ষাক্রম(প্রকাশকাল -২০১২)"
-  16 textbook PDFs hosted on the ministry object storage bucket.
+  16 curriculum-document PDFs hosted on the ministry object storage bucket.
 
 - Higher-secondary listing page:
     https://nctb.gov.bd/pages/files/6922dbc6933eb65569e0c702
   Section heading: "উচ্চ মাধ্যমিক স্তরের শিক্ষাক্রম"
-  32 textbook PDFs hosted on the same bucket.
+  32 curriculum-document PDFs hosted on the same bucket.
 
 Class coverage of the two listing pages: Secondary = classes 6-10,
 Higher Secondary = classes 11-12 (per-page headings; individual books do
@@ -47,7 +47,7 @@ SOURCE_PAGES = {
 
 @dataclass(frozen=True)
 class NctbArtifact:
-    """One officially linked textbook PDF."""
+    """One officially linked curriculum-document PDF."""
 
     file_id: str
     subject_bn: str

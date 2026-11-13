@@ -26,6 +26,7 @@ import { PublicLanguageToggle } from "./components/PublicLanguageToggle";
 import { SkipLink } from "./components/SkipLink";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { onLangChange, t } from "./i18n";
+import { loginReturnPath, safeNextPath } from "./lib/loginReturn";
 
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const WelcomePage = lazy(() => import("./pages/WelcomePage"));
@@ -89,7 +90,11 @@ function RequireAuth({
   children: React.ReactNode;
 }) {
   const { me, loading, apiUnreachable, retrySession } = useAuth();
-  if (!getToken()) return <Navigate to="/login" replace />;
+  // X-02: both /login navigations below carry ?next= via the canonical
+  // policy (lib/loginReturn) — the token-missing boot and the session-
+  // refused boot preserve the deep link, so the redirect race with
+  // AuthContext's 401 bounce can no longer lose the destination.
+  if (!getToken()) return <Navigate to={loginReturnPath()} replace />;
   if (loading)
     return (
       <main className="container" aria-live="polite">
@@ -106,7 +111,7 @@ function RequireAuth({
   if (apiUnreachable) return <ApiUnreachable onRetry={retrySession} />;
   // Token present but the profile was genuinely refused (401/403): the
   // session really is over, so send them to log in.
-  if (me === null) return <Navigate to="/login" replace />;
+  if (me === null) return <Navigate to={loginReturnPath()} replace />;
   if (role && me.role !== role)
     return <Navigate to={ROLE_HOME[me.role] ?? "/login"} replace />;
   // F-001: the page renders inside its own boundary, so a page-level render
@@ -160,23 +165,6 @@ function Loading() {
       </div>
     </main>
   );
-}
-
-/**
- * The ?next= destination from a `/login?next=…` bounce. Same-origin relative
- * paths only: an absolute URL (https://…), a protocol-relative one (//…),
- * or a backslash variant fails this check and falls back to the role home —
- * an open redirect on a government login page is a phishing primitive.
- */
-function safeNextPath(search: string): string | null {
-  try {
-    const next = new URLSearchParams(search).get("next");
-    if (!next || !next.startsWith("/")) return null;
-    if (next.startsWith("//") || next.startsWith("/\\")) return null;
-    return next;
-  } catch {
-    return null;
-  }
 }
 
 function RoutesSwitch() {

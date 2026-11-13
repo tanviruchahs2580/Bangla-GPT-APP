@@ -1,6 +1,6 @@
 {
   "manifest_version": 1,
-  "built_at": "2026-11-11T00:30:34+00:00",
+  "built_at": "2026-11-13T14:14:59+00:00",
   "edition": {
     "secondary": "প্রকাশকাল ২০১২",
     "hsc": "UNKNOWN",
@@ -13,8 +13,8 @@
   },
   "pipeline": {
     "processing_version": "v1",
-    "code_fingerprint": "sha256:225f106c50af82596e78313caa1935fc960716281ad46bc657d4dc6936d6e413",
-    "extractor": "pypdf-6.21.2",
+    "code_fingerprint": "sha256:7f52b02c342ae786d22331c0091fb56611577da8f8213ba39c83ffd455770ad8",
+    "extractor": "pypdf-6.21.4",
     "python": "3.12.10-CPython",
     "chunker": {
       "unit": "tokens",
@@ -48,7 +48,7 @@
       "duplicates_removed": 0,
       "chunks_with_chapter": 34,
       "chapter_coverage": 0.382,
-      "extractor": "pypdf-6.21.2",
+      "extractor": "pypdf-6.21.4",
       "extracted_sha256": "349cd8d3cbba9dfa946d9aecffa4b5f01708dfd26da331f25adce1d3f9ad7c02",
       "normalized_sha256": "0b47b794d991d52afc25f2a1bf6701c3ae7a69703b91b08cc6ec1083e7c69b8e"
     },
@@ -71,7 +71,7 @@
       "duplicates_removed": 0,
       "chunks_with_chapter": 33,
       "chapter_coverage": 0.3402,
-      "extractor": "pypdf-6.21.2",
+      "extractor": "pypdf-6.21.4",
       "extracted_sha256": "2fae4cb8374bc844c7b06b887599c99ae2100ae40106f957efb8e7a7d26eee72",
       "normalized_sha256": "03dd5c790342663664aa58f0a4d98e72369fbb72ed14f8bb0c7949e15afa0e63"
     },
@@ -94,7 +94,7 @@
       "duplicates_removed": 0,
       "chunks_with_chapter": 10,
       "chapter_coverage": 0.1449,
-      "extractor": "pypdf-6.21.2",
+      "extractor": "pypdf-6.21.4",
       "extracted_sha256": "fb588f4719292794fa63d3ac836c7c5b9d0993d63c14c33f547ce53b9c1e6a97",
       "normalized_sha256": "f370b976002c27bc8198eb5d7bbedc7ff42871305621470f00f42a1809013ae5"
     },
@@ -117,7 +117,7 @@
       "duplicates_removed": 0,
       "chunks_with_chapter": 24,
       "chapter_coverage": 0.3,
-      "extractor": "pypdf-6.21.2",
+      "extractor": "pypdf-6.21.4",
       "extracted_sha256": "8d4c293781ca858b7ff889e373262bf4cfae7de64ebdf7eb9f8f18c923c40a02",
       "normalized_sha256": "d894ed96d9f51cc1d88e211c978d15fa006d9dba58c03bbe34cb9d9b3a0642c3"
     },
@@ -140,7 +140,7 @@
       "duplicates_removed": 0,
       "chunks_with_chapter": 0,
       "chapter_coverage": 0.0,
-      "extractor": "pypdf-6.21.2",
+      "extractor": "pypdf-6.21.4",
       "extracted_sha256": "e0f7f1509764940ef521c46581246409886992fa5d86d83e9f36b40df869f1ab",
       "normalized_sha256": "e904b45592f377959557f5c877f32878c27bbc4a6c7a3b96863879140271f267"
     },
@@ -163,7 +163,7 @@
       "duplicates_removed": 0,
       "chunks_with_chapter": 0,
       "chapter_coverage": 0.0,
-      "extractor": "pypdf-6.21.2",
+      "extractor": "pypdf-6.21.4",
       "extracted_sha256": "e40f06696e9872c57fdd55cd579e6a65c6a19e1aab91254110c7b6cc12d60802",
       "normalized_sha256": "72224326b113d29fc3224b549ead5e8b366cc5bb4dd6be7adab05583151a4f43"
     },
@@ -186,7 +186,7 @@
       "duplicates_removed": 0,
       "chunks_with_chapter": 16,
       "chapter_coverage": 0.1798,
-      "extractor": "pypdf-6.21.2",
+      "extractor": "pypdf-6.21.4",
       "extracted_sha256": "6b651bce51fbc17cfa800d055773a5384e085459280a0dc25cbee8be47dd515b",
       "normalized_sha256": "eb9851a72a78cea800f5703a1727c2a650cf5954500c0a88a772751e5a0da4d7"
     },
@@ -209,7 +209,7 @@
       "duplicates_removed": 0,
       "chunks_with_chapter": 24,
       "chapter_coverage": 0.2791,
-      "extractor": "pypdf-6.21.2",
+      "extractor": "pypdf-6.21.4",
       "extracted_sha256": "95fde0635a774c036dd52cb4f3b9133bee0d621fb3148caa4863a53fbb573a85",
       "normalized_sha256": "4d7b1772f41137c37ef683c674fe81bfbf3890a0453c40ef7bb09b59022fd43b"
     },
@@ -232,7 +232,7 @@
       "duplicates_removed": 0,
       "chunks_with_chapter": 22,
       "chapter_coverage": 0.2683,
-      "extractor": "pypdf-6.21.2",
+      "extractor": "pypdf-6.21.4",
       "extracted_sha256": "da13ecf0f54e1c910c64f62c4d9d849edacc8eb67814cad2450f0e0eab46026d",
       "normalized_sha256": "413f97779883c4fc47615274cc53ee38e8e095022dfd216ef8810347014ab5d1"
     }
@@ -312,14 +312,14 @@
     }
   },
   "derived": {
-    "quality_report_sha256": "ca741bcedba1d3de5b51a29113dee3ba206894c27bcd690b1b6e6a158b1293a7",
-    "retrieval_eval_sha256": "38c484156b95795254c5c4c24c6ad651ac0536eaf2668e978931ddbf48f64064",
+    "quality_report_sha256": "f601f3bc16bcf55af22d5965698f88b4dd0cc4d36f1bfcc0728f829648bef784",
+    "retrieval_eval_sha256": "295406d06a485dacbb505f5d7b99cecdf2314d4a83f5e5cb6025543e2270d1b2",
     "index_chunks": 1598,
     "index_id_hash": "ee7e2f3ba3c9528a80294e8a5d10ac5ff6ad6251adcc8199f3a217152b5ae1fc",
     "embedder": {
       "name": "hash-ngram-local",
       "dim": 384
     },
-    "retrieval_evaluated_at": "2026-11-12T22:08:16+00:00"
+    "retrieval_evaluated_at": "2026-11-13T14:18:29+00:00"
   }
 }

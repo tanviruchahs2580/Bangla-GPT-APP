@@ -23,6 +23,7 @@ from bangla_gpt_api.main import (
     _validate_direct_parent_link,
     _validate_llm_provider,
     _validate_rate_limit_redis,
+    _validate_reranker_endpoint,
 )
 
 PG = "postgresql+psycopg://u:p@localhost:5432/db"
@@ -160,3 +161,36 @@ def test_unparseable_worker_count_does_not_bypass_the_guard(monkeypatch, bad):
     monkeypatch.setenv("WEB_CONCURRENCY", bad)
     assert _validate_database(prod(database_url="sqlite:////data/app.db"))
     assert _validate_rate_limit_redis(prod(rate_limit_backend="memory"))
+
+
+# --- V4 S7: reranker egress endpoint ------------------------------------------
+
+
+def test_plaintext_reranker_endpoint_is_refused_in_production():
+    problems = _validate_reranker_endpoint(
+        prod(
+            rag_reranker="cross_encoder",
+            rag_reranker_endpoint="http://reranker.example.test",
+        )
+    )
+    assert problems, "production must refuse cleartext reranker egress"
+    assert "https" in problems[0]
+
+
+def test_https_reranker_endpoint_is_accepted_in_production():
+    assert not _validate_reranker_endpoint(
+        prod(
+            rag_reranker="cross_encoder",
+            rag_reranker_endpoint="https://reranker.example.test",
+        )
+    )
+
+
+def test_private_http_reranker_endpoint_is_allowed_in_production():
+    assert not _validate_reranker_endpoint(
+        prod(rag_reranker="cross_encoder", rag_reranker_endpoint="http://10.0.0.5:8080")
+    )
+
+
+def test_lexical_default_needs_no_endpoint_guard():
+    assert not _validate_reranker_endpoint(prod())

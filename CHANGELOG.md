@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - feat(eval): record and enforce the identity a benchmark measured
+- feat(nctb): resource caps on the untrusted-PDF parse path (V4 G7)
 - feat(retrieval): book and year metadata filters through both lanes
 - feat(retrieval): candidate-pool dedup by content hash and source identity
 - feat(retrieval): neighbor expansion of the selected evidence (gated, default off)
@@ -24,34 +25,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- fix(api): SSE error frames carry refused_reason, matching the JSON refusal envelope (V4 S8)
 - fix(api): answer 401 for bad_current_password everywhere
 - fix(api): bound the teacher support-plan listing
 - fix(api): clear the fresh vulture findings
 - fix(api): declare every 403 code the routers actually raise
 - fix(api): keep sync DB hops off the event loop
+- fix(api): loud non-Bangla exclusion, subject redaction in logs, rebuild idempotence (V4 S3-S6)
 - fix(auth): revocation stamps must be naive UTC like the other writers
 - fix(boot): validate the openai lane, unknown providers and the direct parent-link
 - fix(config): treat blank forwarded env values as unset
+- fix(corpus): rebuild manifest after pipeline edits; exempt ask rows from stagger
 - fix(deps): default-deny outside the staff tenant, scope the force-change exemption, home the consent gate
 - fix(eval): restore the coverage floor the identity writer dropped
 - fix(eval): the 24-question gate grades the served tutor wiring
 - fix(eval): the gate refuses to pass on a missing baseline
+- fix(eval): wire the neighbor-expansion stage into the eval CLI's tutor stack (V4 Phase 3)
 - fix(jobs): reclaim period slots orphaned by a kill
 - fix(ops): forward the documented operator knobs through compose
 - fix(pii): redact BD landline numbers before egress
 - fix(privacy): retention sweeps the unused expired invites
+- fix(rag): private-network reranker exception requires an IP literal, not a hostname prefix (V4 review P1)
+- fix(rag): refuse cleartext reranker egress endpoints (V4 S7)
 - fix(retrieval): reindex unpack and sweep lint; regenerate the CHANGELOG
 - fix(retrieval): verify the remote embedder dimension once it is known
 - fix(security): enforce the password policy on join-school
 - fix(tutor): fold the query boundary through the shared normalizer
 - fix(tutor): honest metering and diagnostics for locally-produced refusals
 - fix(tutor): stream route honours the all-or-nothing turn contract
+- fix(web): X-02 canonical return-path policy preserves the deep link on every /login bounce
 - fix(web): close the contrast-guard blind spot and repair two AA failures
 - fix(web): present live-region answer content without a fade
 - fix(worker): thread the job bodies, retry same-period, wire observability
 
 ### Changed
 
+- refactor(api): extract _log_load_exclusions to restore the complexity ratchet
 - refactor(retrieval): inject the rerank stage's egress seams (import-linter layering)
 - refactor(retrieval): one metadata predicate for every lane (complexity ratchet)
 
@@ -75,7 +84,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(rag): RAG V2/V3 phase-0 baselines, audit and elevation plan
 - docs(rag): fix two path defects the doc-paths guardrail caught
 - docs(rag): retrieval engine v2 design (stage-by-stage, defaults-preserving)
+- docs(rag-v4): 13-step user-journey e2e evidence — 213 passed / 0 failed locally on 8010/5273 (V4 Phase 7)
+- docs(rag-v4): end-to-end traces of 3 representative questions with evidence ids (V4 Phase 4)
+- docs(rag-v4): fix loader path in source-registry pipeline map (doc-path gate)
+- docs(rag-v4): governance artifacts — architecture review, implementation plan, baseline manifest, evidence ledger, ADR drafts, SLO proposal, execution log (V4 Phases 6/8/9)
+- docs(rag-v4): measured neighbor-expansion experiment — structural no-op on the sample gate corpus (V4 Phase 3)
+- docs(rag-v4): phase-0/1 evidence — current state, source registry, R@1 investigation
+- docs(rag-v4): record independent review outcome and the P1 egress hardening in the governance artifacts
 - docs(safety): record the deliberate over-refusal trade-off
+- docs: refresh data-minimization inventory to the current retention sweep (V4 S9)
 - docs: regenerate the native-review sheet after the safety comment edit
 
 ### Tests
@@ -107,6 +124,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - style(tests): drop the unused RemoteEmbedder imports (pinned-ruff F401)
 - style(tests): hoist the indexable_text import out of the test body
 - style(worker): ruff format
+- style: ruff + prettier formatting fixes from CI lint gates (PR #120)
 
 ### Other
 

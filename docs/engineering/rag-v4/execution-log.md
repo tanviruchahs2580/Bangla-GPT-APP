@@ -1,0 +1,73 @@
+# Execution log — RAG V4 readiness pass (append-only)
+
+Format: date · phase · summary · evidence pointer. One entry per completed
+unit of work; later entries never rewrite earlier ones.
+
+- 2026-11-13 · Phase 0 · Branch `feat/bangla-gpt-rag-v4-readiness` created
+  from `main`@`2731a4a`; repo identity confirmed (two-app monorepo, no root
+  manifest, 42 tables, 19 router files). Evidence: current-state.md.
+- 2026-11-13 · Phase 1 · 20 owner-reported handoff claims verified; none
+  CONTRADICTED; two semantically refined (sweep 0.2412 = all-gate-refusals
+  incl. 20.2% false-refusal split; R@1 0.87-vs-0.95 = different corpus
+  revisions, code contributes zero). Evidence: current-state.md §0.1,
+  r1-regression-investigation.md, scripts/diagnose_family_a.py.
+  Commit `9de07ec`.
+- 2026-11-13 · Phase 2 (S1) · X-02 fixed: canonical return-path policy,
+  `?next=` preserved on every /login bounce, hostile destinations rejected.
+  Commit `06e6abc`.
+- 2026-11-13 · Phase 2 (S2) · Resource caps on untrusted-PDF parse path.
+  Commit `40bde1a`.
+- 2026-11-13 · Phase 2 (S3–S6) · Loud non-Bangla exclusion; subject
+  redaction in logs; corpus rebuild idempotence. Commit `e18b00b`.
+- 2026-11-13 · Phase 2 (S7) · Cleartext reranker egress refused; redactor
+  at the only production construction site. Commit `33b389f`.
+- 2026-11-13 · Phase 2 (S8) · SSE error frames carry `refused_reason`
+  (JSON-envelope parity); vision-refusal confidence pinned 0.0.
+  Commit `e06d784`.
+- 2026-11-13 · Phase 2 (S9) · data_minimization.md re-verified against the
+  retention sweep and corrected (no policy change). Commit `ddfb115`.
+- 2026-11-13 · Phase 3 · Eval-CLI flag-consumption defect found via
+  byte-identical pilot runs; expander wired (`aa3d7be`); measured A/B both
+  legs ALL GATES PASS, no-op proven structural (0 multi-chunk buckets in
+  sample corpus). Commit `8512918`.
+- 2026-11-13 · Phase 4 · 3-question traces with evidence ids: grounded,
+  Banglish-transliteration lane, honest refusal. Commit `ad4c79e`.
+- 2026-11-13 · Phase 7 · Full Playwright suite on 8010/5273: 213 passed,
+  14 skipped (all conditional-by-design), 0 failed, 56.2 min; all 13
+  master-prompt journey steps mapped to passing specs. Commit `49d4340`.
+- 2026-11-13 · Phases 6/8/9 · Governance artifacts written with measured
+  fingerprints only: baseline-manifest.json (manifest/golden/redteam
+  hashes, runtime pins), evidence-ledger.jsonl (13 append-only entries),
+  architecture-review.md (11-dimension scorecard, 2 dimensions UNSCORED
+  where no evidence exists), implementation-plan.md (executed sequence +
+  6 escalated owner decisions), adr-drafts.md (6 drafts), slo-proposal.md
+  (7 SLI + 5 alert proposals, all PROPOSED). This commit.
+- 2026-11-13 · Review · Independent security-reviewer subagent over the
+  full `main...HEAD` diff (adversarial; did not see implementer reports).
+  Verdict: no blocking issues; prohibited-files check clean; doc numeric
+  claims spot-checked and verified. 1 P1 found: the S7 private-network
+  allowlist matched hostnames by string prefix
+  (`10.0.0.5.evil.test` → "private").
+- 2026-11-13 · Review-fix · P1 reproduced directly, fixed TDD-style: the
+  RFC-1918 exception now requires an actual IP literal
+  (`ipaddress.ip_address`); 40/40 egress + production-guard tests green.
+  Commit `bdde8b1`. ADR-D4 and the evidence ledger updated.
+- 2026-11-13 · CI-FIX · Manifest fingerprint: CI leg failed
+  (`225f106c… != 7f52b02c…`) because the S3–S6 commit edited three
+  fingerprinted pipeline modules. Rebuilt the corpus locally with the
+  pinned extractor (the venv had drifted to pypdf 6.18.0; reinstalled
+  pypdf 6.21.4 from the hash-pinned constraints line — first rebuild with
+  6.18.0 produced 839 chunks, wrong; with 6.21.4, 847 as committed).
+  `corpus_digest` 1396faf2… and `index_id_hash` ee7e2f3b… are
+  byte-identical to the committed build — proving the loader edits changed
+  logging, not content. Manifest/quality_report/retrieval_eval regenerated;
+  baseline-manifest.json and source-registry.md updated. Gates:
+  check_corpus_manifest OK (digest 1396faf2…), content_qa 9/9 pass,
+  reph invariant 0.
+- 2026-11-13 · CI-FIX · axe color-contrast on the ask-tab badge-teal
+  (CI w2-a11y): fg #1775a8 on #e2f3fe = 4.45. Root cause is NOT the token
+  pair (static pair is AA, 5.17 light / 7.85 dark) — it is the `.stack > *`
+  rise-in stagger re-running when the tab panel remounts; axe sampled the
+  chip mid-fade (same failure class as the 2026-11-12 live-region
+  exemption, styles.css:794). Fix: `.ask-context-row`/`.ask-row` exempted
+  from the stagger; static content appears instantly.
