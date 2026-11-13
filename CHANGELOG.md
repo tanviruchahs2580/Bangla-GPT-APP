@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(ops): forward the documented operator knobs through compose
 - fix(pii): redact BD landline numbers before egress
 - fix(privacy): retention sweeps the unused expired invites
+- fix(retrieval): reindex unpack and sweep lint; regenerate the CHANGELOG
 - fix(retrieval): verify the remote embedder dimension once it is known
 - fix(security): enforce the password policy on join-school
 - fix(tutor): fold the query boundary through the shared normalizer
@@ -80,16 +81,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - test(e2e): point the question-paper row locator at the renamed button
 - test(e2e): poll STU-16 for the settled post-deletion state
 - test(e2e): poll X-02 for the settled fail-secure URL
+- test(retrieval): degenerate-path coverage for the rerank stage
+- test(retrieval): pin the three uncovered embedding arcs (audit F-3 follow-through)
+- test(retrieval): the protocol test sends text documents, as the stage contract defines
 
 ### Maintenance
 
 - chore(api): trace the dead flush branch, stale comments and doc drift
 - chore(docs): regenerate the native-review sheet
+- chore(rag): regenerate the real-corpus retrieval report after the v2 stages
 - chore(web): regenerate the OpenAPI contract fixture
 - chore: regenerate the CHANGELOG
 
 ### Style
 
+- style(tests): hoist the indexable_text import out of the test body
 - style(worker): ruff format
 
 ### Other
