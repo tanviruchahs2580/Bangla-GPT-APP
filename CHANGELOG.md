@@ -140,6 +140,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #117 from tanviruchahs2580/fix/baseline-identity-binding
 - Merge pull request #118 from tanviruchahs2580/fix/live-region-no-fade
 - Merge pull request #119 from tanviruchahs2580/feat/retrieval-engine-v2
+- Merge pull request #120 from tanviruchahs2580/feat/bangla-gpt-rag-v4-readiness
 
 ## v0.10.0 - 2026-11-11
 
