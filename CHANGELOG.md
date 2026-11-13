@@ -96,6 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(rag): regenerate the real-corpus retrieval report after the v2 stages
 - chore(web): regenerate the OpenAPI contract fixture
 - chore: regenerate the CHANGELOG
+- chore: regenerate the native-review sheet and the CHANGELOG
 
 ### Style
 
