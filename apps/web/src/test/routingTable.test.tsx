@@ -89,6 +89,49 @@ describe("routing table", () => {
     expect(window.location.pathname).toBe("/login");
   });
 
+  it("X-02: a token-missing boot on a deep link preserves the destination in ?next=", async () => {
+    // RequireAuth's token-missing navigation used to go to bare /login —
+    // the race loser that destroyed the deep link CI's X-02 flake kept
+    // hitting. The canonical policy (lib/loginReturn) now serves it.
+    authState.me = null;
+    renderAt("/student/quiz?attempt=7");
+    expect(
+      await screen.findByLabelText(t("email"), {}, { timeout: 5000 }),
+    ).toBeTruthy();
+    expect(window.location.pathname).toBe("/login");
+    expect(window.location.search).toBe(
+      `?next=${encodeURIComponent("/student/quiz?attempt=7")}`,
+    );
+  });
+
+  it("X-02: a session-refused boot (me === null with a token) also preserves the destination", async () => {
+    // getToken() returns a token (module mock above) but the profile is
+    // null: RequireAuth's second /login navigation. It must carry ?next= too.
+    authState.me = null;
+    renderAt("/student/me?tab=history");
+    expect(
+      await screen.findByLabelText(t("email"), {}, { timeout: 5000 }),
+    ).toBeTruthy();
+    expect(window.location.pathname).toBe("/login");
+    expect(window.location.search).toBe(
+      `?next=${encodeURIComponent("/student/me?tab=history")}`,
+    );
+  });
+
+  it("X-02: a deep link survives the full round trip — /login?next= returns to it after re-login", async () => {
+    // The consumer half: landing on /login?next=… with a session now sends
+    // the user BACK to the preserved destination (previously bare /login
+    // producers made this impossible to reach deterministically).
+    authState.me = STUDENT;
+    renderAt(
+      `/login?next=${encodeURIComponent("/student/quiz?attempt=7")}`,
+    );
+    await waitFor(() =>
+      expect(window.location.pathname).toBe("/student/quiz"),
+    );
+    expect(window.location.search).toBe("?attempt=7");
+  });
+
   it("shows the welcome page to an anonymous visitor at /", async () => {
     authState.me = null;
     renderAt("/");
