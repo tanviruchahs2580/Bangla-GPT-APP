@@ -3,7 +3,9 @@
 Derived table-by-table from `apps/api/src/bangla_gpt_api/db/models.py` (all 42
 ORM classes at the time of writing), the retention policy in
 `services/retention.py` and the windows in `config.py`. Reviewer:
-engineering (self-review), 2026-10-29. **Bangladesh legal review is a human
+engineering (self-review), 2026-10-29; re-verified against the retention
+sweep 2026-11-13 (RAG V4 readiness pass — invite and ai_jobs rows updated).
+**Bangladesh legal review is a human
 step and is NOT done here — see [`archive/PROGRESS.md`](archive/PROGRESS.md).**
 
 Legend:
@@ -34,7 +36,7 @@ Legend:
 | Guardian phone | `parents.phone_enc` | Optional contact field | erasure | never returned by any route; never exported | Fernet-encrypted when `PII_ENC_KEY` is set; production boot requires the key (B-04). |
 | Parent↔child link | `parent_student_links` | Who may view a child's progress | erasure (both ends) | parent (link owner) | Pair of ids only; no relationship label. |
 | School tenancy | `schools.name/code`, `classrooms.class_level/section`, `class_students`, `class_teachers` | Roster and class scoping | erasure | teacher (own classrooms), school_admin, admin | Institutional data, no personal attributes beyond the code. |
-| Invites / claim codes | `parent_invites`, `student_invites`, `school_invites` | Single-use linking / account claim codes | `token` (used parent invites; student/staff invites swept on expiry only via erasure today) | self (code returned once at creation) | Only the SHA-256 hash is stored; plaintext returned exactly once. `student_invites.email` holds the address the roster import will activate. |
+| Invites / claim codes | `parent_invites`, `student_invites`, `school_invites` | Single-use linking / account claim codes | `token` (used parent invites; unused student/school/parent invites swept `expires_at + 30d`) | self (code returned once at creation) | Only the SHA-256 hash is stored; plaintext returned exactly once. `student_invites.email` holds the address the roster import will activate — the one plaintext contact field in the group; the expiry sweep drains it (see §5). |
 | Reset / verification tokens | `password_resets`, `email_verifications` | Single-use credentials for reset / email verification | `token` (`expires_at + 30d`) | never returned | SHA-256 hashes only; `used_at` marks consumption. |
 
 ## 2. Learning activity
@@ -63,7 +65,7 @@ Legend:
 | Question papers | `question_papers` (`difficulty`, `chapters`, `questions`, `meta`) | Draft/final exam papers with the teacher review gate | erasure | owner teacher | HIL gate: finalize only after every question is explicitly reviewed. |
 | Question bank | `question_bank` (`dedupe_key`, `question_text`, `options`, `source`) | Reviewed question reuse across papers | erasure | teacher who reviewed it | `dedupe_key` is a content hash, not a person. |
 | Short tests / assignments | `short_tests`, `assignments`, `assignment_recipients` | Class-wide and selected-group quizzes | erasure | teacher (owner); student sees own attempt | `attempts` JSON is duplicated membership; `assignment_recipients` is the indexable copy. |
-| AI jobs | `ai_jobs` (`kind`, `payload`, `result`, `error`) | Async generation job lifecycle | erasure (unbounded) | owner user | `error` capped at 300 chars; job body is the artifact request. |
+| AI jobs | `ai_jobs` (`kind`, `payload`, `result`, `error`) | Async generation job lifecycle | `sweep=ai_jobs_retention_days` (30, terminal-status rows only) | owner user | `error` capped at 300 chars; job body is the artifact request. |
 | AI usage ledger | `ai_usage` (`route`, `model`, `prompt_tokens`, `completion_tokens`, `estimated_cost_usd`) | Budget gate + cost dashboards | `sweep=ai_usage_retention_days` (365) | aggregated by model on the admin AI-quality board (`GET /admin/ai/quality`) | Token counts are planning estimates (`services/costs.py`), never prompts or answers. |
 | Analytics events | `analytics_events` (`name`, `role`, `props`) | Product analytics | `sweep=analytics_retention_days` (180) | admin dashboards, aggregated; row keeps `user_id` until erasure nulls it | See the corrected statement below. |
 | Audit trail | `audit_log` (`actor_user_id`, `action`, `target`, `detail`) | Append-only privileged-action record | never deleted; attribution nulled at erasure | admin (`GET /admin/audit`) | `detail` holds ids and counts only — never message content, never PII. |
@@ -103,15 +105,19 @@ both the report and the audit row; deletes are chunked (`DELETE_CHUNK =
 Swept: conversations + messages (`chat_retention_days`, 180), analytics
 events (`analytics_retention_days`, 180), answer log
 (`answer_log_retention_days`, 730), AI usage (`ai_usage_retention_days`,
-365), password resets / email verifications / used parent invites
-(`expires_at + 30d`).
+365), terminal-status AI jobs (`ai_jobs_retention_days`, 30), password
+resets / email verifications / used parent invites (`expires_at + 30d`),
+and unused expired student/school/parent invites (`expires_at + 30d` — the
+unused-invite drain closes the plaintext-email accrual in
+`student_invites.email`; an *unused expired* parent invite is also removed,
+not just a used one).
 
 **Not swept today** (live until account erasure or actor deletion):
 `quiz_attempts`, `chapter_progress`, `daily_activity`, `revision_queue`,
 `concept_mastery`, `student_abilities`, `support_plans`, `saved_notes`,
 `notifications`, `feedback`, `teacher_documents`, `question_papers`,
-`short_tests`, `assignments`, `question_bank`, `chapter_contents`, `ai_jobs`,
-`student_invites`, `school_invites`, `job_runs`. `audit_log` is append-only by
+`short_tests`, `assignments`, `question_bank`, `chapter_contents`,
+`job_runs`. `audit_log` is append-only by
 design. `PII_ENC_KEY` is deliberately NOT in backups (docs/backup_dr.md).
 
 ## 6. Third-party flows (where data leaves the platform)
