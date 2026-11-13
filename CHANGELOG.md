@@ -101,6 +101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Style
 
+- style(retrieval): the metadata predicate as one boolean expression (pinned-ruff SIM103)
 - style(tests): drop the unused RemoteEmbedder imports (pinned-ruff F401)
 - style(tests): hoist the indexable_text import out of the test body
 - style(worker): ruff format
