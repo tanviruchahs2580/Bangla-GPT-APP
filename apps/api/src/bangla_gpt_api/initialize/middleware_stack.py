@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.middleware import (
+    ApiPrefixAliasMiddleware,
     BodySizeLimitMiddleware,
     PrometheusMetricsMiddleware,
     RateLimitMiddleware,
@@ -121,6 +122,12 @@ def build_middleware_stack(
         limiter=limiter,
         settings=settings,
     )
+
+    # /api prefix alias (the APK's baked VITE_API_BASE ends in /api and has
+    # no proxy to strip it, unlike the PWA behind Vercel's edge function).
+    # Registered after RateLimit so the limiter sees the REAL route path,
+    # and before CORS so CORS remains outside and keeps answering preflights.
+    app.add_middleware(ApiPrefixAliasMiddleware)
 
     # CORS (outside the throttle so preflight responses stay clean)
     if settings.cors_origins:
