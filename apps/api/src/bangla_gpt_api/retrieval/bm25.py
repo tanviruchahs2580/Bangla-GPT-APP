@@ -9,6 +9,7 @@ from bangla_gpt_api.retrieval.hybrid import (
     tokenize,
     trigram_ngrams,
 )
+from bangla_gpt_api.retrieval.metadata import matches_metadata
 from bangla_gpt_api.retrieval.normalize import normalize_nfkc
 from bangla_gpt_api.retrieval.query_analysis import english_gloss_terms, is_stop_word
 from bangla_gpt_api.retrieval.vocabulary import CorpusVocabulary
@@ -165,15 +166,14 @@ class BM25Index:
         hits: list[tuple[int, Hit]] = []
         for doc in sorted(candidates):
             chunk = self.chunks[doc]
-            if class_level is not None and chunk.meta.class_level != class_level:
-                continue
-            if subject is not None and chunk.meta.subject != subject:
-                continue
-            if chapter is not None and chunk.meta.chapter != chapter:
-                continue
-            if book is not None and chunk.meta.book != book:
-                continue
-            if year is not None and chunk.meta.curriculum_year != year:
+            if not matches_metadata(
+                chunk.meta,
+                class_level=class_level,
+                subject=subject,
+                chapter=chapter,
+                book=book,
+                year=year,
+            ):
                 continue
             score = self._score(query_terms, doc)
             if score <= min_score:

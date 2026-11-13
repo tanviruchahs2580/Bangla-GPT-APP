@@ -10,6 +10,7 @@ and will implement the same contract server-side.
 from bangla_gpt_api.curriculum.models import Chunk
 from bangla_gpt_api.retrieval.bm25 import Hit
 from bangla_gpt_api.retrieval.embedding import Embedder
+from bangla_gpt_api.retrieval.metadata import matches_metadata
 
 
 def vector_text(chunk: Chunk) -> str:
@@ -45,15 +46,14 @@ class VectorIndex:
         qv = self.embedder.embed([query])[0]
         hits: list[Hit] = []
         for chunk, vec in zip(self.chunks, self.vectors, strict=True):
-            if class_level is not None and chunk.meta.class_level != class_level:
-                continue
-            if subject is not None and chunk.meta.subject != subject:
-                continue
-            if chapter is not None and chunk.meta.chapter != chapter:
-                continue
-            if book is not None and chunk.meta.book != book:
-                continue
-            if year is not None and chunk.meta.curriculum_year != year:
+            if not matches_metadata(
+                chunk.meta,
+                class_level=class_level,
+                subject=subject,
+                chapter=chapter,
+                book=book,
+                year=year,
+            ):
                 continue
             score = sum(a * b for a, b in zip(qv, vec, strict=True))
             if score > min_score:
