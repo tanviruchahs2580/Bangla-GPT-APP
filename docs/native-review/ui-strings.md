@@ -897,8 +897,8 @@ translation that changes the meaning of the English original.
 | 873 | apps/api/src/bangla_gpt_api/providers/mock.py:290 | (literal) | {name}: পূর্ণ ধারণা ও নিজের ভাষায় ব্যাখ্যা ({m}) | |
 | 874 | apps/api/src/bangla_gpt_api/providers/mock.py:291 | (literal) | {name}: আংশিক ধারণা, ছোট ভুল {s[i % len(s)]} | |
 | 875 | apps/api/src/bangla_gpt_api/providers/mock.py:292 | (literal) | {name}: ধারণা স্পষ্ট নয়, আবার পড়তে হবে | |
-| 876 | apps/api/src/bangla_gpt_api/retrieval/bm25.py:37 | (literal) | সূচক কী | |
-| 877 | apps/api/src/bangla_gpt_api/retrieval/bm25.py:37 | (literal) | সূচকের নিয়ম | |
+| 876 | apps/api/src/bangla_gpt_api/retrieval/bm25.py:38 | (literal) | সূচক কী | |
+| 877 | apps/api/src/bangla_gpt_api/retrieval/bm25.py:38 | (literal) | সূচকের নিয়ম | |
 | 878 | apps/api/src/bangla_gpt_api/retrieval/query_analysis.py:5 | (literal) | সালোকসংশ্লেষণ কী এবং কোথায় ঘটে? | |
 | 879 | apps/api/src/bangla_gpt_api/retrieval/query_analysis.py:327 | (literal) | ব্যাখ্যা করো | |
 | 880 | apps/api/src/bangla_gpt_api/retrieval/query_analysis.py:328 | (literal) | ৬ষ্ঠ শ্রেণির | |
