@@ -22,14 +22,11 @@ def matches_metadata(
     year: int | None = None,
 ) -> bool:
     """True when the chunk's metadata satisfies every requested filter."""
-    if class_level is not None and meta.class_level != class_level:
-        return False
-    if subject is not None and meta.subject != subject:
-        return False
-    if chapter is not None and meta.chapter != chapter:
-        return False
-    if book is not None and meta.book != book:
-        return False
-    if year is not None and meta.curriculum_year != year:
-        return False
-    return True
+    mismatches = (
+        (class_level is not None and meta.class_level != class_level)
+        or (subject is not None and meta.subject != subject)
+        or (chapter is not None and meta.chapter != chapter)
+        or (book is not None and meta.book != book)
+        or (year is not None and meta.curriculum_year != year)
+    )
+    return not mismatches
