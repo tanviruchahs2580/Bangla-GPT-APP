@@ -199,6 +199,35 @@ def _build_tutor(
     )
 
 
+def _build_cross_encoder(settings: Settings) -> Any:
+    """Assemble the cross-encoder stage (or None for the lexical default).
+
+    Lives here, above the retrieval layer, so the PII redactor and the
+    circuit breaker can be injected into the stage without retrieval
+    importing services (import-linter: retrieval-does-not-reach-up).
+    """
+    from bangla_gpt_api.retrieval.reranker import (
+        CrossEncoderReranker,
+        build_cross_encoder_config,
+    )
+    from bangla_gpt_api.services.circuit_breaker import CircuitBreaker
+    from bangla_gpt_api.services.pii import redact_pii
+
+    config = build_cross_encoder_config(settings)
+    if config is None:
+        return None
+
+    def _redact(text: str) -> str:
+        redacted, _counts = redact_pii(text)
+        return redacted
+
+    return CrossEncoderReranker(
+        config=config,
+        redact=_redact,
+        breaker=CircuitBreaker(failure_threshold=5, reset_timeout_seconds=30),
+    )
+
+
 def build_retrieval_index(
     settings: Settings,
     cache: Any,
@@ -274,7 +303,6 @@ def build_retrieval_index(
 
     from bangla_gpt_api.caching import RAG_CACHE_TTL_SECONDS, CachedRankingIndex
     from bangla_gpt_api.retrieval.embedding import build_embedder
-    from bangla_gpt_api.retrieval.reranker import build_cross_encoder_config
 
     retrieval_mode = settings.retrieval_mode.strip().lower()
     index_build_started = time.perf_counter()
@@ -297,7 +325,10 @@ def build_retrieval_index(
                 # Retrieval engine v2, rerank stage: None keeps the lexical
                 # ranker; cross_encoder validates its own configuration
                 # (retrieval/reranker.py) and decorates the lexical ordering.
-                "cross_encoder_config": build_cross_encoder_config(settings),
+                # Assembled here (one layer up): the stage's redactor and
+                # circuit breaker live in services, which retrieval must not
+                # import (import-linter contract).
+                "cross_encoder": _build_cross_encoder(settings),
             }.items()
             if name in inspect.signature(_hi_cls.__init__).parameters
         }

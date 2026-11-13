@@ -75,6 +75,13 @@ def _candidates() -> list[tuple[Chunk, float, float]]:
     ]
 
 
+def _redact(text: str) -> str:
+    from bangla_gpt_api.services.pii import redact_pii
+
+    redacted, _counts = redact_pii(text)
+    return redacted
+
+
 def _lexical() -> object:
     return make_lexical_rerank(None)
 
@@ -129,12 +136,12 @@ def test_cross_encoder_orders_and_keeps_the_lexical_floor() -> None:
             },
         )
 
-    inner = _lexical()
     reranker = CrossEncoderReranker(
-        inner,
         config=build_cross_encoder_config(_settings()),
+        redact=_redact,
         transport=httpx.MockTransport(handler),
     )
+    reranker.wrap(_lexical())
     candidates = _candidates()
     scores = reranker("কোষ কী?", candidates)
 
@@ -156,10 +163,11 @@ def test_query_is_redacted_before_egress() -> None:
         return httpx.Response(200, json={"results": []})
 
     reranker = CrossEncoderReranker(
-        _lexical(),
         config=build_cross_encoder_config(_settings()),
+        redact=_redact,
         transport=httpx.MockTransport(handler),
     )
+    reranker.wrap(_lexical())
     reranker("আমার ফোন 01712345678, কোষ কী?", _candidates())
     assert "01712345678" not in seen[0]
     assert "[phone redacted]" in seen[0]
@@ -178,10 +186,11 @@ def test_tie_scores_get_a_deterministic_mid_value() -> None:
         )
 
     reranker = CrossEncoderReranker(
-        _lexical(),
         config=build_cross_encoder_config(_settings()),
+        redact=_redact,
         transport=httpx.MockTransport(handler),
     )
+    reranker.wrap(_lexical())
     scores = reranker("কোষ কী?", _candidates())
     # equal endpoint scores normalize to one mid value; the ordering then
     # follows the lexical magnitude floor (deterministic, by design)
@@ -200,10 +209,11 @@ def test_empty_candidates_pass_through_without_a_request() -> None:
         return httpx.Response(200, json={"results": []})
 
     reranker = CrossEncoderReranker(
-        _lexical(),
         config=build_cross_encoder_config(_settings()),
+        redact=_redact,
         transport=httpx.MockTransport(handler),
     )
+    reranker.wrap(_lexical())
     assert reranker("কোষ কী?", []) == []
     assert calls == [], "an empty candidate pool must not spend an endpoint call"
 
@@ -220,11 +230,12 @@ def test_open_breaker_falls_back_without_a_request() -> None:
     breaker = CircuitBreaker(failure_threshold=1, reset_timeout_seconds=30)
     breaker.record_failure()  # opens
     reranker = CrossEncoderReranker(
-        _lexical(),
         config=build_cross_encoder_config(_settings()),
+        redact=_redact,
         transport=httpx.MockTransport(handler),
         breaker=breaker,
     )
+    reranker.wrap(_lexical())
     candidates = _candidates()
     assert reranker("কোষ কী?", candidates) == _lexical()("কোষ কী?", candidates)
     assert calls == [], "an open breaker must not spend an endpoint call"
@@ -239,8 +250,11 @@ def test_timeout_falls_back_to_inner_scores_and_meters() -> None:
 
     config = build_cross_encoder_config(_settings(rag_reranker_timeout_seconds=0.05))
     reranker = CrossEncoderReranker(
-        _lexical(), config=config, transport=httpx.MockTransport(handler)
+        config=config,
+        redact=_redact,
+        transport=httpx.MockTransport(handler),
     )
+    reranker.wrap(_lexical())
     candidates = _candidates()
     fallback = _counter("rag_reranker_fallback_total")
     scores = reranker("কোষ কী?", candidates)
@@ -253,19 +267,21 @@ def test_http_error_falls_back() -> None:
         return httpx.Response(503)
 
     reranker = CrossEncoderReranker(
-        _lexical(),
         config=build_cross_encoder_config(_settings()),
+        redact=_redact,
         transport=httpx.MockTransport(handler),
     )
+    reranker.wrap(_lexical())
     assert reranker("কোষ কী?", _candidates()) == _lexical()("কোষ কী?", _candidates())
 
 
 def test_malformed_body_falls_back() -> None:
     reranker = CrossEncoderReranker(
-        _lexical(),
         config=build_cross_encoder_config(_settings()),
+        redact=_redact,
         transport=httpx.MockTransport(lambda request: httpx.Response(200, text="not-json")),
     )
+    reranker.wrap(_lexical())
     assert reranker("কোষ কী?", _candidates()) == _lexical()("কোষ কী?", _candidates())
 
 
@@ -274,14 +290,15 @@ def test_index_out_of_range_is_a_protocol_error() -> None:
         pass
 
     reranker = CrossEncoderReranker(
-        _lexical(),
         config=build_cross_encoder_config(_settings()),
+        redact=_redact,
         transport=httpx.MockTransport(
             lambda request: httpx.Response(
                 200, json={"results": [{"index": 9, "relevance_score": 0.9}]}
             )
         ),
     )
+    reranker.wrap(_lexical())
     with pytest.raises(RerankerEndpointError, match="mismatched"):
         # protocol violations surface as the endpoint error type, caught and
         # converted to the fallback by the public callable; documents are

@@ -37,14 +37,12 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 import httpx
 
 from bangla_gpt_api.metrics import RAG_LANE_LATENCY_SECONDS, RAG_RERANKER_FALLBACK_TOTAL
 from bangla_gpt_api.retrieval.normalize import normalize_nfkc
-from bangla_gpt_api.services.circuit_breaker import CircuitBreaker
-from bangla_gpt_api.services.pii import redact_pii
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -52,6 +50,15 @@ if TYPE_CHECKING:
     from bangla_gpt_api.curriculum.models import Chunk
 
 logger = logging.getLogger(__name__)
+
+
+class BreakerProtocol(Protocol):
+    """The circuit-breaker surface this stage needs (injected, not imported:
+    retrieval sits BELOW services in the import-linter layering)."""
+
+    def allow_request(self) -> bool: ...
+    def record_failure(self) -> None: ...
+    def record_success(self) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -99,25 +106,37 @@ def build_cross_encoder_config(settings: Any) -> CrossEncoderConfig | None:
 class CrossEncoderReranker:
     """Decorate the lexical ranker with the endpoint-driven ordering."""
 
+    _inner: Callable[..., list[float]] | None
+
+    def wrap(self, inner: Callable[..., list[float]]) -> None:
+        """Attach the lexical ranker this stage decorates (index build)."""
+        self._inner = inner
+
     def __init__(
         self,
-        inner: Callable[..., list[float]],
         *,
         config: CrossEncoderConfig,
+        redact: Callable[[str], str],
         transport: httpx.BaseTransport | None = None,
-        breaker: CircuitBreaker | None = None,
+        breaker: BreakerProtocol | None = None,
     ) -> None:
-        self._inner = inner
+        self._inner = None
         self._config = config
+        # The egress redactor is INJECTED (services.pii sits above the
+        # retrieval layer in the import-linter contracts); a required
+        # parameter, so the stage cannot silently send a child's raw query.
+        self._redact = redact
         # A per-instance client (connection reuse across turns); the
         # transport seam is what the tests point at (httpx.MockTransport).
         # The top-level httpx.post helper does not accept a transport.
         self._client = httpx.Client(transport=transport, timeout=config.timeout_seconds)
-        self._breaker = breaker or CircuitBreaker(failure_threshold=5, reset_timeout_seconds=30)
+        # The breaker is injected too; without one the stage simply never
+        # opens (every call attempts the endpoint, failures still fall back).
+        self._breaker = breaker
 
     def rerank_remote(self, query: str, documents: Sequence[str]) -> list[float]:
         """Call the endpoint; raises `RerankerEndpointError` on any deviation."""
-        redacted_query, _ = redact_pii(normalize_nfkc(query))
+        redacted_query = self._redact(normalize_nfkc(query))
         payload: dict[str, Any] = {
             "model": self._config.model,
             "query": redacted_query,
@@ -156,20 +175,24 @@ class CrossEncoderReranker:
         return scores
 
     def __call__(self, query: str, candidates: list[tuple[Chunk, float, float]]) -> list[float]:
+        if self._inner is None:  # pragma: no cover - wrap() runs at index build
+            raise RuntimeError("CrossEncoderReranker.wrap() was never called")
         base = self._inner(query, candidates)
         if not candidates:
             return base
-        if not self._breaker.allow_request():
+        if self._breaker is not None and not self._breaker.allow_request():
             return base
         started = time.perf_counter()
         try:
             raw = self.rerank_remote(query, [indexable_text_of(c) for c, _r, _b in candidates])
         except Exception as exc:
-            self._breaker.record_failure()
+            if self._breaker is not None:
+                self._breaker.record_failure()
             _meter_fallback(reason=type(exc).__name__)
             return base
         RAG_LANE_LATENCY_SECONDS.labels(lane="cross_encoder").observe(time.perf_counter() - started)
-        self._breaker.record_success()
+        if self._breaker is not None:
+            self._breaker.record_success()
         return self._blend(base, raw)
 
     def _blend(self, base: list[float], raw: list[float]) -> list[float]:
