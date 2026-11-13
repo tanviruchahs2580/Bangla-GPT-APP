@@ -13,11 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-### CI/CD
+### Fixed
 
-- ci: re-fire the main pipeline after the #121 merge
+- fix(api): serve the /api route alias so the Capacitor APK can log in
 
-## v0.11.0 - 2026-11-13
+## v0.11.0 - 2026-11-14
 
 ### Added
 
@@ -79,6 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - ci(automerge): the header must be YAML comments, not a docstring
 - ci: re-fire the main pipeline (the #118 merge push dispatched nothing)
 - ci: re-fire the main pipeline after the #119 merge
+- ci: re-fire the main pipeline after the #121 merge
 - ci: re-trigger the main pipeline after the #116 merge
 
 ### Documentation
