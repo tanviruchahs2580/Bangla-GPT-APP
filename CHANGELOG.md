@@ -94,6 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - chore(api): trace the dead flush branch, stale comments and doc drift
 - chore(docs): regenerate the native-review sheet
+- chore(docs): regenerate the native-review sheet (terminal state)
 - chore(rag): regenerate the real-corpus retrieval report after the v2 stages
 - chore(web): regenerate the OpenAPI contract fixture
 - chore: regenerate the CHANGELOG
