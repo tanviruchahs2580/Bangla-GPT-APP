@@ -79,9 +79,13 @@ def _endpoint_is_private_network(endpoint: str) -> bool:
     """True for the plain-HTTP deployments this stage permits (V4 S7).
 
     A self-hosted TEI box inside the operator's own network talks cleartext
-    HTTP by design; the public internet must not. Hostname allowlist entries
-    (loopback names and RFC-1918-style literal hosts) are matched exactly.
+    HTTP by design; the public internet must not. The RFC-1918 exception is
+    granted only when the host IS a private/loopback/link-local IP *literal*
+    (V4 review P1: matching the hostname string by prefix let public domains
+    like `10.0.0.5.evil.test` or `10.com` classify as private). Explicit
+    names (localhost, *.local) remain the only non-literal exceptions.
     """
+    import ipaddress
     from urllib.parse import urlparse
 
     host = (urlparse(endpoint).hostname or "").lower()
@@ -89,16 +93,11 @@ def _endpoint_is_private_network(endpoint: str) -> bool:
         return True
     if host.endswith(".local"):
         return True
-    for prefix in ("10.", "192.168.", "169.254."):
-        if host.startswith(prefix):
-            return True
-    if host.startswith("172."):
-        try:
-            second_octet = int(host.split(".")[1])
-        except (IndexError, ValueError):
-            return False
-        return 16 <= second_octet <= 31
-    return False
+    try:
+        addr = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return addr.is_private or addr.is_loopback or addr.is_link_local
 
 
 def build_cross_encoder_config(settings: Any) -> CrossEncoderConfig | None:

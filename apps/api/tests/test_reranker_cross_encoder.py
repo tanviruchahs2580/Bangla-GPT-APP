@@ -139,6 +139,35 @@ def test_private_network_http_is_allowed_for_self_hosted_tei() -> None:
         assert cfg is not None
 
 
+def test_private_network_match_requires_an_ip_literal_not_a_prefix() -> None:
+    """V4 review P1: the RFC-1918 exception matched the hostname *string*
+    prefix, so a public domain like `10.0.0.5.evil.test` or `10.com`
+    classified as private and a misconfigured endpoint would ship student
+    queries over cleartext to the public internet. The exception is granted
+    only when the host IS a private IP literal (or an explicit loopback /
+    .local name)."""
+    from bangla_gpt_api.retrieval.reranker import _endpoint_is_private_network
+
+    for endpoint in (
+        "http://10.0.0.5.evil.test:8080",
+        "http://192.168.evil.test",
+        "http://172.16.evil.test",
+        "http://10.com",
+        "http://169.254.attacker.test",
+    ):
+        assert not _endpoint_is_private_network(endpoint), endpoint
+    # and the genuine literals/names the exception exists for still pass:
+    for endpoint in (
+        "http://10.0.0.5:8080",
+        "http://192.168.1.10",
+        "http://172.16.2.1",
+        "http://169.254.9.9",
+        "http://my-box.local:8080",
+        "http://localhost:8080",
+    ):
+        assert _endpoint_is_private_network(endpoint), endpoint
+
+
 # --- success path -------------------------------------------------------------
 
 
