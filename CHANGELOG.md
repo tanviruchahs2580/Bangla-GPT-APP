@@ -114,6 +114,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(docs): regenerate the native-review sheet
 - chore(docs): regenerate the native-review sheet (terminal state)
 - chore(rag): regenerate the real-corpus retrieval report after the v2 stages
+- chore(release): bump version to 0.11.0
+- chore(release): mirror 0.11.0 into the web lockfile root
+- chore(release): regenerate the OpenAPI fixture at 0.11.0
+- chore(release): regenerate the OpenAPI fixture from current metadata
 - chore(web): regenerate the OpenAPI contract fixture
 - chore: regenerate the CHANGELOG
 - chore: regenerate the native-review sheet and the CHANGELOG
@@ -140,6 +144,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #117 from tanviruchahs2580/fix/baseline-identity-binding
 - Merge pull request #118 from tanviruchahs2580/fix/live-region-no-fade
 - Merge pull request #119 from tanviruchahs2580/feat/retrieval-engine-v2
+- Merge pull request #120 from tanviruchahs2580/feat/bangla-gpt-rag-v4-readiness
 
 ## v0.10.0 - 2026-11-11
 
