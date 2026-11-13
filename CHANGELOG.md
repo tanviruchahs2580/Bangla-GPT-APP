@@ -63,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - ci(automerge): re-arm on synchronize so amended PRs never unhook
 - ci(automerge): the header must be YAML comments, not a docstring
 - ci: re-fire the main pipeline (the #118 merge push dispatched nothing)
+- ci: re-fire the main pipeline after the #119 merge
 - ci: re-trigger the main pipeline after the #116 merge
 
 ### Documentation
@@ -120,6 +121,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #116 from tanviruchahs2580/test/stu16-delete-race
 - Merge pull request #117 from tanviruchahs2580/fix/baseline-identity-binding
 - Merge pull request #118 from tanviruchahs2580/fix/live-region-no-fade
+- Merge pull request #119 from tanviruchahs2580/feat/retrieval-engine-v2
 
 ## v0.10.0 - 2026-11-11
 
