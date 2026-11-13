@@ -53,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - refactor(retrieval): inject the rerank stage's egress seams (import-linter layering)
+- refactor(retrieval): one metadata predicate for every lane (complexity ratchet)
 
 ### CI/CD
 
