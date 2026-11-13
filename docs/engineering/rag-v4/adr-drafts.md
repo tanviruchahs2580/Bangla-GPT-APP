@@ -53,8 +53,14 @@ decision, alternatives, consequences).
 - **Context:** the dormant cross-encoder stage would POST redacted query +
   corpus text to a configured endpoint; an `http://` endpoint would move
   student-adjacent content unencrypted.
-- **Decision (implemented, `33b389f`):** construction refuses cleartext
-  endpoints. Redaction at the only production construction site stays.
+- **Decision (implemented, `33b389f`; hardened `bdde8b1`):** construction
+  refuses cleartext endpoints, with a private-network exception for
+  self-hosted TEI. The independent review found the exception matched the
+  hostname *string* by prefix (`10.0.0.5.evil.test` → "private"); the
+  exception now requires the host to be an actual private/loopback/
+  link-local **IP literal** (`ipaddress.ip_address` parse; `localhost` and
+  `*.local` remain explicit-name exceptions). Pinned by
+  `test_private_network_match_requires_an_ip_literal_not_a_prefix`.
 - **Residual (owner):** no https/host allowlist yet; a data-use gate for
   the endpoint config is proposed before the stage is ever enabled.
 

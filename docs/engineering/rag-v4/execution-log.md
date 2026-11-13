@@ -42,3 +42,13 @@ unit of work; later entries never rewrite earlier ones.
   where no evidence exists), implementation-plan.md (executed sequence +
   6 escalated owner decisions), adr-drafts.md (6 drafts), slo-proposal.md
   (7 SLI + 5 alert proposals, all PROPOSED). This commit.
+- 2026-11-13 · Review · Independent security-reviewer subagent over the
+  full `main...HEAD` diff (adversarial; did not see implementer reports).
+  Verdict: no blocking issues; prohibited-files check clean; doc numeric
+  claims spot-checked and verified. 1 P1 found: the S7 private-network
+  allowlist matched hostnames by string prefix
+  (`10.0.0.5.evil.test` → "private").
+- 2026-11-13 · Review-fix · P1 reproduced directly, fixed TDD-style: the
+  RFC-1918 exception now requires an actual IP literal
+  (`ipaddress.ip_address`); 40/40 egress + production-guard tests green.
+  Commit `bdde8b1`. ADR-D4 and the evidence ledger updated.
