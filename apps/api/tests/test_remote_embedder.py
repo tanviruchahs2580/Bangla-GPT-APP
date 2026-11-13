@@ -244,3 +244,70 @@ def test_build_embedder_installs_the_late_dim_check(tmp_path) -> None:
     embedder = build_embedder(settings)
     assert isinstance(embedder, RemoteEmbedder)
     assert embedder.on_dim_known is not None
+
+
+def test_late_dim_check_is_a_noop_without_a_corpus_dir(tmp_path) -> None:
+    """No corpus dir configured: the late leg has nothing to compare."""
+    from bangla_gpt_api.retrieval.embedding import RemoteEmbedder, build_embedder
+
+    settings = type("S", (), {"embedding_model": "test-model",
+                              "embedding_api_base": "http://embed.test",
+                              "embedding_api_key": "k", "nctb_corpus_dir": ""})()
+    embedder = build_embedder(settings)
+    assert isinstance(embedder, RemoteEmbedder)
+    embedder.on_dim_known(3)  # must not raise
+
+
+def test_late_dim_check_is_a_noop_when_the_manifest_is_absent(tmp_path) -> None:
+    """A corpus dir without a manifest predates the embedder record — not a
+    mismatch (index_manifest.embedder_problems documents the same rule)."""
+    from bangla_gpt_api.retrieval.embedding import RemoteEmbedder, build_embedder
+
+    settings = type("S", (), {"embedding_model": "test-model",
+                              "embedding_api_base": "http://embed.test",
+                              "embedding_api_key": "k",
+                              "nctb_corpus_dir": str(tmp_path)})()
+    embedder = build_embedder(settings)
+    embedder.on_dim_known(3)  # must not raise
+
+
+def test_late_dim_check_uses_the_corpus_dir_captured_at_build(tmp_path) -> None:
+    """The hook keeps the corpus dir from build time (default-arg binding);
+    a mismatch raises through embed() where the hook fires."""
+    from bangla_gpt_api.providers.base import ProviderNotConfigured
+    from bangla_gpt_api.retrieval.embedding import RemoteEmbedder, build_embedder
+
+    _write_manifest(tmp_path, dim=512)
+    settings = type("S", (), {"embedding_model": "test-model",
+                              "embedding_api_base": "http://embed.test",
+                              "embedding_api_key": "k",
+                              "nctb_corpus_dir": str(tmp_path)})()
+    embedder = build_embedder(settings)
+    with pytest.raises(ProviderNotConfigured, match="different embedder"):
+        embedder.on_dim_known(3)
+
+
+def test_l2_normalize_passes_a_zero_vector_through_untouched() -> None:
+    """A zero vector has no direction to normalize; dividing would NaN."""
+    from bangla_gpt_api.retrieval.embedding import _l2_normalize
+
+    assert _l2_normalize([0.0, 0.0, 0.0]) == [0.0, 0.0, 0.0]
+
+
+def test_parse_refuses_a_non_object_payload() -> None:
+    from bangla_gpt_api.providers.base import ProviderError
+    from bangla_gpt_api.retrieval.embedding import RemoteEmbedder
+
+    embedder = _embedder(lambda request: httpx.Response(200, json={"data": []}))
+    with pytest.raises(ProviderError, match="non-object payload"):
+        embedder._parse("not-an-object", expected=1)
+
+
+def test_verify_embedder_identity_is_a_noop_when_the_manifest_is_absent(tmp_path) -> None:
+    """A corpus dir without a manifest predates the embedder record — not a
+    mismatch (same rule index_manifest.embedder_problems documents)."""
+    from bangla_gpt_api.retrieval.embedding import _verify_embedder_identity, build_embedder
+
+    settings = type("S", (), {"embedding_model": "", "nctb_corpus_dir": str(tmp_path)})()
+    embedder = build_embedder(settings)
+    _verify_embedder_identity(settings, embedder)  # must not raise

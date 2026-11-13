@@ -122,7 +122,7 @@ call sites and the sample corpus; tests with synthetic chunks prove the filter.
 
 ### 5. Benchmark sweep — the owner's explicit requirement
 
-`scripts/benchmark_retrieval_v2.py` (hermetic on the sample corpus; the same grid runnable
+`apps/api/scripts/benchmark_retrieval_v2.py` (hermetic on the sample corpus; the same grid runnable
 against the real corpus via the existing `--corpus`-style flags of `evaluate_nctb_retrieval.py`):
 
 - Grid: `candidate_factor ∈ {2,3,4,6}`, `rrf_k ∈ {20,60,100}`, reranker ∈ {lexical,
