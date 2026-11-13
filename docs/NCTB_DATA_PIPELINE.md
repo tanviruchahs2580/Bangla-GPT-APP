@@ -149,7 +149,7 @@ they would otherwise multiply: at index build
 class level), F-012), so the same passage is still served to every class
 level that needs it but is paid for once per level. Measured on this corpus:
 100 shared texts, 292 duplicate chunks, 392 stamped rows; the served index
-drops from 2622 to 1605 entries (-38.8%) for the same content, and family-A
+drops from 2622 to 1598 entries (-39.1%) for the same content (measured on the 847-chunk build; the pre-revision build measured 1605), and family-A
 self-sentence recall@1 on the same 100 queries moves 0.47 -> 0.95 (paired
 bootstrap -0.48, 95% CI [-0.58, -0.36]) — with the duplicates present the
 rank-1 hit was often an identical copy from another book instead of the
@@ -178,8 +178,8 @@ measured per-source coverage is in the report's `chapter_coverage` field.
   (`retrieval.hybrid.tokenize`, F-134), not whitespace words. The budgets are
   constants in `nctb/chunking.py` (target 220, minimum 60, maximum 450
   tokens, line buffer flushed at target + 120), anchored on the measured
-  distribution: the committed corpus's 852 chunks measure p5 82 / p50 220 /
-  p90 222 / p95 244 / max 280 tokens (indexed chunks, 1605 entries after the
+  distribution: the committed corpus's 847 chunks measure p5 82 / p50 220 /
+  p90 222 / p95 244 / max 280 tokens (indexed chunks, 1598 entries after the
   class expansion and cross-source dedupe). Re-measure with
   `python scripts/evaluate_nctb_retrieval.py <corpus> --chunk-stats`.
 - **Every chunk carries a span map back to the extracted page text**
@@ -229,9 +229,9 @@ claim, and the double-build check is a plain digest comparison
 ## 7. The corpus manifest and the build/swap procedure
 
 `manifests/corpus_manifest.json` is the derived-artifact record for the
-committed build (852 chunks across 9 sources, 169 with a chapter,
-1 628 045 characters of usable text, 1605 served index chunks,
-`index_id_hash af2a0a21813324d3`, embedder `hash-ngram-local` dim 384):
+committed build (847 chunks across 9 sources, 163 with a chapter,
+1 627 831 characters of usable text, 1598 served index chunks,
+`index_id_hash ee7e2f3ba3c9528a`, embedder `hash-ngram-local` dim 384):
 
 | Field | Meaning |
 |---|---|

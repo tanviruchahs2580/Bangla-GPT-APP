@@ -270,6 +270,24 @@ class TestCorpusLoader:
         report.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         assert load_nctb_corpus(normalized, report) == []
 
+    def test_low_bangla_ratio_source_is_logged_loudly(self, tmp_path: Path, caplog) -> None:
+        """V4 G5 (S4): a non-Bangla source (English book, failed Bijoy
+        conversion) is gated out at nctb_loader — it must never vanish
+        silently, because the served corpus's scope would shrink without a
+        trace. Every other exclusion path already warns; this one must too."""
+        import logging
+
+        normalized, report = self._write_pipeline_outputs(tmp_path)
+        payload = json.loads(report.read_text(encoding="utf-8"))
+        payload["src1"]["bangla_char_ratio_on_usable"] = 0.05
+        report.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+        with caplog.at_level(logging.WARNING, logger="bangla_gpt_api.data.nctb_loader"):
+            assert load_nctb_corpus(normalized, report) == []
+        joined = " ".join(r.getMessage() for r in caplog.records)
+        assert "src1" in joined
+        assert "bangla" in joined.lower()
+
     def test_undetected_class_falls_back_to_level_range(self, tmp_path: Path) -> None:
         normalized, report = self._write_pipeline_outputs(tmp_path)
         # remove front-matter page so nothing is detected

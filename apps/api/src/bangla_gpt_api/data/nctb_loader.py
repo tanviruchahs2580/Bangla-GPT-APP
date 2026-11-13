@@ -204,6 +204,10 @@ def load_nctb_corpus(
     chunks: list[Chunk] = []
     injection_drops_total = 0
     refused_sources: list[str] = []
+    #: gated out by the Bangla-ratio safety gate (English book, failed Bijoy
+    #: conversion) — logged so the served corpus's scope never shrinks
+    #: silently (V4 G5).
+    non_bangla_sources: list[str] = []
     level_derived_sources: list[str] = []
     #: (normalized-text hash, class level) -> index into ``chunks``
     seen_chunks: dict[tuple[str, int], int] = {}
@@ -219,6 +223,7 @@ def load_nctb_corpus(
         # Safety gate: sources whose text is not predominantly Bangla Unicode
         # (e.g., failed legacy-Bijoy conversion) never reach the tutor index.
         if report.get("bangla_char_ratio_on_usable", 0.0) < 0.5:
+            non_bangla_sources.append(source_id)
             continue
         subject_bn = report.get("subject_bn", "")
         year = _resolve_year(report)
@@ -303,6 +308,14 @@ def load_nctb_corpus(
             "level-range fallback disabled): %s",
             len(refused_sources),
             refused_sources,
+        )
+    if non_bangla_sources:
+        # Never silent either: an excluded book (English edition, broken Bijoy)
+        # shrinks what the tutor can answer — the operator must see it.
+        logger.warning(
+            "nctb_loader: excluded %d non-Bangla source(s) (bangla_char_ratio_on_usable < 0.5): %s",
+            len(non_bangla_sources),
+            non_bangla_sources,
         )
     if level_derived_sources:
         logger.warning(

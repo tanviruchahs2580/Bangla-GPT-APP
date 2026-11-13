@@ -21,6 +21,8 @@ from collections.abc import Mapping
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 
+from bangla_gpt_api.services.pii import redact_pii
+
 # --- prompt-delimiter escaping --------------------------------------------
 # ONE implementation for every untrusted prompt input. It lives here because
 # services.tutor imports this module (the reverse import would be a cycle);
@@ -78,12 +80,24 @@ class RequestContext:
     memory_block: str = ""
 
     def log_fields(self) -> dict[str, object]:
-        """JSON-safe observability fields (eval + cost attribution)."""
+        """JSON-safe observability fields (eval + cost attribution).
+
+        ``ai_subject``/``ai_chapter`` are client-owned values that land in
+        metering rows, so they get the same treatment ``render_block`` gives
+        the prompt: length-capped here, and PII-redacted (services.pii — a
+        phone typed into the subject field must not survive into ai_usage).
+        """
+        subject = self.subject or ""
+        chapter = self.chapter_id or ""
+        if subject:
+            subject = redact_pii(subject[:MAX_CONTEXT_SUBJECT_CHARS])[0]
+        if chapter:
+            chapter = redact_pii(chapter[:MAX_CONTEXT_CHAPTER_CHARS])[0]
         return {
             "ai_role": self.role,
             "ai_class_level": self.class_level,
-            "ai_subject": self.subject or "",
-            "ai_chapter": self.chapter_id or "",
+            "ai_subject": subject,
+            "ai_chapter": chapter,
             "ai_goal": self.goal,
             "ai_history": self.history_summary,
             "ai_mastery_concepts": len(self.mastery_snapshot),
