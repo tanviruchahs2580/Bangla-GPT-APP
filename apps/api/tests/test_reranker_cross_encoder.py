@@ -61,7 +61,7 @@ def _settings(**over) -> Settings:
         env="test",
         jwt_secret=SECRET,
         rag_reranker="cross_encoder",
-        rag_reranker_endpoint="http://reranker.test",
+        rag_reranker_endpoint="https://reranker.test",
         rag_reranker_model="bge-reranker-v2-m3",
     )
     base.update(over)
@@ -114,6 +114,29 @@ def test_cross_encoder_without_model_is_a_configuration_error() -> None:
 def test_unknown_reranker_name_is_refused() -> None:
     with pytest.raises(ValueError, match="RAG_RERANKER"):
         build_cross_encoder_config(_settings(rag_reranker="magic"))
+
+
+# --- egress discipline (V4 S7) ------------------------------------------------
+
+
+def test_plaintext_http_endpoint_is_refused() -> None:
+    """Student queries egress to this endpoint; cleartext HTTP is a
+    misconfiguration in every environment, not just production."""
+    with pytest.raises(ValueError, match="https"):
+        build_cross_encoder_config(_settings(rag_reranker_endpoint="http://reranker.test"))
+
+
+def test_https_endpoint_is_accepted() -> None:
+    cfg = build_cross_encoder_config(_settings(rag_reranker_endpoint="https://reranker.test"))
+    assert cfg is not None and cfg.endpoint == "https://reranker.test"
+
+
+def test_private_network_http_is_allowed_for_self_hosted_tei() -> None:
+    """A self-hosted TEI box in the same trust zone talks plain HTTP — that
+    is the documented deployment for a school-lab reranker."""
+    for host in ("http://10.0.0.5:8080", "http://192.168.1.10:8080", "http://localhost:8080"):
+        cfg = build_cross_encoder_config(_settings(rag_reranker_endpoint=host))
+        assert cfg is not None
 
 
 # --- success path -------------------------------------------------------------
