@@ -52,3 +52,22 @@ unit of work; later entries never rewrite earlier ones.
   RFC-1918 exception now requires an actual IP literal
   (`ipaddress.ip_address`); 40/40 egress + production-guard tests green.
   Commit `bdde8b1`. ADR-D4 and the evidence ledger updated.
+- 2026-11-13 · CI-FIX · Manifest fingerprint: CI leg failed
+  (`225f106c… != 7f52b02c…`) because the S3–S6 commit edited three
+  fingerprinted pipeline modules. Rebuilt the corpus locally with the
+  pinned extractor (the venv had drifted to pypdf 6.18.0; reinstalled
+  pypdf 6.21.4 from the hash-pinned constraints line — first rebuild with
+  6.18.0 produced 839 chunks, wrong; with 6.21.4, 847 as committed).
+  `corpus_digest` 1396faf2… and `index_id_hash` ee7e2f3b… are
+  byte-identical to the committed build — proving the loader edits changed
+  logging, not content. Manifest/quality_report/retrieval_eval regenerated;
+  baseline-manifest.json and source-registry.md updated. Gates:
+  check_corpus_manifest OK (digest 1396faf2…), content_qa 9/9 pass,
+  reph invariant 0.
+- 2026-11-13 · CI-FIX · axe color-contrast on the ask-tab badge-teal
+  (CI w2-a11y): fg #1775a8 on #e2f3fe = 4.45. Root cause is NOT the token
+  pair (static pair is AA, 5.17 light / 7.85 dark) — it is the `.stack > *`
+  rise-in stagger re-running when the tab panel remounts; axe sampled the
+  chip mid-fade (same failure class as the 2026-11-12 live-region
+  exemption, styles.css:794). Fix: `.ask-context-row`/`.ask-row` exempted
+  from the stagger; static content appears instantly.

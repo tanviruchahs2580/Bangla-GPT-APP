@@ -19,8 +19,10 @@ re-parsed and no corpus text is reproduced here. Full command evidence in the ex
 | nctb-hsc-ca39e5957513 | hsc | জীববিজ্ঞান | UNKNOWN | 80 | — | 0.8501 | approved |
 
 Totals: 9 sources, 847 chunks, 555 unique texts (292 cross-source duplicate copies), 1,627,831
-characters; extractor pypdf-6.21.2; processing_version v1; chunker {tokens, 220/60/450,
-nfkc+zero-width+whitespace}; manifest_version 1.
+characters; extractor pypdf-6.21.4 (rebuilt 2026-11-13 after the loader change invalidated the
+code fingerprint; corpus_digest and index_id_hash byte-identical to the 2026-11-11 build —
+the S3–S6 loader edits changed logging, not content); processing_version v1; chunker {tokens,
+220/60/450, nfkc+zero-width+whitespace}; manifest_version 1.
 
 ## Rights / provenance status — the honest reading
 
