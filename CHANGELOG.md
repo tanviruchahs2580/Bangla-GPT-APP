@@ -114,6 +114,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(docs): regenerate the native-review sheet
 - chore(docs): regenerate the native-review sheet (terminal state)
 - chore(rag): regenerate the real-corpus retrieval report after the v2 stages
+- chore(release): bump version to 0.11.0
+- chore(release): mirror 0.11.0 into the web lockfile root
 - chore(web): regenerate the OpenAPI contract fixture
 - chore: regenerate the CHANGELOG
 - chore: regenerate the native-review sheet and the CHANGELOG
