@@ -55,13 +55,33 @@ class ExtractionResult:
     source_id: str
     pages: list[PageText] = field(default_factory=list)
     error: str | None = None
+    #: set when the page loop stopped at a cap — a truncated book must be
+    #: distinguishable from a short one downstream (V4 G7).
+    truncated_to_pages: int | None = None
 
     @property
     def ok(self) -> bool:
         return self.error is None
 
 
-def extract_pdf(path: Path, *, max_pages: int | None = None) -> ExtractionResult:
+#: Refuse to open an input larger than this (V4 G7): a hostile or simply
+#: enormous PDF fails the build loudly here instead of exhausting the
+#: machine's memory inside pypdf. Real NCTB books are far below it (the
+#: largest tracked artifact is ~22 MB).
+MAX_INPUT_BYTES = 64 * 1024 * 1024
+
+#: Default per-book page bound (V4 G7): the pipeline's books are tens of
+#: pages; a parse that claims thousands is a broken file, and an unbounded
+#: loop on one is a hang, not a build error. Explicit max_pages still wins.
+DEFAULT_MAX_PAGES = 2000
+
+
+def extract_pdf(
+    path: Path,
+    *,
+    max_pages: int | None = None,
+    max_input_bytes: int = MAX_INPUT_BYTES,
+) -> ExtractionResult:
     """Extract page texts; legacy Bijoy pages are converted to Unicode.
 
     A hard failure yields error=... (never raises). Pages whose text is not
@@ -72,9 +92,18 @@ def extract_pdf(path: Path, *, max_pages: int | None = None) -> ExtractionResult
 
     result = ExtractionResult(source_id=path.stem)
     try:
+        if path.exists() and path.stat().st_size > max_input_bytes:
+            result.error = (
+                f"input_size_exceeds_cap: {path.stat().st_size} bytes > "
+                f"{max_input_bytes} (MAX_INPUT_BYTES) — refusing to parse"
+            )
+            return result
         reader = PdfReader(str(path))
         total = len(reader.pages)
         limit = total if max_pages is None else min(total, max_pages)
+        default_cap_applied = max_pages is None and total > DEFAULT_MAX_PAGES
+        if default_cap_applied:
+            limit = DEFAULT_MAX_PAGES
         for index in range(limit):
             try:
                 raw = reader.pages[index].extract_text() or ""
@@ -92,6 +121,8 @@ def extract_pdf(path: Path, *, max_pages: int | None = None) -> ExtractionResult
                     encoding = "unicode"
                 raw = _clean_page_text(raw)
             result.pages.append(PageText(page_number=index + 1, text=raw, encoding=encoding))
+        if limit < total:
+            result.truncated_to_pages = limit
     except Exception as exc:  # corrupt PDF must not crash the pipeline
         result.error = f"{type(exc).__name__}: {exc}"
     return result

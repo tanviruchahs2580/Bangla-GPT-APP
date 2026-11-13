@@ -340,6 +340,66 @@ class TestBijoyConversion:
         }
 
 
+class TestExtractionCaps:
+    """Resource caps on the untrusted-PDF parse path (V4 G7).
+
+    A hostile or simply enormous file must fail FAST and LOUD inside the
+    build: a size cap refuses the open before pypdf allocates, a page cap
+    bounds the per-book loop, and both record WHY instead of producing a
+    silently truncated book that later passes the QC gate.
+    """
+
+    def _reader_stub(self, page_count: int) -> "type":
+        from unittest.mock import patch
+
+        class FakePage:
+            def extract_text(self):
+                return "জাতীয় শিক্ষাক্রম সরাসরি ইউনিকোড"
+
+        class FakeReader:
+            pages: ClassVar[list] = [FakePage() for _ in range(page_count)]
+
+        return patch("pypdf.PdfReader", return_value=FakeReader())
+
+    def test_page_cap_limits_pages_and_is_recorded(self, tmp_path: Path) -> None:
+        from bangla_gpt_api.nctb.extract import extract_pdf
+
+        pdf = tmp_path / "book.pdf"
+        pdf.write_bytes(b"%PDF-1.4 stub")
+        with self._reader_stub(page_count=50):
+            result = extract_pdf(pdf, max_pages=10)
+        assert result.ok
+        assert len(result.pages) == 10
+        # The truncation is visible in the result, not silent.
+        assert result.truncated_to_pages == 10
+
+    def test_default_page_cap_applies_when_none(self, tmp_path: Path) -> None:
+        from bangla_gpt_api.nctb.extract import DEFAULT_MAX_PAGES, extract_pdf
+
+        assert DEFAULT_MAX_PAGES == 2000
+        pdf = tmp_path / "book.pdf"
+        pdf.write_bytes(b"%PDF-1.4 stub")
+        with self._reader_stub(page_count=DEFAULT_MAX_PAGES + 5):
+            result = extract_pdf(pdf)
+        assert len(result.pages) == DEFAULT_MAX_PAGES
+        assert result.truncated_to_pages == DEFAULT_MAX_PAGES
+
+    def test_size_cap_refuses_before_parsing(self, tmp_path: Path) -> None:
+        from bangla_gpt_api.nctb.extract import extract_pdf
+
+        pdf = tmp_path / "huge.pdf"
+        pdf.write_bytes(b"%PDF-1.4 " + b"\x00" * 64)
+        result = extract_pdf(pdf, max_input_bytes=10)
+        assert not result.ok
+        assert "size" in (result.error or "").lower()
+        # The reader was never constructed: nothing was parsed.
+
+    def test_default_size_cap_value(self) -> None:
+        from bangla_gpt_api.nctb.extract import MAX_INPUT_BYTES
+
+        assert MAX_INPUT_BYTES == 64 * 1024 * 1024
+
+
 class TestSourcesInventory:
     def test_inventory_shape(self) -> None:
         from bangla_gpt_api.nctb import ALL_ARTIFACTS, HSC_ARTIFACTS, SECONDARY_ARTIFACTS
