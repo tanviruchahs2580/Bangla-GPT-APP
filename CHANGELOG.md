@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### CI/CD
+
+- ci: re-fire the main pipeline after the #121 merge
+
+## v0.11.0 - 2026-11-13
+
 ### Added
 
 - feat(eval): record and enforce the identity a benchmark measured
@@ -145,6 +151,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #118 from tanviruchahs2580/fix/live-region-no-fade
 - Merge pull request #119 from tanviruchahs2580/feat/retrieval-engine-v2
 - Merge pull request #120 from tanviruchahs2580/feat/bangla-gpt-rag-v4-readiness
+- Merge pull request #121 from tanviruchahs2580/chore/release-0.11.0
+
 
 ## v0.10.0 - 2026-11-11
 
