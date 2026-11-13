@@ -168,6 +168,41 @@ class _BodyTooLarge(Exception):
     """Internal signal: the running byte count passed ``max_bytes``."""
 
 
+class ApiPrefixAliasMiddleware:
+    """Accept the ``/api``-prefixed alias of every route (APK login parity).
+
+    The distributed Android WebView bakes ``VITE_API_BASE`` — an absolute
+    URL that ends in ``/api`` — into its bundle and has **no** server-side
+    proxy in front of the API: it calls ``<origin>/api/auth/login`` directly.
+    The web app never sends a prefixed path: Vercel's edge proxy strips
+    ``/api`` before forwarding (``apps/web/src/lib/apiProxy.ts:75``),
+    mirroring the vite dev proxy. So on the 2026-11-14 field report, PWA
+    login worked while the identical-version APK's every call 404'd.
+
+    The rewrite is a single leading-``/api`` strip: ``/api/auth/login`` →
+    ``/auth/login``, ``/api`` → ``/``. No API route begins with ``/api``
+    (measured live: 404 on every ``/api/*`` path before this change), so the
+    alias is unambiguous, and the OpenAPI document is untouched.
+
+    Registered between RateLimit and CORS (see
+    ``initialize/middleware_stack.py``): the limiter and every path-matched
+    rule must see the REAL route path, while CORS stays outside so
+    preflights are answered exactly as before. Pure ASGI — there is no body
+    to touch, so the ``BaseHTTPMiddleware`` shape would add a task hop for
+    nothing.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http":
+            path = scope.get("path", "")
+            if path == "/api" or path.startswith("/api/"):
+                scope["path"] = path[len("/api") :] or "/"
+        await self.app(scope, receive, send)
+
+
 class BodySizeLimitMiddleware:
     """Reject oversized request bodies **without buffering them**.
 
