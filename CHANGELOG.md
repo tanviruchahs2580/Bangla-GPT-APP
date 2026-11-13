@@ -50,6 +50,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): present live-region answer content without a fade
 - fix(worker): thread the job bodies, retry same-period, wire observability
 
+### Changed
+
+- refactor(retrieval): inject the rerank stage's egress seams (import-linter layering)
+
 ### CI/CD
 
 - ci(automerge): arm GitHub auto-merge on every PR aimed at main
@@ -95,6 +99,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Style
 
+- style(tests): drop the unused RemoteEmbedder imports (pinned-ruff F401)
 - style(tests): hoist the indexable_text import out of the test body
 - style(worker): ruff format
 
