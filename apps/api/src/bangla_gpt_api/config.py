@@ -203,6 +203,26 @@ class Settings(BaseSettings):
     rag_w_trigram: float = 0.3
     rag_proximity_window: int = 40
     rag_max_evidence_chars: int = 9000
+    # Retrieval engine v2, rerank stage (retrieval/reranker.py): "lexical"
+    # keeps the deterministic ranker (the served default); "cross_encoder"
+    # decorates it with an endpoint-driven reranker (TEI/Cohere-shaped
+    # POST {endpoint}/rerank) and degrades to the lexical ordering on any
+    # failure. An endpoint without a model (or either without the other)
+    # is a configuration error, never a silent downgrade.
+    rag_reranker: str = "lexical"
+    rag_reranker_endpoint: str = ""
+    rag_reranker_model: str = ""
+    rag_reranker_api_key: str = ""
+    rag_reranker_timeout_seconds: float = 1.5
+    rag_w_cross_encoder: float = 1.0
+    rag_cross_encoder_base_weight: float = 0.15
+    # Retrieval engine v2, expansion stage (retrieval/expansion.py): OFF by
+    # default. When true, the selected top evidence gains its same-section,
+    # same-class neighbors (RAG_NEIGHBOR_PER_SIDE each side) before the
+    # grounding gate reads them — the evidence budget and the gate
+    # thresholds are unchanged, and the eval battery measures the effect.
+    rag_neighbor_expansion: bool = False
+    rag_neighbor_per_side: int = 1
 
     # --- persistence ---
     # File-based SQLite by default so local dev data survives restarts.

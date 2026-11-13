@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - feat(eval): record and enforce the identity a benchmark measured
+- feat(retrieval): book and year metadata filters through both lanes
+- feat(retrieval): candidate-pool dedup by content hash and source identity
+- feat(retrieval): neighbor expansion of the selected evidence (gated, default off)
+- feat(retrieval): the cross-encoder rerank stage (pluggable, degrades safely)
+- feat(retrieval): the v2 benchmark sweep — pool depths measured, not assumed
 
 ### Fixed
 
@@ -35,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(ops): forward the documented operator knobs through compose
 - fix(pii): redact BD landline numbers before egress
 - fix(privacy): retention sweeps the unused expired invites
+- fix(retrieval): reindex unpack and sweep lint; regenerate the CHANGELOG
+- fix(retrieval): verify the remote embedder dimension once it is known
 - fix(security): enforce the password policy on join-school
 - fix(tutor): fold the query boundary through the shared normalizer
 - fix(tutor): honest metering and diagnostics for locally-produced refusals
@@ -42,6 +49,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): close the contrast-guard blind spot and repair two AA failures
 - fix(web): present live-region answer content without a fade
 - fix(worker): thread the job bodies, retry same-period, wire observability
+
+### Changed
+
+- refactor(retrieval): inject the rerank stage's egress seams (import-linter layering)
+- refactor(retrieval): one metadata predicate for every lane (complexity ratchet)
 
 ### CI/CD
 
@@ -57,9 +69,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - docs(ci): document the automerge workflow
 - docs(ci): name the automerge dispatch trigger
+- docs(env): document the rerank-stage knobs
 - docs(native-review): regenerate the UI-strings sheet for three new keys
 - docs(rag): RAG V2/V3 phase-0 baselines, audit and elevation plan
 - docs(rag): fix two path defects the doc-paths guardrail caught
+- docs(rag): retrieval engine v2 design (stage-by-stage, defaults-preserving)
 - docs(safety): record the deliberate over-refusal trade-off
 - docs: regenerate the native-review sheet after the safety comment edit
 
@@ -72,16 +86,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - test(e2e): point the question-paper row locator at the renamed button
 - test(e2e): poll STU-16 for the settled post-deletion state
 - test(e2e): poll X-02 for the settled fail-secure URL
+- test(retrieval): degenerate-path coverage for the rerank stage
+- test(retrieval): pin the three uncovered embedding arcs (audit F-3 follow-through)
+- test(retrieval): the protocol test sends text documents, as the stage contract defines
 
 ### Maintenance
 
 - chore(api): trace the dead flush branch, stale comments and doc drift
 - chore(docs): regenerate the native-review sheet
+- chore(docs): regenerate the native-review sheet (terminal state)
+- chore(rag): regenerate the real-corpus retrieval report after the v2 stages
 - chore(web): regenerate the OpenAPI contract fixture
 - chore: regenerate the CHANGELOG
+- chore: regenerate the native-review sheet and the CHANGELOG
 
 ### Style
 
+- style(retrieval): the metadata predicate as one boolean expression (pinned-ruff SIM103)
+- style(tests): drop the unused RemoteEmbedder imports (pinned-ruff F401)
+- style(tests): hoist the indexable_text import out of the test body
 - style(worker): ruff format
 
 ### Other

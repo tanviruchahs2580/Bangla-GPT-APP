@@ -13,7 +13,7 @@ import hashlib
 import math
 import re
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Protocol
 
 import httpx
@@ -122,6 +122,7 @@ class RemoteEmbedder:
         timeout: float = 30.0,
         batch_size: int = _REMOTE_BATCH,
         transport: httpx.BaseTransport | None = None,
+        on_dim_known: "Callable[[int], None] | None" = None,
     ) -> None:
         # plain attribute, not a property: the Embedder protocol declares a
         # mutable `name: str`, which a read-only property would not satisfy
@@ -129,8 +130,12 @@ class RemoteEmbedder:
         self.model = model
         self.api_base = api_base.rstrip("/")
         # dimension is discovered from the endpoint's first response; the
-        # manifest check skips the dim comparison until then
+        # build-time manifest check skips the dim comparison until then, so
+        # the factory installs `on_dim_known` — fired exactly once when the
+        # dimension becomes known — to complete the identity check then
+        # (audit F-3: the dim leg was dead in the remote lane).
         self.dim: int | None = None
+        self.on_dim_known = on_dim_known
         self._api_key = api_key
         self._timeout = timeout
         self._batch_size = batch_size
@@ -193,6 +198,12 @@ class RemoteEmbedder:
                 raise ProviderError("embedding endpoint returned a non-numeric vector")
             if self.dim is None:
                 self.dim = len(vector)
+                # audit F-3: the dimension is only NOW known — complete the
+                # identity check the build-time pass had to skip (its dim leg
+                # compared against None). A mismatch raises here, refusing to
+                # serve a corpus with a foreign-dimension embedder.
+                if self.on_dim_known is not None:
+                    self.on_dim_known(self.dim)
             elif len(vector) != self.dim:
                 raise ProviderError(
                     f"embedding endpoint changed dimensions mid-corpus ({self.dim} -> {len(vector)})"
@@ -236,6 +247,36 @@ def build_embedder(settings: object) -> Embedder:
         timeout = float(getattr(settings, "llm_timeout_seconds", 30.0) or 30.0)
         embedder = RemoteEmbedder(model=model, api_base=api_base, api_key=api_key, timeout=timeout)
     _verify_embedder_identity(settings, embedder)
+
+    # audit F-3: the remote lane discovers its dimension from the first
+    # embed response; the build-time check above compares the dim against
+    # None there. Install the late leg: once dim is known, re-run the
+    # manifest comparison and refuse on a mismatch.
+    if isinstance(embedder, RemoteEmbedder):
+        from pathlib import Path as _Path
+
+        from bangla_gpt_api.nctb.manifest import corpus_manifest_path as _cmp
+        from bangla_gpt_api.nctb.manifest import read_json as _read_json
+        from bangla_gpt_api.retrieval.index_manifest import embedder_problems as _ep
+
+        corpus_dir = str(getattr(settings, "nctb_corpus_dir", "") or "").strip()
+
+        def _late_dim_check(dim: int, _corpus_dir: str = corpus_dir) -> None:
+            if not _corpus_dir:
+                return
+            manifest_path = _cmp(_Path(_corpus_dir))
+            if not manifest_path.exists():
+                return
+            declared = (_read_json(manifest_path).get("derived") or {}).get("embedder")
+            problems = _ep(declared, name=embedder.name, dim=dim)
+            if problems:
+                raise ProviderNotConfigured(
+                    f"the corpus at {_corpus_dir} was built and measured with a "
+                    f"different embedder ({'; '.join(problems)}); the recorded "
+                    "retrieval numbers would not describe this deployment"
+                )
+
+        embedder.on_dim_known = _late_dim_check
     return embedder
 
 

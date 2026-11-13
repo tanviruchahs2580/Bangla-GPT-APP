@@ -53,6 +53,17 @@ def _endpoint(vectors: list[list[float]], status: int = 200, fail_first: int = 0
     return handler
 
 
+class _RemoteSettings:
+    """Formatter-stable stand-in for the Settings object build_embedder reads."""
+
+    embedding_model = "test-model"
+    embedding_api_base = "http://embed.test"
+    embedding_api_key = "k"
+
+    def __init__(self, corpus_dir: str = "") -> None:
+        self.nctb_corpus_dir = corpus_dir
+
+
 def _embedder(handler) -> RemoteEmbedder:
     return RemoteEmbedder(
         model="test-embed",
@@ -157,3 +168,148 @@ def test_embed_rejects_vector_count_mismatch() -> None:
     embedder = _embedder(handler)
     with pytest.raises(ProviderError, match="vectors for"):
         embedder.embed(["এক", "দুই"])  # 2 inputs, endpoint returns 1 vector
+
+
+def _write_manifest(tmp_path, *, dim: int) -> None:
+    """A corpus manifest whose derived embedder record declares `dim`."""
+    from bangla_gpt_api.nctb.manifest import CORPUS_MANIFEST_NAME
+
+    (tmp_path / "manifests").mkdir(parents=True, exist_ok=True)
+    manifest = {"derived": {"embedder": {"name": "remote:test-model", "dim": dim}}}
+    (tmp_path / "manifests" / CORPUS_MANIFEST_NAME).write_text(
+        json.dumps(manifest, ensure_ascii=False), encoding="utf-8"
+    )
+
+
+class _T(httpx.BaseTransport):
+    """Serves 3-dimensional vectors for every embed call."""
+
+    def handle_request(self, request):
+        return httpx.Response(200, json={"data": [{"embedding": [0.1, 0.2, 0.3]}]})
+
+
+def _late_check_factory(expected_dim: int):
+    from bangla_gpt_api.providers.base import ProviderNotConfigured
+
+    def check(dim: int) -> None:
+        if dim != expected_dim:
+            raise ProviderNotConfigured(
+                f"embedder dim: manifest {expected_dim} != configured {dim}"
+            )
+
+    return check
+
+
+def test_remote_dim_mismatch_refuses_after_the_first_embed(tmp_path) -> None:
+    """Audit F-3: the remote lane discovers its dimension from the FIRST
+    response, and the manifest check ran at build time when dim was still
+    None — the dim leg of the identity check was dead for remote embedders.
+    The on_dim_known hook must fire once the dimension becomes known."""
+    from bangla_gpt_api.providers.base import ProviderNotConfigured
+    from bangla_gpt_api.retrieval.embedding import RemoteEmbedder
+
+    _write_manifest(tmp_path, dim=512)
+    embedder = RemoteEmbedder(
+        model="test-model",
+        api_base="http://embed.test",
+        api_key="k",
+        transport=_T(),
+        on_dim_known=_late_check_factory(512),
+    )
+    assert embedder.dim is None
+    with pytest.raises(ProviderNotConfigured, match="embedder dim"):
+        embedder.embed(["কোষ কী?"])
+
+
+def test_remote_dim_match_serves_after_the_first_embed(tmp_path) -> None:
+    from bangla_gpt_api.retrieval.embedding import RemoteEmbedder
+
+    _write_manifest(tmp_path, dim=3)
+    embedder = RemoteEmbedder(
+        model="test-model",
+        api_base="http://embed.test",
+        api_key="k",
+        transport=_T(),
+        on_dim_known=_late_check_factory(3),
+    )
+    vectors = embedder.embed(["কোষ কী?"])
+    assert len(vectors[0]) == 3
+
+
+def test_build_embedder_installs_the_late_dim_check(tmp_path) -> None:
+    """The factory wires the hook whenever a corpus dir exists, so the dim
+    leg cannot stay dead in the production path."""
+    from bangla_gpt_api.retrieval.embedding import build_embedder
+
+    _write_manifest(tmp_path, dim=3)
+    settings = type(
+        "S",
+        (),
+        {
+            "embedding_model": "test-model",
+            "embedding_api_base": "http://embed.test",
+            "embedding_api_key": "k",
+            "nctb_corpus_dir": str(tmp_path),
+        },
+    )()
+    embedder = build_embedder(settings)
+    assert isinstance(embedder, RemoteEmbedder)
+    assert embedder.on_dim_known is not None
+
+
+def test_late_dim_check_is_a_noop_without_a_corpus_dir(tmp_path) -> None:
+    """No corpus dir configured: the late leg has nothing to compare."""
+    from bangla_gpt_api.retrieval.embedding import build_embedder
+
+    settings = _RemoteSettings(corpus_dir="")
+    embedder = build_embedder(settings)
+    assert isinstance(embedder, RemoteEmbedder)
+    embedder.on_dim_known(3)  # must not raise
+
+
+def test_late_dim_check_is_a_noop_when_the_manifest_is_absent(tmp_path) -> None:
+    """A corpus dir without a manifest predates the embedder record — not a
+    mismatch (index_manifest.embedder_problems documents the same rule)."""
+    from bangla_gpt_api.retrieval.embedding import build_embedder
+
+    settings = _RemoteSettings(corpus_dir=str(tmp_path))
+    embedder = build_embedder(settings)
+    embedder.on_dim_known(3)  # must not raise
+
+
+def test_late_dim_check_uses_the_corpus_dir_captured_at_build(tmp_path) -> None:
+    """The hook keeps the corpus dir from build time (default-arg binding);
+    a mismatch raises through embed() where the hook fires."""
+    from bangla_gpt_api.providers.base import ProviderNotConfigured
+    from bangla_gpt_api.retrieval.embedding import build_embedder
+
+    _write_manifest(tmp_path, dim=512)
+    settings = _RemoteSettings(corpus_dir=str(tmp_path))
+    embedder = build_embedder(settings)
+    with pytest.raises(ProviderNotConfigured, match="different embedder"):
+        embedder.on_dim_known(3)
+
+
+def test_l2_normalize_passes_a_zero_vector_through_untouched() -> None:
+    """A zero vector has no direction to normalize; dividing would NaN."""
+    from bangla_gpt_api.retrieval.embedding import _l2_normalize
+
+    assert _l2_normalize([0.0, 0.0, 0.0]) == [0.0, 0.0, 0.0]
+
+
+def test_parse_refuses_a_non_object_payload() -> None:
+    from bangla_gpt_api.providers.base import ProviderError
+
+    embedder = _embedder(lambda request: httpx.Response(200, json={"data": []}))
+    with pytest.raises(ProviderError, match="non-object payload"):
+        embedder._parse("not-an-object", expected=1)
+
+
+def test_verify_embedder_identity_is_a_noop_when_the_manifest_is_absent(tmp_path) -> None:
+    """A corpus dir without a manifest predates the embedder record — not a
+    mismatch (same rule index_manifest.embedder_problems documents)."""
+    from bangla_gpt_api.retrieval.embedding import _verify_embedder_identity, build_embedder
+
+    settings = _RemoteSettings(corpus_dir=str(tmp_path))
+    embedder = build_embedder(settings)
+    _verify_embedder_identity(settings, embedder)  # must not raise

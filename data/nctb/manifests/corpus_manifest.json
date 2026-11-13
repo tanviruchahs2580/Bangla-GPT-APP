@@ -313,13 +313,13 @@
   },
   "derived": {
     "quality_report_sha256": "ca741bcedba1d3de5b51a29113dee3ba206894c27bcd690b1b6e6a158b1293a7",
-    "retrieval_eval_sha256": "45a70163275f5692fb3550f803524754dae5ad5a2206c872464a2f4ac9cde211",
-    "index_chunks": 1605,
-    "index_id_hash": "af2a0a21813324d3ba2de218f8fddaf3fb8dc53f88d329a14a9c0524480a3bd7",
+    "retrieval_eval_sha256": "38c484156b95795254c5c4c24c6ad651ac0536eaf2668e978931ddbf48f64064",
+    "index_chunks": 1598,
+    "index_id_hash": "ee7e2f3ba3c9528a80294e8a5d10ac5ff6ad6251adcc8199f3a217152b5ae1fc",
     "embedder": {
       "name": "hash-ngram-local",
       "dim": 384
     },
-    "retrieval_evaluated_at": "2026-11-03T09:11:28+00:00"
+    "retrieval_evaluated_at": "2026-11-12T22:08:16+00:00"
   }
 }

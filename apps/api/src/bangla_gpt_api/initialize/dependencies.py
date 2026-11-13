@@ -166,6 +166,7 @@ def _build_tutor(
     corpus_digest: str | None = None,
     top_k: int = 3,
     min_coverage: float = 0.5,
+    neighbor_expander: Callable[[list], list] | None = None,
 ) -> TutorService:
     """Construct the TutorService with optional circuit breaker + fallback.
 
@@ -194,6 +195,36 @@ def _build_tutor(
         corpus_digest=corpus_digest,
         top_k=top_k,
         min_coverage=min_coverage,
+        neighbor_expander=neighbor_expander,
+    )
+
+
+def _build_cross_encoder(settings: Settings) -> Any:
+    """Assemble the cross-encoder stage (or None for the lexical default).
+
+    Lives here, above the retrieval layer, so the PII redactor and the
+    circuit breaker can be injected into the stage without retrieval
+    importing services (import-linter: retrieval-does-not-reach-up).
+    """
+    from bangla_gpt_api.retrieval.reranker import (
+        CrossEncoderReranker,
+        build_cross_encoder_config,
+    )
+    from bangla_gpt_api.services.circuit_breaker import CircuitBreaker
+    from bangla_gpt_api.services.pii import redact_pii
+
+    config = build_cross_encoder_config(settings)
+    if config is None:
+        return None
+
+    def _redact(text: str) -> str:
+        redacted, _counts = redact_pii(text)
+        return redacted
+
+    return CrossEncoderReranker(
+        config=config,
+        redact=_redact,
+        breaker=CircuitBreaker(failure_threshold=5, reset_timeout_seconds=30),
     )
 
 
@@ -202,15 +233,16 @@ def build_retrieval_index(
     cache: Any,
     *,
     hybrid_index_cls: type[HybridIndex] | None = None,
-) -> tuple[RankingIndex, TermStats | None, dict]:
+) -> tuple[RankingIndex, TermStats | None, dict, Callable[[list], list] | None]:
     """One corpus load + one full index build, on a cache-wrapped index.
 
     Single source of truth for the retrieval build: ``build_dependencies``
     calls it at boot and ``POST /admin/reindex`` calls it for a hot corpus
     refresh (audit F-18), so the two paths cannot drift. Returns the
     cache-wrapped index, the *inner* term statistics (the caching wrapper
-    proxies search results, not corpus statistics) and the corpus identity
-    record for the tutor's digest stamping.
+    proxies search results, not corpus statistics), the corpus identity
+    record for the tutor's digest stamping, and the optional neighbor
+    expander (None unless RAG_NEIGHBOR_EXPANSION is enabled).
 
     ``hybrid_index_cls`` keeps the historical test seam: callers that
     monkeypatch ``main.HybridIndex`` retain control at boot. The reindex
@@ -290,6 +322,13 @@ def build_retrieval_index(
                 "rrf_k": settings.rag_rrf_k,
                 "candidate_factor": settings.rag_candidate_factor,
                 "proximity_window": settings.rag_proximity_window,
+                # Retrieval engine v2, rerank stage: None keeps the lexical
+                # ranker; cross_encoder validates its own configuration
+                # (retrieval/reranker.py) and decorates the lexical ordering.
+                # Assembled here (one layer up): the stage's redactor and
+                # circuit breaker live in services, which retrieval must not
+                # import (import-linter contract).
+                "cross_encoder": _build_cross_encoder(settings),
             }.items()
             if name in inspect.signature(_hi_cls.__init__).parameters
         }
@@ -317,7 +356,21 @@ def build_retrieval_index(
     # Statistics come from the *inner* index: the caching wrapper proxies
     # search results, not corpus statistics.
     term_stats = getattr(inner, "term_stats", None)
-    return index, term_stats, corpus_record
+
+    # Retrieval engine v2, expansion stage: OFF by default
+    # (RAG_NEIGHBOR_EXPANSION=false). Built here where the corpus list lives;
+    # when enabled the selected top evidence gains its same-section,
+    # same-class neighbors before the grounding gate reads them
+    # (retrieval/expansion.py) — the evidence budget and the gate thresholds
+    # are unchanged.
+    neighbor_expander = None
+    if settings.rag_neighbor_expansion:
+        from bangla_gpt_api.retrieval.expansion import build_neighbor_expander
+
+        neighbor_expander = build_neighbor_expander(
+            chunks, per_side=max(0, int(settings.rag_neighbor_per_side))
+        )
+    return index, term_stats, corpus_record, neighbor_expander
 
 
 def _load_corpus_chunks(settings: Settings) -> tuple[list[Chunk], str]:
@@ -422,7 +475,7 @@ def build_dependencies(
     if provider is not None:
         # One corpus load + one index build, shared by boot AND the admin
         # reindex endpoint (audit F-18) so the two paths cannot drift.
-        index, term_stats, corpus_record = build_retrieval_index(
+        index, term_stats, corpus_record, neighbor_expander = build_retrieval_index(
             settings, cache, hybrid_index_cls=_hi_cls
         )
         # F-082: one identity record for the corpus the index serves. Logged
@@ -440,6 +493,7 @@ def build_dependencies(
             corpus_digest=corpus_record["digest"],
             top_k=settings.rag_top_k,
             min_coverage=settings.rag_min_coverage,
+            neighbor_expander=neighbor_expander,
         )
     else:
         tutor = None

@@ -521,8 +521,15 @@ class TutorService:
         generation_queue_timeout: float = GENERATION_QUEUE_TIMEOUT_SECONDS,
         retrieval_only_fallback: bool = False,
         corpus_digest: str | None = None,
+        neighbor_expander: Callable[[list], list] | None = None,
     ) -> None:
         self.index = index
+        # Retrieval engine v2, expansion stage (retrieval/expansion.py):
+        # optional neighbor expansion of the selected top evidence before the
+        # grounding gate. Default None keeps the served behavior
+        # byte-identical; the gate and the evidence budget are downstream of
+        # this hook and unchanged.
+        self.neighbor_expander = neighbor_expander
         # RAG-27: when true, a provider failure answers with the retrieved
         # excerpts (ungrounded, cited) instead of raising ProviderError up to
         # the 502 handler. Off by default: the 502 contract is pinned.
@@ -966,6 +973,10 @@ class TutorService:
                 subject=subject,
                 top_k=self.top_k,
             )
+        # Expansion stage (retrieval engine v2): neighbors of the selected
+        # evidence, section- and class-scoped, before the gate reads them.
+        if self.neighbor_expander is not None:
+            hits = self.neighbor_expander(hits)
         return hits
 
     #: Title of the lexical lane on a hybrid index; the fallback below uses it

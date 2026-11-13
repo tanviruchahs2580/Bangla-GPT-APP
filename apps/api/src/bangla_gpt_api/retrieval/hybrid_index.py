@@ -14,6 +14,7 @@ reranker replaces exactly one stage of this pipeline when one is benchmarked.
 
 import time
 from collections.abc import Callable
+from typing import Any
 
 from bangla_gpt_api.curriculum.models import Chunk
 from bangla_gpt_api.metrics import RAG_LANE_LATENCY_SECONDS
@@ -21,7 +22,7 @@ from bangla_gpt_api.retrieval.bm25 import BM25Index, Hit, indexable_text, tokeni
 from bangla_gpt_api.retrieval.embedding import Embedder, bengali_bigrams
 from bangla_gpt_api.retrieval.fusion import reciprocal_rank_fusion
 from bangla_gpt_api.retrieval.hybrid import light_stem, trigram_similarity
-from bangla_gpt_api.retrieval.normalize import normalize_nfkc
+from bangla_gpt_api.retrieval.normalize import collapse_whitespace, normalize_nfkc
 from bangla_gpt_api.retrieval.query_analysis import (
     content_terms,
     coverage_weights,
@@ -213,6 +214,7 @@ class HybridIndex:
         proximity_window: int = _PROXIMITY_WINDOW,
         k1: float = 1.5,
         b: float = 0.75,
+        cross_encoder: Any | None = None,
     ) -> None:
         self.chunks = chunks
         self.bm25 = BM25Index(chunks, k1=k1, b=b)
@@ -227,6 +229,16 @@ class HybridIndex:
         self.reranker: Reranker = reranker or make_lexical_rerank(
             self.bm25.term_stats, proximity_window=self._proximity_window
         )
+        # Retrieval engine v2: when the operator configures the cross-encoder
+        # stage, the BUILT instance (assembled one layer up, where services
+        # like the circuit breaker and the PII redactor may be imported —
+        # retrieval sits BELOW services in the import-linter contracts) wraps
+        # the lexical ranker here: endpoint-driven ordering with the lexical
+        # magnitude floor kept; any endpoint failure degrades to the lexical
+        # ordering for that turn (retrieval/reranker.py).
+        if cross_encoder is not None:
+            cross_encoder.wrap(self.reranker)
+            self.reranker = cross_encoder
 
     @property
     def term_stats(self) -> TermStats:
@@ -240,6 +252,8 @@ class HybridIndex:
         class_level: int | None = None,
         subject: str | None = None,
         chapter: str | None = None,
+        book: str | None = None,
+        year: int | None = None,
         top_k: int = 4,
         min_score: float = 0.0,
     ) -> list[Hit]:
@@ -254,6 +268,8 @@ class HybridIndex:
             class_level=class_level,
             subject=subject,
             chapter=chapter,
+            book=book,
+            year=year,
             top_k=candidate_k,
             min_score=0.0,
         )
@@ -264,6 +280,8 @@ class HybridIndex:
             class_level=class_level,
             subject=subject,
             chapter=chapter,
+            book=book,
+            year=year,
             top_k=candidate_k,
             min_score=0.0,
         )
@@ -290,10 +308,25 @@ class HybridIndex:
             [[h.chunk.id for h in bm25_hits], [h.chunk.id for h in vector_hits]],
             k=self.rrf_k,
         )
-        candidates = [
-            (by_id[chunk_id], rrf_score, lexical_base.get(chunk_id, 0.0))
-            for chunk_id, rrf_score in fused[:candidate_k]
-        ]
+        # Pool dedup (retrieval engine v2): identical text from the SAME
+        # source collapses onto the best fused rank — the reranker pays once
+        # per distinct text and RRF stops spreading rank mass across copies
+        # the real corpus produces. Cross-class copies stay distinct (class
+        # provenance is a product contract) because the identity is
+        # (normalized text, source); assembly-level dedupe still guards the
+        # student-facing evidence (context.py).
+        pool: list[tuple[Chunk, float, float]] = []
+        seen_pool: set[tuple[str, str]] = set()
+        for chunk_id, rrf_score in fused:
+            chunk = by_id[chunk_id]
+            key = (collapse_whitespace(indexable_text(chunk)), chunk.meta.source)
+            if key in seen_pool:
+                continue
+            seen_pool.add(key)
+            pool.append((chunk, rrf_score, lexical_base.get(chunk_id, 0.0)))
+            if len(pool) >= candidate_k:
+                break
+        candidates = pool
         if not candidates:
             return []
         scores = self.reranker(query, candidates)
