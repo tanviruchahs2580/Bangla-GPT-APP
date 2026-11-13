@@ -123,12 +123,8 @@ describe("routing table", () => {
     // the user BACK to the preserved destination (previously bare /login
     // producers made this impossible to reach deterministically).
     authState.me = STUDENT;
-    renderAt(
-      `/login?next=${encodeURIComponent("/student/quiz?attempt=7")}`,
-    );
-    await waitFor(() =>
-      expect(window.location.pathname).toBe("/student/quiz"),
-    );
+    renderAt(`/login?next=${encodeURIComponent("/student/quiz?attempt=7")}`);
+    await waitFor(() => expect(window.location.pathname).toBe("/student/quiz"));
     expect(window.location.search).toBe("?attempt=7");
   });
 

@@ -63,7 +63,9 @@ from bangla_gpt_api.retrieval.hybrid_index import HybridIndex  # noqa: F401 (re-
 from bangla_gpt_api.routers import register_routers
 from bangla_gpt_api.routers._error_contract import CodedDetail, MessageDetail
 from bangla_gpt_api.routers.deps import CONSENT_VERSION
-from bangla_gpt_api.services.circuit_breaker import CircuitBreaker  # noqa: F401 - re-exported for tests
+from bangla_gpt_api.services.circuit_breaker import (
+    CircuitBreaker,  # noqa: F401 - re-exported for tests
+)
 from bangla_gpt_api.services.tutor import TutorService  # noqa: F401 (re-exported for tests)
 
 __all__ = ["CONSENT_VERSION", "app", "create_app", "enforce_production_safety"]

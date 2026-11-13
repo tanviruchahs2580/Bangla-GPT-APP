@@ -45,9 +45,9 @@ describe("safeNextPath — consumer side (post-login return)", () => {
   });
 
   it("preserves an embedded query in the destination", () => {
-    expect(safeNextPath(`?next=${encodeURIComponent("/student/me?tab=1")}`)).toBe(
-      "/student/me?tab=1",
-    );
+    expect(
+      safeNextPath(`?next=${encodeURIComponent("/student/me?tab=1")}`),
+    ).toBe("/student/me?tab=1");
   });
 
   it.each([

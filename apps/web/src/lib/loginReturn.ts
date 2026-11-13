@@ -32,11 +32,7 @@ export function loginReturnPath(): string {
   const here = `${window.location.pathname}${window.location.search}`;
   // "/" has nothing to preserve — the router sends it to the role home
   // anyway — and a next=/login target would loop.
-  if (
-    !isInternalPath(here) ||
-    here.startsWith("/login") ||
-    here === "/"
-  ) {
+  if (!isInternalPath(here) || here.startsWith("/login") || here === "/") {
     return "/login";
   }
   return `/login?next=${encodeURIComponent(here)}`;

@@ -94,8 +94,7 @@ function RequireAuth({
   // policy (lib/loginReturn) — the token-missing boot and the session-
   // refused boot preserve the deep link, so the redirect race with
   // AuthContext's 401 bounce can no longer lose the destination.
-  if (!getToken())
-    return <Navigate to={loginReturnPath()} replace />;
+  if (!getToken()) return <Navigate to={loginReturnPath()} replace />;
   if (loading)
     return (
       <main className="container" aria-live="polite">
