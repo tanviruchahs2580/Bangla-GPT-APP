@@ -173,6 +173,51 @@ def _resolve_year(report: dict) -> int:
     return 2026
 
 
+def _log_load_exclusions(
+    *,
+    refused_sources: list[str],
+    non_bangla_sources: list[str],
+    level_derived_sources: list[str],
+    injection_drops_total: int,
+) -> None:
+    """Boot-log every way a source or sentence stayed out of the index.
+
+    Extracted from ``load_nctb_corpus`` (complexity ratchet: the V4 G5
+    non-Bangla log pushed the build loop over budget; the exclusions are
+    reporting, not building — a named helper keeps the ratchet's
+    extract-don't-raise rule).
+    """
+    if refused_sources:
+        # Never silent: a source with no class signal is not indexed at all,
+        # so the served corpus's scope is visible in the boot log.
+        logger.warning(
+            "nctb_loader: refused %d source(s) with no class signal (no cover statement, "
+            "level-range fallback disabled): %s",
+            len(refused_sources),
+            refused_sources,
+        )
+    if non_bangla_sources:
+        # Never silent either: an excluded book (English edition, broken Bijoy)
+        # shrinks what the tutor can answer — the operator must see it.
+        logger.warning(
+            "nctb_loader: excluded %d non-Bangla source(s) (bangla_char_ratio_on_usable < 0.5): %s",
+            len(non_bangla_sources),
+            non_bangla_sources,
+        )
+    if level_derived_sources:
+        logger.warning(
+            "nctb_loader: %d source(s) indexed under their DECLARED LEVEL's class range "
+            "(no book-level class statement on the cover): %s",
+            len(level_derived_sources),
+            level_derived_sources,
+        )
+    if injection_drops_total:
+        logger.warning(
+            "nctb_loader: dropped %d prompt-injection sentences at load time",
+            injection_drops_total,
+        )
+
+
 def load_nctb_corpus(
     chunks_dir: Path,
     quality_report_path: Path | None = None,
@@ -300,35 +345,6 @@ def load_nctb_corpus(
                 if dedupe:
                     seen_chunks[key] = len(chunks) - 1
                     chunk_sources[key] = list(row_sources)
-    if refused_sources:
-        # Never silent: a source with no class signal is not indexed at all,
-        # so the served corpus's scope is visible in the boot log.
-        logger.warning(
-            "nctb_loader: refused %d source(s) with no class signal (no cover statement, "
-            "level-range fallback disabled): %s",
-            len(refused_sources),
-            refused_sources,
-        )
-    if non_bangla_sources:
-        # Never silent either: an excluded book (English edition, broken Bijoy)
-        # shrinks what the tutor can answer — the operator must see it.
-        logger.warning(
-            "nctb_loader: excluded %d non-Bangla source(s) (bangla_char_ratio_on_usable < 0.5): %s",
-            len(non_bangla_sources),
-            non_bangla_sources,
-        )
-    if level_derived_sources:
-        logger.warning(
-            "nctb_loader: %d source(s) indexed under their DECLARED LEVEL's class range "
-            "(no book-level class statement on the cover): %s",
-            len(level_derived_sources),
-            level_derived_sources,
-        )
-    if injection_drops_total:
-        logger.warning(
-            "nctb_loader: dropped %d prompt-injection sentences at load time",
-            injection_drops_total,
-        )
     if dedupe and duplicate_index_chunks:
         shared_groups = sorted(sources for sources in chunk_sources.values() if len(sources) > 1)
         json_log(
@@ -340,6 +356,12 @@ def load_nctb_corpus(
             merged_groups=len(shared_groups),
             example_groups=shared_groups[:3],
         )
+    _log_load_exclusions(
+        refused_sources=refused_sources,
+        non_bangla_sources=non_bangla_sources,
+        level_derived_sources=level_derived_sources,
+        injection_drops_total=injection_drops_total,
+    )
     _log_corpus_identity(chunks_dir, chunks, index_chunks=len(chunks), verify=verify_manifest)
     return chunks
 
