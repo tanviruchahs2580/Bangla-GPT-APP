@@ -56,9 +56,9 @@ class BreakerProtocol(Protocol):
     """The circuit-breaker surface this stage needs (injected, not imported:
     retrieval sits BELOW services in the import-linter layering)."""
 
-    def allow_request(self) -> bool: ...
-    def record_failure(self) -> None: ...
-    def record_success(self) -> None: ...
+    def allow_request(self) -> bool: ...  # pragma: no cover - protocol stub
+    def record_failure(self) -> None: ...  # pragma: no cover - protocol stub
+    def record_success(self) -> None: ...  # pragma: no cover - protocol stub
 
 
 @dataclass(frozen=True)

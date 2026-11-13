@@ -1006,15 +1006,15 @@ translation that changes the meaning of the English original.
 | 982 | apps/api/src/bangla_gpt_api/services/tutor.py:341 | (literal) | পূর্ববর্তী কথোপকথন (প্রসঙ্গ):\n{turns} | |
 | 983 | apps/api/src/bangla_gpt_api/services/tutor.py:343 | (literal) | প্রশ্ন: <user_question>{safe_question}</user_question> | |
 | 984 | apps/api/src/bangla_gpt_api/services/tutor.py:486 | (literal) | ডলারের দাম কত? | |
-| 985 | apps/api/src/bangla_gpt_api/services/tutor.py:660 | (literal) | ঢাকার সেরা বিরিয়ানির দোকান কোথায়? | |
-| 986 | apps/api/src/bangla_gpt_api/services/tutor.py:684 | (literal) | ভগ্নাংশ কী? explain করো | |
-| 987 | apps/api/src/bangla_gpt_api/services/tutor.py:693 | (literal) | ডলারের দাম কত? | |
-| 988 | apps/api/src/bangla_gpt_api/services/tutor.py:772 | (literal) | সালোকসংশ্লেষণ কী এবং কোথায় ঘটে? | |
-| 989 | apps/api/src/bangla_gpt_api/services/tutor.py:787 | (literal) | ৬ষ্ঠ শ্রেণির | |
-| 990 | apps/api/src/bangla_gpt_api/services/tutor.py:809 | (literal) | স্বরন্ধি কী? | |
-| 991 | apps/api/src/bangla_gpt_api/services/tutor.py:810 | (literal) | স্বরসন্ধি কী? | |
-| 992 | apps/api/src/bangla_gpt_api/services/tutor.py:823 | (literal) | ঢাকার সেরা বিরিয়ানির দোকান কোথায়? | |
-| 993 | apps/api/src/bangla_gpt_api/services/tutor.py:1030 | (literal) | আরেকটু সহজ করে বোঝাও | |
+| 985 | apps/api/src/bangla_gpt_api/services/tutor.py:667 | (literal) | ঢাকার সেরা বিরিয়ানির দোকান কোথায়? | |
+| 986 | apps/api/src/bangla_gpt_api/services/tutor.py:691 | (literal) | ভগ্নাংশ কী? explain করো | |
+| 987 | apps/api/src/bangla_gpt_api/services/tutor.py:700 | (literal) | ডলারের দাম কত? | |
+| 988 | apps/api/src/bangla_gpt_api/services/tutor.py:779 | (literal) | সালোকসংশ্লেষণ কী এবং কোথায় ঘটে? | |
+| 989 | apps/api/src/bangla_gpt_api/services/tutor.py:794 | (literal) | ৬ষ্ঠ শ্রেণির | |
+| 990 | apps/api/src/bangla_gpt_api/services/tutor.py:816 | (literal) | স্বরন্ধি কী? | |
+| 991 | apps/api/src/bangla_gpt_api/services/tutor.py:817 | (literal) | স্বরসন্ধি কী? | |
+| 992 | apps/api/src/bangla_gpt_api/services/tutor.py:830 | (literal) | ঢাকার সেরা বিরিয়ানির দোকান কোথায়? | |
+| 993 | apps/api/src/bangla_gpt_api/services/tutor.py:1041 | (literal) | আরেকটু সহজ করে বোঝাও | |
 | 994 | apps/api/src/bangla_gpt_api/services/verification.py:31 | (literal) | ইমেইল যাচাই / Verify your email | |
 | 995 | apps/api/src/bangla_gpt_api/services/verification.py:45 | (literal) | Bangla GPT Tutor-এ স্বাগতম! | |
 | 996 | apps/api/src/bangla_gpt_api/services/verification.py:46 | (literal) | ইমেইল যাচাই করতে নিচের কোডটি | |

@@ -305,3 +305,47 @@ def test_index_out_of_range_is_a_protocol_error() -> None:
         # TEXT (what __call__ sends via indexable_text), not Chunk objects
         reranker.rerank_remote("কোষ কী?", [indexable_text(c[0]) for c in _candidates()])
     assert reranker("কোষ কী?", _candidates()) == _lexical()("কোষ কী?", _candidates())
+
+
+def test_breaker_records_failures_and_successes_on_the_active_path() -> None:
+    """The three injected-breaker calls: a failing endpoint records a
+    failure through the fallback, a healthy one records a success."""
+    calls = {"failure": 0, "success": 0}
+
+    class _Breaker:
+        def allow_request(self) -> bool:
+            return True
+
+        def record_failure(self) -> None:
+            calls["failure"] += 1
+
+        def record_success(self) -> None:
+            calls["success"] += 1
+
+    state = {"fail": True}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if state["fail"]:
+            return httpx.Response(503)
+        return httpx.Response(
+            200,
+            json={
+                "results": [
+                    {"index": 0, "relevance_score": 0.9},
+                    {"index": 1, "relevance_score": 0.1},
+                ]
+            },
+        )
+
+    reranker = CrossEncoderReranker(
+        config=build_cross_encoder_config(_settings()),
+        redact=_redact,
+        transport=httpx.MockTransport(handler),
+        breaker=_Breaker(),
+    )
+    reranker.wrap(_lexical())
+    reranker("কোষ কী?", _candidates())
+    assert calls["failure"] == 1, calls
+    state["fail"] = False
+    reranker("কোষ কী?", _candidates())
+    assert calls["success"] == 1, calls
