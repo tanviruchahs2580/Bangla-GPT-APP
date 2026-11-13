@@ -55,7 +55,8 @@ nfkc+zero-width+whitespace}; manifest_version 1.
 acquisition (polite, hashed, resumable download) → extract (pypdf + Bijoy at the choke point) →
 normalize (NFKC + zero-width + whitespace; class detection) → chunking (structure-aware, SourceSpan
 provenance) → corpus (build JSONL + quality_report + manifest) → manifest (acquisition ledger +
-verify) → loader (`data/nctb_loader.py`: level-range expansion, `(content_hash, class)` dedupe with
+verify) → loader (`apps/api/src/bangla_gpt_api/data/nctb_loader.py`: level-range expansion,
+`(content_hash, class)` dedupe with
 shared-source merge, injection strip) → index (BM25 + vector + RRF + rerank).
 
 ## Gaps opened in this pass (severity → disposition)
