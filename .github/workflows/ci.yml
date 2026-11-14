@@ -460,7 +460,7 @@ jobs:
         # esbuild for vite (ELSPROBLEMS is a red herring for an SBOM read).
         # Syft scans the installed directory without touching npm's
         # validator; pinned for supply-chain integrity like every action.
-        uses: anchore/sbom-action@43a17d6e7add2b5535efe4dcae9952337c479a93 # v0.20.11
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
           path: ./apps/web
           format: cyclonedx-json
@@ -1276,7 +1276,7 @@ jobs:
         # F-078: release.yml owns the attested image SBOMs; this one makes the
         # cheap per-PR job prove the image contents can be inventoried at all
         # (same pinned action as the sbom job).
-        uses: anchore/sbom-action@43a17d6e7add2b5535efe4dcae9952337c479a93 # v0.20.11
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
           image: bangla-gpt-api:ci
           format: cyclonedx-json
