@@ -76,4 +76,13 @@ regexes = [
   # pardoned -- not the file that happens to contain it. A path entry for that
   # report was considered and rejected for the same reason.
   '''^Auth: JWT\+RBAC\+tenancy''',
+  # Audit V2 wave (2026-11-15): gitleaks's generic-api-key rule flags
+  # `TOKEN = "tok_abcdefghijklmnopqrstuvwxyz012345"` in
+  # apps/api/tests/test_w2_i18n_email_copy.py:27 (commit bdd6ac6,
+  # 2026-10-30). Structurally verified synthetic fixture — the value is
+  # the literal alphabet with a tok_ prefix, zero secret material, sitting
+  # beside PASSWORD="supersecret1" and SECRET="test-secret-…". It only
+  # surfaces in full-history dispatch-mode scans (push-mode scans pass).
+  # Owner-approved waiver; next review 2027-05-14.
+  '''TOKEN\s*=\s*["']tok_abcdefghijklmnopqrstuvwxyz012345["']''',
 ]
