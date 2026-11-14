@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- fix(rag-v5): CI round-1 fixes — typed field, autogenerate exclusion, factory coverage, sheet
 - fix(rag-v5): seams helper attribute, env example entries for the new settings
 
 ### Maintenance
