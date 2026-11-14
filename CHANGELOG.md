@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### CI/CD
+
+- ci: re-fire the main pipeline after the #124 merge
+
+### Other
+
+- Merge pull request #99 from tanviruchahs2580/dependabot/github_actions/actions-f6b5f3bf45
+
+## v0.11.2 - 2026-11-14
+
 ### Fixed
 
 - fix(data): mastery reconciliation heals up, never shrinks (BGPT-DATA-001)
@@ -42,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Merge pull request #123 from tanviruchahs2580/fix/audit-v2-p1-hardening
 - ops(audit-v2): explicit gate statuses, scheduler topology, deployment contract, risk acceptances
+
 
 ## v0.11.1 - 2026-11-14
 
