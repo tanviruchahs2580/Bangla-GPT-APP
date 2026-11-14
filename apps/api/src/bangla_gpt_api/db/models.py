@@ -59,7 +59,10 @@ class User(Base):
     )
     # AUTH-001: TOTP secret (base32). NULL = MFA disabled. The secret is only
     # stored after the user proves possession (verify step), never at enroll.
-    totp_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # BGPT-SEC-001: holds the versioned ciphertext (totp1: + Fernet); the
+    # 255 width fits the token form of a 32-char seed (widened in
+    # migration b6c8d0e2f4a6; the raw-seed era used 64).
+    totp_secret: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # F-05 token epoch: set at password change/reset. Any access token whose
     # ``iat`` is <= this moment is refused by get_current_user, so existing
     # sessions cannot ride out a credential rotation.

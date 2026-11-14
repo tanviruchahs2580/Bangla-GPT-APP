@@ -905,8 +905,8 @@ translation that changes the meaning of the English original.
 | 881 | apps/api/src/bangla_gpt_api/routers/_context.py:33 | (literal) | সবচাইতে সহজ শব্দে ছোট করে বল। | |
 | 882 | apps/api/src/bangla_gpt_api/routers/_context.py:34 | (literal) | স্বাভাবিক ধারাবাহিক বিবরণ দাও। | |
 | 883 | apps/api/src/bangla_gpt_api/routers/_context.py:35 | (literal) | প্রয়োজনীয় সব ধাপ ও উদাহরণসহ বিস্তারিত বল। | |
-| 884 | apps/api/src/bangla_gpt_api/routers/auth.py:805 | (literal) | পাসওয়ার্ড রিসেট / Password reset | |
-| 885 | apps/api/src/bangla_gpt_api/routers/auth.py:806 | (literal) | পাসওয়ার্ড রিসেট করতে নিচের টোকেনটি ব্যবহার করুন (৩০ মিনিটের জন্য বৈধ):\n\n{token}\n | |
+| 884 | apps/api/src/bangla_gpt_api/routers/auth.py:812 | (literal) | পাসওয়ার্ড রিসেট / Password reset | |
+| 885 | apps/api/src/bangla_gpt_api/routers/auth.py:813 | (literal) | পাসওয়ার্ড রিসেট করতে নিচের টোকেনটি ব্যবহার করুন (৩০ মিনিটের জন্য বৈধ):\n\n{token}\n | |
 | 886 | apps/api/src/bangla_gpt_api/routers/learn.py:902 | (literal) | পাঠ্যবই পড়ুন | |
 | 887 | apps/api/src/bangla_gpt_api/routers/learn.py:903 | (literal) | AI-কে প্রশ্ন করুন | |
 | 888 | apps/api/src/bangla_gpt_api/routers/learn.py:904 | (literal) | কুইজ দিন | |

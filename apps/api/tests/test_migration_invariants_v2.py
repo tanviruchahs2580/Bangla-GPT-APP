@@ -46,8 +46,8 @@ from sqlalchemy.orm import Session
 from bangla_gpt_api.db.models import AiJob, AiUsage, AnswerLog, QuizAttempt, Student, User
 
 API_ROOT = Path(__file__).resolve().parents[1]
-FIX_REVISION = "a5b7c9d1e3f7"
-PARENT_REVISION = "dbf1d2e3f4a5"
+FIX_REVISION = "b6c8d0e2f4a6"
+PARENT_REVISION = "a5b7c9d1e3f7"
 #: The revision whose SQLite table rebuild requires PRAGMA foreign_keys=OFF
 #: (see its docstring and alembic/env.py).
 FK_REBUILD_REVISION = "c4d8e0f2a6b9"
@@ -254,7 +254,10 @@ def test_downgrade_keeps_the_fixed_bounds_and_never_enables_foreign_keys(
     assert _normalised(INTENDED_CHOSEN) in ddl
     assert _normalised(LEGACY_CHOSEN) not in ddl
     assert "ck_ai_jobs_attempts" in _table_ddl(url, "ai_jobs")
-    assert "reconciled_at" not in _table_ddl(url, "concept_mastery")
+    assert "reconciled_at" in _table_ddl(url, "concept_mastery"), (
+        "the one-step downgrade removes only the widened TOTP width; the"
+        " mastery stamp column belongs to the parent revision"
+    )
     assert "estimated_cost_usd numeric(14, 10) not null" in _normalised(_table_ddl(url, "ai_usage"))
 
     # DB-FIX-005: the FK-rebuild revision needs PRAGMA foreign_keys=OFF. Its
