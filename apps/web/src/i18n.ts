@@ -818,6 +818,8 @@ const bn = {
   errPasswordUnchanged: "নতুন পাসওয়ার্ড আগেরটির মতোই — ভিন্ন একটি বেছে নিন।",
   errMfaLocked:
     "অনেকবার ভুল কোড দেওয়া হয়েছে — কিছুক্ষণ পরে আবার চেষ্টা করুন।",
+  errMfaUnavailable:
+    "দ্বিতীয় ধাপের যাচাই এখন সাময়িকভাবে বন্ধ — কিছুক্ষণ পরে আবার চেষ্টা করুন বা সাপোর্টে জানান।",
   errNoGradedData: "এখনো কোনো মূল্যায়িত ফলাফল নেই — আগে কুইজ জমা দিন।",
   errMixedClassLevels:
     "একই কুইজে ভিন্ন শ্রেণির শিক্ষার্থী রাখা যায় না — এক শ্রেণির শিক্ষার্থী বেছে নিন।",
@@ -1608,6 +1610,8 @@ const en: Dict = {
   errPasswordUnchanged:
     "The new password is the same as the current one — choose a different one.",
   errMfaLocked: "Too many wrong codes — try again in a little while.",
+  errMfaUnavailable:
+    "Second-factor verification is temporarily unavailable — try again shortly or contact support.",
   errNoGradedData: "No graded results yet — submit a quiz first.",
   errMixedClassLevels:
     "A quiz cannot mix class levels — select students from one class.",
