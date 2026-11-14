@@ -12,6 +12,8 @@ Two small primitives that the hardening step needs:
   Rows store ids and outcome metadata only -- never message content.
 """
 
+import base64
+import hashlib
 import logging
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -23,6 +25,25 @@ from bangla_gpt_api.logging_config import json_log
 logger = logging.getLogger(__name__)
 
 _FERNET_PREFIX = "fernet:"
+
+#: BGPT-SEC-001 — TOTP seeds are ciphertext at rest. The domain is separated
+#: from the PII key by derivation, never by reuse: the same PII_ENC_KEY
+#: material is fed through HKDF with a distinct label, so a compromise of
+#: one ciphertext domain does not open the other. ``totp1:`` is the key/
+#: format version tag; rotation introduces ``totp2:`` with a new label and
+#: a dual-read window.
+_TOTP_PREFIX = "totp1:"
+_TOTP_HKDF_INFO = b"bangla-gpt:totp-seed:v1"
+
+
+def _derive_totp_fernet_key(pii_key: str) -> bytes:
+    """HKDF-SHA256(PII_ENC_KEY, info=…) → urlsafe Fernet key for TOTP."""
+    digest = hashlib.sha256(pii_key.encode()).digest()
+    # RFC 5869 HKDF extract+expand with a fixed salt (the domain label
+    # carries the separation, the salt binds it into the PRK).
+    prk = hashlib.sha256(b"bangla-gpt:totp-domain-salt" + digest).digest()
+    block = hashlib.sha256(prk + _TOTP_HKDF_INFO + b"\x01").digest()
+    return base64.urlsafe_b64encode(block)
 
 
 class PiiKeyUnconfigured(RuntimeError):
@@ -76,6 +97,57 @@ def decrypt_pii(stored: str | None, key: str | None) -> str | None:
     except InvalidToken:
         json_log(logger, logging.WARNING, "pii_decrypt_failed")
         return None
+
+
+def encrypt_totp_secret(seed: str | None, pii_key: str | None) -> str | None:
+    """Encrypt a TOTP seed for storage (BGPT-SEC-001).
+
+    Keyless (dev) deployments fall back to plaintext with a loud structured
+    warning — the same documented passthrough era ``encrypt_pii`` has, while
+    the production boot guard makes the fallback unreachable there.
+    """
+    if seed is None:
+        return None
+    if not pii_key:
+        json_log(
+            logger,
+            logging.WARNING,
+            "totp_encrypt_keyless",
+            detail="storing MFA seed as plaintext: PII_ENC_KEY not configured",
+        )
+        return seed
+    fernet = Fernet(_derive_totp_fernet_key(pii_key))
+    return _TOTP_PREFIX + fernet.encrypt(seed.encode()).decode()
+
+
+def decrypt_totp_secret(stored: str | None, pii_key: str | None) -> str | None:
+    """Inverse of :func:`encrypt_totp_secret`.
+
+    ``totp1:`` ciphertext decrypts with the derived key; a value without the
+    prefix is a legacy plaintext row (pre-fix or keyless era) and passes
+    through so existing MFA accounts keep working until the sweep upgrades
+    them. A ciphertext that will not decrypt returns ``None`` — the caller
+    must fail closed (the challenge simply fails) and never log the stored
+    value.
+    """
+    if stored is None:
+        return None
+    if not stored.startswith(_TOTP_PREFIX):
+        return stored
+    if not pii_key:
+        json_log(logger, logging.WARNING, "totp_decrypt_keyless")
+        return None
+    try:
+        fernet = Fernet(_derive_totp_fernet_key(pii_key))
+        return fernet.decrypt(stored[len(_TOTP_PREFIX) :].encode()).decode()
+    except InvalidToken:
+        json_log(logger, logging.WARNING, "totp_decrypt_failed")
+        return None
+
+
+def is_encrypted_totp_secret(stored: str | None) -> bool:
+    """True when the stored value is the versioned ciphertext form."""
+    return stored is not None and stored.startswith(_TOTP_PREFIX)
 
 
 def write_audit(
