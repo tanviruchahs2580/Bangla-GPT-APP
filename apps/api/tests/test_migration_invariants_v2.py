@@ -255,9 +255,7 @@ def test_downgrade_keeps_the_fixed_bounds_and_never_enables_foreign_keys(
     assert _normalised(LEGACY_CHOSEN) not in ddl
     assert "ck_ai_jobs_attempts" in _table_ddl(url, "ai_jobs")
     assert "reconciled_at" not in _table_ddl(url, "concept_mastery")
-    assert "estimated_cost_usd numeric(14, 10) not null" in _normalised(
-        _table_ddl(url, "ai_usage")
-    )
+    assert "estimated_cost_usd numeric(14, 10) not null" in _normalised(_table_ddl(url, "ai_usage"))
 
     # DB-FIX-005: the FK-rebuild revision needs PRAGMA foreign_keys=OFF. Its
     # downgrade raises rather than proceeding under enforcement
