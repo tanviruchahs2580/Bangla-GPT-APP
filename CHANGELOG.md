@@ -13,6 +13,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Added
+
+- feat(rag-v5): generation registry, atomic activation, pgvector store (W3/W4)
+- feat(rag-v5): neural embedder adapter, verification modes, boot guards (W2/W7)
+
+### Fixed
+
+- fix(rag-v5): seams helper attribute, env example entries for the new settings
+
+### Maintenance
+
+- chore(release): bump version to 0.12.0 (RAG V5 foundation wave)
+
+## v0.11.2 - 2026-11-14
+
 ### Fixed
 
 - fix(data): mastery reconciliation heals up, never shrinks (BGPT-DATA-001)
@@ -42,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Merge pull request #123 from tanviruchahs2580/fix/audit-v2-p1-hardening
 - ops(audit-v2): explicit gate statuses, scheduler topology, deployment contract, risk acceptances
+
 
 ## v0.11.1 - 2026-11-14
 

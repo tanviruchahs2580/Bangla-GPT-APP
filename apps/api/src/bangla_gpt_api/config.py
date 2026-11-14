@@ -188,6 +188,21 @@ class Settings(BaseSettings):
     # vector — bump the corpus version alongside the model.
     embedding_api_base: str = "https://api.openai.com/v1"
     embedding_api_key: str = ""
+    # RAG V5 (W2): "local" keeps the deterministic HashingEmbedder default;
+    # "neural" selects the benchmark-gated local neural adapter (never a
+    # hidden fallback — V5 §8). Non-default until the model-selection gate
+    # passes on human-reviewed Class 6 labels.
+    embedding_provider: str = "local"
+    embedding_model_revision: str = ""
+    # Exact output dimension of the selected neural model (identity field;
+    # the manifest gate refuses a mismatch).
+    embedding_dimension: int = 0
+    # RAG V5 (W7): off = today's behavior; shadow = deterministic verdicts
+    # attached as an additive field, never blocking; enforce = blocking,
+    # refused at boot unless explicitly approved (no calibrated verifier
+    # exists yet, so production must not reach it by accident).
+    evidence_verification_mode: str = "off"  # off | shadow | enforce
+    evidence_verification_enforce_approved: bool = False
     # Retrieval-shape knobs (audit F-05/D1). The defaults ARE the measured
     # values the grounding/rerank work shipped with; overrides exist for
     # offline benchmark sweeps against the committed eval baselines, not for
