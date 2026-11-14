@@ -906,6 +906,11 @@ class ConceptMastery(Base):
     correct: Mapped[int] = mapped_column(Integer, default=0)
     total: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    # BGPT-DATA-001: last time the nightly reconciliation examined this row
+    # against the retained answer-log window. NULL = not yet reconciled. The
+    # reconciliation is monotone (heal-up, never shrink), so this stamp is
+    # an operations signal, not a correctness dependency.
+    reconciled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class PracticeItem(Base):
