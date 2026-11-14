@@ -161,16 +161,10 @@ def _register_ask(client: TestClient, question: str) -> dict:
         },
     )
     assert reg.status_code == 201, reg.text
-    login = client.post(
-        "/auth/login", json={"email": "v5@example.com", "password": PASSWORD}
-    )
+    login = client.post("/auth/login", json={"email": "v5@example.com", "password": PASSWORD})
     assert login.status_code == 200
-    client.headers.update(
-        {"Authorization": f"Bearer {login.json()['access_token']}"}
-    )
-    res = client.post(
-        "/tutor/ask", json={"question": question, "class_level": 6}
-    )
+    client.headers.update({"Authorization": f"Bearer {login.json()['access_token']}"})
+    res = client.post("/tutor/ask", json={"question": question, "class_level": 6})
     assert res.status_code == 200, res.text
     return res.json()
 
@@ -231,7 +225,7 @@ def test_enforce_mode_requires_explicit_approval_at_boot(tmp_path) -> None:
 
 
 def test_unknown_verification_mode_refuses_boot(tmp_path) -> None:
-    with pytest.raises(RuntimeError, match="off|shadow|enforce"):
+    with pytest.raises(RuntimeError, match=r"off\|shadow\|enforce"):
         create_app(
             Settings(
                 env="test",
