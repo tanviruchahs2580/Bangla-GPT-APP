@@ -31,9 +31,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - ci: re-fire the main pipeline after the #124 merge
 
+### Tests
+
+- test(e2e): 60s budget for the X-02 re-login redirect (loaded-runner class)
+
 ### Maintenance
 
 - chore(release): bump version to 0.12.0 (RAG V5 foundation wave)
+- chore(secrets): dated allowlist waiver for the synthetic i18n test fixture
 - chore(semgrep): reviewed allowlist entry for the RAG V5 pgvector store
 - chore: regenerate the CHANGELOG
 - chore: regenerate the native-review sheet
