@@ -70,7 +70,7 @@ def _enable_mfa(client: TestClient) -> str:
             "guardian_consent": True,
         },
     )
-    assert reg.status_code in (200, 201), reg.text
+    assert reg.status_code == 201, reg.text
     login = client.post(
         "/auth/login",
         json={"email": "totp@example.com", "password": PASSWORD},

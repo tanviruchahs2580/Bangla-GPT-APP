@@ -15,6 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- fix(data): mastery reconciliation heals up, never shrinks (BGPT-DATA-001)
+- fix(security): encrypt TOTP seeds at rest (BGPT-SEC-001)
+
+### Other
+
+- ops(audit-v2): explicit gate statuses, scheduler topology, deployment contract, risk acceptances
+
+## v0.11.1 - 2026-11-14
+
+### Fixed
+
 - fix(api): serve the /api route alias so the Capacitor APK can log in
 
 ### CI/CD
@@ -28,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Other
 
 - Merge pull request #122 from tanviruchahs2580/fix/apk-api-prefix-alias
+
 
 ## v0.11.0 - 2026-11-14
 
