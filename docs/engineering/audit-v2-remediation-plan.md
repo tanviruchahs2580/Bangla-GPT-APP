@@ -72,7 +72,7 @@ action — recorded in the backlog, not silently skipped.
 
 ### 5. Small confirmed items executed with the wave
 
-- BGPT-RAG-003: current citation-verdict behavior traced and pinned by test.
+- BGPT-RAG-003: VERIFIED CLOSED as historical carry-forward — current behavior is warn-only, client-labelled (`citation_verified` on the response), metered (`RAG_CITATION_CHECKS_TOTAL`) and traced (`unverified:<reason>`), pinned by `test_citation_check_metered_and_warned_on_fail` (E1+E2). The blocking-or-warn-only product decision remains an owner item if blocking is ever preferred; the current state already satisfies the report's warn-only acceptance criteria.
 - BGPT-REL-002: scheduler mode declared at startup (one owner per topology).
 - BGPT-SEC-004: registration `disclose` posture documented as the accepted
   trade-off with compensating controls (owner acceptance recorded).

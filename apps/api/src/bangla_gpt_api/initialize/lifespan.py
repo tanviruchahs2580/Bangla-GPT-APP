@@ -136,6 +136,20 @@ def build_lifespan(
         digest_task: asyncio.Task[None] | None = None
         weakness_task: asyncio.Task[None] | None = None
 
+        # BGPT-REL-002: one visible ownership decision per scheduler family.
+        # In inline mode this process owns the loops (logged again per family
+        # below); in arq mode the EXTERNAL worker owns them and this process
+        # must not start them — which is only safe if that worker actually
+        # runs, so the topology is stated here for the runbook to grep.
+        json_log(
+            logger,
+            logging.INFO,
+            "scheduler_topology",
+            jobs_backend=settings.jobs_backend,
+            parent_digest_enabled=settings.parent_digest_enabled,
+            weakness_refresh_enabled=settings.weakness_refresh_enabled,
+        )
+
         if settings.parent_digest_enabled and settings.jobs_backend != "arq":
             digest_task = asyncio.create_task(
                 _run_digest_loop(

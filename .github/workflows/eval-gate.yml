@@ -118,6 +118,29 @@ jobs:
         run: python -m bangla_gpt_api.evaluation.cli --real-model 2>&1 | tee real-model-report.txt
         continue-on-error: true
 
+      # BGPT-RAG-001: the corpus-gate status must never be confusable with a
+      # pass. This suite measures the bundled 78-chunk sample corpus; the real
+      # served NCTB corpus is access-controlled (copyright) and is not yet
+      # provisioned for CI. Until the owner provisions the restricted artifact
+      # (repository variable CORPUS_ARTIFACT_URL), every run records an
+      # explicit NOT RUN in the job summary — never a silent skip, never a
+      # green claim about the real corpus. retrieval-eval.yml already fails
+      # closed once provisioning exists (require_corpus).
+      - name: Real-corpus gate status (explicit, never a silent skip)
+        if: always()
+        env:
+          CORPUS_ARTIFACT_URL: ${{ vars.CORPUS_ARTIFACT_URL }}
+        run: |
+          {
+            echo "### Real-corpus retrieval gate (BGPT-RAG-001)"
+            if [ -n "$CORPUS_ARTIFACT_URL" ]; then
+              echo "- Status: PROVISIONED — the digest-bound real-corpus gate is expected to run via retrieval-eval.yml (require_corpus)."
+            else
+              echo "- Status: **NOT RUN — artifact provisioning pending** (owner action)."
+              echo "- This suite measured the bundled 78-chunk sample corpus; a green result here is not real-corpus evidence."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload real-model report
         if: github.event_name == 'workflow_dispatch' && inputs.real_model
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

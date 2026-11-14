@@ -316,6 +316,19 @@ would have looked for a stack that is not there.
 
 ### 7.1 Live topology — hand-run container (the actual procedure today)
 
+**Authoritative deployment contract (BGPT-OPS-001, Enterprise V2 audit):**
+
+| Surface | Authoritative target | Deployment mechanism | Release receipt |
+|---|---|---|---|
+| API | the operator-run container `api-live` on this host | image build from the release commit + container swap (§ below), rollback container retained stopped | commit → image tag/digest → running container → `curl /ready` + `/health`, recorded in the release report |
+| Web (PWA) | Vercel production | automatic deploy on the merged main commit | Vercel commit status + bundle-signature check |
+
+The `release.yml` SSH deploy job is **intentionally conditional**
+(`vars.DEPLOY_ENABLED`) and is NOT the deployment path for this topology —
+a skipped SSH job means "no SSH target configured", never "not deployed".
+The release workflow's job summary carries this contract verbatim so a
+skipped job can never be read as missing deployment evidence.
+
 Facts, read from the running host on 2026-11-10 (`docker ps`, `docker inspect
 api-live`; no secret values inspected):
 
