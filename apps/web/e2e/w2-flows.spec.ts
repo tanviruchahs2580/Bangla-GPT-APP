@@ -779,11 +779,14 @@ test("X-02 session clock: near-expiry token renews, an expired one forces re-log
       }
     })
     .toBeNull();
-  // Re-login from the ?next= bounce lands back on the deep link.
+  // Re-login from the ?next= bounce lands back on the deep link. The 60 s
+  // budget matches the file's other loaded-runner waits: the assertion is
+  // unchanged, only the time a slow CI runner gets to complete the
+  // login POST + full-document redirect.
   await page.locator("#email").fill(STUDENT);
   await page.locator("#password").fill(PASSWORD);
   await page.locator('form button[type="submit"]').click();
-  await expect(page).toHaveURL(/\/student\/quiz$/, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/student\/quiz$/, { timeout: 60_000 });
 });
 
 test("X-03 language and theme persist across reload and re-login", async ({
