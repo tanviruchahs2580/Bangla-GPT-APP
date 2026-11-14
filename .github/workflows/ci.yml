@@ -320,7 +320,9 @@ jobs:
         working-directory: apps/api
     services:
       postgres:
-        image: postgres:16-alpine
+        # RAG V5 (BGPT RAG Master Prompt W3): pgvector-enabled image so the
+        # vector-store integration tests run against a real extension.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres

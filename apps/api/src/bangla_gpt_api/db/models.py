@@ -1114,6 +1114,49 @@ class AnalyticsEventRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
 
 
+class RagIndexGeneration(Base):
+    """RAG V5: one complete retrieval generation (Master Prompt §3.3).
+
+    A generation binds the corpus digest, embedder identity, dimension and
+    BM25 artifact identity for one atomic serving snapshot. Vectors for the
+    generation live in ``rag_vector_chunks`` (pgvector, Postgres only —
+    created by migration, raw-SQL access, no ORM row class here). The
+    active pointer lives in ``rag_active_generation`` and is switched in a
+    single transaction.
+    """
+
+    __tablename__ = "rag_index_generations"
+
+    generation_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    state: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="building", index=True
+    )
+    corpus_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    embedder_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    embedder_revision: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    dimension: Mapped[int] = mapped_column(Integer, nullable=False)
+    bm25_artifact_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    chunk_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    validated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    retired_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class RagActiveGeneration(Base):
+    """RAG V5: single-row atomic activation pointer (Master Prompt §6.4).
+
+    ``singleton`` is always 1. Activation swaps ``generation_id`` in one
+    transaction; workers read it to pin the generation they serve.
+    """
+
+    __tablename__ = "rag_active_generation"
+
+    singleton: Mapped[int] = mapped_column(Integer, primary_key=True)
+    generation_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    activated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
 class AiJob(Base):
     """async generation job (§37) with a linear status lifecycle.
 

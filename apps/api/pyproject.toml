@@ -226,6 +226,9 @@ ignore = [
 max-complexity = 20
 
 [tool.ruff.lint.per-file-ignores]
+# RAG V5 pgvector store: the WHERE clause is assembled from fixed
+# literals only; every user value is a bound parameter (reviewed).
+"src/bangla_gpt_api/retrieval/generation.py" = ["S608"]
 # C901 ratchet (F-006/BE-05). Each line is a debt marker with the score ruff
 # measured when the entry was recorded, not an exemption policy: when the
 # function is split, the line must be deleted, and the budget only falls.
