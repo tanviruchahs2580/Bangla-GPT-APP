@@ -18,9 +18,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(data): mastery reconciliation heals up, never shrinks (BGPT-DATA-001)
 - fix(security): encrypt TOTP seeds at rest (BGPT-SEC-001)
 
+### Tests
+
+- test(migrations): advance the chain head pin to a5b7c9d1e3f7
+
 ### Maintenance
 
 - chore(release): bump version to 0.11.2 (audit V2 P1 hardening wave)
+- chore: regenerate the CHANGELOG
+
+### Style
+
+- style: format the migration invariants test
 
 ### Other
 
