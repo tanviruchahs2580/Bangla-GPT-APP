@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(security): encrypt TOTP seeds at rest (BGPT-SEC-001)
 - fix(web): map the new mfa_unavailable code in the error table (F-111)
 
+### CI/CD
+
+- ci: re-fire the main pipeline after the #123 merge
+
 ### Tests
 
 - test(migrations): advance the chain head pin to a5b7c9d1e3f7
@@ -36,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Other
 
+- Merge pull request #123 from tanviruchahs2580/fix/audit-v2-p1-hardening
 - ops(audit-v2): explicit gate statuses, scheduler topology, deployment contract, risk acceptances
 
 ## v0.11.1 - 2026-11-14
