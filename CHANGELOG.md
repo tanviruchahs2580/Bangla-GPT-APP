@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - chore(release): bump version to 0.11.2 (audit V2 P1 hardening wave)
 - chore: regenerate the CHANGELOG
+- chore: regenerate the native-review sheet (i18n additions)
 
 ### Style
 
