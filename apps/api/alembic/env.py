@@ -60,6 +60,17 @@ import bangla_gpt_api.db.models  # noqa: F401 ensure tables are registered
 
 target_metadata = Base.metadata
 
+# RAG V5: rag_vector_chunks is managed by raw DDL in its migration (the
+# pgvector `vector` column has no ORM type in this tree) — exclude it from
+# autogenerate comparison so `alembic check` does not try to drop it.
+_RAG_RAW_DDL_TABLES = {"rag_vector_chunks"}
+
+
+def _exclude_raw_ddl_tables(obj, _type, _refs, _alembic_state, *_extra):  # noqa: ARG001 - alembic passes (table/column, type, refs, state)
+    if getattr(obj, "name", None) in _RAG_RAW_DDL_TABLES:
+        return False
+    return None
+
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
@@ -129,7 +140,11 @@ def run_migrations_online() -> None:
         _apply_sqlite_pragmas(connectable, url)
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            include_object=_exclude_raw_ddl_tables,
+        )
 
         with context.begin_transaction():
             context.run_migrations()

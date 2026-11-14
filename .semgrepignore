@@ -66,3 +66,12 @@ apps/api/tests/test_auth_teacher.py
 apps/api/tests/test_jwt_claims.py
 apps/api/tests/test_security.py
 apps/api/tests/test_session_renew.py
+
+# ---- allowlist, entry 3: RAG V5 pgvector store ----
+# avoid-sqlalchemy-text flags retrieval/generation.py (raw SQL for the
+# pgvector backend). Every query there uses bound parameters for all
+# values; the only interpolated fragment is a WHERE clause assembled from
+# fixed literals (class/subject/chapter presence), and the table holds
+# curriculum vectors, not user input. Reviewed against the V5 Master
+# Prompt §6.2; ruff S608 carries the same scoped waiver.
+apps/api/src/bangla_gpt_api/retrieval/generation.py

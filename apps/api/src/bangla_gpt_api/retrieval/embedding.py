@@ -233,9 +233,30 @@ def build_embedder(settings: object) -> Embedder:
     served with embedder B has different vectors for the same chunks, so the
     recorded retrieval numbers no longer describe the deployment.
     """
+    # RAG V5 (W2): the neural lane is an explicit, non-default selection.
+    # It is never a runtime fallback from anything, and nothing falls back
+    # to it (V5 §8).
+    provider = str(getattr(settings, "embedding_provider", "local") or "local").strip()
+    if provider == "neural":
+        from bangla_gpt_api.retrieval.neural_embedder import NeuralEmbedder
+
+        model_id = str(getattr(settings, "embedding_model", "") or "").strip()
+        if not model_id:
+            raise ProviderNotConfigured("EMBEDDING_PROVIDER=neural needs EMBEDDING_MODEL set")
+        revision = str(getattr(settings, "embedding_model_revision", "") or "").strip()
+        dim = int(getattr(settings, "embedding_dimension", 0) or 0)
+        if dim <= 0:
+            raise ProviderNotConfigured(
+                "EMBEDDING_PROVIDER=neural needs EMBEDDING_DIMENSION set to"
+                " the model's exact output dimension"
+            )
+        embedder: Embedder = NeuralEmbedder(model_id=model_id, dim=dim, revision=revision)
+        _verify_embedder_identity(settings, embedder)
+        return embedder
     model = str(getattr(settings, "embedding_model", "") or "").strip()
+    embedder = HashingEmbedder()
     if not model:
-        embedder: Embedder = HashingEmbedder()
+        embedder = HashingEmbedder()
     else:
         api_base = str(getattr(settings, "embedding_api_base", "") or "").strip()
         api_key = str(getattr(settings, "embedding_api_key", "") or "").strip()

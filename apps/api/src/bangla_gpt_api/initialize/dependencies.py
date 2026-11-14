@@ -204,6 +204,7 @@ def _build_tutor(
     top_k: int = 3,
     min_coverage: float = 0.5,
     neighbor_expander: Callable[[list], list] | None = None,
+    evidence_verification_mode: str = "off",
 ) -> TutorService:
     """Construct the TutorService with optional circuit breaker + fallback.
 
@@ -229,6 +230,7 @@ def _build_tutor(
         fallback_provider=fallback_provider,
         term_stats=term_stats,
         retrieval_only_fallback=retrieval_only_fallback,
+        evidence_verification_mode=evidence_verification_mode,
         corpus_digest=corpus_digest,
         top_k=top_k,
         min_coverage=min_coverage,
@@ -531,6 +533,7 @@ def build_dependencies(
             top_k=settings.rag_top_k,
             min_coverage=settings.rag_min_coverage,
             neighbor_expander=neighbor_expander,
+            evidence_verification_mode=settings.evidence_verification_mode,
         )
     else:
         tutor = None

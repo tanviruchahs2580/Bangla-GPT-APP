@@ -46,8 +46,8 @@ from sqlalchemy.orm import Session
 from bangla_gpt_api.db.models import AiJob, AiUsage, AnswerLog, QuizAttempt, Student, User
 
 API_ROOT = Path(__file__).resolve().parents[1]
-FIX_REVISION = "b6c8d0e2f4a6"
-PARENT_REVISION = "a5b7c9d1e3f7"
+FIX_REVISION = "c7d9e1f3a5b7"
+PARENT_REVISION = "b6c8d0e2f4a6"
 #: The revision whose SQLite table rebuild requires PRAGMA foreign_keys=OFF
 #: (see its docstring and alembic/env.py).
 FK_REBUILD_REVISION = "c4d8e0f2a6b9"

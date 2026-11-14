@@ -503,6 +503,18 @@ def _in_corpus_weight_fraction(
     return in_weight / total_weight if total_weight > 0 else 0.0
 
 
+def _verification_status(mode: str, *, refused: bool, citation_ok: bool) -> str | None:
+    """RAG V5 (W7, shadow): map the deterministic citation verdict to the
+    additive `verification_status`. Shadow never blocks and its results are
+    never displayed to students as verified (§9.3); enforce mode is
+    boot-guarded separately (no calibrated verifier exists — the default is
+    off, which keeps the payload byte-compatible with the pre-V5 contract).
+    """
+    if mode == "off" or refused:
+        return None
+    return "verified" if citation_ok else "unverified"
+
+
 class TutorService:
     def __init__(
         self,
@@ -522,8 +534,11 @@ class TutorService:
         retrieval_only_fallback: bool = False,
         corpus_digest: str | None = None,
         neighbor_expander: Callable[[list], list] | None = None,
+        evidence_verification_mode: str = "off",
     ) -> None:
         self.index = index
+        # RAG V5 (W7): off keeps the pre-V5 payload byte-identical.
+        self.evidence_verification_mode = evidence_verification_mode
         # Retrieval engine v2, expansion stage (retrieval/expansion.py):
         # optional neighbor expansion of the selected top evidence before the
         # grounding gate. Default None keeps the served behavior
@@ -1512,6 +1527,7 @@ class TutorService:
             return self._refusal(UNSAFE_ANSWER_REFUSAL, "output_screen")
         refs = self._sources(hits)
         refused = _model_refused(answer)
+        citation_ok = False
         if refused:
             RAG_GATE_REFUSALS_TOTAL.labels(reason="model_refused").inc()
         else:
@@ -1537,6 +1553,15 @@ class TutorService:
                 None if refused else ("verified" if citation_ok else f"unverified:{verdict.reason}")
             ),
         )
+        # RAG V5 (W7, shadow): the deterministic citation verdict becomes an
+        # explicit additive verification_status. Shadow never blocks and its
+        # results are never displayed to students as verified (§9.3);
+        # enforce mode is boot-guarded separately (no calibrated verifier
+        # exists — the default is off, which leaves this field None and the
+        # payload byte-compatible with the pre-V5 contract).
+        verification_status = _verification_status(
+            self.evidence_verification_mode, refused=refused, citation_ok=citation_ok
+        )
         return AskResponse(
             answer=answer,
             grounded=not refused,
@@ -1548,6 +1573,7 @@ class TutorService:
                 "model_refused" if refused else None,
                 [] if refused else [float(getattr(r, "score", 0.0)) for r in refs],
             ),
+            verification_status=verification_status,
         )
 
     async def ask(

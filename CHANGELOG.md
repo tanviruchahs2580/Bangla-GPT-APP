@@ -13,13 +13,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Added
+
+- feat(rag-v5): generation registry, atomic activation, pgvector store (W3/W4)
+- feat(rag-v5): neural embedder adapter, verification modes, boot guards (W2/W7)
+
+### Fixed
+
+- fix(rag-v5): CI round-1 fixes — typed field, autogenerate exclusion, factory coverage, sheet
+- fix(rag-v5): seams helper attribute, env example entries for the new settings
+
+### Changed
+
+- refactor(tutor): extract _verification_status (complexity ratchet)
+
 ### CI/CD
 
 - ci: re-fire the main pipeline after the #124 merge
 
+### Maintenance
+
+- chore(release): bump version to 0.12.0 (RAG V5 foundation wave)
+- chore(semgrep): reviewed allowlist entry for the RAG V5 pgvector store
+- chore: regenerate the CHANGELOG
+- chore: regenerate the native-review sheet
+
 ### Other
 
 - Merge pull request #99 from tanviruchahs2580/dependabot/github_actions/actions-f6b5f3bf45
+- merge: main (dependabot action pin + refire) into RAG V5
 
 ## v0.11.2 - 2026-11-14
 
