@@ -46,8 +46,8 @@ from sqlalchemy.orm import Session
 from bangla_gpt_api.db.models import AiJob, AiUsage, AnswerLog, QuizAttempt, Student, User
 
 API_ROOT = Path(__file__).resolve().parents[1]
-FIX_REVISION = "dbf1d2e3f4a5"
-PARENT_REVISION = "e4b8c0d2f6a8"
+FIX_REVISION = "a5b7c9d1e3f7"
+PARENT_REVISION = "dbf1d2e3f4a5"
 #: The revision whose SQLite table rebuild requires PRAGMA foreign_keys=OFF
 #: (see its docstring and alembic/env.py).
 FK_REBUILD_REVISION = "c4d8e0f2a6b9"
@@ -245,15 +245,19 @@ def test_downgrade_keeps_the_fixed_bounds_and_never_enables_foreign_keys(
     down = _alembic("downgrade", PARENT_REVISION, database_url=url)
     assert down.returncode == 0, down.stdout + down.stderr
 
-    # DB-FIX-001: the bounds survive the downgrade -- the pre-revision state is
-    # the bug, and a downgrade must never reintroduce it.
+    # BGPT-DATA-001: the head is now the mastery stamp revision, whose parent
+    # (dbf1d2e3f4a5) is itself the DB-FIX revision — so downgrading one step
+    # keeps every DB-FIX bound in place (they were introduced AT the parent)
+    # and must remove exactly the new stamp column. The pre-fix-bug
+    # reintroduction check now runs against the deeper FK rebuild leg below.
     ddl = _normalised(_table_ddl(url, "answer_log"))
     assert _normalised(INTENDED_CHOSEN) in ddl
     assert _normalised(LEGACY_CHOSEN) not in ddl
-    # DB-FIX-002/003/004: genuinely reversed.
-    assert "ck_ai_jobs_attempts" not in _table_ddl(url, "ai_jobs")
-    assert _index_columns(url, "ai_jobs", "ix_ai_jobs_status_updated") == ()
-    assert "estimated_cost_usd float not null" in _normalised(_table_ddl(url, "ai_usage"))
+    assert "ck_ai_jobs_attempts" in _table_ddl(url, "ai_jobs")
+    assert "reconciled_at" not in _table_ddl(url, "concept_mastery")
+    assert "estimated_cost_usd numeric(14, 10) not null" in _normalised(
+        _table_ddl(url, "ai_usage")
+    )
 
     # DB-FIX-005: the FK-rebuild revision needs PRAGMA foreign_keys=OFF. Its
     # downgrade raises rather than proceeding under enforcement
