@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(rag-v5): CI round-1 fixes — typed field, autogenerate exclusion, factory coverage, sheet
 - fix(rag-v5): seams helper attribute, env example entries for the new settings
 
+### Changed
+
+- refactor(tutor): extract _verification_status (complexity ratchet)
+
 ### Maintenance
 
 - chore(release): bump version to 0.12.0 (RAG V5 foundation wave)
