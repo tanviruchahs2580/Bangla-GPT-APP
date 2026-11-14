@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - fix(data): mastery reconciliation heals up, never shrinks (BGPT-DATA-001)
+- fix(db): widen users.totp_secret for the ciphertext form
 - fix(security): encrypt TOTP seeds at rest (BGPT-SEC-001)
 
 ### Tests
