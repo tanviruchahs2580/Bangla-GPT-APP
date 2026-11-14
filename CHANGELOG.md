@@ -17,6 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - fix(api): serve the /api route alias so the Capacitor APK can log in
 
+### CI/CD
+
+- ci: re-fire the main pipeline after the #122 merge
+
+### Maintenance
+
+- chore: regenerate the CHANGELOG
+
+### Other
+
+- Merge pull request #122 from tanviruchahs2580/fix/apk-api-prefix-alias
+
 ## v0.11.0 - 2026-11-14
 
 ### Added
