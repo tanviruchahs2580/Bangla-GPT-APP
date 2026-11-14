@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### CI/CD
+
+- ci: re-fire the main pipeline for the v0.12.0 tag gate
+
+## v0.12.0 - 2026-11-14
+
 ### Added
 
 - feat(rag-v5): generation registry, atomic activation, pgvector store (W3/W4)
@@ -40,8 +46,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Other
 
+- Merge pull request #124 from tanviruchahs2580/feat/rag-v5-semantic-pgvector
 - Merge pull request #99 from tanviruchahs2580/dependabot/github_actions/actions-f6b5f3bf45
 - merge: main (dependabot action pin + refire) into RAG V5
+
 
 ## v0.11.2 - 2026-11-14
 
