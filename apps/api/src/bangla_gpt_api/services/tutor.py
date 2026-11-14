@@ -503,6 +503,18 @@ def _in_corpus_weight_fraction(
     return in_weight / total_weight if total_weight > 0 else 0.0
 
 
+def _verification_status(mode: str, *, refused: bool, citation_ok: bool) -> str | None:
+    """RAG V5 (W7, shadow): map the deterministic citation verdict to the
+    additive `verification_status`. Shadow never blocks and its results are
+    never displayed to students as verified (§9.3); enforce mode is
+    boot-guarded separately (no calibrated verifier exists — the default is
+    off, which keeps the payload byte-compatible with the pre-V5 contract).
+    """
+    if mode == "off" or refused:
+        return None
+    return "verified" if citation_ok else "unverified"
+
+
 class TutorService:
     def __init__(
         self,
@@ -1515,6 +1527,7 @@ class TutorService:
             return self._refusal(UNSAFE_ANSWER_REFUSAL, "output_screen")
         refs = self._sources(hits)
         refused = _model_refused(answer)
+        citation_ok = False
         if refused:
             RAG_GATE_REFUSALS_TOTAL.labels(reason="model_refused").inc()
         else:
@@ -1546,10 +1559,9 @@ class TutorService:
         # enforce mode is boot-guarded separately (no calibrated verifier
         # exists — the default is off, which leaves this field None and the
         # payload byte-compatible with the pre-V5 contract).
-        verification_mode = self.evidence_verification_mode
-        verification_status: str | None = None
-        if verification_mode != "off" and not refused:
-            verification_status = "verified" if citation_ok else "unverified"
+        verification_status = _verification_status(
+            self.evidence_verification_mode, refused=refused, citation_ok=citation_ok
+        )
         return AskResponse(
             answer=answer,
             grounded=not refused,
