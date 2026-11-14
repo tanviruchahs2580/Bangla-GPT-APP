@@ -26,3 +26,18 @@
   failed); ruff/format/mypy clean (school.py:887 = documented local-only
   drift, CI pinned mypy passes); alembic upgrade+check clean; complexity
   ratchet untouched (no tracked function modified).
+- 2026-11-15 · release · PR #124 merged (dc220e6) after CI green (round 7 on
+  387dce7: E2E X-02 re-login budget widened to 60s per the file's own
+  loaded-runner convention — assertion unchanged; dated gitleaks waiver for
+  the structurally-verified synthetic i18n fixture). Main refired on b90ae6c
+  (green); tag v0.12.0 force-moved to b90ae6c per the release workflow's own
+  documented remedy; Release & Deploy + Android both green on the re-tag.
+- 2026-11-15 · live sync · Pre-swap snapshot app-pre-0120-20261115-050445.db
+  (integrity ok; 60 users / 44 students / 52 answer_log / 38 audit_log);
+  container swap api-live → bangla-gpt-api:0.12.0-b90ae6c (previous kept
+  stopped as api-live-pre-0112); empty bootstrap-created registry tables
+  dropped and `alembic upgrade head` applied cleanly (version c7d9e1f3a5b7,
+  state index present); /health + /ready ok; Vercel /api chain ok (login
+  200, /users/me 200 as the demo student). APK/AAB vc178 (built from tag
+  b90ae6c, baked base = stable Vercel origin) delivered to .apk-latest.
+  As-a-user regression on the release preview build: 35/35 passed.

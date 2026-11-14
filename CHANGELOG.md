@@ -13,11 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-### CI/CD
+Nothing yet.
 
-- ci: re-fire the main pipeline for the v0.12.0 tag gate
-
-## v0.12.0 - 2026-11-14
+## v0.12.0 - 2026-11-15
 
 ### Added
 
@@ -36,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### CI/CD
 
 - ci: re-fire the main pipeline after the #124 merge
+- ci: re-fire the main pipeline for the v0.12.0 tag gate
 
 ### Maintenance
 
