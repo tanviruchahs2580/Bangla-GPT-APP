@@ -83,7 +83,32 @@ def enforce_production_safety(settings: Settings) -> None:
     Each check is a standalone validator function (SRP). When any check
     fails, the combined error is raised as a single RuntimeError.
     """
+    problems: list[str] = []
+    # RAG V5 config guards (Master Prompt §14): incompatible retrieval
+    # settings refuse to boot instead of half-serving a new lane.
+    verification_mode = (settings.evidence_verification_mode or "off").strip().lower()
+    if verification_mode not in ("off", "shadow", "enforce"):
+        problems.append(
+            f"EVIDENCE_VERIFICATION_MODE={settings.evidence_verification_mode!r} is not"
+            " one of off|shadow|enforce"
+        )
+    if verification_mode == "enforce" and not settings.evidence_verification_enforce_approved:
+        problems.append(
+            "EVIDENCE_VERIFICATION_MODE=enforce requires"
+            " EVIDENCE_VERIFICATION_ENFORCE_APPROVED=true: no calibrated"
+            " false-accept evidence exists yet (V5 §9.3)"
+        )
+    provider = (settings.embedding_provider or "local").strip().lower()
+    if provider not in ("local", "neural", "remote"):
+        problems.append(
+            f"EMBEDDING_PROVIDER={settings.embedding_provider!r} is not one of local|neural|remote"
+        )
+
     if not settings.is_production:
+        # Config validity is universal (the guards above ran); everything
+        # below is production hardening only.
+        if problems:
+            raise RuntimeError("; ".join(problems))
         return
 
     if settings.rate_limit_backend.strip().lower() == "memory":
@@ -98,8 +123,6 @@ def enforce_production_safety(settings: Settings) -> None:
             "single-use MFA burns are per-process. A restart re-accepts "
             "tokens revoked before it. Use Redis for the fail-closed store."
         )
-
-    problems: list[str] = []
 
     # ENV-gate guidance (tests/test_env_gate.py): the settings landed here
     # because ENV is not one of the recognized development names -- often a

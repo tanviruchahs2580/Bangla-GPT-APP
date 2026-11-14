@@ -522,8 +522,11 @@ class TutorService:
         retrieval_only_fallback: bool = False,
         corpus_digest: str | None = None,
         neighbor_expander: Callable[[list], list] | None = None,
+        evidence_verification_mode: str = "off",
     ) -> None:
         self.index = index
+        # RAG V5 (W7): off keeps the pre-V5 payload byte-identical.
+        self.evidence_verification_mode = evidence_verification_mode
         # Retrieval engine v2, expansion stage (retrieval/expansion.py):
         # optional neighbor expansion of the selected top evidence before the
         # grounding gate. Default None keeps the served behavior
@@ -1537,6 +1540,16 @@ class TutorService:
                 None if refused else ("verified" if citation_ok else f"unverified:{verdict.reason}")
             ),
         )
+        # RAG V5 (W7, shadow): the deterministic citation verdict becomes an
+        # explicit additive verification_status. Shadow never blocks and its
+        # results are never displayed to students as verified (§9.3);
+        # enforce mode is boot-guarded separately (no calibrated verifier
+        # exists — the default is off, which leaves this field None and the
+        # payload byte-compatible with the pre-V5 contract).
+        verification_mode = self.evidence_verification_mode
+        verification_status: str | None = None
+        if verification_mode != "off" and not refused:
+            verification_status = "verified" if citation_ok else "unverified"
         return AskResponse(
             answer=answer,
             grounded=not refused,
@@ -1548,6 +1561,7 @@ class TutorService:
                 "model_refused" if refused else None,
                 [] if refused else [float(getattr(r, "score", 0.0)) for r in refs],
             ),
+            verification_status=verification_status,
         )
 
     async def ask(

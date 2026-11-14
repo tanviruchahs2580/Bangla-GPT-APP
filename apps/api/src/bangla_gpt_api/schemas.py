@@ -199,6 +199,12 @@ class AskResponse(BaseModel):
     citation_verified: bool | None = None
     # F-119: heuristic retrieval signal (formula in services/safety).
     confidence: float | None = Field(default=None, description=CONFIDENCE_FIELD_DESCRIPTION)
+    # RAG V5 (shadow mode): deterministic verification state of this answer
+    # — "verified" (citation + metadata checks passed) or "unverified".
+    # Always None in the default off mode; shadow results are never
+    # displayed to students as verified (Master Prompt §9.3). Additive and
+    # optional: older clients ignore it.
+    verification_status: str | None = None
 
 
 class ConversationCreate(BaseModel):
