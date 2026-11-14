@@ -351,3 +351,162 @@ def test_refresh_mastery_skips_unresolved_subject_instead_of_aborting(env, caplo
     skipped = [r for r in caplog.records if "weakness_refresh_skipped_attempt" in r.getMessage()]
     assert skipped, "a skipped attempt must be visible at warning level"
     assert str(orphan_attempt) in skipped[0].getMessage()
+
+
+# ---------- BGPT-DATA-001: mastery reconciliation vs answer-log retention ----------
+#
+# Contract (Enterprise V2 audit §8.3, lifetime aggregates): the stored
+# correct/total counters are durable lifetime values maintained by the
+# grading path; the nightly refresh RECONCILES — it creates missing rows,
+# heals counters UP to the retained-window aggregate when they are lower
+# (lost updates), and never shrinks them. A 730-day purge of answer_log
+# rows must therefore leave every mastery total exactly where it was.
+#
+# This file pins SQLite by design (see the module docstring); the same
+# ORM paths run under the CI PostgreSQL parity suite.
+
+
+def _seed_graded_answers_aged(
+    conn: sqlite3.Connection,
+    student_id: int,
+    cells: dict[str, tuple[int, int]],
+    *,
+    age_days: int,
+) -> int:
+    """_seed_graded_answers, but with explicit answer_log ages so the
+    retention sweep can be exercised deterministically."""
+    now = _now()
+    total = sum(t for _, t in cells.values())
+    correct = sum(c for c, _ in cells.values())
+    created = _ts(now - timedelta(hours=1))
+    conn.execute(
+        "INSERT INTO quiz_attempts (student_id, subject, class_level, status, total, correct,"
+        " score_pct, quiz_json, created_at) VALUES (?, ?, 6, 'graded', ?, ?, ?, '[]', ?)",
+        (student_id, "math", total, correct, round(100.0 * correct / total, 2), created),
+    )
+    att = int(
+        conn.execute(
+            "SELECT id FROM quiz_attempts WHERE student_id=? ORDER BY id DESC", (student_id,)
+        ).fetchone()[0]
+    )
+    answer_created = _ts(now - timedelta(days=age_days))
+    seq = 0
+    for chapter, (ok_count, asked) in cells.items():
+        for i in range(asked):
+            seq += 1
+            conn.execute(
+                "INSERT INTO answer_log (attempt_id, seq, question_text, chosen, correct_index,"
+                " is_correct, chapter, book, created_at) VALUES (?, ?, 'q', 0, 0, ?, ?, 'b', ?)",
+                (att, seq, int(i < ok_count), chapter, answer_created),
+            )
+    conn.commit()
+    return att
+
+
+def _refresh(session):
+    return weakness.refresh_mastery(session)
+
+
+def test_mastery_totals_survive_answer_log_retention_purge(env) -> None:
+    """Acceptance 1+2: old+new events, purge between refreshes, totals stable."""
+    client, conn, settings = env
+    sid = _register(client, "purge@rollup.test", role="student")
+    _seed_graded_answers_aged(conn, sid, {"alpha": (1, 4)}, age_days=800)
+    _seed_graded_answers_aged(conn, sid, {"beta": (2, 4)}, age_days=1)
+    session = make_session_factory(make_engine(settings))()
+    try:
+        _refresh(session)
+        before = knowledge.mastery_map(session, sid)
+        assert before == {"alpha": (1, 4), "beta": (2, 4)}
+        # purge: answer_log rows older than 730 days disappear
+        from bangla_gpt_api.services.retention import run_retention_sweep
+
+        report = run_retention_sweep(session, settings=settings)
+        assert report["answer_log_deleted"] == 4  # the aged alpha rows only
+        _refresh(session)
+        assert knowledge.mastery_map(session, sid) == before, (
+            "a retention purge must never shrink lifetime mastery totals"
+        )
+    finally:
+        session.close()
+
+
+def test_concept_with_only_purged_rows_keeps_its_totals(env) -> None:
+    """Acceptance 5: no stale-shrink, no resurrection — the durable value stays."""
+    client, conn, settings = env
+    sid = _register(client, "onlyold@rollup.test", role="student")
+    _seed_graded_answers_aged(conn, sid, {"alpha": (1, 4)}, age_days=800)
+    session = make_session_factory(make_engine(settings))()
+    try:
+        _refresh(session)
+        before = knowledge.mastery_map(session, sid)
+        assert before == {"alpha": (1, 4)}
+        from bangla_gpt_api.services.retention import run_retention_sweep
+
+        run_retention_sweep(session, settings=settings)
+        _refresh(session)
+        after = knowledge.mastery_map(session, sid)
+        assert after == before
+    finally:
+        session.close()
+
+
+def test_refresh_never_shrinks_and_heals_lost_updates(env) -> None:
+    """Acceptance 4 (monotone): stored > retained stays; stored < retained heals."""
+    client, conn, settings = env
+    sid = _register(client, "monotone@rollup.test", role="student")
+    _seed_graded_answers(conn, sid, {"alpha": (1, 4)})
+    _seed_graded_answers(conn, sid, {"beta": (2, 4)})
+    session = make_session_factory(make_engine(settings))()
+    try:
+        _refresh(session)
+        before = knowledge.mastery_map(session, sid)
+        assert before == {"alpha": (1, 4), "beta": (2, 4)}
+        from datetime import UTC, datetime
+
+        stamp = datetime.now(UTC).replace(tzinfo=None)
+        # two historical defects at once: a lost-update row (lower than the
+        # retained aggregate) and a pre-purge lifetime row (higher)
+        rows = {
+            r.concept_id: r
+            for r in session.execute(
+                select(weakness.ConceptMastery).where(weakness.ConceptMastery.student_id == sid)
+            ).scalars()
+        }
+        chapters = {c.id: c.chapter for c in session.execute(select(weakness.Concept)).scalars()}
+        for row in rows.values():
+            if chapters.get(row.concept_id) == "alpha":
+                row.total, row.correct = 10, 8  # higher than retained (1, 4)
+            elif chapters.get(row.concept_id) == "beta":
+                row.total, row.correct = 0, 0  # lower than retained (2, 4)
+            row.updated_at = stamp
+        session.commit()
+
+        _refresh(session)
+
+        after = knowledge.mastery_map(session, sid)
+        assert after["alpha"] == (8, 10), "a purge-era lifetime total must never shrink"
+        assert after["beta"] == (2, 4), "a lost update must heal up to the retained truth"
+    finally:
+        session.close()
+
+
+def test_refresh_stamps_reconciled_at(env) -> None:
+    """The report's last-reconciled timestamp lands on reconciled rows."""
+    client, conn, settings = env
+    sid = _register(client, "stamp@rollup.test", role="student")
+    _seed_graded_answers(conn, sid, CELLS)
+    session = make_session_factory(make_engine(settings))()
+    try:
+        _refresh(session)
+        rows = (
+            session.execute(
+                select(weakness.ConceptMastery).where(weakness.ConceptMastery.student_id == sid)
+            )
+            .scalars()
+            .all()
+        )
+        assert rows, "rows were created"
+        assert all(row.reconciled_at is not None for row in rows)
+    finally:
+        session.close()

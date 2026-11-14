@@ -33,6 +33,7 @@ from bangla_gpt_api.metrics import RAG_INDEX_BUILD_SECONDS, RAG_INDEX_CHUNKS
 from bangla_gpt_api.retrieval.hybrid_index import HybridIndex  # noqa: F401 (re-exported for tests)
 from bangla_gpt_api.retrieval.vocabulary import TermStats
 from bangla_gpt_api.routers.deps import AppContext
+from bangla_gpt_api.security import encrypt_totp_secret, is_encrypted_totp_secret
 from bangla_gpt_api.services.tutor import TutorService
 
 if TYPE_CHECKING:  # typing-only: never executed, so no import cycles
@@ -141,6 +142,42 @@ def _bootstrap_admin(session_factory: Callable[[], Session], settings: Settings)
             except IntegrityError:
                 # Another worker bootstrapped the same admin concurrently.
                 db.rollback()
+    finally:
+        db.close()
+
+
+def _sweep_plaintext_totp_seeds(session_factory: Callable[[], Session], settings: Settings) -> None:
+    """BGPT-SEC-001 backfill: encrypt legacy plaintext MFA seeds at boot.
+
+    The report requires existing plaintext seeds to be backfilled "safely
+    before the application switches to encrypted-only reads". A bounded
+    startup sweep runs with the full application configuration (the key is
+    in hand, unlike an env-blind Alembic data migration), is idempotent
+    (only un-prefixed rows are touched), and never disables an MFA account:
+    a row that cannot be encrypted is left exactly as it was and counted in
+    the log. Keyless deployments skip silently — the passthrough era is the
+    documented dev behavior there.
+    """
+    if not settings.pii_enc_key:
+        return
+    db: Session = session_factory()
+    try:
+        rows = db.execute(select(User).where(User.totp_secret.is_not(None))).scalars().all()
+        converted = 0
+        for user in rows:
+            if is_encrypted_totp_secret(user.totp_secret):
+                continue
+            user.totp_secret = encrypt_totp_secret(user.totp_secret, settings.pii_enc_key)
+            converted += 1
+        if converted:
+            db.commit()
+            json_log(
+                logger,
+                logging.INFO,
+                "totp_seeds_backfilled",
+                converted=converted,
+                total=len(rows),
+            )
     finally:
         db.close()
 
@@ -510,6 +547,9 @@ def build_dependencies(
 
     # --- Admin bootstrap ---
     _bootstrap_admin(session_factory, settings)
+
+    # --- TOTP seed backfill (BGPT-SEC-001) ---
+    _sweep_plaintext_totp_seeds(session_factory, settings)
 
     # --- AppContext ---
     ctx = AppContext(

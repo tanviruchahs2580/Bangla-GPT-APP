@@ -15,6 +15,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- fix(data): mastery reconciliation heals up, never shrinks (BGPT-DATA-001)
+- fix(db): widen users.totp_secret for the ciphertext form
+- fix(security): encrypt TOTP seeds at rest (BGPT-SEC-001)
+- fix(web): map the new mfa_unavailable code in the error table (F-111)
+
+### Tests
+
+- test(migrations): advance the chain head pin to a5b7c9d1e3f7
+
+### Maintenance
+
+- chore(release): bump version to 0.11.2 (audit V2 P1 hardening wave)
+- chore: regenerate the CHANGELOG
+- chore: regenerate the native-review sheet (i18n additions)
+
+### Style
+
+- style: format the migration invariants test
+
+### Other
+
+- ops(audit-v2): explicit gate statuses, scheduler topology, deployment contract, risk acceptances
+
+## v0.11.1 - 2026-11-14
+
+### Fixed
+
 - fix(api): serve the /api route alias so the Capacitor APK can log in
 
 ### CI/CD
@@ -28,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Other
 
 - Merge pull request #122 from tanviruchahs2580/fix/apk-api-prefix-alias
+
 
 ## v0.11.0 - 2026-11-14
 

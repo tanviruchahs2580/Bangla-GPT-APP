@@ -116,6 +116,10 @@ const KEY: Record<string, Parameters<typeof t>[0]> = {
   password_too_short: "errPasswordTooShort",
   password_unchanged: "errPasswordUnchanged",
   mfa_locked: "errMfaLocked",
+  // BGPT-SEC-001: the stored second factor could not be decrypted (key
+  // problem) — a 503 the user cannot fix by retyping; distinct copy from
+  // "wrong code".
+  mfa_unavailable: "errMfaUnavailable",
   no_graded_data: "errNoGradedData",
   mixed_class_levels: "errMixedClassLevels",
   empty_query: "errEmptyQuery",

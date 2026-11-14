@@ -329,6 +329,11 @@ jobs:
             echo
             echo "SBOM and build provenance are attached to both images."
             echo "Verify with: \`gh attestation verify oci://$API_IMAGE@$API_DIGEST --repo \${{ github.repository }}\`"
+            echo
+            echo "### Release gate statuses (explicit — never a silent skip)"
+            echo "- Real-corpus retrieval gate (BGPT-RAG-001): **NOT RUN — access-controlled corpus artifact not yet provisioned for CI** (owner action; retrieval-eval.yml fails closed once provisioned). The blocking eval gate measured the bundled sample corpus."
+            echo "- API deployment (BGPT-OPS-001): the authoritative API production target is the operator-run single-host container swap (docs/runbook.md §7.1), not the optional SSH job. Deployment receipt (commit → image digest → running container → /ready smoke) is recorded by the release operator after the swap; the SSH job below is intentionally conditional."
+            echo "- Web deployment: Vercel production deploy on the merged main commit (commit status)."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Create GitHub Release

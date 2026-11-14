@@ -61,7 +61,14 @@ from bangla_gpt_api.schemas import (
     TokenResponse,
     VerifyEmailRequest,
 )
-from bangla_gpt_api.security import PiiKeyUnconfigured, encrypt_pii_strict, write_audit
+from bangla_gpt_api.security import (
+    PiiKeyUnconfigured,
+    decrypt_totp_secret,
+    encrypt_pii_strict,
+    encrypt_totp_secret,
+    is_encrypted_totp_secret,
+    write_audit,
+)
 from bangla_gpt_api.services.mailer import send_mail, smtp_configured
 from bangla_gpt_api.services.verification import send_verification_email
 
@@ -955,7 +962,10 @@ def mfa_verify(
             status_code=401,
             detail={"code": "bad_mfa_code", "message": "Invalid authenticator code"},
         )
-    user.totp_secret = payload.secret
+    # BGPT-SEC-001: the seed is a second-factor secret — it is stored as
+    # versioned ciphertext derived from PII_ENC_KEY, never as the raw
+    # base32 value the authenticator app shows.
+    user.totp_secret = encrypt_totp_secret(payload.secret, app_ctx.settings.pii_enc_key)
     db.commit()
     return {"enabled": True}
 
@@ -1027,12 +1037,32 @@ def mfa_challenge(app_ctx: Ctx, payload: MfaChallengeIn, db: DbSession) -> Token
                 "message": "Too many invalid codes; try again in a few minutes",
             },
         )
-    if not verify_code(user.totp_secret, payload.code):
+    # BGPT-SEC-001: decrypt the stored seed (versioned ciphertext; legacy
+    # plaintext passes through and is lazily upgraded below). A ciphertext
+    # that will not decrypt fails closed with a coded 503 — MFA is simply
+    # unavailable until the key situation is fixed — and nothing about the
+    # stored value reaches the log or the response.
+    seed = decrypt_totp_secret(user.totp_secret, app_ctx.settings.pii_enc_key)
+    if seed is None:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "mfa_unavailable",
+                "message": "Second factor is temporarily unavailable; contact support",
+            },
+        )
+    if not verify_code(seed, payload.code):
         _record_failed_mfa_code(app_ctx, user_id)
         raise HTTPException(
             status_code=401,
             detail={"code": "bad_mfa_code", "message": "Invalid authenticator code"},
         )
+    if not is_encrypted_totp_secret(user.totp_secret):
+        # Lazy backfill (BGPT-SEC-001): a pre-fix plaintext row is upgraded
+        # on its first successful challenge, so legacy accounts converge to
+        # ciphertext without a separate credential-reset flow.
+        user.totp_secret = encrypt_totp_secret(seed, app_ctx.settings.pii_enc_key)
+        db.commit()
     # Burn the step-up token only AFTER the second factor checks out, so a
     # mistyped code does not cost the user their login. The claim is atomic:
     # of N concurrent replays of the same token, exactly one proceeds.

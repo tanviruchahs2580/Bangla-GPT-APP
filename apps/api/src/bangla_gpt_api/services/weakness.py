@@ -14,10 +14,12 @@ keeps its own copy of the weakness rule, so every consumer calls:func:`weak_conc
   (:func:`knowledge.canonical`) so a colloquial alias merges into its concept.
 * Order: ascending accuracy, ties by name -- consumers slice the same list,
   so "weakest first" means the same thing everywhere.
-*:func:`refresh_mastery` is the nightly reconciliation: it recomputes the
-  chapter-root rows of ConceptMastery straight from the graded answer log,
-  creating any missing root concept, so the persisted per-concept mastery
-  table can never drift from the history the rollup reads.
+*:func:`refresh_mastery` is the nightly reconciliation (BGPT-DATA-001):
+  the stored counters are DURABLE LIFETIME aggregates maintained by the
+  grading path; the reconciliation creates any missing root concept/row and
+  heals counters UP to the retained answer-log aggregate when they are
+  lower (lost updates) — it never shrinks them, so the 730-day retention
+  purge can no longer erase learning history.
 """
 
 import logging
@@ -135,10 +137,21 @@ def nightly_due(now: datetime, last_day: str) -> tuple[bool, str]:
 def refresh_mastery(db: Session) -> tuple[int, int]:
     """Nightly reconciliation of ConceptMastery chapter roots vs graded logs.
 
-    Idempotent: recomputes root-level correct/total straight from the answer
-    log and creates any chapter-root concept seen in the log but missing from
-    the registry. Returns ``(students_synced, rows_synced)`` -- counts only,
-    nothing student-identifying is logged.
+    BGPT-DATA-001 (Enterprise V2 audit): the stored ``correct``/``total``
+    counters are DURABLE LIFETIME aggregates — the grading path increments
+    them per graded attempt. This pass therefore RECONCILES instead of
+    recomputing: it creates any chapter-root concept seen in the log but
+    missing from the registry, creates missing mastery rows, and heals a
+    row's counters UP to the retained-window aggregate when they are lower
+    (a lost update). It NEVER writes a smaller value — the 730-day
+    answer-log retention purge removes history, and a recompute-over-retained
+    rows would silently erase the purged part of a student's lifetime
+    record.
+
+    Idempotent: a second pass with no new graded events changes no counters
+    (it only refreshes the ``reconciled_at`` stamp). Returns
+    ``(students_synced, rows_synced)`` — counts only, nothing
+    student-identifying is logged.
     """
     rows = db.execute(
         select(
@@ -199,11 +212,30 @@ def refresh_mastery(db: Session) -> tuple[int, int]:
     for (sid, chapter), (asked, correct) in cells.items():
         row = db.get(ConceptMastery, (sid, roots[chapter].id))
         if row is None:
-            row = ConceptMastery(student_id=sid, concept_id=roots[chapter].id, correct=0, total=0)
+            # A first-ever cell: the retained window is the only history the
+            # durable aggregate is missing, so it becomes the initial value.
+            row = ConceptMastery(
+                student_id=sid,
+                concept_id=roots[chapter].id,
+                correct=correct,
+                total=asked,
+            )
             db.add(row)
-        row.correct = correct
-        row.total = asked
+        else:
+            # Monotone heal-up: the durable counters only ever grow. If the
+            # retained aggregate is higher, the row lost an update somewhere
+            # in its history — pull it up to the truth. If it is lower or
+            # equal (the normal case: purge shrank the window, or the inline
+            # increment already accounted for every graded event), leave the
+            # durable value exactly as it is.
+            row.total = max(row.total, asked)
+            row.correct = max(row.correct, correct)
+            if row.correct > row.total:
+                # Impossible pair (defensive): clamp to the retained pair
+                # rather than persisting correct > total.
+                row.total, row.correct = asked, correct
         row.updated_at = stamp
+        row.reconciled_at = stamp
         students.add(sid)
         synced += 1
     db.commit()

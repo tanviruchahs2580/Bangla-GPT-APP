@@ -59,7 +59,10 @@ class User(Base):
     )
     # AUTH-001: TOTP secret (base32). NULL = MFA disabled. The secret is only
     # stored after the user proves possession (verify step), never at enroll.
-    totp_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # BGPT-SEC-001: holds the versioned ciphertext (totp1: + Fernet); the
+    # 255 width fits the token form of a 32-char seed (widened in
+    # migration b6c8d0e2f4a6; the raw-seed era used 64).
+    totp_secret: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # F-05 token epoch: set at password change/reset. Any access token whose
     # ``iat`` is <= this moment is refused by get_current_user, so existing
     # sessions cannot ride out a credential rotation.
@@ -906,6 +909,11 @@ class ConceptMastery(Base):
     correct: Mapped[int] = mapped_column(Integer, default=0)
     total: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    # BGPT-DATA-001: last time the nightly reconciliation examined this row
+    # against the retained answer-log window. NULL = not yet reconciled. The
+    # reconciliation is monotone (heal-up, never shrink), so this stamp is
+    # an operations signal, not a correctness dependency.
+    reconciled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class PracticeItem(Base):
