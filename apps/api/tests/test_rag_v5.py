@@ -234,3 +234,56 @@ def test_unknown_verification_mode_refuses_boot(tmp_path) -> None:
                 evidence_verification_mode="yolo",
             )
         )
+
+
+def test_factory_neural_branch_builds_and_gates(monkeypatch, tmp_path) -> None:
+    """The factory's neural branch (model/dim gates + identity check) — the
+    class is patched so no model download happens and the branch lines are
+    covered (per-module coverage floor for retrieval/embedding.py)."""
+
+    created: dict[str, Any] = {}
+
+    class StubNeural(HashingEmbedder):
+        def __init__(self, *, model_id: str, dim: int, revision: str = "") -> None:
+            created["model_id"] = model_id
+            created["dim"] = dim
+            created["revision"] = revision
+            super().__init__()
+            self.name = f"neural:{model_id}" + (f"@{revision}" if revision else "")
+
+    import bangla_gpt_api.retrieval.neural_embedder as ne_mod
+
+    monkeypatch.setattr(ne_mod, "NeuralEmbedder", StubNeural)
+    settings = Settings(
+        env="test",
+        database_url=engine_url(tmp_path, "embfactory"),
+        jwt_secret=SECRET,
+        embedding_provider="neural",
+        embedding_model="intfloat/multilingual-e5-small",
+        embedding_model_revision="r1",
+        embedding_dimension=384,
+    )
+    emb = build_embedder(settings)
+    assert created == {
+        "model_id": "intfloat/multilingual-e5-small",
+        "dim": 384,
+        "revision": "r1",
+    }
+    assert emb.name == "neural:intfloat/multilingual-e5-small@r1"
+
+
+def test_factory_neural_requires_model_id(tmp_path) -> None:
+    import bangla_gpt_api.retrieval.neural_embedder as ne_mod
+    from bangla_gpt_api.providers.base import ProviderNotConfigured
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(ne_mod, "NeuralEmbedder", HashingEmbedder)
+    settings = Settings(
+        env="test",
+        database_url=engine_url(tmp_path, "embfactory2"),
+        jwt_secret=SECRET,
+        embedding_provider="neural",
+    )
+    with pytest.raises(ProviderNotConfigured, match="EMBEDDING_MODEL"):
+        build_embedder(settings)
+    monkeypatch.undo()

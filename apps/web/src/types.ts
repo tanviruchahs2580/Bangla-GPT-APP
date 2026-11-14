@@ -14,6 +14,10 @@ export interface AskResponse {
   sources: SourceRef[];
   refused_reason?: string | null;
   citation_verified?: boolean | null;
+  // RAG V5 shadow mode: deterministic verification state (verified /
+  // unverified); None in the default off mode. Additive, tolerated by
+  // older clients.
+  verification_status?: string | null;
   // numeric grounding confidence 0-1 (null = pre-wave answer)
   confidence?: number | null;
 }
