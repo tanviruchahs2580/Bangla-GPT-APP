@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(release): bump version to 0.12.0 (RAG V5 foundation wave)
 - chore(semgrep): reviewed allowlist entry for the RAG V5 pgvector store
 - chore: regenerate the CHANGELOG
+- chore: regenerate the native-review sheet
 
 ## v0.11.2 - 2026-11-14
 
