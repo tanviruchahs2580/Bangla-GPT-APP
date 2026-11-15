@@ -9,16 +9,24 @@ the pure logic so the CLI cannot silently drift.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 from pathlib import Path
 
 import pytest
-from scripts.build_index_generation import (
-    chunk_rows,
-    corpus_digest,
-    load_chunks,
-    validate_database_url,
-)
+
+# The CLI lives in scripts/ (operator tooling, not an installed package),
+# so load it by path — a bare `pytest` run in CI has no cwd on sys.path.
+_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "build_index_generation.py"
+_spec = importlib.util.spec_from_file_location("build_index_generation", _SCRIPT)
+_mod = importlib.util.module_from_spec(_spec)
+assert _spec.loader is not None
+_spec.loader.exec_module(_mod)
+
+chunk_rows = _mod.chunk_rows
+corpus_digest = _mod.corpus_digest
+load_chunks = _mod.load_chunks
+validate_database_url = _mod.validate_database_url
 
 
 def _write_corpus(tmp_path: Path, sources: dict[str, list[dict]]) -> Path:
