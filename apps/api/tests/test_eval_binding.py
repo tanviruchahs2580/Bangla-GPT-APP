@@ -119,7 +119,10 @@ def test_identity_names_the_corpus_actually_measured():
     assert identity["corpus_chunk_count"] == 78, "sample corpus is 78 chunks"
     assert identity["embedder_name"] == "hash-ngram-local"
     assert identity["embedding_dimension"] == 384
-    assert identity["prompt_version"] == "tutor-prompt-v1"
+    # V5.5: rule ৪ now pins the exact non-answer sentence (the live ask
+    # matrix caught a paraphrase dodging the refusal marker); the bump is
+    # gated by the eval CLI, the 24-question gate and the redteam pass.
+    assert identity["prompt_version"] == "tutor-prompt-v2"
     assert len(identity["prompt_sha256"]) == 64, "sha256 hex digest"
     assert identity["served_chunks_digest"]
 
@@ -153,14 +156,18 @@ def test_checker_rejects_a_drifted_embedder(tmp_path: Path):
 
 
 def test_checker_rejects_a_drifted_prompt(tmp_path: Path):
-    """A prompt change moves the numbers, so it must move the baseline too."""
-    drifted = {**_current_identity(), "prompt_version": "tutor-prompt-v2"}
+    """A prompt change moves the numbers, so it must move the baseline too.
+
+    The drifted version is spelled as a version that is never current, so
+    the test survives legitimate bumps (v2 landed in wave V5.5).
+    """
+    drifted = {**_current_identity(), "prompt_version": "tutor-prompt-v0"}
     baseline = tmp_path / "drifted-prompt.json"
     baseline.write_text(json.dumps({**BASE, "identity": drifted}), encoding="utf-8")
 
     done = _run_checker(baseline)
     assert done.returncode == 1
-    assert "prompt_version: baseline='tutor-prompt-v2'" in done.stdout
+    assert "prompt_version: baseline='tutor-prompt-v0'" in done.stdout
 
 
 def test_missing_identity_notices_but_does_not_fail(tmp_path: Path):

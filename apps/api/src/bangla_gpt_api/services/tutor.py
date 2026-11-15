@@ -233,8 +233,7 @@ SYSTEM_PROMPT = (
     # _MODEL_REFUSAL_MARKER, so a non-answer was recorded grounded=true with
     # a citation attached. The pinned sentence contains the marker substring,
     # which makes the grounded flag honest without widening the detector.
-    "৪. প্রদত্ত অংশে উত্তর না থাকলে উত্তরের শুরুতেই স্পষ্টভাবে এই বাক্যটি লেখবে: "
-    "“উত্তরটি পাঠ্যবইয়ে নেই।” — অনুপস্থিতি অন্য কোনো ভাষায় জানাবে না।\n"
+    "৪. প্রদত্ত অংশে উত্তর না থাকলে শুরুতেই লেখবে: “উত্তরটি পাঠ্যবইয়ে নেই।”\n"
     "৭. " + AGE_RULE_SENTENCE + "\n"
     # Appended as rule ৮ (not renumbered into the data-rules above): the
     # numbering of ১–৭ is pinned by tests and by the generated mock layout,
