@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - fix(rag-v5): make the pgvector gate real (384-dim tests + CI step)
+- fix(tests): load the build CLI by path (bare pytest has no cwd on sys.path)
+- fix(tests): register the loaded CLI module in sys.modules before exec
 - fix(tutor): capacity-model-compatible v2 wording (230 tokens)
 
 ### Documentation
