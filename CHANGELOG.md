@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Maintenance
 
 - chore: regenerate the CHANGELOG
+- chore: release 0.13.0
 
 ## v0.12.0 - 2026-11-15
 
