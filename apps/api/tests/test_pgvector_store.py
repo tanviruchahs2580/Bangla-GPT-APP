@@ -171,9 +171,7 @@ def test_retirement_cleans_retained_generation_rows(pg_engine) -> None:
             generation_id=gen, corpus_digest="d", embedder_name="hashing", dimension=DIM
         )
         manager.mark_validated(gen, chunk_count=1)
-        _store(pg_engine, gen).upsert(
-            [("c-" + gen, "s", 6, "science", "কোষ", _unit(0))]
-        )
+        _store(pg_engine, gen).upsert([("c-" + gen, "s", 6, "science", "কোষ", _unit(0))])
         manager.activate(gen)
     assert manager.active_generation_id() == "drop"
     assert manager.get("keep").state == "retained"
