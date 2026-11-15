@@ -21,11 +21,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - fix(rag-v5): make the pgvector gate real (384-dim tests + CI step)
+- fix(tutor): capacity-model-compatible v2 wording (230 tokens)
 
 ### Documentation
 
 - docs(rag-v5): record the v0.12.0 release and live-sync receipts
 - docs(rag-v5): wave plan, full system design, and the RAG reference base
+
+### Maintenance
+
+- chore: regenerate the CHANGELOG
 
 ## v0.12.0 - 2026-11-15
 
