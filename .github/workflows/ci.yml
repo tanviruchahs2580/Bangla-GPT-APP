@@ -382,6 +382,19 @@ jobs:
       - name: Postgres-backed API journey tests
         run: pytest tests/test_postgres_smoke.py -v -p randomly --randomly-seed=20261030
 
+      - name: pgvector integration tests (RAG V5 Gate P1)
+        # Defect found in wave V5.5: the V5 wave shipped these tests but no
+        # step ever ran them — the skip reason ("real in the CI pgvector
+        # leg") was never true, and the draft tests also inserted 4-dim
+        # vectors into the vector(384) schema. Both fixed there; this step
+        # makes the gate real. DATABASE_URL is required because alembic's
+        # env.py reads the settings URL, not the alembic.ini option the
+        # test fixture sets.
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/bgpt_ci
+          BGPT_PGVECTOR_TEST_URL: postgresql+psycopg://postgres:postgres@localhost:5432/bgpt_ci
+        run: pytest tests/test_pgvector_store.py -q -p randomly --randomly-seed=20261030
+
       - name: Postgres-only single-use/race tests (T-017)
         # tests/test_single_use_tokens.py says "the `postgres` CI job sets it
         # ["TEST_DATABASE_URL"]" -- but this job only ran test_postgres_smoke.py,

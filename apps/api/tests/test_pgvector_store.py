@@ -39,6 +39,19 @@ pytestmark = [
     )
 ]
 
+#: The real schema is `embedding vector(384)` (migration c7d9e1f3a5b7), so
+#: every vector these tests insert must be 384-dimensional — pgvector's
+#: typmod rejects anything else. The original draft used 4-dim vectors for
+#: readability and was never actually executed anywhere (no CI step set
+#: BGPT_PGVECTOR_TEST_URL), which is exactly how the mismatch survived.
+DIM = 384
+
+
+def _unit(idx: int) -> list[float]:
+    v = [0.0] * DIM
+    v[idx] = 1.0
+    return v
+
 
 @pytest.fixture()
 def pg_engine():
@@ -71,7 +84,7 @@ def test_generation_state_machine_and_atomic_pointer(pg_engine) -> None:
         generation_id="g1",
         corpus_digest="digest-a",
         embedder_name="hashing",
-        dimension=384,
+        dimension=DIM,
     )
     with pytest.raises(GenerationStateError):
         manager.activate("g1")  # building → activate is refused
@@ -83,7 +96,7 @@ def test_generation_state_machine_and_atomic_pointer(pg_engine) -> None:
 
     # a second validated generation swaps the pointer; the old one is retained
     manager.create_building(
-        generation_id="g2", corpus_digest="digest-a", embedder_name="hashing", dimension=384
+        generation_id="g2", corpus_digest="digest-a", embedder_name="hashing", dimension=DIM
     )
     manager.mark_validated("g2", chunk_count=2)
     manager.activate("g2")
@@ -94,11 +107,11 @@ def test_generation_state_machine_and_atomic_pointer(pg_engine) -> None:
 def test_upsert_is_idempotent_and_search_applies_filters_in_sql(pg_engine) -> None:
     manager = GenerationManager(make_session_factory(pg_engine))
     manager.create_building(
-        generation_id="gx", corpus_digest="d", embedder_name="hashing", dimension=4
+        generation_id="gx", corpus_digest="d", embedder_name="hashing", dimension=DIM
     )
     store = _store(pg_engine, "gx")
-    vec_a = [1.0, 0.0, 0.0, 0.0]
-    vec_b = [0.0, 1.0, 0.0, 0.0]
+    vec_a = _unit(0)
+    vec_b = _unit(1)
     rows = [
         ("c1", "src1", 6, "science", "কোষ", vec_a),
         ("c2", "src1", 7, "math", "বীজগণিত", vec_b),
@@ -124,28 +137,28 @@ def test_generation_isolation_no_cross_generation_candidates(pg_engine) -> None:
     manager = GenerationManager(make_session_factory(pg_engine))
     for gen in ("ga", "gb"):
         manager.create_building(
-            generation_id=gen, corpus_digest="d", embedder_name="hashing", dimension=4
+            generation_id=gen, corpus_digest="d", embedder_name="hashing", dimension=DIM
         )
         manager.mark_validated(gen, chunk_count=1)
     sa = _store(pg_engine, "ga")
     sb = _store(pg_engine, "gb")
-    sa.upsert([("only-a", "s", 6, "science", "কোষ", [1.0, 0.0, 0.0, 0.0])])
-    sb.upsert([("only-b", "s", 6, "science", "কোষ", [1.0, 0.0, 0.0, 0.0])])
-    assert [h[0] for h in sa.search([1.0, 0.0, 0.0, 0.0], top_k=5)] == ["only-a"]
-    assert [h[0] for h in sb.search([1.0, 0.0, 0.0, 0.0], top_k=5)] == ["only-b"]
+    sa.upsert([("only-a", "s", 6, "science", "কোষ", _unit(0))])
+    sb.upsert([("only-b", "s", 6, "science", "কোষ", _unit(0))])
+    assert [h[0] for h in sa.search(_unit(0), top_k=5)] == ["only-a"]
+    assert [h[0] for h in sb.search(_unit(0), top_k=5)] == ["only-b"]
 
 
 def test_validate_detects_count_and_dimension_problems(pg_engine) -> None:
     manager = GenerationManager(make_session_factory(pg_engine))
     manager.create_building(
-        generation_id="gv", corpus_digest="d", embedder_name="hashing", dimension=4
+        generation_id="gv", corpus_digest="d", embedder_name="hashing", dimension=DIM
     )
     store = _store(pg_engine, "gv")
-    store.upsert([("c1", "s", 6, "science", "কোষ", [1.0, 0.0, 0.0, 0.0])])
-    problems = store.validate(expected_count=2, dimension=4)
+    store.upsert([("c1", "s", 6, "science", "কোষ", _unit(0))])
+    problems = store.validate(expected_count=2, dimension=DIM)
     assert any("count" in p for p in problems)
-    store.upsert([("c2", "s", 6, "science", "কোষ", [0.0, 1.0, 0.0, 0.0])])
-    assert store.validate(expected_count=2, dimension=4) == []
+    store.upsert([("c2", "s", 6, "science", "কোষ", _unit(1))])
+    assert store.validate(expected_count=2, dimension=DIM) == []
     manager.mark_validated("gv", chunk_count=2)
 
 
@@ -155,11 +168,11 @@ def test_retirement_cleans_retained_generation_rows(pg_engine) -> None:
     manager = GenerationManager(make_session_factory(pg_engine))
     for gen in ("keep", "drop"):
         manager.create_building(
-            generation_id=gen, corpus_digest="d", embedder_name="hashing", dimension=4
+            generation_id=gen, corpus_digest="d", embedder_name="hashing", dimension=DIM
         )
         manager.mark_validated(gen, chunk_count=1)
         _store(pg_engine, gen).upsert(
-            [("c-" + gen, "s", 6, "science", "কোষ", [1.0, 0.0, 0.0, 0.0])]
+            [("c-" + gen, "s", 6, "science", "কোষ", _unit(0))]
         )
         manager.activate(gen)
     assert manager.active_generation_id() == "drop"
