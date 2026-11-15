@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(tests): register the loaded CLI module in sys.modules before exec
 - fix(tutor): capacity-model-compatible v2 wording (230 tokens)
 
+### CI/CD
+
+- ci: re-fire the main pipeline after the #125 merge
+
 ### Documentation
 
 - docs(rag-v5): record the v0.12.0 release and live-sync receipts
@@ -34,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - chore: regenerate the CHANGELOG
 - chore: release 0.13.0
+
+### Other
+
+- Merge pull request #125 from tanviruchahs2580/feat/rag-v55-tutor-efficiency
 
 ## v0.12.0 - 2026-11-15
 
