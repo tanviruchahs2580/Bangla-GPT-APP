@@ -13,7 +13,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-Nothing yet.
+### Added
+
+- feat(rag-v5): serving-parity index build CLI + dense-lane comparison harness
+- feat(tutor): pin the exact non-answer sentence (tutor-prompt-v2)
+
+### Fixed
+
+- fix(rag-v5): make the pgvector gate real (384-dim tests + CI step)
+- fix(tests): load the build CLI by path (bare pytest has no cwd on sys.path)
+- fix(tests): register the loaded CLI module in sys.modules before exec
+- fix(tutor): capacity-model-compatible v2 wording (230 tokens)
+
+### Documentation
+
+- docs(rag-v5): record the v0.12.0 release and live-sync receipts
+- docs(rag-v5): wave plan, full system design, and the RAG reference base
+
+### Maintenance
+
+- chore: regenerate the CHANGELOG
+- chore: release 0.13.0
 
 ## v0.12.0 - 2026-11-15
 
