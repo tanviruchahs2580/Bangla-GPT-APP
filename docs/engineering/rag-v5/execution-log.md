@@ -41,3 +41,19 @@
   200, /users/me 200 as the demo student). APK/AAB vc178 (built from tag
   b90ae6c, baked base = stable Vercel origin) delivered to .apk-latest.
   As-a-user regression on the release preview build: 35/35 passed.
+- 2026-11-15 · V5.5 release · PR #125 merged (247340a) after CI round 2
+  (round 1 caught: the build-CLI test's scripts-import fails under bare
+  pytest — fixed by path-loading with sys.modules registration; stale
+  native-review sheet). Main refired on a83ae7a (green); tag v0.13.0;
+  Release & Deploy + Android both SUCCESS. Live swap: pre-swap snapshot
+  app-pre-0130 (integrity ok, chain c7d9e1f3a5b7), container
+  bangla-gpt-api:0.13.0-a83ae7a active (previous kept stopped as
+  api-live-pre-0120), alembic already at head, /health + /ready + Vercel
+  chain ok. Prompt-v2 verified live: the pinned refusal sentence now
+  produces grounded=false for the paraphrase case that v1 mislabelled.
+  APK/AAB vc183 (from tag, baked base verified) in .apk-latest. e2e
+  35/35 on the release preview. OUTAGE during the wave: the 2-day-old
+  quick tunnel died ("Tunnel not found") breaking the Vercel /api origin
+  mid-session; rotated the tunnel and the API_ORIGIN env, redeployed,
+  chain restored (login 200) — fragility already documented; a named
+  tunnel remains the durable fix.

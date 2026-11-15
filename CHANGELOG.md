@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+Nothing yet.
+
+## v0.13.0 - 2026-11-15
+
 ### Added
 
 - feat(rag-v5): serving-parity index build CLI + dense-lane comparison harness
@@ -42,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Other
 
 - Merge pull request #125 from tanviruchahs2580/feat/rag-v55-tutor-efficiency
+
 
 ## v0.12.0 - 2026-11-15
 
