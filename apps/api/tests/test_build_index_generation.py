@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,9 @@ _SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "build_index_generat
 _spec = importlib.util.spec_from_file_location("build_index_generation", _SCRIPT)
 _mod = importlib.util.module_from_spec(_spec)
 assert _spec.loader is not None
+# dataclass resolution reads sys.modules for the module's __module__, so the
+# module must be registered before it executes.
+sys.modules["build_index_generation"] = _mod
 _spec.loader.exec_module(_mod)
 
 chunk_rows = _mod.chunk_rows
