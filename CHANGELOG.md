@@ -13,7 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-Nothing yet.
+### Added
+
+- feat(rag-v5): serving-parity index build CLI + dense-lane comparison harness
+- feat(tutor): pin the exact non-answer sentence (tutor-prompt-v2)
+
+### Fixed
+
+- fix(rag-v5): make the pgvector gate real (384-dim tests + CI step)
+
+### Documentation
+
+- docs(rag-v5): record the v0.12.0 release and live-sync receipts
+- docs(rag-v5): wave plan, full system design, and the RAG reference base
 
 ## v0.12.0 - 2026-11-15
 
