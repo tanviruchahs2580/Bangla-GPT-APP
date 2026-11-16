@@ -13,7 +13,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-Nothing yet.
+### Added
+
+- feat(api): bound the prompt copy of conversation history
+- feat(api): report eval error split with Wilson 95% intervals
+
+### Documentation
+
+- docs(rag-v5): record the v0.13.0 release and live-sync receipts
+- docs(upgrade): record milestone-1 plans and the pgvector readiness decision
+
+### Maintenance
+
+- chore(api): drop the stale type-ignore that failed mypy src
+- chore: release 0.14.0
+
+### Other
+
+- Merge pull request #126 from tanviruchahs2580/dependabot/github_actions/actions/attest-build-provenance-4.2.2
+- Merge pull request #127 from tanviruchahs2580/dependabot/github_actions/github/codeql-action/upload-sarif-4.39.3
+- Merge pull request #128 from tanviruchahs2580/dependabot/github_actions/docker/build-push-action-7.4.0
+- Merge pull request #129 from tanviruchahs2580/dependabot/github_actions/actions/setup-node-7.1.0
+- Merge pull request #130 from tanviruchahs2580/dependabot/github_actions/docker/login-action-4.8.0
 
 ## v0.13.0 - 2026-11-15
 
