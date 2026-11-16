@@ -29,7 +29,7 @@ def hasReleaseSigning = releaseStorePath && releaseStorePassword && releaseKeyAl
 // default to derive from -- Play requires it to increase on every upload, so
 // it comes from -PversionCode (CI passes the run number) and defaults to 1
 // for local exploratory builds.
-def webPackageJson = new File(rootProject.projectDir, '../../package.json')
+def webPackageJson = new File(rootProject.projectDir, '../package.json')
 def webVersion = webPackageJson.exists()
         ? new groovy.json.JsonSlurper().parseText(webPackageJson.text).version
         : '0.0.0'
