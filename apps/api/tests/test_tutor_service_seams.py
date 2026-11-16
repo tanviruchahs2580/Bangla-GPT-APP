@@ -14,6 +14,7 @@ behaviour of each seam so a later change cannot alter it silently:
 import pytest
 
 from bangla_gpt_api.providers.base import LLMProvider, ProviderError
+from bangla_gpt_api.services.context_budget import ContextBudgetManager
 from bangla_gpt_api.services.tutor import TutorService
 
 
@@ -59,6 +60,8 @@ def _service(provider, *, fallback=None, breaker=None, router=None):
     service.top_k = 3
     # RAG V5 (W7): verification mode default matches TutorService.__init__.
     service.evidence_verification_mode = "off"
+    # D3: the prompt-copy history budget; default matches TutorService.__init__.
+    service._context_budget = ContextBudgetManager()
     # F-082: the answer trace stamps the served corpus identity on every row.
     service.corpus_digest = None
     service.max_concurrent_generations = 0

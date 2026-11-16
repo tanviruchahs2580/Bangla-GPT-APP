@@ -21,7 +21,7 @@ from bangla_gpt_api.evaluation.observability import (
     query_fingerprint,
     record_trace,
 )
-from bangla_gpt_api.logging_config import json_log
+from bangla_gpt_api.logging_config import json_log, json_log_without_request_id
 from bangla_gpt_api.metrics import (
     PII_REDACTED_TOTAL,
     RAG_CITATION_CHECKS_TOTAL,
@@ -62,6 +62,7 @@ from bangla_gpt_api.services.context import (
     sanitize_prompt_text,
     set_current_context,
 )
+from bangla_gpt_api.services.context_budget import ContextBudgetManager
 from bangla_gpt_api.services.pii import redact_pii
 from bangla_gpt_api.services.router import (
     Route,
@@ -541,6 +542,7 @@ class TutorService:
         corpus_digest: str | None = None,
         neighbor_expander: Callable[[list], list] | None = None,
         evidence_verification_mode: str = "off",
+        history_token_budget: int = 4000,
     ) -> None:
         self.index = index
         # RAG V5 (W7): off keeps the pre-V5 payload byte-identical.
@@ -587,6 +589,14 @@ class TutorService:
         # specialised worker) can inject its own.
         self.trace_store = trace_store or TRACE_STORE
 
+        # D3 (upgrade plan): history-only token budget for the PROMPT COPY of
+        # conversation history. Retrieval always sees the full router-capped
+        # history; only what reaches the prompt is pruned. Counting is the
+        # Bangla-block-aware local estimate (services/context_budget.py), not
+        # a provider-window guarantee. A non-positive value fails here, at
+        # construction -- it must never silently disable pruning.
+        self._context_budget = ContextBudgetManager(history_token_budget)
+
         # Bounded admission for provider calls (F-117). One semaphore per
         # service instance == one per worker process, which is the resource
         # that runs out. ``max_concurrent_generations <= 0`` disables the cap
@@ -625,6 +635,9 @@ class TutorService:
             corpus_digest=corpus_digest if corpus_digest is not None else self.corpus_digest,
             top_k=self.top_k,
             min_coverage=self.min_coverage,
+            # D3: a hot reindex reuses THIS tutor's budget -- it must never
+            # silently reset the operator's configured value to the default.
+            history_token_budget=self._context_budget.history_token_budget,
         )
 
     # Trigram similarity a near-identical evidence token must clear for a
@@ -1169,6 +1182,40 @@ class TutorService:
         # primary is unhealthy.
         return base, (base if chosen is self.provider else chosen)
 
+    def _prune_prompt_history(
+        self, history: list[dict[str, str]] | None
+    ) -> list[dict[str, str]] | None:
+        """D3: prune ONLY the prompt copy of conversation history.
+
+        Retrieval has already consumed the full router-capped history by the
+        time this runs (follow-up resolution depends on it); the grounding
+        gate and evidence assembly are likewise upstream and untouched. What
+        is bounded here is the transient history copy handed to prompt
+        construction: the newest contiguous suffix that fits the configured
+        history token budget. The original list and its message dicts are
+        never mutated; when nothing is dropped the ORIGINAL object is passed
+        through, so a non-binding budget keeps the prompt byte-identical.
+        Diagnostics are counts only -- never message text.
+        """
+        if not history:
+            return history
+        plan = self._context_budget.plan(history)
+        if not plan.dropped:
+            return history
+        json_log_without_request_id(
+            logger,
+            logging.INFO,
+            "context_history_pruned",
+            # The logging redactor treats keys containing "token" as
+            # sensitive; these are numeric counts in the local tokenizer unit.
+            history_budget_units=self._context_budget.history_token_budget,
+            kept_items=len(plan.kept),
+            dropped_items=len(plan.dropped),
+            kept_units=plan.kept_tokens,
+            dropped_units=plan.dropped_tokens,
+        )
+        return [history[i] for i in plan.kept]
+
     def _prompt_blocks(
         self,
         hits: list,
@@ -1661,10 +1708,11 @@ class TutorService:
         # hit list, and the selected list is what the model, the citations and
         # the trace all see.
         hits = assemble_evidence(hits)
+        prompt_history = self._prune_prompt_history(history)
         context_blocks = self._prompt_blocks(
             hits,
             question,
-            history,
+            prompt_history,
             extra_instruction=extra_instruction,
             context=context,
             low_data=low_data,
@@ -1960,10 +2008,11 @@ class TutorService:
         # is applied after the gate judged the full hit list, and the selected
         # hits are what the model, the citations and the trace all see.
         hits = assemble_evidence(hits)
+        prompt_history = self._prune_prompt_history(history)
         context_blocks = self._prompt_blocks(
             hits,
             question,
-            history,
+            prompt_history,
             extra_instruction=extra_instruction,
             context=context,
             low_data=low_data,

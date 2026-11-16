@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal, cast, get_args, get_origin
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -321,6 +321,18 @@ class Settings(BaseSettings):
     # A24: per-message cap applied when conversation history is replayed
     # into a prompt, so one giant pasted turn cannot blow the context.
     chat_history_message_char_limit: int = 2000
+    # D3 (upgrade plan): token ceiling on the PROMPT COPY of conversation
+    # history. The count cap above and the per-message char cap stay
+    # untouched, and retrieval always sees the full capped history; only
+    # what reaches the prompt is pruned (newest contiguous suffix first).
+    # Counted with the Bangla-block-aware tokenizer
+    # (retrieval.hybrid.tokenize) -- a LOCAL ESTIMATE, not a provider
+    # window guarantee. Default is (8 x 2000) / 4: the chars/4 reading of
+    # the largest history the existing caps can produce, so ordinary
+    # traffic is byte-identical and only spacing-inflated histories bind.
+    # Non-positive values fail at startup; they must never silently
+    # disable pruning.
+    chat_history_token_budget: int = Field(default=4000, gt=0)
     chat_retention_days: int = 180
 
     # Product analytics trail (analytics_events). The model docstring claims

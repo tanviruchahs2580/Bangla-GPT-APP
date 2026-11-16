@@ -44,6 +44,7 @@ If you change a `Settings` field, re-check the citation in the same change.
 | APP_NAME | Service identity (rarely overridden): | 'Bangla GPT API' | - | (commented) Bangla GPT API | - | - | config.py:74 |
 | CHAT_HISTORY_MESSAGES | Past turns replayed into the tutor prompt; bounds prompt cost and context bloat. | 8 | - | 8 | 8 | yes | config.py:248 |
 | CHAT_HISTORY_MESSAGE_CHAR_LIMIT | Per-message char cap when past turns are replayed into the prompt | 2000 | - | 2000 | 2000 | yes | config.py:251 |
+| CHAT_HISTORY_TOKEN_BUDGET | D3: token ceiling on the PROMPT copy of conversation history; retrieval keeps the full capped history and only the newest suffix that fits is rendered. Local estimate via the Bangla-block-aware tokenizer -- not a provider window guarantee. Non-positive values fail at startup. | 4000 | - | 4000 | 4000 | yes | config.py:335 |
 | CHAT_RETENTION_DAYS | Chat history older than this is purged by the retention sweep. | 180 | - | 180 | 180 | yes | config.py:252 |
 | CIRCUIT_BREAKER_FAILURE_THRESHOLD | Consecutive provider failures before the circuit opens and the fallback (if any) is used. | 3 | - | (commented) 3 # consecutive failures before opening the circuit | - | - | config.py:123 |
 | CIRCUIT_BREAKER_RESET_TIMEOUT_SECONDS | Circuit breaker (AI resilience) CIRCUIT_BREAKER_FAILURE_THRESHOLD=3 # consecutive failures before opening the circuit | 60.0 | - | (commented) 60 # seconds before probing the primary again | - | - | config.py:124 |
