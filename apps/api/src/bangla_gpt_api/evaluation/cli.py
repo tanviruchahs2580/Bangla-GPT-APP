@@ -58,6 +58,7 @@ from bangla_gpt_api.evaluation.metrics import (
     retrieval_hit_at_k,
     run_suite,
 )
+from bangla_gpt_api.evaluation.stats import wilson
 from bangla_gpt_api.providers import get_provider
 from bangla_gpt_api.services.tutor import SYSTEM_PROMPT, TutorService
 
@@ -212,6 +213,31 @@ def _apply_sample(items: list[dict], sample: int | None, seed: int) -> tuple[lis
 def _report(metrics: SuiteMetrics, baseline: dict | None) -> bool:
     """Print metrics, intervals, bootstrap and strata; return the gate verdict."""
     print(json.dumps(metrics.as_dict(), indent=1))
+    # Upgrade-plan Step 4: false-refusal and false-answer are reported
+    # EXPLICITLY, not left derivable. Both are exact complements of the
+    # measured coverage rates (same counts, no new measurement), so the
+    # regression gate's contract is untouched — these lines are reporting,
+    # not gate inputs. A change that "answers more" by refusing less must
+    # be read together with the false-answer rate, never accuracy alone.
+    true_total = metrics.counts.get("true_total", 0)
+    false_total = metrics.counts.get("false_total", 0)
+    false_refusals = true_total - metrics.counts.get("answered_true", 0)
+    false_answers = false_total - metrics.counts.get("refused_false", 0)
+    fr_low, fr_high = wilson(false_refusals, true_total)
+    fa_low, fa_high = wilson(false_answers, false_total)
+    fr = (
+        f"{false_refusals}/{true_total} ({false_refusals / true_total:.4f}) "
+        f"wilson95=[{fr_low:.4f}, {fr_high:.4f}]"
+        if true_total
+        else f"n/a wilson95=[{fr_low:.4f}, {fr_high:.4f}]"
+    )
+    fa = (
+        f"{false_answers}/{false_total} ({false_answers / false_total:.4f}) "
+        f"wilson95=[{fa_low:.4f}, {fa_high:.4f}]"
+        if false_total
+        else f"n/a wilson95=[{fa_low:.4f}, {fa_high:.4f}]"
+    )
+    print(f"ERROR SPLIT: false_refusal={fr}  false_answer={fa}")
     if metrics.failures:
         print(f"failures ({len(metrics.failures)}), first 10:")
         for f in metrics.failures[:10]:

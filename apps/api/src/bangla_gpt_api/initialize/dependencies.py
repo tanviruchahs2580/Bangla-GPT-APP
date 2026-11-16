@@ -205,6 +205,7 @@ def _build_tutor(
     min_coverage: float = 0.5,
     neighbor_expander: Callable[[list], list] | None = None,
     evidence_verification_mode: str = "off",
+    history_token_budget: int = 4000,
 ) -> TutorService:
     """Construct the TutorService with optional circuit breaker + fallback.
 
@@ -221,6 +222,10 @@ def _build_tutor(
     ``top_k``/``min_coverage`` come from settings (RAG_TOP_K /
     RAG_MIN_COVERAGE, audit D1) so the gate can be re-tuned after a measured
     eval run without a code change; the defaults are the shipped values.
+
+    ``history_token_budget`` (D3) bounds the prompt COPY of conversation
+    history in local-estimate tokens; retrieval keeps the full capped
+    history. The default is the shipped value.
     """
     return TutorService(
         index=index,
@@ -235,6 +240,7 @@ def _build_tutor(
         top_k=top_k,
         min_coverage=min_coverage,
         neighbor_expander=neighbor_expander,
+        history_token_budget=history_token_budget,
     )
 
 
@@ -534,6 +540,7 @@ def build_dependencies(
             min_coverage=settings.rag_min_coverage,
             neighbor_expander=neighbor_expander,
             evidence_verification_mode=settings.evidence_verification_mode,
+            history_token_budget=settings.chat_history_token_budget,
         )
     else:
         tutor = None

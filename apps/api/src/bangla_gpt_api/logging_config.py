@@ -338,6 +338,18 @@ def configure_logging(level: str = "INFO") -> None:
 
 
 def json_log(logger: logging.Logger, level: int, event: str, **fields) -> None:
+    """Emit one structured line and include the ambient request ID."""
+    _json_log(logger, level, event, True, **fields)
+
+
+def json_log_without_request_id(logger: logging.Logger, level: int, event: str, **fields) -> None:
+    """Emit one structured line without an ambient request identifier."""
+    _json_log(logger, level, event, False, **fields)
+
+
+def _json_log(
+    logger: logging.Logger, level: int, event: str, include_request_id: bool, **fields
+) -> None:
     """Emit one structured line.
 
     ``fields`` are redacted *before* serialisation. A ``logging.Filter`` alone
@@ -346,7 +358,7 @@ def json_log(logger: logging.Logger, level: int, event: str, **fields) -> None:
     to ``password`` and has to fall back on guessing from the value's shape.
     Redacting the mapping first makes the field names authoritative.
     """
-    rid = request_id_var.get()
+    rid = request_id_var.get() if include_request_id else None
     if rid:
         fields.setdefault("request_id", rid)
     safe = {"event": event, **redact_value(fields)}
