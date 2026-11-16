@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #128 from tanviruchahs2580/dependabot/github_actions/docker/build-push-action-7.4.0
 - Merge pull request #129 from tanviruchahs2580/dependabot/github_actions/actions/setup-node-7.1.0
 - Merge pull request #130 from tanviruchahs2580/dependabot/github_actions/docker/login-action-4.8.0
+- Merge pull request #139 from tanviruchahs2580/feat/eval-error-split-wilson
 - Revert "chore(api): drop the stale type-ignore that failed mypy src"
 
 ## v0.13.0 - 2026-11-15
