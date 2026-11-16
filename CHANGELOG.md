@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - chore(api): drop the stale type-ignore that failed mypy src
 - chore(web): mirror the 0.14.0 version into package-lock.json
+- chore(web): regenerate the OpenAPI fixture at 0.14.0
 - chore(web): regenerate the OpenAPI fixture for 0.14.0
 - chore: regenerate the CHANGELOG
 - chore: regenerate the native-review sheet
