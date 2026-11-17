@@ -12,7 +12,7 @@ import type {
   SourceRef,
 } from "../../types";
 import { useAuth } from "../../AuthContext";
-import { Button, Card, Segmented } from "../../components/ui";
+import { Button, Card, ConfirmDialog, Segmented } from "../../components/ui";
 import { ConsentReconfirmNotice } from "../../components/ConsentReconfirmNotice";
 import { friendlyError, isConsentReconfirmationRequired } from "../../errors";
 import { t } from "../../i18n";
@@ -74,6 +74,9 @@ export default function AITutorPage() {
   const [hits, setHits] = useState<MessageSearchHit[] | null>(null);
   const [renamingId, setRenamingId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  // E1: the delete confirmation moved from window.confirm into the shared
+  // ConfirmDialog — this holds the conversation awaiting its confirmation.
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   // Token batching (audit): every SSE token used to call setMessages with
@@ -524,7 +527,6 @@ export default function AITutorPage() {
   };
 
   const removeConversation = async (id: number) => {
-    if (!window.confirm(t("deleteChatConfirm"))) return;
     try {
       await del(`/tutor/conversations/${id}`);
       if (conversationId === id) {
@@ -608,7 +610,7 @@ export default function AITutorPage() {
         onRenameCommit={(id) => void commitRename(id)}
         onRenameCancel={() => setRenamingId(null)}
         onOpenConversation={(id) => void loadConversation(id)}
-        onDeleteConversation={(id) => void removeConversation(id)}
+        onDeleteConversation={setDeleteTarget}
       />
 
       <Card className="chat-card">
@@ -683,6 +685,24 @@ export default function AITutorPage() {
       {evidence && (
         <EvidenceModal source={evidence} onClose={() => setEvidence(null)} />
       )}
+
+      {/* E1: chat deletion asks in the shared ConfirmDialog (danger tone —
+          the action is irreversible) instead of window.confirm. Cancel,
+          Escape and the backdrop close it without touching the conversation;
+          confirming runs the same delete logic as before. */}
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        tone="danger"
+        title={t("deleteChatTitle")}
+        body={t("deleteChatBody")}
+        confirmLabel={t("deleteChatConfirmAction")}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          const id = deleteTarget;
+          setDeleteTarget(null);
+          if (id !== null) void removeConversation(id);
+        }}
+      />
     </main>
   );
 }

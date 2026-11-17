@@ -87,8 +87,7 @@ describe("history UI", () => {
     );
   });
 
-  it("delete sends DELETE and the chip disappears from the list", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+  it("delete asks in the ConfirmDialog, then sends DELETE and the chip disappears", async () => {
     const user = userEvent.setup();
     apiMock.get.mockReset();
     let listCalls = 0;
@@ -108,11 +107,19 @@ describe("history UI", () => {
       await screen.findByRole("button", { name: t("deleteChat") }),
     );
 
+    // E1: the confirmation is the shared ConfirmDialog (danger tone), not
+    // window.confirm — the delete fires only from the dialog's confirm.
+    await screen.findByRole("dialog");
+    await user.click(
+      await screen.findByRole("button", {
+        name: t("deleteChatConfirmAction"),
+      }),
+    );
+
     await waitFor(() =>
       expect(apiMock.del).toHaveBeenCalledWith("/tutor/conversations/5"),
     );
     await waitFor(() => expect(screen.queryByText("My-Old-Title")).toBeNull());
-    expect(window.confirm).toHaveBeenCalled();
   });
 
   // F-021: the history chips were hidden on failure exactly like an empty

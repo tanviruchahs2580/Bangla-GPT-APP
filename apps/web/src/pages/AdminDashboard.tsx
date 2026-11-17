@@ -7,6 +7,7 @@ import { FeedbackQueueCard } from "../components/admin/FeedbackQueueCard";
 import { RefusalAuditCard } from "../components/admin/RefusalAuditCard";
 import { SchoolsCard } from "../components/admin/SchoolsCard";
 import { VersionsCard } from "../components/admin/VersionsCard";
+import { Button, Field, Modal } from "../components/ui";
 import { t } from "../i18n";
 import { roleLabel } from "../lib/roles";
 import { useDebounced } from "../lib/useDebounced";
@@ -46,6 +47,11 @@ export default function AdminDashboard() {
   const [purgeConfirming, setPurgeConfirming] = useState(false);
   const [purgeBusy, setPurgeBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // E1: impersonation used window.prompt — unthemed browser chrome outside
+  // every focus-trap and theme this product runs. The target and its reason
+  // now live in the shared Modal instead; the guard itself is unchanged.
+  const [impTarget, setImpTarget] = useState<UserPublic | null>(null);
+  const [impReason, setImpReason] = useState("");
   const LIMIT = 20;
 
   // F-023: the search box keys a DEBOUNCED query, so a typed burst fires one
@@ -92,11 +98,23 @@ export default function AdminDashboard() {
     }
   }, [queryClient]);
 
-  async function doImpersonate(user: UserPublic) {
-    const reason = window.prompt(t("impReasonPrompt"));
-    if (reason === null || reason.trim().length < 3) return;
+  /** E1: open the reason dialog for a target user (was window.prompt). */
+  function openImpersonate(user: UserPublic) {
+    setImpReason("");
+    setImpTarget(user);
+  }
+
+  async function confirmImpersonate() {
+    const user = impTarget;
+    const reason = impReason.trim();
+    // The exact guard window.prompt had: a cancelled prompt (null) or a
+    // reason under 3 chars never reached the API. The confirm button is
+    // disabled under 3 chars, so this second check is the belt to its braces.
+    if (!user || reason.length < 3) return;
+    setImpTarget(null);
+    setImpReason("");
     try {
-      await startImpersonation(user.id, reason.trim());
+      await startImpersonation(user.id, reason);
       // Full reload: every component (and the auth context) re-reads the
       // swapped token, and the shell shows the "support session" banner.
       window.location.assign("/");
@@ -301,7 +319,7 @@ export default function AdminDashboard() {
                     {u.role !== "admin" && u.role !== "school_admin" && (
                       <button
                         className="small secondary"
-                        onClick={() => doImpersonate(u)}
+                        onClick={() => openImpersonate(u)}
                       >
                         {t("impersonate")}
                       </button>
@@ -332,6 +350,38 @@ export default function AdminDashboard() {
           </button>
         </p>
       </div>
+
+      {/* E1: the impersonation reason, asked in a real dialog instead of
+          window.prompt. The reason is audit-logged server-side, so the
+          surface says so. Cancel / Escape / backdrop abort exactly as
+          window.prompt returning null did; the confirm stays disabled until
+          the reason meets the same minimum the old guard enforced. */}
+      <Modal
+        open={impTarget !== null}
+        onClose={() => setImpTarget(null)}
+        title={t("impTitle")}
+      >
+        <p className="muted m-0">{t("impBody")}</p>
+        <Field label={t("impReasonPrompt")} htmlFor="imp-reason">
+          <input
+            id="imp-reason"
+            value={impReason}
+            onChange={(e) => setImpReason(e.target.value)}
+          />
+        </Field>
+        <div className="modal-footer">
+          <Button variant="ghost" onClick={() => setImpTarget(null)}>
+            {t("cancel")}
+          </Button>
+          <Button
+            variant="primary"
+            disabled={impReason.trim().length < 3}
+            onClick={() => void confirmImpersonate()}
+          >
+            {t("impConfirm")}
+          </Button>
+        </div>
+      </Modal>
     </main>
   );
 }

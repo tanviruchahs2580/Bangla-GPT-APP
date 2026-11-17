@@ -68,7 +68,11 @@ const BUDGET = 500;
  * formatting is the change.
  */
 const CEILING: Record<string, number> = {
-  "AdminDashboard.tsx": 337,
+  // 387: E1 (2026-11-17) moved the impersonation reason out of window.prompt
+  // into the shared Modal — the dialog JSX, its target/reason state and the
+  // preserved <3-chars guard are the growth. The interaction shell is the fix;
+  // no authorization or tenancy logic moved.
+  "AdminDashboard.tsx": 387,
   "ForgotResetPage.tsx": 185,
   "LegalPage.tsx": 127,
   "LoginPage.tsx": 353,
@@ -79,7 +83,10 @@ const CEILING: Record<string, number> = {
   "SchoolDashboard.tsx": 147,
   "StatusPage.tsx": 148,
   "WelcomePage.tsx": 128,
-  "student/AITutorPage.tsx": 688,
+  // 708: E1 (2026-11-17) replaced window.confirm with the shared
+  // ConfirmDialog for chat deletion — the deleteTarget state and the dialog
+  // render are the growth; the delete logic itself is unchanged.
+  "student/AITutorPage.tsx": 708,
   "student/HomePage.tsx": 335,
   "student/LearnPage.tsx": 381,
   "student/MePage.tsx": 793,

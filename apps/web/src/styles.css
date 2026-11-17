@@ -155,6 +155,11 @@
   --shadow-1: var(--elev-1);
   --shadow-2: var(--elev-2);
   --shadow-3: var(--elev-3);
+  /* E1: the hero's brand-ink depth shadow and the modal scrim, named so the
+     dark theme owns its own values (both were loose rgba literals). */
+  --hero-shadow:
+    0 2px 4px rgba(5, 46, 22, 0.2), 0 18px 44px -14px rgba(5, 46, 22, 0.5);
+  --modal-backdrop: rgba(14, 18, 38, 0.55);
 
   /* Spacing — 4/8/12/16/24/32/48 */
   --space-1: 4px;
@@ -245,6 +250,12 @@
   --elev-1: 0 1px 3px rgba(0, 0, 0, 0.4);
   --elev-2: 0 4px 12px rgba(0, 0, 0, 0.45);
   --elev-3: 0 12px 32px rgba(0, 0, 0, 0.55);
+  /* E1: dark twins — this theme's elevation family is pure black, so the
+     hero shadow follows it, and the scrim deepens a step to keep the dialog
+     the brightest layer on screen. */
+  --hero-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.35), 0 18px 44px -14px rgba(0, 0, 0, 0.65);
+  --modal-backdrop: rgba(0, 0, 0, 0.66);
 
   /* WP-01 dark parity for new tokens */
   --grad-brand: linear-gradient(135deg, #22c55e, #4ade80);
@@ -1377,8 +1388,8 @@ p {
   align-items: center;
   justify-content: center;
   /* M1: standalone surfaces draw under the notch/home indicator. */
-  padding: calc(var(--space-5) + env(safe-area-inset-top, 0px))
-    var(--space-4) calc(var(--space-5) + env(safe-area-inset-bottom, 0px));
+  padding: calc(var(--space-5) + env(safe-area-inset-top, 0px)) var(--space-4)
+    calc(var(--space-5) + env(safe-area-inset-bottom, 0px));
   text-align: center;
   gap: var(--space-4);
   position: relative;
@@ -2535,7 +2546,9 @@ table.data tbody tr:hover {
   position: fixed;
   inset: 0;
   z-index: var(--z-modal);
-  background: rgba(14, 18, 38, 0.55);
+  /* E1: was a hardcoded rgba(14, 18, 38, 0.55) — now the --modal-backdrop
+     token, with a deeper dark-theme value in the dark block. */
+  background: var(--modal-backdrop);
   display: grid;
   place-items: center;
   /* M1: the sheet must clear the notch and the home indicator on a
@@ -2589,7 +2602,9 @@ table.data tbody tr:hover {
   position: fixed;
   left: var(--space-4);
   right: var(--space-4);
-  bottom: calc(var(--nav-h) + var(--space-4) + env(safe-area-inset-bottom, 0px));
+  bottom: calc(
+    var(--nav-h) + var(--space-4) + env(safe-area-inset-bottom, 0px)
+  );
   z-index: var(--z-toast);
   display: flex;
   align-items: center;
@@ -2624,7 +2639,9 @@ table.data tbody tr:hover {
   position: fixed;
   /* M1: the bottombar's height already includes the home-indicator inset,
      so the toasts must clear it too or they collide on a standalone PWA. */
-  bottom: calc(var(--nav-h) + var(--space-4) + env(safe-area-inset-bottom, 0px));
+  bottom: calc(
+    var(--nav-h) + var(--space-4) + env(safe-area-inset-bottom, 0px)
+  );
   left: 50%;
   transform: translateX(-50%);
   z-index: var(--z-toast);
@@ -4220,9 +4237,9 @@ button.small {
 /* ── 4. Hero v2 — living aurora ──────────────────────────────── */
 .hero {
   isolation: isolate;
-  box-shadow:
-    0 2px 4px rgba(5, 46, 22, 0.2),
-    0 18px 44px -14px rgba(5, 46, 22, 0.5);
+  /* E1: was a hardcoded rgba(5, 46, 22, …) pair — now the themed
+     --hero-shadow token (dark theme carries its own elevation family). */
+  box-shadow: var(--hero-shadow);
   animation: hero-in 560ms var(--ease-soft) both;
 }
 
@@ -4698,6 +4715,42 @@ button.small {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
+}
+
+/* E1: toast tones + token-driven exit. lib/toast.ts tags each toast
+   toast-info / toast-success / toast-danger and leads it with an aria-hidden
+   lucide glyph; the region's aria-live still carries the message. The exit
+   was an inline 250ms ease opacity transition in the TS module — it is now
+   the .toast-out keyframe on the motion tokens. This rule sits AFTER the
+   spring entry above on purpose: same specificity, later source, so the exit
+   actually replaces the entry animation (whose `both` fill would otherwise
+   pin opacity/transform and smother the exit). The entry keyframes are the
+   slide-up, and the global reduced-motion block at the top of this file
+   collapses every animation and transition duration to 0.001ms, so entry and
+   exit are both covered. */
+.toast-out {
+  animation: toast-out var(--m-fast) var(--ease-out) forwards;
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(1);
+  }
+}
+
+.toast-success {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.toast-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 .modal {

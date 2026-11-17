@@ -184,7 +184,13 @@ const bn = {
   searchHistory: "ইতিহাস খুঁজুন…",
   rename: "নাম পরিবর্তন করুন",
   deleteChat: "চ্যাট মুছুন",
-  deleteChatConfirm: "এই চ্যাটটি মুছে ফেলবেন? নিশ্চিত?",
+  // E1: the delete confirmation moved from window.confirm into the shared
+  // ConfirmDialog, so the question, the consequence and the button each get
+  // their own key (the old single prompt string was all three at once).
+  deleteChatTitle: "কথোপকথন মুছবেন?",
+  deleteChatBody:
+    "এই কথোপকথন ও এর সব বার্তা মুছে যাবে। এটি ফিরিয়ে আনা যাবে না।",
+  deleteChatConfirmAction: "মুছে ফেলুন",
   noResults: "কিছু পাওয়া যায়নি",
   activityTitle: "প্রতিদিনের অনুশীলন",
   streakLabel: "{days} দিনের ধারাবাহিকতা",
@@ -285,6 +291,10 @@ const bn = {
   deleteConfirmPassword: "নিশ্চিত করতে আপনার পাসওয়ার্ড দিন",
   signOutEverywhere: "সব ডিভাইস থেকে লগআউট",
   cancel: "বাতিল",
+  // E1: ConfirmDialog defaults — the generic question and its confirm button
+  // (call sites pass specific titles/bodies; বাতিল above is the shared cancel).
+  confirmTitle: "নিশ্চিত করবেন?",
+  confirmAction: "নিশ্চিত",
   exportData: "আমার ডেটা ডাউনলোড করুন",
   parentInviteTitle: "অভিভাবক যুক্ত করুন",
   parentInviteHowTo:
@@ -600,6 +610,13 @@ const bn = {
   exitImpersonation: "সহায়তা সেশন শেষ করুন",
   impersonate: "সহায়তা সেশনে প্রবেশ করুন",
   impReasonPrompt: "এই সহায়তা সেশনের কারণ (কমপক্ষে ৩ অক্ষর)",
+  // E1: impersonation moved from window.prompt into a modal — the dialog
+  // states the action and that it is audit-logged; impReasonPrompt above
+  // stays as the reason field's label (it already carries the minimum).
+  impTitle: "অন্য ব্যবহারকারী হিসেবে প্রবেশ",
+  impBody:
+    "এই সহায়তা সেশনের সব কার্যক্রম নিরীক্ষার জন্য রেকর্ড করা হয়। কারণ লিখে নিশ্চিত করুন।",
+  impConfirm: "প্রবেশ করুন",
   admTriage: "ফিডব্যাক পর্যালোচনা",
   admTriageOpen: "খোলা",
   admTriageAll: "সব",
@@ -1010,7 +1027,12 @@ const en: Dict = {
   searchHistory: "Search history…",
   rename: "Rename",
   deleteChat: "Delete chat",
-  deleteChatConfirm: "Delete this chat for good? Are you sure?",
+  // E1: twins of the bn block above — the ConfirmDialog splits the old single
+  // prompt string into title, body and button label.
+  deleteChatTitle: "Delete this conversation?",
+  deleteChatBody:
+    "This conversation and all of its messages will be deleted. This cannot be undone.",
+  deleteChatConfirmAction: "Delete",
   noResults: "Nothing found",
   activityTitle: "Daily practice",
   streakLabel: "{days}-day streak",
@@ -1101,6 +1123,9 @@ const en: Dict = {
   deleteConfirmPassword: "Enter your password to confirm",
   signOutEverywhere: "Sign out everywhere",
   cancel: "Cancel",
+  // E1: twins of the bn block above.
+  confirmTitle: "Are you sure?",
+  confirmAction: "Confirm",
   exportData: "Download my data",
   parentInviteTitle: "Link a parent",
   parentInviteHowTo:
@@ -1392,6 +1417,11 @@ const en: Dict = {
   exitImpersonation: "End support session",
   impersonate: "Start support session",
   impReasonPrompt: "Reason for this support session (min 3 chars)",
+  // E1: twins of the bn block above.
+  impTitle: "Sign in as another user",
+  impBody:
+    "Everything done in this support session is audit-logged. Enter the reason and confirm.",
+  impConfirm: "Sign in as user",
   admTriage: "Feedback triage",
   admTriageOpen: "Open",
   admTriageAll: "All",
