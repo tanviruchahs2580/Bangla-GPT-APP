@@ -35,5 +35,17 @@
       "type": "image/png",
       "purpose": "any"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "AI টিউটর",
+      "short_name": "টিউটর",
+      "url": "/student/tutor"
+    },
+    {
+      "name": "কুইজ",
+      "short_name": "কুইজ",
+      "url": "/student/quiz"
+    }
   ]
 }
