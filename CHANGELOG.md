@@ -28,11 +28,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): inset the Android WebView below the system bars (edge-to-edge)
 - fix(web): load the real Noto Sans Bengali 600 face
 - fix(web): mobile correctness wave — keyboard, notch, update banner, tap targets
+- fix(web): tolerate prettier's meta wrapping in the mobile guard test
 
 ### Maintenance
 
 - chore(android): restore LF endings and the trailing newline in build.gradle
 - chore: regenerate the CHANGELOG
+
+### Style
+
+- style: prettier formatting for the M1 stylesheet and meta edits
+
+### Other
+
+- Merge main: absorb the stray prettier commit (superseded by the wave work)
+- Merge pull request #141 from tanviruchahs2580/feat/typography-600-weight
 
 ## v0.14.0 - 2026-11-17
 
