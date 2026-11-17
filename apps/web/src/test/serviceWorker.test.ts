@@ -41,7 +41,11 @@ function makeCaches(matchResult?: Response) {
 function loadSw(
   cachesMock: unknown,
   fetchImpl: unknown,
-  selfExtras?: { registration?: unknown; skipWaiting?: () => Promise<void> },
+  selfExtras?: {
+    registration?: unknown;
+    skipWaiting?: () => Promise<void>;
+    clients?: { claim: () => Promise<void> | void };
+  },
 ) {
   const handlers: Record<string, (event: unknown) => void> = {};
   const self = {
@@ -50,6 +54,7 @@ function loadSw(
     },
     registration: selfExtras?.registration ?? { active: undefined },
     ...(selfExtras?.skipWaiting ? { skipWaiting: selfExtras.skipWaiting } : {}),
+    ...(selfExtras?.clients ? { clients: selfExtras.clients } : {}),
   };
   // The globals are parameters here: the Function constructor is the only way
   // to run a worker script in-process with them injected.
@@ -204,5 +209,76 @@ describe("public/sw.js navigation handling", () => {
 
     expect(respondWith).not.toHaveBeenCalled();
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
+
+describe("public/sw.js runtime-cache trimming (font exemption)", () => {
+  /** Drives the activate handler with a pre-populated cache. */
+  async function runTrim(cacheKeys: Request[]) {
+    const cache = {
+      put: vi.fn(async () => {}),
+      add: vi.fn(async () => {}),
+      keys: vi.fn(async () => cacheKeys),
+      delete: vi.fn(async () => true),
+    };
+    const cachesMock = {
+      open: vi.fn(async () => cache),
+      match: vi.fn(async () => undefined),
+      keys: vi.fn(async () => [] as Request[]),
+      delete: vi.fn(async () => true),
+    };
+    const claim = vi.fn();
+    const handlers = loadSw(cachesMock, fetch, {
+      registration: { active: { scriptURL: "/sw.js" } },
+      clients: { claim },
+    });
+    const waitUntil = vi.fn(async (p: Promise<unknown>) => p);
+    handlers.activate({ waitUntil });
+    await waitUntil.mock.calls[0][0];
+    return cache.delete as ReturnType<typeof vi.fn>;
+  }
+
+  const req = (path: string) => new Request(`https://app.test${path}`);
+
+  it("evicts the oldest runtime assets and the oldest font faces, never the shell", async () => {
+    const runtime = Array.from({ length: 52 }, (_, i) =>
+      req(`/assets/chunk-${i}.js`),
+    );
+    const fonts = Array.from({ length: 26 }, (_, i) =>
+      req(`/assets/noto-${i}.woff2`),
+    );
+    const shell = [req("/index.html"), req("/offline.html")];
+    const keys = [...shell, ...runtime, ...fonts];
+
+    const del = await runTrim(keys);
+    const deleted = del.mock.calls.map(
+      (c) => new URL((c[0] as Request).url).pathname,
+    );
+    // 52 runtime − 50 cap → the two OLDEST chunks; 26 fonts − 24 cap → the
+    // two OLDEST faces; the shell and everything newer stay.
+    expect(deleted).toEqual([
+      "/assets/chunk-0.js",
+      "/assets/chunk-1.js",
+      "/assets/noto-0.woff2",
+      "/assets/noto-1.woff2",
+    ]);
+  });
+
+  it("a session's fonts survive a full runtime rotation (the offline regression)", async () => {
+    // The bug shape: 51 hashed chunks rotate one out while the 3 Bengali
+    // faces the page is using sit in the same FIFO and must not move.
+    const runtime = Array.from({ length: 51 }, (_, i) =>
+      req(`/assets/chunk-${i}.js`),
+    );
+    const fonts = [
+      req("/assets/noto-bengali-400.woff2"),
+      req("/assets/noto-bengali-600.woff2"),
+      req("/assets/noto-bengali-700.woff2"),
+    ];
+    const del = await runTrim([...runtime, ...fonts]);
+    const deleted = del.mock.calls.map(
+      (c) => new URL((c[0] as Request).url).pathname,
+    );
+    expect(deleted).toEqual(["/assets/chunk-0.js"]);
   });
 });
