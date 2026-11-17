@@ -567,7 +567,12 @@ p {
   position: sticky;
   top: 0;
   z-index: var(--z-sticky);
-  height: var(--topbar-h);
+  /* M1: on an iOS standalone PWA the notch overlaps sticky chrome; the
+     inset grows the bar instead of squeezing its content. Android native
+     is inset by the bridge (adjustMarginsForEdgeToEdge) and browsers
+     report 0, so this is a no-op everywhere else. */
+  height: calc(var(--topbar-h) + env(safe-area-inset-top, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1286,7 +1291,9 @@ p {
   color: var(--warn);
   border-bottom: 1px solid color-mix(in srgb, var(--warn) 30%, transparent);
   text-align: center;
-  padding: var(--space-2) var(--space-4);
+  /* M1: matches the topbar's notch inset when this banner is the stuck
+     chrome (it sticks at top:0 above the topbar while offline). */
+  padding: calc(var(--space-2) + env(safe-area-inset-top, 0px)) var(--space-4);
   font-weight: 700;
   font-size: var(--fs-sm);
   position: sticky;
@@ -1369,7 +1376,9 @@ p {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: var(--space-5) var(--space-4);
+  /* M1: standalone surfaces draw under the notch/home indicator. */
+  padding: calc(var(--space-5) + env(safe-area-inset-top, 0px))
+    var(--space-4) calc(var(--space-5) + env(safe-area-inset-bottom, 0px));
   text-align: center;
   gap: var(--space-4);
   position: relative;
@@ -2529,7 +2538,12 @@ table.data tbody tr:hover {
   background: rgba(14, 18, 38, 0.55);
   display: grid;
   place-items: center;
-  padding: var(--space-4);
+  /* M1: the sheet must clear the notch and the home indicator on a
+     standalone PWA; browsers report 0 so desktop is unchanged. */
+  padding: calc(var(--space-4) + env(safe-area-inset-top, 0px))
+    calc(var(--space-4) + env(safe-area-inset-right, 0px))
+    calc(var(--space-4) + env(safe-area-inset-bottom, 0px))
+    calc(var(--space-4) + env(safe-area-inset-left, 0px));
   backdrop-filter: blur(6px);
   animation: backdrop-fade var(--m-med) var(--ease-out);
 }
@@ -2566,10 +2580,51 @@ table.data tbody tr:hover {
   }
 }
 
+/* M1: the PWA update banner previously had no stylesheet at all — it
+   rendered as an unstyled block at the end of the document, behind the
+   fixed bottombar on phones, so the waiting-first update flow was
+   unreachable on mobile. Fixed above the bottombar, same inset math as
+   the toast region, accent card styling from the shared tokens. */
+.update-banner {
+  position: fixed;
+  left: var(--space-4);
+  right: var(--space-4);
+  bottom: calc(var(--nav-h) + var(--space-4) + env(safe-area-inset-bottom, 0px));
+  z-index: var(--z-toast);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-2);
+  animation: banner-rise var(--m-med) var(--ease-out);
+}
+
+.update-banner-text {
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+
+@keyframes banner-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Toast — WP-05/WP-11 lightweight, vanilla (no deps) */
 .toast-region {
   position: fixed;
-  bottom: calc(var(--nav-h) + var(--space-4));
+  /* M1: the bottombar's height already includes the home-indicator inset,
+     so the toasts must clear it too or they collide on a standalone PWA. */
+  bottom: calc(var(--nav-h) + var(--space-4) + env(safe-area-inset-bottom, 0px));
   left: 50%;
   transform: translateX(-50%);
   z-index: var(--z-toast);
@@ -3654,8 +3709,8 @@ button.small {
   max-width: 640px;
 }
 .modal-close {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: var(--radius-sm);
   font-size: var(--fs-sm);
 }
@@ -5168,6 +5223,14 @@ button.small {
   .switch,
   input[type="checkbox"] {
     min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* M1: the same floor for the controls the mobile audit measured under
+     it — citation chips, weakness chips and small buttons. */
+  .source-chip,
+  .weak-chip,
+  .btn-sm {
     min-height: 44px;
   }
 
