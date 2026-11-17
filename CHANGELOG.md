@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - feat(web): E2 unified loading and empty states
 - feat(web): E3 table elevation, mobile card fallback, staff page headers
 - feat(web): E4 type-scale rebalance — lift the small steps
+- feat(web): E6-lite — PWA app shortcuts for Tutor and Quiz
 
 ### Fixed
 
