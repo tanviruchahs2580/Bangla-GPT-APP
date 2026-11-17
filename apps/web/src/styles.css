@@ -155,6 +155,11 @@
   --shadow-1: var(--elev-1);
   --shadow-2: var(--elev-2);
   --shadow-3: var(--elev-3);
+  /* E1: the hero's brand-ink depth shadow and the modal scrim, named so the
+     dark theme owns its own values (both were loose rgba literals). */
+  --hero-shadow:
+    0 2px 4px rgba(5, 46, 22, 0.2), 0 18px 44px -14px rgba(5, 46, 22, 0.5);
+  --modal-backdrop: rgba(14, 18, 38, 0.55);
 
   /* Spacing — 4/8/12/16/24/32/48 */
   --space-1: 4px;
@@ -245,6 +250,12 @@
   --elev-1: 0 1px 3px rgba(0, 0, 0, 0.4);
   --elev-2: 0 4px 12px rgba(0, 0, 0, 0.45);
   --elev-3: 0 12px 32px rgba(0, 0, 0, 0.55);
+  /* E1: dark twins — this theme's elevation family is pure black, so the
+     hero shadow follows it, and the scrim deepens a step to keep the dialog
+     the brightest layer on screen. */
+  --hero-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.35), 0 18px 44px -14px rgba(0, 0, 0, 0.65);
+  --modal-backdrop: rgba(0, 0, 0, 0.66);
 
   /* WP-01 dark parity for new tokens */
   --grad-brand: linear-gradient(135deg, #22c55e, #4ade80);
