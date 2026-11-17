@@ -431,6 +431,7 @@ const bn = {
   baStatus: "অবস্থা",
   noStudents: "এই শ্রেণিতে কোনো শিক্ষার্থী নেই।",
   parentDashboard: "অভিভাবক ড্যাশবোর্ড",
+  parentSub: "সন্তানের পড়াশোনা, অগ্রগতি ও ফলাফল এক নজরে।",
   myChildren: "আমার সন্তান",
   // E2: the linked-children table's empty state (ParentDashboard).
   parentNoChildren: "এখনো কোনো সন্তান সংযোগ করা হয়নি",
@@ -438,6 +439,8 @@ const bn = {
   inviteCodeLabel: "সন্তানের ইনভাইট কোড",
   redeem: "যুক্ত করুন",
   adminDashboard: "অ্যাডমিন ড্যাশবোর্ড",
+  adminSub:
+    "ব্যবহারকারী, রক্ষণাবেক্ষণ ও প্ল্যাটফর্ম স্বাস্থ্য — সব নিয়ন্ত্রণ এক জায়গায়।",
   searchEmail: "ইমেইল খুঁজুন…",
   // E2: the admin users table's empty state (search with no matches, or no
   // users at all — one sentence covers both).
@@ -1267,6 +1270,7 @@ const en: Dict = {
   baStatus: "Status",
   noStudents: "No students in this class.",
   parentDashboard: "Parent dashboard",
+  parentSub: "Your children's study, progress and results at a glance.",
   myChildren: "My children",
   // E2: the linked-children table's empty state (ParentDashboard).
   parentNoChildren: "No children linked yet",
@@ -1274,6 +1278,8 @@ const en: Dict = {
   inviteCodeLabel: "Child's invite code",
   redeem: "Link",
   adminDashboard: "Admin dashboard",
+  adminSub:
+    "Users, maintenance and platform health — every control in one place.",
   searchEmail: "Search email…",
   // E2: the admin users table's empty state (search with no matches, or no
   // users at all — one sentence covers both).

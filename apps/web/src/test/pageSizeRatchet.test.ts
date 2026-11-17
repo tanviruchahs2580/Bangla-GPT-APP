@@ -83,7 +83,7 @@ const CEILING: Record<string, number> = {
   // no authorization or tenancy logic moved.
   // 396: E2 (2026-11-17) gave the settled-empty users table the shared
   // EmptyState (the table keeps rendering while a request is in flight).
-  "AdminDashboard.tsx": 396,
+  "AdminDashboard.tsx": 401, // E3 2026-11-17: cardable data-labels + page-head (measured 401)
   "ForgotResetPage.tsx": 185,
   "LegalPage.tsx": 127,
   "LoginPage.tsx": 353,

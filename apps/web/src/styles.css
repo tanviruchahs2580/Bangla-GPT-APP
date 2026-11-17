@@ -2515,9 +2515,11 @@ table.data {
 
 table.data th,
 table.data td {
-  padding: 10px 12px;
+  /* E3: rows breathe on the staff dashboards (was 10/12px, hairline
+     separators); the header drops to 600 so it guides without shouting. */
+  padding: var(--space-3) var(--space-4);
   text-align: left;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
 }
 
 table.data tr:last-child td {
@@ -2528,17 +2530,80 @@ table.data thead th {
   position: sticky;
   top: 0;
   background: var(--card-2);
-  font-weight: 700;
+  font-weight: 600;
+  font-size: var(--fs-xs);
   color: var(--muted);
   z-index: 1;
 }
 
-table.data tbody tr:nth-child(even) {
-  background: color-mix(in srgb, var(--card-2) 60%, transparent);
+/* E3: zebra striping removed — on dense staff tables it read as noise;
+     the hover row is the single affordance. */
+table.data tbody tr:hover {
+  background: color-mix(in srgb, var(--brand-soft) 60%, transparent);
 }
 
-table.data tbody tr:hover {
-  background: var(--brand-soft);
+/* E3: mobile card fallback. Tables that opt in via `cardable` collapse
+     into stacked cards under 760px instead of forcing a 560px horizontal
+     scroll: the header row is visually hidden, each row becomes a card,
+     and every cell announces its column through data-label. Tables
+     without the class keep the scroll behaviour. */
+@media (max-width: 760px) {
+  table.data.cardable {
+    min-width: 0;
+    display: block;
+  }
+
+  table.data.cardable thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  table.data.cardable tbody tr {
+    display: block;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--card);
+    margin-bottom: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  table.data.cardable td {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--space-3);
+    padding: var(--space-2) 0;
+    text-align: right;
+    border-bottom: 1px dashed color-mix(in srgb, var(--line) 55%, transparent);
+  }
+
+  table.data.cardable td::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    font-weight: 600;
+    font-size: var(--fs-xs);
+    color: var(--muted);
+    text-align: left;
+  }
+
+  table.data.cardable td:last-child {
+    border-bottom: none;
+  }
+}
+
+/* E3: staff page-header layer — a quiet context line under the page
+   title (parent/admin had a bare h1 above dense tables). */
+.page-head .page-title {
+  margin-bottom: var(--space-1);
+}
+
+.page-sub {
+  margin: 0 0 var(--space-4);
+  font-size: var(--fs-sm);
+  color: var(--muted);
 }
 
 /* Segmented chips (class selector etc.) */

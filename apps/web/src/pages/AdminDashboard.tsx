@@ -158,7 +158,10 @@ export default function AdminDashboard() {
     /* A11Y-01: the staff layout had no <main> at all, so the route had no
        landmark and the shell's skip link had nothing to jump to. */
     <main id="main-content" tabIndex={-1} className="shell-main">
-      <h1 className="page-title">{t("adminDashboard")}</h1>
+      <div className="page-head">
+        <h1 className="page-title">{t("adminDashboard")}</h1>
+        <p className="page-sub">{t("adminSub")}</p>
+      </div>
 
       <AiQualityCard />
 
@@ -296,7 +299,7 @@ export default function AdminDashboard() {
           <EmptyState size="sm" icon={Users} title={t("adminUsersEmpty")} />
         ) : (
           <div className="table-wrap">
-            <table className="data">
+            <table className="data cardable">
               <thead>
                 <tr>
                   <th scope="col">#</th>
@@ -308,10 +311,12 @@ export default function AdminDashboard() {
               <tbody>
                 {page.items.map((u) => (
                   <tr key={u.id}>
-                    <td>{u.id}</td>
-                    <td className="cell-wrap-sm">{u.email}</td>
-                    <td>{roleLabel(u.role)}</td>
-                    <td>
+                    <td data-label="#">{u.id}</td>
+                    <td data-label={t("email")} className="cell-wrap-sm">
+                      {u.email}
+                    </td>
+                    <td data-label={t("role")}>{roleLabel(u.role)}</td>
+                    <td data-label={t("role")}>
                       <select
                         value={u.role}
                         onChange={(e) => changeRole(u, e.target.value)}
