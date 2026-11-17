@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Users } from "lucide-react";
 import { get, patch, post, startImpersonation } from "../api";
 import { friendlyError } from "../errors";
 import { AiQualityCard } from "../components/admin/AiQualityCard";
@@ -7,7 +8,7 @@ import { FeedbackQueueCard } from "../components/admin/FeedbackQueueCard";
 import { RefusalAuditCard } from "../components/admin/RefusalAuditCard";
 import { SchoolsCard } from "../components/admin/SchoolsCard";
 import { VersionsCard } from "../components/admin/VersionsCard";
-import { Button, Field, Modal } from "../components/ui";
+import { Button, EmptyState, Field, Modal } from "../components/ui";
 import { t } from "../i18n";
 import { roleLabel } from "../lib/roles";
 import { useDebounced } from "../lib/useDebounced";
@@ -287,49 +288,57 @@ export default function AdminDashboard() {
           </button>
         </form>
 
-        <div className="table-wrap">
-          <table className="data">
-            <thead>
-              <tr>
-                <th scope="col">#</th>
-                <th scope="col">{t("email")}</th>
-                <th scope="col">{t("role")}</th>
-                <th scope="col"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {page.items.map((u) => (
-                <tr key={u.id}>
-                  <td>{u.id}</td>
-                  <td className="cell-wrap-sm">{u.email}</td>
-                  <td>{roleLabel(u.role)}</td>
-                  <td>
-                    <select
-                      value={u.role}
-                      onChange={(e) => changeRole(u, e.target.value)}
-                      aria-label={`${u.email} ${t("role")}`}
-                    >
-                      {ROLES.map((r) => (
-                        <option key={r} value={r}>
-                          {roleLabel(r)}
-                        </option>
-                      ))}
-                    </select>{" "}
-                    {/* server refuses admin targets; button mirrors that. */}
-                    {u.role !== "admin" && u.role !== "school_admin" && (
-                      <button
-                        className="small secondary"
-                        onClick={() => openImpersonate(u)}
-                      >
-                        {t("impersonate")}
-                      </button>
-                    )}
-                  </td>
+        {!usersQuery.isFetching && page.items.length === 0 ? (
+          /* E2: a settled-empty table now says so — the header-only table
+              read as a rendering glitch. While a request is in flight the
+              table stays (the old behaviour), so a search never flashes
+              "no users" before its answer arrives. */
+          <EmptyState size="sm" icon={Users} title={t("adminUsersEmpty")} />
+        ) : (
+          <div className="table-wrap">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th scope="col">#</th>
+                  <th scope="col">{t("email")}</th>
+                  <th scope="col">{t("role")}</th>
+                  <th scope="col"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {page.items.map((u) => (
+                  <tr key={u.id}>
+                    <td>{u.id}</td>
+                    <td className="cell-wrap-sm">{u.email}</td>
+                    <td>{roleLabel(u.role)}</td>
+                    <td>
+                      <select
+                        value={u.role}
+                        onChange={(e) => changeRole(u, e.target.value)}
+                        aria-label={`${u.email} ${t("role")}`}
+                      >
+                        {ROLES.map((r) => (
+                          <option key={r} value={r}>
+                            {roleLabel(r)}
+                          </option>
+                        ))}
+                      </select>{" "}
+                      {/* server refuses admin targets; button mirrors that. */}
+                      {u.role !== "admin" && u.role !== "school_admin" && (
+                        <button
+                          className="small secondary"
+                          onClick={() => openImpersonate(u)}
+                        >
+                          {t("impersonate")}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
         <p className="muted">
           {page.total} — {offset + 1}–{Math.min(offset + LIMIT, page.total)}{" "}
           <button

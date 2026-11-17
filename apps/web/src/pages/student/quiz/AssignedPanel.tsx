@@ -1,4 +1,13 @@
-import { Badge, Button, Card, LoadError } from "../../../components/ui";
+import { ClipboardList } from "lucide-react";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  LoadError,
+  Skeleton,
+  Spinner,
+} from "../../../components/ui";
 import { t, tSubject } from "../../../i18n";
 import { formatServerDateTime } from "../../../lib/datetime";
 import type { AssignmentMine, ShortTestMine } from "../../../types";
@@ -45,15 +54,24 @@ export function AssignedPanel({
         // isStudent guards this: react-query reports isPending while a query
         // is disabled too, so without it a teacher opening this tab would
         // wait on a "loading" that never resolves.
+        // E2: the list's own shape while it loads — card rows — with the
+        // loading state still announced (Spinner carries role="status").
         <Card>
-          <p className="muted flush" role="status">
-            {t("loading")}
-          </p>
+          <div className="stack">
+            <Spinner />
+            <Skeleton variant="row" />
+            <Skeleton variant="row" />
+          </div>
         </Card>
       ) : (
         assigned.length === 0 && (
+          // E2: the shared empty state instead of a lone muted line.
           <Card>
-            <p className="muted flush">{t("assignedEmpty")}</p>
+            <EmptyState
+              size="sm"
+              icon={ClipboardList}
+              title={t("assignedEmpty")}
+            />
           </Card>
         )
       )}

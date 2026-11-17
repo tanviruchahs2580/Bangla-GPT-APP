@@ -432,11 +432,16 @@ const bn = {
   noStudents: "এই শ্রেণিতে কোনো শিক্ষার্থী নেই।",
   parentDashboard: "অভিভাবক ড্যাশবোর্ড",
   myChildren: "আমার সন্তান",
+  // E2: the linked-children table's empty state (ParentDashboard).
+  parentNoChildren: "এখনো কোনো সন্তান সংযোগ করা হয়নি",
   linkChild: "সন্তান যুক্ত করুন",
   inviteCodeLabel: "সন্তানের ইনভাইট কোড",
   redeem: "যুক্ত করুন",
   adminDashboard: "অ্যাডমিন ড্যাশবোর্ড",
   searchEmail: "ইমেইল খুঁজুন…",
+  // E2: the admin users table's empty state (search with no matches, or no
+  // users at all — one sentence covers both).
+  adminUsersEmpty: "কোনো ব্যবহারকারী পাওয়া যায়নি",
   maintenance: "রক্ষণাবেক্ষণ",
   purgeExpired: "মেয়াদোত্তীর্ণ ডেটা মুছুন",
   purged: "মুছে ফেলা হয়েছে",
@@ -1263,11 +1268,16 @@ const en: Dict = {
   noStudents: "No students in this class.",
   parentDashboard: "Parent dashboard",
   myChildren: "My children",
+  // E2: the linked-children table's empty state (ParentDashboard).
+  parentNoChildren: "No children linked yet",
   linkChild: "Link a child",
   inviteCodeLabel: "Child's invite code",
   redeem: "Link",
   adminDashboard: "Admin dashboard",
   searchEmail: "Search email…",
+  // E2: the admin users table's empty state (search with no matches, or no
+  // users at all — one sentence covers both).
+  adminUsersEmpty: "No users found",
   maintenance: "Maintenance",
   purgeExpired: "Purge expired data",
   purged: "Purged",

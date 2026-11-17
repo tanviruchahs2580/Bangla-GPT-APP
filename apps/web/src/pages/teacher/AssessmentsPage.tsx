@@ -11,11 +11,20 @@ import type {
   RosterEntry,
   ShortTest,
 } from "../../types";
-import { Check, ChevronLeft, Pencil } from "lucide-react";
+import {
+  Check,
+  ChevronLeft,
+  ClipboardList,
+  FileText,
+  ListChecks,
+  Pencil,
+  Users,
+} from "lucide-react";
 import {
   Badge,
   Button,
   Card,
+  EmptyState,
   LoadError,
   Segmented,
   Stat,
@@ -262,7 +271,12 @@ export default function AssessmentsPage() {
                    about the teacher's work, not about the request. */
                 <LoadError onRetry={() => void qpsQuery.refetch()} />
               ) : qps.length === 0 ? (
-                <p className="muted">{t("noDocumentsYet")}</p>
+                // E2: the shared empty state instead of a lone muted line.
+                <EmptyState
+                  size="sm"
+                  icon={FileText}
+                  title={t("noDocumentsYet")}
+                />
               ) : (
                 <div className="stack">
                   {qps.map((qp) => (
@@ -340,7 +354,8 @@ export default function AssessmentsPage() {
 
           <Card title={t("classStudents")}>
             {roster.length === 0 ? (
-              <p className="muted">{t("noStudents")}</p>
+              // E2: the shared empty state instead of a lone muted line.
+              <EmptyState size="sm" icon={Users} title={t("noStudents")} />
             ) : (
               <div className="table-wrap">
                 <table className="data">
@@ -505,7 +520,8 @@ export default function AssessmentsPage() {
               /* F-021: a failed list used to read as "nothing assigned". */
               <LoadError onRetry={() => void assignsQuery.refetch()} />
             ) : assigns.length === 0 ? (
-              <p className="muted">{t("baNone")}</p>
+              // E2: the shared empty state instead of a lone muted line.
+              <EmptyState size="sm" icon={ClipboardList} title={t("baNone")} />
             ) : (
               <div className="stack">
                 {assigns.slice(0, 8).map((a) => (
@@ -607,7 +623,9 @@ function ShortTestList() {
   // F-021: the same empty-vs-failed confusion as the paper and assignment
   // lists on this page.
   if (isError) return <LoadError onRetry={() => void refetch()} />;
-  if (rows.length === 0) return <p className="muted">{t("stEmpty")}</p>;
+  if (rows.length === 0)
+    // E2: the shared empty state instead of a lone muted line.
+    return <EmptyState size="sm" icon={ListChecks} title={t("stEmpty")} />;
   return (
     <ul>
       {rows.slice(0, 8).map((st) => (

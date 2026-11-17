@@ -13,7 +13,7 @@ import { getLearnProgress, getSubjectChapters, getSubjects } from "../../api";
 import { track } from "../../lib/analytics";
 import type { ChapterSummaryOut, SubjectOut } from "../../types";
 import { useAuth } from "../../AuthContext";
-import { Card, LoadError } from "../../components/ui";
+import { Card, LoadError, Skeleton } from "../../components/ui";
 import { OfflineLibrary } from "../../components/OfflineLibrary";
 import { formatNumber, t, tSubject } from "../../i18n";
 import { cn } from "../../lib/cn";
@@ -171,9 +171,10 @@ export function LearnPage() {
       </div>
 
       {subjectsQuery.isLoading ? (
+        /* E2: the shared Skeleton component — same classes, one writer. */
         <div className="stack">
-          <div className="skeleton skeleton-card" />
-          <div className="skeleton skeleton-card" />
+          <Skeleton variant="card" />
+          <Skeleton variant="card" />
         </div>
       ) : subjectsQuery.isError ? (
         /* Without this branch a failed fetch fell through to the grid below
@@ -284,7 +285,7 @@ export function LearnPage() {
           <div className="stack">
             {chaptersQuery.isLoading ? (
               <Card>
-                <div className="skeleton skeleton-text" />
+                <Skeleton variant="text" />
               </Card>
             ) : chaptersQuery.isError ? (
               /* "no chapters for this subject" was also the message after a

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { CheckCircle2, AlertTriangle, RefreshCw } from "lucide-react";
 import { getStatus } from "../api";
 import { friendlyError } from "../errors";
+import { Skeleton, Spinner } from "../components/ui";
 import { t } from "../i18n";
 import { formatServerDateTime } from "../lib/datetime";
 import type { StatusOut } from "../types";
@@ -95,7 +96,18 @@ export default function StatusPage() {
           {error}
         </p>
       )}
-      {data === null && !error && <p className="muted">{t("loading")}</p>}
+      {data === null && !error && (
+        /* E2: the page's real shape while it loads — the status banner,
+            then the component list — with the loading state still
+            announced (Spinner carries role="status"). */
+        <div className="stack">
+          <Spinner />
+          <Skeleton variant="text" w="60%" />
+          <Skeleton variant="row" />
+          <Skeleton variant="row" />
+          <Skeleton variant="row" />
+        </div>
+      )}
       {data && (
         <>
           <div

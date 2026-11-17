@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bot } from "lucide-react";
+import { Bot, ClipboardList, FileText } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { get, getTeacherWorkload, post } from "../../api";
 import type {
@@ -8,7 +8,16 @@ import type {
   SupportPlanRow,
   WeakMatrix,
 } from "../../types";
-import { Badge, Button, Card, LoadError, TrendMark } from "../../components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  LoadError,
+  Skeleton,
+  Spinner,
+  TrendMark,
+} from "../../components/ui";
 import { friendlyError } from "../../errors";
 import { t } from "../../i18n";
 
@@ -343,7 +352,8 @@ export default function AnalyticsPage() {
         {spMsg && <p className="muted">{spMsg}</p>}
         <h3 className="mt-4">{t("spTitle")}</h3>
         {sps.length === 0 ? (
-          <p className="muted">{t("spEmpty")}</p>
+          // E2: the shared empty state instead of a lone muted line.
+          <EmptyState size="sm" icon={ClipboardList} title={t("spEmpty")} />
         ) : (
           <ul>
             {sps.map((p) => (
@@ -374,9 +384,14 @@ export default function AnalyticsPage() {
         {workloadQuery.isError ? (
           <LoadError onRetry={() => void workloadQuery.refetch()} />
         ) : workloadQuery.isPending ? (
-          <p className="muted" role="status">
-            {t("loading")}
-          </p>
+          // E2: the workload stat's own shape while it loads — the minutes
+          // figure, then its label — with the loading state still announced
+          // (Spinner carries role="status").
+          <div className="stack">
+            <Spinner />
+            <Skeleton w={72} h={28} />
+            <Skeleton variant="text" w={180} />
+          </div>
         ) : workload ? (
           <div className="stat-row mt-2" title={workload.methodology}>
             <div>
@@ -387,7 +402,8 @@ export default function AnalyticsPage() {
             </div>
           </div>
         ) : (
-          <p className="muted">{t("noDocumentsYet")}</p>
+          // E2: the shared empty state instead of a lone muted line.
+          <EmptyState size="sm" icon={FileText} title={t("noDocumentsYet")} />
         )}
       </Card>
     </main>

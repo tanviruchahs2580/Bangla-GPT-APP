@@ -3,6 +3,7 @@ import { downloadBlob } from "../../lib/download";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
+  Bookmark,
   Brain,
   Download,
   FileText,
@@ -35,8 +36,11 @@ import {
   Badge,
   Button,
   Card,
+  EmptyState,
   LoadError,
   Segmented,
+  Skeleton,
+  Spinner,
 } from "../../components/ui";
 import { friendlyError } from "../../errors";
 import { formatNumber, getLang, setLang, t, tSubject } from "../../i18n";
@@ -354,7 +358,12 @@ export default function MePage() {
                statement -- the student's bookmarked answers looked deleted. */
             <LoadError onRetry={() => void refetchNotes()} />
           ) : (notes ?? []).length === 0 ? (
-            <p className="muted text-sm m-0">{t("savedNotesEmpty")}</p>
+            // E2: the shared empty state instead of a lone muted line.
+            <EmptyState
+              size="sm"
+              icon={Bookmark}
+              title={t("savedNotesEmpty")}
+            />
           ) : (
             <ul className="stack notes-list">
               {(notes ?? []).map((n) => (
@@ -397,9 +406,17 @@ export default function MePage() {
               onRetry={() => void refetchPrefs()}
             />
           ) : prefsPending || !prefs ? (
-            <p className="muted" role="status">
-              {t("loading")}
-            </p>
+            // E2: the form's own shape while it loads — two fields side by
+            // side, then the save row — with the loading state still
+            // announced (Spinner carries role="status").
+            <div className="stack">
+              <Spinner />
+              <div className="grid-2">
+                <Skeleton h={58} />
+                <Skeleton h={58} />
+              </div>
+              <Skeleton w={96} h={34} />
+            </div>
           ) : (
             <>
               <div className="grid-2">

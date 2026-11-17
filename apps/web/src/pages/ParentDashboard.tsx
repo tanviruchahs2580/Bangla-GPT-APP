@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Users } from "lucide-react";
 import { get, getParentReport, post } from "../api";
 import { friendlyError } from "../errors";
 import { formatNumber, t } from "../i18n";
 import { track } from "../lib/analytics";
 import { suggestionSentence } from "../lib/text";
-import { Segmented } from "../components/ui";
+import { EmptyState, Segmented, Skeleton, Spinner } from "../components/ui";
 import { ActivityHeatmap } from "../components/ActivityHeatmap";
 import type { ActivitySummary, StudentBrief, StudentProgress } from "../types";
 
@@ -32,9 +33,14 @@ function ChildSectionState({
     <section className="card" aria-label={title}>
       <h2>{title}</h2>
       {pending ? (
-        <p className="muted" role="status">
-          {t("loading")}
-        </p>
+        // E2: the section's own shape while it loads — a text line and a
+        // content row — with the loading state still said out loud (Spinner
+        // carries the role="status" announcement the old paragraph had).
+        <div className="stack">
+          <Spinner />
+          <Skeleton variant="text" w="60%" />
+          <Skeleton variant="row" />
+        </div>
       ) : (
         <>
           <p className="error" role="alert">
@@ -166,7 +172,17 @@ export default function ParentDashboard() {
       <div className="card">
         <h2>{t("myChildren")}</h2>
         {children.length === 0 ? (
-          <p className="muted">—</p>
+          // E2: a bare "—" said nothing about what to do next; the empty
+          // state carries the invite instruction the card above explains.
+          <EmptyState
+            size="sm"
+            icon={Users}
+            title={t("parentNoChildren")}
+            body={t("parentInviteHowTo", {
+              account: t("account"),
+              invite: t("parentInviteTitle"),
+            })}
+          />
         ) : (
           <div className="table-wrap">
             <table className="data">

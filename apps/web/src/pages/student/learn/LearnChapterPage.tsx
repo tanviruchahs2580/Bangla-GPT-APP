@@ -17,7 +17,7 @@ import {
 } from "../../../api";
 import { track } from "../../../lib/analytics";
 import { useAuth } from "../../../AuthContext";
-import { Card } from "../../../components/ui";
+import { Card, Skeleton } from "../../../components/ui";
 import { invalidateStudyCaches } from "../../../lib/invalidate";
 import { formatNumber, t, tSubject } from "../../../i18n";
 import { cn } from "../../../lib/cn";
@@ -270,10 +270,11 @@ export function LearnChapterPage() {
         <ChevronLeft size={16} aria-hidden /> {t("back")}
       </button>
       {query.isLoading ? (
+        /* E2: the shared Skeleton component — same classes, one writer. */
         <Card>
-          <div className="skeleton skeleton-text" />
-          <div className="skeleton skeleton-text" />
-          <div className="skeleton skeleton-card" />
+          <Skeleton variant="text" />
+          <Skeleton variant="text" />
+          <Skeleton variant="card" />
         </Card>
       ) : query.isError ? (
         <Card>
