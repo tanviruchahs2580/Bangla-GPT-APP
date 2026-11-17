@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - feat(web): E1 interaction integrity — ConfirmDialog, toast tones, tokenized shadows
+- feat(web): E2 unified loading and empty states
 
 ### Fixed
 
