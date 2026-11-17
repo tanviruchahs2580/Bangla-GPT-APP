@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Added
+
+- feat(web): E1 interaction integrity — ConfirmDialog, toast tones, tokenized shadows
+
 ### Fixed
 
 - fix(android): read the web version from the correct package.json path
