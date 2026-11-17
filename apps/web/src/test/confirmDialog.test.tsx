@@ -140,7 +140,7 @@ describe("E1 i18n keys resolve in both languages", () => {
     expect(t("deleteChatBody")).toBe(
       "এই কথোপকথন ও এর সব বার্তা মুছে যাবে। এটি ফিরিয়ে আনা যাবে না।",
     );
-    expect(t("deleteChatConfirmAction")).toBe("মুছে ফেলুন");
+    expect(t("deleteChatConfirmAction")).toBe("মুছুন");
     // The generic pair.
     expect(t("confirmTitle")).toBe("নিশ্চিত করবেন?");
     expect(t("cancel")).toBe("বাতিল");

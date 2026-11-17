@@ -190,7 +190,7 @@ const bn = {
   deleteChatTitle: "কথোপকথন মুছবেন?",
   deleteChatBody:
     "এই কথোপকথন ও এর সব বার্তা মুছে যাবে। এটি ফিরিয়ে আনা যাবে না।",
-  deleteChatConfirmAction: "মুছে ফেলুন",
+  deleteChatConfirmAction: "মুছুন",
   noResults: "কিছু পাওয়া যায়নি",
   activityTitle: "প্রতিদিনের অনুশীলন",
   streakLabel: "{days} দিনের ধারাবাহিকতা",

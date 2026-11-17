@@ -1751,8 +1751,12 @@ test("ADM-05 impersonation: restrictions, the 15-minute bound, admin revoke, aud
   await page.locator("#q").fill(target!.email);
   const row = page.locator("table.data tbody tr", { hasText: target!.email });
   await expect(row).toHaveCount(1, { timeout: 30_000 });
-  page.once("dialog", (dialog) => void dialog.accept("w2 support check"));
+  // E1: the impersonation reason now lives in the modal, not a native prompt.
   await row.getByRole("button", { name: "Start support session" }).click();
+  await page.locator("#imp-reason").fill("w2 support check");
+  await page
+    .locator(".modal-footer button", { hasText: "Sign in as user" })
+    .click();
   await expect(page.locator(".impersonation-banner")).toBeVisible({
     timeout: 30_000,
   });
