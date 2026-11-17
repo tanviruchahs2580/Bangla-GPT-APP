@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
+import { ShieldCheck } from "lucide-react";
 import { get } from "../api";
-import { Badge, Skeleton } from "../components/ui";
+import { Badge, EmptyState, Skeleton, Spinner } from "../components/ui";
 import { SchoolSections } from "../components/school/SchoolSections";
 import { t } from "../i18n";
 import type { SchoolHealth } from "../types";
@@ -24,9 +25,21 @@ export default function SchoolDashboard() {
         className="container"
         aria-live="polite"
       >
-        <p className="muted">{t("loading")}</p>
-        <Skeleton w="60%" />
-        <Skeleton w="40%" />
+        {/* E2: the page's real shape while it loads — the four summary
+            stats, the health card, then the at-risk table — instead of a
+            sentence beside two unshaped bars. Spinner keeps the loading
+            state announced (the skeleton blocks are aria-hidden). */}
+        <Spinner />
+        <div className="stat-grid">
+          <Skeleton variant="card" h={72} />
+          <Skeleton variant="card" h={72} />
+          <Skeleton variant="card" h={72} />
+          <Skeleton variant="card" h={72} />
+        </div>
+        <Skeleton variant="card" h={140} />
+        <Skeleton variant="row" />
+        <Skeleton variant="row" />
+        <Skeleton variant="row" />
       </main>
     );
   }
@@ -100,7 +113,9 @@ export default function SchoolDashboard() {
       <section className="card" aria-label={t("sdAtRiskList")}>
         <h2>{t("sdAtRiskList")}</h2>
         {data.at_risk.length === 0 ? (
-          <p className="muted">{t("sdEmpty")}</p>
+          // E2: an empty at-risk list is good news — said with the shared
+          // empty state instead of a lone muted line.
+          <EmptyState size="sm" icon={ShieldCheck} title={t("sdEmpty")} />
         ) : (
           <div className="table-wrap">
             <table className="data">

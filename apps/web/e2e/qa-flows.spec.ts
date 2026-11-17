@@ -67,10 +67,7 @@ async function signIn(
 }
 
 async function signOut(page: Page): Promise<void> {
-  await page
-    .locator("header")
-    .getByRole("button", { name: "Log out" })
-    .click();
+  await page.locator("header").getByRole("button", { name: "Log out" }).click();
   await expect(page).toHaveURL(/\/login$/);
 }
 
@@ -214,7 +211,9 @@ test("ANON-02 status page shows real component checks and no sensitive payload",
   }
 
   await open(page, "/status");
-  await expect(page.locator(".status-item")).toHaveCount(body.components.length);
+  await expect(page.locator(".status-item")).toHaveCount(
+    body.components.length,
+  );
   for (const c of body.components) {
     await expect(
       page.locator(".status-item strong", { hasText: c.name }),
@@ -416,9 +415,13 @@ test("ADM-05 impersonation: start, support banner, exit, audit trail", async ({
   );
   expect(Number.isInteger(studentUserId)).toBe(true);
 
-  // The reason prompt is part of the product flow; accept it with a real reason.
-  page.once("dialog", (dialog) => void dialog.accept("qa e2e support check"));
+  // The reason prompt is part of the product flow; E1 replaced the native
+  // window.prompt with the focus-trapped impersonation modal — drive it.
   await row.getByRole("button", { name: "Start support session" }).click();
+  await page.locator("#imp-reason").fill("qa e2e support check");
+  await page
+    .locator(".modal-footer button", { hasText: "Sign in as user" })
+    .click();
 
   // The impersonated session lands on the target's home with the banner naming them.
   await expect(page).toHaveURL(/\/student$/, { timeout: 30_000 });
@@ -578,7 +581,9 @@ test("ADM-07 k-anonymity: a one-student cohort is suppressed and the floor canno
 
 /* ------------------------------------------------------------------- SAD */
 
-test("SAD-03 school A cannot read or write school B by ID", async ({ page }) => {
+test("SAD-03 school A cannot read or write school B by ID", async ({
+  page,
+}) => {
   // Fixture: a second school, created the way an operator creates one, plus one
   // classroom in it so there is a real ID to tamper with.
   await signIn(page, ADMIN);
@@ -627,13 +632,11 @@ test("SAD-03 school A cannot read or write school B by ID", async ({ page }) => 
       schoolB!.code,
     );
   }
-  const write = await page.request.post(
-    `/api/schools/${schoolB!.id}/classes`,
-    { headers, data: { class_level: 7, section: "QB" } },
-  );
-  expect(write.status(), "school A could create a class in school B").toBe(
-    403,
-  );
+  const write = await page.request.post(`/api/schools/${schoolB!.id}/classes`, {
+    headers,
+    data: { class_level: 7, section: "QB" },
+  });
+  expect(write.status(), "school A could create a class in school B").toBe(403);
 
   // The own-school path still works, so the 403s above are scoping, not breakage.
   const own = await apiGet<{ name: string }>(page, "/school/overview");
@@ -700,9 +703,7 @@ test("PAR-04 another child's data cannot be read by ID", async ({ page }) => {
     expect(text, `${path} did not answer not_linked: ${text}`).toContain(
       "not_linked",
     );
-    expect(text, `${path} leaked the child's name`).not.toContain(
-      "E2E Visual",
-    );
+    expect(text, `${path} leaked the child's name`).not.toContain("E2E Visual");
     bodies.push(text);
   }
   for (const body of bodies) {
@@ -755,10 +756,7 @@ test("PAR-03 parent report is built from real activity and renders in Bangla", a
     questions_asked: number;
     weak_chapters: string[];
     strengths: string[];
-  }>(
-    page,
-    `/parents/me/children/${child!.student_id}/report?period=weekly`,
-  );
+  }>(page, `/parents/me/children/${child!.student_id}/report?period=weekly`);
   expect(report.quizzes_taken).toBeGreaterThanOrEqual(1);
 
   const row = page.locator("table tbody tr", { hasText: "E2E Student" });
@@ -776,9 +774,7 @@ test("PAR-03 parent report is built from real activity and renders in Bangla", a
   );
   expect(nums[0]).toBe(String(report.quizzes_taken));
   expect(nums[1]).toBe(
-    report.avg_score_pct == null
-      ? "—"
-      : `${Math.round(report.avg_score_pct)}%`,
+    report.avg_score_pct == null ? "—" : `${Math.round(report.avg_score_pct)}%`,
   );
   expect(nums[2]).toBe(String(report.chapters_read));
   expect(nums[3]).toBe(String(report.questions_asked));
@@ -841,18 +837,14 @@ test("STU-13 notification bell: unread count, item copy, read semantics", async 
   const bell = page.getByRole("button", { name: "Notifications" });
   await expect(page.locator(".notif-badge")).toHaveCount(0);
   await bell.click();
-  await expect(page.locator(".notif-empty")).toHaveText(
-    "No notifications yet",
-  );
+  await expect(page.locator(".notif-empty")).toHaveText("No notifications yet");
   await page.keyboard.press("Escape");
   await expect(page.locator(".notif-panel")).toHaveCount(0);
 
   // The link notifies this parent (routers/parent.py notify_user).
   await page.locator("#icode").fill(code);
   await page.getByRole("button", { name: "Link" }).click();
-  await expect(
-    page.getByText("Linked to your child's account."),
-  ).toBeVisible();
+  await expect(page.getByText("Linked to your child's account.")).toBeVisible();
 
   // Opening the bell refreshes it; the new notification arrives unread.
   await bell.click();
@@ -934,9 +926,13 @@ test("STU-16 export returns the full sections and deletion removes the account",
     .poll(async () => page.url(), { timeout: 30_000 })
     .toMatch(/\/login$/);
   await expect
-    .poll(async () => page.evaluate(() => window.localStorage.getItem("bgpt_token")), {
-      timeout: 30_000,
-    })
+    .poll(
+      async () =>
+        page.evaluate(() => window.localStorage.getItem("bgpt_token")),
+      {
+        timeout: 30_000,
+      },
+    )
     .toBeNull();
 
   // The stolen copy of the token is dead...
@@ -993,7 +989,9 @@ test("STU-08 save to notes, list, delete, and thumbs feedback reaches triage", a
   // Feedback: both controls carry accessible names, and Helpful really posts.
   const helpful = surface.getByRole("button", { name: "Helpful" });
   await expect(helpful).toBeVisible();
-  await expect(surface.getByRole("button", { name: "Incorrect" })).toBeVisible();
+  await expect(
+    surface.getByRole("button", { name: "Incorrect" }),
+  ).toBeVisible();
   const posted = page.waitForResponse(
     (res) =>
       res.url().includes("/feedback") && res.request().method() === "POST",
@@ -1007,12 +1005,13 @@ test("STU-08 save to notes, list, delete, and thumbs feedback reaches triage", a
   await expect(rows).toHaveCount(notesBefore.length + 1, { timeout: 30_000 });
   await rows.first().getByRole("button").click();
   await expect
-    .poll(async () =>
-      (
-        (await (
-          await page.request.get("/api/notes", { headers })
-        ).json()) as unknown[]
-      ).length,
+    .poll(
+      async () =>
+        (
+          (await (
+            await page.request.get("/api/notes", { headers })
+          ).json()) as unknown[]
+        ).length,
     )
     .toBe(notesBefore.length);
   await expect(rows).toHaveCount(notesBefore.length);

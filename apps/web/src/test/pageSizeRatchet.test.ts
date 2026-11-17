@@ -62,13 +62,28 @@ const BUDGET = 500;
  * query in its error banner — the same class of fix, a state that was not
  * rendered.
  *
+ * E2 (2026-11-17, unified loading + empty states) raised eleven more, for
+ * the same reason as the FE-FIX pass: each audited loader now renders the
+ * surface's real shape as Skeleton rows (a Spinner keeps the loading state
+ * announced, since the skeleton blocks are aria-hidden) and each text-only
+ * empty state became the shared EmptyState primitive — branches and JSX
+ * that did not exist before are the growth. Two touched pages stayed under
+ * their recorded ceilings and keep them: ParentDashboard (391 ≤ 404) and
+ * MePage (746 ≤ 793).
+ *
  * Every entry is that file's measured count after the change. No page that was
  * split in a pass kept its old ceiling. The two that moved by one or two lines
  * when prettier reformatted them are re-measured, not re-justified: the
  * formatting is the change.
  */
 const CEILING: Record<string, number> = {
-  "AdminDashboard.tsx": 337,
+  // 387: E1 (2026-11-17) moved the impersonation reason out of window.prompt
+  // into the shared Modal — the dialog JSX, its target/reason state and the
+  // preserved <3-chars guard are the growth. The interaction shell is the fix;
+  // no authorization or tenancy logic moved.
+  // 396: E2 (2026-11-17) gave the settled-empty users table the shared
+  // EmptyState (the table keeps rendering while a request is in flight).
+  "AdminDashboard.tsx": 401, // E3 2026-11-17: cardable data-labels + page-head (measured 401)
   "ForgotResetPage.tsx": 185,
   "LegalPage.tsx": 127,
   "LoginPage.tsx": 353,
@@ -76,22 +91,32 @@ const CEILING: Record<string, number> = {
   "NotFoundPage.tsx": 31,
   "ParentDashboard.tsx": 404,
   "RegisterPage.tsx": 288,
-  "SchoolDashboard.tsx": 147,
-  "StatusPage.tsx": 148,
+  // 147: E2 (2026-11-17) — the loading branch now renders the page's real
+  // shape (stat grid, health card, at-risk rows) and the at-risk empty state
+  // became the shared EmptyState.
+  "SchoolDashboard.tsx": 162,
+  "StatusPage.tsx": 160, // E2 (2026-11-17): shaped skeleton loading branch.
   "WelcomePage.tsx": 128,
-  "student/AITutorPage.tsx": 688,
-  "student/HomePage.tsx": 335,
-  "student/LearnPage.tsx": 381,
+  // 708: E1 (2026-11-17) replaced window.confirm with the shared
+  // ConfirmDialog for chat deletion — the deleteTarget state and the dialog
+  // render are the growth; the delete logic itself is unchanged.
+  "student/AITutorPage.tsx": 708,
+  "student/HomePage.tsx": 342, // E2 (2026-11-17): shared Skeleton swap.
+  "student/LearnPage.tsx": 382, // E2 (2026-11-17): shared Skeleton swap.
   "student/MePage.tsx": 793,
   "student/QuizPage.tsx": 586,
   "student/learn/ChapterAsk.tsx": 121,
   "student/learn/ChapterPractice.tsx": 184,
-  "student/learn/LearnChapterPage.tsx": 494,
-  "student/quiz/AssignedPanel.tsx": 119,
+  "student/learn/LearnChapterPage.tsx": 495, // E2 (2026-11-17): Skeleton swap.
+  // 137: E2 (2026-11-17) — the loading card renders row skeletons (Spinner
+  // keeps the announcement) and the empty list became the shared EmptyState.
+  "student/quiz/AssignedPanel.tsx": 137,
   "student/quiz/QuizResultScreen.tsx": 111,
   "student/quiz/QuizRunner.tsx": 138,
   "student/quiz/ReteachCards.tsx": 28,
-  "student/quiz/RevisionPanel.tsx": 77,
+  // 89: E2 (2026-11-17) — same treatment as AssignedPanel: row skeletons
+  // while the queue loads, shared EmptyState when it is empty.
+  "student/quiz/RevisionPanel.tsx": 89,
   "student/quiz/StartQuizCard.tsx": 100,
   "student/tutor/AssistantContent.tsx": 40,
   "student/tutor/EvidenceModal.tsx": 33,
@@ -107,9 +132,16 @@ const CEILING: Record<string, number> = {
   // 289: UX-006 moved the typing dots into the streaming bubble and gave the
   // placeholder its own condition, so only one assistant bubble is on screen.
   "student/tutor/TutorThread.tsx": 297,
-  "teacher/AnalyticsPage.tsx": 395,
-  "teacher/AssessmentsPage.tsx": 618,
-  "teacher/ClassesPage.tsx": 688,
+  // 411: E2 (2026-11-17) — the workload card's loading branch renders the
+  // stat's shape; the support-plan and workload empty states became the
+  // shared EmptyState.
+  "teacher/AnalyticsPage.tsx": 411,
+  // 636: E2 (2026-11-17) — the four text-only list empty states (papers,
+  // roster, bulk assignments, short tests) became the shared EmptyState.
+  "teacher/AssessmentsPage.tsx": 636,
+  // 692: E2 (2026-11-17) — the no-classrooms and empty-roster empty states
+  // became the shared EmptyState (the first moved out of the chip row).
+  "teacher/ClassesPage.tsx": 692,
   "teacher/CreatePage.tsx": 706,
   "teacher/TeacherHomePage.tsx": 180,
   "teacher/TeacherProfilePage.tsx": 119,

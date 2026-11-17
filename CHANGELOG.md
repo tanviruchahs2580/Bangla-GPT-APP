@@ -13,16 +13,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Added
+
+- feat(web): E1 interaction integrity — ConfirmDialog, toast tones, tokenized shadows
+- feat(web): E2 unified loading and empty states
+- feat(web): E3 table elevation, mobile card fallback, staff page headers
+- feat(web): E4 type-scale rebalance — lift the small steps
+- feat(web): E6-lite — PWA app shortcuts for Tutor and Quiz
+
 ### Fixed
 
 - fix(android): read the web version from the correct package.json path
+- fix(web): CI fixes — glossary variant, e2e impersonation flow, visual baselines
 - fix(web): exempt font faces from the SW runtime-cache FIFO
+- fix(web): inset the Android WebView below the system bars (edge-to-edge)
 - fix(web): load the real Noto Sans Bengali 600 face
+- fix(web): mobile correctness wave — keyboard, notch, update banner, tap targets
+- fix(web): tolerate prettier's meta wrapping in the mobile guard test
 
 ### Maintenance
 
 - chore(android): restore LF endings and the trailing newline in build.gradle
+- chore(web): re-baseline the four remaining visual snapshots (Windows leg)
 - chore: regenerate the CHANGELOG
+- chore: regenerate the native-review sheet
+
+### Style
+
+- style: prettier formatting for the M1 stylesheet and meta edits
+
+### Other
+
+- Merge main: absorb the stray prettier commit (superseded by the wave work)
+- Merge pull request #141 from tanviruchahs2580/feat/typography-600-weight
 
 ## v0.14.0 - 2026-11-17
 

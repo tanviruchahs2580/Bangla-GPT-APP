@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bot, ChevronLeft } from "lucide-react";
+import { Bot, ChevronLeft, School, Users } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { get, post } from "../../api";
 import type {
@@ -14,6 +14,7 @@ import {
   Badge,
   Button,
   Card,
+  EmptyState,
   ProgressRing,
   Stat,
   TrendMark,
@@ -288,8 +289,13 @@ export default function ClassesPage() {
               {r.student_count})
             </button>
           ))}
-          {rooms.length === 0 && <p className="muted">{t("noStudents")}</p>}
         </div>
+        {rooms.length === 0 && (
+          /* E2: the shared empty state instead of a lone muted line — moved
+             out of the chip row so it renders as a block, not a squeezed
+             flex item inside role="group". */
+          <EmptyState size="sm" icon={School} title={t("noStudents")} />
+        )}
         <form onSubmit={createRoom} className="row-flex gap-2 mt-2">
           <label htmlFor="ncls">{t("newClassroom")}</label>
           <select
@@ -513,7 +519,8 @@ export default function ClassesPage() {
             ))}
           </div>
           {filtered.length === 0 ? (
-            <p className="muted">{t("noStudents")}</p>
+            // E2: the shared empty state instead of a lone muted line.
+            <EmptyState size="sm" icon={Users} title={t("noStudents")} />
           ) : (
             <div className="table-wrap">
               <table className="data">

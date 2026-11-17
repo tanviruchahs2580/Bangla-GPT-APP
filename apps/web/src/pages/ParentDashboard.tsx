@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Users } from "lucide-react";
 import { get, getParentReport, post } from "../api";
 import { friendlyError } from "../errors";
 import { formatNumber, t } from "../i18n";
 import { track } from "../lib/analytics";
 import { suggestionSentence } from "../lib/text";
-import { Segmented } from "../components/ui";
+import { EmptyState, Segmented, Skeleton, Spinner } from "../components/ui";
 import { ActivityHeatmap } from "../components/ActivityHeatmap";
 import type { ActivitySummary, StudentBrief, StudentProgress } from "../types";
 
@@ -32,9 +33,14 @@ function ChildSectionState({
     <section className="card" aria-label={title}>
       <h2>{title}</h2>
       {pending ? (
-        <p className="muted" role="status">
-          {t("loading")}
-        </p>
+        // E2: the section's own shape while it loads — a text line and a
+        // content row — with the loading state still said out loud (Spinner
+        // carries the role="status" announcement the old paragraph had).
+        <div className="stack">
+          <Spinner />
+          <Skeleton variant="text" w="60%" />
+          <Skeleton variant="row" />
+        </div>
       ) : (
         <>
           <p className="error" role="alert">
@@ -122,7 +128,10 @@ export default function ParentDashboard() {
     /* A11Y-01: the staff layout had no <main> at all, so the route had no
        landmark and the shell's skip link had nothing to jump to. */
     <main id="main-content" tabIndex={-1} className="shell-main">
-      <h1 className="page-title">{t("parentDashboard")}</h1>
+      <div className="page-head">
+        <h1 className="page-title">{t("parentDashboard")}</h1>
+        <p className="page-sub">{t("parentSub")}</p>
+      </div>
 
       <div className="card">
         <h2>{t("linkChild")}</h2>
@@ -166,10 +175,20 @@ export default function ParentDashboard() {
       <div className="card">
         <h2>{t("myChildren")}</h2>
         {children.length === 0 ? (
-          <p className="muted">—</p>
+          // E2: a bare "—" said nothing about what to do next; the empty
+          // state carries the invite instruction the card above explains.
+          <EmptyState
+            size="sm"
+            icon={Users}
+            title={t("parentNoChildren")}
+            body={t("parentInviteHowTo", {
+              account: t("account"),
+              invite: t("parentInviteTitle"),
+            })}
+          />
         ) : (
           <div className="table-wrap">
-            <table className="data">
+            <table className="data cardable">
               <thead>
                 <tr>
                   <th scope="col">#</th>
@@ -185,15 +204,17 @@ export default function ParentDashboard() {
                     {/* The student id is an identifier, not a quantity, so it
                         stays in Latin digits (the numeral policy keeps ids
                         opaque); the class level is a quantity and does not. */}
-                    <td>{c.student_id}</td>
-                    <td>{c.name}</td>
-                    <td>{formatNumber(c.class_level)}</td>
-                    <td>
+                    <td data-label="#">{c.student_id}</td>
+                    <td data-label={t("name")}>{c.name}</td>
+                    <td data-label={t("className")}>
+                      {formatNumber(c.class_level)}
+                    </td>
+                    <td data-label={t("avgScore")}>
                       {c.avg_score_pct === null
                         ? "—"
                         : `${formatNumber(c.avg_score_pct)}%`}
                     </td>
-                    <td>
+                    <td data-label="">
                       <button
                         className="small secondary"
                         onClick={() => setSelected(c.student_id)}
@@ -244,7 +265,7 @@ export default function ParentDashboard() {
           </div>
           {progress.by_chapter.length > 0 && (
             <div className="table-wrap">
-              <table className="data">
+              <table className="data cardable">
                 <thead>
                   <tr>
                     <th scope="col">{t("chapter")}</th>
@@ -256,10 +277,12 @@ export default function ParentDashboard() {
                 <tbody>
                   {progress.by_chapter.map((c) => (
                     <tr key={c.chapter}>
-                      <td>{c.chapter}</td>
-                      <td>{formatNumber(c.asked)}</td>
-                      <td>{formatNumber(c.correct)}</td>
-                      <td>
+                      <td data-label={t("chapter")}>{c.chapter}</td>
+                      <td data-label={t("asked")}>{formatNumber(c.asked)}</td>
+                      <td data-label={t("correct")}>
+                        {formatNumber(c.correct)}
+                      </td>
+                      <td data-label={t("accuracy")}>
                         {formatNumber(c.accuracy)}%
                         {c.accuracy < 60 && (
                           <span className="badge weak"> {t("weak")}</span>

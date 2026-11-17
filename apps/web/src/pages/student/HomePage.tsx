@@ -16,7 +16,13 @@ import type {
   StudentProgress,
 } from "../../types";
 import { useAuth } from "../../AuthContext";
-import { Card, LoadError, ProgressRing, Stat } from "../../components/ui";
+import {
+  Card,
+  LoadError,
+  ProgressRing,
+  Skeleton,
+  Stat,
+} from "../../components/ui";
 import { formatNumber, t, tSubject } from "../../i18n";
 
 function useProgress(me: MeResponse | null) {
@@ -265,9 +271,10 @@ export default function HomePage() {
       <Card className="home-snapshot">
         <div className="card-title">{t("progressSnapshot")}</div>
         {isLoading ? (
+          /* E2: the shared Skeleton primitive (same classes, one writer). */
           <div className="stack">
-            <div className="skeleton" />
-            <div className="skeleton skeleton-text" />
+            <Skeleton />
+            <Skeleton variant="text" />
           </div>
         ) : isError ? (
           <LoadError

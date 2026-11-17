@@ -1,4 +1,11 @@
-import { Card, LoadError } from "../../../components/ui";
+import { RefreshCw } from "lucide-react";
+import {
+  Card,
+  EmptyState,
+  LoadError,
+  Skeleton,
+  Spinner,
+} from "../../../components/ui";
 import { t } from "../../../i18n";
 import type { RevisionDue, RevisionItemOut } from "../../../types";
 
@@ -31,16 +38,21 @@ export function RevisionPanel({
           <LoadError onRetry={onRetry} />
         </Card>
       ) : pending ? (
+        // E2: the queue's shape while it loads — card rows — with the
+        // loading state still announced (Spinner carries role="status").
         <Card>
-          <p className="muted flush" role="status">
-            {t("loading")}
-          </p>
+          <div className="stack">
+            <Spinner />
+            <Skeleton variant="row" />
+            <Skeleton variant="row" />
+          </div>
         </Card>
       ) : (
         due &&
         due.items.length === 0 && (
+          // E2: the shared empty state instead of a lone muted line.
           <Card>
-            <p className="muted flush">{t("revisionEmpty")}</p>
+            <EmptyState size="sm" icon={RefreshCw} title={t("revisionEmpty")} />
           </Card>
         )
       )}

@@ -9,7 +9,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { TrendingDown, TrendingUp, X } from "lucide-react";
+import { TrendingDown, TrendingUp, X, type LucideIcon } from "lucide-react";
 import { createPortal } from "react-dom";
 import { cn } from "../lib/cn";
 import { formatNumber, t } from "../i18n";
@@ -326,6 +326,58 @@ export function Modal({
   );
 }
 
+/** A confirmation dialog, built ON the shared Modal.
+ *
+ * E1 (interaction integrity): `window.confirm`/`window.prompt` rendered the
+ * browser chrome — unthemed, English-titled, and outside every focus-trap and
+ * axe sweep this product runs. This primitive keeps the one modal contract
+ * (portal, focus trap, Escape, scroll lock, focus restore) and adds only the
+ * question/answer shape: a body, a cancel and a confirm button. The danger
+ * tone is for irreversible actions and paints the confirm button with the
+ * danger variant; everything else stays the primary action.
+ *
+ * Controlled exactly like Modal's own call sites: the parent owns `open` and
+ * closes through `onClose` (cancel button, Escape or backdrop); `onConfirm`
+ * fires only from the confirm button — the caller decides what confirming
+ * means and when to close.
+ */
+export function ConfirmDialog({
+  open,
+  onClose,
+  onConfirm,
+  title,
+  body,
+  confirmLabel = t("confirmAction"),
+  cancelLabel = t("cancel"),
+  tone = "default",
+}: {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: ReactNode;
+  body: ReactNode;
+  confirmLabel?: ReactNode;
+  cancelLabel?: ReactNode;
+  tone?: "danger" | "default";
+}) {
+  return (
+    <Modal open={open} onClose={onClose} title={title}>
+      <p className="m-0">{body}</p>
+      <div className="modal-footer">
+        <Button variant="ghost" onClick={onClose}>
+          {cancelLabel}
+        </Button>
+        <Button
+          variant={tone === "danger" ? "danger" : "primary"}
+          onClick={onConfirm}
+        >
+          {confirmLabel}
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
 /** Shimmer placeholder. `w`/`h` are layout dimensions (not theme values). */
 export function Skeleton({
   w,
@@ -345,13 +397,59 @@ export function Skeleton({
         ? "skeleton-list-row"
         : variant === "avatar"
           ? "skeleton-avatar"
-          : undefined;
+          : variant === "text"
+            ? "skeleton-text"
+            : undefined;
   return (
     <div
       aria-hidden
       className={cn("skeleton", variantClass, className)}
       style={{ width: w, height: h }}
     />
+  );
+}
+
+/** The shared empty state — "this list/space is empty", said with the
+ * product's own voice instead of a lone muted paragraph.
+ *
+ * E2: this generalizes the `.empty-mark` pattern the tutor thread and the
+ * 404/maintenance pages already use (icon mark, title, supporting line) so
+ * every surface answers emptiness with the same shape: an icon in a soft
+ * token circle, a 600-weight --fs-md title, a muted --fs-sm body, and an
+ * optional action slot for the caller's own Button. `size="sm"` fits inside
+ * cards and table sections; `md` stands alone on a page.
+ *
+ * The icon is decorative (`aria-hidden`, the same contract `.empty-mark`
+ * carries) — the title carries the meaning, so the accessible name of an
+ * empty state is its sentence, never a glyph. Styling reuses the existing
+ * tokens and the `.empty-state` rise animation; the layout lives on the new
+ * `.empty-state-*` classes so the tutor thread's `.center.empty-state` keeps
+ * its own shape untouched.
+ */
+export function EmptyState({
+  icon: Icon,
+  title,
+  body,
+  action,
+  size = "md",
+}: {
+  icon?: LucideIcon;
+  title: ReactNode;
+  body?: ReactNode;
+  action?: ReactNode;
+  size?: "sm" | "md";
+}) {
+  return (
+    <div className={cn("empty-state", size === "sm" && "empty-state-sm")}>
+      {Icon && (
+        <span className="empty-icon" aria-hidden>
+          <Icon size={size === "sm" ? 20 : 24} />
+        </span>
+      )}
+      <div className="empty-state-title">{title}</div>
+      {body && <div className="empty-state-body">{body}</div>}
+      {action && <div className="empty-state-action">{action}</div>}
+    </div>
   );
 }
 

@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Users } from "lucide-react";
 import { get, patch, post, startImpersonation } from "../api";
 import { friendlyError } from "../errors";
 import { AiQualityCard } from "../components/admin/AiQualityCard";
@@ -7,6 +8,7 @@ import { FeedbackQueueCard } from "../components/admin/FeedbackQueueCard";
 import { RefusalAuditCard } from "../components/admin/RefusalAuditCard";
 import { SchoolsCard } from "../components/admin/SchoolsCard";
 import { VersionsCard } from "../components/admin/VersionsCard";
+import { Button, EmptyState, Field, Modal } from "../components/ui";
 import { t } from "../i18n";
 import { roleLabel } from "../lib/roles";
 import { useDebounced } from "../lib/useDebounced";
@@ -46,6 +48,11 @@ export default function AdminDashboard() {
   const [purgeConfirming, setPurgeConfirming] = useState(false);
   const [purgeBusy, setPurgeBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // E1: impersonation used window.prompt — unthemed browser chrome outside
+  // every focus-trap and theme this product runs. The target and its reason
+  // now live in the shared Modal instead; the guard itself is unchanged.
+  const [impTarget, setImpTarget] = useState<UserPublic | null>(null);
+  const [impReason, setImpReason] = useState("");
   const LIMIT = 20;
 
   // F-023: the search box keys a DEBOUNCED query, so a typed burst fires one
@@ -92,11 +99,23 @@ export default function AdminDashboard() {
     }
   }, [queryClient]);
 
-  async function doImpersonate(user: UserPublic) {
-    const reason = window.prompt(t("impReasonPrompt"));
-    if (reason === null || reason.trim().length < 3) return;
+  /** E1: open the reason dialog for a target user (was window.prompt). */
+  function openImpersonate(user: UserPublic) {
+    setImpReason("");
+    setImpTarget(user);
+  }
+
+  async function confirmImpersonate() {
+    const user = impTarget;
+    const reason = impReason.trim();
+    // The exact guard window.prompt had: a cancelled prompt (null) or a
+    // reason under 3 chars never reached the API. The confirm button is
+    // disabled under 3 chars, so this second check is the belt to its braces.
+    if (!user || reason.length < 3) return;
+    setImpTarget(null);
+    setImpReason("");
     try {
-      await startImpersonation(user.id, reason.trim());
+      await startImpersonation(user.id, reason);
       // Full reload: every component (and the auth context) re-reads the
       // swapped token, and the shell shows the "support session" banner.
       window.location.assign("/");
@@ -139,7 +158,10 @@ export default function AdminDashboard() {
     /* A11Y-01: the staff layout had no <main> at all, so the route had no
        landmark and the shell's skip link had nothing to jump to. */
     <main id="main-content" tabIndex={-1} className="shell-main">
-      <h1 className="page-title">{t("adminDashboard")}</h1>
+      <div className="page-head">
+        <h1 className="page-title">{t("adminDashboard")}</h1>
+        <p className="page-sub">{t("adminSub")}</p>
+      </div>
 
       <AiQualityCard />
 
@@ -269,49 +291,59 @@ export default function AdminDashboard() {
           </button>
         </form>
 
-        <div className="table-wrap">
-          <table className="data">
-            <thead>
-              <tr>
-                <th scope="col">#</th>
-                <th scope="col">{t("email")}</th>
-                <th scope="col">{t("role")}</th>
-                <th scope="col"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {page.items.map((u) => (
-                <tr key={u.id}>
-                  <td>{u.id}</td>
-                  <td className="cell-wrap-sm">{u.email}</td>
-                  <td>{roleLabel(u.role)}</td>
-                  <td>
-                    <select
-                      value={u.role}
-                      onChange={(e) => changeRole(u, e.target.value)}
-                      aria-label={`${u.email} ${t("role")}`}
-                    >
-                      {ROLES.map((r) => (
-                        <option key={r} value={r}>
-                          {roleLabel(r)}
-                        </option>
-                      ))}
-                    </select>{" "}
-                    {/* server refuses admin targets; button mirrors that. */}
-                    {u.role !== "admin" && u.role !== "school_admin" && (
-                      <button
-                        className="small secondary"
-                        onClick={() => doImpersonate(u)}
-                      >
-                        {t("impersonate")}
-                      </button>
-                    )}
-                  </td>
+        {!usersQuery.isFetching && page.items.length === 0 ? (
+          /* E2: a settled-empty table now says so — the header-only table
+              read as a rendering glitch. While a request is in flight the
+              table stays (the old behaviour), so a search never flashes
+              "no users" before its answer arrives. */
+          <EmptyState size="sm" icon={Users} title={t("adminUsersEmpty")} />
+        ) : (
+          <div className="table-wrap">
+            <table className="data cardable">
+              <thead>
+                <tr>
+                  <th scope="col">#</th>
+                  <th scope="col">{t("email")}</th>
+                  <th scope="col">{t("role")}</th>
+                  <th scope="col"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {page.items.map((u) => (
+                  <tr key={u.id}>
+                    <td data-label="#">{u.id}</td>
+                    <td data-label={t("email")} className="cell-wrap-sm">
+                      {u.email}
+                    </td>
+                    <td data-label={t("role")}>{roleLabel(u.role)}</td>
+                    <td data-label={t("role")}>
+                      <select
+                        value={u.role}
+                        onChange={(e) => changeRole(u, e.target.value)}
+                        aria-label={`${u.email} ${t("role")}`}
+                      >
+                        {ROLES.map((r) => (
+                          <option key={r} value={r}>
+                            {roleLabel(r)}
+                          </option>
+                        ))}
+                      </select>{" "}
+                      {/* server refuses admin targets; button mirrors that. */}
+                      {u.role !== "admin" && u.role !== "school_admin" && (
+                        <button
+                          className="small secondary"
+                          onClick={() => openImpersonate(u)}
+                        >
+                          {t("impersonate")}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
         <p className="muted">
           {page.total} — {offset + 1}–{Math.min(offset + LIMIT, page.total)}{" "}
           <button
@@ -332,6 +364,38 @@ export default function AdminDashboard() {
           </button>
         </p>
       </div>
+
+      {/* E1: the impersonation reason, asked in a real dialog instead of
+          window.prompt. The reason is audit-logged server-side, so the
+          surface says so. Cancel / Escape / backdrop abort exactly as
+          window.prompt returning null did; the confirm stays disabled until
+          the reason meets the same minimum the old guard enforced. */}
+      <Modal
+        open={impTarget !== null}
+        onClose={() => setImpTarget(null)}
+        title={t("impTitle")}
+      >
+        <p className="muted m-0">{t("impBody")}</p>
+        <Field label={t("impReasonPrompt")} htmlFor="imp-reason">
+          <input
+            id="imp-reason"
+            value={impReason}
+            onChange={(e) => setImpReason(e.target.value)}
+          />
+        </Field>
+        <div className="modal-footer">
+          <Button variant="ghost" onClick={() => setImpTarget(null)}>
+            {t("cancel")}
+          </Button>
+          <Button
+            variant="primary"
+            disabled={impReason.trim().length < 3}
+            onClick={() => void confirmImpersonate()}
+          >
+            {t("impConfirm")}
+          </Button>
+        </div>
+      </Modal>
     </main>
   );
 }

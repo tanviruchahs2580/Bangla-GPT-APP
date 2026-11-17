@@ -1,4 +1,5 @@
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
+import { BookOpen } from "lucide-react";
 import { formatServerDateTime } from "../../lib/datetime";
 import {
   getSchoolAnalytics,
@@ -7,7 +8,7 @@ import {
   getSchoolStudents,
   getSchoolTeachers,
 } from "../../api";
-import { Badge, Button } from "../ui";
+import { Badge, Button, EmptyState, Skeleton, Spinner } from "../ui";
 import { t } from "../../i18n";
 import { track } from "../../lib/analytics";
 
@@ -28,9 +29,15 @@ function SectionState({
     return (
       <section className="card" aria-label={label}>
         <h2>{label}</h2>
-        <p className="muted" role="status">
-          {t("loading")}
-        </p>
+        {/* E2: the section's own shape while it loads — table rows — with
+            the loading state still announced (Spinner carries
+            role="status"; the skeleton blocks are aria-hidden). */}
+        <div className="stack">
+          <Spinner />
+          <Skeleton variant="row" />
+          <Skeleton variant="row" />
+          <Skeleton variant="row" />
+        </div>
       </section>
     );
   }
@@ -185,7 +192,8 @@ export function SchoolSections() {
         <section className="card" aria-label={t("covTitle")}>
           <h2>{t("covTitle")}</h2>
           {coverage.data.rows.length === 0 ? (
-            <p className="muted">{t("covEmpty")}</p>
+            // E2: the shared empty state instead of a lone muted line.
+            <EmptyState size="sm" icon={BookOpen} title={t("covEmpty")} />
           ) : (
             <div className="table-wrap">
               <table className="data">
