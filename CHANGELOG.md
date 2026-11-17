@@ -16,10 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - fix(android): read the web version from the correct package.json path
+- fix(web): exempt font faces from the SW runtime-cache FIFO
+- fix(web): load the real Noto Sans Bengali 600 face
 
 ### Maintenance
 
 - chore(android): restore LF endings and the trailing newline in build.gradle
+- chore: regenerate the CHANGELOG
 
 ## v0.14.0 - 2026-11-17
 

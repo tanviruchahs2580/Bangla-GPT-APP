@@ -251,10 +251,17 @@ describe("public/sw.js runtime-cache trimming (font exemption)", () => {
     const keys = [...shell, ...runtime, ...fonts];
 
     const del = await runTrim(keys);
-    const deleted = del.mock.calls.map((c) => new URL((c[0] as Request).url).pathname);
+    const deleted = del.mock.calls.map(
+      (c) => new URL((c[0] as Request).url).pathname,
+    );
     // 52 runtime − 50 cap → the two OLDEST chunks; 26 fonts − 24 cap → the
     // two OLDEST faces; the shell and everything newer stay.
-    expect(deleted).toEqual(["/assets/chunk-0.js", "/assets/chunk-1.js", "/assets/noto-0.woff2", "/assets/noto-1.woff2"]);
+    expect(deleted).toEqual([
+      "/assets/chunk-0.js",
+      "/assets/chunk-1.js",
+      "/assets/noto-0.woff2",
+      "/assets/noto-1.woff2",
+    ]);
   });
 
   it("a session's fonts survive a full runtime rotation (the offline regression)", async () => {
@@ -269,7 +276,9 @@ describe("public/sw.js runtime-cache trimming (font exemption)", () => {
       req("/assets/noto-bengali-700.woff2"),
     ];
     const del = await runTrim([...runtime, ...fonts]);
-    const deleted = del.mock.calls.map((c) => new URL((c[0] as Request).url).pathname);
+    const deleted = del.mock.calls.map(
+      (c) => new URL((c[0] as Request).url).pathname,
+    );
     expect(deleted).toEqual(["/assets/chunk-0.js"]);
   });
 });
