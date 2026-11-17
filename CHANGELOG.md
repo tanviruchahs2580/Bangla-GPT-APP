@@ -17,7 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - fix(android): read the web version from the correct package.json path
 - fix(web): exempt font faces from the SW runtime-cache FIFO
+- fix(web): inset the Android WebView below the system bars (edge-to-edge)
 - fix(web): load the real Noto Sans Bengali 600 face
+- fix(web): mobile correctness wave — keyboard, notch, update banner, tap targets
 
 ### Maintenance
 
