@@ -67,13 +67,15 @@ describe("Bangla typography in styles.css", () => {
   it("requests only weights the loaded families can serve without synthesis", () => {
     // main.tsx is the inventory of loaded faces. The first family in --font
     // (Noto Sans Bengali) must cover every weight the stylesheet asks for:
-    // a request inside [400, 700] resolves to a real face (600 -> 700), while
-    // the audit's 14 font-weight: 800 rules had no face at or above them --
-    // an engine that synthesises bold would smear Bangla matras (F-105).
+    // 400/600/700 are all real faces now (the 2026-11-17 typography wave
+    // added the 600 face, so the 25 `font-weight: 600` rules render a true
+    // semibold instead of resolving up to 700), while the audit's 14
+    // font-weight: 800 rules still have no face at or above them -- an
+    // engine that synthesises bold would smear Bangla matras (F-105).
     const notoWeights = [...mainTsx.matchAll(/noto-sans-bengali\/(\d+)\.css/g)]
       .map((m) => Number(m[1]))
       .sort((a, b) => a - b);
-    expect(notoWeights).toEqual([400, 700]);
+    expect(notoWeights).toEqual([400, 600, 700]);
 
     const requested = declarations("font-weight")
       .map(({ value }) => (value === "bold" ? 700 : Number(value)))

@@ -12,6 +12,7 @@ if (import.meta.env.VITE_SENTRY_DSN) {
 }
 import "./styles.css";
 import "@fontsource/noto-sans-bengali/400.css";
+import "@fontsource/noto-sans-bengali/600.css";
 import "@fontsource/noto-sans-bengali/700.css";
 import "@fontsource/hind-siliguri/400.css";
 import "@fontsource/hind-siliguri/600.css";
