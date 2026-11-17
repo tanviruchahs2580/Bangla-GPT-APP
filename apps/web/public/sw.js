@@ -79,17 +79,33 @@ self.addEventListener("activate", (event) => {
 });
 
 // Old hashed assets stay cached forever unless pruned; keep the newest N.
+// Font faces are exempt from that FIFO: a hashed asset's content change is a
+// new URL (no staleness risk), the faces are small, and rotating them out is
+// what broke offline Bengali rendering — a session that touched more than
+// MAX_RUNTIME_ENTRIES hashed chunks could evict the woff2 files the page was
+// still using, and the next offline reload fell back to system Bengali
+// fonts. Fonts get their own generous cap so old deploys' faces do not pile
+// up forever; FIFO among fonts evicts the oldest deploy's faces first, never
+// the ones the live page references.
+const MAX_FONT_ENTRIES = 24;
+
 async function trimRuntimeCache() {
   const cache = await caches.open(CACHE);
   const keys = await cache.keys();
+  const isFont = (req) => /\.woff2?$/i.test(new URL(req.url).pathname);
   const runtime = keys.filter(
-    (req) => !SHELL.includes(new URL(req.url).pathname),
+    (req) => !SHELL.includes(new URL(req.url).pathname) && !isFont(req),
   );
   const excess = runtime.slice(
     0,
     Math.max(0, runtime.length - MAX_RUNTIME_ENTRIES),
   );
-  await Promise.all(excess.map((req) => cache.delete(req)));
+  const fonts = keys.filter((req) => isFont(req));
+  const fontExcess = fonts.slice(
+    0,
+    Math.max(0, fonts.length - MAX_FONT_ENTRIES),
+  );
+  await Promise.all([...excess, ...fontExcess].map((req) => cache.delete(req)));
 }
 
 // PWA-02: an update over a live session waits (see the install handler) until
