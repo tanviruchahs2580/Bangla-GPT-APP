@@ -28,14 +28,15 @@ describe("mobile viewport + PWA meta (index.html)", () => {
     // Chrome 108+ defaults to resizes-visual, which leaves the sticky tutor
     // composer under the keyboard on mobile. resizes-content restores the
     // classic behaviour the composer's sticky positioning assumes.
-    const viewport = html.match(/name="viewport" content="([^"]+)"/)?.[1] ?? "";
+    const viewport =
+      html.match(/name="viewport"\s+content="([^"]+)"/s)?.[1] ?? "";
     expect(viewport).toContain("viewport-fit=cover");
     expect(viewport).toContain("interactive-widget=resizes-content");
   });
 
   it("keeps the iOS home-screen label short enough to render", () => {
     const title = html.match(
-      /apple-mobile-web-app-title" content="([^"]+)"/,
+      /apple-mobile-web-app-title"\s+content="([^"]+)"/s,
     )?.[1];
     expect(title).toBe("বাংলা GPT");
   });
