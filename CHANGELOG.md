@@ -34,7 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Maintenance
 
 - chore(android): restore LF endings and the trailing newline in build.gradle
+- chore(web): re-baseline the four remaining visual snapshots (Windows leg)
 - chore: regenerate the CHANGELOG
+- chore: regenerate the native-review sheet
 
 ### Style
 
