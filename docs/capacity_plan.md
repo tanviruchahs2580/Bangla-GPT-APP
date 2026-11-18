@@ -85,6 +85,19 @@ Readings:
   used only for the server-side PDF font path if PDF payload ever
   matters; today the TTF stays server-side.
 
+### 4.1 E5 Phase 2 — self-hosted fonts (2026-11-18, supersedes the pilot decision above)
+
+The pilot decision to keep `@fontsource` is superseded by the E5 Phase 2
+migration (`docs/engineering/mobile-platform-hardening/FONT_E5_PHASE2.md`):
+the same binaries are now vendored at `apps/web/public/fonts/` (SHA-256
+provenance recorded), served at stable URLs, with the critical Bengali face
+preloaded and a measured metric-matched fallback. Measured at current HEAD:
+dist ships 10 UI woff2 = 346,060 B (was ~375 KB woff2 + ~671 KB never-fetched
+legacy `.woff`); first-view Bengali cold transfer is materially unchanged
+(~55 KB) — the win is dependency removal, APK weight, and cache stability
+across deploys, not first-view bytes. The latin-ext headroom flagged above
+was taken as part of this migration.
+
 ## 5. LLM cost model (flagged assumption)
 
 At an assumed paid-tier list price of $0.10/M input + $0.40/M output

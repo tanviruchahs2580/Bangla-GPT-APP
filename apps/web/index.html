@@ -22,6 +22,18 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="বাংলা GPT" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <!-- E5 Phase 2: preload exactly the face first Bengali paint needs —
+         the primary family's bengali subset at body weight. Stable public/
+         path, so the preload URL always matches the CSS request (no build
+         hash to go stale). crossorigin is required for font preloads even
+         same-origin. -->
+    <link
+      rel="preload"
+      href="/fonts/noto-sans-bengali-bengali-400-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
     <!-- FE-12: an SVG is not a valid apple-touch-icon format; iOS fell
          back to a screenshot of the page. icon-192.png is a real PNG. -->
     <link rel="apple-touch-icon" href="/icon-192.png" />

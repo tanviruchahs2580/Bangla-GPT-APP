@@ -124,8 +124,14 @@
 
   /* Typography — fluid scale (WP-01/WP-03: clamp, Bangla-safe) */
   --font:
-    "Noto Sans Bengali", "Hind Siliguri", -apple-system, "Segoe UI", system-ui,
-    sans-serif;
+    "Noto Sans Bengali", "Noto Sans Bengali Fallback",
+    "Noto Sans Bengali Fallback Local", "Hind Siliguri", -apple-system,
+    "Segoe UI", system-ui, sans-serif;
+  /* The two "Fallback" families are the measured metric-matched swap-window
+   * faces from fonts.css (E5 Phase 2): Windows resolves the Nirmala-tuned
+   * face, Android the local Noto pin; both sit BEFORE Hind Siliguri so the
+   * fallback period renders with target-matched metrics instead of pulling
+   * the second webfont family down. */
   /* E4 (2026-11-17 elevation audit): the small steps carried most of the
      UI (fs-sm used 49x, fs-xs 18x vs body md 10x) and read small on a
      children's product. Both floors rise ~half a step; the fluid shape
