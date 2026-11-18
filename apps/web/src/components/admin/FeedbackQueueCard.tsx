@@ -3,6 +3,7 @@ import { getFeedbackQueue, triageFeedback } from "../../api";
 import { friendlyError } from "../../errors";
 import { t } from "../../i18n";
 import { roleLabel } from "../../lib/roles";
+import { ResponsiveTable } from "../../components/ResponsiveTable";
 import type { FeedbackQueuePage } from "../../types";
 
 /**
@@ -103,64 +104,74 @@ export function FeedbackQueueCard() {
       ) : queue.rows.length === 0 ? (
         <p className="muted">{t("admNoFeedback")}</p>
       ) : (
-        <div className="table-wrap">
-          <table className="data">
-            <thead>
-              <tr>
-                <th scope="col">#</th>
-                <th scope="col">{t("role")}</th>
-                <th scope="col">±</th>
-                <th scope="col">{t("admNoteLabelShort")}</th>
-                <th scope="col">{t("admStatus")}</th>
-                <th scope="col"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {queue.rows.map((row) => (
-                <tr key={row.id}>
-                  <td>{row.id}</td>
-                  <td>{roleLabel(row.role)}</td>
-                  <td>{row.rating > 0 ? "+" : row.rating < 0 ? "−" : "·"}</td>
-                  <td className="cell-wrap">
-                    {row.comment ?? "—"}
-                    {row.note && (
-                      <div className="muted">
-                        {t("admNoteLabel")}: {row.note}
-                      </div>
-                    )}
-                  </td>
-                  <td>{row.triaged ? t("admTriaged") : t("admTriageOpen")}</td>
-                  <td>
-                    <input
-                      value={notes[row.id] ?? ""}
-                      maxLength={500}
-                      placeholder={t("admNoteLabel")}
-                      aria-label={`${t("admNoteLabel")} #${row.id}`}
-                      onChange={(e) =>
-                        setNotes({ ...notes, [row.id]: e.target.value })
-                      }
-                    />{" "}
-                    {row.triaged ? (
-                      <button
-                        className="small secondary"
-                        onClick={() => doTriage(row.id, false)}
-                      >
-                        {t("admReopen")}
-                      </button>
-                    ) : (
-                      <button
-                        className="small primary"
-                        onClick={() => doTriage(row.id, true)}
-                      >
-                        {t("admMarkTriage")}
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ResponsiveTable
+          columns={[
+            { id: "id", header: "#", cell: (row) => row.id, mobileLabel: "#" },
+            {
+              id: "role",
+              header: t("role"),
+              cell: (row) => roleLabel(row.role),
+            },
+            {
+              id: "rating",
+              header: "±",
+              cell: (row) =>
+                row.rating > 0 ? "+" : row.rating < 0 ? "−" : "·",
+              mobileLabel: "±",
+            },
+            {
+              id: "note",
+              header: t("admNoteLabelShort"),
+              cellClassName: "cell-wrap",
+              cell: (row) => (
+                <>
+                  {row.comment ?? "—"}
+                  {row.note && (
+                    <div className="muted">
+                      {t("admNoteLabel")}: {row.note}
+                    </div>
+                  )}
+                </>
+              ),
+            },
+            {
+              id: "status",
+              header: t("admStatus"),
+              cell: (row) =>
+                row.triaged ? t("admTriaged") : t("admTriageOpen"),
+            },
+          ]}
+          rows={queue.rows}
+          rowKey={(row) => String(row.id)}
+          actions={(row) => (
+            <>
+              <input
+                value={notes[row.id] ?? ""}
+                maxLength={500}
+                placeholder={t("admNoteLabel")}
+                aria-label={`${t("admNoteLabel")} #${row.id}`}
+                onChange={(e) =>
+                  setNotes({ ...notes, [row.id]: e.target.value })
+                }
+              />{" "}
+              {row.triaged ? (
+                <button
+                  className="small secondary"
+                  onClick={() => doTriage(row.id, false)}
+                >
+                  {t("admReopen")}
+                </button>
+              ) : (
+                <button
+                  className="small primary"
+                  onClick={() => doTriage(row.id, true)}
+                >
+                  {t("admMarkTriage")}
+                </button>
+              )}
+            </>
+          )}
+        />
       )}
     </div>
   );

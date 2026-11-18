@@ -83,7 +83,10 @@ export function trackRoute(path: string, type: "PUSH" | "REPLACE" | "POP") {
     if (routeStack[routeStack.length - 1] !== path) routeStack.push(path);
   } else if (type === "REPLACE") {
     routeStack[routeStack.length - 1] = path;
-  } else if (routeStack.length > 1 && routeStack[routeStack.length - 1] !== path) {
+  } else if (
+    routeStack.length > 1 &&
+    routeStack[routeStack.length - 1] !== path
+  ) {
     // Browser/router back landed on an earlier in-app entry: drop the one
     // it left. (A POP onto the current top — e.g. a re-render — is a no-op.)
     routeStack.pop();
@@ -91,11 +94,14 @@ export function trackRoute(path: string, type: "PUSH" | "REPLACE" | "POP") {
 }
 
 /** Test seam + listener input: what should the next back press do? */
-export function resolveBackAction(): "keyboard" | "overlay" | "confirm" | "back" | "exit" {
+export function resolveBackAction():
+  "keyboard" | "overlay" | "confirm" | "back" | "exit" {
   const el = document.activeElement;
   if (
     el instanceof HTMLElement &&
-    (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)
+    (el.tagName === "INPUT" ||
+      el.tagName === "TEXTAREA" ||
+      el.isContentEditable)
   ) {
     return "keyboard";
   }

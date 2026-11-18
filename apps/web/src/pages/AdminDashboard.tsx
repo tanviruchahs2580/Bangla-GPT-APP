@@ -8,6 +8,7 @@ import { FeedbackQueueCard } from "../components/admin/FeedbackQueueCard";
 import { RefusalAuditCard } from "../components/admin/RefusalAuditCard";
 import { SchoolsCard } from "../components/admin/SchoolsCard";
 import { VersionsCard } from "../components/admin/VersionsCard";
+import { ResponsiveTable } from "../components/ResponsiveTable";
 import { Button, EmptyState, Field, Modal } from "../components/ui";
 import { t } from "../i18n";
 import { roleLabel } from "../lib/roles";
@@ -298,51 +299,46 @@ export default function AdminDashboard() {
               "no users" before its answer arrives. */
           <EmptyState size="sm" icon={Users} title={t("adminUsersEmpty")} />
         ) : (
-          <div className="table-wrap">
-            <table className="data cardable">
-              <thead>
-                <tr>
-                  <th scope="col">#</th>
-                  <th scope="col">{t("email")}</th>
-                  <th scope="col">{t("role")}</th>
-                  <th scope="col"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {page.items.map((u) => (
-                  <tr key={u.id}>
-                    <td data-label="#">{u.id}</td>
-                    <td data-label={t("email")} className="cell-wrap-sm">
-                      {u.email}
-                    </td>
-                    <td data-label={t("role")}>{roleLabel(u.role)}</td>
-                    <td data-label={t("role")}>
-                      <select
-                        value={u.role}
-                        onChange={(e) => changeRole(u, e.target.value)}
-                        aria-label={`${u.email} ${t("role")}`}
-                      >
-                        {ROLES.map((r) => (
-                          <option key={r} value={r}>
-                            {roleLabel(r)}
-                          </option>
-                        ))}
-                      </select>{" "}
-                      {/* server refuses admin targets; button mirrors that. */}
-                      {u.role !== "admin" && u.role !== "school_admin" && (
-                        <button
-                          className="small secondary"
-                          onClick={() => openImpersonate(u)}
-                        >
-                          {t("impersonate")}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ResponsiveTable
+            cardable
+            columns={[
+              { id: "id", header: "#", cell: (u) => u.id, mobileLabel: "#" },
+              {
+                id: "email",
+                header: t("email"),
+                cell: (u) => u.email,
+                cellClassName: "cell-wrap-sm",
+              },
+              { id: "role", header: t("role"), cell: (u) => roleLabel(u.role) },
+            ]}
+            rows={page.items}
+            rowKey={(u) => String(u.id)}
+            actionsMobileLabel={t("role")}
+            actions={(u) => (
+              <>
+                <select
+                  value={u.role}
+                  onChange={(e) => changeRole(u, e.target.value)}
+                  aria-label={`${u.email} ${t("role")}`}
+                >
+                  {ROLES.map((r) => (
+                    <option key={r} value={r}>
+                      {roleLabel(r)}
+                    </option>
+                  ))}
+                </select>{" "}
+                {/* server refuses admin targets; button mirrors that. */}
+                {u.role !== "admin" && u.role !== "school_admin" && (
+                  <button
+                    className="small secondary"
+                    onClick={() => openImpersonate(u)}
+                  >
+                    {t("impersonate")}
+                  </button>
+                )}
+              </>
+            )}
+          />
         )}
         <p className="muted">
           {page.total} — {offset + 1}–{Math.min(offset + LIMIT, page.total)}{" "}

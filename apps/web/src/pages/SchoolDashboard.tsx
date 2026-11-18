@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ShieldCheck } from "lucide-react";
 import { get } from "../api";
 import { Badge, EmptyState, Skeleton, Spinner } from "../components/ui";
+import { ResponsiveTable } from "../components/ResponsiveTable";
 import { SchoolSections } from "../components/school/SchoolSections";
 import { t } from "../i18n";
 import type { SchoolHealth } from "../types";
@@ -117,42 +118,40 @@ export default function SchoolDashboard() {
           // empty state instead of a lone muted line.
           <EmptyState size="sm" icon={ShieldCheck} title={t("sdEmpty")} />
         ) : (
-          <div className="table-wrap">
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>{t("name")}</th>
-                  <th>{t("classLabel")}</th>
-                  <th>{t("wmAvg")}</th>
-                  <th>{t("wmTrend")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.at_risk.map((r) => (
-                  <tr key={r.student_id}>
-                    <td>{r.name}</td>
-                    <td>
-                      {r.class_level} · {r.section}
-                    </td>
-                    <td>
-                      {/* FE-FIX-006: `avg_score_pct` is `number | null` on
-                          purpose (api.ts SchoolAtRiskRow) — null means "nothing
-                          graded yet", not "scored zero". Coercing it to 0 made
-                          a warning badge claim a measurement the API never
-                          took, which is exactly the kind of number a school
-                          admin would act on. */}
-                      {r.avg_score_pct == null ? (
-                        <Badge>{t("notAvailable")}</Badge>
-                      ) : (
-                        <Badge tone="warn">{`${r.avg_score_pct}%`}</Badge>
-                      )}
-                    </td>
-                    <td>{r.trend}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ResponsiveTable
+            columns={[
+              { id: "name", header: t("name"), cell: (r) => r.name },
+              {
+                id: "class",
+                header: t("classLabel"),
+                cell: (r) => (
+                  <>
+                    {r.class_level} · {r.section}
+                  </>
+                ),
+              },
+              {
+                id: "avg",
+                header: t("wmAvg"),
+                cell: (r) => {
+                  /* FE-FIX-006: `avg_score_pct` is `number | null` on
+                      purpose (api.ts SchoolAtRiskRow) — null means "nothing
+                      graded yet", not "scored zero". Coercing it to 0 made
+                      a warning badge claim a measurement the API never
+                      took, which is exactly the kind of number a school
+                      admin would act on. */
+                  return r.avg_score_pct == null ? (
+                    <Badge>{t("notAvailable")}</Badge>
+                  ) : (
+                    <Badge tone="warn">{`${r.avg_score_pct}%`}</Badge>
+                  );
+                },
+              },
+              { id: "trend", header: t("wmTrend"), cell: (r) => r.trend },
+            ]}
+            rows={data.at_risk}
+            rowKey={(r) => String(r.student_id)}
+          />
         )}
       </section>
 

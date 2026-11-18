@@ -18,6 +18,7 @@ import {
   Spinner,
   TrendMark,
 } from "../../components/ui";
+import { ResponsiveTable } from "../../components/ResponsiveTable";
 import { friendlyError } from "../../errors";
 import { t } from "../../i18n";
 
@@ -288,49 +289,39 @@ export default function AnalyticsPage() {
         {cov === null || cov.cells.length === 0 ? (
           <p className="muted">{t("covEmpty")}</p>
         ) : (
-          <div className="table-wrap">
-            <table className="data">
-              <thead>
-                <tr>
-                  <th scope="col">{t("classLabel")}</th>
-                  {cov.subjects.map((s) => (
-                    <th key={s} scope="col">
-                      {s}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from(
-                  new Map(cov.cells.map((c) => [c.classroom_id, c])).values(),
-                ).map((roomCell) => (
-                  <tr key={roomCell.classroom_id}>
-                    <th scope="row">{`${roomCell.class_level} · ${roomCell.section}`}</th>
-                    {cov.subjects.map((s) => {
-                      const c = cov.cells.find(
-                        (x) =>
-                          x.classroom_id === roomCell.classroom_id &&
-                          x.subject === s,
-                      );
-                      return (
-                        <td key={s}>
-                          {c ? (
-                            <Badge
-                              tone={COV_STATUS_TONES[c.status] ?? "default"}
-                            >
-                              {covLabel(c.status)}
-                            </Badge>
-                          ) : (
-                            "·"
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ResponsiveTable
+            rowHeader
+            columns={[
+              {
+                id: "class",
+                header: t("classLabel"),
+                cell: (roomCell) =>
+                  `${roomCell.class_level} · ${roomCell.section}`,
+              },
+              ...cov.subjects.map((s) => ({
+                id: `subject-${s}`,
+                header: s,
+                cell: (roomCell: (typeof cov.cells)[number]) => {
+                  const c = cov.cells.find(
+                    (x) =>
+                      x.classroom_id === roomCell.classroom_id &&
+                      x.subject === s,
+                  );
+                  return c ? (
+                    <Badge tone={COV_STATUS_TONES[c.status] ?? "default"}>
+                      {covLabel(c.status)}
+                    </Badge>
+                  ) : (
+                    "·"
+                  );
+                },
+              })),
+            ]}
+            rows={Array.from(
+              new Map(cov.cells.map((c) => [c.classroom_id, c])).values(),
+            )}
+            rowKey={(roomCell) => String(roomCell.classroom_id)}
+          />
         )}
         {wm !== null && wm.students.some((s) => s.at_risk) && (
           <div className="row-flex gap-2 mt-2">

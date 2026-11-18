@@ -3,6 +3,7 @@ import { get } from "../../api";
 import { formatNumber, t } from "../../i18n";
 import { formatServerDateTime } from "../../lib/datetime";
 import { LoadError } from "../ui";
+import { ResponsiveTable } from "../../components/ResponsiveTable";
 import type { RefusalAudit } from "../../types";
 
 /**
@@ -79,24 +80,22 @@ export function RefusalAuditCard() {
             <p className="muted">{t("admNoRefusals")}</p>
           ) : (
             <>
-              <div className="table-wrap">
-                <table className="data">
-                  <thead>
-                    <tr>
-                      <th scope="col">{t("admRefusalReason")}</th>
-                      <th scope="col">{t("admRefusals")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(data.by_reason).map(([reason, n]) => (
-                      <tr key={reason}>
-                        <td>{reasonLabel(reason)}</td>
-                        <td>{formatNumber(n)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <ResponsiveTable
+                columns={[
+                  {
+                    id: "reason",
+                    header: t("admRefusalReason"),
+                    cell: ([reason]) => reasonLabel(reason),
+                  },
+                  {
+                    id: "count",
+                    header: t("admRefusals"),
+                    cell: ([, n]) => formatNumber(n),
+                  },
+                ]}
+                rows={Object.entries(data.by_reason)}
+                rowKey={([reason]) => reason}
+              />
               <p className="muted">
                 {Object.entries(data.by_class).map(([cls, n]) => (
                   <span key={cls} className="mr-2">

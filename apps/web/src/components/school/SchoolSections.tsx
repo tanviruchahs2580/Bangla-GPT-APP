@@ -9,6 +9,7 @@ import {
   getSchoolTeachers,
 } from "../../api";
 import { Badge, Button, EmptyState, Skeleton, Spinner } from "../ui";
+import { ResponsiveTable } from "../ResponsiveTable";
 import { t } from "../../i18n";
 import { track } from "../../lib/analytics";
 
@@ -91,32 +92,33 @@ export function SchoolSections() {
           <h2>
             {t("students")} ({students.data.total})
           </h2>
-          <div className="table-wrap">
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>{t("name")}</th>
-                  <th>{t("classLabel")}</th>
-                  <th>{t("secQuizzes")}</th>
-                  <th>{t("secLastActive")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {students.data.items.map((s) => (
-                  <tr key={s.student_id}>
-                    <td>{s.name}</td>
-                    <td>
-                      {s.class_level} · {s.section}
-                    </td>
-                    <td>{s.quiz_attempts}</td>
-                    <td className="muted">
-                      {formatServerDateTime(s.last_active) || "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ResponsiveTable
+            columns={[
+              { id: "name", header: t("name"), cell: (s) => s.name },
+              {
+                id: "class",
+                header: t("classLabel"),
+                cell: (s) => (
+                  <>
+                    {s.class_level} · {s.section}
+                  </>
+                ),
+              },
+              {
+                id: "quizzes",
+                header: t("secQuizzes"),
+                cell: (s) => s.quiz_attempts,
+              },
+              {
+                id: "last_active",
+                header: t("secLastActive"),
+                cellClassName: "muted",
+                cell: (s) => formatServerDateTime(s.last_active) || "—",
+              },
+            ]}
+            rows={students.data.items}
+            rowKey={(s) => String(s.student_id)}
+          />
         </section>
       ) : (
         <SectionState label={t("students")} q={students} />
@@ -125,26 +127,23 @@ export function SchoolSections() {
       {teachers.data ? (
         <section className="card" aria-label={t("sdTeachers")}>
           <h2>{t("sdTeachers")}</h2>
-          <div className="table-wrap">
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>{t("name")}</th>
-                  <th>{t("subject")}</th>
-                  <th>{t("classrooms")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {teachers.data.map((r) => (
-                  <tr key={r.teacher_id}>
-                    <td>{r.name}</td>
-                    <td>{r.subjects.join(", ") || "—"}</td>
-                    <td>{r.classrooms}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ResponsiveTable
+            columns={[
+              { id: "name", header: t("name"), cell: (r) => r.name },
+              {
+                id: "subjects",
+                header: t("subject"),
+                cell: (r) => r.subjects.join(", ") || "—",
+              },
+              {
+                id: "classrooms",
+                header: t("classrooms"),
+                cell: (r) => r.classrooms,
+              },
+            ]}
+            rows={teachers.data}
+            rowKey={(r) => String(r.teacher_id)}
+          />
         </section>
       ) : (
         <SectionState label={t("sdTeachers")} q={teachers} />
@@ -153,36 +152,40 @@ export function SchoolSections() {
       {classes.data ? (
         <section className="card" aria-label={t("classrooms")}>
           <h2>{t("classrooms")}</h2>
-          <div className="table-wrap">
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>{t("classLabel")}</th>
-                  <th>{t("section")}</th>
-                  <th>{t("students")}</th>
-                  <th>{t("secQuizzes")}</th>
-                  <th>{t("wmAvg")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {classes.data.map((c) => (
-                  <tr key={c.classroom_id}>
-                    <td>{c.class_level}</td>
-                    <td>{c.section}</td>
-                    <td>{c.students}</td>
-                    <td>
-                      {c.attempts_graded}/{c.quiz_attempts}
-                    </td>
-                    <td>
-                      {c.avg_quiz_accuracy == null
-                        ? "—"
-                        : `${Math.round(c.avg_quiz_accuracy)}%`}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ResponsiveTable
+            columns={[
+              {
+                id: "class",
+                header: t("classLabel"),
+                cell: (c) => c.class_level,
+              },
+              { id: "section", header: t("section"), cell: (c) => c.section },
+              {
+                id: "students",
+                header: t("students"),
+                cell: (c) => c.students,
+              },
+              {
+                id: "quizzes",
+                header: t("secQuizzes"),
+                cell: (c) => (
+                  <>
+                    {c.attempts_graded}/{c.quiz_attempts}
+                  </>
+                ),
+              },
+              {
+                id: "avg",
+                header: t("wmAvg"),
+                cell: (c) =>
+                  c.avg_quiz_accuracy == null
+                    ? "—"
+                    : `${Math.round(c.avg_quiz_accuracy)}%`,
+              },
+            ]}
+            rows={classes.data}
+            rowKey={(c) => String(c.classroom_id)}
+          />
         </section>
       ) : (
         <SectionState label={t("classrooms")} q={classes} />
@@ -195,42 +198,50 @@ export function SchoolSections() {
             // E2: the shared empty state instead of a lone muted line.
             <EmptyState size="sm" icon={BookOpen} title={t("covEmpty")} />
           ) : (
-            <div className="table-wrap">
-              <table className="data">
-                <thead>
-                  <tr>
-                    <th>{t("classLabel")}</th>
-                    <th>{t("covContent")}</th>
-                    <th>{t("covUncovered")}</th>
-                    <th>{t("reportChaptersRead")}</th>
-                    <th>{t("covCompleted")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {coverage.data.rows.map((r) => (
-                    <tr key={r.class_level}>
-                      <td>{r.class_level}</td>
-                      <td>{r.content_subjects.join(", ") || "—"}</td>
-                      <td>
-                        {r.uncovered_subjects.length === 0 ? (
-                          <span className="muted">—</span>
-                        ) : (
-                          r.uncovered_subjects.map((s) => (
-                            <Badge key={s} tone="warn">
-                              {s}
-                            </Badge>
-                          ))
-                        )}
-                      </td>
-                      <td>
-                        {r.chapters_read}/{r.chapters_available}
-                      </td>
-                      <td>{r.chapters_completed}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <ResponsiveTable
+              columns={[
+                {
+                  id: "class",
+                  header: t("classLabel"),
+                  cell: (r) => r.class_level,
+                },
+                {
+                  id: "content",
+                  header: t("covContent"),
+                  cell: (r) => r.content_subjects.join(", ") || "—",
+                },
+                {
+                  id: "uncovered",
+                  header: t("covUncovered"),
+                  cell: (r) =>
+                    r.uncovered_subjects.length === 0 ? (
+                      <span className="muted">—</span>
+                    ) : (
+                      r.uncovered_subjects.map((s) => (
+                        <Badge key={s} tone="warn">
+                          {s}
+                        </Badge>
+                      ))
+                    ),
+                },
+                {
+                  id: "read",
+                  header: t("reportChaptersRead"),
+                  cell: (r) => (
+                    <>
+                      {r.chapters_read}/{r.chapters_available}
+                    </>
+                  ),
+                },
+                {
+                  id: "completed",
+                  header: t("covCompleted"),
+                  cell: (r) => r.chapters_completed,
+                },
+              ]}
+              rows={coverage.data.rows}
+              rowKey={(r) => String(r.class_level)}
+            />
           )}
         </section>
       ) : (
