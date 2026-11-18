@@ -5,6 +5,13 @@
     "e2e/**/*.spec.ts",
     "api/**/*.ts"
   ],
-  "project": ["src/**/*.{ts,tsx}", "e2e/**/*.ts", "api/**/*.ts"],
-  "ignoreExportsUsedInFile": true
+  "project": [
+    "src/**/*.{ts,tsx}",
+    "e2e/**/*.ts",
+    "api/**/*.ts"
+  ],
+  "ignoreExportsUsedInFile": true,
+  "ignoreDependencies": [
+    "@capacitor/splash-screen"
+  ]
 }

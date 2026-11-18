@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - feat(web): E4 type-scale rebalance — lift the small steps
 - feat(web): E6 — Android hardware back-button guard for resumable state
 - feat(web): E6-lite — PWA app shortcuts for Tutor and Quiz
+- feat(web): E5 phase 2 — self-hosted WOFF2, critical preload, measured fallback
+- feat(web): native system UI + brand launcher assets (status bar, splash, adaptive icons)
+- feat(web): ResponsiveTable — shared accessible data-table surface, 17 tables migrated
 
 ### Fixed
 
@@ -29,8 +32,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): exempt font faces from the SW runtime-cache FIFO
 - fix(web): inset the Android WebView below the system bars (edge-to-edge)
 - fix(web): load the real Noto Sans Bengali 600 face
+- fix(web): vc206 back-button priority — keyboard, overlay, in-app history before exit
 - fix(web): mobile correctness wave — keyboard, notch, update banner, tap targets
 - fix(web): tolerate prettier's meta wrapping in the mobile guard test
+
+### Documentation
+
+- docs(privacy): DPIA draft for the children's education platform (Act 63 of 2026)
+- docs(architecture): Cloudflare Workers feasibility — retain current platform, gateway PoC-only
 
 ### Maintenance
 
