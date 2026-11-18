@@ -21,11 +21,15 @@ import { AuthProvider } from "./AuthContext";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { initInstallPrompt } from "./lib/installPrompt";
 import { initLowData } from "./lib/lowData";
+import { initNativeSystemUi } from "./lib/nativeSystemUi";
 import { registerServiceWorker } from "./lib/serviceWorkerUpdate";
 
 // apply the persisted low-data mode before first paint.
 initLowData();
 initInstallPrompt();
+// native-only, best-effort: syncs the status-bar icon style with the theme.
+// Never awaited — a plugin failure must not delay first paint (see the module).
+void initNativeSystemUi();
 const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("index.html is missing #root");
 ReactDOM.createRoot(rootElement).render(
