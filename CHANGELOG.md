@@ -47,6 +47,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(privacy): DPIA draft for the children's education platform (Act 63 of 2026)
 - docs(readme): name codeql.yml's workflow_dispatch trigger in the CI table
 
+### Tests
+
+- test(api): use varargs in the worker-metric stubs for the vulture gate
+
 ### Maintenance
 
 - chore(android): restore LF endings and the trailing newline in build.gradle
