@@ -160,7 +160,7 @@ def test_worker_metrics_server_disabled_by_default(tmp_path, monkeypatch) -> Non
 
 def test_successful_job_outcome_and_duration_are_metered(ctx, monkeypatch) -> None:
     ok = {"ran": True}
-    monkeypatch.setattr(worker.jobs, "run_retention_job", lambda sf, s: ok)
+    monkeypatch.setattr(worker.jobs, "run_retention_job", lambda *args: ok)
     # Deltas, not absolutes: pytest-randomly orders the file, and counters
     # accumulate for the whole process.
     success_before = (
@@ -180,7 +180,7 @@ def test_successful_job_outcome_and_duration_are_metered(ctx, monkeypatch) -> No
 
 
 def test_failed_job_outcome_is_metered(ctx, monkeypatch) -> None:
-    def boom(sf: object, s: object) -> dict:
+    def boom(*args: object) -> dict:
         raise RuntimeError("smtp down")
 
     monkeypatch.setattr(worker.jobs, "run_retention_job", boom)
@@ -204,7 +204,7 @@ def test_self_deferring_body_meters_retry(ctx, monkeypatch) -> None:
     """A body that raises arq's own Retry (none today) is not counted as a
     plain failure -- it defers itself and the outcome says so."""
 
-    def defer_body(sf: object, s: object) -> dict:
+    def defer_body(*args: object) -> dict:
         raise Retry(defer=30)
 
     monkeypatch.setattr(worker.jobs, "run_retention_job", defer_body)
@@ -225,7 +225,7 @@ def test_timed_out_job_meters_cancelled(ctx, monkeypatch) -> None:
     entered = threading.Event()
     release = threading.Event()
 
-    def slow(sf: object, s: object) -> dict:
+    def slow(*args: object) -> dict:
         entered.set()
         release.wait(10)
         return {}
