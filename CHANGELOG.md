@@ -45,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Maintenance
 
 - chore(android): restore LF endings and the trailing newline in build.gradle
+- chore(docs): refresh generated native review sheet
 - chore(release): regenerate the OpenAPI fixture for 0.15.0; notice the generated maskable icons
 - chore(web): re-baseline the four remaining visual snapshots (Windows leg)
 - chore: final execution report, CHANGELOG entries, knip exception for the native splash plugin
