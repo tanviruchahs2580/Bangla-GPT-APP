@@ -90,6 +90,23 @@ def _apply_sqlite_pragmas(target: Engine, url: str) -> None:
             cursor.close()
 
 
+def _postgres_connect_args(settings: Settings) -> dict:
+    """Connection kwargs for the production Postgres engine.
+
+    ``statement_timeout`` bounds any single statement on a pooled connection
+    so a runaway query cannot hold the pool hostage (2026-11-17 audit P2:
+    the engine set a TCP connect timeout and nothing else). Operators
+    disable it with POSTGRES_STATEMENT_TIMEOUT_MS=0 for migration-style
+    long DDL on a dedicated connection. Applied via the libpq ``options``
+    parameter, which both psycopg releases honour.
+    """
+    connect_args: dict = {"connect_timeout": POSTGRES_CONNECT_TIMEOUT_SECONDS}
+    timeout_ms = int(settings.postgres_statement_timeout_ms)
+    if timeout_ms > 0:
+        connect_args["options"] = f"-c statement_timeout={timeout_ms}"
+    return connect_args
+
+
 def make_engine(settings: Settings) -> Engine:
     url = settings.database_url
     kwargs: dict = {}
@@ -106,7 +123,7 @@ def make_engine(settings: Settings) -> Engine:
         kwargs["pool_size"] = 10
         kwargs["max_overflow"] = 20
         kwargs["pool_recycle"] = POSTGRES_POOL_RECYCLE_SECONDS
-        kwargs["connect_args"] = {"connect_timeout": POSTGRES_CONNECT_TIMEOUT_SECONDS}
+        kwargs["connect_args"] = _postgres_connect_args(settings)
     return create_engine(url, **kwargs)
 
 

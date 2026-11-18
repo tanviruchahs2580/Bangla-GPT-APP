@@ -155,3 +155,31 @@ RAG_RERANKER_FALLBACK_TOTAL = Counter(
     ["reason"],
     registry=REGISTRY,
 )
+
+
+# Scheduled-job outcomes on the arq worker (worker.py). The worker serves no
+# HTTP and used to publish NO metrics at all: job outcomes lived only in log
+# lines, so a silently failing retention sweep was discovered by users
+# (retained rows a purge should have removed) instead of by an alert. Labels:
+# job (parent_digest / retention_sweep / nightly_rollup) and outcome
+# (success / failed / retry / cancelled — job_timeout cancels at the await).
+# The job_runs ledger stays the audit trail; this series is what the
+# WorkerJobsFailing alert reads.
+WORKER_JOBS_TOTAL = Counter(
+    "bgpt_worker_jobs_total",
+    "Scheduled-job outcomes on the arq worker, by job and outcome.",
+    labelnames=["job", "outcome"],
+    registry=REGISTRY,
+)
+
+# Wall-clock duration of one scheduled-job body run (the threaded sync body).
+# The digest's SMTP fan-out and the retention sweep's chunked deletes are the
+# long-pole bodies; a duration shift says the worker is saturating before a
+# failure does.
+WORKER_JOB_DURATION_SECONDS = Histogram(
+    "bgpt_worker_job_duration_seconds",
+    "Wall time of one scheduled-job body run on the arq worker.",
+    labelnames=["job"],
+    buckets=(0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0, 900.0),
+    registry=REGISTRY,
+)

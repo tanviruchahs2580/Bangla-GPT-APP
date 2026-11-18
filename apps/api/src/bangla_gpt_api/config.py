@@ -502,11 +502,33 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     sentry_dsn: str | None = None
     sentry_env: str = "development"
+    # Sentry transaction sample rate (0-1). Was hardcoded 0.1 at the
+    # sentry_sdk.init site (initialize/observability.py); error capture is
+    # unaffected -- this tunes only performance-transaction sampling. Values
+    # outside [0, 1] are clamped there.
+    sentry_traces_sample_rate: float = 0.1
 
     # --- hardening (Phase 4) ---
     # protect /metrics in production — internal ingress or bearer token
     metrics_require_auth: bool = False
     metrics_token: str | None = None
+    # Postgres statement_timeout (ms), applied per connection in
+    # db/session.py: one runaway statement must not hold a pooled connection
+    # indefinitely on the single-host deployment. 0 disables it (e.g. for
+    # migration-style long DDL on a dedicated connection). SQLite
+    # (dev/CI/live) is unaffected.
+    postgres_statement_timeout_ms: int = 30000
+    # The arq worker serves no HTTP; WORKER_METRICS_PORT > 0 starts a
+    # prometheus_client HTTP server on that port so scheduled-job outcomes
+    # (bgpt_worker_jobs_total) are scrapable. 0 keeps the historical
+    # behaviour (no metrics endpoint); the compose worker profile sets 9101.
+    # Security posture (2026-11-18 audit): the endpoint is deliberately
+    # unauthenticated, unlike the API's token-gated /metrics — it exposes
+    # job counters and durations only (no request data, no PII), binds
+    # inside the container, and compose publishes no host port, so its
+    # reach is the compose network. If a deployment ever publishes it, gate
+    # it the way routers/system.py gates /metrics before exposing.
+    worker_metrics_port: int = 0
 
     @property
     def is_production(self) -> bool:

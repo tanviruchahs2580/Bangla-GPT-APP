@@ -26,7 +26,6 @@ from sqlalchemy.exc import IntegrityError
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.models import ChatMessage
 from bangla_gpt_api.db.session import (
-    POSTGRES_CONNECT_TIMEOUT_SECONDS,
     SQLITE_BUSY_TIMEOUT_MS,
     init_db,
     make_engine,
@@ -84,13 +83,15 @@ def test_postgres_engine_sets_connect_timeout() -> None:
     engine = make_engine(
         Settings(env="test", database_url="postgresql+psycopg://u:p@127.0.0.1:1/db")
     )
-    # create_engine is lazy: no connection is attempted here, only the
-    # connect budget is configured.
+    # create_engine is lazy: no connection is attempted here, only posture
+    # is configured.
     assert engine.dialect.name == "postgresql"
-    assert engine.pool._creator is not None
-    # The timeout reaches libpq via connect_args; assert the declared value
-    # stays wired (a silent constant edit would reintroduce indefinite hangs).
-    assert POSTGRES_CONNECT_TIMEOUT_SECONDS == 10
+    # The connect budget and the statement timeout reach libpq via
+    # connect_args. Those kwargs are pinned against the kwargs create_engine
+    # actually receives in tests/test_db_statement_timeout.py -- asserting
+    # the constant here would only prove it equals itself, and reading
+    # engine.pool internals couples the test to SQLAlchemy refactor churn
+    # (2026-11-18 QA audit P3).
 
 
 # ------------------------------------------------------ truthful readiness ---

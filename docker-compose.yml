@@ -239,6 +239,10 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Worker metrics (2026-11-18 audit P1-2 fix): the worker serves its
+      # prometheus registry on this port for the monitoring profile's
+      # bangla-gpt-worker scrape. 0 disables the endpoint entirely.
+      WORKER_METRICS_PORT: ${WORKER_METRICS_PORT:-9101}
     volumes:
       - api_data:/data
     depends_on:

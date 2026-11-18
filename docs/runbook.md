@@ -283,6 +283,13 @@ Alert rules ship in `deploy/prometheus/alerts.yml`:
 - `RAGCitationCheckFailures` — a grounded answer failed citation verification
   in the last 15 min (warning). Inspect the `ai_call` / `tutor_retrieval` logs
   for the request id.
+- `WorkerJobsFailing` — a scheduled job failed on the arq worker in the last
+  30 min (warning). Requires the worker metrics endpoint: the compose worker
+  profile sets `WORKER_METRICS_PORT=9101` (0 disables it), Prometheus scrapes
+  it as `bangla-gpt-worker`, and every body run meters
+  `bgpt_worker_jobs_total{job, outcome}` + `bgpt_worker_job_duration_seconds`.
+  Until 2026-11-18 the worker published no metrics at all — a silently
+  failing retention sweep was found by users, not monitoring.
 
 Logs are JSON lines to stdout with `X-Request-ID` correlation. `LOG_LEVEL`
 controls verbosity (DEBUG/INFO/WARNING/ERROR/CRITICAL).

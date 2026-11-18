@@ -78,3 +78,19 @@ groups:
         annotations:
           summary: "Citation verification failed on a grounded answer in the last 15 minutes"
           description: "Inspect the ai_call / tutor_retrieval logs for the affected request id."
+
+      # The arq worker had NO metrics until the 2026-11-18 fix: a silently
+      # failing retention sweep was found by users (rows a purge should have
+      # removed) instead of by an alert. bgpt_worker_jobs_total{job, outcome}
+      # is the alertable signal; the job_runs ledger is the audit trail.
+      - alert: WorkerJobsFailing
+        expr: increase(bgpt_worker_jobs_total{outcome="failed"}[30m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "A scheduled job failed on the arq worker in the last 30 minutes"
+          description: >
+            Check the worker container log for worker_job_failed (the error class is
+            in the log line, never job content). The same period retries up to
+            max_tries; a failure that persists across attempts needs the job's
+            dependency checked (SMTP for parent_digest, DB volume for retention_sweep).

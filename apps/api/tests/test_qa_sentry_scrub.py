@@ -11,6 +11,7 @@ import types
 
 from bangla_gpt_api.config import Settings
 from bangla_gpt_api.initialize.observability import (
+    configure_observability_with_sentry,
     configure_sentry,
     scrub_sentry_event,
 )
@@ -58,4 +59,118 @@ def test_configure_sentry_passes_the_hook(monkeypatch) -> None:
     configure_sentry(Settings(env="test", sentry_dsn="https://k@sentry.example.test/1"))
 
     assert captured["dsn"] == "https://k@sentry.example.test/1"
+    assert captured["before_send"] is scrub_sentry_event
+
+
+def test_configure_sentry_traces_rate_follows_settings(monkeypatch) -> None:
+    """SENTRY_TRACES_SAMPLE_RATE reaches sentry_sdk.init; an out-of-range
+    value is clamped into [0, 1], not trusted (was hardcoded 0.1 at the
+    init site -- P2, 2026-11-17 audit)."""
+    captured: dict = {}
+    fake = types.SimpleNamespace(init=lambda **kwargs: captured.update(kwargs))
+    monkeypatch.setitem(sys.modules, "sentry_sdk", fake)
+
+    configure_sentry(
+        Settings(
+            env="test",
+            sentry_dsn="https://k@sentry.example.test/1",
+            sentry_traces_sample_rate=0.25,
+        )
+    )
+    assert captured["traces_sample_rate"] == 0.25
+
+    configure_sentry(
+        Settings(
+            env="test",
+            sentry_dsn="https://k@sentry.example.test/1",
+            sentry_traces_sample_rate=2.0,
+        )
+    )
+    assert captured["traces_sample_rate"] == 1.0
+
+    configure_sentry(
+        Settings(
+            env="test",
+            sentry_dsn="https://k@sentry.example.test/1",
+            sentry_traces_sample_rate=-1.0,
+        )
+    )
+    assert captured["traces_sample_rate"] == 0.0
+
+
+def test_configure_sentry_traces_rate_defaults_and_fallbacks(monkeypatch) -> None:
+    """The shipped default stays 0.1, and a duck-typed settings object
+    without the field falls back to it instead of crashing."""
+    captured: dict = {}
+    fake = types.SimpleNamespace(init=lambda **kwargs: captured.update(kwargs))
+    monkeypatch.setitem(sys.modules, "sentry_sdk", fake)
+
+    configure_sentry(Settings(env="test", sentry_dsn="https://k@sentry.example.test/1"))
+    assert captured["traces_sample_rate"] == 0.1
+
+    configure_sentry(types.SimpleNamespace(sentry_dsn="https://k@sentry.example.test/1"))
+    assert captured["traces_sample_rate"] == 0.1
+
+    # a non-numeric value and a NaN fall back to the shipped default too
+    configure_sentry(
+        types.SimpleNamespace(
+            sentry_dsn="https://k@sentry.example.test/1",
+            sentry_traces_sample_rate="not-a-number",
+        )
+    )
+    assert captured["traces_sample_rate"] == 0.1
+
+    configure_sentry(
+        types.SimpleNamespace(
+            sentry_dsn="https://k@sentry.example.test/1",
+            sentry_traces_sample_rate=float("nan"),
+        )
+    )
+    assert captured["traces_sample_rate"] == 0.1
+
+
+def test_configure_sentry_without_dsn_is_a_noop(monkeypatch) -> None:
+    """No DSN configured: sentry_sdk.init must never run (the historical
+    dev/test path -- Sentry stays entirely out of the process)."""
+    calls: dict = {}
+
+    def unexpected_init(**kwargs: object) -> None:
+        calls["called"] = True
+
+    fake = types.SimpleNamespace(init=unexpected_init)
+    monkeypatch.setitem(sys.modules, "sentry_sdk", fake)
+
+    configure_sentry(Settings(env="test"))
+    assert calls == {}
+
+
+def test_configure_sentry_survives_an_init_failure(monkeypatch) -> None:
+    """Sentry init is best-effort: a raised error inside init is logged, not
+    propagated -- a Sentry outage must not take the API or worker boot down."""
+
+    def broken_init(**kwargs: object) -> None:
+        raise RuntimeError("sentry sdk exploded")
+
+    fake = types.SimpleNamespace(init=broken_init)
+    monkeypatch.setitem(sys.modules, "sentry_sdk", fake)
+
+    configure_sentry(Settings(env="test", sentry_dsn="https://k@sentry.example.test/1"))
+
+
+def test_configure_observability_with_sentry_wires_both(monkeypatch) -> None:
+    """The combined entry point (worker boot) runs logging setup AND Sentry
+    init with the settings' sample rate."""
+    captured: dict = {}
+    fake = types.SimpleNamespace(init=lambda **kwargs: captured.update(kwargs))
+    monkeypatch.setitem(sys.modules, "sentry_sdk", fake)
+
+    configure_observability_with_sentry(
+        Settings(
+            env="test",
+            sentry_dsn="https://k@sentry.example.test/1",
+            sentry_traces_sample_rate=0.5,
+        )
+    )
+    assert captured["dsn"] == "https://k@sentry.example.test/1"
+    assert captured["traces_sample_rate"] == 0.5
     assert captured["before_send"] is scrub_sentry_event

@@ -105,3 +105,151 @@ def test_startup_wires_the_app_observability(ctx, monkeypatch) -> None:
     fresh: dict[str, Any] = {}
     asyncio.run(worker.startup(fresh))
     assert len(calls) == 1 and calls[0].env == "test"
+
+
+# --- worker metrics (2026-11-18 audit P1-2 fix) -----------------------------
+# The worker published no metrics: job outcomes lived only in log lines, so
+# a silently failing retention sweep was found by users instead of an alert.
+# startup starts a prometheus HTTP server on WORKER_METRICS_PORT (0 = off)
+# and every body run meters outcome + duration on the shared registry.
+
+
+def _metric(name: str, labels: dict[str, str]) -> float | None:
+    from bangla_gpt_api.metrics import REGISTRY
+
+    return REGISTRY.get_sample_value(name, labels)
+
+
+def test_worker_metrics_server_only_when_port_configured(tmp_path, monkeypatch) -> None:
+    started: dict[str, Any] = {}
+    monkeypatch.setattr(
+        "prometheus_client.start_http_server",
+        lambda port, **kw: started.update(port=port, **kw),
+    )
+    settings = Settings(
+        env="test",
+        database_url=engine_url(tmp_path, "worker_metrics_on"),
+        jwt_secret="test-secret-0123456789abcdef0123456789",
+        worker_metrics_port=9101,
+    )
+    monkeypatch.setattr(worker, "get_settings", lambda: settings)
+    fresh: dict[str, Any] = {}
+    asyncio.run(worker.startup(fresh))
+    assert started.get("port") == 9101
+    assert started.get("registry") is worker.REGISTRY
+    asyncio.run(worker.shutdown(fresh))
+
+
+def test_worker_metrics_server_disabled_by_default(tmp_path, monkeypatch) -> None:
+    started: dict[str, Any] = {}
+    monkeypatch.setattr(
+        "prometheus_client.start_http_server",
+        lambda port, **kw: started.update(port=port, **kw),
+    )
+    settings = Settings(
+        env="test",
+        database_url=engine_url(tmp_path, "worker_metrics_off"),
+        jwt_secret="test-secret-0123456789abcdef0123456789",
+    )
+    monkeypatch.setattr(worker, "get_settings", lambda: settings)
+    fresh: dict[str, Any] = {}
+    asyncio.run(worker.startup(fresh))
+    assert started == {}
+    asyncio.run(worker.shutdown(fresh))
+
+
+def test_successful_job_outcome_and_duration_are_metered(ctx, monkeypatch) -> None:
+    ok = {"ran": True}
+    monkeypatch.setattr(worker.jobs, "run_retention_job", lambda sf, s: ok)
+    # Deltas, not absolutes: pytest-randomly orders the file, and counters
+    # accumulate for the whole process.
+    success_before = (
+        _metric("bgpt_worker_jobs_total", {"job": "retention_sweep", "outcome": "success"}) or 0.0
+    )
+    duration_before = (
+        _metric("bgpt_worker_job_duration_seconds_count", {"job": "retention_sweep"}) or 0.0
+    )
+    result = asyncio.run(worker.job_retention_sweep(ctx))
+    assert result == ok
+    assert (
+        _metric("bgpt_worker_jobs_total", {"job": "retention_sweep", "outcome": "success"}) or 0.0
+    ) == pytest.approx(success_before + 1)
+    assert (
+        _metric("bgpt_worker_job_duration_seconds_count", {"job": "retention_sweep"}) or 0.0
+    ) == pytest.approx(duration_before + 1)
+
+
+def test_failed_job_outcome_is_metered(ctx, monkeypatch) -> None:
+    def boom(sf: object, s: object) -> dict:
+        raise RuntimeError("smtp down")
+
+    monkeypatch.setattr(worker.jobs, "run_retention_job", boom)
+    failed_before = (
+        _metric("bgpt_worker_jobs_total", {"job": "retention_sweep", "outcome": "failed"}) or 0.0
+    )
+    success_before = (
+        _metric("bgpt_worker_jobs_total", {"job": "retention_sweep", "outcome": "success"}) or 0.0
+    )
+    with pytest.raises(Retry):
+        asyncio.run(worker.job_retention_sweep(ctx))
+    assert (
+        _metric("bgpt_worker_jobs_total", {"job": "retention_sweep", "outcome": "failed"}) or 0.0
+    ) == pytest.approx(failed_before + 1)
+    assert (
+        _metric("bgpt_worker_jobs_total", {"job": "retention_sweep", "outcome": "success"}) or 0.0
+    ) == pytest.approx(success_before)
+
+
+def test_self_deferring_body_meters_retry(ctx, monkeypatch) -> None:
+    """A body that raises arq's own Retry (none today) is not counted as a
+    plain failure -- it defers itself and the outcome says so."""
+
+    def defer_body(sf: object, s: object) -> dict:
+        raise Retry(defer=30)
+
+    monkeypatch.setattr(worker.jobs, "run_retention_job", defer_body)
+    retry_before = (
+        _metric("bgpt_worker_jobs_total", {"job": "retention_sweep", "outcome": "retry"}) or 0.0
+    )
+    with pytest.raises(Retry):
+        asyncio.run(worker.job_retention_sweep(ctx))
+    assert (
+        _metric("bgpt_worker_jobs_total", {"job": "retention_sweep", "outcome": "retry"}) or 0.0
+    ) == pytest.approx(retry_before + 1)
+
+
+def test_timed_out_job_meters_cancelled(ctx, monkeypatch) -> None:
+    """arq's job_timeout cancels at the await: a cancelled run must not be
+    counted as a success (CancelledError is a BaseException, so without its
+    own branch the finally block would have metered it as one)."""
+    entered = threading.Event()
+    release = threading.Event()
+
+    def slow(sf: object, s: object) -> dict:
+        entered.set()
+        release.wait(10)
+        return {}
+
+    monkeypatch.setattr(worker.jobs, "run_retention_job", slow)
+    cancelled_before = (
+        _metric("bgpt_worker_jobs_total", {"job": "retention_sweep", "outcome": "cancelled"}) or 0.0
+    )
+    success_before = (
+        _metric("bgpt_worker_jobs_total", {"job": "retention_sweep", "outcome": "success"}) or 0.0
+    )
+
+    async def scenario() -> None:
+        task = asyncio.create_task(worker.job_retention_sweep(ctx))
+        await asyncio.to_thread(entered.wait, 10)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        release.set()
+
+    asyncio.run(scenario())
+    assert (
+        _metric("bgpt_worker_jobs_total", {"job": "retention_sweep", "outcome": "cancelled"}) or 0.0
+    ) == pytest.approx(cancelled_before + 1)
+    assert (
+        _metric("bgpt_worker_jobs_total", {"job": "retention_sweep", "outcome": "success"}) or 0.0
+    ) == pytest.approx(success_before)
