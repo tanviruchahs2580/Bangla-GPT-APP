@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import { useAuth, ROLE_HOME } from "./AuthContext";
 import { exitImpersonation, isImpersonating } from "./api";
+import { ConfirmDialog } from "./components/ui";
+import { registerBackButton } from "./lib/nativeBackButton";
 import { NotificationBell } from "./components/NotificationBell";
 import { BrandMark } from "./components/BrandMark";
 import { SearchBox } from "./components/SearchBox";
@@ -113,6 +115,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // show the install affordance only when Chromium offers it
   const [installable, setInstallable] = useState(canInstall());
   useEffect(() => onInstallChange(() => setInstallable(canInstall())), []);
+  // E6: hardware back-button. The handler is native-only (inert in the
+  // browser/PWA); when a page declares resumable state, the first press
+  // asks before leaving.
+  const [backConfirm, setBackConfirm] = useState(false);
+  useEffect(() => {
+    let un: (() => void) | undefined;
+    void registerBackButton(() => setBackConfirm(true)).then((f) => {
+      un = f;
+    });
+    return () => un?.();
+  }, []);
   const isStaff = !!me && me.role !== "student";
   const roleHome = (me && ROLE_HOME[me.role]) || "/";
 
@@ -276,6 +289,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
       )}
+      <ConfirmDialog
+        open={backConfirm}
+        onClose={() => setBackConfirm(false)}
+        onConfirm={() => {
+          setBackConfirm(false);
+          void import("@capacitor/app").then(({ App }) => App.exitApp());
+        }}
+        title={t("backTitle")}
+        body={t("backBody")}
+        confirmLabel={t("backLeave")}
+        cancelLabel={t("backStay")}
+      />
     </div>
   );
 }

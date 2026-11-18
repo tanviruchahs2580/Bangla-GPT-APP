@@ -431,6 +431,10 @@ const bn = {
   baStatus: "অবস্থা",
   noStudents: "এই শ্রেণিতে কোনো শিক্ষার্থী নেই।",
   parentDashboard: "অভিভাবক ড্যাশবোর্ড",
+  backTitle: "প্রস্থান করবেন?",
+  backBody: "চলমান কুইজ বা উত্তর রয়েছে — বেরিয়ে গেলে এগুলো হারিয়ে যাবে।",
+  backLeave: "প্রস্থান",
+  backStay: "থাকুন",
   parentSub: "সন্তানের পড়াশোনা, অগ্রগতি ও ফলাফল এক নজরে।",
   myChildren: "আমার সন্তান",
   // E2: the linked-children table's empty state (ParentDashboard).
@@ -1270,6 +1274,10 @@ const en: Dict = {
   baStatus: "Status",
   noStudents: "No students in this class.",
   parentDashboard: "Parent dashboard",
+  backTitle: "Leave the app?",
+  backBody: "A quiz or answer is in progress — leaving will lose it.",
+  backLeave: "Exit",
+  backStay: "Stay",
   parentSub: "Your children's study, progress and results at a glance.",
   myChildren: "My children",
   // E2: the linked-children table's empty state (ParentDashboard).

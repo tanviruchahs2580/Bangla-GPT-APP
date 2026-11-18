@@ -100,11 +100,11 @@ const CEILING: Record<string, number> = {
   // 708: E1 (2026-11-17) replaced window.confirm with the shared
   // ConfirmDialog for chat deletion — the deleteTarget state and the dialog
   // render are the growth; the delete logic itself is unchanged.
-  "student/AITutorPage.tsx": 708,
+  "student/AITutorPage.tsx": 713, // E6 2026-11-18: back-button dirty marker (measured 713)
   "student/HomePage.tsx": 342, // E2 (2026-11-17): shared Skeleton swap.
   "student/LearnPage.tsx": 382, // E2 (2026-11-17): shared Skeleton swap.
   "student/MePage.tsx": 793,
-  "student/QuizPage.tsx": 586,
+  "student/QuizPage.tsx": 593, // E6 2026-11-18: back-button dirty marker (measured 593)
   "student/learn/ChapterAsk.tsx": 121,
   "student/learn/ChapterPractice.tsx": 184,
   "student/learn/LearnChapterPage.tsx": 495, // E2 (2026-11-17): Skeleton swap.

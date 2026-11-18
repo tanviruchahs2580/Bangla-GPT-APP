@@ -17,6 +17,7 @@ import { ConsentReconfirmNotice } from "../../components/ConsentReconfirmNotice"
 import { friendlyError, isConsentReconfirmationRequired } from "../../errors";
 import { t } from "../../i18n";
 import { getLowData } from "../../lib/lowData";
+import { markDirty } from "../../lib/nativeBackButton";
 import { prefersReducedMotion } from "../../lib/motion";
 import { subjectOptions } from "../../lib/subjectOptions";
 import { toast } from "../../lib/toast";
@@ -50,6 +51,10 @@ export default function AITutorPage() {
   // from `streaming`, which is only true once tokens can arrive — but it must
   // cover the POST too, so Stop can abort the whole turn (F-012).
   const [sending, setSending] = useState(false);
+  // E6: a streaming answer is resumable state for the back button.
+  useEffect(() => {
+    if (sending) return markDirty("tutor");
+  }, [sending]);
   const [error, setError] = useState<string | null>(null);
   // FE-FIX-019: the consent gate's 403 (BE-FIX-004 gates every tutor write —
   // opening a thread, sending a turn, renaming, rating) sets this so the
