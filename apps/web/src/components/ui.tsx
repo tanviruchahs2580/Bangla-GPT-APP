@@ -13,6 +13,7 @@ import { TrendingDown, TrendingUp, X, type LucideIcon } from "lucide-react";
 import { createPortal } from "react-dom";
 import { cn } from "../lib/cn";
 import { formatNumber, t } from "../i18n";
+import { pushOverlay } from "../lib/nativeBackButton";
 
 type Variant = "primary" | "teal" | "ghost" | "soft" | "danger" | "default";
 type Size = "sm" | "md" | "lg";
@@ -242,6 +243,11 @@ export function Modal({
     restoreRef.current = document.activeElement as HTMLElement | null;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    // vc206: while the modal is open it is the topmost dismissible overlay
+    // for the Android hardware back button (dismissed before any route
+    // change). Inert in the browser/PWA — the registry is only consulted
+    // by the native listener.
+    const removeOverlay = pushOverlay(() => onCloseRef.current());
     // Focus the first real control inside the dialog, not the dialog box:
     // focusing the container left the dialog's OWN first Shift+Tab landing
     // outside the trap, which is the defect this component is documented as
@@ -277,6 +283,7 @@ export function Modal({
     return () => {
       document.removeEventListener("keydown", onKey, true);
       document.body.style.overflow = prevOverflow;
+      removeOverlay();
       restoreRef.current?.focus?.();
     };
   }, [open]);
