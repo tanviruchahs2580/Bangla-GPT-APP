@@ -49,6 +49,8 @@ cite this table as a licence grant.
 
 | File | What it is | Author / source / licence | Status |
 | --- | --- | --- | --- |
+| `apps/web/public/icon-192-maskable.png` | PWA maskable launcher icon (192) | generated in-repo by `apps/web/scripts/generate_native_assets.mjs` from the approved brand mark `apps/web/public/icon-maskable.svg` (whose own provenance row below is pending) | generated in-repo — no third-party material |
+| `apps/web/public/icon-512-maskable.png` | PWA maskable launcher icon (512) | generated in-repo by `apps/web/scripts/generate_native_assets.mjs` from the approved brand mark `apps/web/public/icon-maskable.svg` (whose own provenance row below is pending) | generated in-repo — no third-party material |
 | `apps/web/src/assets/login-bg-desktop.jpg` | login/landing background, desktop | unknown — no metadata in the file, nothing recorded in the adding commit (f63d715) | PENDING owner record or replacement |
 | `apps/web/src/assets/login-bg-desktop.webp` | WebP twin of the above | unknown — derived from the JPEG above at build time (same commit) | PENDING owner record or replacement |
 | `apps/web/src/assets/login-bg-mobile.jpg` | login/landing background, mobile | unknown — no metadata in the file (f63d715) | PENDING owner record or replacement |
