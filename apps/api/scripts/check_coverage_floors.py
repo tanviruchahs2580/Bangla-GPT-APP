@@ -100,6 +100,12 @@ FLOORS: dict[str, tuple[float, str]] = {
         79.0,
         "measured 79.76% on 2026-11-10; gap to 90: render/format branches",
     ),
+    # --- CI-FIX-015: the observability bootstrap was unfloored while its
+    # sibling schedulers.py was floored; the global fail_under=80 could have
+    # absorbed losing the Sentry scrub hook's tests entirely. Measured 100%
+    # on 2026-11-18 (test_qa_sentry_scrub.py after the traces-rate and
+    # boot-branch tests); floor = measured, same policy as CI-FIX-010.
+    "initialize/observability.py": (100.0, "measured 100% on 2026-11-18; the F-043 scrub hook"),
 }
 
 

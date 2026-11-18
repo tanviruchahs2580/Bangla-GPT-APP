@@ -79,6 +79,7 @@ If you change a `Settings` field, re-check the citation in the same change.
 | PASSWORD_RESET_TOKEN_MINUTES | Lifetime of a password-reset token (single use). | 30 | - | 30 | 30 | yes | config.py:184 |
 | PII_ALLOW_PLAINTEXT | Must stay unset/false in production: plaintext guardian-phone storage. The production boot gate refuses PII_ALLOW_PLAINTEXT=true (audit B-04). | True | - | true | false | yes | config.py:245 |
 | PII_ENC_KEY | refuses to boot in production without it. Generate with: python -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())" Rotating it invalidates existing ciphertext -- re-encrypt with the old key first (see docs/runbook.md). Store alongside JWT_SECRET; never commit it. | None | - | - | - | yes | config.py:238 |
+| POSTGRES_STATEMENT_TIMEOUT_MS | Postgres statement_timeout (ms) applied per pooled connection (db/session.py): a runaway query cannot hold the pool indefinitely. 0 disables (migration-style long DDL on a dedicated connection). SQLite is unaffected. | 30000 | - | - | 0 during a planned long-DDL window | - | config.py:520 |
 | RATE_LIMIT_BACKEND | memory \| redis | 'memory' | - | memory # memory \| redis | redis # memory \| redis | yes | config.py:224 |
 | RATE_LIMIT_FAIL_OPEN | Redis limiter behaviour when the backend is unreachable: false (default) refuses with 503, true allows the request. | False | - | false # true = allow traffic when Redis is down | false | yes | config.py:225 |
 | RATE_LIMIT_LOGIN_PER_MINUTE | Anonymous login attempts per IP per minute before the middleware answers 429. | 10 | - | 10 | 10 | yes | config.py:220 |
@@ -89,6 +90,7 @@ If you change a `Settings` field, re-check the citation in the same change.
 | RETRIEVAL_MODE | GEMINI_FAST_MODEL= # S4.2 router: model for SIMPLE routes (empty = main model serves all) | 'hybrid' | - | hybrid | hybrid # S4.3: hybrid = BM25+vector RRF+rerank; bm25 = v1 baseline | yes | config.py:142 |
 | SENTRY_DSN | Error tracking (optional; both apps init Sentry when set). Sentinels are stripped from logs either way. | None | - | # <https://xxx@xxx.ingest.sentry.io/xxx> | - | yes | config.py:419 |
 | SENTRY_ENV | Sentry environment tag; set it to production explicitly or events are tagged environment=development (F-OBS-3). | 'development' | - | production | - | yes | config.py:420 |
+| SENTRY_TRACES_SAMPLE_RATE | Sentry transaction sample rate (0-1); error capture is unaffected. Out-of-range values are clamped at init (initialize/observability.py). Was hardcoded 0.1 until 2026-11-18. | 0.1 | - | - | - | - | config.py:509 |
 | SMTP_ENABLED | Turn password-reset e-mail on; when false the reset token is only printed outside production. | False | - | false | true | yes | config.py:297 |
 | SMTP_FROM | From: address on password-reset e-mail. | None | - | - | <no-reply@example.edu.bd> | yes | config.py:302 |
 | SMTP_HOST | SMTP server for password-reset e-mail; used when SMTP_ENABLED=true. | None | - | - | smtp.example.edu.bd | yes | config.py:298 |
@@ -99,6 +101,7 @@ If you change a `Settings` field, re-check the citation in the same change.
 | VERSION | Service identity (rarely overridden): APP_NAME=Bangla GPT API | _get_version() | - | (commented) # never set: the reported version is read from apps/api/pyproject.toml | - | - | config.py:75 |
 | WEAKNESS_REFRESH_CHECK_MINUTES | Scheduler loop cadence for the nightly weakness reconciliation (daily ~03:00 Dhaka). | 60 | - | 60 | - | - | config.py:320 |
 | WEAKNESS_REFRESH_ENABLED | Nightly weakness reconciliation (S4.6): daily ~03:00 Dhaka, recomputes per-concept mastery rows from the graded answer log (counts only). | True | - | true | - | - | config.py:319 |
+| WORKER_METRICS_PORT | Port the arq worker's prometheus registry listens on (0 disables the endpoint). Compose worker profile defaults 9101; Prometheus scrapes it as the bangla-gpt-worker job (deploy/prometheus/prometheus.yml). | 0 | - | - | 9101 | - | config.py:531 |
 
 ## Infrastructure and deployment variables (no Settings field)
 

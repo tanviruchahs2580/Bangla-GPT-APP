@@ -47,6 +47,27 @@ def scrub_sentry_event(event: Event, hint: Hint | None = None) -> Event | None:
     return cast("Event", scrubbed) if isinstance(scrubbed, dict) else None
 
 
+def _traces_sample_rate(settings: object) -> float:
+    """Settings-driven Sentry transaction sample rate, clamped into [0, 1].
+
+    Was hardcoded 0.1 at the ``init`` call site (P2, 2026-11-17 audit); ops
+    now tunes it with SENTRY_TRACES_SAMPLE_RATE instead of a code change.
+    An invalid value falls back to the shipped 0.1 rather than crashing the
+    boot -- ``configure_sentry`` already treats Sentry init as best-effort.
+    """
+    raw = getattr(settings, "sentry_traces_sample_rate", 0.1)
+    try:
+        rate = float(raw)
+    except (TypeError, ValueError):
+        rate = 0.1
+    if rate != rate:  # NaN
+        rate = 0.1
+    elif rate < 0.0 or rate > 1.0:
+        logger.warning("sentry_traces_sample_rate_out_of_range", extra={"op": "init"})
+        rate = min(1.0, max(0.0, rate))
+    return rate
+
+
 def configure_sentry(settings: object) -> None:
     """Initialise Sentry when a DSN is configured (no-op otherwise).
 
@@ -61,7 +82,7 @@ def configure_sentry(settings: object) -> None:
         sentry_sdk.init(
             dsn=dsn,
             environment=getattr(settings, "sentry_env", "development"),
-            traces_sample_rate=0.1,
+            traces_sample_rate=_traces_sample_rate(settings),
             before_send=scrub_sentry_event,
         )
     except Exception:

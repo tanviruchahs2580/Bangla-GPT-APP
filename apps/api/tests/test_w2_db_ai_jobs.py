@@ -170,6 +170,21 @@ def test_malformed_key_is_refused_not_ignored(tmp_path) -> None:
         assert res.json()["detail"]["code"] == "invalid_idempotency_key"
 
 
+def test_normalize_idempotency_key_rejects_non_url_safe_characters() -> None:
+    """The ASCII-pattern branch (length is covered by the route test above):
+    a key long enough to pass the bounds but carrying characters outside
+    [A-Za-z0-9._:-] is refused, never silently normalised -- a silently
+    rewritten key would make the documented replay contract a lie."""
+    with pytest.raises(ValueError):
+        job_policy.normalize_idempotency_key("has a space inside")
+    with pytest.raises(ValueError):
+        job_policy.normalize_idempotency_key("bangla-\u0995\u09cb\u09b7")
+    with pytest.raises(ValueError):
+        job_policy.normalize_idempotency_key("exclamation!")
+    # the accepted shape round-trips
+    assert job_policy.normalize_idempotency_key("job.key-1:ok") == "job.key-1:ok"
+
+
 def test_jobs_without_a_key_still_work(tmp_path) -> None:
     """The header is optional; NULL keys do not collide (unique index)."""
     settings = _settings(tmp_path, "jobs_nokey")

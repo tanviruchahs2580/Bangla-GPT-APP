@@ -76,4 +76,22 @@ regexes = [
   # pardoned -- not the file that happens to contain it. A path entry for that
   # report was considered and rejected for the same reason.
   '''^Auth: JWT\+RBAC\+tenancy''',
+  # VCS-01 follow-up (2026-11-18): the F-107 mail-copy fixture's stand-in
+  # verification token in apps/api/tests/test_w2_i18n_email_copy.py. Reviewed
+  # byte-for-byte: it is `tok_` + the consecutive a-z alphabet + `012345`, a
+  # sequential placeholder with no randomness, used only as the value
+  # interpolated into a rendered mail body so the assertions can find it
+  # again. It appears in no configuration, secret store, live request or
+  # provider account. The literal is identical in the introducing commit
+  # bdd6ac6 and at HEAD, which is why editing the file cannot clear the
+  # historical finding. Measured 2026-11-18 with gitleaks 8.30.1: the
+  # finding does NOT reproduce under this version -- full-history git scans
+  # with both the pre-change and post-change config, and directory scans of
+  # the test tree, all report zero leaks; a `gitleaks dir` run WITHOUT
+  # --config auto-resolves to default rules and fires on an unrelated
+  # literal. The entry is retained as version-drift insurance (an older or
+  # future generic rule matching the literal would be cleared by exactly
+  # this value-scoped entry), and it is anchored to the full literal so any
+  # other token-shaped value still fails the gate.
+  '''TOKEN\s*=\s*["']tok_abcdefghijklmnopqrstuvwxyz012345["']''',
 ]

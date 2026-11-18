@@ -171,15 +171,16 @@ that are not in the stored rubric, and never adjust scoring to make a particular
 
 ## 10. Database
 
-Alembic migrations in `apps/api/alembic/versions/` — **36 files counted on
-2026-11-10** (`ls apps/api/alembic/versions/*.py | wc -l`). The previous
-claim here said 36 too, but the tree held 35 for most of that day: this number
+Alembic migrations in `apps/api/alembic/versions/` — **39 files counted on
+2026-11-18** (`ls apps/api/alembic/versions/*.py | wc -l`; single head
+`c7d9e1f3a5b7`). The previous claim here said 36 too, but the tree held 35 for most of that day: this number
 moves with every migration, so re-count it rather than quoting it. Engine
 selected by URL scheme in
-`db/session.py`: SQLite locally (`sqlite:///./bangla_gpt.db`), PostgreSQL in production (psycopg3). The app
+`db/session.py`: SQLite locally (`sqlite:///./bangla_gpt.db`), PostgreSQL in production (psycopg3, now with a
+settings-driven `statement_timeout` per pooled connection). The app
 is **SQLAlchemy 2 sync**, not async — do not introduce async sessions.
 
-`db/models.py` holds **42 tables** (`grep -c '__tablename__'
+`db/models.py` holds **44 tables** (`grep -c '__tablename__'
 apps/api/src/bangla_gpt_api/db/models.py`; the claims of 46 and of a
 "41-table schema" elsewhere in this file were both wrong — CI-FIX-007). Read
 the invariant comments. The users role `CHECK` is real now
@@ -214,7 +215,7 @@ part of the command where the API tools need it).
 
 ```bash
 # API
-cd apps/api && python -m pytest -q            # 252 test files on 2026-11-12 (`find tests -name 'test_*.py' | wc -l`); pytest-randomly runs by default; pyproject pins asyncio_default_fixture_loop_scope after the pytest bump broke CI
+cd apps/api && python -m pytest -q            # 265 test files on 2026-11-18 (`find tests -name 'test_*.py' | wc -l`); pytest-randomly runs by default; pyproject pins asyncio_default_fixture_loop_scope after the pytest bump broke CI
 cd apps/api && ruff check . && ruff format --check .
 cd apps/api && mypy src                      # CI-FIX-007: bare `mypy` does not run at all ("Missing target module, package, files, or command"); CI and pre-commit both use `mypy src`
 lint-imports                                 # the five import-linter contracts (repo-root config)
@@ -298,7 +299,7 @@ version, or the audit-log policy; editing pinned helpline numbers.
 - **`*.db` files are everywhere in the working tree.** 216 of them (measured
   2026-11-10: `find . -name '*.db' -not -path './.git/*' -not -path
   './node_modules/*' | wc -l`), of which 130 sit under `.audit/`,
-  `.qa-work/` and `.audit-work/`; some carry the full 42-table schema
+  `.qa-work/` and `.audit-work/`; some carry the full 44-table schema
   (`db/models.py`; the old "41-table" and "~14 files" claims here were both
   wrong, CI-FIX-007). Row contents were never enumerated — treat any retained
   one as a PII artifact. They are now ignored by `.gitignore` (CI-FIX-008),
