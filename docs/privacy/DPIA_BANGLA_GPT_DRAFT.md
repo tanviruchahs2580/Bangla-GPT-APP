@@ -293,11 +293,11 @@ are school-mediated; DPO/Chief Data Officer determination (Act §23 per the inde
 | Statement | Evidence |
 |---|---|
 | Act identity/publication | gazette PDF + dpp.gov.bd index (§4; retrieval 2026-11-18) |
-| Consent fields | `apps/api/.../db/models.py` (consent_version/consent_at/consent_ip) |
-| Redaction before egress | `apps/api/.../services/pii.py` |
-| Grounding/refusal | `apps/api/.../services/tutor.py`; `docs/rag/v3/CHECKPOINT.md` |
-| Retention schedule | `apps/api/.../services/retention.py`; `docs/data_minimization.md` |
-| Rights flows | `apps/api/.../services/gdpr.py` |
+| Consent fields | `apps/api/src/bangla_gpt_api/db/models.py` (consent_version/consent_at/consent_ip) |
+| Redaction before egress | `apps/api/src/bangla_gpt_api/services/pii.py` |
+| Grounding/refusal | `apps/api/src/bangla_gpt_api/services/tutor.py`; `docs/rag/v3/CHECKPOINT.md` |
+| Retention schedule | `apps/api/src/bangla_gpt_api/services/retention.py`; `docs/data_minimization.md` |
+| Rights flows | `apps/api/src/bangla_gpt_api/services/gdpr.py` |
 | Backup rotation | `docs/backup_dr.md` |
 | No third-party font egress | `docs/engineering/mobile-platform-hardening/FONT_E5_PHASE2.md` |
 | Play data-safety declarations | `docs/playstore/data-safety.md` (discrepancies flagged, not edited) |

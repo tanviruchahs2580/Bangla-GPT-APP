@@ -36,9 +36,9 @@ vendor confirmations). This is **not** a production-ready claim.
   root exit; single-listener guard), `AppShell.tsx` wiring, tests.
 - **Fonts:** `public/fonts/` (10 woff2 + 2 OFL licences + README/SHA-256),
   `src/fonts.css` (new), `index.html` (preload), `styles.css` (`--font` stack),
-  `main.tsx`, `scripts/font_metrics.py`, `scripts/verify_fonts.mjs`, package.json/lock.
+  `main.tsx`, `apps/web/scripts/font_metrics.py`, `apps/web/scripts/verify_fonts.mjs`, package.json/lock.
 - **Native assets:** `@capacitor/status-bar@7.0.6`, `@capacitor/splash-screen@7.0.5`,
-  `capacitor.config.ts`, `src/lib/nativeSystemUi.ts`, `scripts/generate_native_assets.mjs`,
+  `capacitor.config.ts`, `src/lib/nativeSystemUi.ts`, `apps/web/scripts/generate_native_assets.mjs`,
   31 regenerated PNG/XML assets under `android/` + `public/`, manifest entries.
 - **Tables:** `src/components/ResponsiveTable.tsx` (new) + 10 page/component files
   migrated; 2 governance tests updated to the new contract (intent unchanged).

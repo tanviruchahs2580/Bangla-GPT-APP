@@ -51,7 +51,7 @@ request exists.
 
 ## 3. Metric-matched fallback (measured, not guessed)
 
-`scripts/font_metrics.py` reads the actual SFNT metrics (fontTools + brotli) and
+`apps/web/scripts/font_metrics.py` reads the actual SFNT metrics (fontTools + brotli) and
 derives the descriptors with the fontaine formula. Measured 2026-11-18:
 
 | Font | upm | hhea ascent/descent/gap | avg advance (em-normalised, 67-glyph Bengali charset) |
@@ -79,7 +79,7 @@ Siliguri so the swap window never pulls the second webfont family down.
 
 ## 4. Browser verification (real Chromium, Playwright)
 
-`scripts/verify_fonts.mjs` serves the production build and loads a Bengali fixture
+`apps/web/scripts/verify_fonts.mjs` serves the production build and loads a Bengali fixture
 (conjuncts ক্ষ ত্র জ্ঞ শ্র ণ্ড, matras, Bengali + Latin numerals, mixed bn/en, ৳, danda,
 weights 400/600/700) through the app's real built stylesheet:
 
@@ -103,7 +103,7 @@ fetch error. The fixture is served same-origin by the verification server.
 | No `@fontsource/*` imports or dependencies | PASS — `grep` over `package.json`, `package-lock.json`, `src/`: 0 hits |
 | Self-hosted, licensed, notices updated | PASS — binaries + `LICENSE-*.txt` committed; `THIRD_PARTY_NOTICES.md` rewritten for the vendored state |
 | Preload exact, non-duplicated, justified | PASS — 1 face, stable path, fetched exactly once in Chromium |
-| Fallback metrics measured | PASS — `scripts/font_metrics.py`, values in §3 |
+| Fallback metrics measured | PASS — `apps/web/scripts/font_metrics.py`, values in §3 |
 | Bengali shaping regression | PASS — fixture screenshots; repo visual e2e suite runs against existing baselines in CI |
 | `npm ci`, TS, ESLint, Vitest, Knip, build | knip + full suite run at Phase 6 and on CI; build verified locally (§2) |
 | Android bundle serves local fonts | the APK packages `dist/` wholesale — `dist/fonts/` is inside it; no remote font host exists anywhere in the bundle |

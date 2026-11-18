@@ -38,7 +38,7 @@
 
 ## 4. Icons (C4) — one source of truth, reproducible pipeline
 
-`scripts/generate_native_assets.mjs` (committed; Playwright chromium rasteriser; same inputs
+`apps/web/scripts/generate_native_assets.mjs` (committed; Playwright chromium rasteriser; same inputs
 → same PNGs) generates **31 assets** from `public/icon.svg` / `public/icon-maskable.svg` —
 no new artwork, no stretching:
 
@@ -70,7 +70,7 @@ reference exists, so none was invented). Favicons/apple-touch-icon references un
 | Launcher icons no longer generic templates | PASS — brand-derived (was already partly true at xxxhdpi; now all densities + foreground + splash) |
 | Splash/status-bar behaviour on the device matrix | **BLOCKED — owner/device action required** |
 | Native plugins harmless in browser/PWA | PASS by construction (native-only guards); full web suite green |
-| Asset generation reproducible + documented | PASS — committed script; `node scripts/generate_native_assets.mjs` |
+| Asset generation reproducible + documented | PASS — committed script; `node apps/web/scripts/generate_native_assets.mjs` |
 
 ## 6. Cross-workstream checks
 
