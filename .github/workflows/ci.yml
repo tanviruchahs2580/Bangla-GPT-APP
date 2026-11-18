@@ -878,12 +878,37 @@ jobs:
       # trivy suppresses dev dependencies by default, which matches what the
       # image contains and what `npm audit --omit=dev` gates one job over.
       - name: Trivy dependency scan (shipped npm bundle)
+        # CI-FIX-013: same DB-fetch exposure as the image gate in the docker
+        # job. Retried only when the failure is the vulnerability-DB download;
+        # a scan that ran and found a fixable HIGH/CRITICAL still fails on the
+        # first attempt.
         run: |
-          docker run --rm -v "$PWD:/work" -w /work \
-            aquasec/trivy:0.58.0@sha256:b88012e2a0a309d6a8a00463d4e63e5e513377fb74eccbc8f9b0f8f81940ebeb \
-            fs --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
-            --exit-code 1 --skip-dirs node_modules --skip-dirs dist \
-            apps/web/package-lock.json
+          set -uo pipefail
+          scan() {
+            docker run --rm -v "$PWD:/work" -w /work \
+              aquasec/trivy:0.58.0@sha256:b88012e2a0a309d6a8a00463d4e63e5e513377fb74eccbc8f9b0f8f81940ebeb \
+              fs --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
+              --exit-code 1 --skip-dirs node_modules --skip-dirs dist \
+              apps/web/package-lock.json
+          }
+          db_flake() {
+            grep -qF 'DB error: failed to download vulnerability DB' "$1"
+          }
+          for attempt in 1 2 3; do
+            if scan 2>&1 | tee /tmp/trivy-npm.log; then
+              echo "trivy: no fixable HIGH/CRITICAL in the shipped npm tree"
+              exit 0
+            fi
+            if db_flake /tmp/trivy-npm.log; then
+              echo "::warning title=Trivy DB fetch flake::attempt ${attempt}/3 could not download the vulnerability DB; retrying"
+              sleep $((attempt * 10))
+              continue
+            fi
+            echo "::error title=Trivy scan failed (non-DB error)::not retried; see the output above"
+            exit 1
+          done
+          echo "::error title=Trivy DB unavailable::the vulnerability DB could not be downloaded after 3 attempts, so the npm tree was never scanned"
+          exit 1
 
       # F-006/BE-05: complexity used to be measured by nobody. `ruff check`
       # (C901, mccabe max-complexity 20 in apps/api/pyproject.toml) refuses new
@@ -1238,9 +1263,48 @@ jobs:
         # NOTE: the previously pinned digest did not exist upstream
         # (manifest unknown), so this step could never pass. trivy 0.58.0
         # is verified working with these flags (0 fixable HIGH/CRITICAL).
+        #
+        # CI-FIX-013 (2026-11-18): every invocation downloads the vulnerability
+        # DB, and mirror.gcr.io intermittently answers BLOB_UNKNOWN for a layer
+        # that does exist. Measured on run 44317146389: the gate exited 1 with
+        # `DB error: failed to download vulnerability DB` and had inspected no
+        # image at all -- a registry flake reported as a security failure.
+        # Trivy 0.58.0 uses "DB error: failed to download vulnerability DB"
+        # for failures from its configured mirrors (GCR plus GHCR); the
+        # fixed-string match below (grep -qF, not a regex) is intentionally
+        # narrow. Do not add generic text such as
+        # "failed to download" without a test showing that it identifies only
+        # a database-bootstrap failure.
+        # The fetch is retried, but the retry is NOT a blanket `|| retry`: it
+        # fires only when the output matches a known DB-download failure. A
+        # scan that ran and found a fixable HIGH/CRITICAL, or any other error,
+        # fails on the first attempt with the real output. The threshold
+        # (HIGH,CRITICAL + --ignore-unfixed + --exit-code 1) is unchanged.
         run: |
-          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy:0.58.0@sha256:b88012e2a0a309d6a8a00463d4e63e5e513377fb74eccbc8f9b0f8f81940ebeb image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 bangla-gpt-api:ci
+          set -uo pipefail
+          scan() {
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+              aquasec/trivy:0.58.0@sha256:b88012e2a0a309d6a8a00463d4e63e5e513377fb74eccbc8f9b0f8f81940ebeb \
+              image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 bangla-gpt-api:ci
+          }
+          db_flake() {
+            grep -qF 'DB error: failed to download vulnerability DB' "$1"
+          }
+          for attempt in 1 2 3; do
+            if scan 2>&1 | tee /tmp/trivy-image.log; then
+              echo "trivy: no fixable HIGH/CRITICAL in bangla-gpt-api:ci"
+              exit 0
+            fi
+            if db_flake /tmp/trivy-image.log; then
+              echo "::warning title=Trivy DB fetch flake::attempt ${attempt}/3 could not download the vulnerability DB; retrying"
+              sleep $((attempt * 10))
+              continue
+            fi
+            echo "::error title=Trivy scan failed (non-DB error)::not retried; see the output above"
+            exit 1
+          done
+          echo "::error title=Trivy DB unavailable::the vulnerability DB could not be downloaded after 3 attempts, so the image was never scanned"
+          exit 1
 
       - name: Run container
         # On a shared network so the k6 step can reach it by name: the k6
