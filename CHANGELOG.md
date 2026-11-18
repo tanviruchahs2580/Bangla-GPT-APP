@@ -45,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(architecture): Cloudflare Workers feasibility — retain current platform, gateway PoC-only
 - docs(audit): add the 2026-11-18 backend audit register and plan
 - docs(privacy): DPIA draft for the children's education platform (Act 63 of 2026)
+- docs(readme): name codeql.yml's workflow_dispatch trigger in the CI table
 
 ### Maintenance
 
