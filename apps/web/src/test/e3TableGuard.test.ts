@@ -55,14 +55,26 @@ describe("mobile card fallback (cardable)", () => {
   });
 
   it("is adopted by the highest-traffic staff tables", () => {
+    // D workstream (2026-11-18): these tables moved onto the shared
+    // ResponsiveTable component; the card fallback is now opted into with
+    // the component's `cardable` prop and the data-label cells are rendered
+    // by the component itself, so the guard checks the new contract.
     for (const file of [
       "src/pages/ParentDashboard.tsx",
       "src/pages/AdminDashboard.tsx",
     ]) {
       const src = readFileSync(resolve(ROOT, file), "utf8");
-      expect(src, file).toContain('className="data cardable"');
-      expect(src, file).toContain("data-label=");
+      expect(src, file).toContain("ResponsiveTable");
+      expect(src, file).toMatch(/\bcardable\b/);
     }
+    // the component still emits the labelled-card contract the CSS pins
+    const component = readFileSync(
+      resolve(ROOT, "src/components/ResponsiveTable.tsx"),
+      "utf8",
+    );
+    expect(component).toContain("data-label=");
+    expect(component).toContain('"data"');
+    expect(component).toContain("cardable");
   });
 });
 

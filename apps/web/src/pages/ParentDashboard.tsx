@@ -6,6 +6,7 @@ import { friendlyError } from "../errors";
 import { formatNumber, t } from "../i18n";
 import { track } from "../lib/analytics";
 import { suggestionSentence } from "../lib/text";
+import { ResponsiveTable } from "../components/ResponsiveTable";
 import { EmptyState, Segmented, Skeleton, Spinner } from "../components/ui";
 import { ActivityHeatmap } from "../components/ActivityHeatmap";
 import type { ActivitySummary, StudentBrief, StudentProgress } from "../types";
@@ -187,46 +188,45 @@ export default function ParentDashboard() {
             })}
           />
         ) : (
-          <div className="table-wrap">
-            <table className="data cardable">
-              <thead>
-                <tr>
-                  <th scope="col">#</th>
-                  <th scope="col">{t("name")}</th>
-                  <th scope="col">{t("className")}</th>
-                  <th scope="col">{t("avgScore")}</th>
-                  <th scope="col"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {children.map((c) => (
-                  <tr key={c.student_id}>
-                    {/* The student id is an identifier, not a quantity, so it
-                        stays in Latin digits (the numeral policy keeps ids
-                        opaque); the class level is a quantity and does not. */}
-                    <td data-label="#">{c.student_id}</td>
-                    <td data-label={t("name")}>{c.name}</td>
-                    <td data-label={t("className")}>
-                      {formatNumber(c.class_level)}
-                    </td>
-                    <td data-label={t("avgScore")}>
-                      {c.avg_score_pct === null
-                        ? "—"
-                        : `${formatNumber(c.avg_score_pct)}%`}
-                    </td>
-                    <td data-label="">
-                      <button
-                        className="small secondary"
-                        onClick={() => setSelected(c.student_id)}
-                      >
-                        {t("progressTitle")}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ResponsiveTable
+            cardable
+            columns={[
+              {
+                id: "id",
+                header: "#",
+                // The student id is an identifier, not a quantity, so it
+                // stays in Latin digits (the numeral policy keeps ids
+                // opaque); the class level is a quantity and does not.
+                cell: (c) => c.student_id,
+                mobileLabel: "#",
+              },
+              { id: "name", header: t("name"), cell: (c) => c.name },
+              {
+                id: "class",
+                header: t("className"),
+                cell: (c) => formatNumber(c.class_level),
+              },
+              {
+                id: "avg",
+                header: t("avgScore"),
+                cell: (c) =>
+                  c.avg_score_pct === null
+                    ? "—"
+                    : `${formatNumber(c.avg_score_pct)}%`,
+              },
+            ]}
+            rows={children}
+            rowKey={(c) => String(c.student_id)}
+            actionsMobileLabel=""
+            actions={(c) => (
+              <button
+                className="small secondary"
+                onClick={() => setSelected(c.student_id)}
+              >
+                {t("progressTitle")}
+              </button>
+            )}
+          />
         )}
       </div>
 
@@ -264,35 +264,36 @@ export default function ParentDashboard() {
             </div>
           </div>
           {progress.by_chapter.length > 0 && (
-            <div className="table-wrap">
-              <table className="data cardable">
-                <thead>
-                  <tr>
-                    <th scope="col">{t("chapter")}</th>
-                    <th scope="col">{t("asked")}</th>
-                    <th scope="col">{t("correct")}</th>
-                    <th scope="col">{t("accuracy")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {progress.by_chapter.map((c) => (
-                    <tr key={c.chapter}>
-                      <td data-label={t("chapter")}>{c.chapter}</td>
-                      <td data-label={t("asked")}>{formatNumber(c.asked)}</td>
-                      <td data-label={t("correct")}>
-                        {formatNumber(c.correct)}
-                      </td>
-                      <td data-label={t("accuracy")}>
-                        {formatNumber(c.accuracy)}%
-                        {c.accuracy < 60 && (
-                          <span className="badge weak"> {t("weak")}</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <ResponsiveTable
+              cardable
+              columns={[
+                { id: "chapter", header: t("chapter"), cell: (c) => c.chapter },
+                {
+                  id: "asked",
+                  header: t("asked"),
+                  cell: (c) => formatNumber(c.asked),
+                },
+                {
+                  id: "correct",
+                  header: t("correct"),
+                  cell: (c) => formatNumber(c.correct),
+                },
+                {
+                  id: "accuracy",
+                  header: t("accuracy"),
+                  cell: (c) => (
+                    <>
+                      {formatNumber(c.accuracy)}%
+                      {c.accuracy < 60 && (
+                        <span className="badge weak"> {t("weak")}</span>
+                      )}
+                    </>
+                  ),
+                },
+              ]}
+              rows={progress.by_chapter}
+              rowKey={(c) => c.chapter}
+            />
           )}
         </div>
       )}

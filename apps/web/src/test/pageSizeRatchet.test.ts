@@ -138,10 +138,17 @@ const CEILING: Record<string, number> = {
   "teacher/AnalyticsPage.tsx": 411,
   // 636: E2 (2026-11-17) — the four text-only list empty states (papers,
   // roster, bulk assignments, short tests) became the shared EmptyState.
-  "teacher/AssessmentsPage.tsx": 636,
+  // 638: D (2026-11-18) — the roster and attempt-results tables moved onto
+  // the shared ResponsiveTable; the declarative column objects are a couple
+  // of lines more verbose per table while the repeated table markup they
+  // replace now lives once in the component.
+  "teacher/AssessmentsPage.tsx": 638,
   // 692: E2 (2026-11-17) — the no-classrooms and empty-roster empty states
   // became the shared EmptyState (the first moved out of the chip row).
-  "teacher/ClassesPage.tsx": 692,
+  // 702: D (2026-11-18) — the roster table moved onto the shared
+  // ResponsiveTable (same trade as AssessmentsPage above: the column
+  // declarations cost lines here, the table markup is now shared).
+  "teacher/ClassesPage.tsx": 702,
   "teacher/CreatePage.tsx": 706,
   "teacher/TeacherHomePage.tsx": 180,
   "teacher/TeacherProfilePage.tsx": 119,

@@ -16,6 +16,15 @@
 ## 1. Legal & child-safety (BLOCKING for launch)
 
 - [ ] **Consent-flow legal review**: have a Bangladesh-based lawyer review the
+
+- [ ] **DPIA review (2026-11-18 draft)**: owner + Bangladesh counsel review
+  [`privacy/DPIA_BANGLA_GPT_DRAFT.md`](privacy/DPIA_BANGLA_GPT_DRAFT.md) —
+  especially the residual high risks (R2/R3/R7/R9/R10) and the go/no-go
+  conditions in its §17 — before scaling beyond the current pilot.
+- [ ] **Cross-border transfer assessment**: written vendor confirmations
+  (retention, training use, deletion, region) for the LLM, SMTP, Sentry,
+  hosting and CDN processors, mapped against the Personal Data Protection
+  Act, 2026 (Act No. 63 of 2026) by counsel.
       registration consent checkbox, `/privacy` and `/terms` copy against
       BTRC/ICT guidance and the Children Act 2013. Record the reviewer and
       date here: ____________________

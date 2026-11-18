@@ -17,15 +17,25 @@ the index.
   to the font because OFL-1.1 section 2 requires every copy to carry the
   licence.
 
-## Web fonts (installed, not vendored)
+## Web fonts (vendored in `apps/web/public/fonts/` — E5 Phase 2, 2026-11-18)
 
-| Package | Copyright | Licence |
-| --- | --- | --- |
-| `@fontsource/noto-sans-bengali` | The Noto Project Authors | SIL OFL 1.1 |
-| `@fontsource/hind-siliguri` | Indian Type Foundry | SIL OFL 1.1 |
+The UI webfonts were previously npm dependencies (`@fontsource/*`); they are
+now committed binaries served from `apps/web/public/fonts/` at stable URLs.
+The binaries are byte-identical copies of the `@fontsource` package files
+(SHA-256 provenance in `apps/web/public/fonts/README.md`), and the OFL 1.1
+licence text ships next to them as `LICENSE-*.txt`, as OFL 1.1 §2 requires
+for every distributed copy.
 
-These are npm dependencies, not committed files; the licence text is installed
-with each package at `node_modules/<package>/LICENSE`.
+| Font | Copyright | Licence | Files |
+| --- | --- | --- | --- |
+| Noto Sans Bengali (bengali + latin subsets, 400/600/700) | The Noto Project Authors | SIL OFL 1.1 | `apps/web/public/fonts/noto-sans-bengali-*.woff2` + `LICENSE-noto-sans-bengali.txt` |
+| Hind Siliguri (bengali + latin subsets, 400/600) | Indian Type Foundry (2015) | SIL OFL 1.1 | `apps/web/public/fonts/hind-siliguri-*.woff2` + `LICENSE-hind-siliguri.txt` |
+
+`@font-face` declarations and the measured metric-matched fallback faces live
+in `apps/web/src/fonts.css`; the critical-face preload lives in
+`apps/web/index.html`. The latin-ext subsets and the legacy `.woff` duplicates
+are deliberately not shipped (rationale in `apps/web/src/fonts.css` and
+`docs/engineering/mobile-platform-hardening/FONT_E5_PHASE2.md`).
 
 ## Bundled images (provenance pending, owner action)
 
@@ -39,6 +49,8 @@ cite this table as a licence grant.
 
 | File | What it is | Author / source / licence | Status |
 | --- | --- | --- | --- |
+| `apps/web/public/icon-192-maskable.png` | PWA maskable launcher icon (192) | generated in-repo by `apps/web/scripts/generate_native_assets.mjs` from the approved brand mark `apps/web/public/icon-maskable.svg` (whose own provenance row below is pending) | generated in-repo — no third-party material |
+| `apps/web/public/icon-512-maskable.png` | PWA maskable launcher icon (512) | generated in-repo by `apps/web/scripts/generate_native_assets.mjs` from the approved brand mark `apps/web/public/icon-maskable.svg` (whose own provenance row below is pending) | generated in-repo — no third-party material |
 | `apps/web/src/assets/login-bg-desktop.jpg` | login/landing background, desktop | unknown — no metadata in the file, nothing recorded in the adding commit (f63d715) | PENDING owner record or replacement |
 | `apps/web/src/assets/login-bg-desktop.webp` | WebP twin of the above | unknown — derived from the JPEG above at build time (same commit) | PENDING owner record or replacement |
 | `apps/web/src/assets/login-bg-mobile.jpg` | login/landing background, mobile | unknown — no metadata in the file (f63d715) | PENDING owner record or replacement |

@@ -11,21 +11,25 @@ if (import.meta.env.VITE_SENTRY_DSN) {
   });
 }
 import "./styles.css";
-import "@fontsource/noto-sans-bengali/400.css";
-import "@fontsource/noto-sans-bengali/600.css";
-import "@fontsource/noto-sans-bengali/700.css";
-import "@fontsource/hind-siliguri/400.css";
-import "@fontsource/hind-siliguri/600.css";
+// E5 Phase 2: self-hosted WOFF2 faces (public/fonts/, OFL-licensed) with a
+// measured metric-matched fallback — replaces the @fontsource package CSS.
+// The critical Bengali face is preloaded from index.html (stable /fonts/
+// path, no build hash to go stale).
+import "./fonts.css";
 import { App, queryClient } from "./App";
 import { AuthProvider } from "./AuthContext";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { initInstallPrompt } from "./lib/installPrompt";
 import { initLowData } from "./lib/lowData";
+import { initNativeSystemUi } from "./lib/nativeSystemUi";
 import { registerServiceWorker } from "./lib/serviceWorkerUpdate";
 
 // apply the persisted low-data mode before first paint.
 initLowData();
 initInstallPrompt();
+// native-only, best-effort: syncs the status-bar icon style with the theme.
+// Never awaited — a plugin failure must not delay first paint (see the module).
+void initNativeSystemUi();
 const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("index.html is missing #root");
 ReactDOM.createRoot(rootElement).render(

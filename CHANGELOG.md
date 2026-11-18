@@ -19,12 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - feat(web): E2 unified loading and empty states
 - feat(web): E3 table elevation, mobile card fallback, staff page headers
 - feat(web): E4 type-scale rebalance — lift the small steps
+- feat(web): E5 phase 2 — self-hosted WOFF2, critical preload, measured fallback
 - feat(web): E6 — Android hardware back-button guard for resumable state
 - feat(web): E6-lite — PWA app shortcuts for Tutor and Quiz
+- feat(web): ResponsiveTable — shared accessible data-table surface, 17 tables migrated
+- feat(web): native system UI + brand launcher assets (status bar, splash, adaptive icons)
+- feat(web): vc206 back-button priority — keyboard, overlay, in-app history before exit
 
 ### Fixed
 
 - fix(android): read the web version from the correct package.json path
+- fix(docs): repo-root-relative paths in the new records; sync lockfile root version to 0.15.0
 - fix(web): CI fixes — glossary variant, e2e impersonation flow, visual baselines
 - fix(web): exempt font faces from the SW runtime-cache FIFO
 - fix(web): inset the Android WebView below the system bars (edge-to-edge)
@@ -32,12 +37,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - fix(web): mobile correctness wave — keyboard, notch, update banner, tap targets
 - fix(web): tolerate prettier's meta wrapping in the mobile guard test
 
+### Documentation
+
+- docs(architecture): Cloudflare Workers feasibility — retain current platform, gateway PoC-only
+- docs(privacy): DPIA draft for the children's education platform (Act 63 of 2026)
+
 ### Maintenance
 
 - chore(android): restore LF endings and the trailing newline in build.gradle
+- chore(docs): refresh generated native review sheet
+- chore(release): regenerate the OpenAPI fixture for 0.15.0; notice the generated maskable icons
 - chore(web): re-baseline the four remaining visual snapshots (Windows leg)
+- chore: final execution report, CHANGELOG entries, knip exception for the native splash plugin
 - chore: regenerate the CHANGELOG
 - chore: regenerate the native-review sheet
+- chore: release 0.15.0
 
 ### Style
 
@@ -48,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge main: absorb the stray prettier commit (superseded by the wave work)
 - Merge pull request #141 from tanviruchahs2580/feat/typography-600-weight
 - Merge pull request #142 from tanviruchahs2580/feat/typography-600-weight
+- Merge pull request #143 from tanviruchahs2580/feat/native-back-button
 
 ## v0.14.0 - 2026-11-17
 

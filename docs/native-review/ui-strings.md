@@ -746,12 +746,12 @@ translation that changes the meaning of the English original.
 | 722 | apps/web/src/i18n.ts:870 | saCheck | তুমি বুঝেছ? | |
 | 723 | apps/web/src/i18n.ts:871 | statTotal | মোট | |
 | 724 | apps/web/src/i18n.ts:872 | statQuizzes | কুইজ | |
-| 725 | apps/web/src/AppShell.tsx:203 | (literal) | ডার্ক মোড | |
+| 725 | apps/web/src/AppShell.tsx:224 | (literal) | ডার্ক মোড | |
 | 726 | apps/web/src/components/NotificationBell.tsx:46 | (literal) | এখন কোনো নোটিফিকেশন নেই | |
 | 727 | apps/web/src/components/SearchBox.tsx:26 | (literal) | কোনো ফলাফল নেই | |
 | 728 | apps/web/src/components/UpdateBanner.tsx:13 | (literal) | নতুন সংস্করণ প্রস্তুত — আপডেট করলে সর্বশেষ সংস্করণ পাবেন। | |
 | 729 | apps/web/src/components/UpdateBanner.tsx:14 | (literal) | এখনই আপডেট করুন | |
-| 730 | apps/web/src/components/admin/RefusalAuditCard.tsx:13 | (literal) | লোড হচ্ছে… | |
+| 730 | apps/web/src/components/admin/RefusalAuditCard.tsx:14 | (literal) | লোড হচ্ছে… | |
 | 731 | apps/web/src/errors.ts:219 | (literal) | ইমেইল বা পাসওয়ার্ড সঠিক নয়। | |
 | 732 | apps/web/src/errors.ts:220 | (literal) | এই ইমেইল দিয়ে আগেই অ্যাকাউন্ট খোলা আছে। | |
 | 733 | apps/web/src/errors.ts:221 | (literal) | আগে ইমেইল যাচাই করুন — কোড পাঠানো হয়েছে। | |
@@ -790,7 +790,7 @@ translation that changes the meaning of the English original.
 | 766 | apps/web/src/pages/student/HomePage.tsx:134 | (literal) | আজ কী শিখতে চাও? | |
 | 767 | apps/web/src/pages/student/QuizPage.tsx:122 | (literal) | এখনো কোনো দুর্বল অধ্যায় নেই | |
 | 768 | apps/web/src/pages/student/QuizPage.tsx:285 | (literal) | কিছু ভুল হয়েছে | |
-| 769 | apps/web/src/pages/teacher/AnalyticsPage.tsx:381 | (literal) | এখন পর্যন্ত কোনো ডকুমেন্ট নেই | |
+| 769 | apps/web/src/pages/teacher/AnalyticsPage.tsx:372 | (literal) | এখন পর্যন্ত কোনো ডকুমেন্ট নেই | |
 | 770 | apps/api/src/bangla_gpt_api/data/loader.py:29 | (literal) | বাংলা ব্যাকরণ | |
 | 771 | apps/api/src/bangla_gpt_api/data/loader.py:53 | (literal) | নতুন গণিত | |
 | 772 | apps/api/src/bangla_gpt_api/data/loader.py:65 | (literal) | সাধারণ গণিত | |

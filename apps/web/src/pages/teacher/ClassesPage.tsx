@@ -19,6 +19,7 @@ import {
   Stat,
   TrendMark,
 } from "../../components/ui";
+import { ResponsiveTable } from "../../components/ResponsiveTable";
 import { friendlyError } from "../../errors";
 import { t } from "../../i18n";
 import { byClassLevelThenSection } from "../../lib/localeSort";
@@ -522,63 +523,72 @@ export default function ClassesPage() {
             // E2: the shared empty state instead of a lone muted line.
             <EmptyState size="sm" icon={Users} title={t("noStudents")} />
           ) : (
-            <div className="table-wrap">
-              <table className="data">
-                <thead>
-                  <tr>
-                    <th scope="col">#</th>
-                    <th scope="col">{t("name")}</th>
-                    <th scope="col">{t("classNameShort")}</th>
-                    <th scope="col">{t("quizTitle")}</th>
-                    <th scope="col">{t("avgScore")}</th>
-                    <th scope="col"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((s) => {
+            <ResponsiveTable
+              columns={[
+                {
+                  id: "id",
+                  header: "#",
+                  cell: (s) => s.student_id,
+                  mobileLabel: "#",
+                },
+                {
+                  id: "name",
+                  header: t("name"),
+                  cell: (s) => (
+                    <>
+                      {s.name}
+                      {s.email && (
+                        <div className="muted text-sm">{s.email}</div>
+                      )}
+                      {s.invite_pending && (
+                        <span className="badge"> {t("invitePending")}</span>
+                      )}
+                    </>
+                  ),
+                },
+                {
+                  id: "class",
+                  header: t("classNameShort"),
+                  cell: (s) => s.class_level,
+                },
+                {
+                  id: "graded",
+                  header: t("quizTitle"),
+                  cell: (s) => s.attempts_graded,
+                },
+                {
+                  id: "avg",
+                  header: t("avgScore"),
+                  cell: (s) => {
                     const w = wmStudent(s.student_id);
                     const h = healthOf(w?.at_risk ? 1 : 0, s.avg_score_pct);
                     return (
-                      <tr key={s.student_id}>
-                        <td>{s.student_id}</td>
-                        <td>
-                          {s.name}
-                          {s.email && (
-                            <div className="muted text-sm">{s.email}</div>
-                          )}
-                          {s.invite_pending && (
-                            <span className="badge"> {t("invitePending")}</span>
-                          )}
-                        </td>
-                        <td>{s.class_level}</td>
-                        <td>{s.attempts_graded}</td>
-                        <td>
-                          {s.avg_score_pct === null
-                            ? "—"
-                            : `${s.avg_score_pct}%`}
-                          <span
-                            className={`health-dot ${HEALTH_DOT[h]}`}
-                            aria-hidden
-                          />
-                          <span className="visually-hidden">
-                            {t(HEALTH_LABEL_KEY[h])}
-                          </span>
-                        </td>
-                        <td>
-                          <Button
-                            variant="soft"
-                            size="sm"
-                            onClick={() => setDetailId(s.student_id)}
-                          >
-                            {t("cOpen")}
-                          </Button>
-                        </td>
-                      </tr>
+                      <>
+                        {s.avg_score_pct === null ? "—" : `${s.avg_score_pct}%`}
+                        <span
+                          className={`health-dot ${HEALTH_DOT[h]}`}
+                          aria-hidden
+                        />
+                        <span className="visually-hidden">
+                          {t(HEALTH_LABEL_KEY[h])}
+                        </span>
+                      </>
                     );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                  },
+                },
+              ]}
+              rows={filtered}
+              rowKey={(s) => String(s.student_id)}
+              actions={(s) => (
+                <Button
+                  variant="soft"
+                  size="sm"
+                  onClick={() => setDetailId(s.student_id)}
+                >
+                  {t("cOpen")}
+                </Button>
+              )}
+            />
           )}
         </Card>
       )}

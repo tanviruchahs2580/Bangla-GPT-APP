@@ -9,6 +9,7 @@ import type {
   SchoolInviteAdmin,
   SchoolInviteOut,
 } from "../../types";
+import { ResponsiveTable } from "../ResponsiveTable";
 import { LoadError } from "../ui";
 
 /**
@@ -149,109 +150,108 @@ export function SchoolsCard({
       ) : schools.length === 0 ? (
         <p className="muted">{t("admNoSchools")}</p>
       ) : (
-        <div className="table-wrap">
-          <table className="data">
-            <thead>
-              <tr>
-                <th scope="col">{t("admNewSchool")}</th>
-                <th scope="col">{t("admCode")}</th>
-                <th scope="col">{t("sdTeachers")}</th>
-                <th scope="col">{t("admClassrooms")}</th>
-                <th scope="col">{t("students")}</th>
-                <th scope="col">{t("admSessions7d")}</th>
-                <th scope="col">{t("admInvite")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {schools.map((s) => (
-                <tr key={s.id}>
-                  <td className="cell-wrap-sm">
-                    <button
-                      className="small secondary"
-                      onClick={() =>
-                        setSelSchool(s.id === selSchool ? null : s.id)
-                      }
-                      aria-label={`${s.name} ${t("admInvites")}`}
-                    >
-                      {s.name}
-                    </button>
-                  </td>
-                  <td>{s.code}</td>
-                  <td>{s.teachers}</td>
-                  <td>{s.classrooms}</td>
-                  <td>{s.students}</td>
-                  <td>{s.sessions_7d}</td>
-                  <td>
-                    <select
-                      value={inviteRoles[s.id] ?? "teacher"}
-                      onChange={(e) =>
-                        setInviteRoles({
-                          ...inviteRoles,
-                          [s.id]: e.target.value,
-                        })
-                      }
-                      aria-label={`${s.name} ${t("role")}`}
-                    >
-                      {INVITE_ROLES.map((r) => (
-                        <option key={r} value={r}>
-                          {roleLabel(r)}
-                        </option>
-                      ))}
-                    </select>{" "}
-                    <button
-                      className="small primary"
-                      onClick={() => createInvite(s.id)}
-                    >
-                      {t("admInvite")}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ResponsiveTable
+          columns={[
+            {
+              id: "name",
+              header: t("admNewSchool"),
+              cellClassName: "cell-wrap-sm",
+              cell: (s) => (
+                <button
+                  className="small secondary"
+                  onClick={() => setSelSchool(s.id === selSchool ? null : s.id)}
+                  aria-label={`${s.name} ${t("admInvites")}`}
+                >
+                  {s.name}
+                </button>
+              ),
+            },
+            { id: "code", header: t("admCode"), cell: (s) => s.code },
+            {
+              id: "teachers",
+              header: t("sdTeachers"),
+              cell: (s) => s.teachers,
+            },
+            {
+              id: "classrooms",
+              header: t("admClassrooms"),
+              cell: (s) => s.classrooms,
+            },
+            { id: "students", header: t("students"), cell: (s) => s.students },
+            {
+              id: "sessions",
+              header: t("admSessions7d"),
+              cell: (s) => s.sessions_7d,
+            },
+          ]}
+          rows={schools}
+          rowKey={(s) => String(s.id)}
+          actions={(s) => (
+            <>
+              <select
+                value={inviteRoles[s.id] ?? "teacher"}
+                onChange={(e) =>
+                  setInviteRoles({
+                    ...inviteRoles,
+                    [s.id]: e.target.value,
+                  })
+                }
+                aria-label={`${s.name} ${t("role")}`}
+              >
+                {INVITE_ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {roleLabel(r)}
+                  </option>
+                ))}
+              </select>{" "}
+              <button
+                className="small primary"
+                onClick={() => createInvite(s.id)}
+              >
+                {t("admInvite")}
+              </button>
+            </>
+          )}
+        />
       )}
       {selSchool !== null && (
-        <div className="table-wrap">
-          <table className="data">
-            <caption>{t("admInvites")}</caption>
-            <thead>
+        <ResponsiveTable
+          caption={t("admInvites")}
+          columns={[
+            { id: "role", header: t("role"), cell: (i) => roleLabel(i.role) },
+            {
+              id: "status",
+              header: t("admStatus"),
+              cell: (i) => (i.used ? t("admUsed") : t("admActive")),
+            },
+            {
+              id: "created",
+              header: t("admCreated"),
+              cell: (i) => i.created_at.slice(0, 10),
+            },
+          ]}
+          rows={invitesFailed ? [] : invites}
+          rowKey={(i) => String(i.id)}
+          tbodyPrefix={
+            invitesFailed ? (
               <tr>
-                <th scope="col">{t("role")}</th>
-                <th scope="col">{t("admStatus")}</th>
-                <th scope="col">{t("admCreated")}</th>
-                <th scope="col"></th>
+                <td colSpan={4}>
+                  <LoadError onRetry={loadInvites} />
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {invitesFailed ? (
-                <tr>
-                  <td colSpan={4}>
-                    <LoadError onRetry={loadInvites} />
-                  </td>
-                </tr>
-              ) : (
-                invites.map((i) => (
-                  <tr key={i.id}>
-                    <td>{roleLabel(i.role)}</td>
-                    <td>{i.used ? t("admUsed") : t("admActive")}</td>
-                    <td>{i.created_at.slice(0, 10)}</td>
-                    <td>
-                      {!i.used && (
-                        <button
-                          className="small secondary"
-                          onClick={() => revokeInvite(i.id)}
-                        >
-                          {t("admRevoke")}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+            ) : null
+          }
+          actions={(i) =>
+            !i.used ? (
+              <button
+                className="small secondary"
+                onClick={() => revokeInvite(i.id)}
+              >
+                {t("admRevoke")}
+              </button>
+            ) : null
+          }
+        />
       )}
     </div>
   );

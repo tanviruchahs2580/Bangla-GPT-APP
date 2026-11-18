@@ -1,0 +1,172 @@
+/*
+ * E5 Phase 2 (2026-11-18): self-hosted UI webfonts — replaces the
+ * @fontsource package CSS that previously drove the entire font pipeline.
+ *
+ * Sources of truth:
+ * - Binaries: public/fonts/*.woff2, copied verbatim from the installed
+ *   @fontsource packages (Google Fonts originals, SIL OFL 1.1). SHA-256
+ *   provenance + regeneration notes: public/fonts/README.md.
+ * - unicode-range: copied verbatim from the @fontsource subset CSS so the
+ *   on-wire behaviour (which subsets a given page fetches) is unchanged.
+ * - Fallback descriptors: measured, not guessed — derived from the actual
+ *   SFNT metrics by scripts/font_metrics.py (fontaine formula):
+ *     Noto Sans Bengali Regular  upm 1000, hhea 917/-408/0, avg 0.6062 em
+ *     Nirmala UI (Windows)       upm 2048, hhea 2210/-514/0, avg 0.6603 em
+ *   -> Windows fallback: size-adjust 91.80%, ascent 99.90%, descent 44.45%.
+ *   The Android face pins the system's own Noto Sans Bengali to the
+ *   webfont's natural ratios (size-adjust 100%), so version drift between
+ *   the OS font and the shipped webfont cannot shift layout mid-swap.
+ *
+ * Subsets shipped: bengali + latin only. The latin-ext subsets were
+ * dropped deliberately (documented in FONT_E5_PHASE2.md): no shipped UI
+ * string and no realistic tutor output uses U+0100-02BA; uncovered
+ * codepoints fall to the system stack exactly as they would if the
+ * webfont lacked them. The .woff legacy duplicates were dropped: every
+ * supported browser/WebView (Chromium 90+, Firefox 89+, Safari 14+) takes
+ * the woff2 source, so the 35 legacy files were dead weight in every APK.
+ *
+ * font-display: swap is preserved from the @fontsource declarations.
+ */
+
+/* ---------- Noto Sans Bengali (primary UI face) ---------- */
+@font-face {
+  font-family: "Noto Sans Bengali";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url("/fonts/noto-sans-bengali-bengali-400-normal.woff2") format("woff2");
+  unicode-range:
+    U+0951-0952, U+0964-0965, U+0980-09FE, U+1CD0, U+1CD2, U+1CD5-1CD6, U+1CD8,
+    U+1CE1, U+1CEA, U+1CED, U+1CF2, U+1CF5-1CF7, U+200C-200D, U+20B9, U+25CC,
+    U+A8F1;
+}
+@font-face {
+  font-family: "Noto Sans Bengali";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url("/fonts/noto-sans-bengali-bengali-600-normal.woff2") format("woff2");
+  unicode-range:
+    U+0951-0952, U+0964-0965, U+0980-09FE, U+1CD0, U+1CD2, U+1CD5-1CD6, U+1CD8,
+    U+1CE1, U+1CEA, U+1CED, U+1CF2, U+1CF5-1CF7, U+200C-200D, U+20B9, U+25CC,
+    U+A8F1;
+}
+@font-face {
+  font-family: "Noto Sans Bengali";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url("/fonts/noto-sans-bengali-bengali-700-normal.woff2") format("woff2");
+  unicode-range:
+    U+0951-0952, U+0964-0965, U+0980-09FE, U+1CD0, U+1CD2, U+1CD5-1CD6, U+1CD8,
+    U+1CE1, U+1CEA, U+1CED, U+1CF2, U+1CF5-1CF7, U+200C-200D, U+20B9, U+25CC,
+    U+A8F1;
+}
+@font-face {
+  font-family: "Noto Sans Bengali";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url("/fonts/noto-sans-bengali-latin-400-normal.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Noto Sans Bengali";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url("/fonts/noto-sans-bengali-latin-600-normal.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Noto Sans Bengali";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url("/fonts/noto-sans-bengali-latin-700-normal.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
+}
+
+/* ---------- Hind Siliguri (secondary face) ---------- */
+@font-face {
+  font-family: "Hind Siliguri";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url("/fonts/hind-siliguri-bengali-400-normal.woff2") format("woff2");
+  unicode-range:
+    U+0951-0952, U+0964-0965, U+0980-09FE, U+1CD0, U+1CD2, U+1CD5-1CD6, U+1CD8,
+    U+1CE1, U+1CEA, U+1CED, U+1CF2, U+1CF5-1CF7, U+200C-200D, U+20B9, U+25CC,
+    U+A8F1;
+}
+@font-face {
+  font-family: "Hind Siliguri";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url("/fonts/hind-siliguri-bengali-600-normal.woff2") format("woff2");
+  unicode-range:
+    U+0951-0952, U+0964-0965, U+0980-09FE, U+1CD0, U+1CD2, U+1CD5-1CD6, U+1CD8,
+    U+1CE1, U+1CEA, U+1CED, U+1CF2, U+1CF5-1CF7, U+200C-200D, U+20B9, U+25CC,
+    U+A8F1;
+}
+@font-face {
+  font-family: "Hind Siliguri";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url("/fonts/hind-siliguri-latin-400-normal.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Hind Siliguri";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url("/fonts/hind-siliguri-latin-600-normal.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212,
+    U+2215, U+FEFF, U+FFFD;
+}
+
+/* ---------- Metric-matched fallback (swap-window CLS guard) ----------
+ * Two faces under two family names so the platform picks the right one by
+ * availability: Windows resolves local("Nirmala UI") in the first family;
+ * Android skips it (not installed) and resolves the second family's
+ * local("Noto Sans Bengali"). macOS resolves neither and falls through to
+ * the system stack — the least-harmful documented limitation. */
+@font-face {
+  font-family: "Noto Sans Bengali Fallback";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: local("Nirmala UI");
+  size-adjust: 91.8%;
+  ascent-override: 99.9%;
+  descent-override: 44.45%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Noto Sans Bengali Fallback Local";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: local("Noto Sans Bengali");
+  size-adjust: 100%;
+  ascent-override: 91.7%;
+  descent-override: 40.8%;
+  line-gap-override: 0%;
+}

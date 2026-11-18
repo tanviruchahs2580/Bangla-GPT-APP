@@ -8,6 +8,16 @@ sweep 2026-11-13 (RAG V4 readiness pass — invite and ai_jobs rows updated).
 **Bangladesh legal review is a human
 step and is NOT done here — see [`archive/PROGRESS.md`](archive/PROGRESS.md).**
 
+**DPIA cross-reference (2026-11-18):** the child-data risk assessment, vendor
+register and open legal questions for this inventory now live in
+[`privacy/DPIA_BANGLA_GPT_DRAFT.md`](privacy/DPIA_BANGLA_GPT_DRAFT.md)
+(DRAFT — not legally approved). That draft also records the correction that
+Bangladesh's Personal Data Protection Act, 2026 (Act No. 63 of 2026) now
+exists; the "no comprehensive law" era this inventory was written under is
+over, and the legal-review item above is consequently more urgent, not less.
+The inventory below is unchanged by that draft — discrepancies it flags are
+listed in its §11/§14, not silently rewritten here.
+
 Legend:
 
 - **Retention**: `sweep=<n>d` = deleted by the retention job after `n` days

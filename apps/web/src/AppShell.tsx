@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import {
+  NavLink,
+  useLocation,
+  useNavigate,
+  useNavigationType,
+} from "react-router-dom";
 import {
   BarChart3,
   BookOpen,
@@ -22,7 +27,11 @@ import {
 import { useAuth, ROLE_HOME } from "./AuthContext";
 import { exitImpersonation, isImpersonating } from "./api";
 import { ConfirmDialog } from "./components/ui";
-import { registerBackButton } from "./lib/nativeBackButton";
+import {
+  registerBackButton,
+  resetRoutes,
+  trackRoute,
+} from "./lib/nativeBackButton";
 import { NotificationBell } from "./components/NotificationBell";
 import { BrandMark } from "./components/BrandMark";
 import { SearchBox } from "./components/SearchBox";
@@ -120,12 +129,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // asks before leaving.
   const [backConfirm, setBackConfirm] = useState(false);
   useEffect(() => {
+    // A fresh shell mount is a fresh in-app history: pre-logout routes must
+    // not be reachable via the hardware back button after re-login.
+    resetRoutes();
     let un: (() => void) | undefined;
     void registerBackButton(() => setBackConfirm(true)).then((f) => {
       un = f;
     });
     return () => un?.();
   }, []);
+  // vc206: feed the hardware-back route stack from the router itself —
+  // PUSH grows it, REPLACE rewrites the top, POP shrinks it — so a back
+  // press walks the app's own history and only exits at the true root.
+  // (Deep links / PWA cold starts seed the stack with the entry route.)
+  const location = useLocation();
+  const navType = useNavigationType();
+  useEffect(() => {
+    trackRoute(location.pathname, navType);
+  }, [location.pathname, navType]);
   const isStaff = !!me && me.role !== "student";
   const roleHome = (me && ROLE_HOME[me.role]) || "/";
 

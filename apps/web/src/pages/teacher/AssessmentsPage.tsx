@@ -31,6 +31,7 @@ import {
 } from "../../components/ui";
 import { QPaperReviewPanel } from "../../components/teacher/QPaperReviewPanel";
 import { ShortTestRow } from "../../components/teacher/ShortTestRow";
+import { ResponsiveTable } from "../../components/ResponsiveTable";
 import { friendlyError } from "../../errors";
 import { formatNumber, t } from "../../i18n";
 import { formatServerDateTime } from "../../lib/datetime";
@@ -357,68 +358,73 @@ export default function AssessmentsPage() {
               // E2: the shared empty state instead of a lone muted line.
               <EmptyState size="sm" icon={Users} title={t("noStudents")} />
             ) : (
-              <div className="table-wrap">
-                <table className="data">
-                  <thead>
-                    <tr>
-                      <th scope="col">
-                        <input
-                          type="checkbox"
-                          aria-label={t("baSelect")}
-                          checked={allSelected}
-                          onChange={toggleAllSel}
-                        />
-                      </th>
-                      <th scope="col">#</th>
-                      <th scope="col">{t("name")}</th>
-                      <th scope="col">{t("quizTitle")}</th>
-                      <th scope="col">{t("avgScore")}</th>
-                      <th scope="col"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {roster.map((s) => (
-                      <tr key={s.student_id}>
-                        <td>
-                          <input
-                            type="checkbox"
-                            aria-label={`${t("baSelect")}: ${s.name}`}
-                            checked={selIds.has(s.student_id)}
-                            onChange={() => toggleSel(s.student_id)}
-                          />
-                        </td>
-                        <td>{s.student_id}</td>
-                        <td>
-                          {s.name}
-                          {s.email && (
-                            <div className="muted text-sm">{s.email}</div>
-                          )}
-                          {s.invite_pending && (
-                            <span className="badge"> {t("invitePending")}</span>
-                          )}
-                        </td>
-                        <td>{s.attempts_graded}</td>
-                        <td>
-                          {s.avg_score_pct === null
-                            ? "—"
-                            : `${s.avg_score_pct}%`}
-                        </td>
-                        <td>
-                          <Button
-                            variant={
-                              assignTo === s.student_id ? "primary" : "soft"
-                            }
-                            size="sm"
-                            onClick={() => setAssignTo(s.student_id)}
-                          >
-                            {t("assignQuiz")}
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <ResponsiveTable
+                columns={[
+                  {
+                    id: "select",
+                    header: (
+                      <input
+                        type="checkbox"
+                        aria-label={t("baSelect")}
+                        checked={allSelected}
+                        onChange={toggleAllSel}
+                      />
+                    ),
+                    cell: (s) => (
+                      <input
+                        type="checkbox"
+                        aria-label={`${t("baSelect")}: ${s.name}`}
+                        checked={selIds.has(s.student_id)}
+                        onChange={() => toggleSel(s.student_id)}
+                      />
+                    ),
+                    mobileLabel: "",
+                  },
+                  {
+                    id: "id",
+                    header: "#",
+                    cell: (s) => s.student_id,
+                    mobileLabel: "#",
+                  },
+                  {
+                    id: "name",
+                    header: t("name"),
+                    cell: (s) => (
+                      <>
+                        {s.name}
+                        {s.email && (
+                          <div className="muted text-sm">{s.email}</div>
+                        )}
+                        {s.invite_pending && (
+                          <span className="badge"> {t("invitePending")}</span>
+                        )}
+                      </>
+                    ),
+                  },
+                  {
+                    id: "graded",
+                    header: t("quizTitle"),
+                    cell: (s) => s.attempts_graded,
+                  },
+                  {
+                    id: "avg",
+                    header: t("avgScore"),
+                    cell: (s) =>
+                      s.avg_score_pct === null ? "—" : `${s.avg_score_pct}%`,
+                  },
+                ]}
+                rows={roster}
+                rowKey={(s) => String(s.student_id)}
+                actions={(s) => (
+                  <Button
+                    variant={assignTo === s.student_id ? "primary" : "soft"}
+                    size="sm"
+                    onClick={() => setAssignTo(s.student_id)}
+                  >
+                    {t("assignQuiz")}
+                  </Button>
+                )}
+              />
             )}
           </Card>
 
@@ -579,36 +585,32 @@ function AssignmentResult({ rows }: { rows: AssignmentProgressRow[] }) {
           label={t("resLow")}
         />
       </div>
-      <div className="table-wrap">
-        <table className="data">
-          <thead>
-            <tr>
-              <th scope="col">{t("name")}</th>
-              <th scope="col">{t("baStatus")}</th>
-              <th scope="col">{t("avgScore")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.attempt_id}>
-                <td>{r.name}</td>
-                <td>
-                  {r.done ? (
-                    <span className="badge badge-ok"> {t("baDone")}</span>
-                  ) : r.overdue ? (
-                    <span className="badge badge-warn"> {t("baOverdue")}</span>
-                  ) : (
-                    <span className="badge"> {t("baPending")}</span>
-                  )}
-                </td>
-                <td>
-                  {r.score_pct === null ? "·" : `${Math.round(r.score_pct)}%`}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <ResponsiveTable
+        columns={[
+          { id: "name", header: t("name"), cell: (r) => r.name },
+          {
+            id: "status",
+            header: t("baStatus"),
+            cell: (r) =>
+              r.done ? (
+                <span className="badge badge-ok"> {t("baDone")}</span>
+              ) : r.overdue ? (
+                <span className="badge badge-warn"> {t("baOverdue")}</span>
+              ) : (
+                <span className="badge"> {t("baPending")}</span>
+              ),
+          },
+          {
+            id: "score",
+            header: t("avgScore"),
+            cell: (r) =>
+              r.score_pct === null ? "·" : `${Math.round(r.score_pct)}%`,
+          },
+        ]}
+        rows={rows}
+        rowKey={(r) => String(r.attempt_id)}
+        emptyMessage={t("noResults")}
+      />
     </div>
   );
 }

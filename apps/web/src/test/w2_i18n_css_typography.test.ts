@@ -13,7 +13,11 @@ import { describe, expect, it } from "vitest";
 // way (contrastTokens.test.ts).
 const ROOT = resolve(process.cwd(), "src");
 const css = readFileSync(resolve(ROOT, "styles.css"), "utf8");
-const mainTsx = readFileSync(resolve(ROOT, "main.tsx"), "utf8");
+// E5 Phase 2: the loaded-face inventory moved from main.tsx's @fontsource
+// imports to the self-hosted @font-face declarations in fonts.css. The
+// weight-coverage guard below reads the new source of truth; its intent is
+// unchanged — every requested weight must be a real face, never synthesised.
+const fontsCss = readFileSync(resolve(ROOT, "fonts.css"), "utf8");
 
 /** Comments out of the way, so a declaration text can be attributed. */
 const stripped = css.replace(/\/\*[\s\S]*?\*\//g, "");
@@ -65,16 +69,23 @@ describe("Bangla typography in styles.css", () => {
   });
 
   it("requests only weights the loaded families can serve without synthesis", () => {
-    // main.tsx is the inventory of loaded faces. The first family in --font
-    // (Noto Sans Bengali) must cover every weight the stylesheet asks for:
-    // 400/600/700 are all real faces now (the 2026-11-17 typography wave
-    // added the 600 face, so the 25 `font-weight: 600` rules render a true
-    // semibold instead of resolving up to 700), while the audit's 14
-    // font-weight: 800 rules still have no face at or above them -- an
-    // engine that synthesises bold would smear Bangla matras (F-105).
-    const notoWeights = [...mainTsx.matchAll(/noto-sans-bengali\/(\d+)\.css/g)]
-      .map((m) => Number(m[1]))
-      .sort((a, b) => a - b);
+    // fonts.css is the inventory of loaded faces (E5 Phase 2: the
+    // self-hosted @font-face set). The first family in --font (Noto Sans
+    // Bengali) must cover every weight the stylesheet asks for: 400/600/700
+    // are all real faces now (the 2026-11-17 typography wave added the 600
+    // face, so the 25 `font-weight: 600` rules render a true semibold
+    // instead of resolving up to 700), while the audit's 14 font-weight: 800
+    // rules still have no face at or above them -- an engine that
+    // synthesises bold would smear Bangla matras (F-105).
+    const notoWeights = [
+      ...new Set(
+        [
+          ...fontsCss.matchAll(
+            /@font-face\s*{[^}]*font-family:\s*"Noto Sans Bengali";[^}]*font-weight:\s*(\d+);[^}]*}/g,
+          ),
+        ].map((m) => Number(m[1])),
+      ),
+    ].sort((a, b) => a - b);
     expect(notoWeights).toEqual([400, 600, 700]);
 
     const requested = declarations("font-weight")
