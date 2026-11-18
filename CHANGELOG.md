@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- feat(api): worker metrics, statement_timeout, Sentry rate setting
 - feat(web): E1 interaction integrity — ConfirmDialog, toast tones, tokenized shadows
 - feat(web): E2 unified loading and empty states
 - feat(web): E3 table elevation, mobile card fallback, staff page headers
@@ -29,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - fix(android): read the web version from the correct package.json path
+- fix(ci): add CodeQL workflow_dispatch for bot-merged release gating
+- fix(ci): retry Trivy only on the vulnerability-DB bootstrap failure
 - fix(docs): repo-root-relative paths in the new records; sync lockfile root version to 0.15.0
 - fix(web): CI fixes — glossary variant, e2e impersonation flow, visual baselines
 - fix(web): exempt font faces from the SW runtime-cache FIFO
@@ -40,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Documentation
 
 - docs(architecture): Cloudflare Workers feasibility — retain current platform, gateway PoC-only
+- docs(audit): add the 2026-11-18 backend audit register and plan
 - docs(privacy): DPIA draft for the children's education platform (Act 63 of 2026)
 
 ### Maintenance
@@ -47,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - chore(android): restore LF endings and the trailing newline in build.gradle
 - chore(docs): refresh generated native review sheet
 - chore(release): regenerate the OpenAPI fixture for 0.15.0; notice the generated maskable icons
+- chore(security): record the measured gitleaks waiver for the F-107 fixture
 - chore(web): re-baseline the four remaining visual snapshots (Windows leg)
 - chore: final execution report, CHANGELOG entries, knip exception for the native splash plugin
 - chore: regenerate the CHANGELOG
@@ -60,9 +65,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Other
 
 - Merge main: absorb the stray prettier commit (superseded by the wave work)
+- Merge pull request #137 from tanviruchahs2580/dependabot/pip/apps/api/pypdf-7.0.1
 - Merge pull request #141 from tanviruchahs2580/feat/typography-600-weight
 - Merge pull request #142 from tanviruchahs2580/feat/typography-600-weight
 - Merge pull request #143 from tanviruchahs2580/feat/native-back-button
+- Merge pull request #145 from tanviruchahs2580/feat/mobile-platform-hardening
 
 ## v0.14.0 - 2026-11-17
 
