@@ -5,10 +5,19 @@
 > It must be reviewed by a Bangladeshi lawyer before any school signs it —
 > that review is a human step tracked in
 > [`archive/PROGRESS.md`](archive/PROGRESS.md) and **has not
-> been performed**. Bangladesh's Digital Security Act / Cyber Security Act
-> 2023 and any applicable student-data rules must be checked by counsel; the
-> country has no comprehensive GDPR-equivalent statute yet, so contract terms
-> carry more weight than usual.
+> been performed**.
+>
+> **Legal-context correction (2026-11-18, DPIA workstream):** an earlier
+> version of this note said Bangladesh has no comprehensive GDPR-equivalent
+> statute. That premise is stale. Bangladesh has enacted **ব্যক্তিগত উপাত্ত
+> সুরক্ষা আইন, ২০২৬ (Personal Data Protection Act, 2026, Act No. 63 of
+> 2026)**, gazetted 10 April 2026 (verified against the official gazette PDF
+> on bdlaws.minlaw.gov.bd and the dpp.gov.bd April 2026 index). What this
+> template must absorb from that Act — processor duties, child-data
+> provisions, cross-border transfer conditions, breach timelines — is a
+> counsel question, tracked in
+> [`docs/privacy/DPIA_BANGLA_GPT_DRAFT.md`](privacy/DPIA_BANGLA_GPT_DRAFT.md)
+> §4 and §19. No contract wording here is asserted to satisfy the Act.
 
 ## 1. Parties & roles
 
