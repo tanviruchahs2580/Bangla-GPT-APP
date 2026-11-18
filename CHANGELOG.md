@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+Nothing yet.
+
+## v0.15.0 - 2026-11-18
+
 ### Added
 
 - feat(api): worker metrics, statement_timeout, Sentry rate setting
@@ -75,6 +79,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Merge pull request #142 from tanviruchahs2580/feat/typography-600-weight
 - Merge pull request #143 from tanviruchahs2580/feat/native-back-button
 - Merge pull request #145 from tanviruchahs2580/feat/mobile-platform-hardening
+- Merge pull request #147 from tanviruchahs2580/fix/release-gates-0.15.0
+
 
 ## v0.14.0 - 2026-11-17
 
