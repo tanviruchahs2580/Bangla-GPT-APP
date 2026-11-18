@@ -17,6 +17,21 @@ on:
     branches: [main]
   schedule:
     - cron: "0 3 * * 1" # weekly, Monday 03:00 UTC
+  # CI-FIX-014 (2026-11-18): release.yml's ci-gate requires a completed,
+  # successful codeql.yml run with head_branch=main for the exact commit being
+  # released. That run is normally produced by the `push: main` trigger -- but
+  # a push made with GITHUB_TOKEN does not start workflows (GitHub's
+  # anti-recursion rule), and every merge in this repo is a bot auto-merge
+  # authored by GitHub <noreply@github.com>. Measured: commits c5ac13e and
+  # d14daef have no codeql.yml run at all, while the same code was scanned on
+  # its PR head (run 44313230870 on 6288b3f) -- so the release gate could never
+  # be satisfied for a bot-merged main commit.
+  #
+  # ci.yml and eval-gate.yml already declare workflow_dispatch and the gate's
+  # `head_branch == main` test accepts a dispatched run on main, which is the
+  # documented remedy ("a manually dispatched CI run on main counts too").
+  # This makes codeql.yml symmetrical instead of special.
+  workflow_dispatch:
 
 permissions:
   contents: read
