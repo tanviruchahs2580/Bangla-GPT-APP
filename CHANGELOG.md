@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - fix(android): read the web version from the correct package.json path
+- fix(docs): repo-root-relative paths in the new records; sync lockfile root version to 0.15.0
 - fix(web): CI fixes — glossary variant, e2e impersonation flow, visual baselines
 - fix(web): exempt font faces from the SW runtime-cache FIFO
 - fix(web): inset the Android WebView below the system bars (edge-to-edge)
@@ -44,10 +45,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Maintenance
 
 - chore(android): restore LF endings and the trailing newline in build.gradle
+- chore(release): regenerate the OpenAPI fixture for 0.15.0; notice the generated maskable icons
 - chore(web): re-baseline the four remaining visual snapshots (Windows leg)
 - chore: final execution report, CHANGELOG entries, knip exception for the native splash plugin
 - chore: regenerate the CHANGELOG
 - chore: regenerate the native-review sheet
+- chore: release 0.15.0
 
 ### Style
 
