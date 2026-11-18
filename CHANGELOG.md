@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - feat(web): E2 unified loading and empty states
 - feat(web): E3 table elevation, mobile card fallback, staff page headers
 - feat(web): E4 type-scale rebalance — lift the small steps
+- feat(web): E6 — Android hardware back-button guard for resumable state
 - feat(web): E6-lite — PWA app shortcuts for Tutor and Quiz
 
 ### Fixed
@@ -46,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Merge main: absorb the stray prettier commit (superseded by the wave work)
 - Merge pull request #141 from tanviruchahs2580/feat/typography-600-weight
+- Merge pull request #142 from tanviruchahs2580/feat/typography-600-weight
 
 ## v0.14.0 - 2026-11-17
 

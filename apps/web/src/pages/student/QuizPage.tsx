@@ -15,6 +15,7 @@ import type {
   StudentProgress,
 } from "../../types";
 import { invalidateStudyCaches } from "../../lib/invalidate";
+import { markDirty } from "../../lib/nativeBackButton";
 import { buildExplainPayload, LAST_RESULT_KEY } from "../../lib/quizExplain";
 import { useAuth } from "../../AuthContext";
 import { Badge, Button, Card, LoadError } from "../../components/ui";
@@ -57,6 +58,12 @@ export default function QuizPage() {
   const [started, setStarted] = useState<QuizStarted | null>(
     () => readQuizDraft()?.started ?? null,
   );
+  // E6: an unsubmitted attempt is resumable state — the hardware back
+  // button must ask before discarding it.
+  useEffect(() => {
+    if (started) return markDirty("quiz");
+  }, [started]);
+
   const [answers, setAnswers] = useState<Record<number, number>>(
     () => readQuizDraft()?.answers ?? {},
   );
