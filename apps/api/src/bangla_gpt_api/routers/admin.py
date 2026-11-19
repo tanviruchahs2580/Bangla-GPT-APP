@@ -125,6 +125,14 @@ def admin_update_role(
             )
     old_role = target.role
     target.role = payload.role
+    # BC-2/T-13: a role change ends the account's existing sessions the same
+    # way a password change does — every access token minted before this
+    # moment is refused on its next use (get_current_user compares iat
+    # against sessions_invalidated_at). The database-backed role check
+    # already denies the OLD role's routes to a stale token; without the
+    # rotation the stale token itself stayed fully usable until its natural
+    # expiry (N-01).
+    target.sessions_invalidated_at = datetime.now(UTC).replace(tzinfo=None)
     # audit event 1/5: role_change (ids + before/after only)
     write_audit(
         db,

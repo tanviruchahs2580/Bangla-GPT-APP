@@ -2,6 +2,7 @@
  "version": "golden-v3.0.0",
  "generated_by": "bangla_gpt_api.evaluation.golden_v3.build_golden",
  "generated_from": "bundled sample corpus (data/sample_nctb)",
+ "provenance": "synthetic_from_corpus",
  "construct_rule": "questions are templated over chapter and section metadata (the table of contents); no text is lifted from chunk bodies and no item is filtered on system behaviour",
  "split_rule": "dev when sha256('20261029|question|class|subject') mod 3 == 0, else test",
  "bootstrap_seed": 20261029,

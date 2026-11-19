@@ -538,10 +538,11 @@ jobs:
       - name: Dependency audit (npm audit, prod deps)
         run: npm audit --audit-level=high --omit=dev
 
-      # H-03: thresholds are enforced in vite.config.ts (lines 68,
-      # functions 60, branches 60, statements 70) — a run that drops below
+      # H-03: thresholds are enforced in vite.config.ts (lines 78,
+      # functions 72, branches 70, statements 76 — raised to the measured
+      # baselines by T-16) — a run that drops below
       # them exits 1, so frontend coverage can no longer regress silently
-      # while the backend enforces fail_under=80.
+      # while the backend enforces fail_under=89.
       - name: Unit tests with coverage gate (vitest)
         # F-163/TEST-05: shuffled files and tests with a FIXED seed, mirroring
         # the pytest legs. Vitest reports the seed, so a failure is

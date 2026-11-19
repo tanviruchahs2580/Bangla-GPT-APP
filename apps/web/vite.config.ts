@@ -145,7 +145,7 @@ export default defineConfig({
     // slowest async queries brush the 5s default. Same assertions, more room.
     testTimeout: 15000,
     coverage: {
-      // H-03: the backend enforces fail_under=80 with branch coverage; the
+      // H-03: the backend enforces fail_under=89 with branch coverage; the
       // frontend suite ran with no measurement at all, so regression was
       // invisible. Baselines are the measured values on the current suite —
       // raised deliberately as the floor moves, never skipped (thresholds
@@ -158,14 +158,17 @@ export default defineConfig({
       reporter: ['text', 'html'],
       reportsDirectory: 'coverage/vitest',
       thresholds: {
-        // Measured baselines of the current suite (2026-10-24: lines 70.2,
-        // branches 62.9, functions 62.8, statements 72.5) minus a small
-        // margin, so the gate blocks regressions without failing today.
-        // Raise these as coverage grows; never lower or skip them.
-        lines: 68,
-        functions: 60,
-        branches: 60,
-        statements: 70,
+        // Measured baselines of the current suite. 2026-10-24 baseline was
+        // lines 70.2 / branches 62.9 / functions 62.8 / statements 72.5 and
+        // the thresholds sat just under it; T-16 re-measured with the exact
+        // CI command on 2026-11-19 (124 files / 592 tests: lines 78.94,
+        // branches 70.07, functions 72.27, statements 76.76) and raised the
+        // floors to those values rounded down. Raise these as coverage
+        // grows; never lower or skip them.
+        lines: 78,
+        functions: 72,
+        branches: 70,
+        statements: 76,
       },
     },
   },

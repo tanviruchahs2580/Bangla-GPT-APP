@@ -22,6 +22,7 @@ from bangla_gpt_api.main import (
     _validate_database,
     _validate_direct_parent_link,
     _validate_llm_provider,
+    _validate_password_hash_parameters,
     _validate_rate_limit_redis,
     _validate_reranker_endpoint,
 )
@@ -194,3 +195,29 @@ def test_private_http_reranker_endpoint_is_allowed_in_production():
 
 def test_lexical_default_needs_no_endpoint_guard():
     assert not _validate_reranker_endpoint(prod())
+
+
+# --- T-12 / BC-8: Argon2id parameters below the OWASP floor -------------------
+
+
+def test_argon2_parameters_at_the_floor_are_accepted_in_production():
+    assert not _validate_password_hash_parameters(prod())
+
+
+def test_argon2_parameters_below_the_floor_are_refused_in_production(monkeypatch):
+    import bangla_gpt_api.main as main_module
+
+    monkeypatch.setattr("bangla_gpt_api.auth.security.ARGON2_MEMORY_COST_KIB", 8 * 1024)
+    problems = main_module._validate_password_hash_parameters(prod())
+    assert problems, "production must refuse below-floor hash parameters"
+    assert "OWASP floor" in problems[0]
+    # the refusal must name the parameters, never any secret material
+    assert "m=8192" in problems[0]
+
+
+def test_argon2_time_cost_below_two_is_refused_in_production(monkeypatch):
+    import bangla_gpt_api.main as main_module
+
+    monkeypatch.setattr("bangla_gpt_api.auth.security.ARGON2_TIME_COST", 1)
+    problems = main_module._validate_password_hash_parameters(prod())
+    assert problems and "t=1" in problems[0]

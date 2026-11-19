@@ -207,6 +207,23 @@ _FORCE_CHANGE_EXEMPT_PATHS = frozenset(
 _FORCE_CHANGE_EXEMPT_REQUESTS = frozenset({("/users/me", "GET")})
 
 
+def _mfa_enrollment_allowed(request: Request) -> bool:
+    """Where a required-but-unenrolled MFA session may still go (T-13/BC-6).
+
+    The user must be able to enrol (enroll + verify), end the session
+    (logout), read what they need for enrolment (users/me GET, status), and
+    the ops probes must stay reachable for the platform. Everything else
+    waits until TOTP is proven -- mirroring the forced password change's
+    restricted-waiver shape.
+    """
+    path = request.url.path
+    if path in ("/health", "/live", "/ready", "/status", "/metrics"):
+        return True
+    if path in ("/auth/mfa/enroll", "/auth/mfa/verify", "/auth/logout"):
+        return True
+    return (path, request.method) in _FORCE_CHANGE_EXEMPT_REQUESTS
+
+
 def _force_change_allowed(request: Request) -> bool:
     path = request.url.path
     return (
@@ -299,6 +316,28 @@ def get_current_user(
             detail={
                 "code": "password_change_required",
                 "message": "Password change required. Use POST /auth/change-password first.",
+            },
+        )
+    # T-13/BC-6: MFA enforcement for configured roles. Default is empty
+    # (= current behaviour, MFA optional). A required-but-unenrolled user
+    # keeps a session only for the enrolment endpoints and the session-less
+    # basics -- the same restricted-waiver shape the forced password change
+    # uses above. The check runs after the epoch check, so a role change
+    # that makes MFA required ends the user's old sessions first (T-13).
+    required_roles = {
+        r.strip() for r in (ctx.settings.mfa_required_roles or "").split(",") if r.strip()
+    }
+    if (
+        required_roles
+        and user.role in required_roles
+        and not user.totp_secret
+        and not _mfa_enrollment_allowed(request)
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "mfa_enrollment_required",
+                "message": "MFA enrolment required for this role. Use POST /auth/mfa/enroll first.",
             },
         )
     return user

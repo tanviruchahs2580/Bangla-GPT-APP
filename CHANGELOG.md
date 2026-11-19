@@ -13,7 +13,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-Nothing yet.
+### Added
+
+- feat(api): T-12/BC-8 production boot guard for Argon2id parameters
+- feat(api): T-13/BC-2 role change ends sessions; T-13/BC-6 MFA-required-roles setting
+- feat(api): T-14/EG-7 provenance-labelled eval reporting and human-set scaffolding
+
+### Fixed
+
+- fix(api): T-24/BC-7 close four safety-refusal gaps proven by the must-sets
+
+### CI/CD
+
+- ci: add the missing job timeout to automerge (T-16)
+
+### Tests
+
+- test(api): T-11 route classification file, guard tests, authz matrix
+
+### Maintenance
+
+- chore(ci): raise coverage ratchets to the measured baselines (T-16)
+- chore(repo): ignore apps/api/coverage.xml alongside the JSON report (T-10)
+- chore: regenerate the CHANGELOG
+- chore: regenerate the CHANGELOG for v0.15.0
+
+### Other
+
+- Merge pull request #148 from tanviruchahs2580/chore/changelog-0.15.0
 
 ## v0.15.0 - 2026-11-18
 
