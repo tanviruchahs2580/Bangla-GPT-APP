@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - feat(api): T-13/BC-2 role change ends sessions; T-13/BC-6 MFA-required-roles setting
 - feat(api): T-14/EG-7 provenance-labelled eval reporting and human-set scaffolding
 - feat(api): T-20/BC-5 indexable attempt-membership links for short tests
+- feat(api): T-23/BC-9 provider-reported usage replaces char estimates
 - feat(api): T-32/BC-8 refuse inline scheduler loops with multiple workers
 
 ### Fixed
