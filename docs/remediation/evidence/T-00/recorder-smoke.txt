@@ -1,0 +1,11 @@
+Evidence-ID: EV-T00-recorder-smoke
+Captured-UTC: 2026-11-19T10:53:22.104937+00:00
+Finished-UTC: 2026-11-19T10:53:22.178243+00:00
+Base-SHA: 31e3e60ba51b9dde54cfbcba0de4466f70c83917
+Working-directory: .
+Command: apps/api/.venv/Scripts/python.exe --version
+Python: 3.12.10
+Exit-code: 0
+Duration-seconds: 0.078
+--- output ---
+Python 3.12.10

@@ -1,0 +1,17 @@
+Evidence-ID: EV-T00-api-openapi-export-verified2
+Captured-UTC: 2026-11-19T11:54:50.607232+00:00
+Finished-UTC: 2026-11-19T11:55:08.389477+00:00
+Base-SHA: 31e3e60ba51b9dde54cfbcba0de4466f70c83917
+Working-directory: apps/api
+Command: .venv/Scripts/python.exe scripts/export_openapi_types.py ../../docs/remediation/evidence/T-00/openapi.baseline.json
+Python: 3.12.10
+Exit-code: 0
+Duration-seconds: 17.797
+--- output ---
+{"event": "rag_corpus_identity", "corpus": "bundled-sample", "chunks": 78, "digest": "[redacted]", "manifest_sha256": null}
+{"event": "rag_corpus_loaded", "corpus": "bundled-sample", "chunks": 78, "requested_dir": null}
+{"event": "rag_index_built", "mode": "hybrid", "chunks": 78, "build_seconds": 0.3}
+{"event": "rag_corpus_identity", "corpus": "bundled-sample", "chunks": 78, "digest": "[redacted]", "manifest_sha256": null}
+{"event": "rag_corpus_loaded", "corpus": "bundled-sample", "chunks": 78, "requested_dir": null}
+{"event": "rag_index_built", "mode": "hybrid", "chunks": 78, "build_seconds": 0.33}
+openapi fixture written: ..\..\docs\remediation\evidence\T-00\openapi.baseline.json (121 paths, 140 operations)

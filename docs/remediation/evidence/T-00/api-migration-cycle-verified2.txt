@@ -1,0 +1,134 @@
+Evidence-ID: EV-T00-api-migration-cycle-verified2
+Captured-UTC: 2026-11-19T11:54:49.868016+00:00
+Finished-UTC: 2026-11-19T11:55:23.957337+00:00
+Base-SHA: 31e3e60ba51b9dde54cfbcba0de4466f70c83917
+Working-directory: apps/api
+Command: .venv/Scripts/python.exe -c 'import os,pathlib,subprocess,sys,tempfile; d=tempfile.TemporaryDirectory(prefix='"'"'bgpt-remediation-t00-cycle-'"'"'); p=pathlib.Path(d.name)/'"'"'cycle.db'"'"'; env=os.environ.copy(); env['"'"'DATABASE_URL'"'"']='"'"'sqlite:///'"'"'+p.as_posix(); [subprocess.run([sys.executable,'"'"'-m'"'"','"'"'alembic'"'"',*args],env=env,check=True) for args in (('"'"'upgrade'"'"','"'"'head'"'"'),('"'"'downgrade'"'"','"'"'base'"'"'),('"'"'upgrade'"'"','"'"'head'"'"'))]; print('"'"'SQLite upgrade head -> downgrade base -> upgrade head: PASS'"'"'); d.cleanup()'
+Python: 3.12.10
+Exit-code: 0
+Duration-seconds: 34.094
+--- output ---
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 7a826704cc96, initial
+INFO  [alembic.runtime.migration] Running upgrade 7a826704cc96 -> 19b86998e9fa, parent linkage
+INFO  [alembic.runtime.migration] Running upgrade 19b86998e9fa -> c3f4a5b6d7e8, safe accounts: password resets + admin force-change flag
+INFO  [alembic.runtime.migration] Running upgrade c3f4a5b6d7e8 -> d4e5f6a7b8c9, chat, parent invites, feedback, consent evidence
+INFO  [alembic.runtime.migration] Running upgrade d4e5f6a7b8c9 -> f1a2b3c4d5e6, s1.2 chapter_progress
+INFO  [alembic.runtime.migration] Running upgrade f1a2b3c4d5e6 -> a2c5e7b9d1f3, conversation last_strategy for adaptive re-teach
+INFO  [alembic.runtime.migration] Running upgrade a2c5e7b9d1f3 -> b3d7f9a1c2e4, daily_activity table for streak + heatmap
+INFO  [alembic.runtime.migration] Running upgrade b3d7f9a1c2e4 -> e6f7a8b9c0d1, revision_queue table for SM-2-lite spaced revision
+INFO  [alembic.runtime.migration] Running upgrade e6f7a8b9c0d1 -> f7a8b9c0d1e2, school + classroom tenancy tables with class_level backfill
+INFO  [alembic.runtime.migration] Running upgrade f7a8b9c0d1e2 -> b9c0d1e2f3a4, student account invite codes for CSV class import
+INFO  [alembic.runtime.migration] Running upgrade b9c0d1e2f3a4 -> c1d2e3f4a5b6, versioned AI chapter content (content engine)
+INFO  [alembic.runtime.migration] Running upgrade c1d2e3f4a5b6 -> e5f6a7b8c9d0, teacher-in-the-loop question papers (draft -> review -> final)
+INFO  [alembic.runtime.migration] Running upgrade e5f6a7b8c9d0 -> f6a7b8c9d0e1, short tests: class+chapter ultra-fast classroom-wide tests
+INFO  [alembic.runtime.migration] Running upgrade f6a7b8c9d0e1 -> a7b8c9d0e1f2, support plans: three-week rule-based plans for at-risk students
+INFO  [alembic.runtime.migration] Running upgrade a7b8c9d0e1f2 -> b8c9d0e1f2a3, bulk assignments: multi-student quiz assignment with due date tracking
+INFO  [alembic.runtime.migration] Running upgrade b8c9d0e1f2a3 -> c9d0e1f2a3b4, question bank: reviewed questions with dedupe key for generation reuse
+INFO  [alembic.runtime.migration] Running upgrade c9d0e1f2a3b4 -> d0e1f2a3b4c5, school onboarding: users.school_id + single-use school invite codes
+INFO  [alembic.runtime.migration] Running upgrade d0e1f2a3b4c5 -> a4f7c2e8b1d0, knowledge graph v1: concepts, prerequisite edges, per-concept mastery
+INFO  [alembic.runtime.migration] Running upgrade a4f7c2e8b1d0 -> c7d1e4f6a2b8, adaptive practice: Elo item difficulty + per-concept student ability
+INFO  [alembic.runtime.migration] Running upgrade c7d1e4f6a2b8 -> e8f9a0b1c2d3, job_runs idempotency ledger (background jobs)
+INFO  [alembic.runtime.migration] Running upgrade e8f9a0b1c2d3 -> f9a0b1c2d3e4, security: audit_log table + encrypted guardian phone column
+INFO  [alembic.runtime.migration] Running upgrade f9a0b1c2d3e4 -> a1b2c3d4e5f6, feedback triage queue columns
+INFO  [alembic.runtime.migration] Running upgrade a1b2c3d4e5f6 -> b7e3f5a8c2d4, backend wave 1: documents, notes, notifications, analytics events, ai jobs
+INFO  [alembic.runtime.migration] Running upgrade b7e3f5a8c2d4 -> c9d1e4f5a6b7, AI-002 usage ledger + AUTH-001 TOTP column.
+INFO  [alembic.runtime.migration] Running upgrade c9d1e4f5a6b7 -> d7e8f9a0b1c2, F-05: user token-epoch column for session revocation on rotation.
+INFO  [alembic.runtime.migration] Running upgrade d7e8f9a0b1c2 -> e1f2a3b4c5d6, DAT-002: reconcile ORM/migration drift surfaced by ``alembic check``.
+INFO  [alembic.runtime.migration] Running upgrade e1f2a3b4c5d6 -> f2b3c4d5e6f7, AUD-0046: bound school invite codes to a lifetime.
+INFO  [alembic.runtime.migration] Running upgrade f2b3c4d5e6f7 -> b4c6d8e0f2a4, S-002: per-account failed-login lockout columns on ``users``.
+INFO  [alembic.runtime.migration] Running upgrade b4c6d8e0f2a4 -> c5d7e9f1a3b5, A-xxx: indexable assignment membership (``assignment_recipients``).
+INFO  [alembic.runtime.migration] Running upgrade c5d7e9f1a3b5 -> d6e8f2a4b6c8, Indexes for the grade-filtered hot paths (audit L-11).
+INFO  [alembic.runtime.migration] Running upgrade d6e8f2a4b6c8 -> a3c5e7f9b1d3, H-04: database-enforced value invariants, FK indexes, redundant-index prune
+INFO  [alembic.runtime.migration] Running upgrade a3c5e7f9b1d3 -> b5d7e9f1a3c7, DB-04/DB-05: age the answer log, index the budget-gate hot path
+INFO  [alembic.runtime.migration] Running upgrade b5d7e9f1a3c7 -> c4d8e0f2a6b9, F-014/DB-01: every foreign key declares its ON DELETE policy
+INFO  [alembic.runtime.migration] Running upgrade c4d8e0f2a6b9 -> d2f6a8c0b4e1, F-007: the ai_jobs row becomes an idempotency record and counts attempts
+INFO  [alembic.runtime.migration] Running upgrade d2f6a8c0b4e1 -> e4b8c0d2f6a8, F-175/DB-02: drop the single-column indexes the composites already serve
+INFO  [alembic.runtime.migration] Running upgrade e4b8c0d2f6a8 -> dbf1d2e3f4a5, DB-FIX-001..004: re-assert two invariants, index four hot paths, exact money
+INFO  [alembic.runtime.migration] Running upgrade dbf1d2e3f4a5 -> a5b7c9d1e3f7, BGPT-DATA-001: concept_mastery.reconciled_at stamp
+INFO  [alembic.runtime.migration] Running upgrade a5b7c9d1e3f7 -> b6c8d0e2f4a6, BGPT-SEC-001 follow-up: widen users.totp_secret for ciphertext
+INFO  [alembic.runtime.migration] Running upgrade b6c8d0e2f4a6 -> c7d9e1f3a5b7, RAG V5: index generation registry + pgvector chunk embeddings
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running downgrade c7d9e1f3a5b7 -> b6c8d0e2f4a6, RAG V5: index generation registry + pgvector chunk embeddings
+INFO  [alembic.runtime.migration] Running downgrade b6c8d0e2f4a6 -> a5b7c9d1e3f7, BGPT-SEC-001 follow-up: widen users.totp_secret for ciphertext
+INFO  [alembic.runtime.migration] Running downgrade a5b7c9d1e3f7 -> dbf1d2e3f4a5, BGPT-DATA-001: concept_mastery.reconciled_at stamp
+INFO  [alembic.runtime.migration] Running downgrade dbf1d2e3f4a5 -> e4b8c0d2f6a8, DB-FIX-001..004: re-assert two invariants, index four hot paths, exact money
+INFO  [alembic.runtime.migration] Running downgrade e4b8c0d2f6a8 -> d2f6a8c0b4e1, F-175/DB-02: drop the single-column indexes the composites already serve
+INFO  [alembic.runtime.migration] Running downgrade d2f6a8c0b4e1 -> c4d8e0f2a6b9, F-007: the ai_jobs row becomes an idempotency record and counts attempts
+INFO  [alembic.runtime.migration] Running downgrade c4d8e0f2a6b9 -> b5d7e9f1a3c7, F-014/DB-01: every foreign key declares its ON DELETE policy
+INFO  [alembic.runtime.migration] Running downgrade b5d7e9f1a3c7 -> a3c5e7f9b1d3, DB-04/DB-05: age the answer log, index the budget-gate hot path
+INFO  [alembic.runtime.migration] Running downgrade a3c5e7f9b1d3 -> d6e8f2a4b6c8, H-04: database-enforced value invariants, FK indexes, redundant-index prune
+INFO  [alembic.runtime.migration] Running downgrade d6e8f2a4b6c8 -> c5d7e9f1a3b5, Indexes for the grade-filtered hot paths (audit L-11).
+INFO  [alembic.runtime.migration] Running downgrade c5d7e9f1a3b5 -> b4c6d8e0f2a4, A-xxx: indexable assignment membership (``assignment_recipients``).
+INFO  [alembic.runtime.migration] Running downgrade b4c6d8e0f2a4 -> f2b3c4d5e6f7, S-002: per-account failed-login lockout columns on ``users``.
+INFO  [alembic.runtime.migration] Running downgrade f2b3c4d5e6f7 -> e1f2a3b4c5d6, AUD-0046: bound school invite codes to a lifetime.
+INFO  [alembic.runtime.migration] Running downgrade e1f2a3b4c5d6 -> d7e8f9a0b1c2, DAT-002: reconcile ORM/migration drift surfaced by ``alembic check``.
+INFO  [alembic.runtime.migration] Running downgrade d7e8f9a0b1c2 -> c9d1e4f5a6b7, F-05: user token-epoch column for session revocation on rotation.
+INFO  [alembic.runtime.migration] Running downgrade c9d1e4f5a6b7 -> b7e3f5a8c2d4, AI-002 usage ledger + AUTH-001 TOTP column.
+INFO  [alembic.runtime.migration] Running downgrade b7e3f5a8c2d4 -> a1b2c3d4e5f6, backend wave 1: documents, notes, notifications, analytics events, ai jobs
+INFO  [alembic.runtime.migration] Running downgrade a1b2c3d4e5f6 -> f9a0b1c2d3e4, feedback triage queue columns
+INFO  [alembic.runtime.migration] Running downgrade f9a0b1c2d3e4 -> e8f9a0b1c2d3, security: audit_log table + encrypted guardian phone column
+INFO  [alembic.runtime.migration] Running downgrade e8f9a0b1c2d3 -> c7d1e4f6a2b8, job_runs idempotency ledger (background jobs)
+INFO  [alembic.runtime.migration] Running downgrade c7d1e4f6a2b8 -> a4f7c2e8b1d0, adaptive practice: Elo item difficulty + per-concept student ability
+INFO  [alembic.runtime.migration] Running downgrade a4f7c2e8b1d0 -> d0e1f2a3b4c5, knowledge graph v1: concepts, prerequisite edges, per-concept mastery
+INFO  [alembic.runtime.migration] Running downgrade d0e1f2a3b4c5 -> c9d0e1f2a3b4, school onboarding: users.school_id + single-use school invite codes
+INFO  [alembic.runtime.migration] Running downgrade c9d0e1f2a3b4 -> b8c9d0e1f2a3, question bank: reviewed questions with dedupe key for generation reuse
+INFO  [alembic.runtime.migration] Running downgrade b8c9d0e1f2a3 -> a7b8c9d0e1f2, bulk assignments: multi-student quiz assignment with due date tracking
+INFO  [alembic.runtime.migration] Running downgrade a7b8c9d0e1f2 -> f6a7b8c9d0e1, support plans: three-week rule-based plans for at-risk students
+INFO  [alembic.runtime.migration] Running downgrade f6a7b8c9d0e1 -> e5f6a7b8c9d0, short tests: class+chapter ultra-fast classroom-wide tests
+INFO  [alembic.runtime.migration] Running downgrade e5f6a7b8c9d0 -> c1d2e3f4a5b6, teacher-in-the-loop question papers (draft -> review -> final)
+INFO  [alembic.runtime.migration] Running downgrade c1d2e3f4a5b6 -> b9c0d1e2f3a4, versioned AI chapter content (content engine)
+INFO  [alembic.runtime.migration] Running downgrade b9c0d1e2f3a4 -> f7a8b9c0d1e2, student account invite codes for CSV class import
+INFO  [alembic.runtime.migration] Running downgrade f7a8b9c0d1e2 -> e6f7a8b9c0d1, school + classroom tenancy tables with class_level backfill
+INFO  [alembic.runtime.migration] Running downgrade e6f7a8b9c0d1 -> b3d7f9a1c2e4, revision_queue table for SM-2-lite spaced revision
+INFO  [alembic.runtime.migration] Running downgrade b3d7f9a1c2e4 -> a2c5e7b9d1f3, daily_activity table for streak + heatmap
+INFO  [alembic.runtime.migration] Running downgrade a2c5e7b9d1f3 -> f1a2b3c4d5e6, conversation last_strategy for adaptive re-teach
+INFO  [alembic.runtime.migration] Running downgrade f1a2b3c4d5e6 -> d4e5f6a7b8c9, s1.2 chapter_progress
+INFO  [alembic.runtime.migration] Running downgrade d4e5f6a7b8c9 -> c3f4a5b6d7e8, chat, parent invites, feedback, consent evidence
+INFO  [alembic.runtime.migration] Running downgrade c3f4a5b6d7e8 -> 19b86998e9fa, safe accounts: password resets + admin force-change flag
+INFO  [alembic.runtime.migration] Running downgrade 19b86998e9fa -> 7a826704cc96, parent linkage
+INFO  [alembic.runtime.migration] Running downgrade 7a826704cc96 -> , initial
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 7a826704cc96, initial
+INFO  [alembic.runtime.migration] Running upgrade 7a826704cc96 -> 19b86998e9fa, parent linkage
+INFO  [alembic.runtime.migration] Running upgrade 19b86998e9fa -> c3f4a5b6d7e8, safe accounts: password resets + admin force-change flag
+INFO  [alembic.runtime.migration] Running upgrade c3f4a5b6d7e8 -> d4e5f6a7b8c9, chat, parent invites, feedback, consent evidence
+INFO  [alembic.runtime.migration] Running upgrade d4e5f6a7b8c9 -> f1a2b3c4d5e6, s1.2 chapter_progress
+INFO  [alembic.runtime.migration] Running upgrade f1a2b3c4d5e6 -> a2c5e7b9d1f3, conversation last_strategy for adaptive re-teach
+INFO  [alembic.runtime.migration] Running upgrade a2c5e7b9d1f3 -> b3d7f9a1c2e4, daily_activity table for streak + heatmap
+INFO  [alembic.runtime.migration] Running upgrade b3d7f9a1c2e4 -> e6f7a8b9c0d1, revision_queue table for SM-2-lite spaced revision
+INFO  [alembic.runtime.migration] Running upgrade e6f7a8b9c0d1 -> f7a8b9c0d1e2, school + classroom tenancy tables with class_level backfill
+INFO  [alembic.runtime.migration] Running upgrade f7a8b9c0d1e2 -> b9c0d1e2f3a4, student account invite codes for CSV class import
+INFO  [alembic.runtime.migration] Running upgrade b9c0d1e2f3a4 -> c1d2e3f4a5b6, versioned AI chapter content (content engine)
+INFO  [alembic.runtime.migration] Running upgrade c1d2e3f4a5b6 -> e5f6a7b8c9d0, teacher-in-the-loop question papers (draft -> review -> final)
+INFO  [alembic.runtime.migration] Running upgrade e5f6a7b8c9d0 -> f6a7b8c9d0e1, short tests: class+chapter ultra-fast classroom-wide tests
+INFO  [alembic.runtime.migration] Running upgrade f6a7b8c9d0e1 -> a7b8c9d0e1f2, support plans: three-week rule-based plans for at-risk students
+INFO  [alembic.runtime.migration] Running upgrade a7b8c9d0e1f2 -> b8c9d0e1f2a3, bulk assignments: multi-student quiz assignment with due date tracking
+INFO  [alembic.runtime.migration] Running upgrade b8c9d0e1f2a3 -> c9d0e1f2a3b4, question bank: reviewed questions with dedupe key for generation reuse
+INFO  [alembic.runtime.migration] Running upgrade c9d0e1f2a3b4 -> d0e1f2a3b4c5, school onboarding: users.school_id + single-use school invite codes
+INFO  [alembic.runtime.migration] Running upgrade d0e1f2a3b4c5 -> a4f7c2e8b1d0, knowledge graph v1: concepts, prerequisite edges, per-concept mastery
+INFO  [alembic.runtime.migration] Running upgrade a4f7c2e8b1d0 -> c7d1e4f6a2b8, adaptive practice: Elo item difficulty + per-concept student ability
+INFO  [alembic.runtime.migration] Running upgrade c7d1e4f6a2b8 -> e8f9a0b1c2d3, job_runs idempotency ledger (background jobs)
+INFO  [alembic.runtime.migration] Running upgrade e8f9a0b1c2d3 -> f9a0b1c2d3e4, security: audit_log table + encrypted guardian phone column
+INFO  [alembic.runtime.migration] Running upgrade f9a0b1c2d3e4 -> a1b2c3d4e5f6, feedback triage queue columns
+INFO  [alembic.runtime.migration] Running upgrade a1b2c3d4e5f6 -> b7e3f5a8c2d4, backend wave 1: documents, notes, notifications, analytics events, ai jobs
+INFO  [alembic.runtime.migration] Running upgrade b7e3f5a8c2d4 -> c9d1e4f5a6b7, AI-002 usage ledger + AUTH-001 TOTP column.
+INFO  [alembic.runtime.migration] Running upgrade c9d1e4f5a6b7 -> d7e8f9a0b1c2, F-05: user token-epoch column for session revocation on rotation.
+INFO  [alembic.runtime.migration] Running upgrade d7e8f9a0b1c2 -> e1f2a3b4c5d6, DAT-002: reconcile ORM/migration drift surfaced by ``alembic check``.
+INFO  [alembic.runtime.migration] Running upgrade e1f2a3b4c5d6 -> f2b3c4d5e6f7, AUD-0046: bound school invite codes to a lifetime.
+INFO  [alembic.runtime.migration] Running upgrade f2b3c4d5e6f7 -> b4c6d8e0f2a4, S-002: per-account failed-login lockout columns on ``users``.
+INFO  [alembic.runtime.migration] Running upgrade b4c6d8e0f2a4 -> c5d7e9f1a3b5, A-xxx: indexable assignment membership (``assignment_recipients``).
+INFO  [alembic.runtime.migration] Running upgrade c5d7e9f1a3b5 -> d6e8f2a4b6c8, Indexes for the grade-filtered hot paths (audit L-11).
+INFO  [alembic.runtime.migration] Running upgrade d6e8f2a4b6c8 -> a3c5e7f9b1d3, H-04: database-enforced value invariants, FK indexes, redundant-index prune
+INFO  [alembic.runtime.migration] Running upgrade a3c5e7f9b1d3 -> b5d7e9f1a3c7, DB-04/DB-05: age the answer log, index the budget-gate hot path
+INFO  [alembic.runtime.migration] Running upgrade b5d7e9f1a3c7 -> c4d8e0f2a6b9, F-014/DB-01: every foreign key declares its ON DELETE policy
+INFO  [alembic.runtime.migration] Running upgrade c4d8e0f2a6b9 -> d2f6a8c0b4e1, F-007: the ai_jobs row becomes an idempotency record and counts attempts
+INFO  [alembic.runtime.migration] Running upgrade d2f6a8c0b4e1 -> e4b8c0d2f6a8, F-175/DB-02: drop the single-column indexes the composites already serve
+INFO  [alembic.runtime.migration] Running upgrade e4b8c0d2f6a8 -> dbf1d2e3f4a5, DB-FIX-001..004: re-assert two invariants, index four hot paths, exact money
+INFO  [alembic.runtime.migration] Running upgrade dbf1d2e3f4a5 -> a5b7c9d1e3f7, BGPT-DATA-001: concept_mastery.reconciled_at stamp
+INFO  [alembic.runtime.migration] Running upgrade a5b7c9d1e3f7 -> b6c8d0e2f4a6, BGPT-SEC-001 follow-up: widen users.totp_secret for ciphertext
+INFO  [alembic.runtime.migration] Running upgrade b6c8d0e2f4a6 -> c7d9e1f3a5b7, RAG V5: index generation registry + pgvector chunk embeddings
+SQLite upgrade head -> downgrade base -> upgrade head: PASS

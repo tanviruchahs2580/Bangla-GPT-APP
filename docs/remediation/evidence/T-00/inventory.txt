@@ -1,0 +1,57 @@
+tracked_files=1289
+source_lines_by_extension:
+  .css: 5639
+  .html: 155
+  .java: 49
+  .js: 765
+  .mjs: 843
+  .py: 104245
+  .sh: 321
+  .ts: 21068
+  .tsx: 27542
+top_20_source_files_by_lines:
+  5467	apps/web/src/styles.css
+  2191	apps/web/e2e/w2-flows2.spec.ts
+  2178	apps/api/src/bangla_gpt_api/services/tutor.py
+  1812	apps/web/src/i18n.ts
+  1676	apps/api/src/bangla_gpt_api/schemas.py
+  1390	apps/web/src/api.ts
+  1296	apps/api/src/bangla_gpt_api/db/models.py
+  1283	apps/web/e2e/w2-flows.spec.ts
+  1235	apps/api/src/bangla_gpt_api/routers/tutor.py
+  1199	apps/api/src/bangla_gpt_api/routers/teacher_content.py
+  1181	apps/api/src/bangla_gpt_api/routers/school.py
+  1143	apps/web/e2e/qa-flows.spec.ts
+  1113	apps/api/src/bangla_gpt_api/routers/learn.py
+  1085	apps/api/src/bangla_gpt_api/routers/auth.py
+  974	apps/api/src/bangla_gpt_api/services/gdpr.py
+  897	apps/api/src/bangla_gpt_api/routers/assessment.py
+  869	apps/api/src/bangla_gpt_api/main.py
+  806	apps/api/src/bangla_gpt_api/routers/parent.py
+  746	apps/web/src/pages/student/MePage.tsx
+  723	apps/api/src/bangla_gpt_api/services/safety.py
+dependency_manifests_and_lockfiles:
+  apps/api/constraints.txt
+  apps/api/pyproject.toml
+  apps/web/package-lock.json
+  apps/web/package.json
+ci_workflows:
+  .github/workflows/android-release.yml
+  .github/workflows/automerge.yml
+  .github/workflows/ci.yml
+  .github/workflows/codeql.yml
+  .github/workflows/eval-gate.yml
+  .github/workflows/release.yml
+  .github/workflows/retrieval-eval.yml
+  .github/workflows/scorecard.yml
+  .github/workflows/secret-masking.yml
+  .github/workflows/uptime.yml
+  .github/workflows/vercel-deploy.yml
+dockerfiles_and_compose_files:
+  Dockerfile
+  apps/web/Dockerfile
+  deploy/postgres/Dockerfile
+  docker-compose.yml
+alembic_heads_from_tracked_revision_graph=c7d9e1f3a5b7
+baseline_non_nfc_bengali_runs_by_file:
+  none

@@ -1,0 +1,153 @@
+{
+  "dataset": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\api\\eval\\golden_questions.json",
+  "total": 24,
+  "hit_at_3": 1.0,
+  "grounded_accuracy": 0.9167,
+  "latency_seconds": 1.108,
+  "results": [
+    {
+      "question": "কোষ কী?",
+      "expected_grounded": true,
+      "actual_grounded": true,
+      "chapter_hit": true
+    },
+    {
+      "question": "কোষের প্রধান অংশ কয়টি ও কী কী?",
+      "expected_grounded": true,
+      "actual_grounded": true,
+      "chapter_hit": true
+    },
+    {
+      "question": "নিউক্লিয়াসকে কী বলা হয়?",
+      "expected_grounded": true,
+      "actual_grounded": true,
+      "chapter_hit": true
+    },
+    {
+      "question": "সবুজ গাছ সূর্যের আলো দিয়ে কী তৈরি করে?",
+      "expected_grounded": true,
+      "actual_grounded": false,
+      "chapter_hit": true
+    },
+    {
+      "question": "পাতার কোষে সবুজ রঙের কণিকাকে কী বলে?",
+      "expected_grounded": true,
+      "actual_grounded": true,
+      "chapter_hit": true
+    },
+    {
+      "question": "সমুদ্র ও নদীর পানি কীভাবে মেঘ তৈরি করে?",
+      "expected_grounded": true,
+      "actual_grounded": true,
+      "chapter_hit": true
+    },
+    {
+      "question": "ভগ্নাংশ কাকে বলে?",
+      "expected_grounded": true,
+      "actual_grounded": true,
+      "chapter_hit": true
+    },
+    {
+      "question": "১/২ ও ২/৪ কেন সমান ভগ্নাংশ?",
+      "expected_grounded": true,
+      "actual_grounded": true,
+      "chapter_hit": true
+    },
+    {
+      "question": "লব ও হর দিয়ে কী নির্ণয় করা হয়?",
+      "expected_grounded": true,
+      "actual_grounded": true,
+      "chapter_hit": true
+    },
+    {
+      "question": "শতকরা মানে কী?",
+      "expected_grounded": true,
+      "actual_grounded": true,
+      "chapter_hit": true
+    },
+    {
+      "question": "২৫% কত ভাগ বোঝায়?",
+      "expected_grounded": true,
+      "actual_grounded": false,
+      "chapter_hit": true
+    },
+    {
+      "question": "বস্তুর গতির পরিমাণ বা গতির দিক পরিবর্তন করে কী?",
+      "expected_grounded": true,
+      "actual_grounded": true,
+      "chapter_hit": true
+    },
+    {
+      "question": "অণুবীক্ষণ যন্ত্রে কী দেখা যায়?",
+      "expected_grounded": true,
+      "actual_grounded": true,
+      "chapter_hit": true
+    },
+    {
+      "question": "সমতল দর্পণে গঠিত প্রতিবিম্ব কেমন হয়?",
+      "expected_grounded": true,
+      "actual_grounded": true,
+      "chapter_hit": true
+    },
+    {
+      "question": "ছায়া কখন তৈরি হয় এবং কেন বড়-ছোট হয়?",
+      "expected_grounded": true,
+      "actual_grounded": true,
+      "chapter_hit": true
+    },
+    {
+      "question": "চুম্বক কী কী আকর্ষণ করে?",
+      "expected_grounded": true,
+      "actual_grounded": true,
+      "chapter_hit": true
+    },
+    {
+      "question": "ফুসফুসে অক্সিজেন আসা ও কার্বন ডাই-অক্সাইড বের হওয়াকে কী বলে?",
+      "expected_grounded": true,
+      "actual_grounded": true,
+      "chapter_hit": true
+    },
+    {
+      "question": "গত বিশ্বকাপ ফুটবল ফাইনালে কোন দল জিতেছিল?",
+      "expected_grounded": false,
+      "actual_grounded": false,
+      "chapter_hit": false
+    },
+    {
+      "question": "আগামীকালের আবহাওয়ার পূর্বাভাস কী?",
+      "expected_grounded": false,
+      "actual_grounded": false,
+      "chapter_hit": false
+    },
+    {
+      "question": "সেরা গেমিং ল্যাপটপ কোনটি?",
+      "expected_grounded": false,
+      "actual_grounded": false,
+      "chapter_hit": false
+    },
+    {
+      "question": "ইংরেজি tense কিভাবে শিখবো?",
+      "expected_grounded": false,
+      "actual_grounded": false,
+      "chapter_hit": false
+    },
+    {
+      "question": "qxzzv bloop blarp",
+      "expected_grounded": false,
+      "actual_grounded": false,
+      "chapter_hit": false
+    },
+    {
+      "question": "চ্যাম্পিয়নস লিগের খেলা কবে?",
+      "expected_grounded": false,
+      "actual_grounded": false,
+      "chapter_hit": false
+    },
+    {
+      "question": "নতুন মোবাইল কোনটা কিনবো?",
+      "expected_grounded": false,
+      "actual_grounded": false,
+      "chapter_hit": false
+    }
+  ]
+}

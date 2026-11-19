@@ -1,0 +1,14 @@
+Evidence-ID: EV-T00-t10-step1-name-checks
+Captured-UTC: 2026-11-19T17:28:10.106166+00:00
+Finished-UTC: 2026-11-19T17:28:11.449045+00:00
+Base-SHA: f206ee2a5504253187cd9c6b9719010e6a2514f5
+Working-directory: .
+Command: bash -c 'git ls-files | grep -Ei '"'"'(^|/)\.env(\.|$)|\.(db|sqlite3?)$|(^|/)\.coverage'"'"' | grep -v '"'"'\.example$'"'"' | sort; echo '"'"'---tracked-end---'"'"'; git log --all --diff-filter=A --name-only --format= | grep -Ei '"'"'(^|/)\.env(\.|$)'"'"' | grep -v '"'"'\.example$'"'"' | sort -u; echo '"'"'---history-env-end---'"'"'; git log --all --diff-filter=A --format='"'"'%H %ad'"'"' --date=short -- apps/api/dev.db.bak-wave2 | head -3; echo '"'"'---db-blob-commits-end---'"'"''
+Python: 3.12.10
+Exit-code: 0
+Duration-seconds: 1.343
+--- output ---
+---tracked-end---
+---history-env-end---
+5bfbae80dc5640f9fb0db3acc1a6af3626129923 2026-09-09
+---db-blob-commits-end---

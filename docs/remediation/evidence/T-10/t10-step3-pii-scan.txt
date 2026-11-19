@@ -1,0 +1,11 @@
+Evidence-ID: EV-T00-t10-step3-pii-scan
+Captured-UTC: 2026-11-19T17:28:32.379502+00:00
+Finished-UTC: 2026-11-19T17:28:32.380504+00:00
+Base-SHA: f206ee2a5504253187cd9c6b9719010e6a2514f5
+Working-directory: .
+Command: ../../apps/api/.venv/Scripts/python.exe docs/remediation/tools/t10_pii_scan.py
+Python: 3.12.10
+Exit-code: 127
+Duration-seconds: 0.000
+--- output ---
+FileNotFoundError: [WinError 2] The system cannot find the file specified

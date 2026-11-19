@@ -1,0 +1,470 @@
+{
+  "openapi_paths": 121,
+  "openapi_operations": 140,
+  "app_routes_top_level": [
+    {
+      "type": "Route",
+      "name": "openapi",
+      "path": "/openapi.json"
+    },
+    {
+      "type": "Route",
+      "name": "swagger_ui_html",
+      "path": "/docs"
+    },
+    {
+      "type": "Route",
+      "name": "swagger_ui_redirect",
+      "path": "/docs/oauth2-redirect"
+    },
+    {
+      "type": "Route",
+      "name": "redoc_html",
+      "path": "/redoc"
+    },
+    {
+      "type": "_IncludedRouter",
+      "name": null,
+      "path": null
+    },
+    {
+      "type": "_IncludedRouter",
+      "name": null,
+      "path": null
+    },
+    {
+      "type": "_IncludedRouter",
+      "name": null,
+      "path": null
+    },
+    {
+      "type": "_IncludedRouter",
+      "name": null,
+      "path": null
+    },
+    {
+      "type": "_IncludedRouter",
+      "name": null,
+      "path": null
+    },
+    {
+      "type": "_IncludedRouter",
+      "name": null,
+      "path": null
+    },
+    {
+      "type": "_IncludedRouter",
+      "name": null,
+      "path": null
+    },
+    {
+      "type": "_IncludedRouter",
+      "name": null,
+      "path": null
+    },
+    {
+      "type": "_IncludedRouter",
+      "name": null,
+      "path": null
+    },
+    {
+      "type": "_IncludedRouter",
+      "name": null,
+      "path": null
+    },
+    {
+      "type": "_IncludedRouter",
+      "name": null,
+      "path": null
+    },
+    {
+      "type": "_IncludedRouter",
+      "name": null,
+      "path": null
+    }
+  ],
+  "resolved_served_routes": {
+    "/health": [
+      "get"
+    ],
+    "/live": [
+      "get"
+    ],
+    "/ready": [
+      "get"
+    ],
+    "/status": [
+      "get"
+    ],
+    "/admin/system/info": [
+      "get"
+    ],
+    "/auth/register": [
+      "post"
+    ],
+    "/auth/verify-email": [
+      "post"
+    ],
+    "/auth/resend-verification": [
+      "post"
+    ],
+    "/auth/login": [
+      "post"
+    ],
+    "/auth/logout": [
+      "post"
+    ],
+    "/auth/renew": [
+      "post"
+    ],
+    "/auth/forgot": [
+      "post"
+    ],
+    "/auth/reset": [
+      "post"
+    ],
+    "/auth/change-password": [
+      "post"
+    ],
+    "/auth/mfa/enroll": [
+      "post"
+    ],
+    "/auth/mfa/verify": [
+      "post"
+    ],
+    "/auth/mfa/disable": [
+      "post"
+    ],
+    "/auth/mfa/challenge": [
+      "post"
+    ],
+    "/tutor/ask": [
+      "post"
+    ],
+    "/tutor/conversations": [
+      "get",
+      "post"
+    ],
+    "/tutor/conversations/{conversation_id}/messages": [
+      "get",
+      "post"
+    ],
+    "/tutor/conversations/{conversation_id}": [
+      "delete",
+      "patch"
+    ],
+    "/tutor/messages/search": [
+      "get"
+    ],
+    "/tutor/conversations/{conversation_id}/messages/stream": [
+      "post"
+    ],
+    "/feedback": [
+      "post"
+    ],
+    "/admin/feedback": [
+      "get"
+    ],
+    "/admin/feedback/{feedback_id}": [
+      "patch"
+    ],
+    "/events": [
+      "post"
+    ],
+    "/users/me": [
+      "delete",
+      "get"
+    ],
+    "/users/me/sessions/revoke": [
+      "post"
+    ],
+    "/users/me/export": [
+      "get"
+    ],
+    "/students/{student_id}": [
+      "get"
+    ],
+    "/students/{student_id}/consent": [
+      "get"
+    ],
+    "/students/{student_id}/consent/reconfirm": [
+      "post"
+    ],
+    "/learn/subjects": [
+      "get"
+    ],
+    "/learn/subjects/{subject}/chapters": [
+      "get"
+    ],
+    "/learn/subjects/{subject}/chapters/{chapter}": [
+      "get"
+    ],
+    "/quizzes": [
+      "post"
+    ],
+    "/quizzes/{attempt_id}/submit": [
+      "post"
+    ],
+    "/students/{student_id}/progress": [
+      "get"
+    ],
+    "/students/{student_id}/activity": [
+      "get"
+    ],
+    "/revision/due": [
+      "get"
+    ],
+    "/revision/{item_id}/review": [
+      "post"
+    ],
+    "/kg/gaps": [
+      "get"
+    ],
+    "/kg/rebuild": [
+      "post"
+    ],
+    "/search": [
+      "get"
+    ],
+    "/dashboard/summary": [
+      "get"
+    ],
+    "/learn/progress": [
+      "get",
+      "post"
+    ],
+    "/teacher/students": [
+      "get"
+    ],
+    "/teacher/classes/{class_level}/analytics": [
+      "get"
+    ],
+    "/teacher/classrooms": [
+      "get",
+      "post"
+    ],
+    "/teacher/classrooms/{room_id}/roster": [
+      "get"
+    ],
+    "/teacher/classrooms/{room_id}/import": [
+      "post"
+    ],
+    "/admin/schools": [
+      "get",
+      "post"
+    ],
+    "/admin/schools/stats": [
+      "get"
+    ],
+    "/admin/schools/{school_id}/invites": [
+      "get"
+    ],
+    "/admin/schools/{school_id}/invites/{invite_id}": [
+      "delete"
+    ],
+    "/admin/content/versions": [
+      "get"
+    ],
+    "/admin/reports/aggregate": [
+      "get"
+    ],
+    "/schools/{school_id}/invites": [
+      "post"
+    ],
+    "/auth/join-school": [
+      "post"
+    ],
+    "/schools/mine": [
+      "get"
+    ],
+    "/schools/{school_id}/classes": [
+      "post"
+    ],
+    "/school/overview": [
+      "get"
+    ],
+    "/school/students": [
+      "get"
+    ],
+    "/school/teachers": [
+      "get"
+    ],
+    "/school/classes": [
+      "get"
+    ],
+    "/school/coverage": [
+      "get"
+    ],
+    "/school/analytics": [
+      "get"
+    ],
+    "/teacher/content/generate": [
+      "post"
+    ],
+    "/teacher/content/history": [
+      "get"
+    ],
+    "/teacher/content": [
+      "get",
+      "put"
+    ],
+    "/teacher/qpapers": [
+      "get",
+      "post"
+    ],
+    "/teacher/qpapers/{qp_id}": [
+      "get"
+    ],
+    "/teacher/qpapers/{qp_id}/regenerate": [
+      "post"
+    ],
+    "/teacher/qpapers/{qp_id}/shuffle": [
+      "post"
+    ],
+    "/teacher/qpapers/{qp_id}/review": [
+      "post"
+    ],
+    "/teacher/qpapers/{qp_id}/replace": [
+      "post"
+    ],
+    "/teacher/qpapers/{qp_id}/finalize": [
+      "post"
+    ],
+    "/teacher/qpapers/{qp_id}/pdf": [
+      "get"
+    ],
+    "/teacher/lesson-plans": [
+      "post"
+    ],
+    "/teacher/generate/{kind}": [
+      "post"
+    ],
+    "/teacher/documents": [
+      "get"
+    ],
+    "/teacher/documents/{document_id}": [
+      "delete",
+      "get"
+    ],
+    "/teacher/documents/{document_id}/pdf": [
+      "get"
+    ],
+    "/notes": [
+      "get",
+      "post"
+    ],
+    "/notes/{note_id}": [
+      "delete"
+    ],
+    "/notifications": [
+      "get"
+    ],
+    "/notifications/{notification_id}/read": [
+      "post"
+    ],
+    "/teacher/jobs": [
+      "get",
+      "post"
+    ],
+    "/teacher/jobs/{job_id}": [
+      "get"
+    ],
+    "/teacher/workload": [
+      "get"
+    ],
+    "/teacher/shorttests": [
+      "get",
+      "post"
+    ],
+    "/shorttests/mine": [
+      "get"
+    ],
+    "/teacher/weak-matrix": [
+      "get"
+    ],
+    "/teacher/curriculum-coverage": [
+      "get"
+    ],
+    "/teacher/support-plans": [
+      "get",
+      "post"
+    ],
+    "/teacher/assignments": [
+      "get",
+      "post"
+    ],
+    "/teacher/assignments/{assignment_id}/progress": [
+      "get"
+    ],
+    "/assignments/mine": [
+      "get"
+    ],
+    "/admin/users": [
+      "get"
+    ],
+    "/admin/users/{user_id}/role": [
+      "patch"
+    ],
+    "/admin/users/{user_id}/impersonate": [
+      "delete",
+      "post"
+    ],
+    "/auth/impersonate/exit": [
+      "post"
+    ],
+    "/admin/audit": [
+      "get"
+    ],
+    "/admin/analytics/overview": [
+      "get"
+    ],
+    "/admin/safety/refusals": [
+      "get"
+    ],
+    "/admin/ai/quality": [
+      "get"
+    ],
+    "/admin/maintenance/purge": [
+      "post"
+    ],
+    "/admin/reindex": [
+      "post"
+    ],
+    "/parents/link": [
+      "post"
+    ],
+    "/students/me/invite-code": [
+      "get",
+      "post"
+    ],
+    "/students/me/invite-code/{invite_id}": [
+      "delete"
+    ],
+    "/students/me/prefs": [
+      "get",
+      "patch"
+    ],
+    "/students/me/memory": [
+      "delete",
+      "get"
+    ],
+    "/parents/link/invite": [
+      "post"
+    ],
+    "/parents/me/children": [
+      "get"
+    ],
+    "/parents/me/children/{student_id}/progress": [
+      "get"
+    ],
+    "/parents/me/children/{student_id}/activity": [
+      "get"
+    ],
+    "/parents/me/children/{student_id}/report": [
+      "get"
+    ],
+    "/students/me/report": [
+      "get"
+    ]
+  }
+}

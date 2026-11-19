@@ -1,0 +1,1354 @@
+{
+ "operations": [
+  {
+   "path": "/admin/ai/quality",
+   "method": "GET",
+   "function": "admin.py:admin_ai_quality",
+   "auth": [
+    "role-restricted:admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/admin/analytics/overview",
+   "method": "GET",
+   "function": "admin.py:admin_overview",
+   "auth": [
+    "role-restricted:admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/admin/audit",
+   "method": "GET",
+   "function": "admin.py:admin_audit",
+   "auth": [
+    "role-restricted:admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/admin/content/versions",
+   "method": "GET",
+   "function": "school.py:admin_content_versions",
+   "auth": [
+    "role-restricted:admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/admin/feedback",
+   "method": "GET",
+   "function": "tutor.py:admin_feedback_queue",
+   "auth": [
+    "role-restricted:admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/admin/feedback/{feedback_id}",
+   "method": "PATCH",
+   "function": "tutor.py:admin_feedback_triage",
+   "auth": [
+    "role-restricted:admin"
+   ],
+   "owned_params": [
+    "feedback_id"
+   ]
+  },
+  {
+   "path": "/admin/maintenance/purge",
+   "method": "POST",
+   "function": "admin.py:admin_purge_expired",
+   "auth": [
+    "role-restricted:admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/admin/reindex",
+   "method": "POST",
+   "function": "admin.py:admin_reindex",
+   "auth": [
+    "role-restricted:admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/admin/reports/aggregate",
+   "method": "GET",
+   "function": "school.py:admin_report_aggregate",
+   "auth": [
+    "role-restricted:admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/admin/safety/refusals",
+   "method": "GET",
+   "function": "admin.py:admin_refusal_audit",
+   "auth": [
+    "role-restricted:admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/admin/schools",
+   "method": "GET",
+   "function": "school.py:admin_school_list",
+   "auth": [
+    "role-restricted:admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/admin/schools",
+   "method": "POST",
+   "function": "school.py:admin_school_create",
+   "auth": [
+    "role-restricted:admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/admin/schools/stats",
+   "method": "GET",
+   "function": "school.py:admin_school_stats",
+   "auth": [
+    "role-restricted:admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/admin/schools/{school_id}/invites",
+   "method": "GET",
+   "function": "school.py:admin_school_invite_list",
+   "auth": [
+    "role-restricted:admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/admin/schools/{school_id}/invites/{invite_id}",
+   "method": "DELETE",
+   "function": "school.py:admin_school_invite_revoke",
+   "auth": [
+    "role-restricted:admin"
+   ],
+   "owned_params": [
+    "invite_id"
+   ]
+  },
+  {
+   "path": "/admin/system/info",
+   "method": "GET",
+   "function": "system.py:system_info",
+   "auth": [
+    "role-restricted:admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/admin/users",
+   "method": "GET",
+   "function": "admin.py:admin_list_users",
+   "auth": [
+    "role-restricted:admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/admin/users/{user_id}/impersonate",
+   "method": "DELETE",
+   "function": "admin.py:admin_impersonate_end",
+   "auth": [
+    "role-restricted:admin"
+   ],
+   "owned_params": [
+    "user_id"
+   ]
+  },
+  {
+   "path": "/admin/users/{user_id}/impersonate",
+   "method": "POST",
+   "function": "admin.py:admin_impersonate",
+   "auth": [
+    "role-restricted:admin"
+   ],
+   "owned_params": [
+    "user_id"
+   ]
+  },
+  {
+   "path": "/admin/users/{user_id}/role",
+   "method": "PATCH",
+   "function": "admin.py:admin_update_role",
+   "auth": [
+    "role-restricted:admin"
+   ],
+   "owned_params": [
+    "user_id"
+   ]
+  },
+  {
+   "path": "/assignments/mine",
+   "method": "GET",
+   "function": "assessment.py:assignments_mine",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/auth/change-password",
+   "method": "POST",
+   "function": "auth.py:change_password",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/auth/forgot",
+   "method": "POST",
+   "function": "auth.py:forgot_password",
+   "auth": [
+    "unclassified"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/auth/impersonate/exit",
+   "method": "POST",
+   "function": "admin.py:impersonate_exit",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/auth/join-school",
+   "method": "POST",
+   "function": "school.py:auth_join_school",
+   "auth": [
+    "unclassified"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/auth/login",
+   "method": "POST",
+   "function": "auth.py:login",
+   "auth": [
+    "unclassified"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/auth/logout",
+   "method": "POST",
+   "function": "auth.py:logout",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/auth/mfa/challenge",
+   "method": "POST",
+   "function": "auth.py:mfa_challenge",
+   "auth": [
+    "unclassified"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/auth/mfa/disable",
+   "method": "POST",
+   "function": "auth.py:mfa_disable",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/auth/mfa/enroll",
+   "method": "POST",
+   "function": "auth.py:mfa_enroll",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/auth/mfa/verify",
+   "method": "POST",
+   "function": "auth.py:mfa_verify",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/auth/register",
+   "method": "POST",
+   "function": "auth.py:register",
+   "auth": [
+    "unclassified"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/auth/renew",
+   "method": "POST",
+   "function": "auth.py:renew_token",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/auth/resend-verification",
+   "method": "POST",
+   "function": "auth.py:resend_verification",
+   "auth": [
+    "unclassified"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/auth/reset",
+   "method": "POST",
+   "function": "auth.py:reset_password",
+   "auth": [
+    "unclassified"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/auth/verify-email",
+   "method": "POST",
+   "function": "auth.py:verify_email",
+   "auth": [
+    "unclassified"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/dashboard/summary",
+   "method": "GET",
+   "function": "learn.py:dashboard_summary",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/events",
+   "method": "POST",
+   "function": "tutor.py:record_event",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/feedback",
+   "method": "POST",
+   "function": "tutor.py:submit_feedback",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/health",
+   "method": "GET",
+   "function": "system.py:health",
+   "auth": [
+    "unclassified"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/kg/gaps",
+   "method": "GET",
+   "function": "learn.py:kg_gaps",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/kg/rebuild",
+   "method": "POST",
+   "function": "learn.py:kg_rebuild",
+   "auth": [
+    "role-restricted:admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/learn/progress",
+   "method": "GET",
+   "function": "learn.py:get_learn_progress",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/learn/progress",
+   "method": "POST",
+   "function": "learn.py:upsert_learn_progress",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/learn/subjects",
+   "method": "GET",
+   "function": "learn.py:learn_subjects",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/learn/subjects/{subject}/chapters",
+   "method": "GET",
+   "function": "learn.py:learn_subject_chapters",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/learn/subjects/{subject}/chapters/{chapter}",
+   "method": "GET",
+   "function": "learn.py:learn_chapter_content",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/live",
+   "method": "GET",
+   "function": "system.py:live",
+   "auth": [
+    "unclassified"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/metrics",
+   "method": "GET",
+   "function": "system.py:metrics",
+   "auth": [
+    "unclassified"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/notes",
+   "method": "GET",
+   "function": "workspace.py:list_notes",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/notes",
+   "method": "POST",
+   "function": "workspace.py:create_note",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/notes/{note_id}",
+   "method": "DELETE",
+   "function": "workspace.py:delete_note",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": [
+    "note_id"
+   ]
+  },
+  {
+   "path": "/notifications",
+   "method": "GET",
+   "function": "workspace.py:notifications_list",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/notifications/{notification_id}/read",
+   "method": "POST",
+   "function": "workspace.py:notification_mark_read",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": [
+    "notification_id"
+   ]
+  },
+  {
+   "path": "/parents/link",
+   "method": "POST",
+   "function": "parent.py:parent_link",
+   "auth": [
+    "role-restricted:parent"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/parents/link/invite",
+   "method": "POST",
+   "function": "parent.py:link_via_invite",
+   "auth": [
+    "role-restricted:parent"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/parents/me/children",
+   "method": "GET",
+   "function": "parent.py:parent_children",
+   "auth": [
+    "role-restricted:parent"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/parents/me/children/{student_id}/activity",
+   "method": "GET",
+   "function": "parent.py:parent_child_activity",
+   "auth": [
+    "role-restricted:parent"
+   ],
+   "owned_params": [
+    "student_id"
+   ]
+  },
+  {
+   "path": "/parents/me/children/{student_id}/progress",
+   "method": "GET",
+   "function": "parent.py:parent_child_progress",
+   "auth": [
+    "role-restricted:parent"
+   ],
+   "owned_params": [
+    "student_id"
+   ]
+  },
+  {
+   "path": "/parents/me/children/{student_id}/report",
+   "method": "GET",
+   "function": "parent.py:parent_child_report",
+   "auth": [
+    "role-restricted:parent"
+   ],
+   "owned_params": [
+    "student_id"
+   ]
+  },
+  {
+   "path": "/quizzes",
+   "method": "POST",
+   "function": "learn.py:start_quiz",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/quizzes/{attempt_id}/submit",
+   "method": "POST",
+   "function": "learn.py:submit_quiz",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": [
+    "attempt_id"
+   ]
+  },
+  {
+   "path": "/ready",
+   "method": "GET",
+   "function": "system.py:ready",
+   "auth": [
+    "unclassified"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/revision/due",
+   "method": "GET",
+   "function": "learn.py:get_revision_due",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/revision/{item_id}/review",
+   "method": "POST",
+   "function": "learn.py:review_revision_item",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": [
+    "item_id"
+   ]
+  },
+  {
+   "path": "/school/analytics",
+   "method": "GET",
+   "function": "school.py:school_analytics",
+   "auth": [
+    "role-restricted:teacher,school_admin,admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/school/classes",
+   "method": "GET",
+   "function": "school.py:school_classes",
+   "auth": [
+    "role-restricted:teacher,school_admin,admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/school/coverage",
+   "method": "GET",
+   "function": "school.py:school_coverage",
+   "auth": [
+    "role-restricted:teacher,school_admin,admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/school/overview",
+   "method": "GET",
+   "function": "school.py:school_health_overview",
+   "auth": [
+    "role-restricted:teacher,school_admin,admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/school/students",
+   "method": "GET",
+   "function": "school.py:school_students",
+   "auth": [
+    "role-restricted:teacher,school_admin,admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/school/teachers",
+   "method": "GET",
+   "function": "school.py:school_teachers",
+   "auth": [
+    "role-restricted:teacher,school_admin,admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/schools/mine",
+   "method": "GET",
+   "function": "school.py:school_my_overview",
+   "auth": [
+    "role-restricted:teacher,school_admin,admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/schools/{school_id}/classes",
+   "method": "POST",
+   "function": "school.py:school_class_register",
+   "auth": [
+    "role-restricted:teacher,school_admin,admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/schools/{school_id}/invites",
+   "method": "POST",
+   "function": "school.py:school_invite_create",
+   "auth": [
+    "role-restricted:teacher,school_admin,admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/search",
+   "method": "GET",
+   "function": "learn.py:global_search",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/shorttests/mine",
+   "method": "GET",
+   "function": "assessment.py:shorttests_mine",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/status",
+   "method": "GET",
+   "function": "system.py:status",
+   "auth": [
+    "unclassified"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/students/me/invite-code",
+   "method": "GET",
+   "function": "parent.py:list_parent_invites",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/students/me/invite-code",
+   "method": "POST",
+   "function": "parent.py:create_parent_invite",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/students/me/invite-code/{invite_id}",
+   "method": "DELETE",
+   "function": "parent.py:revoke_parent_invite",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": [
+    "invite_id"
+   ]
+  },
+  {
+   "path": "/students/me/memory",
+   "method": "DELETE",
+   "function": "parent.py:disable_my_memory",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/students/me/memory",
+   "method": "GET",
+   "function": "parent.py:get_my_memory",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/students/me/prefs",
+   "method": "GET",
+   "function": "parent.py:get_my_prefs",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/students/me/prefs",
+   "method": "PATCH",
+   "function": "parent.py:patch_my_prefs",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/students/me/report",
+   "method": "GET",
+   "function": "parent.py:student_self_report",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/students/{student_id}",
+   "method": "GET",
+   "function": "users.py:get_student",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": [
+    "student_id"
+   ]
+  },
+  {
+   "path": "/students/{student_id}/activity",
+   "method": "GET",
+   "function": "learn.py:get_activity",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": [
+    "student_id"
+   ]
+  },
+  {
+   "path": "/students/{student_id}/consent",
+   "method": "GET",
+   "function": "users.py:get_consent_status",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": [
+    "student_id"
+   ]
+  },
+  {
+   "path": "/students/{student_id}/consent/reconfirm",
+   "method": "POST",
+   "function": "users.py:post_consent_reconfirm",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": [
+    "student_id"
+   ]
+  },
+  {
+   "path": "/students/{student_id}/progress",
+   "method": "GET",
+   "function": "learn.py:get_progress",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": [
+    "student_id"
+   ]
+  },
+  {
+   "path": "/teacher/assignments",
+   "method": "GET",
+   "function": "assessment.py:teacher_assignment_list",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/teacher/assignments",
+   "method": "POST",
+   "function": "assessment.py:teacher_assignment_create",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/teacher/assignments/{assignment_id}/progress",
+   "method": "GET",
+   "function": "assessment.py:teacher_assignment_progress",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": [
+    "assignment_id"
+   ]
+  },
+  {
+   "path": "/teacher/classes/{class_level}/analytics",
+   "method": "GET",
+   "function": "teacher.py:teacher_analytics",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/teacher/classrooms",
+   "method": "GET",
+   "function": "teacher.py:teacher_list_classrooms",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/teacher/classrooms",
+   "method": "POST",
+   "function": "teacher.py:teacher_create_classroom",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/teacher/classrooms/{room_id}/import",
+   "method": "POST",
+   "function": "teacher.py:classroom_import",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": [
+    "room_id"
+   ]
+  },
+  {
+   "path": "/teacher/classrooms/{room_id}/roster",
+   "method": "GET",
+   "function": "teacher.py:classroom_roster",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": [
+    "room_id"
+   ]
+  },
+  {
+   "path": "/teacher/content",
+   "method": "GET",
+   "function": "teacher_content.py:teacher_content_get",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/teacher/content",
+   "method": "PUT",
+   "function": "teacher_content.py:teacher_content_edit",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/teacher/content/generate",
+   "method": "POST",
+   "function": "teacher_content.py:teacher_content_generate",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/teacher/content/history",
+   "method": "GET",
+   "function": "teacher_content.py:teacher_content_history",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/teacher/curriculum-coverage",
+   "method": "GET",
+   "function": "assessment.py:teacher_curriculum_coverage",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/teacher/documents",
+   "method": "GET",
+   "function": "teacher_content.py:teacher_documents_list",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/teacher/documents/{document_id}",
+   "method": "DELETE",
+   "function": "teacher_content.py:teacher_document_delete",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": [
+    "document_id"
+   ]
+  },
+  {
+   "path": "/teacher/documents/{document_id}",
+   "method": "GET",
+   "function": "teacher_content.py:teacher_document_get",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": [
+    "document_id"
+   ]
+  },
+  {
+   "path": "/teacher/documents/{document_id}/pdf",
+   "method": "GET",
+   "function": "teacher_content.py:teacher_document_pdf",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": [
+    "document_id"
+   ]
+  },
+  {
+   "path": "/teacher/generate/{kind}",
+   "method": "POST",
+   "function": "teacher_content.py:teacher_generate_document",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/teacher/jobs",
+   "method": "GET",
+   "function": "workspace.py:teacher_jobs_list",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/teacher/jobs",
+   "method": "POST",
+   "function": "workspace.py:teacher_job_create",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/teacher/jobs/{job_id}",
+   "method": "GET",
+   "function": "workspace.py:teacher_job_get",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": [
+    "job_id"
+   ]
+  },
+  {
+   "path": "/teacher/lesson-plans",
+   "method": "POST",
+   "function": "teacher_content.py:teacher_lesson_plan",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/teacher/qpapers",
+   "method": "GET",
+   "function": "teacher_content.py:teacher_qp_list",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/teacher/qpapers",
+   "method": "POST",
+   "function": "teacher_content.py:teacher_qp_create",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/teacher/qpapers/{qp_id}",
+   "method": "GET",
+   "function": "teacher_content.py:teacher_qp_get",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": [
+    "qp_id"
+   ]
+  },
+  {
+   "path": "/teacher/qpapers/{qp_id}/finalize",
+   "method": "POST",
+   "function": "teacher_content.py:teacher_qp_finalize",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": [
+    "qp_id"
+   ]
+  },
+  {
+   "path": "/teacher/qpapers/{qp_id}/pdf",
+   "method": "GET",
+   "function": "teacher_content.py:teacher_qp_pdf",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": [
+    "qp_id"
+   ]
+  },
+  {
+   "path": "/teacher/qpapers/{qp_id}/regenerate",
+   "method": "POST",
+   "function": "teacher_content.py:teacher_qp_regenerate",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": [
+    "qp_id"
+   ]
+  },
+  {
+   "path": "/teacher/qpapers/{qp_id}/replace",
+   "method": "POST",
+   "function": "teacher_content.py:teacher_qp_replace",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": [
+    "qp_id"
+   ]
+  },
+  {
+   "path": "/teacher/qpapers/{qp_id}/review",
+   "method": "POST",
+   "function": "teacher_content.py:teacher_qp_review",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": [
+    "qp_id"
+   ]
+  },
+  {
+   "path": "/teacher/qpapers/{qp_id}/shuffle",
+   "method": "POST",
+   "function": "teacher_content.py:teacher_qp_shuffle",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": [
+    "qp_id"
+   ]
+  },
+  {
+   "path": "/teacher/shorttests",
+   "method": "GET",
+   "function": "assessment.py:teacher_shorttest_list",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": [
+    "classroom_id"
+   ]
+  },
+  {
+   "path": "/teacher/shorttests",
+   "method": "POST",
+   "function": "assessment.py:teacher_shorttest_create",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/teacher/students",
+   "method": "GET",
+   "function": "teacher.py:teacher_roster",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/teacher/support-plans",
+   "method": "GET",
+   "function": "assessment.py:teacher_list_support_plans",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": [
+    "student_id"
+   ]
+  },
+  {
+   "path": "/teacher/support-plans",
+   "method": "POST",
+   "function": "assessment.py:teacher_create_support_plan",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/teacher/weak-matrix",
+   "method": "GET",
+   "function": "assessment.py:teacher_weak_matrix",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": [
+    "room_id"
+   ]
+  },
+  {
+   "path": "/teacher/workload",
+   "method": "GET",
+   "function": "workspace.py:teacher_workload",
+   "auth": [
+    "role-restricted:teacher,admin,school_admin"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/tutor/ask",
+   "method": "POST",
+   "function": "tutor.py:ask",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/tutor/conversations",
+   "method": "GET",
+   "function": "tutor.py:list_conversations",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/tutor/conversations",
+   "method": "POST",
+   "function": "tutor.py:create_conversation",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/tutor/conversations/{conversation_id}",
+   "method": "DELETE",
+   "function": "tutor.py:delete_conversation",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": [
+    "conversation_id"
+   ]
+  },
+  {
+   "path": "/tutor/conversations/{conversation_id}",
+   "method": "PATCH",
+   "function": "tutor.py:rename_conversation",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": [
+    "conversation_id"
+   ]
+  },
+  {
+   "path": "/tutor/conversations/{conversation_id}/messages",
+   "method": "GET",
+   "function": "tutor.py:conversation_messages",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": [
+    "conversation_id"
+   ]
+  },
+  {
+   "path": "/tutor/conversations/{conversation_id}/messages",
+   "method": "POST",
+   "function": "tutor.py:send_chat_message",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": [
+    "conversation_id"
+   ]
+  },
+  {
+   "path": "/tutor/conversations/{conversation_id}/messages/stream",
+   "method": "POST",
+   "function": "tutor.py:stream_chat_message",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": [
+    "conversation_id"
+   ]
+  },
+  {
+   "path": "/tutor/messages/search",
+   "method": "GET",
+   "function": "tutor.py:search_messages",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/users/me",
+   "method": "DELETE",
+   "function": "users.py:delete_me",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/users/me",
+   "method": "GET",
+   "function": "users.py:read_me",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/users/me/export",
+   "method": "GET",
+   "function": "users.py:export_me",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  },
+  {
+   "path": "/users/me/sessions/revoke",
+   "method": "POST",
+   "function": "users.py:revoke_my_sessions",
+   "auth": [
+    "authenticated"
+   ],
+   "owned_params": []
+  }
+ ],
+ "count": 141
+}

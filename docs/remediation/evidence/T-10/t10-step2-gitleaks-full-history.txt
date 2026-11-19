@@ -1,0 +1,20 @@
+Evidence-ID: EV-T00-t10-step2-gitleaks-full-history
+Captured-UTC: 2026-11-19T17:28:12.301577+00:00
+Finished-UTC: 2026-11-19T17:28:19.135038+00:00
+Base-SHA: f206ee2a5504253187cd9c6b9719010e6a2514f5
+Working-directory: .
+Command: gitleaks git . --log-opts=--all --config .gitleaks.toml --report-path docs/remediation/evidence/T-10/gitleaks-report.json --report-format json --redact --verbose
+Python: 3.12.10
+Exit-code: 0
+Duration-seconds: 6.828
+--- output ---
+
+    ○
+    │╲
+    │ ○
+    ○ ░
+    ░    gitleaks
+
+[90m11:28PM[0m [32mINF[0m [1m1176 commits scanned.[0m
+[90m11:28PM[0m [32mINF[0m [1mscanned ~30029581 bytes (30.03 MB) in 6.06s[0m
+[90m11:28PM[0m [32mINF[0m [1mno leaks found[0m

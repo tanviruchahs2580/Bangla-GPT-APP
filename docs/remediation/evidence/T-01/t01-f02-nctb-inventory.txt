@@ -1,0 +1,27 @@
+Evidence-ID: EV-T00-t01-f02-nctb-inventory
+Captured-UTC: 2026-11-19T15:35:08.467403+00:00
+Finished-UTC: 2026-11-19T15:35:11.188040+00:00
+Base-SHA: 31e3e60ba51b9dde54cfbcba0de4466f70c83917
+Working-directory: .
+Command: bash -c 'git ls-files data/nctb | head -30; echo '"'"'---tracked-under-nctb-end---'"'"'; git ls-files data/nctb | wc -l; ls data/nctb 2>/dev/null; echo '"'"'---dir-listing-end---'"'"'; grep -n '"'"'nctb'"'"' .gitignore; echo '"'"'---gitignore-end---'"'"'; gh repo view tanviruchahs2580/BANGLA-GPT-APP --json visibility,isPrivate --jq '"'"'{visibility: .visibility, isPrivate: .isPrivate}'"'"''
+Python: 3.12.10
+Exit-code: 0
+Duration-seconds: 2.718
+--- output ---
+data/nctb/manifests/acquisition_manifest.jsonl
+data/nctb/manifests/corpus_manifest.json
+data/nctb/quality_report.json
+data/nctb/retrieval_ablation.json
+data/nctb/retrieval_eval.json
+---tracked-under-nctb-end---
+5
+manifests
+quality_report.json
+retrieval_ablation.json
+retrieval_eval.json
+---dir-listing-end---
+95:data/nctb/raw/
+96:data/nctb/extracted/
+97:data/nctb/normalized/
+---gitignore-end---
+{"isPrivate":false,"visibility":"PUBLIC"}
