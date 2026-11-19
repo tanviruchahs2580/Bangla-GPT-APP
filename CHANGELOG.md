@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Maintenance
 
 - chore(ci): raise coverage ratchets to the measured baselines (T-16)
+- chore(repo): ignore apps/api/coverage.xml alongside the JSON report (T-10)
+- chore: regenerate the CHANGELOG
 - chore: regenerate the CHANGELOG for v0.15.0
 
 ### Other
