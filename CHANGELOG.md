@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - feat(api): T-12/BC-8 production boot guard for Argon2id parameters
 - feat(api): T-13/BC-2 role change ends sessions; T-13/BC-6 MFA-required-roles setting
+- feat(api): T-14/EG-7 provenance-labelled eval reporting and human-set scaffolding
 
 ### CI/CD
 
