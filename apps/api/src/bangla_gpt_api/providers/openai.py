@@ -30,6 +30,8 @@ from bangla_gpt_api.providers.base import (
     LLMProvider,
     ProviderError,
     ProviderSettings,
+    ProviderUsage,
+    UsageReportingMixin,
     backoff_delay_seconds,
     finish_stream,
     fit_timeout,
@@ -109,7 +111,7 @@ def _build_messages(prompt: str, system: str | None) -> list[dict]:
     return messages
 
 
-class OpenAIProvider(LLMProvider):
+class OpenAIProvider(LLMProvider, UsageReportingMixin):
     """OpenAI-compatible provider supporting both OpenAI and compatible APIs."""
 
     name = "openai"
@@ -270,9 +272,14 @@ class OpenAIProvider(LLMProvider):
 
             if response.status_code == 200:
                 try:
-                    text = _extract_text(response.json())
+                    body = response.json()
+                    text = _extract_text(body)
                     latency_ms = int((time.perf_counter() - start) * 1000)
                     PROVIDER_LATENCY_SECONDS.labels(provider=self.name).observe(latency_ms / 1000)
+                    # BC-9/T-23: usage taken from the provider-reported usage
+                    # block when present, char heuristic otherwise.
+                    usage = _openai_usage(body)
+                    self.record_usage(usage)
                     json_log(
                         logger,
                         logging.INFO,
@@ -282,6 +289,9 @@ class OpenAIProvider(LLMProvider):
                         prompt_chars=len(prompt),
                         answer_chars=len(text),
                         retries=attempt,
+                        usage_source=usage.usage_source,
+                        prompt_tokens=usage.prompt_tokens,
+                        completion_tokens=usage.completion_tokens,
                     )
                     return text
                 except ValueError as exc:
@@ -326,4 +336,26 @@ def build_openai_provider(settings: ProviderSettings, model: str | None = None) 
         timeout_seconds=settings.llm_timeout_seconds,
         max_retries=settings.llm_max_retries,
         max_output_tokens=settings.llm_max_output_tokens,
+    )
+
+
+def _openai_usage(body: dict) -> ProviderUsage:
+    """Extract the provider-reported usage block (BC-9/T-23); estimate
+    fallback labelled usage_source=estimated."""
+    usage = body.get("usage") or {}
+    try:
+        prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
+        completion_tokens = int(usage.get("completion_tokens", 0) or 0)
+        total = int(usage.get("total_tokens", prompt_tokens + completion_tokens) or 0)
+        if prompt_tokens or completion_tokens:
+            return ProviderUsage(
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total,
+                usage_source="provider",
+            )
+    except (TypeError, ValueError):
+        pass
+    return ProviderUsage(
+        prompt_tokens=0, completion_tokens=0, total_tokens=0, usage_source="estimated"
     )

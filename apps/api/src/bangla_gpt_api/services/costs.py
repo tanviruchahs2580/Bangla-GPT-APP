@@ -179,6 +179,8 @@ def finalize_ai_usage(
     *,
     model: str | None,
     answer_text: str | None,
+    completion_tokens_override: int | None = None,
+    prompt_tokens_override: int | None = None,
 ) -> None:
     """Update a reserved ledger row in place with the (possibly partial)
     answer. Adds or updates only; the CALLER's commit persists it.
@@ -192,7 +194,16 @@ def finalize_ai_usage(
     """
     if row is None:
         raise ValueError("finalize_ai_usage requires a reserved row")
-    completion_tokens = estimate_tokens(answer_text)
+    # BC-9/T-23: provider-reported counts (when the response carried a usage
+    # block) take precedence over the char heuristic; the caller decides and
+    # labels via usage_source in its log line.
+    completion_tokens = (
+        completion_tokens_override
+        if completion_tokens_override is not None
+        else estimate_tokens(answer_text)
+    )
+    if prompt_tokens_override is not None:
+        row.prompt_tokens = prompt_tokens_override
     row.model = ledger_model_name(model or row.model)
     row.completion_tokens = completion_tokens
     row.estimated_cost_usd = estimate_cost_usd(row.model, row.prompt_tokens, completion_tokens)
