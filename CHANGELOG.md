@@ -33,7 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Documentation
 
+- docs(remediation): T-02/T-80 UAT matrix from the executed journey suite
+- docs(remediation): T-15/T-37/T-70 — e2e classification, capacity smoke, version BLOCKED record
 - docs(remediation): T-17/T-27/T-28 inventories and boundary maps
+- docs(remediation): T-22/T-26/T-36 evidence — layering measurement, retrieval groundwork, restore drill
+- docs(remediation): T-29/T-30/T-33/T-34/T-35 verification records
 
 ### Tests
 
