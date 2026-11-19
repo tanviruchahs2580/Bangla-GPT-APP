@@ -369,3 +369,67 @@ Two security findings during the engineering audit (2026-10-09):
 Accepted — implemented in `auth/security.py` (AUD-0023, AUD-0028). Supersedes
 the password-hashing clause of ADR-0008; its `jti` revocation clause is
 unchanged.
+
+# ADR-0011: Session Revocation Coverage, MFA Enforcement Setting, and Token Storage
+
+## Context
+
+V2 remediation T-13 (BC-2/BC-6). Password change and reset already rotate the
+token epoch (`users.sessions_invalidated_at`), and logout parks a token's
+`jti` in the shared deny-list. A role change did not end sessions (N-01): a
+demoted user kept a fully valid 60-minute token — the database-backed role
+check denied the OLD role's routes, but the token itself stayed usable for
+everything else until natural expiry. TOTP MFA existed (RFC 6238,
+`auth/mfa.py`) but was optional for every role, including admin-class ones.
+Token storage on the web and Capacitor clients was unexamined in one place.
+
+## Decision
+
+1. **Role change rotates the token epoch.** `PATCH /admin/users/{id}/role`
+   stamps `sessions_invalidated_at` in the same transaction as the
+   `role_change` audit event, so every access token minted before the change
+   is refused on its next use (401 `session_expired` — the established epoch
+   code). Verified red-first (`tests/test_role_change_revocation.py`).
+   Account deletion needs no rotation: the erased user row makes every
+   lookup fail closed.
+2. **MFA enforcement ships as a setting, disabled.** `MFA_REQUIRED_ROLES`
+   (comma-separated, empty default = today's behaviour). A required-but-
+   unenrolled user keeps a session only for the enrolment endpoints plus the
+   session-less basics (`deps._mfa_enrollment_allowed`) — the same
+   restricted-waiver shape as the forced password change. Enabling it in a
+   deployment changes a user-visible default and is a recorded owner
+   decision (STOP S-3 in docs/remediation/STATE.md).
+3. **Token storage stays as-is; options recorded.** The browser and the
+   Capacitor WebView hold the bearer token in JavaScript-accessible storage;
+   any change (httpOnly cookie with CSRF, short-lived access + rotating
+   refresh, platform secure storage) is a cross-cutting client contract
+   change and remains STOP S-3. Recommendation recorded for the owner:
+   platform secure storage on Android (Capacitor Preferences with the
+   secure-storage plugin) first, an httpOnly-cookie session for the web as
+   the larger follow-up; both after 0.2.0.
+
+## Alternatives Considered
+
+- Per-token deny-list entries on role change (already the logout mechanism):
+  rejected — the epoch is per-account state the request path already reads,
+  while the deny-list needs a write per outstanding token and a cache write
+  per role change.
+- Blocking login entirely for required-but-unenrolled users: rejected —
+  enrolment itself needs an authenticated session; the restricted-waiver
+  shape lets the user enrol without granting the rest of the app.
+- Refresh tokens: rejected for 0.2.0 — no consumer exists; an additive
+  claim (`iat` epoch) already gives server-side invalidation without a new
+  token class.
+
+## Consequences
+
+- **+** BC-2 holds for logout, password change/reset, role change and account
+  deletion: pre-change tokens die on next use.
+- **+** MFA can be made mandatory per role without a code change, and the
+  shipped default provably keeps current behaviour.
+- **-** A role change now ends the target's sessions by design; tests that
+  rely on a token surviving a role change must mint after the change (the
+  existing suites were updated where needed).
+- **-** Second-precision epoch: tokens minted in the same second as the
+  rotation legitimately survive (documented in deps.py); tests use the
+  past-mint technique instead of sleeps.

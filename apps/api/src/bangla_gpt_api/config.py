@@ -253,6 +253,15 @@ class Settings(BaseSettings):
     # signing key) cannot be replayed here.
     jwt_issuer: str = "bangla-gpt-api"
     jwt_audience: str = "bangla-gpt-clients"
+    # T-13/BC-6: roles that MUST enrol in TOTP before they can use the app.
+    # Comma-separated role names ("teacher,school_admin,admin"); EMPTY by
+    # default, which is exactly the current behaviour (MFA exists but is
+    # optional for every role). A required-but-unenrolled user can still
+    # reach only the MFA enrolment endpoints plus the session-less basics
+    # (see deps._mfa_enrollment_allowed) -- the same restricted-waiver shape
+    # the must_change_password flow uses. Flipping this to a non-empty value
+    # in production changes a user-visible default: STOP S-3, owner decision.
+    mfa_required_roles: str = ""
     password_reset_token_minutes: int = 30
     # SEC-02: the length floor of the documented password policy (NIST
     # SP 800-63B-4 s3.1.1.2; see auth/security.py for the full citation).
