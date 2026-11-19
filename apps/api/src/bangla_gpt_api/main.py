@@ -140,6 +140,7 @@ def enforce_production_safety(settings: Settings) -> None:
     for validator in (
         _validate_smtp,
         _validate_jwt,
+        _validate_password_hash_parameters,
         _validate_admin,
         _validate_cors,
         _validate_database,
@@ -243,6 +244,32 @@ def _validate_admin(settings: Settings) -> list[str]:
     elif len(settings.admin_password) < 12:
         problems.append("ADMIN_PASSWORD must be at least 12 characters in production")
     return problems
+
+
+def _validate_password_hash_parameters(settings: Settings) -> list[str]:
+    """BC-8: production refuses Argon2id parameters below the OWASP floor.
+
+    The parameters are module constants, not settings, so they cannot drift
+    through the environment -- but they CAN drift through an edit, and the
+    unit test that pins them only runs when someone touches the test suite.
+    This guard makes a below-floor constant refuse to boot in production the
+    same way a weak JWT secret does. The floor mirrors the OWASP Password
+    Storage Cheat Sheet floor the hashing module documents (m >= 19 MiB,
+    t >= 2, p >= 1).
+    """
+    from bangla_gpt_api.auth.security import (
+        ARGON2_MEMORY_COST_KIB,
+        ARGON2_PARALLELISM,
+        ARGON2_TIME_COST,
+    )
+
+    if ARGON2_MEMORY_COST_KIB < 19 * 1024 or ARGON2_TIME_COST < 2 or ARGON2_PARALLELISM < 1:
+        return [
+            f"Argon2id parameters are below the OWASP floor "
+            f"(m={ARGON2_MEMORY_COST_KIB} KiB, t={ARGON2_TIME_COST}, p={ARGON2_PARALLELISM}); "
+            "production refuses to hash passwords below m>=19MiB, t>=2, p>=1"
+        ]
+    return []
 
 
 def _validate_cors(settings: Settings) -> list[str]:
