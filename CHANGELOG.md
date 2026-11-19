@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - feat(api): T-12/BC-8 production boot guard for Argon2id parameters
 - feat(api): T-13/BC-2 role change ends sessions; T-13/BC-6 MFA-required-roles setting
 - feat(api): T-14/EG-7 provenance-labelled eval reporting and human-set scaffolding
+- feat(api): T-32/BC-8 refuse inline scheduler loops with multiple workers
 
 ### Fixed
 
@@ -26,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### CI/CD
 
 - ci: add the missing job timeout to automerge (T-16)
+
+### Documentation
+
+- docs(remediation): T-17/T-27/T-28 inventories and boundary maps
 
 ### Tests
 
