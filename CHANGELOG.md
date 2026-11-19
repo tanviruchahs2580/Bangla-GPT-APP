@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Documentation
 
+- docs(remediation): STATE rows for T-15/22/25/26/29/30/33/34/35/36/37/70/80; N-04 recorded
 - docs(remediation): T-02/T-80 UAT matrix from the executed journey suite
 - docs(remediation): T-15/T-37/T-70 — e2e classification, capacity smoke, version BLOCKED record
 - docs(remediation): T-17/T-27/T-28 inventories and boundary maps
@@ -42,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Tests
 
 - test(api): T-11 route classification file, guard tests, authz matrix
+- test(api): T-90 fresh-clone gate repair — FK-policy invariant covers later revisions
 
 ### Maintenance
 
