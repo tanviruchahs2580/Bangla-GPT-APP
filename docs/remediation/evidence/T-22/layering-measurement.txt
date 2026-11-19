@@ -1,0 +1,57 @@
+== LOC per module family ==
+routers: 11647 lines / 19 files
+services: 10436 lines / 43 files
+evaluation: 3410 lines / 12 files
+retrieval: 3370 lines / 20 files
+nctb: 2533 lines / 11 files
+providers: 1694 lines / 6 files
+schemas.py: 1676 lines / 1 files
+db: 1465 lines / 4 files
+initialize: 1235 lines / 6 files
+main.py: 930 lines / 1 files
+config.py: 581 lines / 1 files
+auth: 540 lines / 5 files
+data: 538 lines / 3 files
+middleware.py: 454 lines / 1 files
+logging_config.py: 422 lines / 1 files
+caching.py: 381 lines / 1 files
+jobs.py: 343 lines / 1 files
+metrics.py: 185 lines / 1 files
+security.py: 185 lines / 1 files
+ingestion: 165 lines / 3 files
+ratelimit.py: 149 lines / 1 files
+curriculum: 21 lines / 1 files
+__init__.py: 0 lines / 1 files
+== largest routers ==
+tutor.py: 1273
+teacher_content.py: 1199
+school.py: 1181
+learn.py: 1113
+auth.py: 1085
+assessment.py: 926
+== churn (last 90 days, commits touching each family) ==
+routers: 246 commits
+services: 222 commits
+retrieval: 78 commits
+config.py: 55 commits
+providers: 51 commits
+main.py: 51 commits
+initialize: 44 commits
+nctb: 44 commits
+db: 41 commits
+evaluation: 37 commits
+== import-linter contracts (enforced in CI) ==
+; Dependency-direction contracts for the API package (ARCH-02 / F-069).
+;
+; The layering was convention-only: nothing failed when a persistence module
+; imported a service or an evaluation helper reached into the routers. These
+; contracts encode the directions that hold today and that a reviewer would
+; reject a change to; they run in CI (`lint-imports`).
+;
+; Not expressed here: a single strict layer list. Two edges make that
+; impossible without a refactor (services <-> providers both import each
+; other: the mock provider reuses the answer-structure helpers, and the gemini
+; provider reads the request context that services set up). The contracts
+; below are the subset that is true and worth enforcing; widening them is a
+; follow-up once those two edges are broken.
+
