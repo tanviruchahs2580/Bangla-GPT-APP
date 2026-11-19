@@ -1,0 +1,289 @@
+Evidence-ID: EV-T00-t15-e2e-chromium-run1b
+Captured-UTC: 2026-11-19T19:09:01.475318+00:00
+Finished-UTC: 2026-11-19T19:45:49.352230+00:00
+Base-SHA: 94766877d62b812f3142479131f32db4b6c370d6
+Working-directory: apps/web
+Command: node 'C:/Program Files/nodejs/node_modules/npm/bin/npm-cli.js' run test:e2e
+Python: 3.12.10
+Exit-code: 1
+Duration-seconds: 2207.875
+--- output ---
+
+> bangla-gpt-web@0.15.0 test:e2e
+> playwright test
+
+[WebServer] INFO:     Started server process [42808]
+[WebServer] INFO:     Waiting for application startup.
+[WebServer] INFO:     Application startup complete.
+[WebServer] INFO:     Uvicorn running on http://127.0.0.1:8010 (Press CTRL+C to quit)
+
+Running 227 tests using 1 worker
+
+  ok   1 [chromium] › e2e\00-identity.spec.ts:14:1 › the harness is serving THIS app (48.2s)
+  ok   2 [chromium] › e2e\axe.spec.ts:62:3 › [public] axe serious/critical = 0 (light-bn) (25.2s)
+  ok   3 [chromium] › e2e\axe.spec.ts:62:3 › [public] axe serious/critical = 0 (light-en) (21.1s)
+  ok   4 [chromium] › e2e\axe.spec.ts:62:3 › [public] axe serious/critical = 0 (dark-bn) (21.6s)
+  ok   5 [chromium] › e2e\axe.spec.ts:62:3 › [public] axe serious/critical = 0 (dark-en) (19.2s)
+  ok   6 [chromium] › e2e\axe.spec.ts:79:5 › [student] axe serious/critical = 0 (light-bn) (29.6s)
+  ok   7 [chromium] › e2e\axe.spec.ts:79:5 › [student] axe serious/critical = 0 (light-en) (24.1s)
+  ok   8 [chromium] › e2e\axe.spec.ts:79:5 › [student] axe serious/critical = 0 (dark-bn) (20.6s)
+  ok   9 [chromium] › e2e\axe.spec.ts:79:5 › [student] axe serious/critical = 0 (dark-en) (20.8s)
+  ok  10 [chromium] › e2e\axe.spec.ts:79:5 › [teacher] axe serious/critical = 0 (light-bn) (20.5s)
+  ok  11 [chromium] › e2e\axe.spec.ts:79:5 › [teacher] axe serious/critical = 0 (light-en) (20.2s)
+  ok  12 [chromium] › e2e\axe.spec.ts:79:5 › [teacher] axe serious/critical = 0 (dark-bn) (19.3s)
+  ok  13 [chromium] › e2e\axe.spec.ts:79:5 › [teacher] axe serious/critical = 0 (dark-en) (19.0s)
+  ok  14 [chromium] › e2e\axe.spec.ts:79:5 › [parent] axe serious/critical = 0 (light-bn) (7.7s)
+  ok  15 [chromium] › e2e\axe.spec.ts:79:5 › [parent] axe serious/critical = 0 (light-en) (6.1s)
+  ok  16 [chromium] › e2e\axe.spec.ts:79:5 › [parent] axe serious/critical = 0 (dark-bn) (5.2s)
+  ok  17 [chromium] › e2e\axe.spec.ts:79:5 › [parent] axe serious/critical = 0 (dark-en) (5.2s)
+  ok  18 [chromium] › e2e\axe.spec.ts:79:5 › [admin] axe serious/critical = 0 (light-bn) (6.6s)
+  ok  19 [chromium] › e2e\axe.spec.ts:79:5 › [admin] axe serious/critical = 0 (light-en) (8.2s)
+  ok  20 [chromium] › e2e\axe.spec.ts:79:5 › [admin] axe serious/critical = 0 (dark-bn) (6.8s)
+  ok  21 [chromium] › e2e\axe.spec.ts:79:5 › [admin] axe serious/critical = 0 (dark-en) (7.0s)
+  ok  22 [chromium] › e2e\axe.spec.ts:79:5 › [school_admin] axe serious/critical = 0 (light-bn) (5.4s)
+  ok  23 [chromium] › e2e\axe.spec.ts:79:5 › [school_admin] axe serious/critical = 0 (light-en) (6.8s)
+  ok  24 [chromium] › e2e\axe.spec.ts:79:5 › [school_admin] axe serious/critical = 0 (dark-bn) (6.2s)
+  ok  25 [chromium] › e2e\axe.spec.ts:79:5 › [school_admin] axe serious/critical = 0 (dark-en) (6.0s)
+  ok  26 [chromium] › e2e\crawl.spec.ts:174:1 › public routes crawl clean (links, controls, headings) (9.8s)
+  ok  27 [chromium] › e2e\crawl.spec.ts:182:3 › student routes crawl clean and the shell navigates (14.2s)
+  ok  28 [chromium] › e2e\crawl.spec.ts:182:3 › teacher routes crawl clean and the shell navigates (15.4s)
+  ok  29 [chromium] › e2e\crawl.spec.ts:182:3 › parent routes crawl clean and the shell navigates (5.6s)
+  ok  30 [chromium] › e2e\crawl.spec.ts:182:3 › admin routes crawl clean and the shell navigates (6.4s)
+  ok  31 [chromium] › e2e\crawl.spec.ts:182:3 › school_admin routes crawl clean and the shell navigates (5.6s)
+  ok  32 [chromium] › e2e\crawl.spec.ts:217:1 › each role is denied the other roles home (guard, not styling) (5.9s)
+  ok  33 [chromium] › e2e\engines.spec.ts:82:3 › Bangla conjuncts render unclipped in this engine (bn) (2.3s)
+  ok  34 [chromium] › e2e\engines.spec.ts:82:3 › Bangla conjuncts render unclipped in this engine (en) (2.3s)
+  ok  35 [chromium] › e2e\engines.spec.ts:160:1 › no letter-spacing is applied to Bangla text, in any engine (2.2s)
+  ok  36 [chromium] › e2e\engines.spec.ts:188:1 › only loaded font weights are used for Bangla (no synthetic bold) (2.3s)
+  ok  37 [chromium] › e2e\engines.spec.ts:238:1 › Intl: bn-BD numbers, dates, plurals and collation behave in this engine (2.3s)
+  ok  38 [chromium] › e2e\engines.spec.ts:313:1 › the app formats API dates in the app language, not the browser language (2.5s)
+  ok  39 [chromium] › e2e\keyboard.spec.ts:122:1 › the first keyboard stop on a public page is the skip link, and it jumps to main (3.8s)
+  ok  40 [chromium] › e2e\keyboard.spec.ts:150:1 › login form runs in visual order and signs in with Enter alone (3.8s)
+  ok  41 [chromium] › e2e\keyboard.spec.ts:177:1 › student opens the tutor, sends with Enter and the evidence dialog traps and restores focus (13.6s)
+  ok  42 [chromium] › e2e\keyboard.spec.ts:230:1 › teacher reaches the classes screen by keyboard and every focus stop is visible (4.1s)
+  ok  43 [chromium] › e2e\keyboard.spec.ts:247:1 › parent form is operable by keyboard and reports an invalid code accessibly (3.5s)
+  ok  44 [chromium] › e2e\keyboard.spec.ts:262:1 › admin searches users by keyboard alone (5.2s)
+  ok  45 [chromium] › e2e\keyboard.spec.ts:276:1 › school admin dashboard is reachable and tabbable (4.4s)
+  -   46 [chromium] › e2e\offline-shell.spec.ts:37:1 › the service worker installs, caches the hashed bundle, and boots offline
+  -   47 [chromium] › e2e\offline-shell.spec.ts:82:1 › API responses are never served from the cache
+  -   48 [chromium] › e2e\perf.spec.ts:109:1 › tutor thread with 120 messages streams a new answer at 4x CPU throttle
+  ok  49 [chromium] › e2e\perf.spec.ts:169:1 › maximal roster CSV import (200 rows) at 4x CPU throttle (52.2s)
+  -   50 [chromium] › e2e\perf.spec.ts:245:1 › tutor history renders at 6x CPU throttle without a >100 ms task
+  ok  51 [chromium] › e2e\qa-flows.spec.ts:177:1 › ANON-02 status page shows real component checks and no sensitive payload (1.9s)
+  ok  52 [chromium] › e2e\qa-flows.spec.ts:225:1 › ANON-04 unknown email and wrong password give the same refusal, and success signs in (8.9s)
+  ok  53 [chromium] › e2e\qa-flows.spec.ts:246:1 › X-11 kill switch (generation enabled): tutor, search, reader and quizzes all work (4.7s)
+  ok  54 [chromium] › e2e\qa-flows.spec.ts:307:1 › X-01 role switching in one browser leaves no student data in the teacher shell (12.0s)
+  ok  55 [chromium] › e2e\qa-flows.spec.ts:403:1 › ADM-05 impersonation: start, support banner, exit, audit trail (7.7s)
+  ok  56 [chromium] › e2e\qa-flows.spec.ts:465:1 › ADM-03 retention purge: dry-run shape, real run through the UI, audit row (4.7s)
+  ok  57 [chromium] › e2e\qa-flows.spec.ts:528:1 › ADM-07 k-anonymity: a one-student cohort is suppressed and the floor cannot be lowered (7.7s)
+  ok  58 [chromium] › e2e\qa-flows.spec.ts:584:1 › SAD-03 school A cannot read or write school B by ID (8.2s)
+  ok  59 [chromium] › e2e\qa-flows.spec.ts:650:1 › PAR-04 another child's data cannot be read by ID (14.2s)
+  ok  60 [chromium] › e2e\qa-flows.spec.ts:727:1 › PAR-03 parent report is built from real activity and renders in Bangla (8.7s)
+  ok  61 [chromium] › e2e\qa-flows.spec.ts:813:1 › STU-13 notification bell: unread count, item copy, read semantics (10.1s)
+  x   62 [chromium] › e2e\qa-flows.spec.ts:869:1 › STU-16 export returns the full sections and deletion removes the account (41.1s)
+  ok  63 [chromium] › e2e\qa-flows.spec.ts:962:1 › STU-08 save to notes, list, delete, and thumbs feedback reaches triage (16.2s)
+  ok  64 [chromium] › e2e\qa-flows.spec.ts:1038:1 › STU-14 AI memory view, edit, disable, and the next ask still works (12.4s)
+  ok  65 [chromium] › e2e\qa-flows.spec.ts:1110:1 › STU-03 history persists across reload and re-login, and New chat clears it (14.6s)
+  ok  66 [chromium] › e2e\reflow.spec.ts:114:3 › reflow: welcome at every named width, no overflow (15.7s)
+  ok  67 [chromium] › e2e\reflow.spec.ts:114:3 › reflow: login at every named width, no overflow (11.8s)
+  ok  68 [chromium] › e2e\reflow.spec.ts:114:3 › reflow: register at every named width, no overflow (12.0s)
+  ok  69 [chromium] › e2e\reflow.spec.ts:114:3 › reflow: status at every named width, no overflow (9.4s)
+  ok  70 [chromium] › e2e\reflow.spec.ts:114:3 › reflow: legal at every named width, no overflow (10.0s)
+  ok  71 [chromium] › e2e\reflow.spec.ts:114:3 › reflow: student-home at every named width, no overflow (17.0s)
+  ok  72 [chromium] › e2e\reflow.spec.ts:114:3 › reflow: student-tutor at every named width, no overflow (14.7s)
+  ok  73 [chromium] › e2e\reflow.spec.ts:114:3 › reflow: teacher-home at every named width, no overflow (16.1s)
+  ok  74 [chromium] › e2e\reflow.spec.ts:137:1 › reflow: 200% text resize keeps the layout inside the viewport (28.0s)
+  ok  75 [chromium] › e2e\reflow.spec.ts:172:1 › text at 200% is not clipped by its own box (2.9s)
+  ok  76 [chromium] › e2e\reflow.spec.ts:197:1 › reduced motion: the app ships no animation and still renders (4.2s)
+  ok  77 [chromium] › e2e\reflow.spec.ts:240:1 › reduced motion: skeletons stop shimmering instead of disappearing (4.2s)
+  ok  78 [chromium] › e2e\resilience.spec.ts:57:1 › loading: a slow API shows skeletons, never a bare spinner (4.6s)
+  ok  79 [chromium] › e2e\resilience.spec.ts:72:1 › error: a failing API shows an actionable message, and retry recovers (6.5s)
+  ok  80 [chromium] › e2e\resilience.spec.ts:107:1 › error copy is English when the UI is English, Bangla when it is Bangla (5.4s)
+  ok  81 [chromium] › e2e\resilience.spec.ts:123:1 › offline: the banner appears, and the message is the app copy (5.2s)
+  ok  82 [chromium] › e2e\resilience.spec.ts:157:1 › slow 3G: the flows still complete, with skeletons in between (3.0m)
+  ok  83 [chromium] › e2e\resilience.spec.ts:194:1 › permission-denied: a student cannot open a teacher screen, and is told so (5.9s)
+  ok  84 [chromium] › e2e\resilience.spec.ts:204:1 › empty: a teacher with no classes gets a next step, not a blank screen (5.1s)
+  ok  85 [chromium] › e2e\screen-reader.spec.ts:23:1 › login screen accessible tree and language (bn), reviewed ARIA baseline (2.9s)
+  ok  86 [chromium] › e2e\screen-reader.spec.ts:40:1 › language switch moves html lang to en and the tree follows (3.0s)
+  ok  87 [chromium] › e2e\screen-reader.spec.ts:50:1 › tutor screen landmarks, live region and reviewed ARIA baseline (bn) (5.0s)
+  ok  88 [chromium] › e2e\screen-reader.spec.ts:72:1 › a completed streamed answer is announced exactly once, in the live region (6.5s)
+  ok  89 [chromium] › e2e\session.spec.ts:34:1 › a token from a signed-out session is rejected by the API (5.1s)
+  ok  90 [chromium] › e2e\smoke.spec.ts:66:1 › a student signs in, is routed to the student home and can log out (4.3s)
+  ok  91 [chromium] › e2e\smoke.spec.ts:86:1 › a guardian-consented student registers and lands on the student home (3.9s)
+  ok  92 [chromium] › e2e\smoke.spec.ts:113:1 › a student asks the tutor and gets a streamed mock answer (5.9s)
+  ok  93 [chromium] › e2e\smoke.spec.ts:151:1 › an out-of-corpus question is refused with the grounding message (5.2s)
+  ok  94 [chromium] › e2e\smoke.spec.ts:177:1 › a student completes a quiz attempt end to end (11.1s)
+  ok  95 [chromium] › e2e\smoke.spec.ts:208:1 › a teacher signs in and sees the teacher dashboard (3.0s)
+  ok  96 [chromium] › e2e\smoke.spec.ts:220:1 › a student generates a parent invite code and the parent links with it (9.3s)
+  ok  97 [chromium] › e2e\smoke.spec.ts:244:1 › an admin signs in and sees the admin dashboard (2.9s)
+  -   98 [chromium] › e2e\store-listing.spec.ts:110:5 › Play Store listing assets › screenshot: welcome (bn + en)
+  -   99 [chromium] › e2e\store-listing.spec.ts:110:5 › Play Store listing assets › screenshot: login (bn + en)
+  -  100 [chromium] › e2e\store-listing.spec.ts:110:5 › Play Store listing assets › screenshot: student-home (bn + en)
+  -  101 [chromium] › e2e\store-listing.spec.ts:110:5 › Play Store listing assets › screenshot: student-tutor (bn + en)
+  -  102 [chromium] › e2e\store-listing.spec.ts:110:5 › Play Store listing assets › screenshot: student-practice (bn + en)
+  -  103 [chromium] › e2e\store-listing.spec.ts:110:5 › Play Store listing assets › screenshot: teacher-dashboard (bn + en)
+  -  104 [chromium] › e2e\store-listing.spec.ts:143:3 › Play Store listing assets › captions file matches the captured screens
+  -  105 [chromium] › e2e\store-listing.spec.ts:155:3 › Play Store listing assets › feature graphic 1024x500
+  ok 106 [chromium] › e2e\visual.spec.ts:83:7 › visual: welcome--light-bn--360 (2.5s)
+  ok 107 [chromium] › e2e\visual.spec.ts:83:7 › visual: welcome--light-bn--768 (3.7s)
+  ok 108 [chromium] › e2e\visual.spec.ts:83:7 › visual: welcome--light-bn--1280 (4.0s)
+  ok 109 [chromium] › e2e\visual.spec.ts:83:7 › visual: welcome--light-en--360 (2.8s)
+  ok 110 [chromium] › e2e\visual.spec.ts:83:7 › visual: welcome--light-en--768 (3.6s)
+  ok 111 [chromium] › e2e\visual.spec.ts:83:7 › visual: welcome--light-en--1280 (4.9s)
+  ok 112 [chromium] › e2e\visual.spec.ts:83:7 › visual: welcome--dark-bn--360 (2.7s)
+  ok 113 [chromium] › e2e\visual.spec.ts:83:7 › visual: welcome--dark-bn--768 (3.4s)
+  ok 114 [chromium] › e2e\visual.spec.ts:83:7 › visual: welcome--dark-bn--1280 (3.6s)
+  ok 115 [chromium] › e2e\visual.spec.ts:83:7 › visual: welcome--dark-en--360 (2.3s)
+  ok 116 [chromium] › e2e\visual.spec.ts:83:7 › visual: welcome--dark-en--768 (3.2s)
+  ok 117 [chromium] › e2e\visual.spec.ts:83:7 › visual: welcome--dark-en--1280 (3.8s)
+  ok 118 [chromium] › e2e\visual.spec.ts:83:7 › visual: login--light-bn--360 (2.9s)
+  ok 119 [chromium] › e2e\visual.spec.ts:83:7 › visual: login--light-bn--768 (3.2s)
+  ok 120 [chromium] › e2e\visual.spec.ts:83:7 › visual: login--light-bn--1280 (5.0s)
+  ok 121 [chromium] › e2e\visual.spec.ts:83:7 › visual: login--light-en--360 (3.0s)
+  ok 122 [chromium] › e2e\visual.spec.ts:83:7 › visual: login--light-en--768 (3.7s)
+  ok 123 [chromium] › e2e\visual.spec.ts:83:7 › visual: login--light-en--1280 (3.9s)
+  ok 124 [chromium] › e2e\visual.spec.ts:83:7 › visual: login--dark-bn--360 (2.9s)
+  ok 125 [chromium] › e2e\visual.spec.ts:83:7 › visual: login--dark-bn--768 (4.2s)
+  ok 126 [chromium] › e2e\visual.spec.ts:83:7 › visual: login--dark-bn--1280 (3.8s)
+  ok 127 [chromium] › e2e\visual.spec.ts:83:7 › visual: login--dark-en--360 (2.6s)
+  ok 128 [chromium] › e2e\visual.spec.ts:83:7 › visual: login--dark-en--768 (3.6s)
+  ok 129 [chromium] › e2e\visual.spec.ts:83:7 › visual: login--dark-en--1280 (3.6s)
+  ok 130 [chromium] › e2e\visual.spec.ts:83:7 › visual: student-home--light-bn--360 (5.9s)
+  ok 131 [chromium] › e2e\visual.spec.ts:83:7 › visual: student-home--light-bn--768 (5.9s)
+  ok 132 [chromium] › e2e\visual.spec.ts:83:7 › visual: student-home--light-bn--1280 (6.4s)
+  ok 133 [chromium] › e2e\visual.spec.ts:83:7 › visual: student-home--light-en--360 (5.8s)
+  ok 134 [chromium] › e2e\visual.spec.ts:83:7 › visual: student-home--light-en--768 (6.1s)
+  ok 135 [chromium] › e2e\visual.spec.ts:83:7 › visual: student-home--light-en--1280 (7.1s)
+  ok 136 [chromium] › e2e\visual.spec.ts:83:7 › visual: student-home--dark-bn--360 (5.3s)
+  ok 137 [chromium] › e2e\visual.spec.ts:83:7 › visual: student-home--dark-bn--768 (5.6s)
+  ok 138 [chromium] › e2e\visual.spec.ts:83:7 › visual: student-home--dark-bn--1280 (5.5s)
+  ok 139 [chromium] › e2e\visual.spec.ts:83:7 › visual: student-home--dark-en--360 (5.0s)
+  ok 140 [chromium] › e2e\visual.spec.ts:83:7 › visual: student-home--dark-en--768 (5.8s)
+  ok 141 [chromium] › e2e\visual.spec.ts:83:7 › visual: student-home--dark-en--1280 (6.4s)
+  ok 142 [chromium] › e2e\visual.spec.ts:83:7 › visual: student-tutor--light-bn--360 (4.6s)
+  ok 143 [chromium] › e2e\visual.spec.ts:83:7 › visual: student-tutor--light-bn--768 (5.2s)
+  ok 144 [chromium] › e2e\visual.spec.ts:83:7 › visual: student-tutor--light-bn--1280 (6.2s)
+  ok 145 [chromium] › e2e\visual.spec.ts:83:7 › visual: student-tutor--light-en--360 (4.4s)
+  ok 146 [chromium] › e2e\visual.spec.ts:83:7 › visual: student-tutor--light-en--768 (4.7s)
+  ok 147 [chromium] › e2e\visual.spec.ts:83:7 › visual: student-tutor--light-en--1280 (5.2s)
+  ok 148 [chromium] › e2e\visual.spec.ts:83:7 › visual: student-tutor--dark-bn--360 (5.3s)
+  ok 149 [chromium] › e2e\visual.spec.ts:83:7 › visual: student-tutor--dark-bn--768 (5.5s)
+  ok 150 [chromium] › e2e\visual.spec.ts:83:7 › visual: student-tutor--dark-bn--1280 (5.8s)
+  ok 151 [chromium] › e2e\visual.spec.ts:83:7 › visual: student-tutor--dark-en--360 (4.6s)
+  ok 152 [chromium] › e2e\visual.spec.ts:83:7 › visual: student-tutor--dark-en--768 (6.1s)
+  ok 153 [chromium] › e2e\visual.spec.ts:83:7 › visual: student-tutor--dark-en--1280 (5.2s)
+  ok 154 [chromium] › e2e\visual.spec.ts:83:7 › visual: teacher-home--light-bn--360 (4.9s)
+  ok 155 [chromium] › e2e\visual.spec.ts:83:7 › visual: teacher-home--light-bn--768 (5.2s)
+  ok 156 [chromium] › e2e\visual.spec.ts:83:7 › visual: teacher-home--light-bn--1280 (6.6s)
+  ok 157 [chromium] › e2e\visual.spec.ts:83:7 › visual: teacher-home--light-en--360 (4.7s)
+  ok 158 [chromium] › e2e\visual.spec.ts:83:7 › visual: teacher-home--light-en--768 (6.2s)
+  ok 159 [chromium] › e2e\visual.spec.ts:83:7 › visual: teacher-home--light-en--1280 (7.9s)
+  ok 160 [chromium] › e2e\visual.spec.ts:83:7 › visual: teacher-home--dark-bn--360 (5.3s)
+  ok 161 [chromium] › e2e\visual.spec.ts:83:7 › visual: teacher-home--dark-bn--768 (5.4s)
+  ok 162 [chromium] › e2e\visual.spec.ts:83:7 › visual: teacher-home--dark-bn--1280 (5.2s)
+  ok 163 [chromium] › e2e\visual.spec.ts:83:7 › visual: teacher-home--dark-en--360 (4.4s)
+  ok 164 [chromium] › e2e\visual.spec.ts:83:7 › visual: teacher-home--dark-en--768 (4.8s)
+  ok 165 [chromium] › e2e\visual.spec.ts:83:7 › visual: teacher-home--dark-en--1280 (5.1s)
+  ok 166 [chromium] › e2e\w2-a11y.spec.ts:53:1 › reader TTS control is named and exposes its pressed state (5.1s)
+  ok 167 [chromium] › e2e\w2-a11y.spec.ts:86:1 › every rendered image carries an alt attribute on the key routes (11.4s)
+  ok 168 [chromium] › e2e\w2-a11y.spec.ts:114:1 › axe: zero serious/critical violations on the reader and tutor routes (10.7s)
+  ok 169 [chromium] › e2e\w2-a11y.spec.ts:169:1 › the chapter ask tab is labelled, announces its answer, and passes axe (8.9s)
+  ok 170 [chromium] › e2e\w2-c1-flows.spec.ts:107:1 › STU-06 an unsafe prompt gets the supportive refusal and nothing harmful is stored (6.2s)
+  ok 171 [chromium] › e2e\w2-c1-flows.spec.ts:178:1 › STU-07 image question: valid, wrong-type, oversized and corrupted attachments (7.4s)
+  ok 172 [chromium] › e2e\w2-c1-flows.spec.ts:248:1 › STU-10 revision mini-quiz drains a due item and the heatmap matches activity (8.4s)
+  ok 173 [chromium] › e2e\w2-c1-flows.spec.ts:368:1 › STU-11 reader: chapter opens, bookmark and font scale persist, TTS toggles (9.0s)
+  ok 174 [chromium] › e2e\w2-c1-flows.spec.ts:436:1 › STU-11 the offline copy appears in the library and can be deleted (9.1s)
+  ok 175 [chromium] › e2e\w2-c1-flows.spec.ts:468:1 › STU-11 the quiz's explain-this deep link lands in the tutor with the question pre-asked (11.5s)
+  ok 176 [chromium] › e2e\w2-c1-flows.spec.ts:524:1 › STU-12 unified search: three Bangla surface forms return the same hits (8.0s)
+  ok 177 [chromium] › e2e\w2-c1-flows.spec.ts:605:1 › FE-05 every client call exists in the served OpenAPI schema (4.0s)
+  ok 178 [chromium] › e2e\w2-flows.spec.ts:274:1 › ANON-01 welcome toggle switches the copy and the error strings, console stays clean (10.9s)
+  ok 179 [chromium] › e2e\w2-flows.spec.ts:316:1 › ANON-03 role registration paths and the validation matrix (14.4s)
+  ok 180 [chromium] › e2e\w2-flows.spec.ts:391:1 › ANON-04 repeated failed sign-ins are refused with a 429 at the account bound (17.0s)
+  ok 181 [chromium] › e2e\w2-flows.spec.ts:441:1 › ANON-05 forgot-password is enumeration-safe and a bad token is refused (8.0s)
+  ok 182 [chromium] › e2e\w2-flows.spec.ts:478:1 › ANON-07 unknown routes show the not-found page, a forbidden area is bounced, and a 500 keeps app copy (10.4s)
+  ok 183 [chromium] › e2e\w2-flows.spec.ts:537:1 › X-11 kill switch (generation enabled): tutor, search, reader and quizzes all work (6.1s)
+  ok 184 [chromium] › e2e\w2-flows.spec.ts:597:1 › X-02 session clock: near-expiry token renews, an expired one forces re-login, tabs survive, history works (20.4s)
+  ok 185 [chromium] › e2e\w2-flows.spec.ts:789:1 › X-03 language and theme persist across reload and re-login (10.9s)
+  ok 186 [chromium] › e2e\w2-flows.spec.ts:831:1 › X-04 a 429 and a 503 on the login API show the app's copy in both languages (5.2s)
+  ok 187 [chromium] › e2e\w2-flows.spec.ts:888:3 › X-09 dates and numerals › X-09 rendered timestamps are the Dhaka instant and numeral policy is consistent (7.3s)
+  ok 188 [chromium] › e2e\w2-flows.spec.ts:979:1 › STU-03 a second turn stays in the same thread and both survive reload and re-login (9.7s)
+  ok 189 [chromium] › e2e\w2-flows.spec.ts:1024:1 › STU-04 streaming: tokens grow, Stop aborts, a mid-stream failure is recoverable, Bangla text is intact (22.9s)
+  ok 190 [chromium] › e2e\w2-flows.spec.ts:1127:1 › STU-15 invite code: regenerate yields a new code, redemption is single-use (14.9s)
+  ok 191 [chromium] › e2e\w2-flows.spec.ts:1169:1 › STU-17 five question variants settle grounded or refused, and citations match the corpus (13.5s)
+  ok 192 [chromium] › e2e\w2-flows.spec.ts:1242:1 › STU-18 a follow-up stays grounded and New chat leaks no earlier context (8.7s)
+  ok 193 [chromium] › e2e\w2-flows2.spec.ts:240:1 › TCH-01 teacher dashboard numbers equal the API and the workload metric is recomputed from real rows (5.5s)
+  ok 194 [chromium] › e2e\w2-flows2.spec.ts:335:1 › TCH-02 classroom create, roster, and the CSV import matrix (10.5s)
+  ok 195 [chromium] › e2e\w2-flows2.spec.ts:482:1 › TCH-03 assign a take-home quiz; the student sees it with the correct deadline and can start it (13.8s)
+  ok 196 [chromium] › e2e\w2-flows2.spec.ts:629:1 › TCH-04 question paper: generate, edit, review, finalize and download the PDFs (12.0s)
+  ok 197 [chromium] › e2e\w2-flows2.spec.ts:707:1 › TCH-05 create hub: synchronous generation, the queued job outcome, and the saved library (9.8s)
+  ok 198 [chromium] › e2e\w2-flows2.spec.ts:770:1 › TCH-06 lesson plans persist and stay editable; short tests and support plans work (9.8s)
+  ok 199 [chromium] › e2e\w2-flows2.spec.ts:897:1 › TCH-07 document library: list, open, filter, persist across sessions and delete (9.6s)
+  ok 200 [chromium] › e2e\w2-flows2.spec.ts:969:1 › TCH-08 weak matrix and coverage equal independently queried values (37.8s)
+  ok 201 [chromium] › e2e\w2-flows2.spec.ts:1138:1 › TCH-09 student detail matches the source; another school's classroom and another teacher's paper are denied (23.8s)
+  ok 202 [chromium] › e2e\w2-flows2.spec.ts:1262:1 › PAR-01 a valid invite links a child, the code is single-use, and a wrong code is refused (9.1s)
+  ok 203 [chromium] › e2e\w2-flows2.spec.ts:1307:1 › PAR-02 child list, per-chapter accuracy and the activity feed match the source data (11.2s)
+  ok 204 [chromium] › e2e\w2-flows2.spec.ts:1384:1 › SAD-02 a school admin manages classes and teachers inside its own school (5.9s)
+  ok 205 [chromium] › e2e\w2-flows2.spec.ts:1463:1 › SAD-01 the school dashboard equals the per-row data recomputed in the spec (4.8s)
+  ok 206 [chromium] › e2e\w2-flows2.spec.ts:1552:1 › ADM-01 users search, role filter, pagination, a role change with its audit row, and no self-escalation (12.2s)
+  ok 207 [chromium] › e2e\w2-flows2.spec.ts:1685:1 › ADM-02 the analytics overview equals the user rows recomputed in the spec (5.0s)
+  ok 208 [chromium] › e2e\w2-flows2.spec.ts:1737:1 › ADM-05 impersonation: restrictions, the 15-minute bound, admin revoke, audit rows (12.0s)
+  ok 209 [chromium] › e2e\w2-flows2.spec.ts:1874:1 › ADM-04 the audit log is complete and strictly newest-first across pages (4.2s)
+  ok 210 [chromium] › e2e\w2-flows2.spec.ts:1927:1 › ADM-06 the AI-quality board matches the logs and the feedback triage workflow runs (13.4s)
+  ok 211 [chromium] › e2e\w2-flows2.spec.ts:2051:1 › ADM-08 the safety audit records a real refusal without content or identity (9.9s)
+  ok 212 [chromium] › e2e\w2-flows2.spec.ts:2113:1 › ANON-04 the per-IP login limiter answers 429 and the app shows the wait copy (1.1m)
+  ok 213 [chromium] › e2e\w2-perf.spec.ts:98:1 › INP across the login and tutor flow stays inside the 500 ms budget (7.7s)
+  -  214 [chromium] › e2e\w2-perf.spec.ts:128:1 › Slow 3G + 4x CPU: the key screens still become interactive
+  ok 215 [chromium] › e2e\w2-perf.spec.ts:189:1 › JS heap after a long conversation does not grow without bound (19.4s)
+  ok 216 [chromium] › e2e\w2-session.spec.ts:127:1 › logout clears the query cache, user storage and offline copies; the next user sees none of it (21.2s)
+  -  217 [chromium] › e2e\w2-session.spec.ts:251:3 › the service worker caches carry no user data (preview harness only)
+  ok 218 [mobile-chromium] › e2e\mobile.spec.ts:23:1 › mobile: bottom navigation targets are at least 44px and fit the viewport (9.5s)
+  ok 219 [mobile-chromium] › e2e\mobile.spec.ts:54:1 › mobile: a student asks the tutor and gets an answer (7.6s)
+  ok 220 [mobile-chromium] › e2e\smoke.spec.ts:66:1 › a student signs in, is routed to the student home and can log out (6.0s)
+  ok 221 [mobile-chromium] › e2e\smoke.spec.ts:86:1 › a guardian-consented student registers and lands on the student home (6.7s)
+  ok 222 [mobile-chromium] › e2e\smoke.spec.ts:113:1 › a student asks the tutor and gets a streamed mock answer (6.6s)
+  ok 223 [mobile-chromium] › e2e\smoke.spec.ts:151:1 › an out-of-corpus question is refused with the grounding message (6.5s)
+  ok 224 [mobile-chromium] › e2e\smoke.spec.ts:177:1 › a student completes a quiz attempt end to end (12.9s)
+  ok 225 [mobile-chromium] › e2e\smoke.spec.ts:208:1 › a teacher signs in and sees the teacher dashboard (5.3s)
+  ok 226 [mobile-chromium] › e2e\smoke.spec.ts:220:1 › a student generates a parent invite code and the parent links with it (10.0s)
+  ok 227 [mobile-chromium] › e2e\smoke.spec.ts:244:1 › an admin signs in and sees the admin dashboard (3.9s)
+
+
+  1) [chromium] › e2e\qa-flows.spec.ts:869:1 › STU-16 export returns the full sections and deletion removes the account 
+
+    Error: expect(received).toMatch(expected)
+
+    Expected pattern: /\/login$/
+    Received string:  "http://127.0.0.1:5183/login?next=%2Fstudent%2Fme"
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+      925 |   await expect
+      926 |     .poll(async () => page.url(), { timeout: 30_000 })
+    > 927 |     .toMatch(/\/login$/);
+          |      ^
+      928 |   await expect
+      929 |     .poll(
+      930 |       async () =>
+        at C:\Users\DST\AppData\Local\Temp\bgpt-remediation-0.2.0-20261119\worktree\apps\web\e2e\qa-flows.spec.ts:927:6
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\qa-flows-STU-16-export-ret-4360a-eletion-removes-the-account-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\qa-flows-STU-16-export-ret-4360a-eletion-removes-the-account-chromium\error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\qa-flows-STU-16-export-ret-4360a-eletion-removes-the-account-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\qa-flows-STU-16-export-ret-4360a-eletion-removes-the-account-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  Slow test file: [chromium] › e2e\axe.spec.ts (5.6m)
+  Consider running tests from slow files in parallel. See: https://playwright.dev/docs/test-parallel
+  1 failed
+    [chromium] › e2e\qa-flows.spec.ts:869:1 › STU-16 export returns the full sections and deletion removes the account 
+  14 skipped
+  212 passed (36.7m)

@@ -1,0 +1,218 @@
+{"step": 10, "run": 1, "rows": [{"endpoint": "GET /health", "vus": 10, "n": 1055, "errors": 0, "p50": 6.4, "p95": 19.8, "p99": 29.6}, {"endpoint": "POST /tutor/ask (mock)", "vus": 10, "n": 30, "errors": 964, "p50": 27.2, "p95": 53.7, "p99": 83.7}, {"endpoint": "GET /student/me", "vus": 10, "n": 0, "errors": 707, "p50": null, "p95": null, "p99": null}, {"endpoint": "GET /learn/progress", "vus": 10, "n": 553, "errors": 0, "p50": 12.2, "p95": 30.9, "p99": 35.2}, {"endpoint": "POST /student/notes", "vus": 10, "n": 0, "errors": 734, "p50": null, "p95": null, "p99": null}]}
+{"step": 10, "run": 2, "rows": [{"endpoint": "GET /health", "vus": 10, "n": 1042, "errors": 0, "p50": 6.1, "p95": 19.6, "p99": 29.5}, {"endpoint": "POST /tutor/ask (mock)", "vus": 10, "n": 0, "errors": 1103, "p50": null, "p95": null, "p99": null}, {"endpoint": "GET /student/me", "vus": 10, "n": 0, "errors": 804, "p50": null, "p95": null, "p99": null}, {"endpoint": "GET /learn/progress", "vus": 10, "n": 540, "errors": 0, "p50": 13.5, "p95": 28.3, "p99": 36.7}, {"endpoint": "POST /student/notes", "vus": 10, "n": 0, "errors": 829, "p50": null, "p95": null, "p99": null}]}
+{"step": 25, "run": 1, "rows": [{"endpoint": "GET /health", "vus": 25, "n": 1114, "errors": 0, "p50": 5.7, "p95": 15.6, "p99": 27.3}, {"endpoint": "POST /tutor/ask (mock)", "vus": 25, "n": 30, "errors": 971, "p50": 31.2, "p95": 48.0, "p99": 51.9}, {"endpoint": "GET /student/me", "vus": 25, "n": 0, "errors": 751, "p50": null, "p95": null, "p99": null}, {"endpoint": "GET /learn/progress", "vus": 25, "n": 541, "errors": 0, "p50": 14.0, "p95": 21.4, "p99": 34.8}, {"endpoint": "POST /student/notes", "vus": 25, "n": 0, "errors": 806, "p50": null, "p95": null, "p99": null}]}
+{"step": 25, "run": 2, "rows": [{"endpoint": "GET /health", "vus": 25, "n": 1079, "errors": 0, "p50": 6.5, "p95": 11.8, "p99": 29.2}, {"endpoint": "POST /tutor/ask (mock)", "vus": 25, "n": 0, "errors": 837, "p50": null, "p95": null, "p99": null}, {"endpoint": "GET /student/me", "vus": 25, "n": 0, "errors": 767, "p50": null, "p95": null, "p99": null}, {"endpoint": "GET /learn/progress", "vus": 25, "n": 612, "errors": 0, "p50": 11.8, "p95": 21.6, "p99": 34.3}, {"endpoint": "POST /student/notes", "vus": 25, "n": 0, "errors": 819, "p50": null, "p95": null, "p99": null}]}
+{
+ "base": "http://127.0.0.1:8011",
+ "provenance": [
+  "LOCAL",
+  "MOCK",
+  "SQLITE"
+ ],
+ "results": [
+  {
+   "step": 10,
+   "run": 1,
+   "rows": [
+    {
+     "endpoint": "GET /health",
+     "vus": 10,
+     "n": 1055,
+     "errors": 0,
+     "p50": 6.4,
+     "p95": 19.8,
+     "p99": 29.6
+    },
+    {
+     "endpoint": "POST /tutor/ask (mock)",
+     "vus": 10,
+     "n": 30,
+     "errors": 964,
+     "p50": 27.2,
+     "p95": 53.7,
+     "p99": 83.7
+    },
+    {
+     "endpoint": "GET /student/me",
+     "vus": 10,
+     "n": 0,
+     "errors": 707,
+     "p50": null,
+     "p95": null,
+     "p99": null
+    },
+    {
+     "endpoint": "GET /learn/progress",
+     "vus": 10,
+     "n": 553,
+     "errors": 0,
+     "p50": 12.2,
+     "p95": 30.9,
+     "p99": 35.2
+    },
+    {
+     "endpoint": "POST /student/notes",
+     "vus": 10,
+     "n": 0,
+     "errors": 734,
+     "p50": null,
+     "p95": null,
+     "p99": null
+    }
+   ]
+  },
+  {
+   "step": 10,
+   "run": 2,
+   "rows": [
+    {
+     "endpoint": "GET /health",
+     "vus": 10,
+     "n": 1042,
+     "errors": 0,
+     "p50": 6.1,
+     "p95": 19.6,
+     "p99": 29.5
+    },
+    {
+     "endpoint": "POST /tutor/ask (mock)",
+     "vus": 10,
+     "n": 0,
+     "errors": 1103,
+     "p50": null,
+     "p95": null,
+     "p99": null
+    },
+    {
+     "endpoint": "GET /student/me",
+     "vus": 10,
+     "n": 0,
+     "errors": 804,
+     "p50": null,
+     "p95": null,
+     "p99": null
+    },
+    {
+     "endpoint": "GET /learn/progress",
+     "vus": 10,
+     "n": 540,
+     "errors": 0,
+     "p50": 13.5,
+     "p95": 28.3,
+     "p99": 36.7
+    },
+    {
+     "endpoint": "POST /student/notes",
+     "vus": 10,
+     "n": 0,
+     "errors": 829,
+     "p50": null,
+     "p95": null,
+     "p99": null
+    }
+   ]
+  },
+  {
+   "step": 25,
+   "run": 1,
+   "rows": [
+    {
+     "endpoint": "GET /health",
+     "vus": 25,
+     "n": 1114,
+     "errors": 0,
+     "p50": 5.7,
+     "p95": 15.6,
+     "p99": 27.3
+    },
+    {
+     "endpoint": "POST /tutor/ask (mock)",
+     "vus": 25,
+     "n": 30,
+     "errors": 971,
+     "p50": 31.2,
+     "p95": 48.0,
+     "p99": 51.9
+    },
+    {
+     "endpoint": "GET /student/me",
+     "vus": 25,
+     "n": 0,
+     "errors": 751,
+     "p50": null,
+     "p95": null,
+     "p99": null
+    },
+    {
+     "endpoint": "GET /learn/progress",
+     "vus": 25,
+     "n": 541,
+     "errors": 0,
+     "p50": 14.0,
+     "p95": 21.4,
+     "p99": 34.8
+    },
+    {
+     "endpoint": "POST /student/notes",
+     "vus": 25,
+     "n": 0,
+     "errors": 806,
+     "p50": null,
+     "p95": null,
+     "p99": null
+    }
+   ]
+  },
+  {
+   "step": 25,
+   "run": 2,
+   "rows": [
+    {
+     "endpoint": "GET /health",
+     "vus": 25,
+     "n": 1079,
+     "errors": 0,
+     "p50": 6.5,
+     "p95": 11.8,
+     "p99": 29.2
+    },
+    {
+     "endpoint": "POST /tutor/ask (mock)",
+     "vus": 25,
+     "n": 0,
+     "errors": 837,
+     "p50": null,
+     "p95": null,
+     "p99": null
+    },
+    {
+     "endpoint": "GET /student/me",
+     "vus": 25,
+     "n": 0,
+     "errors": 767,
+     "p50": null,
+     "p95": null,
+     "p99": null
+    },
+    {
+     "endpoint": "GET /learn/progress",
+     "vus": 25,
+     "n": 612,
+     "errors": 0,
+     "p50": 11.8,
+     "p95": 21.6,
+     "p99": 34.3
+    },
+    {
+     "endpoint": "POST /student/notes",
+     "vus": 25,
+     "n": 0,
+     "errors": 819,
+     "p50": null,
+     "p95": null,
+     "p99": null
+    }
+   ]
+  }
+ ]
+}

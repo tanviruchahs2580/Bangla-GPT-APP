@@ -1,0 +1,18 @@
+HEAD: 94766877d62b812f3142479131f32db4b6c370d6
+API pyproject: no version literal
+web package.json: ['0.15.0']
+web package-lock root: ['0.15.0', '0.15.0', '4.5.0']
+PWA manifest: no version literal
+capacitor.config: no version literal
+Dockerfile ARG: ['APP_VERSION', 'APP_VERSION']
+android versionName: 26:// versionName is the web app version (apps/api/pyproject.toml is the single
+27:// source of truth and apps/web/packa
+sw.js cache names: []
+version in sw.js: []
+README version mentions: ['0.15.0', '127.0.0', '127.0.0', '127.0.0', '0.0.0', '127.0.0']
+CHANGELOG latest: ['## v0.15.0 - 2026-11-18', '## v0.14.0 - 2026-11-17']
+OpenAPI info.version (from T-00 baseline): 0.15.0
+versionParity test: 2: * QE-06: the release version is double-entered (apps/api/pyproject.toml and
+4: * drift ships an API image or an AAB labeled with the wrong version — one
+11:describe("release version parity", () => 
+store evidence: docs/playstore exists = True
