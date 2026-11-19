@@ -26,6 +26,10 @@ jobs:
       github.event.pull_request.base.ref == 'main' &&
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    # Q-19 (T-16): every job carries an explicit timeout so a hung gh call
+    # cannot bill GitHub's 6-hour default; three 20 s retries plus margin
+    # never needs five minutes.
+    timeout-minutes: 5
     steps:
       - name: Enable auto-merge (waits for the required checks)
         env:
