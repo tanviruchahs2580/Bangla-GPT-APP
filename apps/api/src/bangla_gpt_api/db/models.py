@@ -1294,3 +1294,32 @@ class AiUsage(Base):
     # (dbf1d2e3f4a5).
     estimated_cost_usd: Mapped[float] = mapped_column(Numeric(14, 10, asdecimal=False), default=0.0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
+
+
+class ShortTestAttemptLink(Base):
+    """BC-5 (T-20): indexable mirror of ``short_tests.attempts`` JSON.
+
+    Same shape and contract as ``assignment_recipients`` (migration
+    c5d7e9f1a3b5) — see that model's docstring for the expand/contract
+    rationale; this is the short-test mirror that migration did not need.
+    """
+
+    __tablename__ = "short_test_attempt_links"
+    __table_args__ = (
+        UniqueConstraint(
+            "short_test_id",
+            "student_id",
+            name="uq_short_test_attempt_links_short_test_student",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    short_test_id: Mapped[int] = mapped_column(
+        ForeignKey("short_tests.id", ondelete="CASCADE"), index=True
+    )
+    student_id: Mapped[int] = mapped_column(
+        ForeignKey("students.id", ondelete="CASCADE"), index=True
+    )
+    attempt_id: Mapped[int] = mapped_column(
+        ForeignKey("quiz_attempts.id", ondelete="CASCADE"), index=True
+    )

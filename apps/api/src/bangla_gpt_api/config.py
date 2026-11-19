@@ -308,6 +308,12 @@ class Settings(BaseSettings):
     # inline = scheduler loops inside the web process (default);
     # arq = an external ARQ worker owns the schedule (job bodies live in jobs.py).
     jobs_backend: str = "inline"  # inline | arq
+    # T-20/BC-5: read the attempt-membership mirror tables instead of the
+    # JSON arrays. Default False keeps the JSON read path — the expand/
+    # contract read switch; flipping it (after the reconciliation check
+    # passes) is a recorded S-3 decision, and dropping the JSON column is a
+    # later release. API responses are identical under both values.
+    attempt_links_read: bool = False
     # Enable ONLY behind a trusted reverse proxy (Caddy/nginx) that APPENDS
     # the real peer to X-Forwarded-For ($proxy_add_x_forwarded_for) and is the
     # only trusted hop; the limiter reads the LAST valid entry (S-001). With

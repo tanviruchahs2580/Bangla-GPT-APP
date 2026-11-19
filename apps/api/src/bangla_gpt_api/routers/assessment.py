@@ -56,6 +56,7 @@ from bangla_gpt_api.services import (
     coverage,
     weakness,
 )
+from bangla_gpt_api.services.attempt_links import attempt_refs, sync_attempt_links
 from bangla_gpt_api.services.quiz import ClozeQuizGenerator, dump_quiz
 
 from .common import (
@@ -93,7 +94,7 @@ def _st_questions(st: ShortTest) -> list[QuizQuestionPublic]:
     ]
 
 
-def _st_out(st: ShortTest) -> ShortTestOut:
+def _st_out(db: Session, st: ShortTest, links_read: bool) -> ShortTestOut:
     return ShortTestOut(
         id=st.id,
         classroom_id=st.classroom_id,
@@ -103,7 +104,10 @@ def _st_out(st: ShortTest) -> ShortTestOut:
         num_questions=st.num_questions,
         duration_min=st.duration_min,
         questions=_st_questions(st),
-        attempts=[dict(a) for a in st.attempts],
+        attempts=[
+            {"student_id": sid, "attempt_id": aid}
+            for sid, aid in attempt_refs(db, kind="short_test", parent=st, links_read=links_read)
+        ],
         created_at=st.created_at,
     )
 
@@ -183,6 +187,14 @@ def teacher_shorttest_create(
     )
     db.add(st)
     db.flush()
+    # BC-5 dual-write: mirror the JSON membership into the link table in the
+    # same transaction — a rollback of either write rolls back both.
+    sync_attempt_links(
+        db,
+        kind="short_test",
+        parent_id=st.id,
+        refs=[(int(a["student_id"]), int(a["attempt_id"])) for a in attempts],
+    )
     # every roster student with a user account gets a notification.
     for student in roster:
         notify_user(
@@ -208,11 +220,12 @@ def teacher_shorttest_create(
         question_count=len(questions),
         elapsed_ms=elapsed_ms,
     )
-    return _st_out(st)
+    return _st_out(db, st, app_ctx.settings.attempt_links_read)
 
 
 @router.get("/teacher/shorttests", response_model=list[ShortTestOut])
 def teacher_shorttest_list(
+    app_ctx: Ctx,
     db: DbSession,
     teacher: TeacherOrAdminUser,
     classroom_id: int | None = None,
@@ -233,11 +246,13 @@ def teacher_shorttest_list(
         .scalars()
         .all()
     )
-    return [_st_out(row) for row in rows]
+    links_read = app_ctx.settings.attempt_links_read
+    return [_st_out(db, row, links_read) for row in rows]
 
 
 @router.get("/shorttests/mine", response_model=list[ShortTestMineOut])
 def shorttests_mine(
+    app_ctx: Ctx,
     db: DbSession,
     user: CurrentUser,
     limit: Annotated[int, Query(ge=1, le=STANDARD_PAGE_MAX_LIMIT)] = STANDARD_PAGE_DEFAULT_LIMIT,
@@ -271,7 +286,14 @@ def shorttests_mine(
     out: list[ShortTestMineOut] = []
     for st in rows:
         expires_at = st.created_at + timedelta(minutes=st.duration_min)
-        own = {int(a["student_id"]): int(a["attempt_id"]) for a in st.attempts}
+        own = dict(
+            attempt_refs(
+                db,
+                kind="short_test",
+                parent=st,
+                links_read=app_ctx.settings.attempt_links_read,
+            )
+        )
         out.append(
             ShortTestMineOut(
                 id=st.id,
@@ -619,7 +641,7 @@ def _assignment_questions(a: Assignment) -> list[QuizQuestionPublic]:
     ]
 
 
-def _assignment_out(a: Assignment) -> AssignmentOut:
+def _assignment_out(db: Session, a: Assignment, links_read: bool) -> AssignmentOut:
     return AssignmentOut(
         id=a.id,
         teacher_id=a.teacher_id,
@@ -628,7 +650,10 @@ def _assignment_out(a: Assignment) -> AssignmentOut:
         num_questions=a.num_questions,
         due_at=a.due_at,
         questions=_assignment_questions(a),
-        attempts=[{k: int(v) for k, v in ref.items()} for ref in a.attempts],
+        attempts=[
+            {"student_id": sid, "attempt_id": aid}
+            for sid, aid in attempt_refs(db, kind="assignment", parent=a, links_read=links_read)
+        ],
         created_at=a.created_at,
     )
 
@@ -752,11 +777,12 @@ def teacher_assignment_create(
         question_count=len(questions),
         elapsed_ms=elapsed_ms,
     )
-    return _assignment_out(assignment)
+    return _assignment_out(db, assignment, app_ctx.settings.attempt_links_read)
 
 
 @router.get("/teacher/assignments", response_model=list[AssignmentOut])
 def teacher_assignment_list(
+    app_ctx: Ctx,
     db: DbSession,
     teacher: TeacherOrAdminUser,
     limit: Annotated[int, Query(ge=1, le=STANDARD_PAGE_MAX_LIMIT)] = STANDARD_PAGE_DEFAULT_LIMIT,
@@ -775,12 +801,15 @@ def teacher_assignment_list(
         .scalars()
         .all()
     )
-    return [_assignment_out(row) for row in rows]
+    links_read = app_ctx.settings.attempt_links_read
+    return [_assignment_out(db, row, links_read) for row in rows]
 
 
-def _assignment_progress_rows(db: Session, assignment: Assignment) -> list[AssignmentProgressRow]:
+def _assignment_progress_rows(
+    db: Session, assignment: Assignment, links_read: bool
+) -> list[AssignmentProgressRow]:
     now = datetime.now(UTC).replace(tzinfo=None)
-    refs = [(int(r["student_id"]), int(r["attempt_id"])) for r in assignment.attempts]
+    refs = attempt_refs(db, kind="assignment", parent=assignment, links_read=links_read)
     attempts = (
         {
             a.id: a
@@ -826,7 +855,7 @@ def _assignment_progress_rows(db: Session, assignment: Assignment) -> list[Assig
     response_model=list[AssignmentProgressRow],
 )
 def teacher_assignment_progress(
-    assignment_id: int, db: DbSession, teacher: TeacherOrAdminUser
+    app_ctx: Ctx, assignment_id: int, db: DbSession, teacher: TeacherOrAdminUser
 ) -> list[AssignmentProgressRow]:
     assignment = db.get(Assignment, assignment_id)
     if assignment is None or (teacher.role != "admin" and assignment.teacher_id != teacher.id):
@@ -834,7 +863,7 @@ def teacher_assignment_progress(
             status_code=404,
             detail={"code": "assignment_not_found", "message": "Assignment not found"},
         )
-    return _assignment_progress_rows(db, assignment)
+    return _assignment_progress_rows(db, assignment, app_ctx.settings.attempt_links_read)
 
 
 @router.get("/assignments/mine", response_model=list[AssignmentMineOut])
