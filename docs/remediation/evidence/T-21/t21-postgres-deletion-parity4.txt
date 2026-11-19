@@ -1,0 +1,12 @@
+Evidence-ID: EV-T00-t21-postgres-deletion-parity4
+Captured-UTC: 2026-11-19T18:34:19.062972+00:00
+Finished-UTC: 2026-11-19T18:35:05.527595+00:00
+Base-SHA: 14a9efd0d01c7f460acf3f8db9e931f751935621
+Working-directory: apps/api
+Command: .venv/Scripts/python.exe -m pytest tests/test_round2_erasure_fk.py tests/test_delete_cascade_v2.py tests/test_new_tables_deletion.py tests/test_export_completeness.py tests/test_dat_003_export_consent_ip.py -q -p randomly --randomly-seed=20261030
+Python: 3.12.10
+Exit-code: 0
+Duration-seconds: 46.454
+--- output ---
+................                                                         [100%]
+16 passed in 42.01s
