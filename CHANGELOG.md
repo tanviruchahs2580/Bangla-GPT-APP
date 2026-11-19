@@ -39,6 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - docs(remediation): T-17/T-27/T-28 inventories and boundary maps
 - docs(remediation): T-22/T-26/T-36 evidence — layering measurement, retrieval groundwork, restore drill
 - docs(remediation): T-29/T-30/T-33/T-34/T-35 verification records
+- docs(remediation): T-90 fresh-clone verification record
+- docs(remediation): T-99 final report — finding outcomes, measured results, BC mapping, owner decisions
 
 ### Tests
 
