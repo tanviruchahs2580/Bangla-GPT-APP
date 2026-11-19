@@ -13,9 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Added
+
+- feat(api): T-12/BC-8 production boot guard for Argon2id parameters
+
 ### CI/CD
 
 - ci: add the missing job timeout to automerge (T-16)
+
+### Tests
+
+- test(api): T-11 route classification file, guard tests, authz matrix
 
 ### Maintenance
 
