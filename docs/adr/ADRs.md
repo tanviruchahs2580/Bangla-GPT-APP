@@ -451,3 +451,19 @@ V2 T-32. Scheduled jobs (parent digest, weakness rollup, retention) run from one
 - **+** The documented single-host deployment keeps booting unchanged.
 - **-** Multi-worker production must run an ARQ worker process (one more container) or accept one worker.
 - **-** A Postgres-native queue remains viable future work if arq stalls upstream; the ledger is the seam both designs share.
+
+# ADR-0013: the /v1 API alias — transport shim, not a second contract
+
+## Context
+
+V2 T-25 (BC-4): store-distributed mobile clients bake an absolute base URL and cannot be force-updated, so a future breaking API change has no seam to mount behind. The API previously served only root paths (F-16).
+
+## Decision
+
+Every domain router mounts a second time under `/v1` (`include_in_schema=False`). Legacy paths keep working unchanged; `/v1/*` mirrors the identical operations with identical status codes. The alias does NOT appear in the exported OpenAPI document: the mirrored surface is identical to the documented one, so duplicating ~140 operations would double the generated-client surface without adding information and would violate operation-ID uniqueness (FastAPI derives IDs from route names, which collide across the two mounts).
+
+## Consequences
+
+- **+** A breaking change can be introduced under `/v2` (or by changing `/v1` semantics later) while root paths serve the current contract.
+- **+** The OpenAPI document, the committed contract fixture and the generated clients stay single-surface.
+- **-** `/v1` is discoverable only from this ADR and the route table, not from `/docs` — acceptable for a compat shim; a future `/v2` with genuinely different shapes SHOULD appear in the document.
