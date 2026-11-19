@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - feat(api): T-14/EG-7 provenance-labelled eval reporting and human-set scaffolding
 - feat(api): T-20/BC-5 indexable attempt-membership links for short tests
 - feat(api): T-23/BC-9 provider-reported usage replaces char estimates
+- feat(api): T-25/BC-4 additive /v1 API alias
 - feat(api): T-32/BC-8 refuse inline scheduler loops with multiple workers
 
 ### Fixed
