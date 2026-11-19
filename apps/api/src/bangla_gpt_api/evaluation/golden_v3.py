@@ -559,6 +559,11 @@ def build_golden(chunks: list[Any], prompt_texts: dict[str, str] | None = None) 
         "version": GOLDEN_V3_VERSION,
         "generated_by": "bangla_gpt_api.evaluation.golden_v3.build_golden",
         "generated_from": "bundled sample corpus (data/sample_nctb)",
+        # T-14: the provenance label the harness reports per set. This
+        # generator produces questions templated over corpus METADATA, so
+        # the class is synthetic_from_corpus; paraphrase and human sets are
+        # separate files and are never merged with these numbers.
+        "provenance": "synthetic_from_corpus",
         "construct_rule": (
             "questions are templated over chapter and section metadata (the table of "
             "contents); no text is lifted from chunk bodies and no item is filtered on "

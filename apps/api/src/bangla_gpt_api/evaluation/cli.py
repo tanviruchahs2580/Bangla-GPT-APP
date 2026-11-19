@@ -500,7 +500,52 @@ def main() -> int:
             " not decide merges; this is the manual quality-probe leg (M-19)."
         ),
     )
+    parser.add_argument(
+        "--human-eval-path",
+        default=None,
+        help=(
+            "path to the human-labelled eval set (eval/human/human_eval.json"
+            " when the set exists). T-14: its status is printed on every run"
+            " and its numbers are never merged with synthetic ones."
+        ),
+    )
+    parser.add_argument(
+        "--human-min-items",
+        type=int,
+        default=300,
+        help="minimum human-labelled items the release gate requires (default 300)",
+    )
+    parser.add_argument(
+        "--require-human-eval",
+        action="store_true",
+        help=(
+            "release-gate flag: fail when the human-labelled set is absent or"
+            " below --human-min-items. OFF by default (T-14); everyday CI"
+            " prints the status without failing."
+        ),
+    )
+    parser.add_argument(
+        "--human-status-only",
+        action="store_true",
+        help="print the human-set status line and exit (CI summary step)",
+    )
     args = parser.parse_args()
+
+    root = Path(__file__).resolve().parents[3]  # apps/api
+
+    # T-14: the human-set status is printed on every invocation, before any
+    # suite runs. Absence is non-failing unless --require-human-eval is set
+    # (a release-gating decision, not an everyday CI one).
+    from bangla_gpt_api.evaluation.human_eval import render_status_line
+
+    human_path = (
+        Path(args.human_eval_path)
+        if args.human_eval_path
+        else root / "eval" / "human" / "human_eval.json"
+    )
+    if args.human_status_only:
+        print(render_status_line(human_path, min_items=args.human_min_items))
+        return 0
 
     # HERMETIC: the gate must never hit an external model (CI has no secrets;
     # a real LLM-judge is a human-input upgrade). Force mock even if the
@@ -520,7 +565,6 @@ def main() -> int:
         # poisoned nothing.
         parser.error("--seed-bad only applies to the report run, not --gate")
 
-    root = Path(__file__).resolve().parents[3]  # apps/api
     golden_path = Path(args.golden) if args.golden else root / "eval" / "golden_v3.json"
     baseline_path = Path(args.baseline) if args.baseline else root / "eval" / "baseline_v3.json"
 
@@ -530,6 +574,23 @@ def main() -> int:
     # without an identity is unattributable.
     identity = _evidence_identity(settings)
     print(f"IDENTITY: {json.dumps(identity, ensure_ascii=True)}")
+    # T-14: provenance honesty. The golden set is generated from the corpus's
+    # own vocabulary (synthetic_from_corpus); its numbers describe the
+    # generator, never real-world quality. The human-set status is printed
+    # beside it so the gap is said out loud on every run.
+    _golden_data = json.loads(golden_path.read_text(encoding="utf-8"))
+    print(f"PROVENANCE: {_golden_data.get('provenance', 'unlabelled')}")
+    print(render_status_line(human_path, min_items=args.human_min_items))
+    if args.require_human_eval:
+        from bangla_gpt_api.evaluation.human_eval import human_set_status
+
+        _status, _n = human_set_status(human_path, min_items=args.human_min_items)
+        if _status != "present":
+            print(
+                f"FAIL: require_human_eval is set but the human set is {_status}"
+                f" ({_n} items, minimum {args.human_min_items})"
+            )
+            return 1
 
     if args.latency_report:
         from bangla_gpt_api.evaluation.latency_report import format_table, measure

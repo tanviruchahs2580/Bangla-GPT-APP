@@ -104,6 +104,13 @@ jobs:
       - name: Red-team moderation gate (blocking)
         run: python -m bangla_gpt_api.evaluation.cli --redteam
 
+      # T-14: the human-labelled eval set does not exist yet (labelling is
+      # HO-4). The status is printed, non-failing, so a green gate never
+      # implies human evidence; --require-human-eval is the release-gating
+      # decision (S-3), kept off here.
+      - name: Human eval set status (explicit, never merged with synthetic)
+        run: python -m bangla_gpt_api.evaluation.cli --human-status-only
+
       # M-19: the committed gate is hermetic against the mock provider, so it
       # catches retrieval/pipeline regressions but never REAL model output
       # quality. This optional leg runs the same suite against the configured
