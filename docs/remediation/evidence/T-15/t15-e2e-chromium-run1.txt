@@ -1,0 +1,17 @@
+Evidence-ID: EV-T00-t15-e2e-chromium-run1
+Captured-UTC: 2026-11-19T19:07:44.432498+00:00
+Finished-UTC: 2026-11-19T19:07:47.584206+00:00
+Base-SHA: 8717f6fe41ebfeb9ef78fc8c67cb28de627bc27a
+Working-directory: apps/web
+Command: node 'C:/Program Files/nodejs/node_modules/npm/bin/npm-cli.js' run test:e2e
+Python: 3.12.10
+Exit-code: 1
+Duration-seconds: 3.156
+--- output ---
+
+> bangla-gpt-web@0.15.0 test:e2e
+> playwright test
+
+[WebServer] The system cannot find the path specified.
+Error: Process from config.webServer was not able to start. Exit code: 1
+

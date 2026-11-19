@@ -1,0 +1,55 @@
+Evidence-ID: EV-T00-t15-e2e-stu16-rerun
+Captured-UTC: 2026-11-19T19:46:38.637572+00:00
+Finished-UTC: 2026-11-19T19:48:34.167650+00:00
+Base-SHA: 94766877d62b812f3142479131f32db4b6c370d6
+Working-directory: apps/web
+Command: node 'C:/Program Files/nodejs/node_modules/npm/bin/npm-cli.js' exec playwright test -- -g STU-16
+Python: 3.12.10
+Exit-code: 1
+Duration-seconds: 115.531
+--- output ---
+[WebServer] INFO:     Started server process [38476]
+[WebServer] INFO:     Waiting for application startup.
+[WebServer] INFO:     Application startup complete.
+[WebServer] INFO:     Uvicorn running on http://127.0.0.1:8010 (Press CTRL+C to quit)
+
+Running 1 test using 1 worker
+
+  x  1 [chromium] › e2e\qa-flows.spec.ts:869:1 › STU-16 export returns the full sections and deletion removes the account (54.4s)
+
+
+  1) [chromium] › e2e\qa-flows.spec.ts:869:1 › STU-16 export returns the full sections and deletion removes the account 
+
+    Error: expect(received).toMatch(expected)
+
+    Expected pattern: /\/login$/
+    Received string:  "http://127.0.0.1:5183/login?next=%2Fstudent%2Fme"
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+      925 |   await expect
+      926 |     .poll(async () => page.url(), { timeout: 30_000 })
+    > 927 |     .toMatch(/\/login$/);
+          |      ^
+      928 |   await expect
+      929 |     .poll(
+      930 |       async () =>
+        at C:\Users\DST\AppData\Local\Temp\bgpt-remediation-0.2.0-20261119\worktree\apps\web\e2e\qa-flows.spec.ts:927:6
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\qa-flows-STU-16-export-ret-4360a-eletion-removes-the-account-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\qa-flows-STU-16-export-ret-4360a-eletion-removes-the-account-chromium\error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\qa-flows-STU-16-export-ret-4360a-eletion-removes-the-account-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\qa-flows-STU-16-export-ret-4360a-eletion-removes-the-account-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium] › e2e\qa-flows.spec.ts:869:1 › STU-16 export returns the full sections and deletion removes the account 

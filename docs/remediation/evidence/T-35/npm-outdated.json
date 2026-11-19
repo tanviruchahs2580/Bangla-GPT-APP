@@ -1,0 +1,233 @@
+{
+  "@capacitor/android": {
+    "current": "7.6.10",
+    "wanted": "7.6.10",
+    "latest": "8.6.2",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\@capacitor\\android"
+  },
+  "@capacitor/app": {
+    "current": "7.1.2",
+    "wanted": "7.1.2",
+    "latest": "8.1.2",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\@capacitor\\app"
+  },
+  "@capacitor/cli": {
+    "current": "7.6.10",
+    "wanted": "7.6.10",
+    "latest": "8.6.2",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\@capacitor\\cli"
+  },
+  "@capacitor/core": {
+    "current": "7.6.10",
+    "wanted": "7.6.10",
+    "latest": "8.6.2",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\@capacitor\\core"
+  },
+  "@capacitor/splash-screen": {
+    "current": "7.0.5",
+    "wanted": "7.0.5",
+    "latest": "8.0.2",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\@capacitor\\splash-screen"
+  },
+  "@capacitor/status-bar": {
+    "current": "7.0.6",
+    "wanted": "7.0.6",
+    "latest": "8.0.4",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\@capacitor\\status-bar"
+  },
+  "@eslint/js": {
+    "current": "9.39.5",
+    "wanted": "9.39.5",
+    "latest": "10.0.1",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\@eslint\\js"
+  },
+  "@playwright/test": {
+    "current": "1.65.0",
+    "wanted": "1.65.1",
+    "latest": "1.65.1",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\@playwright\\test"
+  },
+  "@sentry/react": {
+    "current": "10.78.0",
+    "wanted": "10.78.0",
+    "latest": "11.15.0",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\@sentry\\react"
+  },
+  "@tanstack/react-query": {
+    "current": "5.107.1",
+    "wanted": "5.108.1",
+    "latest": "5.108.1",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\@tanstack\\react-query"
+  },
+  "@testing-library/jest-dom": {
+    "current": "7.0.1",
+    "wanted": "7.0.1",
+    "latest": "8.0.0",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\@testing-library\\jest-dom"
+  },
+  "@testing-library/user-event": {
+    "current": "14.6.8",
+    "wanted": "14.6.13",
+    "latest": "14.6.13",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\@testing-library\\user-event"
+  },
+  "@types/react": {
+    "current": "18.3.31",
+    "wanted": "18.3.31",
+    "latest": "19.3.0",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\@types\\react"
+  },
+  "@types/react-dom": {
+    "current": "18.3.7",
+    "wanted": "18.3.7",
+    "latest": "19.3.0",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\@types\\react-dom"
+  },
+  "@vitejs/plugin-react": {
+    "current": "4.7.0",
+    "wanted": "4.7.0",
+    "latest": "6.3.0",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\@vitejs\\plugin-react"
+  },
+  "@vitest/coverage-v8": {
+    "current": "4.1.12",
+    "wanted": "4.1.12",
+    "latest": "5.1.1",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\@vitest\\coverage-v8"
+  },
+  "axe-core": {
+    "current": "4.14.0",
+    "wanted": "4.14.1",
+    "latest": "4.14.1",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\axe-core"
+  },
+  "eslint": {
+    "current": "9.39.5",
+    "wanted": "9.39.5",
+    "latest": "10.15.0",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\eslint"
+  },
+  "eslint-plugin-import-x": {
+    "current": "4.18.0",
+    "wanted": "4.18.0",
+    "latest": "4.18.1",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\eslint-plugin-import-x"
+  },
+  "eslint-plugin-react-hooks": {
+    "current": "5.2.0",
+    "wanted": "5.2.0",
+    "latest": "7.1.1",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\eslint-plugin-react-hooks"
+  },
+  "eslint-plugin-react-refresh": {
+    "current": "0.5.7",
+    "wanted": "0.5.8",
+    "latest": "0.5.8",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\eslint-plugin-react-refresh"
+  },
+  "globals": {
+    "current": "15.15.0",
+    "wanted": "15.15.0",
+    "latest": "17.14.0",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\globals"
+  },
+  "jsdom": {
+    "current": "30.1.3",
+    "wanted": "30.1.3",
+    "latest": "31.0.1",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\jsdom"
+  },
+  "knip": {
+    "current": "6.44.2",
+    "wanted": "6.44.2",
+    "latest": "6.46.1",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\knip"
+  },
+  "lucide-react": {
+    "current": "1.70.0",
+    "wanted": "1.76.0",
+    "latest": "1.76.0",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\lucide-react"
+  },
+  "prettier": {
+    "current": "3.9.10",
+    "wanted": "3.10.1",
+    "latest": "3.10.1",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\prettier"
+  },
+  "react": {
+    "current": "18.3.1",
+    "wanted": "18.3.1",
+    "latest": "19.3.1",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\react"
+  },
+  "react-dom": {
+    "current": "18.3.1",
+    "wanted": "18.3.1",
+    "latest": "19.3.1",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\react-dom"
+  },
+  "react-router-dom": {
+    "current": "7.18.5",
+    "wanted": "7.18.6",
+    "latest": "7.18.6",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\react-router-dom"
+  },
+  "typescript": {
+    "current": "5.6.3",
+    "wanted": "5.6.3",
+    "latest": "7.0.2",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\typescript"
+  },
+  "typescript-eslint": {
+    "current": "8.72.1",
+    "wanted": "8.73.0",
+    "latest": "8.73.0",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\typescript-eslint"
+  },
+  "vite": {
+    "current": "5.4.21",
+    "wanted": "5.4.21",
+    "latest": "8.3.8",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\vite"
+  },
+  "vitest": {
+    "current": "4.1.12",
+    "wanted": "4.1.12",
+    "latest": "5.1.1",
+    "dependent": "web",
+    "location": "C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\apps\\web\\node_modules\\vitest"
+  }
+}
