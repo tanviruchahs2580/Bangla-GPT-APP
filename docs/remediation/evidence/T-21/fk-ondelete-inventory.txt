@@ -1,0 +1,26 @@
+ForeignKey occurrences: 52; with explicit ondelete: 44; without: 8
+=== WITHOUT explicit ondelete ===
+models.py:50: ForeignKey("schools.id", ondelete="NO ACTION"), nullable=True, index=True
+models.py:336: ForeignKey("parents.id", ondelete="SET NULL"), nullable=True, index=True
+models.py:359: ForeignKey("chat_messages.id", ondelete="SET NULL"), nullable=True, index=True
+models.py:362: ForeignKey("quiz_attempts.id", ondelete="SET NULL"), nullable=True, index=True
+models.py:511: school_id: Mapped[int] = mapped_column(ForeignKey("schools.id", ondelete="NO ACTION"))
+models.py:614: ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+models.py:853: ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+models.py:1030: ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+=== ondelete distribution ===
+{'CASCADE': 44}
+=== continuation-line policies for the 8 multi-line FKs ===
+models.py:50: ondelete=MISSING
+models.py:336: ondelete=MISSING
+models.py:359: ondelete=MISSING
+models.py:362: ondelete=MISSING
+models.py:511: ondelete=MISSING
+models.py:614: ondelete=MISSING
+models.py:853: ondelete=MISSING
+models.py:1030: ondelete=MISSING
+VERDICT: 52/52 ForeignKey declarations carry an explicit ondelete policy.
+=== CORRECTED regex ([A-Z ]+ for multi-word policies) ===
+total: 52 distribution: {'NO ACTION': 2, 'CASCADE': 44, 'SET NULL': 6}
+missing: []
+FINAL VERDICT: every ForeignKey carries an explicit ondelete (44 CASCADE / 2 NO ACTION / 6 SET NULL). The 8 "gaps" were a regex artifact ([A-Z]+ cannot match the space in "NO ACTION"/"SET NULL"). NO ACTION is deliberate for users.school_id + classrooms.school_id (school deletion must not cascade-delete accounts/classrooms — retention rule), and SET NULL for optional attribution columns (created_by-style), so no policy change is proposed; S-3 not triggered.

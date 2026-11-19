@@ -38,11 +38,14 @@ Evidence forms: `[F: path:lines @31e3e60]` = source read this session; `[C: comm
 
 ## New findings (N-01…N-10)
 
+(added during phase 1-4 execution)
+
 | ID | Finding | Evidence (H-1) | Severity | Next |
 |---|---|---|---|---|
 | N-01 | Token epoch is rotated on password change/reset but no rotation site exists for role change or account deactivation; if a user's role is demoted or an account is deactivated, previously issued 60-minute tokens keep working until natural expiry | `[C: grep token_epoch/rotate across users.py, admin.py, school.py, gdpr.py → zero hits; EV-T01-t01-batch-a2 session]`; `[F: routers/auth.py:861,907 @31e3e60]` (only password paths rotate) | Medium (10-min window at 60-min tokens; BC-2 scope) | T-13 characterization test first; fix at narrowest place if red |
 | N-02 | `apps/api/coverage.xml` (the artifact CI uploads) is not covered by `.gitignore` while `apps/api/coverage.json` is (CI-FIX-009) — every local coverage run leaves a stray untracked file | `[C: git check-ignore -v → json ignored (line 115), xml exit 1; EV-T00 session 2026-11-19]` | Low (hygiene) | One-line `.gitignore` addition under T-10 |
 | N-03 | `tests/test_build_index_generation.py::test_load_chunks_carries_manifest_metadata` returns a value instead of asserting (`PytestReturnNotNoneWarning` in every full-suite run) | `[C: pytest warnings summary → 3 runs identical; EV-T00-api-coverage]` | Low (test hygiene) | Fold into a test-hygiene commit; not a behavior fix |
+| N-04 | `qa-flows.spec.ts:869 STU-16` post-deletion redirect assertion is environment-sensitive: expects bare `/login`, the settled state carries `?next=%2Fstudent%2Fme` on Windows-local runs. Fails IDENTICALLY at base `31e3e60` (unmodified worktree run) and at HEAD — not a remediation regression | `[C: playwright run at base 31e3e60 → 1 failed, same assertion; EV-T15 session 2026-11-20]` | Low (test robustness on this platform; CI Linux passes) | e2e robustness fix by the frontend stream (poll the settled auth state, not the URL suffix) |
 
 ## Task routing summary
 
