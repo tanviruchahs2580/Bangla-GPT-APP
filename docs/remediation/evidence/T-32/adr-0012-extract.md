@@ -1,0 +1,453 @@
+# ADR-0001: Modular Monolith Architecture
+
+## Context
+
+The original `main.py` was ~7000 lines with all business logic, middleware, and bootstrap code in a single file. This made the codebase unmaintainable and violated separation of concerns.
+
+## Decision
+
+Refactor into a modular monolith with:
+
+- Thin `main.py` (581 lines today) delegating to `initialize/` subpackage
+- 13 domain routers in `routers/`
+- 35 service modules in `services/` (incl. `generators/`)
+- Self-contained infrastructure modules (`providers/`, `retrieval/`)
+
+The entrypoint imports and re-exports test dependencies for monkeypatching.
+
+## Alternatives Considered
+
+1. **Monolithic single-file** — Simple but unmaintainable at scale
+2. **Microservices** — Overkill for a single-team educational platform; introduces distributed systems complexity unnecessarily
+3. **Plugin architecture** — Adds complexity without proven benefit
+
+## Consequences
+
+- **+** Every domain has clear ownership (router → service → infrastructure)
+- **+** `main.py` is now a thin bootstrap file
+- **+** Tests can monkeypatch individual services
+- **+** New domain modules can be added without touching entrypoint
+- **-** Requires discipline to maintain dependency direction (enforced by convention)
+
+## Status
+
+Accepted — Implemented across waves 1-5.
+
+---
+
+# ADR-0002: LLM Provider Abstraction with Mock Default
+
+## Context
+
+The platform must support multiple AI providers (Gemini, OpenAI, OpenRouter, Ollama) but cannot require an API key for basic functionality.
+
+## Decision
+
+Define an `LLMProvider` protocol with factory pattern:
+
+- `mock` provider is the default and always available
+- Real providers are loaded only when their API key is set
+- `/ready` endpoint returns 503 if configured provider is unavailable
+- Provider error propagation through `ProviderError` with retry/circuit breaker
+
+## Alternatives Considered
+
+1. **Always require a real provider** — Poor developer experience for local testing
+2. **Hardcode one provider** — Vendor lock-in, no fallback option
+
+## Consequences
+
+- **+** Works offline with mock provider
+- **+** Easy to add new providers (implement protocol)
+- **+** Graceful degradation when provider is unavailable
+- **-** Mock provider doesn't match real model behavior (must test with real provider in staging)
+
+## Status
+
+Accepted — Used across all AI/RAG flows.
+
+---
+
+# ADR-0003: Hybrid Retrieval with BM25 + Vector Fusion
+
+## Context
+
+Pure BM25 retrieval misses semantic matches; pure vector retrieval misses exact term matches. For NCTB academic content, both matter.
+
+## Decision
+
+Implement hybrid retrieval (`RetrievalMode.hybrid`) combining:
+
+1. **BM25 lane** — Lexical matching with Bangla-aware tokenizer (U+0980-U+09FF)
+2. **Vector lane** — Deterministic local embeddings (or real multilingual model)
+3. **Fusion** — Reciprocal Rank Fusion (RRF) with configurable weights
+4. **Reranking** — Trigram similarity fallback blended into BM25 score
+
+`RetrievalMode.bm25` (legacy) is still supported for backward compatibility.
+
+## Alternatives Considered
+
+1. **BM25 only** — Misses semantic relationships between Bangla synonyms
+2. **Vector only** — Expensive, misses exact curriculum references
+3. **Three-lane (BM25 + vector + metadata filter)** — Deferred until real embeddings are available
+
+## Consequences
+
+- **+** Best of both lexical and semantic matching
+- **+** Curriculum-aware filtering at retrieval time
+- **+** Configurable per deployment
+- **-** RRF weights need tuning per corpus size
+
+## Status
+
+Accepted — Default mode in production.
+
+---
+
+# ADR-0004: Safety Screening Before Retrieval
+
+## Context
+
+Unsafe queries should never reach the retrieval pipeline or LLM provider to prevent prompt injection, data exfiltration, and inappropriate content processing.
+
+## Decision
+
+1. Apply NFKC normalization first (`normalize_query()`)
+2. Run Bengali keyword regex patterns (`_screen_safety()`)
+3. If unsafe: return refusal immediately without retrieval or LLM call
+4. If safe: proceed to retrieval + PII redaction at evidence boundary
+
+Coverage: self-harm, weapons, drugs, sexual content, violence, personal data.
+
+## Alternatives Considered
+
+1. **After LLM generation** — Risk: unsafe prompt still reaches LLM provider (cost, policy violation)
+2. **Before normalization** — Risk: mobile keyboard variants bypass keyword filters
+
+## Consequences
+
+- **+** Never calls LLM for unsafe queries (cost savings, policy compliance)
+- **+** NFKC normalization prevents variant bypass
+- **+** PII redaction on evidence text, not user input
+- **-** Keyword-based approach has false positives (academic science terms get flagged)
+
+## Status
+
+Accepted — Safety is a release gate per master prompt Rule 7.
+
+---
+
+# ADR-0005: SQLite Default with Production Refusal
+
+## Context
+
+Local development needs zero-configuration setup; production needs persistent, concurrent-safe database.
+
+## Decision
+
+- Default: `sqlite:///./bangla_gpt.db` (file-based, survives restarts)
+- Production boot: `enforce_production_safety()` + `validate_database_url()` refuse `sqlite://` / `sqlite:///:memory:` / any URL containing `:memory:`
+- Migration path: Set `DATABASE_URL=postgresql+psycopg://...` for any non-dev deployment
+
+## Alternatives Considered
+
+1. **Always PostgreSQL** — Requires local PostgreSQL install for dev
+2. **Always SQLite** — Not suitable for concurrent production access
+
+## Consequences
+
+- **+** Zero-config local development
+- **+** Production safety enforced at boot (fail-fast)
+- **+** Tests can still use in-memory DB
+- **-** `bangla_gpt.db` must be gitignored
+
+## Status
+
+Accepted — implemented and committed; production boot still refuses in-memory/file SQLite via `validate_database_url()` (`initialize/dependencies.py`).
+
+---
+
+# ADR-0006: NFKC Normalization at AI Boundary
+
+## Context
+
+Bangla mobile keyboards produce both precomposed and decomposed Unicode forms for the same character. Without normalization, queries may fail to match indexed content.
+
+## Decision
+
+Apply `unicodedata.normalize("NFKC", text)` at the AI boundary — specifically in `normalize_query()` called in both `TutorService.ask()` and `TutorService.ask_stream()` before safety screening and retrieval. Also applied in BM25 tokenizer.
+
+## Alternatives Considered
+
+1. **Case-insensitive only** — Doesn't solve precomposed/decomposed Bangla
+2. **Full Unicode normalization (NFC + NFD + NFKC + NFKD)** — Over-normalization changes meaning
+
+## Consequences
+
+- **+** Mobile keyboard input matches indexed content
+- **+** Symmetric normalization (index + query both NFKC)
+- **+** Pure NFKC only — preserves original casing and spacing
+- **-** Very small edge cases where NFKC changes meaning (e.g. compatibility characters)
+
+## Status
+
+Accepted — implemented and committed (NFKC is applied in the BM25 tokenizer, `retrieval/bm25.py`, and in `normalize_query()` at the tutor boundary).
+
+---
+
+# ADR-0007: Two-Service Deployment Topology
+
+## Context
+
+The platform has a static frontend SPA and a long-running API server with SSE streaming, job queues, and persistent database connections. These have different deployment requirements.
+
+## Decision
+
+Split deployment into two services:
+
+1. **Vercel** — Static SPA with `/api/*` proxy rewrite to API origin
+2. **API origin** — Any long-running host (VM, Docker, PaaS) with Cloudflare tunnel or direct DNS
+
+The API cannot run on Vercel serverless (ephemeral filesystem, no long-running worker, no persistent DB connections).
+
+## Alternatives Considered
+
+1. **Single Vercel deployment** — Serverless can't handle SSE streaming, job queues, or persistent DB
+2. **Two separate domains** — Breaks same-origin cookie auth, requires CORS everywhere
+
+## Consequences
+
+- **+** Each service uses its optimal platform
+- **+** Same-origin API proxy avoids CORS complexity
+- **-** Two deploy targets (need to manage both)
+- **-** API host must be always-on (not serverless)
+
+## Status
+
+Accepted — Live deployment documented in
+`docs/archive/VERCEL_DEPLOY_RECORD_2026-09-13.md` (archived: the record is
+kept for history, not maintained).
+
+---
+
+# ADR-0008: PBKDF2 Password Hashing with Per-Token JWT Revocation
+
+## Context
+
+Student accounts must be secure. Password reset tokens must be revocable if compromised.
+
+## Decision
+
+- Passwords: PBKDF2 with 200,000 iterations (SHA-256)
+- JWT: Per-token `jti` (JWT ID) stored in cache
+- Logout: Add `jti` to cache → next request rejects token
+- Password reset: Generate cryptographically secure token, hash before storing
+
+## Alternatives Considered
+
+1. **bcrypt** — Slower, doesn't support per-token revocation without database lookup
+2. **Session-based auth** — Not suitable for SPA + mobile API pattern
+
+## Consequences
+
+- **+** Strong password hashing (OWASP recommended)
+- **+** Logout actually revokes token (not just client-side clear)
+- **+** No server-side session store needed (stateless JWT)
+- **-** Cache (Redis/memory) needed for revocation list
+
+## Status
+
+Accepted — implemented in `auth/security.py`; the password-hashing clause is superseded by ADR-0010.
+
+---
+
+# ADR-0009: Fernet PII Encryption at Rest
+
+## Context
+
+Student PII (phone numbers, emails) stored in database must be encrypted at rest to comply with data protection requirements.
+
+## Decision
+
+Use Fernet symmetric encryption (from `cryptography` library):
+
+- Helper functions `encrypt_pii()` / `decrypt_pii()` in `security.py` handle
+  encrypt/decrypt; the single encrypted column today is `parents.phone_enc`
+- Encryption key from the `PII_ENC_KEY` env var (production boot refuses to
+  start without a valid Fernet key — `main.py` `_validate_pii`)
+- Audit logging of the five privileged actions in `audit_log`
+  (role_change, data_export, purge, qp_finalize, impersonation) — **not**
+  "all PII access"
+
+## Alternatives Considered
+
+1. **Application-level hashing** — Can't retrieve original PII for display
+2. **Database-level encryption** — Tied to specific DB vendor
+
+## Consequences
+
+- **+** Explicit encrypt/decrypt at the one PII column (`parents.phone_enc`)
+- **+** Vendor-neutral (Python-level encryption)
+- **+** Guarded at boot: a missing/invalid `PII_ENC_KEY` fails production startup
+- **-** Performance overhead on PII reads/writes
+
+## Status
+
+Accepted — Implemented in `security.py`.
+
+---
+
+# ADR-0010: Argon2id Password Hashing, JWT Issuer/Audience Binding, and Session-Epoch Design
+
+## Context
+
+Two security findings during the engineering audit (2026-10-09):
+
+1. **Password hashing** (AUD-0023): ADR-0008 chose PBKDF2-HMAC-SHA256 at
+   200,000 iterations. The OWASP Password Storage Cheat Sheet (fetched
+   2026-10-09) recommends Argon2id (19 MiB, t=2, p=1) first and PBKDF2 at
+   600,000 iterations only as a fallback, so the chosen configuration was
+   below even the fallback floor.
+2. **JWT binding** (AUD-0028): access tokens carried `sub`, `role`, `exp`,
+   `iat` and `jti` but no `iss` or `aud`, so anything else signed with the
+   same key (a future service sharing the secret, a differently-scoped token)
+   would be accepted. The codebase also has no refresh-token rotation with
+   reuse detection; it relies on a 60-minute access token, a per-token `jti`
+   deny-list and the F-05 second-precision token epoch.
+
+## Decision
+
+- **Passwords**: hash new passwords with Argon2id at `time_cost=2`,
+  `memory_cost=19*1024` KiB (19 MiB), `parallelism=1`. `verify_password`
+  keeps reading `pbkdf2_sha256` hashes so no account is locked out, and
+  `needs_rehash` + login re-hash migrate each legacy hash to Argon2id in place
+  the first time that user signs in. No bulk reset and no forced change.
+- **JWT**: `create_access_token` stamps `iss = "bangla-gpt-api"` and
+  `aud = "bangla-gpt-clients"` (settings-configurable); `decode_token`
+  verifies both, which also refuses every token minted before the change (a
+  one-time forced re-login, accepted because the session-epoch design already
+  bounds impact to 60 minutes).
+- **Refresh-rotation decision**: no refresh token is introduced. The design
+  that substitutes for it is the session epoch: `users.sessions_invalidated_at`
+  is set on password change/reset, and `get_current_user` refuses every access
+  token whose `iat` is at or before that moment. Combined with a short (60
+  minute) access-token lifetime and per-token `jti` revocation, the material
+  refresh-rotation benefits — bounded credential compromise window and "old
+  sessions die when the password changes" — are already delivered without the
+  additional server-side state, rotation endpoints and reuse-detection bookkeeping
+  a refresh-token scheme would add to this stateless-JWT codebase.
+
+## Alternatives Considered
+
+1. **Argon2i/Argon2d** — Argon2id is the OWASP recommendation precisely
+   because it resists both GPU side-channel (Argon2d strength) and TMTO
+   (Argon2i strength) attacks.
+2. **scrypt (N=2^17, r=8, p=1)** — OWASP's second choice; Argon2id is
+   preferred and equally verbatim-specified.
+3. **Fresh refresh tokens with rotation and reuse detection** — strictly
+   stronger on paper, but the session-epoch + 60-minute lifetime + `jti`
+   revocation already covers the threat model; the added state contradicts the
+   stateless-JWT architecture of ADR-0008.
+
+## Consequences
+
+- **+** Password hashes now meet the primary OWASP recommendation.
+- **+** Tokens are bound to this service's issuer and audience.
+- **+** Legacy hashes upgrade persistently without ops work.
+- **+** Existing deployments keep working: legacy hashes verify, and users are
+  upgraded silently on their next login.
+- **-** All sessions are invalidated once at deploy time (pre-SEC-03 tokens
+  lack `iss`/`aud` and are refused); each client re-authenticates.
+- **-** Argon2id is heavier than PBKDF2 per hash (~30-60 ms at these
+  parameters); negligible for a login path but measurable in
+  test-suite wall-time.
+- **-** A future service that needs the same signing key must now be minted
+  with its own `iss`/`aud` (by design).
+
+## Status
+
+Accepted — implemented in `auth/security.py` (AUD-0023, AUD-0028). Supersedes
+the password-hashing clause of ADR-0008; its `jti` revocation clause is
+unchanged.
+
+# ADR-0011: Session Revocation Coverage, MFA Enforcement Setting, and Token Storage
+
+## Context
+
+V2 remediation T-13 (BC-2/BC-6). Password change and reset already rotate the
+token epoch (`users.sessions_invalidated_at`), and logout parks a token's
+`jti` in the shared deny-list. A role change did not end sessions (N-01): a
+demoted user kept a fully valid 60-minute token — the database-backed role
+check denied the OLD role's routes, but the token itself stayed usable for
+everything else until natural expiry. TOTP MFA existed (RFC 6238,
+`auth/mfa.py`) but was optional for every role, including admin-class ones.
+Token storage on the web and Capacitor clients was unexamined in one place.
+
+## Decision
+
+1. **Role change rotates the token epoch.** `PATCH /admin/users/{id}/role`
+   stamps `sessions_invalidated_at` in the same transaction as the
+   `role_change` audit event, so every access token minted before the change
+   is refused on its next use (401 `session_expired` — the established epoch
+   code). Verified red-first (`tests/test_role_change_revocation.py`).
+   Account deletion needs no rotation: the erased user row makes every
+   lookup fail closed.
+2. **MFA enforcement ships as a setting, disabled.** `MFA_REQUIRED_ROLES`
+   (comma-separated, empty default = today's behaviour). A required-but-
+   unenrolled user keeps a session only for the enrolment endpoints plus the
+   session-less basics (`deps._mfa_enrollment_allowed`) — the same
+   restricted-waiver shape as the forced password change. Enabling it in a
+   deployment changes a user-visible default and is a recorded owner
+   decision (STOP S-3 in docs/remediation/STATE.md).
+3. **Token storage stays as-is; options recorded.** The browser and the
+   Capacitor WebView hold the bearer token in JavaScript-accessible storage;
+   any change (httpOnly cookie with CSRF, short-lived access + rotating
+   refresh, platform secure storage) is a cross-cutting client contract
+   change and remains STOP S-3. Recommendation recorded for the owner:
+   platform secure storage on Android (Capacitor Preferences with the
+   secure-storage plugin) first, an httpOnly-cookie session for the web as
+   the larger follow-up; both after 0.2.0.
+
+## Alternatives Considered
+
+- Per-token deny-list entries on role change (already the logout mechanism):
+  rejected — the epoch is per-account state the request path already reads,
+  while the deny-list needs a write per outstanding token and a cache write
+  per role change.
+- Blocking login entirely for required-but-unenrolled users: rejected —
+  enrolment itself needs an authenticated session; the restricted-waiver
+  shape lets the user enrol without granting the rest of the app.
+- Refresh tokens: rejected for 0.2.0 — no consumer exists; an additive
+  claim (`iat` epoch) already gives server-side invalidation without a new
+  token class.
+
+## Consequences
+
+- **+** BC-2 holds for logout, password change/reset, role change and account
+  deletion: pre-change tokens die on next use.
+- **+** MFA can be made mandatory per role without a code change, and the
+  shipped default provably keeps current behaviour.
+- **-** A role change now ends the target's sessions by design; tests that
+  rely on a token surviving a role change must mint after the change (the
+  existing suites were updated where needed).
+- **-** Second-precision epoch: tokens minted in the same second as the
+  rotation legitimately survive (documented in deps.py); tests use the
+  past-mint technique instead of sleeps.
+
+# ADR-0012: Background-Job Execution Topology
+
+## Context
+
+V2 T-32. Scheduled jobs (parent digest, weakness rollup, retention) run from one job core with two schedulers (`jobs.py`): the inline asyncio loops inside the web process (`JOBS_BACKEND=inline`, default) or an ARQ worker's cron (`JOBS_BACKEND=arq`). Idempotency lives in the `job_runs` ledger — a `(job, period_key)` composite primary key means a duplicate execution loses an INSERT race and skips. Verified facts: arq 0.28.0 is the newest release (PyPI, uploaded 2026-04-16; the lock pins exactly that version and caps redis<6 because arq requires it — pyproject comment), and the live single-host deployment runs one web worker with inline loops (docs/runbook.md §7.3).
+
+## Decision
+
+1. **Boot guard (BC-8)**: production refuses `JOBS_BACKEND=inline` when `WEB_CONCURRENCY > 1` — every worker would run its own copy of every loop against the same ledger (the ledger makes duplicates at-most-once, not pleasant). Single-worker inline keeps booting: it is the documented live topology, and a refusal would break the runbook's rollback path.
+2. **Queue framework**: stay on arq for 0.2.0. Postgres-native queues (e.g. a `SELECT ... FOR UPDATE SKIP LOCKED` poller) would add no dependency but reimplement scheduling, retries and cron semantics the ledger plus arq already give; Celery/Dramatiq add a broker dependency and a second deployment surface for three nightly loops. Re-verify arq's maintenance status at the next upgrade window; the guard makes the inline/arq choice auditable either way.
+
+## Consequences
+
+- **+** The loop-per-worker duplication class is refused at boot in production.
+- **+** The documented single-host deployment keeps booting unchanged.
+- **-** Multi-worker production must run an ARQ worker process (one more container) or accept one worker.
+- **-** A Postgres-native queue remains viable future work if arq stalls upstream; the ledger is the seam both designs share.

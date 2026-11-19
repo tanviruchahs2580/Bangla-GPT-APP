@@ -433,3 +433,21 @@ Token storage on the web and Capacitor clients was unexamined in one place.
 - **-** Second-precision epoch: tokens minted in the same second as the
   rotation legitimately survive (documented in deps.py); tests use the
   past-mint technique instead of sleeps.
+
+# ADR-0012: Background-Job Execution Topology
+
+## Context
+
+V2 T-32. Scheduled jobs (parent digest, weakness rollup, retention) run from one job core with two schedulers (`jobs.py`): the inline asyncio loops inside the web process (`JOBS_BACKEND=inline`, default) or an ARQ worker's cron (`JOBS_BACKEND=arq`). Idempotency lives in the `job_runs` ledger — a `(job, period_key)` composite primary key means a duplicate execution loses an INSERT race and skips. Verified facts: arq 0.28.0 is the newest release (PyPI, uploaded 2026-04-16; the lock pins exactly that version and caps redis<6 because arq requires it — pyproject comment), and the live single-host deployment runs one web worker with inline loops (docs/runbook.md §7.3).
+
+## Decision
+
+1. **Boot guard (BC-8)**: production refuses `JOBS_BACKEND=inline` when `WEB_CONCURRENCY > 1` — every worker would run its own copy of every loop against the same ledger (the ledger makes duplicates at-most-once, not pleasant). Single-worker inline keeps booting: it is the documented live topology, and a refusal would break the runbook's rollback path.
+2. **Queue framework**: stay on arq for 0.2.0. Postgres-native queues (e.g. a `SELECT ... FOR UPDATE SKIP LOCKED` poller) would add no dependency but reimplement scheduling, retries and cron semantics the ledger plus arq already give; Celery/Dramatiq add a broker dependency and a second deployment surface for three nightly loops. Re-verify arq's maintenance status at the next upgrade window; the guard makes the inline/arq choice auditable either way.
+
+## Consequences
+
+- **+** The loop-per-worker duplication class is refused at boot in production.
+- **+** The documented single-host deployment keeps booting unchanged.
+- **-** Multi-worker production must run an ARQ worker process (one more container) or accept one worker.
+- **-** A Postgres-native queue remains viable future work if arq stalls upstream; the ledger is the seam both designs share.

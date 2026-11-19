@@ -142,6 +142,7 @@ def enforce_production_safety(settings: Settings) -> None:
         _validate_jwt,
         _validate_password_hash_parameters,
         _validate_admin,
+        _validate_jobs_backend,
         _validate_cors,
         _validate_database,
         _validate_pii,
@@ -244,6 +245,39 @@ def _validate_admin(settings: Settings) -> list[str]:
     elif len(settings.admin_password) < 12:
         problems.append("ADMIN_PASSWORD must be at least 12 characters in production")
     return problems
+
+
+def _validate_jobs_backend(settings: Settings) -> list[str]:
+    """BC-8/T-32: inline scheduler loops must not run in multiple web workers.
+
+    ``JOBS_BACKEND=inline`` runs the digest/weakness loops inside the web
+    process (jobs.py: "one core, two schedulers"). With one worker that is
+    the documented live topology; with two or more, EVERY worker starts its
+    own copy of every loop — duplicated work contending over the same
+    ``job_runs`` idempotency ledger rows, and the loop count silently
+    scaling with WEB_CONCURRENCY. Production refuses that shape and names
+    the two exits (the ARQ worker backend, or one worker). The
+    ``job_runs`` ledger makes double execution at-most-once, not exactly-once
+    pleasant: the loser INSERT hits IntegrityError per period, per loop,
+    per extra worker.
+    """
+    backend = (settings.jobs_backend or "").strip().lower()
+    if backend != "inline":
+        return []
+    if _worker_count(settings) > 1:
+        return [
+            "JOBS_BACKEND=inline runs scheduler loops inside each web worker; "
+            f"with WEB_CONCURRENCY={_worker_count(settings)} every worker runs its "
+            "own copy of every loop against the same job_runs ledger. Use "
+            "JOBS_BACKEND=arq (an ARQ worker process owns the cron), or run a "
+            "single web worker."
+        ]
+    logger.warning(
+        "JOBS_BACKEND=inline with a single worker: scheduler loops share the "
+        "web process. This is the documented single-host topology; an ARQ "
+        "worker separates them when the deployment grows."
+    )
+    return []
 
 
 def _validate_password_hash_parameters(settings: Settings) -> list[str]:
