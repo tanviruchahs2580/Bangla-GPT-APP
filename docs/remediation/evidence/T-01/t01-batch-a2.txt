@@ -1,0 +1,111 @@
+Evidence-ID: EV-T00-t01-batch-a2
+Captured-UTC: 2026-11-19T15:37:00.975778+00:00
+Finished-UTC: 2026-11-19T15:37:02.123196+00:00
+Base-SHA: 31e3e60ba51b9dde54cfbcba0de4466f70c83917
+Working-directory: apps/api
+Command: .venv/Scripts/python.exe ../../docs/remediation/tools/t01_batch_a.py
+Python: 3.12.10
+Exit-code: 0
+Duration-seconds: 1.140
+--- output ---
+HEAD 31e3e60ba51b9dde54cfbcba0de4466f70c83917
+== F-01 history .db/.log ==
+history-tracked: apps/api/dev.db.bak-wave2
+history .db/.log/.sqlite count: 1
+== F-21 version declarations ==
+apps/api/pyproject.toml project.version: "0.15.0"
+apps/web/package.json version: "0.15.0"
+apps/web/public/manifest.webmanifest version: null
+apps/api/eval/parked_specs/test_deploy_contracts.py:150:    """docs/operations/PRODUCTION_DEPLOYMENT.md documented an APP_VERSION build-arg
+apps/api/eval/parked_specs/test_deploy_contracts.py:153:    assert "ARG APP_VERSION" in text
+Binary file apps/web/android/app/build.gradle matches
+== F-11 router LOC and async-with-Session ==
+__init__.py: 49
+_context.py: 126
+_documents.py: 433
+_error_contract.py: 107
+_images.py: 133
+admin.py: 601
+assessment.py: 897
+auth.py: 1085
+common.py: 408
+deps.py: 604
+learn.py: 1113
+parent.py: 806
+school.py: 1181
+system.py: 180
+teacher.py: 398
+teacher_content.py: 1199
+tutor.py: 1235
+users.py: 283
+workspace.py: 681
+routers total LOC: 11519
+main.py LOC: 869
+async def handlers with Session param: 1
+tutor.py:233: async def ask(app_ctx: Ctx, payload: AskRequest, db: DbSession, user: CurrentUser) -> AskR
+== F-09 JSON columns in models ==
+models.py:121: learning_prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+models.py:141: prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+models.py:206: quiz_json: Mapped[list] = mapped_column(JSON, default=list)
+models.py:311: sources_json: Mapped[list | None] = mapped_column(JSON, nullable=True)
+models.py:472: options_json: Mapped[list] = mapped_column(JSON, default=list)
+models.py:612: payload: Mapped[dict] = mapped_column(JSON, default=dict)
+models.py:654: difficulty: Mapped[dict] = mapped_column(JSON, default=dict)
+models.py:655: chapters: Mapped[list] = mapped_column(JSON, default=list)
+models.py:657: questions: Mapped[list] = mapped_column(JSON, default=list)
+models.py:658: meta: Mapped[dict] = mapped_column(JSON, default=dict)
+models.py:694: questions: Mapped[list] = mapped_column(JSON, default=list)
+models.py:695: attempts: Mapped[list] = mapped_column(JSON, default=list)  # [{student_id, attempt_id}]
+models.py:720: focus_concepts: Mapped[list] = mapped_column(JSON, default=list)
+models.py:721: plan: Mapped[dict] = mapped_column(JSON, default=dict)
+models.py:748: questions: Mapped[list] = mapped_column(JSON, default=list)
+models.py:749: attempts: Mapped[list] = mapped_column(JSON, default=list)  # [{student_id, attempt_id}]
+models.py:819: options: Mapped[list] = mapped_column(JSON, default=list)
+models.py:873: aliases: Mapped[list] = mapped_column(JSON, default=list)
+models.py:1035: detail: Mapped[dict] = mapped_column(JSON, default=dict)
+models.py:1061: payload: Mapped[dict] = mapped_column(JSON, default=dict)
+models.py:1075: source_ref: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+models.py:1092: params: Mapped[dict] = mapped_column(JSON, default=dict)
+models.py:1113: props: Mapped[dict] = mapped_column(JSON, default=dict)
+models.py:1227: payload: Mapped[dict] = mapped_column(JSON, default=dict)
+models.py:1228: result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+== F-10 FK ondelete ==
+ForeignKey ondelete= occurrences: 44
+ForeignKey( occurrences: 52
+== F-15 frontend ==
+src/i18n.ts: 1812 lines
+e2e specs: 22 -> ['00-identity.spec.ts', 'axe.spec.ts', 'crawl.spec.ts', 'engines.spec.ts', 'keyboard.spec.ts', 'mobile.spec.ts', 'offline-shell.spec.ts', 'perf.spec.ts', 'qa-flows.spec.ts', 'reflow.spec.ts', 'resilience.spec.ts', 'screen-reader.spec.ts', 'session.spec.ts', 'smoke.spec.ts', 'store-listing.spec.ts', 'visual.spec.ts', 'w2-a11y.spec.ts', 'w2-c1-flows.spec.ts', 'w2-flows.spec.ts', 'w2-flows2.spec.ts', 'w2-perf.spec.ts', 'w2-session.spec.ts']
+location.reload hits in web src: 5
+apps/web/src/components/AppErrorBoundary.tsx:53:              onClick={() => window.location.reload()}
+apps/web/src/lib/serviceWorkerUpdate.ts:65:    if (accepted) window.location.reload();
+apps/web/src/lib/serviceWorkerUpdate.ts:79:  window.location.reload();
+apps/web/src/pages/MaintenancePage.tsx:26:            onClick={() => window.location.reload()}
+apps/web/src/test/serviceWorkerUpdate.test.ts:73:    value: { ...window.location, reload },
+== F-08 eval data ==
+eval/golden_questions.json: parse error AttributeError
+eval/golden_v3.json: top-level keys=['bootstrap_seed', 'composition', 'construct_rule', 'generated_by', 'generated_from', 'items', 'leakage', 'negatives', 'split_rule', 'version']; items=427
+eval/redteam_v2.json: top-level keys=['items', 'rule']; items=36
+eval/baseline_v3.json: top-level keys=['bootstrap_seed', 'metrics', 'n', 'per_item_scores', 'recorded_by', 'sampling', 'split', 'version']; items=0
+eval dir entries: ['baseline_v2.json', 'baseline_v3.json', 'benchmark_v2.json', 'golden_questions.json', 'golden_report.json', 'golden_v2.json', 'golden_v3.json', 'parked_specs', 'redteam_v2.json', 'sample_questions.json']
+== F-30 routes vs OpenAPI ==
+top-level Route entries outside included routers: [('openapi', '/openapi.json'), ('swagger_ui_html', '/docs'), ('swagger_ui_redirect', '/docs/oauth2-redirect'), ('redoc_html', '/redoc')]
+resolved served paths: 121; in OpenAPI: 121; outside: []
+== F-17 git process ==
+branches (local+remote refs): 111
+31e3e60 Merge pull request #148 from tanviruchahs2580/chore/changelog-0.15.0
+1035a5a chore: regenerate the CHANGELOG for v0.15.0
+f08c606 Merge pull request #147 from tanviruchahs2580/fix/release-gates-0.15.0
+016bfba chore: regenerate the CHANGELOG
+5066a39 test(api): use varargs in the worker-metric stubs for the vulture gate
+08d87f3 chore: regenerate the CHANGELOG
+bd046f0 docs(readme): name codeql.yml's workflow_dispatch trigger in the CI table
+d26f8b2 chore: regenerate the CHANGELOG
+5f45c2d docs(audit): add the 2026-11-18 backend audit register and plan
+94a76cb feat(api): worker metrics, statement_timeout, Sentry rate setting
+acf239c chore(security): record the measured gitleaks waiver for the F-107 fixture
+7535f00 fix(ci): add CodeQL workflow_dispatch for bot-merged release gating
+ac31f9b fix(ci): retry Trivy only on the vulnerability-DB bootstrap failure
+d14daef Merge pull request #137 from tanviruchahs2580/dependabot/pip/apps/api/pypdf-7.0.1
+b3cf0a0 build(python): bump pypdf from 6.21.4 to 7.1.0 in /apps/api
+
+root-level .md files: ['AGENTS.md', 'CHANGELOG.md', 'CODE_OF_CONDUCT.md', 'CONTRIBUTING.md', 'README.md', 'SECURITY.md', 'SUPPORT.md', 'THIRD_PARTY_NOTICES.md']

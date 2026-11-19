@@ -27,6 +27,8 @@ from bangla_gpt_api.metrics import PROVIDER_LATENCY_SECONDS
 from bangla_gpt_api.providers.base import (
     ProviderError,
     ProviderSettings,
+    ProviderUsage,
+    UsageReportingMixin,
     backoff_delay_seconds,
     finish_stream,
     fit_timeout,
@@ -141,7 +143,7 @@ def _build_payload(
     return payload
 
 
-class GeminiProvider:
+class GeminiProvider(UsageReportingMixin):
     name = "gemini"
     # Gemini accepts inline_data image parts (see _build_payload).
     supports_vision = True
@@ -279,10 +281,16 @@ class GeminiProvider:
 
             if response.status_code == 200:
                 try:
-                    text = _extract_text(response.json())
+                    body = response.json()
+                    text = _extract_text(body)
                     latency_ms = int((time.perf_counter() - start) * 1000)
                     PROVIDER_LATENCY_SECONDS.labels(provider=self.name).observe(latency_ms / 1000)
-                    # Token usage not returned by generateContent; log chars as proxy for cost
+                    # BC-9/T-23: usage taken from the provider-reported
+                    # usageMetadata when the response carries it (the old
+                    # comment claimed generateContent never returns tokens —
+                    # it does), falling back to the char heuristic otherwise.
+                    usage = _gemini_usage(body, prompt_chars=len(prompt), answer_chars=len(text))
+                    self.record_usage(usage)
                     json_log(
                         logger,
                         logging.INFO,
@@ -292,6 +300,9 @@ class GeminiProvider:
                         prompt_chars=len(prompt),
                         answer_chars=len(text),
                         retries=attempt,
+                        usage_source=usage.usage_source,
+                        prompt_tokens=usage.prompt_tokens,
+                        completion_tokens=usage.completion_tokens,
                         **_context_log_fields(),
                     )
                     return text
@@ -320,4 +331,36 @@ def build_gemini_provider(settings: ProviderSettings, model: str | None = None) 
         timeout_seconds=settings.llm_timeout_seconds,
         max_retries=settings.llm_max_retries,
         max_output_tokens=settings.llm_max_output_tokens,
+    )
+
+
+def _gemini_usage(body: dict, *, prompt_chars: int, answer_chars: int) -> ProviderUsage:
+    """Extract provider-reported token counts from a generateContent body.
+
+    Falls back to the char heuristic (and usage_source=estimated) when the
+    body carries no usageMetadata — an old proxy count is still better than
+    a zero, but it is LABELLED as an estimate so the ledger never mistakes
+    one for the other.
+    """
+    meta = body.get("usageMetadata") or {}
+    try:
+        prompt_tokens = int(meta.get("promptTokenCount", 0) or 0)
+        completion_tokens = int(meta.get("candidatesTokenCount", 0) or 0)
+        total = int(meta.get("totalTokenCount", prompt_tokens + completion_tokens) or 0)
+        if prompt_tokens or completion_tokens:
+            return ProviderUsage(
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total,
+                usage_source="provider",
+            )
+    except (TypeError, ValueError):
+        pass
+    from bangla_gpt_api.services.costs import estimate_tokens
+
+    return ProviderUsage(
+        prompt_tokens=estimate_tokens(None),
+        completion_tokens=0,
+        total_tokens=0,
+        usage_source="estimated",
     )

@@ -5,6 +5,7 @@ import secrets
 import threading
 import time
 from collections.abc import AsyncIterator, Mapping
+from dataclasses import dataclass
 from typing import Any, Protocol
 
 from bangla_gpt_api.logging_config import json_log
@@ -24,6 +25,21 @@ LLM_TOTAL_BUDGET_SECONDS = 45.0
 
 #: The backoff ceiling used by both real providers.
 MAX_BACKOFF_SECONDS = 4.0
+
+
+@dataclass
+class ProviderUsage:
+    """Tokens a provider REPORTED for the last call (BC-9/T-23).
+
+    ``usage_source`` distinguishes provider-reported counts from the
+    char-heuristic estimate the ledger falls back to when a provider (or a
+    test double) reports nothing.
+    """
+
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    usage_source: str = "provider"  # provider | estimated | mock
 
 
 def backoff_total_seconds(max_retries: int) -> float:
@@ -233,6 +249,27 @@ def track_provider_health(method: Any) -> Any:
         return result
 
     return wrapper
+
+
+class UsageReportingMixin:
+    """Thread-local slot for the tokens the provider REPORTED last call.
+
+    BC-9/T-23: usage and cost are taken from provider-reported metadata when
+    the response carries it (Gemini ``usageMetadata``, OpenAI ``usage``) and
+    fall back to the char-heuristic estimate when it does not. Thread-local
+    because one provider instance serves concurrent requests; ``take`` clears
+    the slot so a stale report can never be billed to a later request.
+    """
+
+    _usage_local: threading.local = threading.local()
+
+    def record_usage(self, usage: ProviderUsage | None) -> None:
+        self._usage_local.last = usage
+
+    def take_last_usage(self) -> ProviderUsage | None:
+        usage = getattr(self._usage_local, "last", None)
+        self._usage_local.last = None
+        return usage
 
 
 class LLMProvider(Protocol):

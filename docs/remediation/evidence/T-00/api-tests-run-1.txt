@@ -1,0 +1,28 @@
+Evidence-ID: EV-T00-api-tests-run-1
+Captured-UTC: 2026-11-19T10:54:39.180574+00:00
+Finished-UTC: 2026-11-19T10:55:08.763539+00:00
+Base-SHA: 31e3e60ba51b9dde54cfbcba0de4466f70c83917
+Working-directory: apps/api
+Command: pytest -q
+Python: 3.12.10
+Exit-code: 2
+Duration-seconds: 29.578
+--- output ---
+
+=================================== ERRORS ====================================
+_________________ ERROR collecting tests/test_worker_spine.py _________________
+ImportError while importing test module 'C:\Users\DST\AppData\Local\Temp\bgpt-remediation-0.2.0-20261119\worktree\apps\api\tests\test_worker_spine.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\..\..\Programs\Python\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\test_worker_spine.py:31: in <module>
+    _spec.loader.exec_module(worker)
+worker.py:42: in <module>
+    from bangla_gpt_api.metrics import REGISTRY, WORKER_JOB_DURATION_SECONDS, WORKER_JOBS_TOTAL
+E   ImportError: cannot import name 'WORKER_JOB_DURATION_SECONDS' from 'bangla_gpt_api.metrics' (C:\Users\DST\projects\Bangla GPT APP\apps\api\src\bangla_gpt_api\metrics.py)
+=========================== short test summary info ===========================
+ERROR tests/test_worker_spine.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 21.82s

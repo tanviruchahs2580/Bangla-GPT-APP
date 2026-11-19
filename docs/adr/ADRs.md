@@ -433,3 +433,37 @@ Token storage on the web and Capacitor clients was unexamined in one place.
 - **-** Second-precision epoch: tokens minted in the same second as the
   rotation legitimately survive (documented in deps.py); tests use the
   past-mint technique instead of sleeps.
+
+# ADR-0012: Background-Job Execution Topology
+
+## Context
+
+V2 T-32. Scheduled jobs (parent digest, weakness rollup, retention) run from one job core with two schedulers (`jobs.py`): the inline asyncio loops inside the web process (`JOBS_BACKEND=inline`, default) or an ARQ worker's cron (`JOBS_BACKEND=arq`). Idempotency lives in the `job_runs` ledger — a `(job, period_key)` composite primary key means a duplicate execution loses an INSERT race and skips. Verified facts: arq 0.28.0 is the newest release (PyPI, uploaded 2026-04-16; the lock pins exactly that version and caps redis<6 because arq requires it — pyproject comment), and the live single-host deployment runs one web worker with inline loops (docs/runbook.md §7.3).
+
+## Decision
+
+1. **Boot guard (BC-8)**: production refuses `JOBS_BACKEND=inline` when `WEB_CONCURRENCY > 1` — every worker would run its own copy of every loop against the same ledger (the ledger makes duplicates at-most-once, not pleasant). Single-worker inline keeps booting: it is the documented live topology, and a refusal would break the runbook's rollback path.
+2. **Queue framework**: stay on arq for 0.2.0. Postgres-native queues (e.g. a `SELECT ... FOR UPDATE SKIP LOCKED` poller) would add no dependency but reimplement scheduling, retries and cron semantics the ledger plus arq already give; Celery/Dramatiq add a broker dependency and a second deployment surface for three nightly loops. Re-verify arq's maintenance status at the next upgrade window; the guard makes the inline/arq choice auditable either way.
+
+## Consequences
+
+- **+** The loop-per-worker duplication class is refused at boot in production.
+- **+** The documented single-host deployment keeps booting unchanged.
+- **-** Multi-worker production must run an ARQ worker process (one more container) or accept one worker.
+- **-** A Postgres-native queue remains viable future work if arq stalls upstream; the ledger is the seam both designs share.
+
+# ADR-0013: the /v1 API alias — transport shim, not a second contract
+
+## Context
+
+V2 T-25 (BC-4): store-distributed mobile clients bake an absolute base URL and cannot be force-updated, so a future breaking API change has no seam to mount behind. The API previously served only root paths (F-16).
+
+## Decision
+
+Every domain router mounts a second time under `/v1` (`include_in_schema=False`). Legacy paths keep working unchanged; `/v1/*` mirrors the identical operations with identical status codes. The alias does NOT appear in the exported OpenAPI document: the mirrored surface is identical to the documented one, so duplicating ~140 operations would double the generated-client surface without adding information and would violate operation-ID uniqueness (FastAPI derives IDs from route names, which collide across the two mounts).
+
+## Consequences
+
+- **+** A breaking change can be introduced under `/v2` (or by changing `/v1` semantics later) while root paths serve the current contract.
+- **+** The OpenAPI document, the committed contract fixture and the generated clients stay single-surface.
+- **-** `/v1` is discoverable only from this ADR and the route table, not from `/docs` — acceptable for a compat shim; a future `/v2` with genuinely different shapes SHOULD appear in the document.

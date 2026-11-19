@@ -1,0 +1,11 @@
+Evidence-ID: EV-T00-web-deadcode
+Captured-UTC: 2026-11-19T10:54:43.416438+00:00
+Finished-UTC: 2026-11-19T10:54:43.425966+00:00
+Base-SHA: 31e3e60ba51b9dde54cfbcba0de4466f70c83917
+Working-directory: apps/web
+Command: npm run deadcode
+Python: 3.12.10
+Exit-code: 127
+Duration-seconds: 0.016
+--- output ---
+FileNotFoundError: [WinError 2] The system cannot find the file specified

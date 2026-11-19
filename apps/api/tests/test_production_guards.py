@@ -221,3 +221,32 @@ def test_argon2_time_cost_below_two_is_refused_in_production(monkeypatch):
     monkeypatch.setattr("bangla_gpt_api.auth.security.ARGON2_TIME_COST", 1)
     problems = main_module._validate_password_hash_parameters(prod())
     assert problems and "t=1" in problems[0]
+
+
+# --- T-32 / BC-8: inline scheduler loops must not run in multiple workers -----
+
+
+def test_inline_jobs_with_multiple_workers_are_refused_in_production(monkeypatch):
+    import bangla_gpt_api.main as main_module
+
+    monkeypatch.setattr(main_module, "_worker_count", lambda settings: 2)
+    problems = main_module._validate_jobs_backend(prod())
+    assert problems, "inline loops + >1 worker must refuse to boot in production"
+    assert "job_runs" in problems[0]
+    assert "JOBS_BACKEND=arq" in problems[0]
+
+
+def test_inline_jobs_with_a_single_worker_still_boot_in_production(monkeypatch):
+    """The documented single-host live topology (one worker, inline loops)
+    must keep booting — the guard targets the multi-worker duplication."""
+    import bangla_gpt_api.main as main_module
+
+    monkeypatch.setattr(main_module, "_worker_count", lambda settings: 1)
+    assert not main_module._validate_jobs_backend(prod())
+
+
+def test_arq_jobs_backend_needs_no_worker_guard(monkeypatch):
+    import bangla_gpt_api.main as main_module
+
+    monkeypatch.setattr(main_module, "_worker_count", lambda settings: 4)
+    assert not main_module._validate_jobs_backend(prod(jobs_backend="arq"))

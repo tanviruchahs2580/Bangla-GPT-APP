@@ -1,0 +1,11 @@
+Evidence-ID: EV-T00-web-test-verified
+Captured-UTC: 2026-11-19T15:16:31.595668+00:00
+Finished-UTC: 2026-11-19T15:16:31.605919+00:00
+Base-SHA: 31e3e60ba51b9dde54cfbcba0de4466f70c83917
+Working-directory: apps/web
+Command: npm run test
+Python: 3.12.10
+Exit-code: 127
+Duration-seconds: 0.000
+--- output ---
+FileNotFoundError: [WinError 2] The system cannot find the file specified

@@ -1,0 +1,32 @@
+Evidence-ID: EV-T00-t12-hash-time-5runs
+Captured-UTC: 2026-11-19T17:56:00.007445+00:00
+Finished-UTC: 2026-11-19T17:56:03.390300+00:00
+Base-SHA: 860b5069ba668e565f89491ef2f0c7a46ee5f4b6
+Working-directory: apps/api
+Command: .venv/Scripts/python.exe -c '
+import time, statistics
+from bangla_gpt_api.auth.security import hash_password, verify_password
+times = []
+for i in range(5):
+    t0 = time.perf_counter()
+    h = hash_password('"'"'Str0ngRootPassw0rd!'"'"' + str(i))
+    dt = time.perf_counter() - t0
+    times.append(dt)
+    assert verify_password('"'"'Str0ngRootPassw0rd!'"'"' + str(i), h)
+times_ms = [round(t * 1000, 1) for t in times]
+print('"'"'hash times (ms):'"'"', times_ms)
+print('"'"'median (ms):'"'"', round(statistics.median(times) * 1000, 1))
+print('"'"'spread (ms):'"'"', round(min(times) * 1000, 1), '"'"'-'"'"', round(max(times) * 1000, 1))
+import importlib.metadata as im
+print('"'"'argon2-cffi version:'"'"', im.version('"'"'argon2-cffi'"'"'))
+import sys; print('"'"'python:'"'"', sys.version.split()[0])
+'
+Python: 3.12.10
+Exit-code: 0
+Duration-seconds: 3.391
+--- output ---
+hash times (ms): [54.0, 62.1, 59.0, 57.1, 55.5]
+median (ms): 57.1
+spread (ms): 54.0 - 62.1
+argon2-cffi version: 25.1.0
+python: 3.12.10

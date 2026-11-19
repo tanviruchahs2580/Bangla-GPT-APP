@@ -89,3 +89,30 @@ def test_single_strip_no_double_alias(tmp_path) -> None:
     """/api/api/health strips once to /api/health — a path with no route."""
     client = make_client(tmp_path)
     assert client.get("/api/api/health").status_code == 404
+
+
+# --- T-25 / BC-4: the /v1 additive alias --------------------------------------
+
+
+def test_v1_alias_serves_the_same_operations(tmp_path) -> None:
+    """Every legacy system path is mirrored under /v1 with the same status."""
+    client = make_client(tmp_path)
+    legacy = client.get("/health")
+    alias = client.get("/v1/health")
+    assert legacy.status_code == alias.status_code == 200
+    assert alias.json() == legacy.json()
+
+
+def test_v1_alias_unauthenticated_denial_matches_legacy(tmp_path) -> None:
+    client = make_client(tmp_path)
+    assert client.get("/v1/users/me").status_code == 401
+    assert client.get("/users/me").status_code == 401
+
+
+def test_v1_alias_absent_from_the_openapi_document(tmp_path) -> None:
+    """ADR-0013: the alias is transport-only; the document keeps ONE canonical
+    surface so operation IDs stay unique and clients do not double-generate."""
+    client = make_client(tmp_path)
+    doc = client.get("/openapi.json").json()
+    v1_paths = [p for p in doc["paths"] if p.startswith("/v1")]
+    assert not v1_paths, f"/v1 leaked into the OpenAPI document: {v1_paths[:5]}"

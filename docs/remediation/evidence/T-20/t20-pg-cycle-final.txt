@@ -1,0 +1,19 @@
+Evidence-ID: EV-T00-t20-pg-cycle-final
+Captured-UTC: 2026-11-19T18:54:18.761160+00:00
+Finished-UTC: 2026-11-19T18:54:29.991532+00:00
+Base-SHA: 14a9efd0d01c7f460acf3f8db9e931f751935621
+Working-directory: apps/api
+Command: .venv/Scripts/python.exe -c 'import os,subprocess,sys; env=os.environ.copy(); [subprocess.run([sys.executable,'"'"'-m'"'"','"'"'alembic'"'"',*a],env=env,check=True) for a in (('"'"'upgrade'"'"','"'"'head'"'"'),('"'"'downgrade'"'"','"'"'-1'"'"'),('"'"'upgrade'"'"','"'"'head'"'"'))]; print('"'"'FINAL T-20 migration cycle on PostgreSQL 16: PASS'"'"')'
+Python: 3.12.10
+Exit-code: 0
+Duration-seconds: 11.234
+--- output ---
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running downgrade e2f3a4b5c6d7 -> c7d9e1f3a5b7, T-20/BC-5: indexable attempt-membership link tables + JSON backfill.
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade c7d9e1f3a5b7 -> e2f3a4b5c6d7, T-20/BC-5: indexable attempt-membership link tables + JSON backfill.
+FINAL T-20 migration cycle on PostgreSQL 16: PASS

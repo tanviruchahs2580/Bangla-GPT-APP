@@ -1,0 +1,12 @@
+Evidence-ID: EV-T00-api-coverage-floors-verified
+Captured-UTC: 2026-11-19T15:13:57.208993+00:00
+Finished-UTC: 2026-11-19T15:13:57.414501+00:00
+Base-SHA: 31e3e60ba51b9dde54cfbcba0de4466f70c83917
+Working-directory: apps/api
+Command: .venv/Scripts/python.exe scripts/check_coverage_floors.py coverage.json
+Python: 3.12.10
+Exit-code: 0
+Duration-seconds: 0.203
+--- output ---
+below the 90% target (recorded gaps): auth/impersonation.py 85.29%, auth/single_use.py 86.36%, caching.py 68.97%, evaluation/cli.py 62.09%, initialize/schedulers.py 48.39%, nctb/corpus.py 72.55%, providers/gemini.py 68.47%, ratelimit.py 89.62%, routers/admin.py 88.21%, routers/parent.py 81.96%, routers/users.py 87.18%, security.py 86.21%, services/generators/answer_key.py 79.01%, services/generators/rubric.py 79.76%, services/generators/worksheet.py 77.98%
+coverage floors: 36/36 modules at or above their floor (global 89.52%)

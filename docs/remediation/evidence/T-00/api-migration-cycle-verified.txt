@@ -1,0 +1,11 @@
+Evidence-ID: EV-T00-api-migration-cycle-verified
+Captured-UTC: 2026-11-19T11:54:08.215942+00:00
+Finished-UTC: 2026-11-19T11:54:08.227097+00:00
+Base-SHA: 31e3e60ba51b9dde54cfbcba0de4466f70c83917
+Working-directory: apps/api
+Command: Scripts/python.exe -c 'import os,pathlib,subprocess,sys,tempfile; p=pathlib.Path(tempfile.gettempdir())/'"'"'bgpt_remediation_t00_cycle_20261119.db'"'"'; assert not p.exists(), f'"'"'disposable DB already exists: {p}'"'"'; env=os.environ.copy(); env['"'"'DATABASE_URL'"'"']='"'"'sqlite:///'"'"'+p.as_posix(); [subprocess.run([sys.executable,'"'"'-m'"'"','"'"'alembic'"'"',*args],env=env,check=True) for args in (('"'"'upgrade'"'"','"'"'head'"'"'),('"'"'downgrade'"'"','"'"'base'"'"'),('"'"'upgrade'"'"','"'"'head'"'"'))]'
+Python: 3.12.10
+Exit-code: 127
+Duration-seconds: 0.016
+--- output ---
+FileNotFoundError: [WinError 2] The system cannot find the file specified

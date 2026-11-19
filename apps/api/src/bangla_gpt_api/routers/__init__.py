@@ -44,6 +44,20 @@ _ROUTER_TAGS: tuple[tuple[ModuleType, str], ...] = (
 )
 
 
-def register_routers(app: FastAPI) -> None:
+def register_routers(app: FastAPI, *, versioned: bool = True) -> None:
+    """Mount every domain router at its legacy root path, and (BC-4/T-25)
+    additionally under ``/v1``.
+
+    The ``/v1`` alias is an API-CONTRACT version (unrelated to the app
+    version, §2.5): store-distributed mobile clients pin a baked base URL and
+    cannot be force-updated, so a versioned prefix is the seam a future
+    breaking change mounts behind. Legacy paths keep working unchanged; the
+    alias mirrors the identical operations, so it is mounted with
+    ``include_in_schema=False`` — duplicating 140 operations into the
+    document would double the client surface without adding information and
+    would break operation-ID uniqueness (ADR-0013).
+    """
     for module, tag in _ROUTER_TAGS:
         app.include_router(module.router, tags=[tag])
+        if versioned:
+            app.include_router(module.router, prefix="/v1", include_in_schema=False, tags=[tag])

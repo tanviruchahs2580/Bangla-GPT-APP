@@ -1,0 +1,25 @@
+Evidence-ID: EV-T00-t01-batch-a
+Captured-UTC: 2026-11-19T15:36:36.686974+00:00
+Finished-UTC: 2026-11-19T15:36:37.247308+00:00
+Base-SHA: 31e3e60ba51b9dde54cfbcba0de4466f70c83917
+Working-directory: apps/api
+Command: .venv/Scripts/python.exe ../../docs/remediation/tools/t01_batch_a.py
+Python: 3.12.10
+Exit-code: 1
+Duration-seconds: 0.547
+--- output ---
+HEAD 31e3e60ba51b9dde54cfbcba0de4466f70c83917
+== F-01 history .db/.log ==
+history .db/.log/.sqlite count: 0
+== F-21 version declarations ==
+Traceback (most recent call last):
+  File "C:\Users\DST\AppData\Local\Temp\bgpt-remediation-0.2.0-20261119\worktree\docs\remediation\tools\t01_batch_a.py", line 41, in <module>
+    pyproject = (API / "pyproject.toml").read_text(encoding="utf-8")
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DST\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1027, in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\DST\AppData\Local\Programs\Python\Python312\Lib\pathlib.py", line 1013, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: 'C:\\Users\\DST\\AppData\\Local\\Temp\\bgpt-remediation-0.2.0-20261119\\worktree\\docs\\apps\\api\\pyproject.toml'

@@ -1,0 +1,14 @@
+Evidence-ID: EV-T00-web-deadcode-verified
+Captured-UTC: 2026-11-19T11:06:08.745273+00:00
+Finished-UTC: 2026-11-19T11:06:29.689619+00:00
+Base-SHA: 31e3e60ba51b9dde54cfbcba0de4466f70c83917
+Working-directory: apps/web
+Command: node 'C:/Program Files/nodejs/node_modules/npm/bin/npm-cli.js' run deadcode
+Python: 3.12.10
+Exit-code: 0
+Duration-seconds: 20.953
+--- output ---
+
+> bangla-gpt-web@0.15.0 deadcode
+> node scripts/deadcode.mjs
+

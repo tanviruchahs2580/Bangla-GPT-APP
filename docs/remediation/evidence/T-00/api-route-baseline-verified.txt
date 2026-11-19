@@ -1,0 +1,11 @@
+Evidence-ID: EV-T00-api-route-baseline-verified
+Captured-UTC: 2026-11-19T11:54:09.357338+00:00
+Finished-UTC: 2026-11-19T11:54:09.360373+00:00
+Base-SHA: 31e3e60ba51b9dde54cfbcba0de4466f70c83917
+Working-directory: apps/api
+Command: Scripts/python.exe -c 'from bangla_gpt_api.config import Settings; from bangla_gpt_api.main import create_app; from pathlib import Path; import json; app=create_app(Settings(env='"'"'test'"'"',database_url='"'"'sqlite://'"'"',jwt_secret='"'"'x'"'"'*48)); doc=app.openapi(); rows=[{'"'"'path'"'"':r.path,'"'"'methods'"'"':sorted(r.methods or []),'"'"'name'"'"':r.name,'"'"'class'"'"':type(r).__name__,'"'"'include_in_schema'"'"':getattr(r,'"'"'include_in_schema'"'"',None)} for r in app.routes if hasattr(r,'"'"'path'"'"')]; out=Path('"'"'../../docs/remediation/evidence/T-00/routes.baseline.json'"'"'); out.write_text(json.dumps({'"'"'openapi_paths'"'"':len(doc.get('"'"'paths'"'"',{})),'"'"'routes'"'"':rows},ensure_ascii=False,indent=2)+'"'"'\n'"'"',encoding='"'"'utf-8'"'"',newline='"'"'\n'"'"'); print(json.dumps({'"'"'openapi_paths'"'"':len(doc.get('"'"'paths'"'"',{})),'"'"'runtime_routes'"'"':len(rows),'"'"'output'"'"':str(out)},ensure_ascii=False))'
+Python: 3.12.10
+Exit-code: 127
+Duration-seconds: 0.015
+--- output ---
+FileNotFoundError: [WinError 2] The system cannot find the file specified

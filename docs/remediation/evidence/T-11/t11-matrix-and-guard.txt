@@ -1,0 +1,15 @@
+Evidence-ID: EV-T00-t11-matrix-and-guard
+Captured-UTC: 2026-11-19T17:53:00.392618+00:00
+Finished-UTC: 2026-11-19T17:56:25.158434+00:00
+Base-SHA: 860b5069ba668e565f89491ef2f0c7a46ee5f4b6
+Working-directory: apps/api
+Command: .venv/Scripts/python.exe -m pytest tests/test_authz_matrix.py tests/test_route_classification.py tests/test_school_tenancy_isolation.py tests/test_w2_authz_tenancy.py -q -p randomly --randomly-seed=20261030
+Python: 3.12.10
+Exit-code: 0
+Duration-seconds: 204.765
+--- output ---
+........................................................................ [ 30%]
+........................................................................ [ 60%]
+........................................................................ [ 90%]
+.......................                                                  [100%]
+239 passed in 201.27s (0:03:21)

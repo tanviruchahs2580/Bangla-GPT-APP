@@ -205,6 +205,24 @@ def _ask_prepare(
     return explain_instruction, question, search_query, ctx, pending
 
 
+def _provider_reported_usage(tutor: TutorService) -> tuple[int | None, int | None]:
+    """(prompt_tokens, completion_tokens) the provider REPORTED, or (None, None).
+
+    BC-9/T-23: cost taken from provider-reported metadata when the response
+    carried a usage block; the char heuristic remains the fallback. The
+    thread-local slot is consumed here so a stale report can never be billed
+    to a later request.
+    """
+    provider = tutor.provider
+    take = getattr(provider, "take_last_usage", None)
+    if take is None:
+        return (None, None)
+    usage = take()
+    if usage is None or usage.usage_source != "provider":
+        return (None, None)
+    return (usage.prompt_tokens or None, usage.completion_tokens or None)
+
+
 def _ask_ledger(
     db: Session,
     user: User,
@@ -213,6 +231,7 @@ def _ask_ledger(
     answer: str | None,
     model: str,
     pending: AiUsage | None = None,
+    reported_usage: tuple[int | None, int | None] = (None, None),
 ) -> None:
     """DB postlude to /tutor/ask: finalize the reserved ledger row (or
     append, legacy shape), activity counters, commit. ``answer=None`` is
@@ -221,7 +240,22 @@ def _ask_ledger(
     # BE-01: the reserve, finalized in place — one row per generation, with
     # the answer the provider actually produced (a refusal answer included:
     # it went through the model's safety path, and its tokens were real).
-    finalize_ai_usage(db, pending, model=model, answer_text=answer)
+    reported_prompt, reported_completion = reported_usage
+    json_log(
+        logging.getLogger(__name__),
+        logging.INFO,
+        "usage_source",
+        usage_source="provider" if reported_completion is not None else "estimated",
+        route="tutor.ask",
+    )
+    finalize_ai_usage(
+        db,
+        pending,
+        model=model,
+        answer_text=answer,
+        completion_tokens_override=reported_completion,
+        prompt_tokens_override=reported_prompt,
+    )
     # one tutoring question ≈ one minute of study for the daily
     # counters (the chat routes already record; ask must not be a gap).
     if user.role == "student":
@@ -262,6 +296,9 @@ async def ask(app_ctx: Ctx, payload: AskRequest, db: DbSession, user: CurrentUse
             context=ctx,
             search_query=search_query,
         )
+        # BC-9/T-23: consume the provider-reported usage on THIS thread (the
+        # provider recorded it here); the ledger finalizes in a worker thread.
+        reported_usage = _provider_reported_usage(tutor)
         await asyncio.to_thread(
             _ask_ledger,
             db,
@@ -274,6 +311,7 @@ async def ask(app_ctx: Ctx, payload: AskRequest, db: DbSession, user: CurrentUse
             answer=(None if response.refused_reason in LOCAL_REFUSAL_REASONS else response.answer),
             model=getattr(tutor.provider, "model", None) or tutor.provider.name,
             pending=pending,
+            reported_usage=reported_usage,
         )
         return response
     except ProviderError as exc:

@@ -1,0 +1,59 @@
+Evidence-ID: EV-T00-api-evaluation-regression-verified2
+Captured-UTC: 2026-11-19T11:54:57.126538+00:00
+Finished-UTC: 2026-11-19T11:55:24.262827+00:00
+Base-SHA: 31e3e60ba51b9dde54cfbcba0de4466f70c83917
+Working-directory: apps/api
+Command: .venv/Scripts/python.exe -m bangla_gpt_api.evaluation.cli
+Python: 3.12.10
+Exit-code: 0
+Duration-seconds: 27.125
+--- output ---
+IDENTITY: {"corpus_source": "bundled_sample", "corpus_path": "src/bangla_gpt_api/data/sample_nctb", "corpus_chunk_count": 78, "served_chunks_digest": "4d2409a2ec9adc924e9025bdcf63917e3c42617319278a721f3c15270946e991", "embedder_name": "hash-ngram-local", "embedding_dimension": 384, "prompt_version": "tutor-prompt-v2", "prompt_sha256": "5ea88a83c2c019b4bb4f01485abf8c7d5155dc2f1b4f344fb8962e795ca37fc8"}
+SUITE: version=golden-v3.0.0 split=all n=427 sampling=census (all 427 items) bootstrap_seed=20261029
+{
+ "total": 427,
+ "grounded_rate": 0.808,
+ "coverage_true": 0.798,
+ "coverage_false": 1.0,
+ "precision_true": 1.0,
+ "faithfulness_avg": 0.8544,
+ "faithfulness_mode": "local_overlap",
+ "grammar_avg": 0.988,
+ "language_consistency": 1.0,
+ "assamese_letter_violations": 0
+}
+ERROR SPLIT: false_refusal=82/406 (0.2020) wilson95=[0.1658, 0.2437]  false_answer=0/21 (0.0000) wilson95=[0.0000, 0.1546]
+failures (82), first 10:
+   {"question": "pd prkarbhed chapter ta bujhiye dao.", "class_level": 6, "subject": "bangla", "expect": "answer", "got_grounded": false, "refused_reason": "insufficient_evidence"}
+   {"question": "'\u09ad\u09be\u09b7' \u0985\u09a7\u09cd\u09af\u09be\u09af\u09bc\u099f\u09bf \u09ac\u09c1\u099d\u09bf\u09af\u09bc\u09c7 \u09a6\u09be\u0993\u0964", "class_level": 6, "subject": "bangla", "expect": "answer", "got_grounded": false, "refused_reason": "insufficient_evidence"}
+   {"question": "'\u09b8\u09a8\u09cd\u09a7\u09bf' \u09a5\u09c7\u0995\u09c7 \u098f\u0995\u099f\u09bf \u0989\u09a6\u09be\u09b9\u09b0\u09a3 \u09a6\u09be\u0993\u0964", "class_level": 6, "subject": "bangla", "expect": "answer", "got_grounded": false, "refused_reason": "insufficient_evidence"}
+   {"question": "'\u09b8\u09a8\u09cd\u09a7\u09c0' \u0985\u09a7\u09cd\u09af\u09be\u09af\u09bc\u099f\u09bf \u09ac\u09c1\u099d\u09bf\u09af\u09bc\u09c7 \u09a6\u09be\u0993\u0964", "class_level": 6, "subject": "bangla", "expect": "answer", "got_grounded": false, "refused_reason": "insufficient_evidence"}
+   {"question": "sndhi chapter ta bujhiye dao.", "class_level": 6, "subject": "bangla", "expect": "answer", "got_grounded": false, "refused_reason": "insufficient_evidence"}
+   {"question": "'\u099c\u09cd\u09af\u09be\u09ae\u09bf\u09a4\u09bf' \u09a5\u09c7\u0995\u09c7 \u098f\u0995\u099f\u09bf \u0989\u09a6\u09be\u09b9\u09b0\u09a3 \u09a6\u09be\u0993\u0964", "class_level": 6, "subject": "mathematics", "expect": "answer", "got_grounded": false, "refused_reason": "insufficient_evidence"}
+   {"question": "'\u099c\u09cd\u09af\u09be\u09ae\u09c0\u09a4\u09bf' \u0985\u09a7\u09cd\u09af\u09be\u09af\u09bc\u099f\u09bf \u09ac\u09c1\u099d\u09bf\u09af\u09bc\u09c7 \u09a6\u09be\u0993\u0964", "class_level": 6, "subject": "mathematics", "expect": "answer", "got_grounded": false, "refused_reason": "insufficient_evidence"}
+   {"question": "jjamiti chapter ta bujhiye dao.", "class_level": 6, "subject": "mathematics", "expect": "answer", "got_grounded": false, "refused_reason": "insufficient_evidence"}
+   {"question": "'\u09ad\u0997\u09cd\u09a8\u09be\u0982\u09b6' \u09a5\u09c7\u0995\u09c7 \u098f\u0995\u099f\u09bf \u0989\u09a6\u09be\u09b9\u09b0\u09a3 \u09a6\u09be\u0993\u0964", "class_level": 6, "subject": "mathematics", "expect": "answer", "got_grounded": false, "refused_reason": "insufficient_evidence"}
+   {"question": "'\u09ad\u0997\u09cd\u09a8\u09be\u0982\u09b6' \u0985\u09a7\u09cd\u09af\u09be\u09af\u09bc\u09c7 \u0995\u09c0 \u0995\u09c0 \u09aa\u09be\u09b0\u09cd\u09a5\u0995\u09cd\u09af \u0986\u099b\u09c7?", "class_level": 6, "subject": "mathematics", "expect": "answer", "got_grounded": false, "refused_reason": "insufficient_evidence"}
+LANGUAGE: consistency=1.0000 assamese_letter_violations=0
+JUDGE: mode=local_overlap (deterministic overlap; LLM-judge legs UNVERIFIED-LIVE without a provider)
+ANSWER QUALITY (RAG-D1/SLOP-D1): UNVERIFIED-LIVE (faithfulness mode=local_overlap; a real model and human review are required for this class)
+STRATA negative_kind: adversarial=5/5 ambiguous=6/6 out_of_corpus=10/10
+STRATA query_form: banglish=53/74 bn=212/238 bn_typo=6/37 en=4/4 mixed=70/74
+STRATA question_type: application=35/37 comparison=31/37 definition=148/184 example=22/37 explanation=53/74 negative=21/21 summary=35/37
+STRATA split: dev=105/122 test=240/305
+
+GATE (regression > 2pp fails):
+   grounded_rate: baseline=0.7963 current=0.8080 drop=-1.17pp PASS
+   coverage_true: baseline=0.7882 current=0.7980 drop=-0.98pp PASS
+   coverage_false: baseline=0.9524 current=1.0000 drop=-4.76pp PASS
+   precision_true: baseline=0.9969 current=1.0000 drop=-0.31pp PASS
+   faithfulness_avg: baseline=0.8544 current=0.8544 drop=+0.00pp PASS
+   grammar_avg: baseline=0.9879 current=0.9880 drop=-0.01pp PASS
+   grounded_rate: n=427 rate=0.8080 wilson95=[0.7679, 0.8425]
+   coverage_true: n=406 rate=0.7980 wilson95=[0.7563, 0.8342]
+   coverage_false: n=21 rate=1.0000 wilson95=[0.8454, 1.0000]
+   precision_true: n=324 rate=1.0000 wilson95=[0.9883, 1.0000]
+   language_consistency: baseline=1.0000 current=1.0000 drop=+0.00pp floor=0.99 PASS
+   assamese_letter_violations: current=0 floor=0 PASS
+   grounded_rate paired bootstrap (seed=20261029, n=427): delta=+0.0117 95% CI [+0.0023, +0.0234] -> measurable difference
+GATE: PASS

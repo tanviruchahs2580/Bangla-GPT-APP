@@ -1,0 +1,11 @@
+Evidence-ID: EV-T00-api-evaluation-redteam
+Captured-UTC: 2026-11-19T11:54:09.983816+00:00
+Finished-UTC: 2026-11-19T11:54:09.985474+00:00
+Base-SHA: 31e3e60ba51b9dde54cfbcba0de4466f70c83917
+Working-directory: apps/api
+Command: Scripts/python.exe -m bangla_gpt_api.evaluation.cli --redteam
+Python: 3.12.10
+Exit-code: 127
+Duration-seconds: 0.000
+--- output ---
+FileNotFoundError: [WinError 2] The system cannot find the file specified
