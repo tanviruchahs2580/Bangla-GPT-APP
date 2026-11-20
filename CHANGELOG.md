@@ -13,7 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-Nothing yet.
+### Maintenance
+
+- chore: add Claude Code project setup
+- chore: regenerate the CHANGELOG for v0.15.0
+
+### Other
+
+- Merge pull request #148 from tanviruchahs2580/chore/changelog-0.15.0
 
 ## v0.15.0 - 2026-11-18
 
