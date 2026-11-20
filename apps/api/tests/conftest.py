@@ -119,6 +119,23 @@ def poll_until(
 
 
 @pytest.fixture(autouse=True)
+def _reset_provider_health():
+    """Clear the provider-failure streak around every test.
+
+    ``providers.base`` keeps a process-wide count of consecutive failed
+    provider calls (``PROVIDER_DEGRADED_AFTER``). The Gemini and OpenAI
+    error-path tests raise it, and nothing reset it between tests, so a later
+    ``/status`` test could read "degraded" depending on test order. Tests that
+    need a streak build it themselves.
+    """
+    from bangla_gpt_api.providers.base import reset_provider_health
+
+    reset_provider_health()
+    yield
+    reset_provider_health()
+
+
+@pytest.fixture(autouse=True)
 def _isolate_production_opt_ins():
     """Stop production-guard opt-ins leaking between tests.
 
