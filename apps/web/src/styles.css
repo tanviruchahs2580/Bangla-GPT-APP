@@ -309,6 +309,23 @@ body {
   font-synthesis: none;
 }
 
+/* Font A fidelity (2026-11-20): form controls do not inherit the page font.
+   The UA stylesheet gives button/input/select/textarea their own family
+   (Arial on Windows Chrome) at 13.33px, and Arial has no Bengali glyphs, so
+   every control without a per-class font-family rendered its Bangla label in
+   the OS fallback face (Nirmala UI on Windows) instead of Noto Sans Bengali:
+   the tutor's subject/style/suggestion chips, quiz answers, subject cards,
+   every Segmented control and the admin role selects. Only the family is
+   inherited here; sizes and line-heights stay with each component, so no
+   token in the type scale moves. Guarded by controlFontInheritance.test.ts. */
+button,
+input,
+select,
+textarea,
+optgroup {
+  font-family: inherit;
+}
+
 /* ── WAVE-4: ambient national-scale backdrop ────────────────────
    Layered brand mesh + nakshi-kantha-inspired stitch weave, fixed to
    the viewport so it never scrolls with content. Pure CSS (zero image
@@ -1213,6 +1230,14 @@ p {
   padding: var(--space-4);
 }
 
+/* The value and label are stacked lines. Several cards render them as <span>s
+   (AiQualityCard, SchoolDashboard, SchoolSections), which left both inline
+   and glued the label to the number ("1মোট উত্তর"). */
+.stat-value,
+.stat-label {
+  display: block;
+}
+
 .stat-value {
   font-size: var(--fs-2xl);
   font-weight: 700;
@@ -2092,6 +2117,9 @@ form .btn[type="submit"] {
 
 .subject-card .subject-name {
   font-weight: 700;
+  /* Font A fidelity: inherited the card button's 13.33px UA size, which put
+     the subject title below its own --fs-sm meta line. */
+  font-size: var(--fs-md);
   margin-top: var(--space-2);
 }
 
@@ -2297,6 +2325,8 @@ form .btn[type="submit"] {
   background: var(--card);
   padding: 10px 16px;
   font-weight: 600;
+  /* Font A fidelity: was the 13.33px UA button default; matches .chip. */
+  font-size: var(--fs-sm);
   cursor: pointer;
   transition:
     transform var(--m-fast) var(--ease),
@@ -2827,6 +2857,9 @@ table.data tbody tr:hover {
   background: var(--card);
   cursor: pointer;
   font-weight: 600;
+  /* Font A fidelity: quiz answers are reading text for children; they sat at
+     the 13.33px UA button default, smaller than the question above them. */
+  font-size: var(--fs-md);
   transition:
     transform var(--m-fast) var(--ease),
     border-color var(--m-fast) var(--ease),

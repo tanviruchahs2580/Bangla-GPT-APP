@@ -6,6 +6,26 @@
     <meta name="robots" content="noindex" />
     <title>অফলাইন / Offline — বাংলা GPT টিউটর</title>
     <style>
+      /* Font A fidelity: the body stack named "Noto Sans Bengali" but nothing
+         declared it, so this page rendered in the OS face on Windows/iOS. The
+         same self-hosted files as src/fonts.css; the service worker serves
+         them from its font cache once the app has loaded them, and the stack
+         below takes over when they are not cached. */
+      @font-face {
+        font-family: "Noto Sans Bengali"; font-style: normal; font-weight: 400; font-display: swap;
+        src: url("/fonts/noto-sans-bengali-bengali-400-normal.woff2") format("woff2");
+        unicode-range: U+0951-0952, U+0964-0965, U+0980-09FE, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Noto Sans Bengali"; font-style: normal; font-weight: 700; font-display: swap;
+        src: url("/fonts/noto-sans-bengali-bengali-700-normal.woff2") format("woff2");
+        unicode-range: U+0951-0952, U+0964-0965, U+0980-09FE, U+200C-200D, U+25CC;
+      }
+      @font-face {
+        font-family: "Noto Sans Bengali"; font-style: normal; font-weight: 400; font-display: swap;
+        src: url("/fonts/noto-sans-bengali-latin-400-normal.woff2") format("woff2");
+        unicode-range: U+0000-00FF, U+2000-206F;
+      }
       :root { color-scheme: light dark; }
       body {
         margin: 0; min-height: 100vh; display: grid; place-items: center;
