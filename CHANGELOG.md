@@ -13,7 +13,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-Nothing yet.
+### Fixed
+
+- fix(docker): pin openssl to the build Debian serves now
+- fix(web): follow the numeral policy in dashboard stats
+- fix(web): rebuild the forgot-password page on the design system
+- fix(web): render every form control in the app font (Font A)
+
+### Maintenance
+
+- chore: regenerate the CHANGELOG for v0.15.0
+
+### Other
+
+- Merge pull request #148 from tanviruchahs2580/chore/changelog-0.15.0
 
 ## v0.15.0 - 2026-11-18
 
