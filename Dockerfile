@@ -44,17 +44,21 @@ LABEL org.opencontainers.image.title="bangla-gpt-api" \
 # continuously — targeted installs are whack-a-mole that reds the pipeline.
 #
 # The two explicitly installed packages are version-pinned (hadolint DL3008).
-# Pinning them is safe only because the base image is digest-pinned: the
-# candidate version below is the one that digest resolves to, so the pin is
-# deterministic. `apt-get upgrade` still floats every OTHER package, which is
-# the deliberate trade-off documented above — it is why two builds of this
-# image are content-identical but not byte-identical.
+# The pin is NOT made deterministic by the digest-pinned base: `apt-get
+# update` reads the LIVE Debian archive, `apt-get upgrade` then moves openssl
+# to the archive's current build, and the install line below must name that
+# same build. When Debian publishes a newer openssl (security or point
+# release) the superseded version disappears from the archive and the build
+# fails with apt exit 100 (2026-11-21: 3.5.7-1~deb13u3 -> 3.5.9-1~deb13u1
+# red every PR's Docker job). `apt-get upgrade` still floats every OTHER
+# package, which is the deliberate trade-off documented above — it is why two
+# builds of this image are content-identical but not byte-identical.
 #
-# To refresh: re-resolve the candidate in the pinned base
+# To refresh: re-resolve the candidate the live archive serves
 #   docker run --rm --entrypoint sh python:3.12-slim@sha256:<digest> \
 #     -c "apt-get update -qq && apt-cache policy openssl libssl3t64"
-# and update both the digest and the versions here together.
-ARG OPENSSL_VERSION=3.5.7-1~deb13u3
+# and update the versions here (and the digest, when it moves) together.
+ARG OPENSSL_VERSION=3.5.9-1~deb13u1
 RUN apt-get update \
     && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
