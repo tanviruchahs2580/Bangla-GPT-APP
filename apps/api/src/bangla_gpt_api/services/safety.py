@@ -55,6 +55,14 @@ _PATTERNS: tuple[tuple[str, str], ...] = (
         "self_harm",
         r"আত্মহত্যা|আত্মঘাতী|নিজেকে\s*(?:মার|মারে|মেরে)\s*(?:ফেল|ফেলা|শেষ)?|মরে\s*যেতে\s*(?:চাই|ইচ্ছে)"
         r"|বাঁচতে\s*চাই\s*না|জীবন\s*শেষ\s*কর|গিলে\s*ফেল|বিষ\s*খাও|ফাঁসি\s*দেও|কাটা\s*যাবে"
+        # 2026-11-20 audit (RAG-01, verified by running screen_question): the
+        # commonest first-person phrasing "আমি মরতে চাই" passed while its own
+        # romanised mirror "morte chai" below was refused, so a child typing
+        # it in Bangla never saw the helpline copy. Each arm keeps an intent
+        # frame (চাই / ইচ্ছে / কর-verb), so curriculum questions such as
+        # "পানি না পেলে গাছ মরতে পারে" or "ধূমপান নিজের ক্ষতি করে" stay legal.
+        r"|মরতে\s*(?:চাই|ইচ্ছে|ইচ্ছা)|নিজেকে\s*শেষ\s*কর"
+        r"|নিজের\s*ক্ষতি\s*কর(?:তে\s*চাই|ব|বো)|বাঁচতে\s*(?:ইচ্ছে|ইচ্ছা)\s*কর(?:ে|ছে)\s*না"
         # romanized Bangla + English variants (case handled by (?i) below)
         r"|(?i:suicid\w*|kill\s+(?:myself|me)|mar\s*kh\w+b?o?\s*(?:bo|dibo)?"
         r"|(?:gori|gola)\s*katbo|gila\s*felbo|bish\s*khabo|fashi\s*dibo"
@@ -69,7 +77,18 @@ _PATTERNS: tuple[tuple[str, str], ...] = (
         r"|atm[ao]\s*h[ao]t(?:t?[ay]|ya)|atmaghati|atma\s*ghati"
         r"|nijeke\s*m[ae]r(?:e|a|bo|be|lo|echi|chhi|dibo|felbo)"
         r"|nijer\s*jibon\s*sesh?|jibon\s*sesh?\s*kor(?:te|e|ar|bo)"
-        r"|mor(?:te|e)\s*(?:jete\s*)?chai|b[aã]n?chte\s*chai\s*na)",
+        r"|mor(?:te|e)\s*(?:jete\s*)?chai|b[aã]n?chte\s*chai\s*na"
+        # RAG-01 mirrors: the Bangla additions above, romanised, and the
+        # everyday English first-person phrasings ("I want to die" passed;
+        # only "suicide" and "kill myself" were known). First-person or
+        # intent framed, like the rest of the arm.
+        r"|nijeke\s*sh?esh?\s*kor|b[aã]n?chte\s*ichh?e\s*kor(?:e|che)\s*na"
+        r"|\bwan(?:t|ts|ted|na)\s+(?:to\s+)?die\b|\bwish\s+i\s+(?:was|were)\s+dead\b"
+        r"|\b(?:do\s*n[o']?t|dont)\s+want\s+to\s+(?:live|be\s+alive)\b"
+        # "hurt myself" alone is how a child reports a playground injury, so
+        # the English harm verbs need a want/going-to frame.
+        r"|\bend\s+my\s+(?:own\s+)?life\b"
+        r"|\b(?:want|wants|wanted|wanna|going)\s+(?:to\s+)?(?:hurt|harm|cut)\s+myself\b)",
     ),
     # Weapons / explosives synthesis
     (
