@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { getAdminAiQuality } from "../../api";
 import type { AdminAiQuality } from "../../api";
 import { Badge, LoadError } from "../ui";
-import { t } from "../../i18n";
+import { formatNumber, t } from "../../i18n";
 import { track } from "../../lib/analytics";
 
 /** (blueprint §admin): AI answer-quality panel — grounding rate,
@@ -80,34 +80,36 @@ export function AiQualityCard() {
   return (
     <section className="card">
       <h2>{t("aiqTitle")}</h2>
-      <p className="muted m-0">{q.days}d</p>
+      <p className="muted m-0">{t("periodLastDays", { days: q.days })}</p>
       <div className="stat-grid">
         <div className="stat">
-          <span className="stat-value">{q.answers_total}</span>
+          <span className="stat-value">{formatNumber(q.answers_total)}</span>
           <span className="stat-label">{t("aiqAnswers")}</span>
         </div>
         <div className="stat">
-          <span className="stat-value">{q.grounded_count}</span>
+          <span className="stat-value">{formatNumber(q.grounded_count)}</span>
           <span className="stat-label">{t("aiqGrounded")}</span>
         </div>
         <div className="stat">
-          <span className="stat-value">{q.ungrounded_count}</span>
+          <span className="stat-value">{formatNumber(q.ungrounded_count)}</span>
           <span className="stat-label">{t("aiqUngrounded")}</span>
         </div>
         <div className="stat">
-          <span className="stat-value">{q.low_confidence_count}</span>
+          <span className="stat-value">
+            {formatNumber(q.low_confidence_count)}
+          </span>
           <span className="stat-label">{t("aiqLowConf")}</span>
         </div>
       </div>
       <p className="mt-2 m-0">
         <Badge tone="ok">
-          {t("aiqThumbsUp")} {q.thumbs_up}
+          {t("aiqThumbsUp")} {formatNumber(q.thumbs_up)}
         </Badge>{" "}
         <Badge tone={q.thumbs_down > 0 ? "warn" : "ok"}>
-          {t("aiqThumbsDown")} {q.thumbs_down}
+          {t("aiqThumbsDown")} {formatNumber(q.thumbs_down)}
         </Badge>{" "}
         <Badge tone={q.refusals_total > 0 ? "warn" : "ok"}>
-          {t("aiqRefusals")} {q.refusals_total}
+          {t("aiqRefusals")} {formatNumber(q.refusals_total)}
         </Badge>
       </p>
       {reasons.length > 0 && (

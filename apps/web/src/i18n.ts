@@ -141,6 +141,7 @@ const bn = {
   on: "চালু",
   off: "বন্ধ",
   aiqTitle: "AI উত্তরের মান",
+  periodLastDays: "গত {days} দিন",
   aiqAnswers: "মোট উত্তর",
   aiqGrounded: "সূত্রসহ",
   aiqUngrounded: "সূত্রবিহীন",
@@ -996,6 +997,7 @@ const en: Dict = {
   on: "On",
   off: "Off",
   aiqTitle: "AI answer quality",
+  periodLastDays: "Last {days} days",
   aiqAnswers: "Answers",
   aiqGrounded: "Grounded",
   aiqUngrounded: "Ungrounded",
@@ -1714,6 +1716,7 @@ const EN_SINGULAR: Partial<Record<keyof Dict, string>> = {
   genSourcesCount: "Grounded in {n} textbook source",
   quizUnansweredConfirm:
     "{n} question has no answer yet. Submit with what you have?",
+  periodLastDays: "Last {days} day",
 };
 
 let current: Lang = (localStorage.getItem("bgpt_lang") as Lang) || "bn";

@@ -9,7 +9,7 @@ import type {
 } from "../../api";
 import { Badge, Button, Card, Segmented } from "../ui";
 import { friendlyError } from "../../errors";
-import { t } from "../../i18n";
+import { formatNumber, t } from "../../i18n";
 import { track } from "../../lib/analytics";
 // FE-FIX (duplication): this subject list and its comment were copy-pasted in
 // the tutor and quiz pickers too; one helper owns the values now.
@@ -479,7 +479,9 @@ export function CreateHub({
       {workload && (
         <div className="stat-row mt-4" title={workload.methodology}>
           <div>
-            <div className="num">{workload.total_minutes_saved}</div>
+            <div className="num">
+              {formatNumber(workload.total_minutes_saved)}
+            </div>
             <div className="lbl">
               {t("workloadMinutes", { n: workload.total_minutes_saved })}
             </div>

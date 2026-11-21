@@ -10,7 +10,7 @@ import { SchoolsCard } from "../components/admin/SchoolsCard";
 import { VersionsCard } from "../components/admin/VersionsCard";
 import { ResponsiveTable } from "../components/ResponsiveTable";
 import { Button, EmptyState, Field, Modal } from "../components/ui";
-import { t } from "../i18n";
+import { formatNumber, t } from "../i18n";
 import { roleLabel } from "../lib/roles";
 import { useDebounced } from "../lib/useDebounced";
 import type { AdminOverview, AdminUsersPage, UserPublic } from "../types";
@@ -216,23 +216,25 @@ export default function AdminDashboard() {
         {overview && (
           <div className="stat-row">
             <div className="stat">
-              <div className="num">{overview.users_total}</div>
+              <div className="num">{formatNumber(overview.users_total)}</div>
               <div className="lbl">{t("statTotal")}</div>
             </div>
             <div className="stat">
-              <div className="num">{overview.students}</div>
+              <div className="num">{formatNumber(overview.students)}</div>
               <div className="lbl">{t("roleStudent")}</div>
             </div>
             <div className="stat">
-              <div className="num">{overview.teachers}</div>
+              <div className="num">{formatNumber(overview.teachers)}</div>
               <div className="lbl">{t("roleTeacher")}</div>
             </div>
             <div className="stat">
-              <div className="num">{overview.parents}</div>
+              <div className="num">{formatNumber(overview.parents)}</div>
               <div className="lbl">{t("roleParent")}</div>
             </div>
             <div className="stat">
-              <div className="num">{overview.quiz_attempts_graded}</div>
+              <div className="num">
+                {formatNumber(overview.quiz_attempts_graded)}
+              </div>
               <div className="lbl">{t("statQuizzes")}</div>
             </div>
           </div>

@@ -99,7 +99,10 @@ const CEILING: Record<string, number> = {
   // 147: E2 (2026-11-17) — the loading branch now renders the page's real
   // shape (stat grid, health card, at-risk rows) and the at-risk empty state
   // became the shared EmptyState.
-  "SchoolDashboard.tsx": 162,
+  // 163: Font A fidelity (2026-11-20) routed every stat through formatNumber
+  // (numeral policy: Bangla digits in Bangla copy); prettier wrapped one
+  // `{formatNumber(data.support_pct)}%` line. No branch or JSX was added.
+  "SchoolDashboard.tsx": 163,
   "StatusPage.tsx": 160, // E2 (2026-11-17): shaped skeleton loading branch.
   "WelcomePage.tsx": 128,
   // 708: E1 (2026-11-17) replaced window.confirm with the shared
@@ -155,7 +158,10 @@ const CEILING: Record<string, number> = {
   // declarations cost lines here, the table markup is now shared).
   "teacher/ClassesPage.tsx": 702,
   "teacher/CreatePage.tsx": 706,
-  "teacher/TeacherHomePage.tsx": 180,
+  // 182: Font A fidelity (2026-11-20) put the minutes-saved figure through
+  // formatNumber (Bangla digits in Bangla copy); prettier wrapped that one
+  // line. No branch or JSX was added.
+  "teacher/TeacherHomePage.tsx": 182,
   "teacher/TeacherProfilePage.tsx": 119,
 };
 
