@@ -14877,7 +14877,7 @@
     },
     "/teacher/classrooms": {
       "get": {
-        "description": "all classrooms with enrollment counts.\n\ntenancy: a teacher attached to a school only sees that school's\nrooms; school-less teachers and platform admins keep the old view.",
+        "description": "all classrooms with enrollment counts.\n\ntenancy: a teacher attached to a school only sees that school's\nrooms; a school-less teacher only the rooms they teach (SEC-01: the\nshared default school is not one tenancy); platform admins see all.",
         "operationId": "teacher_list_classrooms_teacher_classrooms_get",
         "responses": {
           "200": {

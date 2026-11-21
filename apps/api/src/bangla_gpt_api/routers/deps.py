@@ -23,6 +23,7 @@ from bangla_gpt_api.config import Settings
 from bangla_gpt_api.db.models import (
     ClassRoom,
     ClassStudent,
+    ClassTeacher,
     Parent,
     School,
     Student,
@@ -415,7 +416,9 @@ def _provider_lacks_vision(app_ctx: AppContext) -> bool:
 # real school platform-wide. Once a teacher is attached to a school,
 # students and classrooms of OTHER schools are answered as not found
 # (F-144: the 403 "other_school" code the /school/* scope guards still use
-# made this wall an existence oracle for staff ids).
+# made this wall an existence oracle for staff ids). SEC-01: the default
+# school is NOT one tenancy — inside it a school-less teacher is further
+# walled to the rooms they teach (_standalone_room_ids).
 def _default_school_id(db: Session) -> int:
     """Id of the shared default school, created lazily like common's
     get-or-create helper (kept local to avoid a deps -> common import)."""
@@ -458,6 +461,112 @@ def _tenant_school_id(db: Session, user: User) -> int | None:
         status_code=403,
         detail={"code": "insufficient_role", "message": "Insufficient role"},
     )
+
+
+#: SEC-01: every standalone teacher gets a private home school for the rooms
+#: they create, so the (school, class_level, section) key stops colliding
+#: across strangers and the school wall separates them like any real school.
+_STANDALONE_SCHOOL_PREFIX = "BGPT-T"
+_STANDALONE_SCOPE_CACHE = "sec01_standalone_room_ids"
+
+
+def _standalone_school_code(user_id: int) -> str:
+    return f"{_STANDALONE_SCHOOL_PREFIX}{user_id}"
+
+
+def _existing_school_id(db: Session, code: str) -> int | None:
+    """Look a school up by code WITHOUT creating it (safe on read paths)."""
+    found = db.scalar(select(School.id).where(School.code == code))
+    return int(found) if found is not None else None
+
+
+def _standalone_home_school(db: Session, user: User) -> School:
+    """Get-or-create the private school a standalone teacher's rooms live in."""
+    from sqlalchemy.exc import IntegrityError as _IntegrityError
+
+    code = _standalone_school_code(user.id)
+    school = db.execute(select(School).where(School.code == code)).scalar_one_or_none()
+    if school is None:
+        school = School(name=f"Standalone teacher {user.id}", code=code)
+        db.add(school)
+        try:
+            db.flush()
+        except _IntegrityError:  # concurrent creation
+            db.rollback()
+            school = db.execute(select(School).where(School.code == code)).scalar_one()
+    return school
+
+
+def _standalone_room_ids(db: Session, user: User) -> frozenset[int] | None:
+    """SEC-01 (2026-11-20 audit): the narrower wall for school-less staff.
+
+    F-04 anchored every teacher without a school to ONE shared default school,
+    so the default school was a single tenancy for all of them: any stranger
+    who self-registered as a teacher could list, read and act on the children
+    every other standalone teacher had imported (roster, progress, activity,
+    assignments, consent reconfirm). A standalone teacher is now walled to the
+    classrooms they are an assigned ClassTeacher of (the B-07 invariant mints
+    that row for every room a teacher creates) and, through them, to the
+    students enrolled there. Only rooms in their private home school (new
+    rooms) or in the default school (rooms created before the home school
+    existed) count, so an assignment never widens a standalone account into a
+    real school.
+
+    Returns None when the school wall alone applies: platform admin, or staff
+    bound to a real school. An account bound to the default school itself is
+    treated as standalone (binding to it must not reopen the shared tenancy).
+    A school_admin without a school is a provisioning error (the /school/*
+    guards already 404 it) and gets an EMPTY scope. Cached per session, which
+    is per request.
+    """
+    if user.role == "admin":
+        return None
+    cache: dict[int, frozenset[int] | None] = db.info.setdefault(_STANDALONE_SCOPE_CACHE, {})
+    if user.id in cache:
+        return cache[user.id]
+    default_id = _existing_school_id(db, _DEFAULT_SCHOOL_CODE)
+    if user.school_id is not None and user.school_id != default_id:
+        cache[user.id] = None
+        return None
+    rooms: frozenset[int] = frozenset()
+    if user.role == "teacher":
+        homes = [
+            sid
+            for sid in (default_id, _existing_school_id(db, _standalone_school_code(user.id)))
+            if sid is not None
+        ]
+        if homes:
+            rooms = frozenset(
+                int(r)
+                for r in db.scalars(
+                    select(ClassTeacher.classroom_id)
+                    .join(Teacher, Teacher.id == ClassTeacher.teacher_id)
+                    .join(ClassRoom, ClassRoom.id == ClassTeacher.classroom_id)
+                    .where(Teacher.user_id == user.id, ClassRoom.school_id.in_(homes))
+                )
+            )
+    cache[user.id] = rooms
+    return rooms
+
+
+def _forget_standalone_scope(db: Session) -> None:
+    """Drop the per-session scope cache after a room or assignment changes."""
+    db.info.pop(_STANDALONE_SCOPE_CACHE, None)
+
+
+def _student_in_rooms(db: Session, room_ids: frozenset[int], student_id: int) -> bool:
+    """One EXISTS probe: is the student enrolled in any of ``room_ids``?"""
+    if not room_ids:
+        return False
+    probe = (
+        select(ClassStudent.student_id)
+        .where(
+            ClassStudent.student_id == student_id,
+            ClassStudent.classroom_id.in_(sorted(room_ids)),
+        )
+        .exists()
+    )
+    return db.scalar(select(probe)) is True
 
 
 def _student_in_school(db: Session, school_id: int, student_id: int) -> bool:
@@ -525,7 +634,13 @@ def _assert_student_in_school(db: Session, user: User, student: Student) -> Stud
     school_id = _tenant_school_id(db, user)
     if school_id is None:
         return student
-    if not _student_in_school(db, school_id, student.id):
+    rooms = _standalone_room_ids(db, user)
+    inside = (
+        _student_in_school(db, school_id, student.id)
+        if rooms is None
+        else _student_in_rooms(db, rooms, student.id)
+    )
+    if not inside:
         _audit_tenant_mismatch(
             db, user, kind="student", object_id=student.id, object_school_id=None
         )
@@ -544,7 +659,9 @@ def _assert_room_in_school(db: Session, user: User, room: ClassRoom) -> ClassRoo
     school_id = _tenant_school_id(db, user)
     if school_id is None:
         return room
-    if room.school_id != school_id:
+    rooms = _standalone_room_ids(db, user)
+    outside = room.id not in rooms if rooms is not None else room.school_id != school_id
+    if outside:
         _audit_tenant_mismatch(
             db, user, kind="classroom", object_id=room.id, object_school_id=room.school_id
         )

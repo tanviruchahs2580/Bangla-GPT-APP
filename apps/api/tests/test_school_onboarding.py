@@ -229,7 +229,9 @@ def test_classrooms_follow_the_teachers_school(env) -> None:
     ).fetchone()[0]
     assert school_id == a["id"]
 
-    # legacy school-less teacher keeps landing in the default school
+    # SEC-01: a school-less teacher's rooms land in their private home school
+    # (BGPT-T<user id>), not the shared default school, so two standalone
+    # teachers never share one tenancy or one (level, section) namespace.
     client.post(
         "/auth/register",
         json={"email": "legacy@school.test", "password": PASSWORD, "name": "নাম", "role": "teacher"},
@@ -241,7 +243,10 @@ def test_classrooms_follow_the_teachers_school(env) -> None:
         "SELECT s.code FROM classrooms c JOIN schools s ON s.id=c.school_id WHERE c.id=?",
         (room2.json()["id"],),
     ).fetchone()[0]
-    assert code == "BGPT-DEFAULT"
+    legacy_id = conn.execute(
+        "SELECT id FROM users WHERE email=?", ("legacy@school.test",)
+    ).fetchone()[0]
+    assert code == f"BGPT-T{legacy_id}"
 
 
 def test_invited_staff_receive_a_verification_code_when_smtp_is_on(tmp_path) -> None:

@@ -100,7 +100,10 @@ def _seed_attempt(
 
 
 def _enroll_in_default_school(
-    conn: sqlite3.Connection, student_id: int, class_level: int = 6
+    conn: sqlite3.Connection,
+    student_id: int,
+    class_level: int = 6,
+    teacher_email: str | None = None,
 ) -> None:
     """Enroll a seeded student into the shared default school (F-04).
 
@@ -134,6 +137,19 @@ def _enroll_in_default_school(
         "INSERT OR IGNORE INTO class_students (classroom_id, student_id, created_at) VALUES (?, ?, ?)",
         (room_id, student_id, now),
     )
+    if teacher_email is not None:
+        # SEC-01: a standalone teacher is walled to the rooms they teach, so
+        # the acting teacher is made this room's ClassTeacher -- the row
+        # POST /teacher/classrooms mints for a room's creator.
+        teacher_id = conn.execute(
+            "SELECT t.id FROM teachers t JOIN users u ON u.id = t.user_id WHERE u.email=?",
+            (teacher_email,),
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT OR IGNORE INTO class_teachers (classroom_id, teacher_id, subject, created_at)"
+            " VALUES (?, ?, '', ?)",
+            (room_id, teacher_id, now),
+        )
     conn.commit()
 
 
@@ -163,7 +179,7 @@ def test_roster_briefs_batched_and_identical(tmp_path, monkeypatch) -> None:
     # F-04: teacher surfaces are walled to the default school, so the
     # seeded students must be enrolled in one of its classrooms
     for sid in (s1, s2, s3, s4):
-        _enroll_in_default_school(conn, sid)
+        _enroll_in_default_school(conn, sid, teacher_email="t@scale.test")
     _seed_attempt(conn, s1, 40.0, now - timedelta(hours=2))
     _seed_attempt(conn, s1, 80.0, now - timedelta(hours=1))
     _seed_attempt(conn, s2, 55.5, now)
@@ -195,7 +211,7 @@ def test_teacher_students_limit(tmp_path) -> None:
     teacher = _register(client, "teacher", "t2@scale.test")
     ids = [_seed_student(conn, f"k{i}@scale.test") for i in range(5)]
     for sid in ids:
-        _enroll_in_default_school(conn, sid)
+        _enroll_in_default_school(conn, sid, teacher_email="t2@scale.test")
     res = client.get("/teacher/students", headers=teacher, params={"limit": 3})
     assert res.status_code == 200
     assert [b["student_id"] for b in res.json()] == ids[:3]

@@ -279,14 +279,25 @@ def _load_class_students(
     class_level: int | None,
     limit: int | None = None,
     school_id: int | None = None,
+    room_ids: frozenset[int] | None = None,
 ) -> list[Student]:
     # tenancy: when the caller is bound to a school, only students
     # enrolled in a classroom of THAT school are visible. school_id=None
-    # keeps the legacy platform-wide view (school-less teachers, admins).
+    # is the platform-wide view (admins only: school-less teachers are
+    # anchored to the default school by deps._tenant_school_id).
+    # SEC-01: ``room_ids`` (deps._standalone_room_ids) narrows a school-less
+    # teacher to the classrooms they teach; without it every standalone
+    # teacher saw every child in the shared default school.
     statement = select(Student).order_by(Student.id)
     if class_level is not None:
         statement = statement.where(Student.class_level == class_level)
-    if school_id is not None:
+    if room_ids is not None:
+        # The room set already carries the tenancy (deps._standalone_room_ids
+        # only admits the teacher's own home-school or legacy default rooms).
+        statement = statement.join(ClassStudent, ClassStudent.student_id == Student.id).where(
+            ClassStudent.classroom_id.in_(sorted(room_ids))
+        )
+    elif school_id is not None:
         statement = (
             statement.join(ClassStudent, ClassStudent.student_id == Student.id)
             .join(ClassRoom, ClassRoom.id == ClassStudent.classroom_id)

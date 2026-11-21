@@ -185,8 +185,8 @@ def _enroll_in_default_school(
 ) -> None:
     """Enroll a student into the shared default school (F-04 contract).
 
-    School-less staff reads are walled to the default school, so teacher
-    surfaces in these tests see only default-school classrooms' students.
+    School-less staff reads are walled to the default school, and inside it to
+    the rooms they teach (SEC-01), so each test also assigns its teacher.
     """
     row = conn.execute("SELECT id FROM schools WHERE code='BGPT-DEFAULT'").fetchone()
     if row is None:
@@ -215,6 +215,33 @@ def _enroll_in_default_school(
     conn.commit()
 
 
+def _assign_teacher_to_default_room(
+    conn: sqlite3.Connection, teacher_email: str, class_level: int = 6
+) -> None:
+    """Make the teacher an assigned ClassTeacher of the default-school room.
+
+    SEC-01: a school-less teacher is walled to the classrooms they teach, not
+    to the whole shared default school, so the teacher surfaces below see the
+    enrolled student only through this assignment (the row POST
+    /teacher/classrooms mints for a room's creator).
+    """
+    teacher_id = conn.execute(
+        "SELECT t.id FROM teachers t JOIN users u ON u.id = t.user_id WHERE u.email=?",
+        (teacher_email,),
+    ).fetchone()[0]
+    room_id = conn.execute(
+        "SELECT c.id FROM classrooms c JOIN schools s ON s.id = c.school_id "
+        "WHERE s.code='BGPT-DEFAULT' AND c.class_level=? AND c.section='GEN'",
+        (class_level,),
+    ).fetchone()[0]
+    conn.execute(
+        "INSERT OR IGNORE INTO class_teachers (classroom_id, teacher_id, subject, created_at) "
+        "VALUES (?, ?, '', ?)",
+        (room_id, teacher_id, _ts(_now())),
+    )
+    conn.commit()
+
+
 def test_same_value_from_all_three_surfaces(env) -> None:
     client, conn, settings = env
     sid = _register(client, "kid@rollup.test", role="student")
@@ -222,6 +249,7 @@ def test_same_value_from_all_three_surfaces(env) -> None:
     _enroll_in_default_school(conn, sid)
     student_h = _login(client, "kid@rollup.test")
     _register(client, "teach@rollup.test", role="teacher")
+    _assign_teacher_to_default_room(conn, "teach@rollup.test")
     teacher_h = _login(client, "teach@rollup.test")
     _seed_family(client, conn, "par@rollup.test", sid)
     parent_h = _login(client, "par@rollup.test")
@@ -282,6 +310,7 @@ def test_weak_chapter_rule_agrees_across_memory_analytics_and_personalization(en
     _enroll_in_default_school(conn, sid)
     student_h = _login(client, "tri@rollup.test")
     _register(client, "teach3@rollup.test", role="teacher")
+    _assign_teacher_to_default_room(conn, "teach3@rollup.test")
     teacher_h = _login(client, "teach3@rollup.test")
 
     memory = client.get("/students/me/memory", headers=student_h)

@@ -74,6 +74,7 @@ from .deps import (
     TeacherOrAdminUser,
     _assert_room_in_school,
     _assert_student_in_school,
+    _standalone_room_ids,
     _tenant_school_id,
 )
 
@@ -309,7 +310,11 @@ def _read_chapters(db: Session, student_ids: list[int]) -> dict[int, set[str]]:
 
 
 def _weak_matrix(
-    db: Session, class_level: int, school_id: int | None = None, room_id: int | None = None
+    db: Session,
+    class_level: int,
+    school_id: int | None = None,
+    room_id: int | None = None,
+    room_ids: frozenset[int] | None = None,
 ) -> WeakMatrixOut:
     if room_id is not None:
         # Roster-scoped view (QA bug: an empty classroom showed stats for
@@ -326,7 +331,7 @@ def _weak_matrix(
             .all()
         )
     else:
-        students = _load_class_students(db, class_level, school_id=school_id)
+        students = _load_class_students(db, class_level, school_id=school_id, room_ids=room_ids)
     ids = [s.id for s in students]
     cells = _answer_cells(db, ids)
     percents = _attempt_percents(db, ids)
@@ -390,7 +395,13 @@ def teacher_weak_matrix(
     """
     if room_id is not None:
         _assert_room_in_school(db, teacher, _classroom_or_404(db, room_id))
-    return _weak_matrix(db, class_level, school_id=_tenant_school_id(db, teacher), room_id=room_id)
+    return _weak_matrix(
+        db,
+        class_level,
+        school_id=_tenant_school_id(db, teacher),
+        room_id=room_id,
+        room_ids=_standalone_room_ids(db, teacher),
+    )
 
 
 def _coverage_rooms(db: Session, teacher: User) -> list[ClassRoom]:
@@ -398,9 +409,14 @@ def _coverage_rooms(db: Session, teacher: User) -> list[ClassRoom]:
     room_stmt = select(ClassRoom).order_by(ClassRoom.class_level, ClassRoom.section)
     if teacher.role != "admin":
         school = db.get(School, teacher.school_id) if teacher.school_id else None
-        if school is None:
-            school = _default_school(db)
-        room_stmt = room_stmt.where(ClassRoom.school_id == school.id)
+        rooms_in_scope = _standalone_room_ids(db, teacher)
+        if rooms_in_scope is not None:
+            # SEC-01: a standalone teacher covers only the rooms they teach.
+            room_stmt = room_stmt.where(ClassRoom.id.in_(sorted(rooms_in_scope)))
+        else:
+            if school is None:
+                school = _default_school(db)
+            room_stmt = room_stmt.where(ClassRoom.school_id == school.id)
     return list(db.execute(room_stmt).scalars())
 
 

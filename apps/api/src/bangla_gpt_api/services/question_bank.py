@@ -12,7 +12,7 @@ import hashlib
 import unicodedata
 from collections.abc import Iterable, Sequence
 
-from sqlalchemy import select
+from sqlalchemy import false, select
 from sqlalchemy.orm import Session
 
 from bangla_gpt_api.db.models import QuestionBankEntry
@@ -93,6 +93,7 @@ def find_reusable(
     exclude_texts: Iterable[str] = (),
     limit: int = 1,
     include_all_schools: bool = False,
+    viewer_id: int | None = None,
 ) -> list[QuestionBankEntry]:
     """Reviewed questions reusable for a generation request.
 
@@ -100,8 +101,9 @@ def find_reusable(
     first, skipping anything already used on the paper being edited.
 
     Tenancy matches ``_assert_content_writable``: entries authored inside the
-    viewer's own school are reusable, and school-less entries are visible to
-    school-less viewers — the same rule the chapter-content library applies to
+    viewer's own school are reusable. SEC-01: school-less accounts are not one
+    tenancy, so a school-less viewer reuses only their OWN reviewed entries
+    (``viewer_id``) — the same rule the chapter-content library now applies to
     writes. Without this filter, a teacher in one school received the OTHER
     school's reviewed questions back as "reuse" replacements.
     ``include_all_schools`` is the explicit admin path.
@@ -113,10 +115,15 @@ def find_reusable(
         .order_by(QuestionBankEntry.created_at.desc(), QuestionBankEntry.id.desc())
     )
     if not include_all_schools:
-        from bangla_gpt_api.db.models import User
+        if school_id is None:
+            stmt = stmt.where(
+                QuestionBankEntry.teacher_id == viewer_id if viewer_id is not None else false()
+            )
+        else:
+            from bangla_gpt_api.db.models import User
 
-        authors = select(User.id).where(User.school_id == school_id)
-        stmt = stmt.where(QuestionBankEntry.teacher_id.in_(authors))
+            authors = select(User.id).where(User.school_id == school_id)
+            stmt = stmt.where(QuestionBankEntry.teacher_id.in_(authors))
     if subject is not None:
         stmt = stmt.where(QuestionBankEntry.subject == subject)
     if chapter is not None:

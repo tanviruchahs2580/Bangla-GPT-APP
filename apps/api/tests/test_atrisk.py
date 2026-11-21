@@ -258,14 +258,15 @@ def test_support_plan_errors(client: TestClient, db_path) -> None:
         client.post("/teacher/support-plans", json={"student_id": 999}, headers=headers).status_code
         == 404
     )
-    # s0 has data; a fresh roster-only student without graded attempts -> 422
-    headers2 = _teacher_headers(client, "teach2@example.com")
-    rid = _seed_classroom(client, headers2, 1, section="B")  # stu0 dup-row -> still 200
+    # s0 has data; a fresh roster-only student without graded attempts -> 422.
+    # SEC-01: the no-data student sits in a room THIS teacher teaches; a child
+    # in another standalone teacher's room is now a 404 (tenancy), not a 422.
+    rid = _seed_classroom(client, headers, 1, section="B")  # stu0 dup-row -> still 200
     # stu2 not imported above; import one more student in room 2 for the no-data case
     res = client.post(
         f"/teacher/classrooms/{rid}/import",
         json={"csv_text": "name,email\nLate,stu9@school.edu"},
-        headers=headers2,
+        headers=headers,
     )
     assert res.status_code == 200
     sid = _student_id(db_path, "stu9@school.edu")
