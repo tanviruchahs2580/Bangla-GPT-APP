@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import SchoolDashboard from "../pages/SchoolDashboard";
-import { t } from "../i18n";
+import { formatNumber, t } from "../i18n";
 import type { SchoolHealth } from "../types";
 
 const apiMock = vi.hoisted(() => ({
@@ -75,11 +75,11 @@ describe("school dashboard", () => {
     expect(apiMock.get).toHaveBeenCalledWith("/school/overview");
     expect(screen.getByText(t("schoolDashboard"))).toBeInTheDocument();
     expect(screen.getByText(new RegExp("CFPLFN93"))).toBeInTheDocument();
-    // stat tiles
-    expect(screen.getByText("11")).toBeInTheDocument();
+    // stat tiles: counts follow the numeral policy (Bangla digits in Bangla)
+    expect(screen.getByText(formatNumber(11))).toBeInTheDocument();
     // health buckets (40% = strong+risk stats; 20% = support stat and Rahim's badge)
-    expect(screen.getAllByText("40%")).toHaveLength(2);
-    expect(screen.getAllByText("20%")).toHaveLength(2);
+    expect(screen.getAllByText(`${formatNumber(40)}%`)).toHaveLength(2);
+    expect(screen.getAllByText(`${formatNumber(20)}%`)).toHaveLength(2);
     // at-risk rows from both classes
     expect(screen.getByText("Rahim")).toBeInTheDocument();
     expect(screen.getByText("Karim")).toBeInTheDocument();
@@ -118,5 +118,6 @@ it("shows an explicit 'not available' instead of a fabricated 0% average", async
   renderPage();
   await screen.findByText("Anondo High School");
   expect(screen.getByText(t("notAvailable"))).toBeInTheDocument();
+  expect(screen.queryByText(`${formatNumber(0)}%`)).not.toBeInTheDocument();
   expect(screen.queryByText("0%")).not.toBeInTheDocument();
 });

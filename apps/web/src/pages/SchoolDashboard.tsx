@@ -4,7 +4,7 @@ import { get } from "../api";
 import { Badge, EmptyState, Skeleton, Spinner } from "../components/ui";
 import { ResponsiveTable } from "../components/ResponsiveTable";
 import { SchoolSections } from "../components/school/SchoolSections";
-import { t } from "../i18n";
+import { formatNumber, t } from "../i18n";
 import type { SchoolHealth } from "../types";
 
 /**
@@ -66,19 +66,19 @@ export default function SchoolDashboard() {
 
       <div className="stat-grid">
         <div className="stat">
-          <span className="stat-value">{data.students}</span>
+          <span className="stat-value">{formatNumber(data.students)}</span>
           <span className="stat-label">{t("students")}</span>
         </div>
         <div className="stat">
-          <span className="stat-value">{data.teachers}</span>
+          <span className="stat-value">{formatNumber(data.teachers)}</span>
           <span className="stat-label">{t("sdTeachers")}</span>
         </div>
         <div className="stat">
-          <span className="stat-value">{data.classrooms}</span>
+          <span className="stat-value">{formatNumber(data.classrooms)}</span>
           <span className="stat-label">{t("classrooms")}</span>
         </div>
         <div className="stat">
-          <span className="stat-value">{data.sessions_7d}</span>
+          <span className="stat-value">{formatNumber(data.sessions_7d)}</span>
           <span className="stat-label">{t("sdSessions")}</span>
         </div>
       </div>
@@ -87,25 +87,27 @@ export default function SchoolDashboard() {
         <h2>{t("sdHealthTitle")}</h2>
         <div className="stat-grid">
           <div className="stat">
-            <span className="stat-value">{data.strong_pct}%</span>
+            <span className="stat-value">{formatNumber(data.strong_pct)}%</span>
             <span className="stat-label">
-              {t("sdStrong")} ({data.strong})
+              {t("sdStrong")} ({formatNumber(data.strong)})
             </span>
           </div>
           <div className="stat">
-            <span className="stat-value">{data.support_pct}%</span>
+            <span className="stat-value">
+              {formatNumber(data.support_pct)}%
+            </span>
             <span className="stat-label">
-              {t("sdSupport")} ({data.support})
+              {t("sdSupport")} ({formatNumber(data.support)})
             </span>
           </div>
           <div className="stat">
-            <span className="stat-value">{data.risk_pct}%</span>
+            <span className="stat-value">{formatNumber(data.risk_pct)}%</span>
             <span className="stat-label">
-              {t("spRisk")} ({data.risk})
+              {t("spRisk")} ({formatNumber(data.risk)})
             </span>
           </div>
           <div className="stat">
-            <span className="stat-value">{data.ungraded}</span>
+            <span className="stat-value">{formatNumber(data.ungraded)}</span>
             <span className="stat-label">{t("sdUngraded")}</span>
           </div>
         </div>
@@ -143,7 +145,7 @@ export default function SchoolDashboard() {
                   return r.avg_score_pct == null ? (
                     <Badge>{t("notAvailable")}</Badge>
                   ) : (
-                    <Badge tone="warn">{`${r.avg_score_pct}%`}</Badge>
+                    <Badge tone="warn">{`${formatNumber(r.avg_score_pct)}%`}</Badge>
                   );
                 },
               },

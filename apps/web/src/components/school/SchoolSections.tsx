@@ -10,7 +10,7 @@ import {
 } from "../../api";
 import { Badge, Button, EmptyState, Skeleton, Spinner } from "../ui";
 import { ResponsiveTable } from "../ResponsiveTable";
-import { t } from "../../i18n";
+import { formatNumber, t } from "../../i18n";
 import { track } from "../../lib/analytics";
 
 /**
@@ -90,7 +90,7 @@ export function SchoolSections() {
       {students.data ? (
         <section className="card" aria-label={t("students")}>
           <h2>
-            {t("students")} ({students.data.total})
+            {t("students")} ({formatNumber(students.data.total)})
           </h2>
           <ResponsiveTable
             columns={[
@@ -180,7 +180,7 @@ export function SchoolSections() {
                 cell: (c) =>
                   c.avg_quiz_accuracy == null
                     ? "—"
-                    : `${Math.round(c.avg_quiz_accuracy)}%`,
+                    : `${formatNumber(Math.round(c.avg_quiz_accuracy))}%`,
               },
             ]}
             rows={classes.data}
@@ -251,29 +251,33 @@ export function SchoolSections() {
       {analytics.data ? (
         <section className="card" aria-label={t("anaTitle")}>
           <h2>{t("anaTitle")}</h2>
-          <p className="muted m-0">{analytics.data.days}d</p>
+          <p className="muted m-0">
+            {t("periodLastDays", { days: analytics.data.days })}
+          </p>
           <div className="stat-grid">
             <div className="stat">
               <span className="stat-value">
-                {Math.round(analytics.data.daily_active_avg)}
+                {formatNumber(Math.round(analytics.data.daily_active_avg))}
               </span>
               <span className="stat-label">{t("anaDaily")}</span>
             </div>
             <div className="stat">
               <span className="stat-value">
-                {analytics.data.questions_asked}
+                {formatNumber(analytics.data.questions_asked)}
               </span>
               <span className="stat-label">{t("reportQuestions")}</span>
             </div>
             <div className="stat">
-              <span className="stat-value">{analytics.data.quiz_attempts}</span>
+              <span className="stat-value">
+                {formatNumber(analytics.data.quiz_attempts)}
+              </span>
               <span className="stat-label">{t("secQuizzes")}</span>
             </div>
             <div className="stat">
               <span className="stat-value">
                 {analytics.data.avg_quiz_score_pct == null
                   ? "—"
-                  : `${Math.round(analytics.data.avg_quiz_score_pct)}%`}
+                  : `${formatNumber(Math.round(analytics.data.avg_quiz_score_pct))}%`}
               </span>
               <span className="stat-label">{t("avgScore")}</span>
             </div>

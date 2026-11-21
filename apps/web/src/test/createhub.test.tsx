@@ -11,7 +11,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
 import { CreateHub } from "../components/teacher/CreateHub";
-import { t } from "../i18n";
+import { formatNumber, t } from "../i18n";
 import type { TeacherDocument, TeacherWorkload } from "../api";
 
 const apiMock = vi.hoisted(() => ({
@@ -91,7 +91,8 @@ it("renders the saved library and the workload estimate", async () => {
   expect(
     await screen.findByText("Photosynthesis worksheet"),
   ).toBeInTheDocument();
-  expect(screen.getByText("25")).toBeInTheDocument();
+  // minutes saved follows the numeral policy (Bangla digits in Bangla)
+  expect(screen.getByText(formatNumber(25))).toBeInTheDocument();
 });
 
 it("generates a worksheet synchronously with the chosen class and subject", async () => {

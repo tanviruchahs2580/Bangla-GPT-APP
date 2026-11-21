@@ -20,7 +20,7 @@ import {
 } from "../../components/ui";
 import { ResponsiveTable } from "../../components/ResponsiveTable";
 import { friendlyError } from "../../errors";
-import { t } from "../../i18n";
+import { formatNumber, t } from "../../i18n";
 
 const errText = (err: unknown): string =>
   friendlyError((err as { rawDetail?: unknown }).rawDetail)?.text ??
@@ -386,7 +386,9 @@ export default function AnalyticsPage() {
         ) : workload ? (
           <div className="stat-row mt-2" title={workload.methodology}>
             <div>
-              <div className="num">{workload.total_minutes_saved}</div>
+              <div className="num">
+                {formatNumber(workload.total_minutes_saved)}
+              </div>
               <div className="lbl">
                 {t("workloadMinutes", { n: workload.total_minutes_saved })}
               </div>

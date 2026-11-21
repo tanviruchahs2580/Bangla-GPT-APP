@@ -13,7 +13,7 @@ import { get, getTeacherWorkload } from "../../api";
 import type { ClassRoom, QPaper, WeakMatrix } from "../../types";
 import { Card, Stat } from "../../components/ui";
 import { useAuth } from "../../AuthContext";
-import { t } from "../../i18n";
+import { formatNumber, t } from "../../i18n";
 
 // Quick Create shortcuts -> deep links into Create (?kind=…).
 const QUICK = [
@@ -167,7 +167,9 @@ export default function TeacherHomePage() {
           aria-label={t("thWorkloadTitle")}
         >
           <div>
-            <div className="num">{workload.total_minutes_saved}</div>
+            <div className="num">
+              {formatNumber(workload.total_minutes_saved)}
+            </div>
             <div className="lbl">{t("thWorkloadTitle")}</div>
           </div>
           <p className="muted muted-sm">

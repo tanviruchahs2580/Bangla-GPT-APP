@@ -160,9 +160,14 @@ export function ProgressRing({
 }
 
 export function Stat({ value, label }: { value: ReactNode; label: ReactNode }) {
+  // Numeral policy (i18n.ts header): a bare count is a quantity and renders
+  // in the active language's digits. Callers pass raw numbers, so the
+  // teacher dashboard showed Latin "0" inside Bangla copy.
   return (
     <div className="stat">
-      <div className="stat-value">{value}</div>
+      <div className="stat-value">
+        {typeof value === "number" ? formatNumber(value) : value}
+      </div>
       <div className="stat-label">{label}</div>
     </div>
   );

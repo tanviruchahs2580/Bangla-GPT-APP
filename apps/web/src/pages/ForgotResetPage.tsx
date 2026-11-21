@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { forgotPassword, resetPassword, verifyEmail } from "../api";
+import { Button, Field, Segmented } from "../components/ui";
 import { friendlyError, type ErrorCopy } from "../errors";
 import { t } from "../i18n";
 
@@ -8,23 +9,20 @@ type Tab = "forgot" | "verify";
 export default function ForgotResetPage() {
   const [tab, setTab] = useState<Tab>("forgot");
 
+  // The mode switch used to borrow .rate-btn (the 44x44 thumbs icon button):
+  // both Bangla labels were clipped inside it and rendered in the UA font.
+  // Segmented is the shared .chip toggle every other page uses.
   return (
-    <main id="main-content" tabIndex={-1} className="card auth-card">
+    <main id="main-content" tabIndex={-1} className="card auth-card stack">
       <h1>{tab === "forgot" ? t("resetTitle") : t("verifyTitle")}</h1>
-      <p className="muted">
-        <button
-          className={`rate-btn${tab === "forgot" ? " on-up" : ""}`}
-          onClick={() => setTab("forgot")}
-        >
-          {t("resetTitle")}
-        </button>{" "}
-        <button
-          className={`rate-btn${tab === "verify" ? " on-up" : ""}`}
-          onClick={() => setTab("verify")}
-        >
-          {t("verifyTitle")}
-        </button>
-      </p>
+      <Segmented
+        options={[
+          { value: "forgot", label: t("resetTitle") },
+          { value: "verify", label: t("verifyTitle") },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
       {tab === "forgot" ? <ForgotForm /> : <VerifyForm />}
       <p className="muted">
         {t("haveAccount")} <a href="/login">{t("login")}</a>
@@ -71,24 +69,26 @@ function ForgotForm() {
 
   if (!requested) {
     return (
-      <form onSubmit={requestToken}>
-        <label htmlFor="femail">{t("email")}</label>
-        <input
-          id="femail"
-          type="email"
-          autoComplete="email"
-          value={email}
-          required
-          onChange={(e) => setEmail(e.target.value)}
-        />
+      <form onSubmit={requestToken} className="stack">
+        <Field label={t("email")} htmlFor="femail">
+          <input
+            className="input"
+            id="femail"
+            type="email"
+            autoComplete="email"
+            value={email}
+            required
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </Field>
         {error && (
           <p className="error" role="alert">
             {error.text}
           </p>
         )}
-        <button className="primary" type="submit" disabled={busy}>
+        <Button variant="primary" block type="submit" disabled={busy}>
           {busy ? <span className="spinner" aria-hidden /> : t("resetTitle")}
-        </button>
+        </Button>
       </form>
     );
   }
@@ -97,33 +97,37 @@ function ForgotForm() {
       <p className="ok" role="status">
         {t("forgotSent")}
       </p>
-      <form onSubmit={doReset}>
-        <label htmlFor="rtoken">{t("locResetCode")}</label>
-        <input
-          id="rtoken"
-          value={token}
-          required
-          minLength={16}
-          onChange={(e) => setToken(e.target.value)}
-        />
-        <label htmlFor="rnewpass">{t("password")}</label>
-        <input
-          id="rnewpass"
-          type="password"
-          autoComplete="new-password"
-          value={newPassword}
-          required
-          minLength={8}
-          onChange={(e) => setNewPassword(e.target.value)}
-        />
+      <form onSubmit={doReset} className="stack">
+        <Field label={t("locResetCode")} htmlFor="rtoken">
+          <input
+            className="input"
+            id="rtoken"
+            value={token}
+            required
+            minLength={16}
+            onChange={(e) => setToken(e.target.value)}
+          />
+        </Field>
+        <Field label={t("password")} htmlFor="rnewpass">
+          <input
+            className="input"
+            id="rnewpass"
+            type="password"
+            autoComplete="new-password"
+            value={newPassword}
+            required
+            minLength={8}
+            onChange={(e) => setNewPassword(e.target.value)}
+          />
+        </Field>
         {error && (
           <p className="error" role="alert">
             {error.text}
           </p>
         )}
-        <button className="primary" type="submit" disabled={busy}>
+        <Button variant="primary" block type="submit" disabled={busy}>
           {busy ? <span className="spinner" aria-hidden /> : t("resetTitle")}
-        </button>
+        </Button>
       </form>
     </>
   );
@@ -157,15 +161,17 @@ function VerifyForm() {
   return (
     <>
       <p className="muted">{t("verifySent")}</p>
-      <form onSubmit={submit}>
-        <label htmlFor="vcode">{t("locCode")}</label>
-        <input
-          id="vcode"
-          value={code}
-          required
-          minLength={16}
-          onChange={(e) => setCode(e.target.value)}
-        />
+      <form onSubmit={submit} className="stack">
+        <Field label={t("locCode")} htmlFor="vcode">
+          <input
+            className="input"
+            id="vcode"
+            value={code}
+            required
+            minLength={16}
+            onChange={(e) => setCode(e.target.value)}
+          />
+        </Field>
         {okMsg && (
           <p className="ok" role="status">
             {okMsg}
@@ -176,9 +182,9 @@ function VerifyForm() {
             {error.text}
           </p>
         )}
-        <button className="primary" type="submit" disabled={busy}>
+        <Button variant="primary" block type="submit" disabled={busy}>
           {busy ? <span className="spinner" aria-hidden /> : t("verifyBtn")}
-        </button>
+        </Button>
       </form>
     </>
   );

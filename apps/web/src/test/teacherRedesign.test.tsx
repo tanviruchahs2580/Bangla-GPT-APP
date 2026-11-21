@@ -9,7 +9,7 @@ import TeacherHomePage from "../pages/teacher/TeacherHomePage";
 import ClassesPage from "../pages/teacher/ClassesPage";
 import AssessmentsPage from "../pages/teacher/AssessmentsPage";
 import AnalyticsPage from "../pages/teacher/AnalyticsPage";
-import { t } from "../i18n";
+import { formatNumber, t } from "../i18n";
 
 const apiMock = vi.hoisted(() => ({
   get: vi.fn(),
@@ -219,7 +219,8 @@ describe("teacher home", () => {
     await waitFor(() =>
       expect(screen.getByText(t("thWorkloadTitle"))).toBeInTheDocument(),
     );
-    expect(screen.getByText("25")).toBeInTheDocument();
+    // minutes saved follows the numeral policy (Bangla digits in Bangla)
+    expect(screen.getByText(formatNumber(25))).toBeInTheDocument();
   });
 });
 
