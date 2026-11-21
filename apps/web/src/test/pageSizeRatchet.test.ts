@@ -84,7 +84,12 @@ const CEILING: Record<string, number> = {
   // 396: E2 (2026-11-17) gave the settled-empty users table the shared
   // EmptyState (the table keeps rendering while a request is in flight).
   "AdminDashboard.tsx": 401, // E3 2026-11-17: cardable data-labels + page-head (measured 401)
-  "ForgotResetPage.tsx": 185,
+  // 191: Font A fidelity (2026-11-20) moved the page onto the design system:
+  // the mode switch became the shared Segmented (it borrowed the 44px icon
+  // button class and clipped both labels) and each control gained Field +
+  // .input (they rendered as raw UA inputs). Wrapper JSX is the growth; no
+  // branch, state or API call was added.
+  "ForgotResetPage.tsx": 191,
   "LegalPage.tsx": 127,
   "LoginPage.tsx": 353,
   "MaintenancePage.tsx": 37,

@@ -105,4 +105,21 @@ describe("ForgotResetPage", () => {
     // friendlyError is exactly what this page depends on.
     expect(await screen.findByText(t("errInvalidToken"))).toBeTruthy();
   });
+
+  it("switches modes with the shared segmented control and styled fields", async () => {
+    // Font A fidelity: the switch borrowed the 44px icon-button class and the
+    // inputs were raw UA controls; both now use the design-system primitives.
+    render(<ForgotResetPage />);
+    expect(screen.getByLabelText(t("email")).className).toContain("input");
+    const verify = screen.getByRole("button", { name: t("verifyTitle") });
+    expect(verify.getAttribute("aria-pressed")).toBe("false");
+
+    await userEvent.click(verify);
+
+    expect(verify.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByLabelText(t("locCode")).className).toContain("input");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
+      t("verifyTitle"),
+    );
+  });
 });
