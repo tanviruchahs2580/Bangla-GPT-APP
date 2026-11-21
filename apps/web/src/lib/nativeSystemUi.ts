@@ -8,10 +8,11 @@ import { currentTheme, onThemeChange } from "./theme";
 // (every rejection is swallowed), and nothing here runs in the browser/PWA.
 //
 // Ownership discipline (matches capacitor.config.ts): this module only sets
-// the ICON STYLE. It never calls setOverlaysWebView or setBackgroundColor —
-// edge-to-edge geometry stays owned by the bridge's
-// adjustMarginsForEdgeToEdge: "auto" and the CSS safe-area rules; a second
-// inset strategy would reintroduce the double-inset class of bug.
+// the ICON STYLE. It never calls setOverlaysWebView or setBackgroundColor
+// (both are no-ops on API 36) — edge-to-edge geometry stays owned by
+// Capacitor 8's SystemBars plugin (insetsHandling: "native") and the CSS
+// safe-area rules; a second inset strategy would reintroduce the
+// double-inset class of bug.
 
 export async function initNativeSystemUi(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;

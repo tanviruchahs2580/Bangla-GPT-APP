@@ -21,13 +21,6 @@ const config: CapacitorConfig = {
   android: {
     // Production API is TLS-only; no cleartext fallback in the WebView.
     allowMixedContent: false,
-    // Android 15 (targetSdk 35) enforces edge-to-edge: the status bar draws
-    // OVER the WebView and covered the app header's upper part (user report
-    // 2026-11-17, screenshot). 'auto' lets the bridge inset the WebView below
-    // the system bars only where edge-to-edge is enforced, so the header is
-    // never overlaid. The stylesheet's env(safe-area-inset-*) rules stay for
-    // the browser/PWA surfaces, where Android's WebView reports 0 insets.
-    adjustMarginsForEdgeToEdge: "auto",
   },
   plugins: {
     // E5/native-assets workstream (2026-11-18): the splash plugin owns the
@@ -47,10 +40,24 @@ const config: CapacitorConfig = {
       androidScaleType: "CENTER_CROP",
       showSpinner: false,
     },
+    // Capacitor 8 / targetSdk 36: Android 15+ enforces edge-to-edge and
+    // Android 16 removed the opt-out, so the status bar draws over the WebView
+    // (it covered the app header, user report 2026-11-17). Capacitor 7's
+    // android.adjustMarginsForEdgeToEdge is gone; the core SystemBars plugin
+    // owns the insets now. 'native' (Capacitor's recommendation, and its
+    // Capacitor 9 default): on Android WebView < 140 the bridge pads the
+    // WebView below the system bars and env(safe-area-inset-*) reads 0px,
+    // as 'auto' did; on WebView >= 140 it follows index.html's
+    // viewport-fit=cover, so env(safe-area-inset-*) carries the real insets
+    // and the stylesheet's safe-area rules (.topbar, .bottombar, overlays)
+    // pad the content. The hint matches that meta tag to avoid a layout jump.
     // The status bar's icon style is synced with the app theme by
-    // src/lib/nativeSystemUi.ts (native-only, failure-tolerant). No
-    // overlaysWebView/backgroundColor calls here: 'auto' edge-to-edge
-    // ownership stays with the bridge (see the android block above).
+    // src/lib/nativeSystemUi.ts (native-only, failure-tolerant); no
+    // overlaysWebView/backgroundColor calls anywhere (no-ops on API 36).
+    SystemBars: {
+      insetsHandling: "native",
+      initialViewportFitValueHint: "cover",
+    },
   },
 };
 

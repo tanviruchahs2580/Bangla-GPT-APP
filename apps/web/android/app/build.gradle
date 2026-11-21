@@ -37,8 +37,8 @@ def appVersionName = project.findProperty('versionName') ?: webVersion
 def appVersionCode = (project.findProperty('versionCode') ?: '1') as Integer
 
 android {
-    namespace "app.banglagpt.tutor"
-    compileSdk rootProject.ext.compileSdkVersion
+    namespace = "app.banglagpt.tutor"
+    compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
         applicationId "app.banglagpt.tutor"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -49,7 +49,7 @@ android {
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
-            ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
     signingConfigs {
