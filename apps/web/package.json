@@ -22,10 +22,10 @@
     "test:coverage": "node scripts/check_vitest_ran.mjs --coverage"
   },
   "dependencies": {
-    "@capacitor/app": "^7.1.2",
-    "@capacitor/core": "^7.6.9",
-    "@capacitor/splash-screen": "7.0.5",
-    "@capacitor/status-bar": "7.0.6",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/splash-screen": "8.0.2",
+    "@capacitor/status-bar": "8.0.4",
     "@sentry/react": "^10.73.0",
     "@tanstack/react-query": "^5.107.1",
     "katex": "^0.19.1",
@@ -39,8 +39,8 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
-    "@capacitor/android": "^7.6.9",
-    "@capacitor/cli": "^7.6.9",
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/cli": "^8.6.2",
     "@eslint/js": "9.39.5",
     "@playwright/test": "^1.65.0",
     "@testing-library/jest-dom": "^7.0.1",

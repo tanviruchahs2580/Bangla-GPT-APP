@@ -17,7 +17,7 @@ Verification: `npm run build` then check `dist/` contains
 `manifest.webmanifest`, `sw.js`, `theme-boot.js`, icons — all present in
 this repo's build; Lighthouse PWA audit is a human step on real phones.
 
-## 2. Native Android wrapper (Capacitor 7)
+## 2. Native Android wrapper (Capacitor 8)
 
 Config: `apps/web/capacitor.config.ts` (`app.banglagpt.tutor`,
 webDir `dist`, mixed content disabled). Android project scaffolded at
@@ -57,7 +57,7 @@ base is baked at build time; the rebuild is the only repair (docs/runbook.md,
 
 ### Built in CI; what is still human
 
-The Android build runs on GitHub's runners (JDK 17 + the preinstalled Android
+The Android build runs on GitHub's runners (JDK 21 + the preinstalled Android
 SDK), so it no longer needs a workstation: see `.github/workflows/android-release.yml`.
 This machine has no JDK or Android SDK (`java` absent, `ANDROID_HOME` unset), so
 no APK is produced locally — that is recorded, not faked, and CI is the build

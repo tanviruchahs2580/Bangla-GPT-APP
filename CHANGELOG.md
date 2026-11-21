@@ -13,7 +13,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-Nothing yet.
+### Fixed
+
+- fix(docker): pin openssl to the build Debian serves now
+- fix(web): keep the topbar's safe-area padding from being reset
+
+### Build and dependencies
+
+- build(web): upgrade Capacitor to 8 and target Android SDK 36
+
+### Maintenance
+
+- chore: regenerate the CHANGELOG for v0.15.0
+
+### Other
+
+- Merge pull request #148 from tanviruchahs2580/chore/changelog-0.15.0
 
 ## v0.15.0 - 2026-11-18
 

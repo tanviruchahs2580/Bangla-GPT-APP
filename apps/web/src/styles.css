@@ -588,17 +588,19 @@ p {
   position: sticky;
   top: 0;
   z-index: var(--z-sticky);
-  /* M1: on an iOS standalone PWA the notch overlaps sticky chrome; the
-     inset grows the bar instead of squeezing its content. Android native
-     is inset by the bridge (adjustMarginsForEdgeToEdge) and browsers
-     report 0, so this is a no-op everywhere else. */
+  /* M1: where the status bar or notch overlaps sticky chrome (an iOS
+     standalone PWA; Android native on WebView >= 140 under Capacitor 8's
+     SystemBars insetsHandling "native" with viewport-fit=cover) the inset
+     grows the bar and pads its content below the bar. Browsers report 0,
+     so this is a no-op there. The top padding is part of the one shorthand:
+     a separate padding-top before `padding: 0 ...` was silently reset to 0,
+     which left the header content partly under the status bar. */
   height: calc(var(--topbar-h) + env(safe-area-inset-top, 0px));
-  padding-top: env(safe-area-inset-top, 0px);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  padding: 0 var(--space-4);
+  padding: env(safe-area-inset-top, 0px) var(--space-4) 0;
   background: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
   border-bottom: 1px solid var(--line);

@@ -22,8 +22,9 @@ repository and track it on the launch checklist.
 
 ## 0. Repo-side state (already in place)
 
-- Capacitor 7 Android project at `apps/web/android` — `applicationId app.banglagpt.tutor`,
-  `minSdk 23`, `compile/targetSdk 35`.
+- Capacitor 8 Android project at `apps/web/android` — `applicationId app.banglagpt.tutor`,
+  `minSdk 24` (Android 7.0; Capacitor 8 dropped Android 6.0), `compile/targetSdk 36`
+  (Google Play requires target API 36 for new apps and updates).
 - Release **signing is fail-closed**: `apps/web/android/app/build.gradle` reads
   `keystore.properties` (gitignored) or the `ANDROID_*` environment variables,
   and a `bundleRelease`/`assembleRelease` task graph with no credentials throws
