@@ -48,7 +48,14 @@ describe("safe-area coverage in styles.css", () => {
     expect(rule).toMatch(
       /height:\s*calc\(var\(--topbar-h\)\s*\+\s*env\(safe-area-inset-top/,
     );
-    expect(rule).toMatch(/padding-top:\s*env\(safe-area-inset-top/);
+    // The EFFECTIVE top padding must carry the inset. This guard used to pin
+    // a `padding-top: env(...)` that a later `padding: 0 ...` shorthand in
+    // the same rule silently reset to 0, so it passed while the header
+    // content sat partly under the status bar. Now: the inset is the first
+    // value of the one shorthand, and no padding-top/shorthand follows it.
+    expect(rule).toMatch(/padding:\s*env\(safe-area-inset-top/);
+    const paddings = [...rule.matchAll(/padding(-top)?\s*:/g)];
+    expect(paddings).toHaveLength(1);
   });
 
   it("keeps the offline banner clear of the notch when it is the stuck chrome", () => {
