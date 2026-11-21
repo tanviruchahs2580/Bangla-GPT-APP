@@ -13,7 +13,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-Nothing yet.
+### Added
+
+- feat(api): add a confirm-only owner backfill for legacy standalone rooms
+
+### Fixed
+
+- fix(api): wall standalone teachers to the classrooms they teach (SEC-01)
+- fix(docker): pin openssl to the build Debian serves now
+
+### Tests
+
+- test(api): freeze the breaker clock in the half-open re-open test
+
+### Maintenance
+
+- chore: regenerate the CHANGELOG for v0.15.0
+
+### Other
+
+- Merge pull request #148 from tanviruchahs2580/chore/changelog-0.15.0
 
 ## v0.15.0 - 2026-11-18
 

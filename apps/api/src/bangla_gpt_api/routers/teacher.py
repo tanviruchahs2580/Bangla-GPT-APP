@@ -54,9 +54,13 @@ from .common import (
     _student_briefs,
 )
 from .deps import (
+    _DEFAULT_SCHOOL_CODE,
     DbSession,
     TeacherOrAdminUser,
     _assert_room_in_school,
+    _forget_standalone_scope,
+    _standalone_home_school,
+    _standalone_room_ids,
     _tenant_school_id,
 )
 
@@ -78,7 +82,11 @@ def teacher_roster(
     # capped (class_level omitted used to pull the whole student table).
     # tenancy: school-bound teachers only ever see their own school.
     students = _load_class_students(
-        db, class_level, limit=limit, school_id=_tenant_school_id(db, teacher)
+        db,
+        class_level,
+        limit=limit,
+        school_id=_tenant_school_id(db, teacher),
+        room_ids=_standalone_room_ids(db, teacher),
     )
     return _student_briefs(db, students)
 
@@ -87,7 +95,12 @@ def teacher_roster(
 def teacher_analytics(
     class_level: int, db: DbSession, teacher: TeacherOrAdminUser
 ) -> ClassAnalytics:
-    students = _load_class_students(db, class_level, school_id=_tenant_school_id(db, teacher))
+    students = _load_class_students(
+        db,
+        class_level,
+        school_id=_tenant_school_id(db, teacher),
+        room_ids=_standalone_room_ids(db, teacher),
+    )
     briefs = _student_briefs(db, students)
 
     stats: dict[str, list[int]] = defaultdict(lambda: [0, 0])
@@ -152,11 +165,15 @@ def teacher_list_classrooms(db: DbSession, teacher: TeacherOrAdminUser) -> list[
     """all classrooms with enrollment counts.
 
     tenancy: a teacher attached to a school only sees that school's
-    rooms; school-less teachers and platform admins keep the old view.
+    rooms; a school-less teacher only the rooms they teach (SEC-01: the
+    shared default school is not one tenancy); platform admins see all.
     """
     statement = select(ClassRoom).order_by(ClassRoom.class_level, ClassRoom.section)
     tenant = _tenant_school_id(db, teacher)
-    if tenant is not None:
+    rooms_in_scope = _standalone_room_ids(db, teacher) if tenant is not None else None
+    if rooms_in_scope is not None:
+        statement = statement.where(ClassRoom.id.in_(sorted(rooms_in_scope)))
+    elif tenant is not None:
         statement = statement.where(ClassRoom.school_id == tenant)
     rooms = db.execute(statement).scalars().all()
     counts = _room_counts(db)
@@ -180,10 +197,15 @@ def teacher_list_classrooms(db: DbSession, teacher: TeacherOrAdminUser) -> list[
 def teacher_create_classroom(
     payload: ClassRoomCreateIn, db: DbSession, teacher: TeacherOrAdminUser
 ) -> ClassRoomOut:
-    # teachers with a school create rooms inside it; legacy
-    # school-less teachers keep using the default school.
+    # Teachers with a school create rooms inside it. SEC-01: a standalone
+    # teacher's rooms go to their private home school, so two strangers'
+    # "Class 6 GEN" no longer collide on the shared default school's
+    # (school, class_level, section) key and the school wall separates them.
+    # Admins without a school keep using the default school.
     school = db.get(School, teacher.school_id) if teacher.school_id else None
-    if school is None:
+    if teacher.role == "teacher" and (school is None or school.code == _DEFAULT_SCHOOL_CODE):
+        school = _standalone_home_school(db, teacher)
+    elif school is None:
         school = _default_school(db)
     section = (payload.section or "").strip().upper() or "GEN"
     room = ClassRoom(school_id=school.id, class_level=payload.class_level, section=section)
@@ -199,9 +221,16 @@ def teacher_create_classroom(
         db.flush()
         if teacher.role == "teacher":
             profile = db.scalar(select(Teacher).where(Teacher.user_id == teacher.id))
-            if profile is not None:
-                db.add(ClassTeacher(classroom_id=room.id, teacher_id=profile.id, subject=""))
+            if profile is None:
+                # A role-changed account can lack its profile. Without one the
+                # creator was never assigned, and under SEC-01's room wall the
+                # room would be invisible to the teacher who made it.
+                profile = Teacher(user_id=teacher.id, name=teacher.email.split("@", 1)[0][:120])
+                db.add(profile)
+                db.flush()
+            db.add(ClassTeacher(classroom_id=room.id, teacher_id=profile.id, subject=""))
         db.commit()
+        _forget_standalone_scope(db)
     except IntegrityError:
         db.rollback()
         raise HTTPException(

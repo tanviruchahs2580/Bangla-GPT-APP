@@ -229,8 +229,8 @@ def test_find_reusable_is_school_scoped() -> None:
 
     ``find_reusable`` filtered only on class/subject/chapter, while the
     sibling chapter-content library has an explicit tenancy rule
-    (``_assert_content_writable``: match on ``User.school_id``, school-less
-    matches school-less, admins are platform-wide). The same rule now guards
+    (``_assert_content_writable``: match on ``User.school_id``, a school-less
+    account matches only itself since SEC-01, admins are platform-wide). The same rule now guards
     the bank: without it, a teacher in another school received School A's
     reviewed questions as "reuse" replacements through
     ``POST /teacher/qpapers/{id}/replace``.
@@ -273,11 +273,14 @@ def test_find_reusable_is_school_scoped() -> None:
         assert texts(find_reusable(db, class_level=6, school_id=1, limit=10)) == [
             "school one question?"
         ]
-        # A school-less viewer matches the school-less author (the documented
-        # legacy rule), not the schools.
-        assert texts(find_reusable(db, class_level=6, school_id=None, limit=10)) == [
+        # SEC-01: school-less accounts are not one tenancy. A school-less
+        # viewer reuses only their OWN reviewed entries, never another
+        # standalone teacher's, and never a school's.
+        assert texts(find_reusable(db, class_level=6, school_id=None, viewer_id=3, limit=10)) == [
             "school-less question?"
         ]
+        assert find_reusable(db, class_level=6, school_id=None, viewer_id=99, limit=10) == []
+        assert find_reusable(db, class_level=6, school_id=None, limit=10) == []
         # Admins are the explicit platform-wide path.
         assert (
             len(find_reusable(db, class_level=6, school_id=1, limit=10, include_all_schools=True))

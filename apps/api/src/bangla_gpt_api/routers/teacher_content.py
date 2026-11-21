@@ -131,8 +131,9 @@ def _assert_content_writable(db: Session, row: ChapterContent, actor: User) -> N
     A write is allowed only when the current version was authored inside the
     actor's own tenancy, matched on ``User.school_id``:
 
-    * same school id -> writable (school-less legacy accounts match
-      school-less authors, preserving pre-school-layer behaviour);
+    * same school id -> writable;
+    * both school-less -> writable only by the same account (SEC-01: the
+      old None == None match made every standalone teacher one tenancy);
     * another school -> 403 ``content_read_only``;
     * author deleted or ``created_by`` NULL (platform/system seed) -> 403,
       because there is no tenancy to match;
@@ -142,7 +143,15 @@ def _assert_content_writable(db: Session, row: ChapterContent, actor: User) -> N
         return
     if row.created_by is not None:
         author = db.get(User, row.created_by)
-        if author is not None and author.school_id == actor.school_id:
+        # SEC-01: school-less accounts are not one tenancy. Two of them used to
+        # "match" on None == None, so any self-registered teacher could
+        # overwrite every other standalone teacher's chapter material; a
+        # school-less actor may now overwrite only their own versions.
+        if (
+            author is not None
+            and author.school_id == actor.school_id
+            and (actor.school_id is not None or author.id == actor.id)
+        ):
             return
     raise HTTPException(
         status_code=403,
@@ -725,6 +734,7 @@ def _bank_replacement(
         class_level=qp.class_level,
         school_id=teacher.school_id,
         include_all_schools=teacher.role == "admin",
+        viewer_id=teacher.id,
         subject=qp.subject,
         chapter=chapter,
         exclude_texts=[str(q["text"]) for q in qp.questions],

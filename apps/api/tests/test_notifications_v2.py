@@ -57,7 +57,9 @@ def _codes(client: TestClient, headers: dict) -> list:
     return [n["code"] for n in body["items"]]
 
 
-def _enroll_in_default_school(db_path: str, student_id: int, class_level: int = 6) -> None:
+def _enroll_in_default_school(
+    db_path: str, student_id: int, class_level: int = 6, teacher_email: str | None = None
+) -> None:
     """Enroll a student into the shared default school (F-04 contract).
 
     School-less staff are anchored to the default school, so teacher-surface
@@ -96,6 +98,19 @@ def _enroll_in_default_school(db_path: str, student_id: int, class_level: int = 
             "INSERT OR IGNORE INTO class_students (classroom_id, student_id, created_at) VALUES (?, ?, ?)",
             (room_id, student_id, now),
         )
+        if teacher_email is not None:
+            # SEC-01: a standalone teacher is walled to the rooms they teach, so
+            # the acting teacher is made this room's ClassTeacher -- the row
+            # POST /teacher/classrooms mints for a room's creator.
+            teacher_id = conn.execute(
+                "SELECT t.id FROM teachers t JOIN users u ON u.id = t.user_id WHERE u.email=?",
+                (teacher_email,),
+            ).fetchone()[0]
+            conn.execute(
+                "INSERT OR IGNORE INTO class_teachers (classroom_id, teacher_id, subject, created_at)"
+                " VALUES (?, ?, '', ?)",
+                (room_id, teacher_id, now),
+            )
         conn.commit()
     finally:
         conn.close()
@@ -107,7 +122,9 @@ def test_quiz_assignment_notifies_each_student(client: TestClient, tmp_path) -> 
     s2 = _register(client, "s2@example.com")
     # F-04: the teacher's assignment write is walled to the default school
     for sid in (s1["profile_id"], s2["profile_id"]):
-        _enroll_in_default_school(str(tmp_path / "notif.db"), sid)
+        _enroll_in_default_school(
+            str(tmp_path / "notif.db"), sid, teacher_email="teach@example.com"
+        )
     res = client.post(
         "/teacher/assignments",
         json={
@@ -136,7 +153,9 @@ def test_quiz_assignment_notifies_each_student(client: TestClient, tmp_path) -> 
 def test_support_plan_notifies_student_user(client: TestClient, tmp_path) -> None:
     teach = _teacher(client)
     student = _register(client, "weak@example.com")
-    _enroll_in_default_school(str(tmp_path / "notif.db"), student["profile_id"])
+    _enroll_in_default_school(
+        str(tmp_path / "notif.db"), student["profile_id"], teacher_email="teach@example.com"
+    )
     headers = _login(client, "weak@example.com")
     started = client.post(
         "/quizzes", json={"student_id": student["profile_id"], "num_questions": 2}, headers=headers
@@ -163,7 +182,9 @@ def test_support_plan_listing_is_bounded(client: TestClient, tmp_path) -> None:
     would otherwise be fully materialized per dashboard view."""
     teach = _teacher(client)
     student = _register(client, "bounded@example.com")
-    _enroll_in_default_school(str(tmp_path / "notif.db"), student["profile_id"])
+    _enroll_in_default_school(
+        str(tmp_path / "notif.db"), student["profile_id"], teacher_email="teach@example.com"
+    )
     headers = _login(client, "bounded@example.com")
     # Plan generation refuses a student with no graded quiz data
     # (no_graded_data), so create the graded attempt first — the same
@@ -215,7 +236,9 @@ def test_feed_is_scoped_newest_first_and_read_state_idempotent(
 ) -> None:
     teach = _teacher(client)
     s1 = _register(client, "only@example.com")
-    _enroll_in_default_school(str(tmp_path / "notif.db"), s1["profile_id"])
+    _enroll_in_default_school(
+        str(tmp_path / "notif.db"), s1["profile_id"], teacher_email="teach@example.com"
+    )
     _register(client, "other@example.com")
     for _ in range(2):
         res = client.post(

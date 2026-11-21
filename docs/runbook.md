@@ -197,6 +197,27 @@ never goes green the script flips nothing and exits 1 — the old release keeps
 serving (verified locally with continuous load: 0 failed requests,
 `scripts/deploy_rolling.py --demo`, see §10 note).
 
+### Standalone-teacher tenancy (SEC-01) — after deploying it
+
+SEC-01 walls each school-less teacher to the classrooms they are an assigned
+teacher of; new rooms go to a private home school (`BGPT-T<user id>`).
+Classrooms created before v0.10.0 never recorded an assigned teacher, so after
+the deploy only a platform admin can reach them. List them (read-only, ids
+and evidence kinds only):
+
+```bash
+.venv/Scripts/python.exe apps/api/scripts/backfill_standalone_room_owners.py
+```
+
+The evidence shows who touched a room, which before SEC-01 any standalone
+teacher could do; it is not proof of ownership. Confirm each owner with the
+teacher out of band, then assign only confirmed pairs (needs the owner's
+approval on production):
+
+```bash
+.venv/Scripts/python.exe apps/api/scripts/backfill_standalone_room_owners.py --assign ROOM_ID=USER_ID
+```
+
 ## 4. Backups & restore rehearsal (automated)
 
 The `backup` compose sidecar runs `scripts/backup_loop.py` every

@@ -9,10 +9,12 @@ Verifies the Hystrix-style state machine:
 """
 
 import asyncio
+from types import SimpleNamespace
 
 import pytest
 
 from bangla_gpt_api.providers.base import LLMProvider, ProviderError
+from bangla_gpt_api.services import circuit_breaker as circuit_breaker_module
 from bangla_gpt_api.services.circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerMiddleware,
@@ -128,11 +130,18 @@ async def test_half_open_after_timeout() -> None:
     assert cb.state == CircuitState.HALF_OPEN
 
 
-async def test_half_open_reopens_on_failure() -> None:
+async def test_half_open_reopens_on_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A frozen clock, not a real sleep: with a 0.1 s reset window, a loaded CI
+    # runner that took >0.1 s between the re-opening failure and the next
+    # state read saw the cool-down elapse AGAIN and read HALF_OPEN (flaked on
+    # the Postgres engine-parity leg, 2026-11-21). Only the breaker module's
+    # clock is replaced, so the event loop keeps the real one.
+    now = [1000.0]
+    monkeypatch.setattr(circuit_breaker_module, "time", SimpleNamespace(monotonic=lambda: now[0]))
     cb = CircuitBreaker(failure_threshold=1, reset_timeout_seconds=0.1, name="test")
     cb.record_failure()
     assert cb.state == CircuitState.OPEN
-    await asyncio.sleep(0.15)
+    now[0] += 0.15
     assert cb.state == CircuitState.HALF_OPEN
     # A new failure in half-open should reopen
     cb.record_failure()

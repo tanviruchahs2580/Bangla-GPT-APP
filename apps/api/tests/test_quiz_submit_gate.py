@@ -108,13 +108,33 @@ def _audit_proxy_rows(client: TestClient) -> list[dict]:
     return rows.json()["rows"]
 
 
+def _join_same_real_school(client: TestClient, *emails: str) -> None:
+    """Bind the given teachers to one real school (fixture shortcut for the
+    /schools/{id}/invites + /auth/join-school flow)."""
+    from bangla_gpt_api.db.models import School, User
+
+    factory = client.app.state.ctx.session_factory
+    with factory() as db, db.begin():
+        school = School(name="Shared School", code="SHARED-1")
+        db.add(school)
+        db.flush()
+        for email in emails:
+            db.execute(select(User).where(User.email == email)).scalar_one().school_id = school.id
+
+
 def test_teacher_outside_the_classroom_cannot_submit_forgery_case(
     client: TestClient,
 ) -> None:
-    """The audit's harm scenario: same school, somebody else's roster."""
+    """The audit's harm scenario: same school, somebody else's roster.
+
+    SEC-01: two STANDALONE teachers no longer share a tenancy, so this case
+    needs two teachers of one real school to reach the B-07 gate at all (the
+    standalone case is walled earlier; see the test below).
+    """
     _register(client, "teach@example.com", role="teacher")  # classroom owner
     _register(client, "other-teach@example.com", role="teacher")
     _register(client, "stu@example.com")  # account-holding classroom student
+    _join_same_real_school(client, "teach@example.com", "other-teach@example.com")
     student_id = _seed_classroom_student(client, student_user_email="stu@example.com")
     owner_headers = _login_headers(client, "teach@example.com")
     outsider_headers = _login_headers(client, "other-teach@example.com")
@@ -134,6 +154,29 @@ def test_teacher_outside_the_classroom_cannot_submit_forgery_case(
     assert res.status_code == 403, res.text
     assert res.json()["detail"]["code"] == "staff_cannot_submit_student_quiz"
     # nothing was acted on: no proxy audit row was written by the refusal
+    assert _audit_proxy_rows(client) == []
+
+
+def test_standalone_outsider_is_walled_before_the_gate(client: TestClient) -> None:
+    """SEC-01: a standalone stranger never reaches another standalone
+    teacher's student at all -- the tenancy wall answers not-found."""
+    _register(client, "teach@example.com", role="teacher")
+    _register(client, "other-teach@example.com", role="teacher")
+    _register(client, "stu@example.com")
+    student_id = _seed_classroom_student(client, student_user_email="stu@example.com")
+    started = client.post(
+        "/quizzes",
+        json={"student_id": student_id, "num_questions": 2},
+        headers=_login_headers(client, "teach@example.com"),
+    )
+    assert started.status_code == 200, started.text
+    res = client.post(
+        f"/quizzes/{started.json()['attempt_id']}/submit",
+        json={"answers": [0] * len(started.json()["questions"])},
+        headers=_login_headers(client, "other-teach@example.com"),
+    )
+    assert res.status_code == 404, res.text
+    assert res.json()["detail"]["code"] == "student_not_found"
     assert _audit_proxy_rows(client) == []
 
 
