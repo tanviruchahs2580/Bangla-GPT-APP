@@ -13,7 +13,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
-Nothing yet.
+### Fixed
+
+- fix(api): refuse first-person self-harm phrasings the screen missed
+- fix(docker): pin openssl to the build Debian serves now
+
+### Documentation
+
+- docs: refresh the native-review sheet for the moved safety prompt lines
+
+### Maintenance
+
+- chore: regenerate the CHANGELOG for v0.15.0
+
+### Other
+
+- Merge pull request #148 from tanviruchahs2580/chore/changelog-0.15.0
 
 ## v0.15.0 - 2026-11-18
 
