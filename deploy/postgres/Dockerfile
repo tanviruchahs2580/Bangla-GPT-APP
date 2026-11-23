@@ -7,7 +7,7 @@
 # this file lives in the repo and every change is a rebuild.
 # Digest-pinned (audit F9): the pgBackRest tooling layer must be built on
 # exactly the server image the release was tested against.
-FROM postgres:16@sha256:9e2cf6287f25c3151f4c9421ccce2b17f3e60061c111a29165e0d2cdd9ff0a97
+FROM postgres:16@sha256:3950ad7c3148ca2175ef1b6c36c9efbf78957ae8fbe8b3a5d7c35af50500382f
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends pgbackrest \
